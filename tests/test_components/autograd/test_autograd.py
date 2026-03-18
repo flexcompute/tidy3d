@@ -2125,6 +2125,30 @@ def test_sim_fields_io(structure_key, tmp_path):
         assert np.all(data == autograd_field_map[path])
 
 
+def test_field_map_complex_array_dict_io(tmp_path):
+    """Complex array tracer payloads should roundtrip through FieldMap IO."""
+    payload = {
+        "tracers": (
+            {
+                "path": ("sources", 0, "field_dataset", "Ex", "values"),
+                "data": {"real": [[1.0, 2.0]], "imag": [[3.0, 4.0]]},
+            },
+        )
+    }
+    field_map = FieldMap.model_validate(payload)
+    field_map_file = join(tmp_path, "test_complex_array_field_map.hdf5.gz")
+    field_map.to_file(field_map_file)
+
+    reloaded = FieldMap.from_file(field_map_file)
+    autograd_field_map = reloaded.to_autograd_field_map
+
+    expected = np.array([[1.0 + 3.0j, 2.0 + 4.0j]])
+    np.testing.assert_allclose(reloaded.tracers[0].data, expected)
+    np.testing.assert_allclose(
+        autograd_field_map[("sources", 0, "field_dataset", "Ex", "values")], expected
+    )
+
+
 def test_web_incompatible_inputs(monkeypatch):
     """Test what happens when bad inputs passed to web.run()."""
 

@@ -12,7 +12,7 @@ from autograd.numpy.numpy_boxes import ArrayBox
 from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, TypeAdapter
 
 from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
-from tidy3d.components.types.base import _auto_serializer
+from tidy3d.components.types.base import _auto_serializer, _from_complex_dict
 from tidy3d.components.types.utils import _add_schema
 
 from .utils import get_static, hasbox
@@ -45,15 +45,20 @@ def traced_alias(base_alias: Any, *, name: Optional[str] = None) -> TypeAlias:
     base_adapter = TypeAdapter(base_alias, config={"arbitrary_types_allowed": True})
 
     def _validate_box_or_container(v: Any) -> Any:
-        # case 1: v itself is a tracer
-        # in this case we just validate but leave the tracer untouched
+        # Normalize serialized complex arrays before Union validation so they are
+        # treated as ndarrays rather than scalar complex values.
+        complex_arr = _from_complex_dict(v)
+        if isinstance(complex_arr, anp.ndarray) and complex_arr.ndim > 0:
+            return base_adapter.validate_python(complex_arr)
+
+        # If v itself is a tracer, validate its static value but leave the tracer untouched.
         if isinstance(v, Box):
             base_adapter.validate_python(get_static(v))
             return v
 
-        # case 2: v is a plain container that contains at least one tracer
-        # in this case we try to coerce into ArrayBox for one-shot validation,
-        # but always return the original v, and fall back to a structural walk if needed
+        # If v is a plain container that contains at least one tracer, try to coerce it
+        # into an ArrayBox for one-shot validation, but return the original structure and
+        # fall back to a structural walk if needed.
         if hasbox(v):
             # decide whether we must return an array
             origin = get_origin(base_alias)
