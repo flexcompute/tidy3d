@@ -60,6 +60,7 @@ from tidy3d.components.types import ArrayComplex3D, Direction, EMField, FreqArra
 from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.validators import (
+    validate_colocated_integration,
     validate_freqs_min,
     validate_freqs_not_empty,
 )
@@ -210,6 +211,18 @@ class ModeSolver(Tidy3dBaseModel):
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
     )
+
+    use_colocated_integration: bool = Field(
+        True,
+        title="Use Colocated Integration",
+        description="Only takes effect when ``colocate=False``. If ``True``, dot products "
+        "and overlap integrals still use fields interpolated to grid cell boundaries "
+        "(colocated), even though the field data is stored at native Yee grid positions. "
+        "Experimental feature that can give improved accuracy by avoiding interpolation of "
+        "fields to Yee cell positions for integration.",
+    )
+
+    _colocated_integration_validator = validate_colocated_integration()
 
     conjugated_dot_product: bool = Field(
         True,
@@ -2520,6 +2533,7 @@ class ModeSolver(Tidy3dBaseModel):
             freqs=freqs,
             direction=self.direction,
             colocate=colocate,
+            use_colocated_integration=self.use_colocated_integration,
             conjugated_dot_product=self.conjugated_dot_product,
             name=name,
         )

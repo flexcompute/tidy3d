@@ -1394,6 +1394,8 @@ def test_mode_solver_with_microwave_mode_spec(colocate):
     plane = td.Box(center=(0, 0, 0), size=(0, 10 * width, 2 * height + metal_thickness))
     num_modes = 3
     impedance_specs = td.AutoImpedanceSpec()
+    # RF mode solvers should use non-colocated integration when colocate=False
+    use_colocated_integration = colocate
     mode_spec = td.MicrowaveModeSpec(
         num_modes=num_modes, target_neff=2.2, impedance_specs=impedance_specs
     )
@@ -1404,6 +1406,7 @@ def test_mode_solver_with_microwave_mode_spec(colocate):
         mode_spec=mode_spec,
         colocate=colocate,
         freqs=freqs,
+        use_colocated_integration=use_colocated_integration,
     )
 
     # _, ax = plt.subplots(1, 1, tight_layout=True, figsize=(15, 15))

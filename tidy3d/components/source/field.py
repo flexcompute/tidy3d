@@ -92,14 +92,15 @@ class PlanarSource(Source, ABC):
     """A source defined on a 2D plane."""
 
     _plane_validator = assert_plane()
-    use_colocated_normalization: bool = Field(
+    use_colocated_integration: bool = Field(
         True,
-        title="Use Colocated Normalization",
-        description="If ``True`` (default), source power normalization uses fields interpolated "
-        "to grid cell boundaries, matching monitors with ``colocate=True``. If ``False``, "
-        "uses fields at native Yee grid positions, matching monitors with ``colocate=False``. "
-        "Flux agreement between source normalization and monitors is much better when both "
-        "use the same colocation setting.",
+        title="Use Colocated Integration",
+        description="If ``True`` (default), source power normalization uses fields "
+        "interpolated to grid cell boundaries (colocated). If ``False``, uses fields at "
+        "native Yee grid positions (non-colocated). Should match the "
+        "``use_colocated_integration`` setting on monitors for consistent power normalization. "
+        "Experimental feature that can give improved accuracy by avoiding interpolation of "
+        "fields to Yee cell positions for integration.",
     )
 
     @cached_property
@@ -963,14 +964,15 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         "to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
     )
 
-    use_colocated_normalization: bool = Field(
+    use_colocated_integration: bool = Field(
         True,
-        title="Use Colocated Normalization",
-        description="If ``True`` (default), source power normalization uses fields interpolated "
-        "to grid cell boundaries, matching monitors with ``colocate=True``. If ``False``, "
-        "uses fields at native Yee grid positions, matching monitors with ``colocate=False``. "
-        "Flux agreement between source normalization and monitors is much better when both "
-        "use the same colocation setting.",
+        title="Use Colocated Integration",
+        description="If ``True`` (default), source power normalization uses fields "
+        "interpolated to grid cell boundaries (colocated). If ``False``, uses fields at "
+        "native Yee grid positions (non-colocated). Should match the "
+        "``use_colocated_integration`` setting on monitors for consistent power normalization. "
+        "Experimental feature that can give improved accuracy by avoiding interpolation of "
+        "fields to Yee cell positions for integration.",
     )
 
     @cached_property

@@ -890,18 +890,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             return FreqModeDataArray(flux_values)
         return FluxDataArray(flux_values)
 
-    def _compute_complex_flux(
-        self, use_colocated_fields: bool = False
-    ) -> Union[FluxDataArray, FreqModeDataArray]:
-        """Compute complex flux, with optional colocated field override.
+    def _compute_complex_flux(self) -> Union[FluxDataArray, FreqModeDataArray]:
+        """Compute complex flux."""
 
-        Parameters
-        ----------
-        use_colocated_fields : bool = False
-            If ``True``, force colocated field integration regardless of the monitor setting.
-        """
-
-        if self.monitor.colocate or use_colocated_fields:
+        if self.monitor.use_colocated_integration:
             fields = self._colocated_tangential_fields
             dS = self._diff_area.to_numpy()
             dS_numpy = (dS, dS)
@@ -1119,16 +1111,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         self,
         field_data: FieldData | ModeData | ModeSolverData,
         conjugate: bool = True,
-        use_colocated_fields: bool = False,
         bidirectional: bool = True,
     ) -> FreqDataArray | FreqModeDataArray:
         r"""Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor.
 
-        When either monitor uses ``colocate=True`` (default) or ``use_colocated_fields=True``,
-        the tangential fields from ``field_data`` are interpolated onto this object's grid,
-        so the two datasets may have different spatial discretizations. Otherwise, both
-        datasets must share the same tangential grid.
+        When either monitor uses ``colocate=True`` (default) or
+        ``use_colocated_integration=True``, the tangential fields from ``field_data`` are
+        interpolated onto this object's grid, so the two datasets may have different spatial
+        discretizations. Otherwise, both datasets must share the same tangential grid.
 
         Along the normal direction, the monitor position may differ and is ignored.
         Non-spatial coordinates (``f``, ``mode_index``) are aligned by intersection;
@@ -1154,9 +1145,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         conjugate : bool, optional
             If ``True`` (default), the dot product is defined as above. If ``False``, the definition
             is similar, but without the complex conjugation of the fields.
-        use_colocated_fields : bool = False
-            If ``True``, force colocated field integration regardless of the monitor's
-            ``colocate`` setting.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
             ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
@@ -1180,7 +1168,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             In the non-conjugated definition, modes are orthogonal, but the interpretation of the
             dot product as power carried by a given mode is no longer valid.
         """
-        use_colocated = self.monitor.colocate or field_data.monitor.colocate or use_colocated_fields
+        use_colocated = (
+            self.monitor.use_colocated_integration or field_data.monitor.use_colocated_integration
+        )
         if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
@@ -1354,17 +1344,16 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         self,
         field_data: FieldData | ModeData | ModeSolverData,
         conjugate: bool = True,
-        use_colocated_fields: bool = False,
         bidirectional: bool = True,
         truncate_to_monitor_bounds: bool = False,
     ) -> FreqDataArray | MixedModeDataArray:
         r"""Outer dot product (pairwise modal overlap matrix) with another :class:`.FieldData`
         object.
 
-        When either monitor uses ``colocate=True`` (default) or ``use_colocated_fields=True``,
-        the tangential fields from ``field_data`` are interpolated onto this object's grid,
-        so the two datasets may have different spatial discretizations. Otherwise, both
-        datasets must share the same tangential grid.
+        When either monitor uses ``colocate=True`` (default) or
+        ``use_colocated_integration=True``, the tangential fields from ``field_data`` are
+        interpolated onto this object's grid, so the two datasets may have different spatial
+        discretizations. Otherwise, both datasets must share the same tangential grid.
 
         The calculation is performed for all common frequencies between the two datasets.
 
@@ -1387,9 +1376,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         conjugate : bool = True
             If ``True`` (default), the dot product is defined as above. If ``False``, the definition
             is similar, but without the complex conjugation of the fields.
-        use_colocated_fields : bool = False
-            If ``True``, force colocated field integration regardless of the monitor's
-            ``colocate`` setting.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
             ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
@@ -1422,7 +1408,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
             raise DataError("Tangential dimensions must match between the two monitors.")
 
-        use_colocated = self.monitor.colocate or field_data.monitor.colocate or use_colocated_fields
+        use_colocated = (
+            self.monitor.use_colocated_integration or field_data.monitor.use_colocated_integration
+        )
         if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
@@ -1954,18 +1942,12 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         e_x_h -= np.real(tan_fields["E" + dim2]) * np.real(tan_fields["H" + dim1])
         return e_x_h
 
-    def _compute_flux(self, use_colocated_fields: bool = False) -> FluxTimeDataArray:
-        """Compute instantaneous flux, with optional colocated field override.
-
-        Parameters
-        ----------
-        use_colocated_fields : bool = False
-            If ``True``, force colocated field integration regardless of the monitor setting.
-        """
+    def _compute_flux(self) -> FluxTimeDataArray:
+        """Compute instantaneous flux."""
         dim1, dim2 = self._tangential_dims
         tangential_dims = self._tangential_dims
 
-        if self.monitor.colocate or use_colocated_fields:
+        if self.monitor.use_colocated_integration:
             fields = self._colocated_tangential_fields
             dS = self._diff_area.to_numpy()
             dS_numpy = (dS, dS)
@@ -1993,9 +1975,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         """Flux for data corresponding to a 2D monitor."""
         return self._compute_flux()
 
-    def _compute_complex_flux(
-        self, use_colocated_fields: bool = False
-    ) -> Union[FluxDataArray, FreqModeDataArray]:
+    def _compute_complex_flux(self) -> Union[FluxDataArray, FreqModeDataArray]:
         """Complex flux is not defined for time-domain data."""
         raise DataError("Complex power flow is not defined for time-domain data.")
 
@@ -2008,7 +1988,6 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         self,
         field_data: ElectromagneticFieldData,
         conjugate: bool = True,
-        use_colocated_fields: bool = False,
         bidirectional: bool = True,
     ) -> xr.DataArray:
         """Inner product is not defined for time-domain data."""
@@ -2018,7 +1997,6 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         self,
         field_data: ElectromagneticFieldData,
         conjugate: bool = True,
-        use_colocated_fields: bool = False,
         bidirectional: bool = True,
     ) -> xr.DataArray:
         """Outer dot product is not defined for time-domain data."""

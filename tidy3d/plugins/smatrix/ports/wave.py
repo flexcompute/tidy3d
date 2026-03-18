@@ -366,6 +366,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             freqs=freqs,
             name=self._mode_monitor_name,
             colocate=MONITOR_COLOCATE,
+            use_colocated_integration=MONITOR_COLOCATE,
             mode_spec=mode_spec,
             store_fields_direction=self.direction,
             conjugated_dot_product=self.conjugated_dot_product,
@@ -398,6 +399,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             freqs=freqs,
             direction=self.direction,
             colocate=MONITOR_COLOCATE,
+            use_colocated_integration=MONITOR_COLOCATE,
         )
         return mode_solver
 
@@ -713,6 +715,7 @@ class WavePort(AbstractWavePort):
             direction=self.direction,
             name=self.name,
             frame=self.frame,
+            use_colocated_integration=False,
         )
 
     def get_characteristic_impedance_matrix(
@@ -1069,6 +1072,7 @@ class TerminalWavePort(AbstractWavePort):
             direction=self.direction,
             name=self.name,
             frame=self.frame,
+            use_colocated_integration=False,
         )
 
     def get_characteristic_impedance_matrix(

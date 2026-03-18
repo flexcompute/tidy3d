@@ -1517,6 +1517,7 @@ def test_degenerate_mode_processing():
         freqs=[freq0],
         direction="+",
         colocate=False,
+        use_colocated_integration=False,
         conjugated_dot_product=False,
     )
 

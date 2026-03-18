@@ -1680,6 +1680,7 @@ def _make_dot_test_mode_solver_data(
     freqs: np.ndarray = FS,
     mode_indices: np.ndarray = MODE_INDICES,
     colocate: bool = False,
+    use_colocated_integration: bool = True,
 ) -> ModeSolverData:
     """Build a ModeSolverData with random fields for dot product testing."""
     sim_2d = 0 in sim.size
@@ -1697,6 +1698,7 @@ def _make_dot_test_mode_solver_data(
         mode_spec=mode_spec,
         direction="+",
         colocate=colocate,
+        use_colocated_integration=use_colocated_integration,
     )
 
     grid = sim.discretize_monitor(monitor)
@@ -2180,8 +2182,12 @@ def test_normalize_modes_zero_mode():
 
 def test_dot_coord_mismatch_fallback():
     """Test that dot/outer_dot fall back to colocated when tangential coords don't match."""
-    self_data = _make_dot_test_mode_solver_data(SIM, colocate=False)
-    other_data = _make_dot_test_mode_solver_data(SIM, colocate=False)
+    self_data = _make_dot_test_mode_solver_data(
+        SIM, colocate=False, use_colocated_integration=False
+    )
+    other_data = _make_dot_test_mode_solver_data(
+        SIM, colocate=False, use_colocated_integration=False
+    )
 
     # Shift spatial coordinates of other_data so Yee grids differ
     shifted_fields = {}

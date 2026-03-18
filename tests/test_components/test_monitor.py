@@ -539,3 +539,27 @@ def test_surface_monitors():
             run_time=1e-12,
             grid_spec=td.GridSpec.auto(wavelength=1),
         )
+
+
+def test_use_colocated_integration_requires_colocate_false():
+    """use_colocated_integration=False requires colocate=False."""
+    # Valid: colocate=False, use_colocated_integration=False
+    td.FieldMonitor(
+        size=(1, 1, 0), freqs=[1e14], name="valid", colocate=False, use_colocated_integration=False
+    )
+
+    # Invalid: colocate=True, use_colocated_integration=False
+    with pytest.raises(pd.ValidationError):
+        td.FieldMonitor(
+            size=(1, 1, 0), freqs=[1e14], name="m", colocate=True, use_colocated_integration=False
+        )
+
+    with pytest.raises(pd.ValidationError):
+        td.ModeMonitor(
+            size=(1, 1, 0),
+            freqs=[1e14],
+            name="m",
+            mode_spec=td.ModeSpec(),
+            colocate=True,
+            use_colocated_integration=False,
+        )

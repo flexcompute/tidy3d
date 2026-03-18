@@ -868,7 +868,7 @@
           "default": "AstigmaticGaussianBeam",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         },
@@ -1030,6 +1030,10 @@
           "const": "AstigmaticGaussianOverlapMonitor",
           "default": "AstigmaticGaussianOverlapMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         },
         "waist_distances": {
           "default": [
@@ -1275,6 +1279,11 @@
           "const": "AuxFieldTimeMonitor",
           "default": "AuxFieldTimeMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -4159,7 +4168,7 @@
           "default": "CustomFieldSource",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         }
@@ -5614,6 +5623,11 @@
           "const": "DiffractionMonitor",
           "default": "DiffractionMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -5869,6 +5883,11 @@
           "const": "DirectivityMonitor",
           "default": "DirectivityMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         },
         "window_size": {
           "default": [
@@ -6362,6 +6381,10 @@
           "const": "FieldMonitor",
           "default": "FieldMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -6616,6 +6639,11 @@
           "const": "FieldProjectionAngleMonitor",
           "default": "FieldProjectionAngleMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         },
         "window_size": {
           "default": [
@@ -6881,6 +6909,11 @@
           "const": "FieldProjectionCartesianMonitor",
           "default": "FieldProjectionCartesianMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         },
         "window_size": {
           "default": [
@@ -7166,6 +7199,11 @@
           "default": "FieldProjectionKSpaceMonitor",
           "type": "string"
         },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
+        },
         "ux": {
           "type": "ArrayLike",
           "x-array-dtype": "<f8",
@@ -7336,6 +7374,10 @@
           "const": "FieldTimeMonitor",
           "default": "FieldTimeMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -7667,6 +7709,11 @@
           "const": "FluxMonitor",
           "default": "FluxMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -7814,6 +7861,11 @@
           "const": "FluxTimeMonitor",
           "default": "FluxTimeMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -8172,7 +8224,7 @@
           "default": "GaussianBeam",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         },
@@ -8384,6 +8436,10 @@
           "const": "GaussianOverlapMonitor",
           "default": "GaussianOverlapMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         },
         "waist_distance": {
           "default": 0.0,
@@ -10601,6 +10657,11 @@
           "const": "MediumMonitor",
           "default": "MediumMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -10925,7 +10986,14 @@
           "type": "array"
         },
         "mode_spec": {
-          "anyOf": [
+          "discriminator": {
+            "mapping": {
+              "MicrowaveModeSpec": "#/$defs/MicrowaveModeSpec",
+              "MicrowaveTerminalModeSpec": "#/$defs/MicrowaveTerminalModeSpec"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
             {
               "$ref": "#/$defs/MicrowaveModeSpec"
             },
@@ -10967,6 +11035,10 @@
           "const": "MicrowaveModeMonitor",
           "default": "MicrowaveModeMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -11076,7 +11148,14 @@
           "type": "array"
         },
         "mode_spec": {
-          "anyOf": [
+          "discriminator": {
+            "mapping": {
+              "MicrowaveModeSpec": "#/$defs/MicrowaveModeSpec",
+              "MicrowaveTerminalModeSpec": "#/$defs/MicrowaveTerminalModeSpec"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
             {
               "$ref": "#/$defs/MicrowaveModeSpec"
             },
@@ -11118,6 +11197,10 @@
           "const": "MicrowaveModeSolverMonitor",
           "default": "MicrowaveModeSolverMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -11202,19 +11285,41 @@
         "impedance_specs": {
           "anyOf": [
             {
-              "$ref": "#/$defs/AutoImpedanceSpec"
-            },
-            {
-              "$ref": "#/$defs/CustomImpedanceSpec"
+              "discriminator": {
+                "mapping": {
+                  "AutoImpedanceSpec": "#/$defs/AutoImpedanceSpec",
+                  "CustomImpedanceSpec": "#/$defs/CustomImpedanceSpec"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/AutoImpedanceSpec"
+                },
+                {
+                  "$ref": "#/$defs/CustomImpedanceSpec"
+                }
+              ]
             },
             {
               "items": {
                 "anyOf": [
                   {
-                    "$ref": "#/$defs/AutoImpedanceSpec"
-                  },
-                  {
-                    "$ref": "#/$defs/CustomImpedanceSpec"
+                    "discriminator": {
+                      "mapping": {
+                        "AutoImpedanceSpec": "#/$defs/AutoImpedanceSpec",
+                        "CustomImpedanceSpec": "#/$defs/CustomImpedanceSpec"
+                      },
+                      "propertyName": "type"
+                    },
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/AutoImpedanceSpec"
+                      },
+                      {
+                        "$ref": "#/$defs/CustomImpedanceSpec"
+                      }
+                    ]
                   },
                   {
                     "type": "null"
@@ -11542,6 +11647,14 @@
           "additionalProperties": true,
           "type": "object"
         },
+        "broadband_method": {
+          "default": "chebyshev",
+          "enum": [
+            "chebyshev",
+            "pole_residue"
+          ],
+          "type": "string"
+        },
         "center": {
           "anyOf": [
             {
@@ -11594,7 +11707,7 @@
         },
         "num_freqs": {
           "default": 1,
-          "maximum": 20,
+          "maximum": 50,
           "minimum": 1,
           "type": "integer"
         },
@@ -11657,7 +11770,7 @@
           "default": "MicrowaveTerminalSource",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         }
@@ -11934,6 +12047,10 @@
           "const": "ModeMonitor",
           "default": "ModeMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -12078,6 +12195,10 @@
           "const": "ModeSolverMonitor",
           "default": "ModeSolverMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -12369,7 +12490,7 @@
           "default": "ModeSource",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         }
@@ -13561,6 +13682,11 @@
           "const": "PermittivityMonitor",
           "default": "PermittivityMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -14138,7 +14264,7 @@
           "default": "PlaneWave",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         }
@@ -15503,6 +15629,10 @@
           ],
           "type": "string"
         },
+        "relax_courant": {
+          "default": false,
+          "type": "boolean"
+        },
         "run_time": {
           "anyOf": [
             {
@@ -16536,6 +16666,11 @@
           "const": "SurfaceFieldMonitor",
           "default": "SurfaceFieldMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -16660,6 +16795,11 @@
           "const": "SurfaceFieldTimeMonitor",
           "default": "SurfaceFieldTimeMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -16857,7 +16997,7 @@
           "default": "TFSF",
           "type": "string"
         },
-        "use_colocated_normalization": {
+        "use_colocated_integration": {
           "default": true,
           "type": "boolean"
         }

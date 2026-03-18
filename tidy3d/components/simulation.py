@@ -78,10 +78,10 @@ from .medium import (
 )
 from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from .monitor import (
-    AbstractAuxFieldMonitor,
     AbstractFieldMonitor,
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
+    AbstractOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
@@ -4452,30 +4452,29 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     def _warn_source_monitor_normalization_grid(self) -> None:
-        """Warn when a source's use_colocated_normalization doesn't match monitor colocate settings."""
+        """Warn when a source's use_colocated_integration doesn't match monitor settings."""
         with log as consolidated_logger:
             for src_idx, source in enumerate(self.sources):
                 if not isinstance(source, (PlanarSource, TFSF)):
                     continue
                 # CustomFieldSource doesn't use flux-based normalization (flux=1),
-                # so use_colocated_normalization has no effect.
+                # so use_colocated_integration has no effect.
                 if isinstance(source, CustomFieldSource):
                     continue
-                expects_colocate = source.use_colocated_normalization
+                src_colocated = source.use_colocated_integration
                 for monitor in self.monitors:
-                    if not isinstance(monitor, (AbstractFieldMonitor, AbstractAuxFieldMonitor)):
+                    if not isinstance(monitor, (AbstractFieldMonitor, AbstractOverlapMonitor)):
                         continue
                     # Skip internally generated adjoint monitors (colocate=False by design)
                     if monitor.name.startswith("adjoint_"):
                         continue
-                    if monitor.colocate != expects_colocate:
+                    if monitor.use_colocated_integration != src_colocated:
                         consolidated_logger.warning(
                             f"Source '{source.name}' has "
-                            f"'use_colocated_normalization={expects_colocate}', which expects monitors "
-                            f"with 'colocate={expects_colocate}'. However, monitor "
+                            f"'use_colocated_integration={src_colocated}', but monitor "
                             f"'{monitor.name}' has "
-                            f"'colocate={monitor.colocate}'. This mismatch may lead to "
-                            "slightly inaccurate power normalization.",
+                            f"'use_colocated_integration={monitor.use_colocated_integration}'. "
+                            "This mismatch may lead to slightly inaccurate power normalization.",
                             custom_loc=["sources", src_idx],
                         )
 
@@ -4832,6 +4831,7 @@ class Simulation(AbstractYeeGridSimulation):
             pol_angle=source.pol_angle,
             direction=source.direction,
             num_freqs=source.num_freqs,
+            use_colocated_integration=source.use_colocated_integration,
         )
 
     def _validate_tfsf_aux_sources(self) -> None:

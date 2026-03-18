@@ -5007,6 +5007,10 @@
           "const": "EMEFieldMonitor",
           "default": "EMEFieldMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -7840,6 +7844,11 @@
           "const": "MediumMonitor",
           "default": "MediumMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -8169,19 +8178,41 @@
         "impedance_specs": {
           "anyOf": [
             {
-              "$ref": "#/$defs/AutoImpedanceSpec"
-            },
-            {
-              "$ref": "#/$defs/CustomImpedanceSpec"
+              "discriminator": {
+                "mapping": {
+                  "AutoImpedanceSpec": "#/$defs/AutoImpedanceSpec",
+                  "CustomImpedanceSpec": "#/$defs/CustomImpedanceSpec"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/AutoImpedanceSpec"
+                },
+                {
+                  "$ref": "#/$defs/CustomImpedanceSpec"
+                }
+              ]
             },
             {
               "items": {
                 "anyOf": [
                   {
-                    "$ref": "#/$defs/AutoImpedanceSpec"
-                  },
-                  {
-                    "$ref": "#/$defs/CustomImpedanceSpec"
+                    "discriminator": {
+                      "mapping": {
+                        "AutoImpedanceSpec": "#/$defs/AutoImpedanceSpec",
+                        "CustomImpedanceSpec": "#/$defs/CustomImpedanceSpec"
+                      },
+                      "propertyName": "type"
+                    },
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/AutoImpedanceSpec"
+                      },
+                      {
+                        "$ref": "#/$defs/CustomImpedanceSpec"
+                      }
+                    ]
                   },
                   {
                     "type": "null"
@@ -8795,6 +8826,10 @@
           "const": "ModeSolverMonitor",
           "default": "ModeSolverMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -10053,6 +10088,11 @@
           "const": "PermittivityMonitor",
           "default": "PermittivityMonitor",
           "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [

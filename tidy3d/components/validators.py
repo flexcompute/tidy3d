@@ -444,6 +444,22 @@ def _assert_min_freq(freqs: FloatArray, msg_start: str) -> None:
         )
 
 
+def validate_colocated_integration() -> Callable[[type, bool, FieldValidationInfo], bool]:
+    """Ensure use_colocated_integration=False is only used with colocate=False."""
+
+    @field_validator("use_colocated_integration")
+    @classmethod
+    def _check_colocated_integration(cls: type, val: bool, info: FieldValidationInfo) -> bool:
+        colocate = info.data.get("colocate", True)
+        if colocate and not val:
+            raise ValidationError(
+                "'use_colocated_integration' can only be set to 'False' when 'colocate' is 'False'."
+            )
+        return val
+
+    return _check_colocated_integration
+
+
 def validate_freqs_min() -> Callable[[type, FreqArray], FreqArray]:
     """Validate lower bound for monitor, and mode solver frequencies."""
 

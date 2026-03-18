@@ -39,6 +39,7 @@ from .types import (
 from .validators import (
     assert_plane,
     assert_volumetric,
+    validate_colocated_integration,
     validate_freqs_min,
     validate_freqs_not_empty,
 )
@@ -102,6 +103,14 @@ class Monitor(AbstractMonitor):
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
         "monitors depending on their specific function.",
+    )
+
+    use_colocated_integration: Literal[True] = Field(
+        True,
+        title="Use Colocated Integration",
+        description="Whether to use colocated fields for flux, dot products, and overlap "
+        "integrals. Hard-coded to ``True`` for most monitor types. Can be toggled on field "
+        "and overlap monitors.",
     )
 
     @property
@@ -292,6 +301,18 @@ class AbstractFieldMonitor(Monitor, ABC):
         "primal grid nodes).",
     )
 
+    use_colocated_integration: bool = Field(
+        True,
+        title="Use Colocated Integration",
+        description="Only takes effect when ``colocate=False``. If ``True``, flux, dot "
+        "products, and overlap integrals still use fields interpolated to grid cell "
+        "boundaries (colocated), even though the field data is stored at native Yee grid "
+        "positions. Experimental feature that can give improved accuracy by avoiding "
+        "interpolation of fields to Yee cell positions for integration.",
+    )
+
+    _colocated_integration_validator = validate_colocated_integration()
+
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         final_data_size = self.storage_size(num_cells=num_cells, tmesh=tmesh)
@@ -384,6 +405,18 @@ class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. primal grid nodes).",
     )
+
+    use_colocated_integration: bool = Field(
+        True,
+        title="Use Colocated Integration",
+        description="Only takes effect when ``colocate=False``. If ``True``, dot products "
+        "and overlap integrals still use fields interpolated to grid cell boundaries "
+        "(colocated), even though the field data is stored at native Yee grid positions. "
+        "Experimental feature that can give improved accuracy by avoiding interpolation of "
+        "fields to Yee cell positions for integration.",
+    )
+
+    _colocated_integration_validator = validate_colocated_integration()
 
     conjugated_dot_product: bool = Field(
         True,
