@@ -101,7 +101,7 @@ jobs:
       run: python -m pip install --upgrade uv
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
       with:
         aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
         aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
@@ -227,7 +227,7 @@ jobs:
       run: python -m pip install --upgrade uv
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
       with:
         aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
         aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
