@@ -3,7 +3,7 @@ Release Flow
 
 This page contains all the relevant information relating to each version release process for ``tidy3d``.
 
-.. You just need to make sure that the ``<same>`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` repositories within the ``./`` and ``./docs/notebooks/`` directories are updated. The ``readthedocs`` documentation will be automatically updated through the ``sync-readthedocs-repo`` Github action.
+.. You just need to make sure that the ``<same>`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` repositories within the ``./`` and ``./docs/notebooks/`` directories are updated.
 
 .. toctree::
     :maxdepth: 1
