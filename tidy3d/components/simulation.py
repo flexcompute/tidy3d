@@ -4492,11 +4492,35 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_internal_abc_no_fully_anisotropic()
         return self
 
+    def validate_rf_type(self) -> bool:
+        """Whether the simulation contains RF-classified components.
+
+        Returns ``True`` if any of the following are detected:
+        - A ``LossyMetalMedium`` in the scene
+        - Any lumped element
+        - Source frequencies below 300 GHz
+        - Monitor frequencies below 300 GHz
+        """
+        for mat in self.scene.mediums:
+            if isinstance(mat, LossyMetalMedium):
+                return True
+        if len(self.lumped_elements) > 0:
+            return True
+        if (self.frequency_range[0] < RF_FREQ_WARNING) and (self.frequency_range[0] != 0):
+            return True
+        for monitor in self.monitors:
+            if isinstance(monitor, FreqMonitor) and monitor.frequency_range[0] < RF_FREQ_WARNING:
+                return True
+        return False
+
     def _warn_rf_license(self) -> None:
         """
         Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
         simulation is categorised as RF simulation at the backend.
         """
+        if not self.validate_rf_type():
+            return
+
         # RF component messages
         rf_component_breakdown_msg = ""
 
@@ -4520,11 +4544,9 @@ class Simulation(AbstractYeeGridSimulation):
                 rf_component_breakdown_msg += "\n - Contains monitors defined for RF wavelengths."
                 break
 
-        # issue warning
-        if rf_component_breakdown_msg != "":
-            msg = "RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'."
-            msg += rf_component_breakdown_msg
-            log.warning(msg, log_once=True)
+        msg = "RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'."
+        msg += rf_component_breakdown_msg
+        log.warning(msg, log_once=True)
 
     def _validate_mode_objects(self) -> None:
         """Create a ModeSolver for each mode object in order to validate."""
