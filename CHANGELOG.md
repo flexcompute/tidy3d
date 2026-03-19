@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.11.0.dev2] - 2026-03-19
+
+### Added
+
+- Added `TerminalWavePort` for terminal-driven modal excitation in transmission line simulations. Added `reference_impedance` field on both `WavePort` and `TerminalWavePort` to allow user-specified reference impedance for S-parameter calculations.
+- Monitors with `colocate=False` now compute flux, dot product, and outer dot product directly on the Yee grid without interpolation, improving accuracy.
+- Added `TerminalComponentModelerData.renormalize()` method for renormalizing S-parameters to arbitrary reference impedances, supporting scalar, per-port, and full-matrix impedance specifications.
+- Added `use_colocated_integration` field on sources and monitors to control whether flux, dot products, and overlap integrals use colocated or native Yee grid fields. RF wave ports now default to non-colocated integration for improved accuracy.
+- Added `bulges` parameter to `PolySlab` geometry for defining arc segments in 2D polygon cross-sections using the standard bulge convention (bulge = tan(theta/4)), enabling curved edges between vertices.
+- Added `CircuitImpedanceModel` to support arbitrary RLC circuits in `LinearLumpedElement`. Users can construct it directly with a valid list of components or use the class method `from_spice()` for instantiation from a SPICE netlist.
+- Implemented batch execution optimizations by reducing HTTP calls and increasing parallelization.
+- Added ``pole_residue`` broadband method for ``ModeSource`` and ``GaussianBeam`` sources, using vector fitting with auxiliary differential equations as an alternative to Chebyshev interpolation for frequency-dependent field injection.
+- Added adjoint support for `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor`.
+- Added autograd support for `center` derivatives on `CustomFieldSource` and `CustomCurrentSource` for dimensions where source `size > 0`.
+- Added `plot_port` support for `LumpedPort`, `CoaxialLumpedPort`, and `WavePort` in `TerminalComponentModeler`.
+- Added native Claude Code and Gemini CLI plugin manifests for the Tidy3D MCP integration.
+
+### Changed
+
+- The fully tensorial mode solver (required for fully anisotropic media or non-zero `ModeSpec.angle_theta`) now requires `tidy3d-extras` for local runs; install with `pip install tidy3d[extras]` or run through the server.
+- Mode solver normalization now uses the dot product with the monitor's `conjugated_dot_product` setting instead of flux magnitude.
+
+### Fixed
+
+- Fixed `num_workers` propagation in batch async/autograd paths so explicit values are respected, while defaults are preserved when omitted. Upload/start uses a separate fixed concurrency of 64 workers.
+- Batch upload/start now logs per-task errors during upload/validation/start.
+- Fixed adjoint SimulationData splitting to match monitor data by monitor name, with warnings for missing or unexpected monitor entries.
+- Fixed autograd derivatives for `CustomFieldSource` and `CustomCurrentSource` datasets to preserve complex-valued gradients instead of dropping the imaginary component.
+- Fixed simulation validation failure when WavePort `extrude_structures` was enabled with named structures by assigning unique names to extruded structures.
+- Fixed incorrect far-field results from ``DirectivityMonitor`` when symmetry is used.
+- Fixed local ``FieldProjector.project_fields()`` runs to support ``verbose=False`` when progress-bar output needs to be suppressed.
+- Fixed traced Cartesian field projection conversion so projected fields can be used directly as custom source datasets without producing object-dtype arrays during serialization.
+- Fixed autograd deserialization of remote complex-array VJP payloads used by traced field and custom source gradients.
+
+### Planned Deprecation
+
+- `RLCNetwork` (a deprecation warning is now issued). Use `CircuitImpedanceModel` instead. `AdmittanceNetwork` may be renamed to `AdmittanceModel` in a future release.
+
 ## [2.11.0.dev1] - 2026-03-06
 
 ### Added
@@ -2041,6 +2079,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.11.0.dev2]: https://github.com/flexcompute/tidy3d/compare/v2.11.0.dev1...v2.11.0.dev2
 [2.11.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0.dev0...v2.11.0.dev1
 [2.11.0]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
