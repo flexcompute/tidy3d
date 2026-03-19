@@ -12903,7 +12903,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2.11.0.dev2",
+      "default": "2.11.0",
       "type": "string"
     }
   },

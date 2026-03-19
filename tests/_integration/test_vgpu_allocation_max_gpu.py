@@ -13,16 +13,17 @@ actual GPU limit, and there is no "max" sentinel value.
 from __future__ import annotations
 
 import json
-import os
+import sys
+from pathlib import Path
 
 import tidy3d as td
-import tidy3d.web as web
 from tidy3d.web.core.http_util import http
 
-td.config.web.enable_caching = False
-td.config.local_cache.enabled = False
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-web.configure(os.environ["TIDY3D_VGPU_API_KEY"])
+from _helpers import configure_integration_environment
+
+configure_integration_environment()
 
 # --- Step 1: Check what the account endpoint returns ---
 print("=" * 60)

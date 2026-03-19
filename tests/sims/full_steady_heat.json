@@ -289,7 +289,7 @@
         "min_edges_per_side": 2.0,
         "non_refined_structures": []
     },
-    "version": "2.11.0.dev2",
+    "version": "2.11.0",
     "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "analysis_spec": null

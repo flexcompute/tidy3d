@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import os
+import sys
+from pathlib import Path
 
 import numpy as np
 
 import tidy3d as td
-import tidy3d.web as web
 
-td.config.web.enable_caching = False
-td.config.local_cache.enabled = False
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-web.configure(os.environ["TIDY3D_VGPU_API_KEY"])
+from _helpers import configure_integration_environment
+
+configure_integration_environment()
 
 freq0 = td.C_0 / 0.75
 

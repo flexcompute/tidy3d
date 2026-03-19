@@ -121,7 +121,8 @@
                         -1.0,
                         0.1
                     ]
-                ]
+                ],
+                "bulges": null
             },
             "name": "traced custom polyslab",
             "background_permittivity": null,
@@ -924,7 +925,8 @@
                         -0.5,
                         -0.5
                     ]
-                ]
+                ],
+                "bulges": null
             },
             "name": "pole_slab",
             "background_permittivity": null,
@@ -1692,7 +1694,8 @@
                         -0.5,
                         -0.5
                     ]
-                ]
+                ],
+                "bulges": null
             },
             "name": null,
             "background_permittivity": null,
@@ -2060,6 +2063,8 @@
                 "remove_dc_component": true
             },
             "num_freqs": 1,
+            "broadband_method": "chebyshev",
+            "use_colocated_integration": true,
             "direction": "-",
             "mode_spec": {
                 "attrs": {},
@@ -2094,8 +2099,8 @@
                 "interp_spec": null,
                 "type": "ModeSpec"
             },
-            "mode_index": 0,
-            "frame": null
+            "frame": null,
+            "mode_index": 0
         },
         {
             "attrs": {},
@@ -2122,6 +2127,8 @@
                 "remove_dc_component": true
             },
             "num_freqs": 3,
+            "broadband_method": "chebyshev",
+            "use_colocated_integration": true,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2156,6 +2163,8 @@
                 "remove_dc_component": true
             },
             "num_freqs": 1,
+            "broadband_method": "chebyshev",
+            "use_colocated_integration": true,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2188,6 +2197,8 @@
                 "remove_dc_component": true
             },
             "num_freqs": 1,
+            "broadband_method": "chebyshev",
+            "use_colocated_integration": true,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2225,6 +2236,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
+            "use_colocated_integration": true,
             "field_dataset": {
                 "attrs": {},
                 "type": "FieldDataset",
@@ -2298,11 +2310,13 @@
                 "remove_dc_component": true
             },
             "num_freqs": 1,
+            "broadband_method": "chebyshev",
             "direction": "+",
             "angle_theta": 0.5235987755982988,
             "angle_phi": 0.6283185307179586,
             "pol_angle": 0.0,
-            "injection_axis": 2
+            "injection_axis": 2,
+            "use_colocated_integration": true
         },
         {
             "attrs": {},
@@ -2431,6 +2445,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 150000000000000.0,
                 200000000000000.0
@@ -2466,6 +2481,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "start": 0.0,
             "stop": null,
             "interval": 100,
@@ -2498,6 +2514,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "start": 0.0,
             "stop": null,
             "interval": 100,
@@ -2525,6 +2542,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 200000000000000.0,
                 250000000000000.0
@@ -2559,6 +2577,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "start": 0.0,
             "stop": null,
             "interval": 1,
@@ -2585,6 +2604,7 @@
                 1
             ],
             "colocate": false,
+            "use_colocated_integration": true,
             "freqs": [
                 100000000000000.0
             ],
@@ -2616,6 +2636,7 @@
                 1
             ],
             "colocate": false,
+            "use_colocated_integration": true,
             "freqs": [
                 100000000000000.0
             ],
@@ -2647,6 +2668,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 200000000000000.0,
                 250000000000000.0
@@ -2714,6 +2736,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -2866,6 +2889,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -2925,6 +2949,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -2981,6 +3006,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -3133,6 +3159,7 @@
                 1
             ],
             "colocate": true,
+            "use_colocated_integration": true,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -3285,6 +3312,7 @@
                 1
             ],
             "colocate": false,
+            "use_colocated_integration": true,
             "freqs": [
                 100000000000000.0,
                 200000000000000.0
@@ -3467,7 +3495,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.11.0.dev2",
+    "version": "2.11.0",
     "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "lumped_elements": [
@@ -3541,6 +3569,7 @@
     "post_norm": 1.0,
     "internal_absorbers": [],
     "courant": 0.8,
+    "relax_courant": false,
     "precision": "hybrid",
     "normalize_index": 0,
     "shutoff": 0.0001,
