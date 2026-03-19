@@ -532,6 +532,21 @@ def test_mode_solver_data():
     assert normal_dim not in data.poynting.coords
 
 
+def test_mode_solver_data_log(tmp_path):
+    """Test that ModeSolverData.log round-trips through save/load."""
+    data = make_mode_solver_data()
+    assert data.log is None
+
+    log_string = "Mode solver at f=1.93e+14 with plane size (124, 135), direction: +"
+    data_with_log = data.updated_copy(log=log_string)
+    assert data_with_log.log == log_string
+
+    fname = str(tmp_path / "mode_solver_data.hdf5")
+    data_with_log.to_file(fname)
+    data_loaded = ModeSolverData.from_file(fname)
+    assert data_loaded.log == log_string
+
+
 def test_permittivity_data():
     data = make_permittivity_data()
     for comp in "xyz":

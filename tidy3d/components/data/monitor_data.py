@@ -3377,6 +3377,12 @@ class ModeSolverData(ModeData):
         "interpolating in frequency.",
     )
 
+    log: Optional[str] = Field(
+        None,
+        title="Solver Log",
+        description="A string containing the log information from the mode solver run.",
+    )
+
     def _normalize_modes(self) -> None:
         """Normalize modes. Note: this modifies ``self`` in-place."""
         self_dot = self.dot(self, conjugate=self.monitor.conjugated_dot_product)
