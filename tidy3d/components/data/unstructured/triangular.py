@@ -600,6 +600,74 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         return Triangulation(self.points[:, 0], self.points[:, 1], self.cells)
 
+    @requires_vtk
+    def _decimate(
+        self, target_num_cells: int, geometry_only: bool = False
+    ) -> TriangularGridDataset:
+        """Return a decimated copy suitable for visualization.
+
+        Uses VTK's ``vtkDecimatePro`` to reduce the number of triangles
+        while preserving the overall shape and vertex data.
+
+        Parameters
+        ----------
+        target_num_cells : int
+            Desired (approximate) number of cells in the output mesh.
+        geometry_only : bool = False
+            When ``True`` skip marshaling point data into VTK, which avoids
+            copying the full value tensor for grid-only plots.
+
+        Returns
+        -------
+        TriangularGridDataset
+            Decimated dataset.
+        """
+        num_cells = len(self.cells)
+        if num_cells <= target_num_cells:
+            return self
+
+        target_reduction = 1.0 - target_num_cells / num_cells
+
+        poly = vtk["mod"].vtkPolyData()
+        poly.SetPoints(self._vtk_points)
+        poly.SetPolys(self._vtk_cells)
+
+        if not geometry_only:
+            data_values = self.values.values
+            if self.is_complex:
+                data_values = data_values.view("(2,)float")
+            if len(self._non_spatial_shape) > 0:
+                data_values = data_values.reshape(
+                    (len(self.points.values), (1 + self.is_complex) * self._num_fields)
+                )
+            point_data_vtk = vtk["numpy_to_vtk"](np.array(data_values, copy=True))
+            point_data_vtk.SetName(self.name)
+            poly.GetPointData().SetScalars(point_data_vtk)
+
+        decimate = vtk["mod"].vtkDecimatePro()
+        decimate.SetInputData(poly)
+        decimate.SetTargetReduction(target_reduction)
+        decimate.PreserveTopologyOn()
+        decimate.Update()
+
+        decimated = decimate.GetOutput()
+        if decimated.GetNumberOfCells() == 0:
+            return self
+
+        if geometry_only:
+            dummy = vtk["numpy_to_vtk"](np.zeros(decimated.GetNumberOfPoints()))
+            decimated.GetPointData().SetScalars(dummy)
+
+        return type(self)._from_vtk_obj(
+            decimated,
+            field=None if geometry_only else self._non_spatial_coords_dict,
+            remove_degenerate_cells=True,
+            remove_unused_points=True,
+            values_type=IndexedDataArray if geometry_only else self._values_type,
+            expect_complex=False if geometry_only else self.is_complex,
+            ignore_invalid_cells=True,
+        )
+
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -614,6 +682,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Optional[dict] = None,
         pcolor_kwargs: Optional[dict] = None,
+        max_cells: Optional[int] = None,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -641,6 +710,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Additional parameters passed to colorbar object.
         pcolor_kwargs: Dict = {}
             Additional parameters passed to ax.tripcolor()
+        max_cells : int = None
+            When set to a positive integer, the mesh is decimated to approximately
+            this many cells before plotting. This reduces memory usage and speeds up
+            rendering for large meshes that would otherwise cause out-of-memory
+            errors. Requires ``vtk``.
 
         Returns
         -------
@@ -654,18 +728,36 @@ class TriangularGridDataset(UnstructuredGridDataset):
             pcolor_kwargs = {}
         if not (field or grid):
             raise DataError("Nothing to plot ('field == False', 'grid == False').")
+        if max_cells is not None and max_cells <= 0:
+            raise DataError("'max_cells' must be a positive integer.")
+
+        if field and self._num_fields != 1:
+            raise DataError(
+                "Unstructured dataset contains more than 1 field. "
+                "Use '.sel()' to select a single field from available dimensions "
+                f"{self._non_spatial_coords_dict} before plotting."
+            )
+
+        plot_data = self
+        if max_cells is not None and len(self.cells) > max_cells:
+            try:
+                plot_data = self._decimate(max_cells, geometry_only=not field)
+                log.info(
+                    f"Decimated mesh from {len(self.cells)} to {len(plot_data.cells)} "
+                    "cells for plotting."
+                )
+            except Exception:
+                log.warning(
+                    "Mesh decimation failed (vtk may not be installed). Plotting full mesh."
+                )
+
+        triangulation = plot_data._triangulation_obj
 
         # plot data field if requested
         if field:
-            if self._num_fields != 1:
-                raise DataError(
-                    "Unstructured dataset contains more than 1 field. "
-                    "Use '.sel()' to select a single field from available dimensions "
-                    f"{self._non_spatial_coords_dict} before plotting."
-                )
             plot_obj = ax.tripcolor(
-                self._triangulation_obj,
-                self.values.data.ravel(),
+                triangulation,
+                plot_data.values.data.ravel(),
                 shading=shading,
                 cmap=cmap,
                 vmin=vmin,
@@ -684,7 +776,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # plot grid if requested
         if grid:
             ax.triplot(
-                self._triangulation_obj,
+                triangulation,
                 color=plot_params_grid.edgecolor,
                 linewidth=plot_params_grid.linewidth,
             )

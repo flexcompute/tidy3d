@@ -311,6 +311,31 @@ def test_triangular_dataset(tmp_path, ds_name, values_type, no_vtk=False):
     _ = tri_grid_one_field.plot(shading="flat")
     plt.close()
 
+    # test max_cells decimation
+    if not no_vtk:
+        _ = tri_grid_one_field.plot(max_cells=1)
+        plt.close()
+
+        # max_cells larger than mesh should be a no-op
+        _ = tri_grid_one_field.plot(max_cells=10_000)
+        plt.close()
+
+        # grid-only decimation must not warn about missing point data
+        with AssertLogLevel("INFO"):
+            _ = tri_grid_one_field.plot(field=False, grid=True, max_cells=1)
+        plt.close()
+
+    # max_cells <= 0 must be rejected
+    with pytest.raises(DataError):
+        _ = tri_grid_one_field.plot(max_cells=0)
+    with pytest.raises(DataError):
+        _ = tri_grid_one_field.plot(max_cells=-1)
+
+    # multi-field guard fires before decimation
+    if len(extra_dims) > 0 and not no_vtk:
+        with pytest.raises(DataError):
+            _ = tri_grid.plot(max_cells=1)
+
     with pytest.raises(DataError):
         _ = tri_grid.plot(field=False, grid=False)
 
@@ -660,6 +685,10 @@ def test_tetrahedral_dataset(tmp_path, ds_name, values_type, no_vtk=False):
         plt.close()
 
         _ = tet_grid_one_field.plot(z=0.5, cbar=False, shading="flat")
+        plt.close()
+
+        # test max_cells decimation pass-through
+        _ = tet_grid_one_field.plot(z=0.5, max_cells=1, grid=False)
         plt.close()
 
         # verify axis limits are clipped to tet bounds

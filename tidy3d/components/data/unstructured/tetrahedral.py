@@ -392,6 +392,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
+        max_cells: Optional[int] = None,
         **kwargs: Any,
     ) -> Ax:
         """Plot a 2D slice of the tetrahedral grid data.
@@ -409,6 +410,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             Position of the slicing plane along the y-axis.
         z : float = None
             Position of the slicing plane along the z-axis.
+        max_cells : int = None
+            When set, the triangular slice is decimated to approximately this many
+            cells before plotting. Forwarded to :meth:`TriangularGridDataset.plot`.
         **kwargs : dict
             Keyword arguments forwarded to :meth:`TriangularGridDataset.plot`.
 
@@ -433,7 +437,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         axis = list("xyz").index(next(iter(sel_kwargs)))
         tri_data = self.sel(**sel_kwargs)
-        ax = tri_data.plot(**kwargs)
+        ax = tri_data.plot(max_cells=max_cells, **kwargs)
 
         # Clip axis limits to the original tetrahedral domain bounds so that
         # triangles straddling the boundary don't stretch the plot extent.
