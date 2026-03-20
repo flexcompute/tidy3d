@@ -77,6 +77,70 @@ SOLVER_NAME = {
     "VOLUME_MESH": "VolumeMesher",
 }
 
+DEFAULT_DATA_FILENAME = {
+    TaskType.FDTD.name: "simulation_data.hdf5",
+    TaskType.MODE_SOLVER.name: "simulation_data.hdf5",
+    TaskType.MODE.name: "simulation_data.hdf5",
+    TaskType.EME.name: "simulation_data.hdf5",
+    TaskType.HEAT.name: "simulation_data.hdf5",
+    TaskType.HEAT_CHARGE.name: "simulation_data.hdf5",
+    TaskType.VOLUME_MESH.name: "simulation_data.hdf5",
+    TaskType.MODAL_CM.name: "cm_data.hdf5",
+    TaskType.TERMINAL_CM.name: "cm_data.hdf5",
+    "COMPONENT_MODELER": "cm_data.hdf5",
+    "TERMINAL_COMPONENT_MODELER": "cm_data.hdf5",
+    "RF": "cm_data.hdf5",
+}
+
+
+def default_data_filename(task_type: Optional[str]) -> str:
+    """Return the default results filename for the given task type."""
+
+    if isinstance(task_type, TaskType):
+        task_type = task_type.name
+    return DEFAULT_DATA_FILENAME.get(task_type or "", "simulation_data.hdf5")
+
+
+def _resolve_output_path(path: Optional[PathLike], task_type: Optional[str]) -> Path:
+    """Resolve an explicit output path or a task-type-specific default filename."""
+
+    return Path(path) if path is not None else Path(default_data_filename(task_type))
+
+
+def _task_type_from_task(task: WebTask, task_type: Optional[str] = None) -> Optional[str]:
+    """Normalize the task type for default-path and artifact resolution."""
+
+    task_type = task_type or getattr(task, "task_type", None)
+    if isinstance(task_type, TaskType):
+        task_type = task_type.name
+    if isinstance(task, BatchTask):
+        return task_type or "RF"
+    return task_type
+
+
+def _resolve_download_target(
+    task_id: str,
+    path: Optional[PathLike],
+    task: Optional[WebTask] = None,
+    task_type: Optional[str] = None,
+) -> tuple[Path, WebTask, Optional[str]]:
+    """Resolve the output path and task metadata needed to download results."""
+
+    if task is None:
+        task = TaskFactory.get(task_id, verbose=False)
+        if task is None:
+            raise ValueError("Task not found.")
+    task_type = _task_type_from_task(task, task_type)
+    return _resolve_output_path(path, task_type), task, task_type
+
+
+def _remote_data_file(task: WebTask, task_type: Optional[str]) -> str:
+    """Return the remote results artifact name for a task."""
+
+    if isinstance(task, BatchTask):
+        return CM_DATA_HDF5_GZ
+    return MODE_DATA_HDF5_GZ if task_type == TaskType.MODE_SOLVER.name else SIMULATION_DATA_HDF5_GZ
+
 
 def _get_url(task_id: str) -> str:
     """Get the URL for a task on our server."""
@@ -302,7 +366,7 @@ def run(
     simulation: WorkflowType,
     task_name: Optional[str] = None,
     folder_name: str = "default",
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     callback_url: Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: Optional[Callable[[float], None]] = None,
@@ -330,8 +394,9 @@ def run(
         Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    path : PathLike = "simulation_data.hdf5"
-        Path to download results file (.hdf5), including filename.
+    path : Optional[PathLike] = None
+        Path to download results file (.hdf5), including filename. When ``None``, a task-type-
+        specific default filename is used.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
@@ -410,9 +475,14 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    stub = Tidy3dStub(simulation=simulation)
+    if task_name is None:
+        task_name = stub.get_default_task_name()
+
+    resolved_path = _resolve_output_path(path, stub.get_type())
     restored_path, _ = restore_simulation_if_cached(
         simulation=simulation,
-        path=path,
+        path=resolved_path,
         reduce_simulation=reduce_simulation,
         verbose=verbose,
     )
@@ -445,7 +515,7 @@ def run(
 
     data = load(
         task_id=task_id,
-        path=path,
+        path=resolved_path,
         verbose=verbose,
         progress_callback=progress_callback_download,
         lazy=lazy,
@@ -453,7 +523,7 @@ def run(
 
     if isinstance(simulation, ModeSolver):
         if task_id is not None:
-            _store_mode_solver_in_cache(task_id, simulation, data, path)
+            _store_mode_solver_in_cache(task_id, simulation, data, resolved_path)
         simulation._patch_data(data=data)
 
     return data
@@ -1025,9 +1095,12 @@ def abort(task_id: TaskId) -> Optional[TaskInfo]:
 @wait_for_connection
 def download(
     task_id: TaskId,
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
+    *,
+    task: Optional[WebTask] = None,
+    task_type: Optional[str] = None,
 ) -> None:
     """Download results of task to file.
 
@@ -1035,33 +1108,21 @@ def download(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : PathLike = "simulation_data.hdf5"
-        Download path to .hdf5 data file (including filename).
+    path : Optional[PathLike] = None
+        Download path to .hdf5 data file (including filename). When ``None``, a task-type-
+        specific default filename is used.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
-    path = Path(path)
-    task = TaskFactory.get(task_id, verbose=False)
-    if isinstance(task, BatchTask):
-        if path.name == "simulation_data.hdf5":
-            path = path.with_name("cm_data.hdf5")
-        task.get_data_hdf5(
-            to_file=path,
-            remote_data_file_gz=CM_DATA_HDF5_GZ,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
-        return
-    info = get_info(task_id, verbose=False)
-    remote_data_file = SIMULATION_DATA_HDF5_GZ
-    if info.taskType == "MODE_SOLVER":
-        remote_data_file = MODE_DATA_HDF5_GZ
+    resolved_path, task, task_type = _resolve_download_target(
+        task_id, path, task=task, task_type=task_type
+    )
     task.get_data_hdf5(
-        to_file=path,
-        remote_data_file_gz=remote_data_file,
+        to_file=resolved_path,
+        remote_data_file_gz=_remote_data_file(task, task_type),
         verbose=verbose,
         progress_callback=progress_callback,
     )
@@ -1160,7 +1221,7 @@ def download_log(
 @wait_for_connection
 def load(
     task_id: Optional[TaskId],
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -1186,8 +1247,9 @@ def load(
     ----------
     task_id : Optional[str] = None
         Unique identifier of task on server. Returned by :meth:`upload`. If None, file is assumed to exist already from cache.
-    path : PathLike
-        Download path to .hdf5 data file (including filename).
+    path : Optional[PathLike]
+        Download path to .hdf5 data file (including filename). When ``None`` and ``task_id`` is
+        provided, a task-type-specific default filename is used.
     replace_existing : bool = True
         Downloads the data even if path exists (overwriting the existing).
     verbose : bool = True
@@ -1203,29 +1265,44 @@ def load(
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
-    path = Path(path)
     from_cache = task_id is None  # for readability
-    # For component modeler batches, default to a clearer filename if the default was used.
-    if not from_cache and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}:
-        if TaskFactory.get_kind(task_id) is BatchTask:
-            path = path.with_name(path.name.replace("simulation", "cm"))
-
+    resolved_path = Path(path) if path is not None else None
+    task_type = None
     if from_cache:
-        if not path.exists():
+        resolved_path = _resolve_output_path(path, None)
+        if not resolved_path.exists():
             raise FileNotFoundError("Cached file not found.")
-    elif not path.exists() or replace_existing:
-        download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
+    elif resolved_path is None:
+        resolved_path, task, task_type = _resolve_download_target(task_id, None)
+        if not resolved_path.exists() or replace_existing:
+            download(
+                task_id=task_id,
+                path=resolved_path,
+                verbose=verbose,
+                progress_callback=progress_callback,
+                task=task,
+                task_type=task_type,
+            )
+    elif not resolved_path.exists() or replace_existing:
+        download(
+            task_id=task_id,
+            path=resolved_path,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
     if verbose and not from_cache:
         console = get_logging_console()
-        console.log(f"Loading results from {path}")
+        console.log(f"Loading results from {resolved_path}")
 
-    stub_data = Tidy3dStubData.postprocess(path, lazy=lazy)
+    stub_data = Tidy3dStubData.postprocess(resolved_path, lazy=lazy)
 
     simulation_cache = resolve_local_cache()
     if simulation_cache is not None and not from_cache:
-        info = get_info(task_id, verbose=False)
-        workflow_type = getattr(info, "taskType", None)
+        workflow_type = task_type
+        if workflow_type is None:
+            info = get_info(task_id, verbose=False)
+            workflow_type = getattr(info, "taskType", None)
         if (
             workflow_type != TaskType.MODE_SOLVER.name
         ):  # we cannot get the simulation from data or web for mode solver
@@ -1239,7 +1316,7 @@ def load(
             simulation_cache.store_result(
                 stub_data=stub_data,
                 task_id=task_id,
-                path=path,
+                path=resolved_path,
                 workflow_type=workflow_type,
                 simulation=simulation,
             )

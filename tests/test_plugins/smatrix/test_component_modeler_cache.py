@@ -20,6 +20,7 @@ from tests.utils import run_emulated
 from tidy3d import SimulationDataMap
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+from tidy3d.web import run as public_run
 from tidy3d.web.api import webapi as web
 from tidy3d.web.cache import resolve_local_cache
 from tidy3d.web.core.types import TaskType
@@ -153,6 +154,94 @@ def test_component_modeler_cache_hit(
 
     s_matrix2 = data2.smatrix()
     assert s_matrix2 is not None
+
+
+@pytest.mark.parametrize(
+    "make_modeler, data_cls, task_type, patch_smatrix",
+    [
+        (make_component_modeler, ModalComponentModelerData, TaskType.MODAL_CM.value, None),
+        (
+            lambda: make_terminal_component_modeler(planar_pec=False),
+            TerminalComponentModelerData,
+            TaskType.TERMINAL_CM.value,
+            _patch_terminal_smatrix,
+        ),
+    ],
+)
+def test_component_modeler_cache_hit_uses_default_cm_path(
+    monkeypatch, tmp_path, make_modeler, data_cls, task_type, patch_smatrix
+):
+    modeler = make_modeler()
+    fake_stub = _FakeComponentModelerStubData(modeler, data_cls)
+    counters = _patch_run_pipeline(
+        monkeypatch,
+        task_type=task_type,
+        postprocess=lambda path, lazy=False: fake_stub,
+        load_simulation_fn=lambda task_id, path="simulation.json", verbose=True: modeler,
+        patch_autograd=False,
+    )
+    if patch_smatrix is not None:
+        patch_smatrix(monkeypatch, modeler)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    monkeypatch.chdir(tmp_path)
+
+    default_path = tmp_path / "cm_data.hdf5"
+
+    web.run(modeler, task_name=f"{task_type.lower()}_modeler_cache_default_path")
+    assert default_path.exists()
+    assert counters["download"] == 1
+
+    default_path.unlink()
+    _reset_counters(counters)
+
+    web.run(modeler, task_name=f"{task_type.lower()}_modeler_cache_default_path")
+    assert counters["download"] == 0
+    assert default_path.exists()
+
+
+@pytest.mark.parametrize(
+    "make_modeler, data_cls, task_type, patch_smatrix",
+    [
+        (make_component_modeler, ModalComponentModelerData, TaskType.MODAL_CM.value, None),
+        (
+            lambda: make_terminal_component_modeler(planar_pec=False),
+            TerminalComponentModelerData,
+            TaskType.TERMINAL_CM.value,
+            _patch_terminal_smatrix,
+        ),
+    ],
+)
+def test_public_run_component_modeler_uses_default_cm_path(
+    monkeypatch, tmp_path, make_modeler, data_cls, task_type, patch_smatrix
+):
+    modeler = make_modeler()
+    fake_stub = _FakeComponentModelerStubData(modeler, data_cls)
+    counters = _patch_run_pipeline(
+        monkeypatch,
+        task_type=task_type,
+        postprocess=lambda path, lazy=False: fake_stub,
+        load_simulation_fn=lambda task_id, path="simulation.json", verbose=True: modeler,
+        patch_autograd=False,
+    )
+    if patch_smatrix is not None:
+        patch_smatrix(monkeypatch, modeler)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    monkeypatch.chdir(tmp_path)
+
+    default_path = tmp_path / "cm_data.hdf5"
+
+    public_run(modeler, task_name=f"{task_type.lower()}_public_wrapper_default_path")
+    assert default_path.exists()
+    assert counters["download"] == 1
+
+    default_path.unlink()
+    _reset_counters(counters)
+
+    public_run(modeler, task_name=f"{task_type.lower()}_public_wrapper_default_path")
+    assert counters["download"] == 0
+    assert default_path.exists()
 
 
 @pytest.mark.parametrize(

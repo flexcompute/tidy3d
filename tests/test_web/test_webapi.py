@@ -40,6 +40,7 @@ from tidy3d.web.api.run import _collect_by_hash, run
 from tidy3d.web.api.tidy3d_stub import Tidy3dStubData, task_type_name_of
 from tidy3d.web.api.webapi import (
     abort,
+    default_data_filename,
     delete,
     delete_old,
     download,
@@ -56,8 +57,10 @@ from tidy3d.web.api.webapi import (
     start,
     upload,
 )
+from tidy3d.web.core.constants import MODE_DATA_HDF5_GZ
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.exceptions import WebNotFoundError
+from tidy3d.web.core.task_core import BatchTask
 from tidy3d.web.core.types import PayType, TaskType
 
 TASK_NAME = "task_name_test"
@@ -523,6 +526,158 @@ def test_download(mock_download, tmp_path):
         assert f.read() == "0.3,5.7"
 
 
+@pytest.mark.parametrize(
+    ("task_type", "expected_name"),
+    [
+        (TaskType.FDTD, "simulation_data.hdf5"),
+        (TaskType.MODE_SOLVER, "simulation_data.hdf5"),
+        (TaskType.HEAT.name, "simulation_data.hdf5"),
+        (TaskType.MODAL_CM, "cm_data.hdf5"),
+        (TaskType.TERMINAL_CM, "cm_data.hdf5"),
+        ("RF", "cm_data.hdf5"),
+        ("UNKNOWN", "simulation_data.hdf5"),
+        (None, "simulation_data.hdf5"),
+    ],
+)
+def test_default_data_filename(task_type, expected_name):
+    assert default_data_filename(task_type) == expected_name
+
+
+def test_download_uses_mode_defaults_and_single_task_lookup(monkeypatch, tmp_path):
+    captured = {}
+    get_calls = 0
+
+    class FakeTask:
+        task_type = TaskType.MODE_SOLVER.name
+
+        def get_data_hdf5(self, to_file, remote_data_file_gz, **kwargs):
+            captured["to_file"] = Path(to_file)
+            captured["remote_data_file_gz"] = remote_data_file_gz
+            Path(to_file).write_text("mode-data")
+            return Path(to_file)
+
+    def _fake_get(*args, **kwargs):
+        nonlocal get_calls
+        get_calls += 1
+        return FakeTask()
+
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _fake_get)
+    monkeypatch.chdir(tmp_path)
+
+    download(TASK_ID, path=None, verbose=False)
+
+    assert get_calls == 1
+    assert captured["to_file"] == Path("simulation_data.hdf5")
+    assert captured["remote_data_file_gz"] == MODE_DATA_HDF5_GZ
+    assert (tmp_path / "simulation_data.hdf5").exists()
+
+
+def test_download_uses_cm_default_path_for_batch(monkeypatch, tmp_path):
+    captured = {}
+    batch_task = BatchTask(taskId=TASK_ID, taskType=TaskType.TERMINAL_CM.name)
+
+    def _fake_get(*args, **kwargs):
+        return batch_task
+
+    def _fake_get_data_hdf5(self, to_file, remote_data_file_gz, **kwargs):
+        captured["to_file"] = Path(to_file)
+        captured["remote_data_file_gz"] = remote_data_file_gz
+        Path(to_file).write_text("cm-data")
+        return Path(to_file)
+
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _fake_get)
+    monkeypatch.setattr(BatchTask, "get_data_hdf5", _fake_get_data_hdf5)
+    monkeypatch.chdir(tmp_path)
+
+    download(TASK_ID, path=None, verbose=False)
+
+    assert captured["to_file"] == Path("cm_data.hdf5")
+    assert (tmp_path / "cm_data.hdf5").exists()
+
+
+def test_download_respects_explicit_batch_path(monkeypatch, tmp_path):
+    captured = {}
+    explicit_path = tmp_path / "simulation_data.hdf5"
+    batch_task = BatchTask(taskId=TASK_ID, taskType=TaskType.TERMINAL_CM.name)
+
+    def _fake_get(*args, **kwargs):
+        return batch_task
+
+    def _fake_get_data_hdf5(self, to_file, remote_data_file_gz, **kwargs):
+        captured["to_file"] = Path(to_file)
+        Path(to_file).write_text("cm-data")
+        return Path(to_file)
+
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _fake_get)
+    monkeypatch.setattr(BatchTask, "get_data_hdf5", _fake_get_data_hdf5)
+
+    download(TASK_ID, path=explicit_path, verbose=False)
+
+    assert captured["to_file"] == explicit_path
+
+
+def test_load_uses_cm_default_path_for_batch(monkeypatch, tmp_path):
+    captured = {"get_calls": 0}
+    batch_task = BatchTask(taskId=TASK_ID, taskType=TaskType.TERMINAL_CM.name)
+
+    def _fake_get(*args, **kwargs):
+        captured["get_calls"] += 1
+        return batch_task
+
+    def _fake_get_data_hdf5(self, to_file, remote_data_file_gz, **kwargs):
+        captured["download_path"] = Path(to_file)
+        captured["remote_data_file_gz"] = remote_data_file_gz
+        Path(to_file).write_text("cm-data")
+        return Path(to_file)
+
+    def _fake_postprocess(path, lazy=False):
+        captured["postprocess_path"] = Path(path)
+        return "cm-stub-data"
+
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _fake_get)
+    monkeypatch.setattr(BatchTask, "get_data_hdf5", _fake_get_data_hdf5)
+    monkeypatch.setattr(f"{api_path}.Tidy3dStubData.postprocess", _fake_postprocess)
+    monkeypatch.setattr(f"{api_path}.resolve_local_cache", lambda: None)
+    monkeypatch.chdir(tmp_path)
+
+    data = load(TASK_ID, path=None, verbose=False)
+
+    assert data == "cm-stub-data"
+    assert captured["get_calls"] == 1
+    assert captured["download_path"] == Path("cm_data.hdf5")
+    assert captured["postprocess_path"] == Path("cm_data.hdf5")
+    assert (tmp_path / "cm_data.hdf5").exists()
+
+
+def test_load_respects_explicit_batch_path(monkeypatch, tmp_path):
+    captured = {}
+    explicit_path = tmp_path / "simulation_data.hdf5"
+    batch_task = BatchTask(taskId=TASK_ID, taskType=TaskType.TERMINAL_CM.name)
+
+    def _fake_get(*args, **kwargs):
+        return batch_task
+
+    def _fake_get_data_hdf5(self, to_file, remote_data_file_gz, **kwargs):
+        captured["download_path"] = Path(to_file)
+        Path(to_file).write_text("cm-data")
+        return Path(to_file)
+
+    def _fake_postprocess(path, lazy=False):
+        captured["postprocess_path"] = Path(path)
+        return "cm-stub-data"
+
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _fake_get)
+    monkeypatch.setattr(BatchTask, "get_data_hdf5", _fake_get_data_hdf5)
+    monkeypatch.setattr(f"{api_path}.Tidy3dStubData.postprocess", _fake_postprocess)
+    monkeypatch.setattr(f"{api_path}.resolve_local_cache", lambda: None)
+
+    data = load(TASK_ID, path=explicit_path, verbose=False)
+
+    assert data == "cm-stub-data"
+    assert captured["download_path"] == explicit_path
+    assert captured["postprocess_path"] == explicit_path
+
+
 @responses.activate
 def _test_load(mock_load, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
@@ -530,6 +685,24 @@ def _test_load(mock_load, mock_get_info, tmp_path):
 
     monkeypatch.setattr(f"{task_core_path}.download_file", mock_download)
     load(TASK_ID, str(tmp_path / "monitor_data.hdf5"))
+
+
+def test_load_existing_explicit_path_skips_task_lookup(monkeypatch, tmp_path):
+    data_path = tmp_path / "existing_results.hdf5"
+    data_path.write_text("stub")
+
+    def _raise(*args, **kwargs):
+        raise AssertionError("Unexpected task lookup during explicit-path load.")
+
+    monkeypatch.setattr(f"{api_path}.get_info", _raise)
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _raise)
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get_kind", _raise)
+    monkeypatch.setattr(f"{api_path}.resolve_local_cache", lambda: None)
+    monkeypatch.setattr(
+        f"{api_path}.Tidy3dStubData.postprocess", lambda *args, **kwargs: "stub_data"
+    )
+
+    assert load(TASK_ID, path=data_path, replace_existing=False, verbose=False) == "stub_data"
 
 
 def test_batch_load_sim_data_skips_task_lookup(monkeypatch, tmp_path):
@@ -1847,6 +2020,19 @@ def test_run_single_offline_eager(monkeypatch, tmp_path):
     assert sim_data.__class__.__name__ == "SimulationData"  # no proxy
 
 
+@responses.activate
+def test_run_single_offline_eager_uses_default_path(monkeypatch, tmp_path):
+    sim = make_sim()
+    task_name = "single_default"
+    monkeypatch.chdir(tmp_path)
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={task_name: sim})
+
+    sim_data = run(sim, task_name=task_name)
+
+    assert (tmp_path / "simulation_data.hdf5").exists()
+    assert isinstance(sim_data, SimulationData)
+
+
 class FauxPath:
     """Minimal PathLike to exercise __fspath__ support."""
 
@@ -1912,6 +2098,18 @@ def test_job_run_accepts_pathlikes(monkeypatch, tmp_path, path_builder):
     _ = j.run(path=out_file)
 
     assert os.path.exists(os.fspath(out_file))
+
+
+def test_job_run_uses_default_path(monkeypatch, tmp_path):
+    sim = make_sim()
+    task_name = "job_default"
+    monkeypatch.chdir(tmp_path)
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={task_name: sim})
+
+    job = Job(simulation=sim, task_name=task_name, folder_name=PROJECT_NAME)
+    _ = job.run()
+
+    assert (tmp_path / "simulation_data.hdf5").exists()
 
 
 @pytest.mark.parametrize(

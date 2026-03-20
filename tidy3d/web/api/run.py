@@ -9,7 +9,9 @@ from tidy3d.config import config
 from tidy3d.log import get_logging_console
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.autograd import run_async
-from tidy3d.web.api.container import DEFAULT_DATA_DIR, DEFAULT_DATA_PATH
+from tidy3d.web.api.container import DEFAULT_DATA_DIR
+from tidy3d.web.api.tidy3d_stub import task_type_name_of
+from tidy3d.web.api.webapi import default_data_filename
 from tidy3d.web.core.types import PayType
 
 if TYPE_CHECKING:
@@ -117,7 +119,8 @@ def run(
     the input structure.
 
     **Path behavior**
-      - **Single simulation:** results are downloaded to ``f"{path}.hdf5"``.
+      - **Single simulation:** results are downloaded to ``f"{path}.hdf5"`` when ``path`` is
+        provided without a suffix.
       - **Multiple simulations:** ``path`` is treated as a **directory**, and each
         task will write its own results file inside that directory.
 
@@ -137,7 +140,8 @@ def run(
         Folder shown on the web UI.
     path : Optional[PathLike] = None
         Output path. Interpreted as a file path for single simulations and a directory for multiple simulations.
-        Defaults are "simulation.hdf5" (single simulation) and the current directory (multiple simulations).
+        Defaults are task-type-specific filenames for single simulations and the current
+        directory for multiple simulations.
     callback_url : Optional[str] = None
         Optional HTTP PUT endpoint to receive completion events.
     verbose : bool = True
@@ -252,9 +256,9 @@ def run(
                 path = f"{path}.hdf5"
                 console = get_logging_console()
                 console.log(f"Changed output path to {path}")
-        else:
-            path = DEFAULT_DATA_PATH
         h, sim = next(iter(h2sim.items()))
+        if path is None:
+            path = default_data_filename(task_type_name_of(sim))
         data = {
             h: run_autograd(
                 simulation=sim,

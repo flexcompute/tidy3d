@@ -284,7 +284,7 @@ def run_custom(
     simulation: WorkflowType,
     task_name: Optional[str] = None,
     folder_name: str = "default",
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     callback_url: Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: Optional[Callable[[float], None]] = None,
@@ -318,8 +318,9 @@ def run_custom(
         Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    path : PathLike = "simulation_data.hdf5"
-        Path to download results file (.hdf5), including filename.
+    path : Optional[PathLike] = None
+        Path to download results file (.hdf5), including filename. When ``None``, a task-type-
+        specific default filename is used.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
@@ -446,11 +447,13 @@ def run_custom(
             "workflows."
         )
 
+    stub = Tidy3dStub(simulation=simulation)
     if task_name is None:
-        stub = Tidy3dStub(simulation=simulation)
         task_name = stub.get_default_task_name()
 
-    path = Path(path)
+    resolved_path = (
+        Path(path) if path is not None else Path(webapi.default_data_filename(stub.get_type()))
+    )
 
     if isinstance(simulation, get_args(ComponentModelerType)):
         sim_dict = simulation.sim_dict
@@ -463,7 +466,7 @@ def run_custom(
         if should_run_local:
             from tidy3d.plugins.smatrix import run as smatrix_run
 
-            path_dir = path.parent
+            path_dir = resolved_path.parent
             return smatrix_run._run_local(
                 simulation,
                 path_dir=path_dir,
@@ -503,7 +506,7 @@ def run_custom(
             simulation=simulation,
             task_name=task_name,
             folder_name=folder_name,
-            path=path,
+            path=resolved_path,
             callback_url=callback_url,
             verbose=verbose,
             progress_callback_upload=progress_callback_upload,
@@ -536,7 +539,7 @@ def run_custom(
         simulation=simulation_static,
         task_name=task_name,
         folder_name=folder_name,
-        path=path,
+        path=resolved_path,
         callback_url=callback_url,
         verbose=verbose,
         progress_callback_upload=progress_callback_upload,
@@ -864,7 +867,7 @@ def run(
     simulation: WorkflowType,
     task_name: Optional[str] = None,
     folder_name: str = "default",
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     callback_url: Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: Optional[Callable[[float], None]] = None,

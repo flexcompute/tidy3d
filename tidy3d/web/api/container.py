@@ -39,7 +39,7 @@ from tidy3d.web.api.states import (
     RUNNING_STATES,
     STATE_PROGRESS_PERCENTAGE,
 )
-from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+from tidy3d.web.api.tidy3d_stub import Tidy3dStub, task_type_name_of
 from tidy3d.web.api.webapi import _batch_detail_progress, restore_simulation_if_cached
 from tidy3d.web.cache import _store_mode_solver_in_cache
 from tidy3d.web.core.constants import TaskId, TaskName
@@ -57,7 +57,6 @@ if TYPE_CHECKING:
     from tidy3d.components.types.workflow import WorkflowDataType
     from tidy3d.web.core.task_info import RunInfo, TaskInfo
 
-DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_PROGRESS_REFRESH_TIME = 0.02
 # Upload/start requests are network I/O-bound, so use a fixed concurrency cap.
@@ -283,6 +282,14 @@ class Job(WebContainer):
         stash_dir.mkdir(parents=True, exist_ok=True)
         return str(Path(stash_dir / f"{uuid.uuid4()}.hdf5"))
 
+    def _task_type_hint(self) -> Optional[str]:
+        """Best-effort task type derived from the simulation for default filename selection."""
+
+        try:
+            return task_type_name_of(self.simulation)
+        except (AttributeError, TypeError, ValueError):
+            return None
+
     def _materialize_from_stash(self, dst_path: os.PathLike) -> None:
         """Atomic copy from stash to requested path."""
         tmp = str(dst_path) + ".part"
@@ -316,7 +323,7 @@ class Job(WebContainer):
 
     def run(
         self,
-        path: PathLike = DEFAULT_DATA_PATH,
+        path: Optional[PathLike] = None,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
         ignore_memory_limit: Optional[bool] = None,
@@ -325,8 +332,9 @@ class Job(WebContainer):
 
         Parameters
         ----------
-        path : PathLike = "./simulation_data.hdf5"
-            Path to download results file (.hdf5), including filename.
+        path : Optional[PathLike] = None
+            Path to download results file (.hdf5), including filename. When ``None``, a task-type-
+            specific default filename is used.
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
@@ -344,7 +352,8 @@ class Job(WebContainer):
         :class:`WorkflowDataType`
             Object containing simulation results.
         """
-        self._check_path_dir(path=path)
+        if path is not None:
+            self._check_path_dir(path=path)
 
         loaded_from_cache = self.load_if_cached
         if not loaded_from_cache:
@@ -497,31 +506,36 @@ class Job(WebContainer):
             return
         web.monitor(self.task_id, verbose=self.verbose)
 
-    def download(self, path: PathLike = DEFAULT_DATA_PATH) -> None:
+    def download(self, path: Optional[PathLike] = None) -> None:
         """Download results of simulation.
 
         Parameters
         ----------
-        path : PathLike = "./simulation_data.hdf5"
-            Path to download data as ``.hdf5`` file (including filename).
+        path : Optional[PathLike] = None
+            Path to download data as ``.hdf5`` file (including filename). When ``None``, a task-
+            type-specific default filename is used.
 
         Note
         ----
         To load the data after download, use :meth:`Job.load`.
         """
         if self.load_if_cached:
-            self._materialize_from_stash(path)
+            target_path = web._resolve_output_path(path, self._task_type_hint())
+            self._check_path_dir(path=target_path)
+            self._materialize_from_stash(target_path)
             return
-        self._check_path_dir(path=path)
+        if path is not None:
+            self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: PathLike = DEFAULT_DATA_PATH) -> WorkflowDataType:
+    def load(self, path: Optional[PathLike] = None) -> WorkflowDataType:
         """Download job results and load them into a data object.
 
         Parameters
         ----------
-        path : PathLike = "./simulation_data.hdf5"
-            Path to download data as ``.hdf5`` file (including filename).
+        path : Optional[PathLike] = None
+            Path to download data as ``.hdf5`` file (including filename). When ``None``, a task-
+            type-specific default filename is used.
 
         Returns
         -------
@@ -529,13 +543,19 @@ class Job(WebContainer):
         :class:`~tidy3d.EMESimulationData`]
             Object containing simulation results.
         """
-        self._check_path_dir(path=path)
+        resolved_path = Path(path) if path is not None else None
         if self.load_if_cached:
-            self._materialize_from_stash(path)
+            resolved_path = web._resolve_output_path(resolved_path, self._task_type_hint())
+            self._check_path_dir(path=resolved_path)
+            self._materialize_from_stash(resolved_path)
+        else:
+            if resolved_path is None:
+                resolved_path = web._resolve_output_path(None, self._task_type_hint())
+            self._check_path_dir(path=resolved_path)
 
         data = web.load(
             task_id=None if self.load_if_cached else self.task_id,
-            path=path,
+            path=resolved_path,
             verbose=self.verbose,
             lazy=self.lazy,
         )
@@ -545,7 +565,7 @@ class Job(WebContainer):
                     self.task_id,
                     self.simulation,
                     data,
-                    path,
+                    resolved_path,
                 )
             self.simulation._patch_data(data=data)
 

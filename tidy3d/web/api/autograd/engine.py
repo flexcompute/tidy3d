@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import tidy3d as td
-from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, Job
+from tidy3d.web.api import webapi
+from tidy3d.web.api.container import Batch, Job
 
 from .io_utils import get_vjp_traced_fields, upload_sim_fields_keys
 
@@ -37,7 +38,11 @@ def _run_tidy3d(
     if job.simulation_type == "autograd_fwd":
         verbose = run_kwargs.get("verbose", False)
         upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
-    path = Path(run_kwargs.get("path", DEFAULT_DATA_PATH))
+    path_arg = run_kwargs.get("path")
+    if path_arg is None:
+        path = webapi._resolve_output_path(None, job._task_type_hint())
+    else:
+        path = Path(path_arg)
     priority = run_kwargs.get("priority")
     vgpu_allocation = run_kwargs.get("vgpu_allocation")
     ignore_memory_limit = run_kwargs.get("ignore_memory_limit")

@@ -629,6 +629,69 @@ def test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
     assert os.path.exists(out2_path)
 
 
+def test_run_uses_default_path_on_cache_hit(monkeypatch, basic_simulation, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    monkeypatch.chdir(tmp_path)
+
+    default_path = tmp_path / "simulation_data.hdf5"
+
+    run(basic_simulation, task_name="demo")
+    assert default_path.exists()
+    assert counters["download"] == 1
+
+    default_path.unlink()
+    _reset_counters(counters)
+
+    run(basic_simulation, task_name="demo")
+    assert counters["download"] == 0
+    assert default_path.exists()
+
+
+def test_job_download_uses_default_path_on_cache_hit(monkeypatch, basic_simulation, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    monkeypatch.chdir(tmp_path)
+
+    Job(simulation=basic_simulation, task_name="job-download-default").run(
+        path=tmp_path / "seed.hdf5"
+    )
+
+    default_path = tmp_path / "simulation_data.hdf5"
+    if default_path.exists():
+        default_path.unlink()
+    _reset_counters(counters)
+
+    cached_job = Job(simulation=basic_simulation, task_name="job-download-default")
+    cached_job.download()
+
+    assert counters["download"] == 0
+    assert default_path.exists()
+
+
+def test_job_load_uses_default_path_on_cache_hit(monkeypatch, basic_simulation, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    monkeypatch.chdir(tmp_path)
+
+    Job(simulation=basic_simulation, task_name="job-load-default").run(path=tmp_path / "seed.hdf5")
+
+    default_path = tmp_path / "simulation_data.hdf5"
+    if default_path.exists():
+        default_path.unlink()
+    _reset_counters(counters)
+
+    cached_job = Job(simulation=basic_simulation, task_name="job-load-default")
+    data = cached_job.load()
+
+    assert isinstance(data, _FakeStubData)
+    assert counters["download"] == 0
+    assert default_path.exists()
+
+
 def test_autograd_cache(monkeypatch, request, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
 
