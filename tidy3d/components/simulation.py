@@ -29,6 +29,7 @@ from tidy3d.exceptions import (
     Tidy3dError,
     Tidy3dImportError,
     ValidationError,
+    format_chained_exception_message,
 )
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel, supports_local_subpixel, tidy3d_extras
@@ -2392,7 +2393,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             _ = self._finalized
         except Exception as e:
             raise Tidy3dError(
-                f"Simulation fails after requested mode source PEC frames are added with the following error:\n{e!s}"
+                format_chained_exception_message(
+                    "Simulation fails after requested mode source PEC frames are added.", e
+                )
             ) from e
 
 
@@ -5867,7 +5870,10 @@ class Simulation(AbstractYeeGridSimulation):
                 from tidy3d_extras.extension import _relax_courant
             except ImportError as exc:
                 raise ImportError(
-                    "'relax_courant' requires the 'tidy3d_extras' package to be installed."
+                    format_chained_exception_message(
+                        "'relax_courant' requires the 'tidy3d_extras' package to be installed",
+                        exc,
+                    )
                 ) from exc
             dl_mins_xyz = [float(np.min(sizes)) for sizes in self.grid.sizes.to_list]
             relax_ratio = _relax_courant(dl_mins=dl_mins_xyz)

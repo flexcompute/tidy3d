@@ -14,6 +14,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from scipy.fft import next_fast_len
 
 from tidy3d.components.autograd.functions import add_at, interpn, trapz
+from tidy3d.exceptions import format_chained_exception_message
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -58,7 +59,11 @@ def _normalize_axes(
             try:
                 ax = int(ax)
             except Exception as e:
-                raise TypeError(f"Axis {ax!r} could not be converted to an integer.") from e
+                raise TypeError(
+                    format_chained_exception_message(
+                        f"Axis {ax!r} could not be converted to an integer", e
+                    )
+                ) from e
 
         if not -ndim <= ax < ndim:
             raise ValueError(f"Invalid axis {ax} for {kind} with ndim {ndim}.")
@@ -216,7 +221,9 @@ def _get_pad_indices(
     try:
         indices = onp.pad(onp.arange(n), (pad_left, pad_right), mode=mode)
     except ValueError as error:
-        raise ValueError(f"Unsupported padding mode: {mode}") from error
+        raise ValueError(
+            format_chained_exception_message(f"Unsupported padding mode: {mode}", error)
+        ) from error
     return numpy_module.asarray(indices, dtype=int)
 
 

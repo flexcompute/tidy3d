@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 from typing import TYPE_CHECKING
 
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, format_chained_exception_message
 
 if TYPE_CHECKING:
     from typing import Union
@@ -77,8 +77,11 @@ def plot_sim_3d(
         from IPython.display import HTML, display
     except ImportError as e:
         raise SetupError(
-            "3D plotting requires ipython to be installed "
-            "and the code to be running on a jupyter notebook."
+            format_chained_exception_message(
+                "3D plotting requires ipython to be installed and the code to be running "
+                "on a jupyter notebook",
+                e,
+            )
         ) from e
 
     from base64 import b64encode

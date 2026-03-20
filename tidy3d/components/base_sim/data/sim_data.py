@@ -13,7 +13,13 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.file_util import replace_values
-from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import (
+    DataError,
+    FileError,
+    Tidy3dKeyError,
+    ValidationError,
+    format_chained_exception_message,
+)
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -72,8 +78,11 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
                 sim.get_monitor_by_name(monitor_name)
             except Tidy3dKeyError as exc:
                 raise DataError(
-                    f"Data with monitor name '{monitor_name}' supplied "
-                    f"but not found in the original '{sim.type}'."
+                    format_chained_exception_message(
+                        f"Data with monitor name '{monitor_name}' supplied "
+                        f"but not found in the original '{sim.type}'",
+                        exc,
+                    )
                 ) from exc
         return self
 
@@ -219,8 +228,11 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             savemat(fname, modified_sim_dict, **kwargs)
         except Exception as e:
             raise ValueError(
-                "Could not save supplied simulation data to file. As this is an experimental "
-                "feature, we may not be able to support the contents of your dataset. If you "
-                "receive this error, please feel free to raise an issue on our front end "
-                "repository so we can investigate."
+                format_chained_exception_message(
+                    "Could not save supplied simulation data to file. As this is an experimental "
+                    "feature, we may not be able to support the contents of your dataset. If you "
+                    "receive this error, please feel free to raise an issue on our front end "
+                    "repository so we can investigate.",
+                    e,
+                )
             ) from e

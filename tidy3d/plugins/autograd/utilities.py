@@ -8,7 +8,7 @@ import autograd.numpy as anp
 import numpy as np
 import xarray as xr
 
-from tidy3d.exceptions import Tidy3dError
+from tidy3d.exceptions import Tidy3dError, format_chained_exception_message
 
 if TYPE_CHECKING:
     from typing import Callable, Optional, Union
@@ -242,9 +242,11 @@ def scalar_objective(
                     ) from None
             except ValueError as e:
                 raise Tidy3dError(
-                    "An objective function's return value must be a scalar "
-                    "but got an array with shape "
-                    f"{getattr(result, 'shape', 'N/A')}."
+                    format_chained_exception_message(
+                        "An objective function's return value must be a scalar but got an "
+                        f"array with shape {getattr(result, 'shape', 'N/A')}",
+                        e,
+                    )
                 ) from e
 
             if not anp.isreal(result):

@@ -16,7 +16,7 @@ from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.config import config
-from tidy3d.exceptions import WebError
+from tidy3d.exceptions import WebError, format_chained_exception_message
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.states import (
     ALL_POST_VALIDATE_STATES,
@@ -122,7 +122,11 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
         status = batch_detail.status.lower()
     except Exception as e:
         log.error(f"Could not retrieve batch details for '{resource_id}': {e}")
-        raise WebError(f"Failed to retrieve status for batch '{resource_id}'.") from e
+        raise WebError(
+            format_chained_exception_message(
+                f"Failed to retrieve status for batch '{resource_id}'", e
+            )
+        ) from e
 
     if status not in ERROR_STATES:
         return
@@ -142,7 +146,10 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
             )
         except Exception as e:
             raise WebError(
-                "One or more subtasks failed validation. Failed to parse validation errors."
+                format_chained_exception_message(
+                    "One or more subtasks failed validation. Failed to parse validation errors.",
+                    e,
+                )
             ) from e
         raise WebError(full_error_msg)
 
@@ -1786,17 +1793,16 @@ def test() -> None:
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
         url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html"
-        msg = (
-            str(e)
-            + "\n\n"
-            + "It looks like the Tidy3D Python interface is not configured with your "
-            "unique API key. "
-            "To get your API key, sign into 'https://tidy3d.simulation.cloud' and copy it "
-            "from your 'Account' page. Then you can configure tidy3d through command line "
-            "'tidy3d configure' (recommended). Alternatively, one can manually create the configuration "
-            "file by creating a file at your home directory '~/.tidy3d/config' (unix) or "
-            "'.tidy3d/config' (windows) with content like: \n\n"
-            "apikey = 'XXX' \n\nHere XXX is your API key copied from your account page within quotes.\n\n"
-            f"For details, check the instructions at {url}."
-        )
-        raise WebError(msg) from e
+        raise WebError(
+            format_chained_exception_message(
+                "It looks like the Tidy3D Python interface is not configured with your unique "
+                "API key. To get your API key, sign into 'https://tidy3d.simulation.cloud' and "
+                "copy it from your 'Account' page. Then you can configure tidy3d through "
+                "command line 'tidy3d configure' (recommended). Alternatively, one can "
+                "manually create the configuration file by creating a file at your home "
+                "directory '~/.tidy3d/config' (unix) or '.tidy3d/config' (windows) with "
+                "content like: \n\napikey = 'XXX' \n\nHere XXX is your API key copied from "
+                f"your account page within quotes.\n\nFor details, check the instructions at {url}.",
+                e,
+            )
+        ) from e

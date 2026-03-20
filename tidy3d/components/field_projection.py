@@ -13,7 +13,7 @@ from pydantic import Field, model_validator
 from rich.progress import track
 
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, format_chained_exception_message
 from tidy3d.log import get_logging_console
 
 from .autograd.functions import add_at, trapz
@@ -572,7 +572,11 @@ class FieldProjector(Tidy3dBaseModel):
             currents_f = currents.sel(f=frequency)
         except Exception as e:
             raise SetupError(
-                f"Frequency {frequency} not found in fields for monitor '{surface.monitor.name}'."
+                format_chained_exception_message(
+                    f"Frequency {frequency} not found in fields for monitor "
+                    f"'{surface.monitor.name}'",
+                    e,
+                )
             ) from e
 
         idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)

@@ -36,7 +36,7 @@ from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
-from tidy3d.exceptions import FileError
+from tidy3d.exceptions import FileError, format_chained_exception_message
 from tidy3d.log import log
 
 from .autograd.types import TracedDict
@@ -389,7 +389,9 @@ class Tidy3dBaseModel(BaseModel):
         try:
             type_value = obj[TYPE_TAG_STR]
         except KeyError as exc:
-            raise ValueError(f'Missing "{TYPE_TAG_STR}" in data') from exc
+            raise ValueError(
+                format_chained_exception_message(f'Missing "{TYPE_TAG_STR}" in data', exc)
+            ) from exc
         if not isinstance(type_value, str) or not type_value:
             raise ValueError(f'Invalid "{TYPE_TAG_STR}" value: {type_value!r}')
         return type_value
@@ -399,7 +401,9 @@ class Tidy3dBaseModel(BaseModel):
         try:
             return TYPE_TO_CLASS_MAP[type_value]
         except KeyError as exc:
-            raise ValueError(f"Unknown type: {type_value}") from exc
+            raise ValueError(
+                format_chained_exception_message(f"Unknown type: {type_value}", exc)
+            ) from exc
 
     @classmethod
     def _should_dispatch_to(cls, target_cls: type[Tidy3dBaseModel]) -> bool:
@@ -642,8 +646,11 @@ class Tidy3dBaseModel(BaseModel):
             sub_component = getattr(self, field_name)
         except AttributeError as exc:
             raise AttributeError(
-                f"Could not find field '{field_name}' in path '{path}'. "
-                f"Available top-level fields: {tuple(type(self).model_fields)}."
+                format_chained_exception_message(
+                    f"Could not find field '{field_name}' in path '{path}'. "
+                    f"Available top-level fields: {tuple(type(self).model_fields)}",
+                    exc,
+                )
             ) from exc
 
         if isinstance(sub_component, (list, tuple)):

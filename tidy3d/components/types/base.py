@@ -18,6 +18,8 @@ from pydantic import (
 from pydantic.functional_serializers import PlainSerializer
 from pydantic.json_schema import WithJsonSchema
 
+from tidy3d.exceptions import format_chained_exception_message
+
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
@@ -115,7 +117,11 @@ def _coerce(v: Any, *, constraints: ArrayConstraints) -> NDArray:
         # constraints.dtype is already an np.dtype object or None
         arr = np.asarray(v) if constraints.dtype is None else np.asarray(v, dtype=constraints.dtype)
     except Exception as e:
-        raise ValueError(f"cannot convert {type(v).__name__!r} to a NumPy array") from e
+        raise ValueError(
+            format_chained_exception_message(
+                f"cannot convert {type(v).__name__!r} to a NumPy array", e
+            )
+        ) from e
 
     if arr.dtype == np.dtype("object"):
         raise ValueError(f"unsupported element type {type(v).__name__!r} for array coercion")

@@ -14,7 +14,7 @@ from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.config import config
 from tidy3d.constants import MICROMETER
-from tidy3d.exceptions import SetupError, Tidy3dImportError
+from tidy3d.exceptions import SetupError, Tidy3dImportError, format_chained_exception_message
 from tidy3d.log import log
 
 from .autograd.utils import contains, get_static
@@ -734,8 +734,11 @@ class Structure(AbstractStructure):
             library = gdstk.Library()
         except ImportError as e:
             raise Tidy3dImportError(
-                "Python module 'gdstk' not found. To export geometries to .gds "
-                "files, please install it."
+                format_chained_exception_message(
+                    "Python module 'gdstk' not found. To export geometries to .gds files, "
+                    "please install it",
+                    e,
+                )
             ) from e
         cell = library.new_cell(gds_cell_name)
         self.to_gds(

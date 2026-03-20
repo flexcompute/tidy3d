@@ -23,7 +23,7 @@ from tidy3d.components.microwave.path_integrals.specs.voltage import (
     AxisAlignedVoltageIntegralSpec,
     Custom2DVoltageIntegralSpec,
 )
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError, ValidationError, format_chained_exception_message
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -148,9 +148,12 @@ def make_path_integrals(
             i_integrals.append(i_integral)
         except Exception as e:
             raise SetupError(
-                f"Failed to construct path integrals for the mode with index {idx} "
-                "from the impedance specification. "
-                "Please create a github issue so that the problem can be investigated."
+                format_chained_exception_message(
+                    f"Failed to construct path integrals for the mode with index {idx} "
+                    "from the impedance specification. Please create a github issue so that "
+                    "the problem can be investigated.",
+                    e,
+                )
             ) from e
     return (tuple(v_integrals), tuple(i_integrals))
 
@@ -199,9 +202,12 @@ def make_path_integrals_for_terminal(
             integrals_dict[terminal_label] = (v_integral, i_integral)
         except Exception as e:
             raise SetupError(
-                f"Failed to construct path integrals for terminal '{terminal_label}' "
-                "from the impedance specification. "
-                "Please create a github issue so that the problem can be investigated."
+                format_chained_exception_message(
+                    f"Failed to construct path integrals for terminal '{terminal_label}' "
+                    "from the impedance specification. Please create a github issue so that "
+                    "the problem can be investigated.",
+                    e,
+                )
             ) from e
 
     return integrals_dict

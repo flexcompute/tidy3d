@@ -18,7 +18,7 @@ from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.simulation import Simulation
 from tidy3d.config import config
-from tidy3d.exceptions import SetupError, WebError
+from tidy3d.exceptions import SetupError, WebError, format_chained_exception_message
 from tidy3d.log import get_logging_console, log
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from tidy3d.version import __version__
@@ -635,8 +635,11 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
                 )
             except Exception as e:
                 raise WebError(
-                    "Failed to download the simulation data file from the server. "
-                    "Please confirm that the task was successfully run."
+                    format_chained_exception_message(
+                        "Failed to download the simulation data file from the server. Please "
+                        "confirm that the task was successfully run.",
+                        e,
+                    )
                 ) from e
 
         data = ModeSolverData.from_hdf5(to_file)

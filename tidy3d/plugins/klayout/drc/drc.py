@@ -14,7 +14,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.structure import Structure
-from tidy3d.exceptions import ValidationError
+from tidy3d.exceptions import ValidationError, format_chained_exception_message
 from tidy3d.log import get_logging_console
 from tidy3d.plugins.klayout.drc.defaults import (
     DEFAULT_GDSFILE,
@@ -104,7 +104,11 @@ class DRCConfig(Tidy3dBaseModel):
         try:
             v = {str(k): str(v) for k, v in v.items()}
         except Exception as e:
-            raise ValidationError("Could not coerce keys and values of drc_args to strings.") from e
+            raise ValidationError(
+                format_chained_exception_message(
+                    "Could not coerce keys and values of drc_args to strings", e
+                )
+            ) from e
         return v
 
     @field_validator("drc_args")

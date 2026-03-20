@@ -10,7 +10,7 @@ from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import Coordinate2D
-from tidy3d.exceptions import FileError
+from tidy3d.exceptions import FileError, format_chained_exception_message
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -416,9 +416,15 @@ def violations_from_file(
     try:
         xmltree = ET.parse(resultsfile)
     except FileNotFoundError as err:
-        raise FileError(f"DRC result file not found: '{resultsfile}'.") from err
+        raise FileError(
+            format_chained_exception_message(f"DRC result file not found: '{resultsfile}'", err)
+        ) from err
     except ET.ParseError as err:
-        raise ET.ParseError(f"Invalid XML format in DRC result file: '{resultsfile}'.") from err
+        raise ET.ParseError(
+            format_chained_exception_message(
+                f"Invalid XML format in DRC result file: '{resultsfile}'", err
+            )
+        ) from err
 
     # Initialize violations dict with all the categories
     violations = {}

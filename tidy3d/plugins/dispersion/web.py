@@ -14,7 +14,7 @@ from tidy3d.components.medium import PoleResidue
 from tidy3d.components.types import Undefined
 from tidy3d.config import config
 from tidy3d.constants import HERTZ, MICROMETER
-from tidy3d.exceptions import SetupError, Tidy3dError, WebError
+from tidy3d.exceptions import SetupError, Tidy3dError, WebError, format_chained_exception_message
 from tidy3d.log import log
 from tidy3d.web.core.http_util import get_headers
 
@@ -254,7 +254,11 @@ class FitterData(AdvancedFitterParam):
             resp = requests.get(f"{url_server}/health", verify=ssl_verify)
             resp.raise_for_status()
         except Exception as e:
-            raise WebError("Connection to the server failed. Please try again.") from e
+            raise WebError(
+                format_chained_exception_message(
+                    "Connection to the server failed. Please try again.", e
+                )
+            ) from e
 
         return get_headers(), ssl_verify
 
@@ -293,10 +297,13 @@ class FitterData(AdvancedFitterParam):
                         "inner iterations, or to relax the RMS tolerance."
                     )
                 )
-                raise Tidy3dError(msg) from e
+                raise Tidy3dError(format_chained_exception_message(msg, e)) from e
 
             raise WebError(
-                "Fitter failed. Try again, tune the parameters, or contact us for more help."
+                format_chained_exception_message(
+                    "Fitter failed. Try again, tune the parameters, or contact us for more help.",
+                    e,
+                )
             ) from e
 
         run_result = resp.json()

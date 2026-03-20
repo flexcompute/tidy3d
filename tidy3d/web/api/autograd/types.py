@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, Union
 
 import numpy as np
 
-from tidy3d.exceptions import AdjointError
+from tidy3d.exceptions import AdjointError, format_chained_exception_message
 
 if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
@@ -103,8 +103,11 @@ class NumericalStructureConfig:
             array_params = np.asarray(self.parameters)
         except Exception as exc:
             raise AdjointError(
-                "NumericalStructureConfig.parameters must be array-like (e.g., list, tuple, "
-                "numpy array, or compatible autograd array-like)."
+                format_chained_exception_message(
+                    "NumericalStructureConfig.parameters must be array-like (e.g., list, "
+                    "tuple, numpy array, or compatible autograd array-like)",
+                    exc,
+                )
             ) from exc
 
         if array_params.ndim != 1:

@@ -41,6 +41,7 @@ from tidy3d.exceptions import (
     Tidy3dImportError,
     Tidy3dKeyError,
     ValidationError,
+    format_chained_exception_message,
 )
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
@@ -131,8 +132,14 @@ def check_transform_invertible(transform: MatrixReal4x4, index: Optional[int] = 
         _ = np.linalg.inv(transform)
     except np.linalg.LinAlgError as err:
         if index is not None:
-            raise ValidationError(f"Transform at index {index} is not invertible.") from err
-        raise ValidationError("Transform matrix is not invertible.") from err
+            raise ValidationError(
+                format_chained_exception_message(
+                    f"Transform at index {index} is not invertible", err
+                )
+            ) from err
+        raise ValidationError(
+            format_chained_exception_message("Transform matrix is not invertible", err)
+        ) from err
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -1566,8 +1573,11 @@ class Geometry(Tidy3dBaseModel, ABC):
             import gdstk
         except ImportError as e:
             raise Tidy3dImportError(
-                "Python module 'gdstk' not found. To export geometries to .gds "
-                "files, please install it."
+                format_chained_exception_message(
+                    "Python module 'gdstk' not found. To export geometries to .gds files, "
+                    "please install it",
+                    e,
+                )
             ) from e
 
         library = gdstk.Library()

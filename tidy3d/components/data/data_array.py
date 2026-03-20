@@ -32,7 +32,7 @@ from tidy3d.constants import (
     VOLT,
     WATT,
 )
-from tidy3d.exceptions import DataError, FileError
+from tidy3d.exceptions import DataError, FileError, format_chained_exception_message
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -576,9 +576,13 @@ class DataArray(xr.DataArray):
             new_data = data.reshape(new_shape)
         except ValueError as e:
             raise ValueError(
-                "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided data was "
-                f"of shape {data.shape} and tried to reshape to {new_shape}. If you encounter this "
-                "error please raise an issue on the tidy3d github repository with the context."
+                format_chained_exception_message(
+                    "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided "
+                    f"data was of shape {data.shape} and tried to reshape to {new_shape}. If "
+                    "you encounter this error please raise an issue on the tidy3d github "
+                    "repository with this context.",
+                    e,
+                )
             ) from e
 
         # broadcast data to repeat data along the selected dimensions to match mask

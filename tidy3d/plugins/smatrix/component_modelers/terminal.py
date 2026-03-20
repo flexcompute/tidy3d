@@ -33,7 +33,12 @@ from tidy3d.components.types import Complex, Coordinate
 from tidy3d.components.types.base import PriorityMode, discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_lumped_element
 from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
-from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import (
+    SetupError,
+    Tidy3dKeyError,
+    ValidationError,
+    format_chained_exception_message,
+)
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.base import (
     FWIDTH_FRAC,
@@ -1556,9 +1561,12 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     finalized.append(generated)
                 except ValueError as e:
                     raise ValueError(
-                        "Automatic construction of radiation monitors failed. "
-                        "Please address the reason or provide a tuple of DirectivityMonitor "
-                        "objects to the 'radiation_monitors' parameter."
+                        format_chained_exception_message(
+                            "Automatic construction of radiation monitors failed. Please "
+                            "address the reason or provide a tuple of DirectivityMonitor "
+                            "objects to the 'radiation_monitors' parameter.",
+                            e,
+                        )
                     ) from e
             else:
                 # DirectivityMonitor - use as-is

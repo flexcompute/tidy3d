@@ -10,6 +10,31 @@ if TYPE_CHECKING:
     from typing import Optional
 
 
+def _format_exception_detail(exc: BaseException) -> str:
+    """Format an exception detail for inclusion in a user-facing chained message."""
+
+    detail = str(exc).strip()
+    return detail or type(exc).__name__
+
+
+def format_chained_exception_message(message: str, exc: BaseException) -> str:
+    """Append a standardized cause description to a user-facing exception message."""
+
+    message = message.rstrip()
+    if message.endswith(":"):
+        message = message[:-1].rstrip()
+
+    if isinstance(exc, KeyError):
+        return message
+
+    exc_type = type(exc).__name__
+    detail = _format_exception_detail(exc)
+    if detail == exc_type:
+        return f"{message} (cause: {exc_type})"
+
+    return f"{message} (cause: {exc_type}: {detail})"
+
+
 class Tidy3dError(ValueError):
     """Any error in tidy3d"""
 

@@ -13,7 +13,7 @@ from pydantic import Field, TypeAdapter
 
 import tidy3d as td
 from tidy3d.config import config
-from tidy3d.exceptions import ValidationError
+from tidy3d.exceptions import ValidationError, format_chained_exception_message
 
 from . import http_util
 from .cache import FOLDER_CACHE
@@ -316,8 +316,11 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
                 )
             except Exception as e:
                 raise WebError(
-                    "Failed to download the data file from the server. "
-                    "Please confirm that the task completed successfully."
+                    format_chained_exception_message(
+                        "Failed to download the data file from the server. Please confirm "
+                        "that the task completed successfully.",
+                        e,
+                    )
                 ) from e
         return file
 
@@ -829,12 +832,18 @@ class SimulationTask(WebTask):
                         )
                 except Exception as e:
                     raise ValidationError(
-                        "The parent task must be a 'VolumeMesher' task which has been successfully "
-                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
+                        format_chained_exception_message(
+                            "The parent task must be a 'VolumeMesher' task which has been "
+                            "successfully run and is associated to the same "
+                            "'HeatChargeSimulation' as provided here.",
+                            e,
+                        )
                     ) from e
 
             except Exception as e:
-                raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
+                raise WebError(
+                    format_chained_exception_message("Provided 'parent_tasks' failed validation", e)
+                ) from e
 
 
 class BatchTask(WebTask):

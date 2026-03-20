@@ -23,6 +23,7 @@ from rich.progress import (
 )
 
 from tidy3d.config import config
+from tidy3d.exceptions import format_chained_exception_message
 
 from .core_config import get_logger_console
 from .exceptions import WebError
@@ -465,7 +466,11 @@ def download_gz_file(
         except Exception as e:
             tmp_out_path.unlink(missing_ok=True)
             raise WebError(
-                f"Failed to extract '{remote_filename}' from '{tmp_file_path_str}' to '{to_path}'."
+                format_chained_exception_message(
+                    f"Failed to extract '{remote_filename}' from '{tmp_file_path_str}' to "
+                    f"'{to_path}'",
+                    e,
+                )
             ) from e
     finally:
         Path(tmp_file_path_str).unlink(missing_ok=True)

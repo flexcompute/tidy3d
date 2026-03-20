@@ -18,7 +18,12 @@ from tidy3d.components.types import ArrayFloat1D
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.config import config
 from tidy3d.constants import C_0, HBAR, MICROMETER
-from tidy3d.exceptions import SetupError, ValidationError, WebError
+from tidy3d.exceptions import (
+    SetupError,
+    ValidationError,
+    WebError,
+    format_chained_exception_message,
+)
 from tidy3d.log import get_logging_console, log
 
 if TYPE_CHECKING:
@@ -614,7 +619,11 @@ class DispersionFitter(Tidy3dBaseModel):
                 try:
                     _ = [float(x) for x in row]
                 except Exception as e:
-                    raise ValidationError("Invalid URL. Float data cannot be recognized.") from e
+                    raise ValidationError(
+                        format_chained_exception_message(
+                            "Invalid URL. Float data cannot be recognized", e
+                        )
+                    ) from e
 
         if has_k > 1:
             raise ValidationError("Invalid URL. Too many k labels.")
@@ -674,7 +683,11 @@ class DispersionFitter(Tidy3dBaseModel):
         try:
             resp.raise_for_status()
         except Exception as e:
-            raise WebError("Connection to the website failed. Please provide a valid URL.") from e
+            raise WebError(
+                format_chained_exception_message(
+                    "Connection to the website failed. Please provide a valid URL.", e
+                )
+            ) from e
 
         data_url = list(
             csv.reader(codecs.iterdecode(resp.iter_lines(), "utf-8"), delimiter=delimiter)
