@@ -40,9 +40,16 @@ from tidy3d.web.core.constants import (
 )
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
-from tidy3d.web.core.types import PayType, TaskType
+from tidy3d.web.core.types import TaskType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
+from .run_options import (
+    log_deprecated_run_args,
+    resolve_dispatch_start_options,
+    resolve_pay_type,
+    resolve_upload_options,
+    resolve_vgpu_start_options,
+)
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData
 
 if TYPE_CHECKING:
@@ -53,6 +60,7 @@ if TYPE_CHECKING:
     from tidy3d.web.cache import CacheEntry
     from tidy3d.web.core.constants import TaskId
     from tidy3d.web.core.task_core import BatchDetail
+    from tidy3d.web.core.types import PayType
 
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
@@ -373,10 +381,10 @@ def run(
     progress_callback_download: Optional[Callable[[float], None]] = None,
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     parent_tasks: Optional[list[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     lazy: bool = False,
     vgpu_allocation: Optional[int] = None,
@@ -402,34 +410,37 @@ def run(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
-    simulation_type : str = "tidy3d"
-        Type of simulation being uploaded.
+    simulation_type : Optional[str] = None
+        Type of simulation being uploaded. If ``None``, uses
+        ``td.config.dispatch.simulation_type``.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
-    solver_version: str = None
-        target solver version.
-    worker_group: str = None
-        worker group
+    solver_version : Optional[str] = None
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+    worker_group : Optional[str] = None
+        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: Union[PayType, str] = PayType.AUTO
-        Which method to pay the simulation.
-    priority: int = None
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method. If ``None``, uses ``td.config.run.pay_type``.
+    priority : Optional[int] = None
         Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
     lazy : bool = False
         Whether to load the actual data (``lazy=False``) or return a proxy that loads
         the data when accessed (``lazy=True``).
-    vgpu_allocation : int = None
+    vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
-        Only applies to vGPU license users. If not specified, the system
+        Only applies to vGPU license users. If not specified, uses
+        ``td.config.vgpu.vgpu_allocation``.
+        If that is also unset, the system
         automatically determines the optimal GPU count.
     ignore_memory_limit : Optional[bool] = None
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
-        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
 
     Returns
     -------
@@ -449,6 +460,9 @@ def run(
         simulation to the server without running it, you can use the :meth:`tidy3d.web.api.webapi.monitor`,
         :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
         display the progress of your simulation(s).
+        Passing run options directly is deprecated. Set defaults via
+        ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+        passed here override the config for this call.
 
     Examples
     --------
@@ -480,6 +494,15 @@ def run(
         task_name = stub.get_default_task_name()
 
     resolved_path = _resolve_output_path(path, stub.get_type())
+    log_deprecated_run_args(
+        solver_version=solver_version,
+        worker_group=worker_group,
+        simulation_type=simulation_type,
+        pay_type=pay_type,
+        priority=priority,
+        vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
+    )
     restored_path, _ = restore_simulation_if_cached(
         simulation=simulation,
         path=resolved_path,
@@ -556,7 +579,7 @@ def upload(
     callback_url: Optional[str] = None,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     parent_tasks: Optional[list[str]] = None,
     source_required: bool = True,
     solver_version: Optional[str] = None,
@@ -581,14 +604,15 @@ def upload(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
-    simulation_type : str = "tidy3d"
-        Type of simulation being uploaded.
+    simulation_type : Optional[str] = None
+        Type of simulation being uploaded. If ``None``, uses
+        ``td.config.dispatch.simulation_type``.
     parent_tasks : list[str]
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
-    solver_version: str = None
-        target solver version.
+    solver_version : Optional[str] = None
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     verbose_estimate_cost : Optional[bool] = None
@@ -610,9 +634,22 @@ def upload(
             web.upload(simulation, task_name="task_name", verbose=verbose)
 
         It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.api.webapi.start`.
+        Passing ``solver_version`` or ``simulation_type`` directly is deprecated.
+        Set defaults via ``td.config.dispatch`` instead. Non-``None`` values passed here
+        override the config for this call.
 
     """
     console = get_logging_console() if verbose else None
+
+    log_deprecated_run_args(
+        solver_version=solver_version,
+        simulation_type=simulation_type,
+    )
+
+    upload_options = resolve_upload_options(
+        solver_version=solver_version,
+        simulation_type=simulation_type,
+    )
 
     if isinstance(simulation, (ModeSolver, ModeSimulation)):
         simulation = get_reduced_simulation(simulation, reduce_simulation)
@@ -631,7 +668,7 @@ def upload(
         task_name,
         folder_name,
         callback_url,
-        simulation_type,
+        upload_options.simulation_type,
         parent_tasks,
         "Gz",
     )
@@ -670,7 +707,7 @@ def upload(
     verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
     estimate_cost(
         task_id=resource_id,
-        solver_version=solver_version,
+        solver_version=upload_options.solver_version,
         verbose=verbose_estimate_cost,
     )
 
@@ -766,7 +803,7 @@ def start(
     task_id: TaskId,
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     vgpu_allocation: Optional[int] = None,
     ignore_memory_limit: Optional[bool] = None,
@@ -778,50 +815,75 @@ def start(
 
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    verbose : bool = True
-        If ``True``, will print log messages, otherwise, will run silently.
-    solver_version: str = None
-        target solver version.
-    worker_group: str = None
-        worker group
-    pay_type: Union[PayType, str] = PayType.AUTO
-        Which method to pay the simulation
-    priority: int = None
+    solver_version : Optional[str] = None
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+    worker_group : Optional[str] = None
+        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method. If ``None``, uses ``td.config.run.pay_type``.
+    priority : Optional[int] = None
         Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
-    vgpu_allocation : int = None
+    vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
-        Only applies to vGPU license users. If not specified, the system
+        Only applies to vGPU license users. If not specified, uses
+        ``td.config.vgpu.vgpu_allocation``.
+        If that is also unset, the system
         automatically determines the optimal GPU count.
     ignore_memory_limit : Optional[bool] = None
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
-        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
 
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
+    Passing these run options directly is deprecated. Set defaults via
+    ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values passed
+    here override the config for this call.
     """
-
-    if priority is not None and (priority < 1 or priority > 10):
-        raise ValueError("Priority must be between '1' and '10' if specified.")
-
-    _valid_vgpu_allocations = {1, 2, 4, 8}
-    if vgpu_allocation is not None and vgpu_allocation not in _valid_vgpu_allocations:
-        raise ValueError(
-            f"vgpu_allocation must be one of {sorted(_valid_vgpu_allocations)} if specified."
-        )
-
-    task = TaskFactory.get(task_id)
-    if not task:
-        raise ValueError("Task not found.")
-    task.submit(
+    log_deprecated_run_args(
         solver_version=solver_version,
         worker_group=worker_group,
         pay_type=pay_type,
         priority=priority,
         vgpu_allocation=vgpu_allocation,
         ignore_memory_limit=ignore_memory_limit,
+    )
+
+    task = TaskFactory.get(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+
+    dispatch_options = resolve_dispatch_start_options(
+        solver_version=solver_version,
+        worker_group=worker_group,
+    )
+    if isinstance(task, BatchTask):
+        resolved_pay_type = resolve_pay_type(pay_type, apply_config_default=False)
+        resolved_priority = priority
+        resolved_vgpu_allocation = vgpu_allocation
+        resolved_ignore_memory_limit = ignore_memory_limit
+    else:
+        resolved_pay_type = resolve_pay_type(pay_type)
+        vgpu_options = resolve_vgpu_start_options(
+            priority=priority,
+            vgpu_allocation=vgpu_allocation,
+            ignore_memory_limit=ignore_memory_limit,
+            apply_config_defaults=True,
+        )
+        resolved_priority = vgpu_options.priority
+        resolved_vgpu_allocation = vgpu_options.vgpu_allocation
+        resolved_ignore_memory_limit = vgpu_options.ignore_memory_limit
+
+    task.submit(
+        solver_version=dispatch_options.solver_version,
+        worker_group=dispatch_options.worker_group,
+        pay_type=resolved_pay_type,
+        priority=resolved_priority,
+        vgpu_allocation=resolved_vgpu_allocation,
+        ignore_memory_limit=resolved_ignore_memory_limit,
+        additional_payload=dispatch_options.additional_payload,
     )
 
 

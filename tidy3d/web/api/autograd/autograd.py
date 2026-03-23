@@ -18,8 +18,8 @@ from tidy3d.exceptions import AdjointError
 from tidy3d.web.api import asynchronous as asynchronous_webapi
 from tidy3d.web.api import webapi
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
+from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
-from tidy3d.web.core.types import PayType
 
 from .backward import postprocess_adj as _postprocess_adj_impl
 from .backward import setup_adj as _setup_adj_impl
@@ -58,6 +58,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
     from tidy3d.web.api.container import BatchData
+    from tidy3d.web.core.types import PayType
 
     from .types import CustomVJPSpec
 
@@ -291,12 +292,12 @@ def run_custom(
     progress_callback_download: Optional[Callable[[float], None]] = None,
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     parent_tasks: Optional[list[str]] = None,
     local_gradient: Optional[bool] = None,
     max_num_adjoint_per_fwd: Optional[int] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
     numerical_structures: Optional[
@@ -326,16 +327,17 @@ def run_custom(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
-    simulation_type : str = "tidy3d"
-        Type of simulation being uploaded.
+    simulation_type : Optional[str] = None
+        Type of simulation being uploaded. If ``None``, uses
+        ``td.config.dispatch.simulation_type``.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
-    solver_version: str = None
-        target solver version.
-    worker_group: str = None
-        worker group
+    solver_version : Optional[str] = None
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+    worker_group : Optional[str] = None
+        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculation locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -346,9 +348,9 @@ def run_custom(
         Maximum number of adjoint simulations allowed to run automatically. Uses the autograd configuration when None.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: Union[PayType, str] = PayType.AUTO
-        Which method to pay for the simulation.
-    priority: int = None
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method. If ``None``, uses ``td.config.run.pay_type``.
+    priority : Optional[int] = None
         Task priority for vGPU queue (1=lowest, 10=highest).
     lazy: Optional[bool] = None
         Whether to return lazy data proxies. Defaults to ``False`` for single runs when
@@ -361,14 +363,16 @@ def run_custom(
     custom_vjp : Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None
         Replacement hook for existing traced structure paths. Each config overrides derivative computation
         for matching structure/path targets in the standard ``("structures", ...)`` path namespace.
-    vgpu_allocation : int = None
+    vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
-        Only applies to vGPU license users. If not specified, the system
+        Only applies to vGPU license users. If not specified, uses
+        ``td.config.vgpu.vgpu_allocation``.
+        If that is also unset, the system
         automatically determines the optimal GPU count.
     ignore_memory_limit : Optional[bool] = None
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
-        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
 
     Returns
     -------
@@ -388,6 +392,9 @@ def run_custom(
         simulation to the server without running it, you can use the :meth:`tidy3d.web.api.webapi.monitor`,
         :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
         display the progress of your simulation(s).
+        Passing run options directly is deprecated. Set defaults via
+        ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+        passed here override the config for this call.
 
     Examples
     --------
@@ -415,6 +422,15 @@ def run_custom(
         Monitor progress of each of the running tasks.
     """
     local_gradient = _resolve_local_gradient(local_gradient)
+    log_deprecated_run_args(
+        solver_version=solver_version,
+        worker_group=worker_group,
+        simulation_type=simulation_type,
+        pay_type=pay_type,
+        priority=priority,
+        vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
+    )
 
     if max_num_adjoint_per_fwd is None:
         max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
@@ -564,13 +580,13 @@ def run_async_custom(
     callback_url: Optional[str] = None,
     num_workers: Optional[int] = None,
     verbose: bool = True,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     solver_version: Optional[str] = None,
     parent_tasks: Optional[dict[str, list[str]]] = None,
     local_gradient: Optional[bool] = None,
     max_num_adjoint_per_fwd: Optional[int] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
     numerical_structures: Optional[
@@ -606,10 +622,11 @@ def run_async_custom(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
-    simulation_type : str = "tidy3d"
-        Type of simulation being uploaded.
+    simulation_type : Optional[str] = None
+        Type of simulation being uploaded. If ``None``, uses
+        ``td.config.dispatch.simulation_type``.
     solver_version: Optional[str] = None
-        Target solver version.
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculations locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -618,8 +635,8 @@ def run_async_custom(
         Maximum number of adjoint simulations allowed to run automatically. Uses the autograd configuration when None.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: Union[PayType, str] = PayType.AUTO
-        Specify the payment method.
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method. If ``None``, uses ``td.config.run.pay_type``.
     priority: Optional[int] = None
         Queue priority for vGPU simulations (1=lowest, 10=highest).
     lazy: Optional[bool] = None
@@ -642,14 +659,16 @@ def run_async_custom(
         A single config is broadcast to all simulations. A dict or sequence with single configs sets one
         config for each simulation. Multiple custom VJPs can be specified for each
         simulation by specifying a dict with sequence values or a sequence of sequences.
-    vgpu_allocation : int = None
+    vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
-        Only applies to vGPU license users. If not specified, the system
+        Only applies to vGPU license users. If not specified, uses
+        ``td.config.vgpu.vgpu_allocation``.
+        If that is also unset, the system
         automatically determines the optimal GPU count.
     ignore_memory_limit : Optional[bool] = None
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
-        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
 
     Returns
     ------
@@ -665,12 +684,26 @@ def run_async_custom(
 
     :class:`Batch`
         Interface for submitting several :class:`.Simulation` objects to sever.
+
+    Notes
+    -----
+    Passing run options directly is deprecated. Set defaults via
+    ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+    passed here override the config for this call.
     """
     # validate priority if specified
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
 
     local_gradient = _resolve_local_gradient(local_gradient)
+    log_deprecated_run_args(
+        solver_version=solver_version,
+        simulation_type=simulation_type,
+        pay_type=pay_type,
+        priority=priority,
+        vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
+    )
 
     if max_num_adjoint_per_fwd is None:
         max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
@@ -874,12 +907,12 @@ def run(
     progress_callback_download: Optional[Callable[[float], None]] = None,
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     parent_tasks: Optional[list[str]] = None,
     local_gradient: Optional[bool] = None,
     max_num_adjoint_per_fwd: Optional[int] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
     vgpu_allocation: Optional[int] = None,
@@ -919,13 +952,13 @@ def run_async(
     callback_url: Optional[str] = None,
     num_workers: Optional[int] = None,
     verbose: bool = True,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     solver_version: Optional[str] = None,
     parent_tasks: Optional[dict[str, list[str]]] = None,
     local_gradient: Optional[bool] = None,
     max_num_adjoint_per_fwd: Optional[int] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
     vgpu_allocation: Optional[int] = None,

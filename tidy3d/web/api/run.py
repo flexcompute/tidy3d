@@ -12,10 +12,11 @@ from tidy3d.web.api.autograd.autograd import run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR
 from tidy3d.web.api.tidy3d_stub import task_type_name_of
 from tidy3d.web.api.webapi import default_data_filename
-from tidy3d.web.core.types import PayType
 
 if TYPE_CHECKING:
     from os import PathLike
+
+    from tidy3d.web.core.types import PayType
 
 RunInput: typing.TypeAlias = typing.Union[
     WorkflowType,
@@ -96,12 +97,12 @@ def run(
     progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
     solver_version: typing.Optional[str] = None,
     worker_group: typing.Optional[str] = None,
-    simulation_type: str = "tidy3d",
+    simulation_type: typing.Optional[str] = None,
     parent_tasks: typing.Optional[list[str]] = None,
     local_gradient: typing.Optional[bool] = None,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    pay_type: typing.Optional[typing.Union[PayType, str]] = None,
     priority: typing.Optional[int] = None,
     max_workers: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
@@ -151,11 +152,12 @@ def run(
     progress_callback_download : Optional[Callable[[float], None]] = None
         Callback invoked with byte counts during download (single-run path only).
     solver_version : Optional[str] = None
-        Target solver version.
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
     worker_group : Optional[str] = None
-        Worker group to target.
-    simulation_type : str = "tidy3d"
-        Simulation type label passed through to the runners.
+        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
+    simulation_type : Optional[str] = None
+        Simulation type label passed through to the runners. If ``None``, uses
+        ``td.config.dispatch.simulation_type``.
     parent_tasks : Optional[List[str]] = None
         Parent task IDs, if any.
     local_gradient : Optional[bool] = None
@@ -167,8 +169,8 @@ def run(
         ``config.adjoint.max_adjoint_per_fwd`` when not provided.
     reduce_simulation : {"auto", True, False} = "auto"
         Whether to reduce structures to the simulation domain (mode solver only).
-    pay_type : Union[PayType, str] = PayType.AUTO
-        Payment method selection.
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method selection. If ``None``, uses ``td.config.run.pay_type``.
     priority : Optional[int] = None
         Queue priority for vGPU (1 = lowest, 10 = highest).
     max_workers : Optional[int] = None
@@ -178,12 +180,14 @@ def run(
         the data when accessed (``lazy=True``).
     vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
-        Only applies to vGPU license users. If not specified, the system
+        Only applies to vGPU license users. If not specified, uses
+        ``td.config.vgpu.vgpu_allocation``.
+        If that is also unset, the system
         automatically determines the optimal GPU count.
     ignore_memory_limit : Optional[bool] = None
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
-        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
 
     Returns
     -------
@@ -200,6 +204,9 @@ def run(
     - For each simulation, a mode-solver compatibility patch is applied so that
       the returned data exposes expected convenience attributes.
     - ``progress_callback_*`` are only used in the single-run code path.
+    - Passing run options directly is deprecated. Set defaults via
+      ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+      passed here override the config for this call.
 
     Raises
     ------

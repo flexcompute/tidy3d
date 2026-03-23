@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 
 import pytest
@@ -10,7 +11,7 @@ import tidy3d as td
 from tidy3d import config
 from tidy3d.web.core import http_util
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
 from tidy3d.web.core.types import PayType, TaskType
 
 config.switch_profile("test")
@@ -254,6 +255,29 @@ def test_submit(set_api_key):
     task.submit()
     # test DE need to open the comment
     # monitor(TASK_ID, True)
+
+
+@responses.activate
+def test_batch_submit_additional_payload(set_api_key):
+    task = BatchTask(taskId="batch-task-id")
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/rf/task/batch-task-id/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": None,
+                    "protocolVersion": td.version.__version__,
+                    "workerGroup": None,
+                    "additionalPayload": json.dumps({"routeHint": "batch"}),
+                }
+            )
+        ],
+        json={"data": {"taskId": "batch-task-id"}},
+        status=200,
+    )
+
+    task.submit(additional_payload={"routeHint": "batch"})
 
 
 @responses.activate

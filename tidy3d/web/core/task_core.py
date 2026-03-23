@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from botocore.exceptions import ClientError
 from pydantic import Field, TypeAdapter
@@ -40,6 +41,16 @@ if TYPE_CHECKING:
     import requests
 
     from .stub import TaskStub
+
+
+def _serialize_additional_payload(
+    additional_payload: Optional[Union[dict[str, Any], str]],
+) -> Optional[str]:
+    """Serialize additional submit payloads to JSON strings."""
+
+    if additional_payload is None or isinstance(additional_payload, str):
+        return additional_payload
+    return json.dumps(additional_payload)
 
 
 class Folder(Tidy3DResource, Queryable, extra="allow"):
@@ -598,6 +609,7 @@ class SimulationTask(WebTask):
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
         ignore_memory_limit: Optional[bool] = None,
+        additional_payload: Optional[Union[dict[str, Any], str]] = None,
     ) -> None:
         """Kick off this task.
 
@@ -624,6 +636,9 @@ class SimulationTask(WebTask):
             If ``True``, allows the simulation to run even when estimated vGPU memory
             exceeds the allocation limit (up to 2x the limit). Only applies to
             vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        additional_payload : Optional[Union[dict[str, Any], str]] = None
+            Additional submit payload. Dict values are JSON-serialized and sent
+            under ``additionalPayload``.
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
@@ -632,18 +647,23 @@ class SimulationTask(WebTask):
         else:
             protocol_version = http_util.get_version()
 
+        payload = {
+            "solverVersion": solver_version,
+            "workerGroup": worker_group,
+            "protocolVersion": protocol_version,
+            "enableCaching": config.web.enable_caching,
+            "payType": pay_type.value,
+            "priority": priority,
+            "vgpuAllocation": vgpu_allocation,
+            "ignoreMemoryLimit": ignore_memory_limit,
+        }
+        serialized_additional_payload = _serialize_additional_payload(additional_payload)
+        if serialized_additional_payload is not None:
+            payload["additionalPayload"] = serialized_additional_payload
+
         http.post(
             f"tidy3d/tasks/{self.task_id}/submit",
-            {
-                "solverVersion": solver_version,
-                "workerGroup": worker_group,
-                "protocolVersion": protocol_version,
-                "enableCaching": config.web.enable_caching,
-                "payType": pay_type.value,
-                "priority": priority,
-                "vgpuAllocation": vgpu_allocation,
-                "ignoreMemoryLimit": ignore_memory_limit,
-            },
+            payload,
         )
 
     def estimate_cost(self, solver_version: Optional[str] = None) -> float:
@@ -937,6 +957,7 @@ class BatchTask(WebTask):
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
         ignore_memory_limit: Optional[bool] = None,
+        additional_payload: Optional[Union[dict[str, Any], str]] = None,
     ) -> requests.Response:
         """Submits the batch for execution on the server.
 
@@ -953,6 +974,9 @@ class BatchTask(WebTask):
         ignore_memory_limit : Optional[bool], default=None
             If ``True``, allows the simulation to run even when estimated vGPU memory
             exceeds the allocation limit (up to 2x the limit).
+        additional_payload : Optional[Union[dict[str, Any], str]], default=None
+            Additional submit payload. Dict values are JSON-serialized and sent
+            under ``additionalPayload``.
 
         Returns
         -------
@@ -980,13 +1004,18 @@ class BatchTask(WebTask):
 
         if protocol_version is None:
             protocol_version = _get_protocol_version()
+        payload = {
+            "solverVersion": solver_version,
+            "protocolVersion": protocol_version,
+            "workerGroup": worker_group,
+        }
+        serialized_additional_payload = _serialize_additional_payload(additional_payload)
+        if serialized_additional_payload is not None:
+            payload["additionalPayload"] = serialized_additional_payload
+
         return http.post(
             f"rf/task/{self.task_id}/submit",
-            {
-                "solverVersion": solver_version,
-                "protocolVersion": protocol_version,
-                "workerGroup": worker_group,
-            },
+            payload,
         )
 
     def abort(self) -> requests.Response:

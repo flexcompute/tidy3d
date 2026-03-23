@@ -15,6 +15,7 @@
 1. Importing `tidy3d.config` registers built-in sections and handlers.
 2. `ConfigManager` attaches to the registry, loads builtin and user profiles, applies environment overrides, and composes the effective tree.
 3. Handlers push side effects (logging level, env vars, cache dirs). Calls to `update_section` reload the tree and re-run the relevant handlers.
+4. Entering `with config as scoped_config:` snapshots runtime overrides and restores them on exit, including nested contexts.
 
 ## Component Map
 
@@ -94,3 +95,4 @@ flowchart LR
 - `config.format()` prints the composed tree - handy for verifying merges.
 - Inspect `_compose_without_env()` in a debugger to view the persisted state only.
 - `get_sections()` and `get_handlers()` confirm that new registrations landed.
+- Use `with config as scoped_config:` in tests or notebooks when you want temporary runtime overrides that do not leak afterward.

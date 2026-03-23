@@ -93,6 +93,17 @@ Assignments like ``config.logging.level = "INFO"`` apply immediately but only
 live in memory. They affect new simulations started in the same interpreter but
 disappear when the process exits.
 
+For short-lived overrides, use ``config`` as a context manager. Changes made
+inside the block are restored automatically when the block exits::
+
+    from tidy3d import config, web
+
+    with config as tmp_config:
+        tmp_config.logging.level = "DEBUG"
+        web.run(sim)
+
+    # runtime overrides from the block are cleared here
+
 Saving to Disk
 ~~~~~~~~~~~~~~
 

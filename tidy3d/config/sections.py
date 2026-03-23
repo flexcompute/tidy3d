@@ -38,6 +38,8 @@ from .registry import register_handler, register_section
 if TYPE_CHECKING:
     from os import PathLike
 
+VALID_VGPU_ALLOCATIONS = (1, 2, 4, 8)
+
 TLS_VERSION_CHOICES = {"TLSv1", "TLSv1_1", "TLSv1_2", "TLSv1_3"}
 
 
@@ -327,6 +329,97 @@ def apply_adjoint(config: AdjointConfig) -> None:
     )
 
 
+@register_section("dispatch")
+class DispatchConfig(ConfigSection):
+    """Default dispatch configuration for web runs."""
+
+    solver_version: Optional[str] = Field(
+        None,
+        title="Solver version",
+        description="Default solver version to use for web runs.",
+    )
+
+    worker_group: Optional[str] = Field(
+        None,
+        title="Worker group",
+        description="Default worker group to use for web runs.",
+    )
+
+    simulation_type: str = Field(
+        "tidy3d",
+        title="Simulation type",
+        description="Default simulation type label for uploaded tasks.",
+    )
+
+    additional_payload: Optional[dict[str, Any]] = Field(
+        None,
+        title="Additional payload",
+        description="Additional submit payload serialized to JSON and sent under 'additionalPayload'.",
+    )
+
+
+@register_section("run")
+class RunConfig(ConfigSection):
+    """Default run configuration for web submissions."""
+
+    pay_type: str = Field(
+        "AUTO",
+        title="Payment type",
+        description="Default payment type for web runs.",
+    )
+
+    @field_validator("pay_type", mode="before")
+    @classmethod
+    def _validate_pay_type(cls, value: Any) -> str:
+        from tidy3d.web.core.types import PayType
+
+        candidate = getattr(value, "value", value)
+        return PayType(candidate).value
+
+
+@register_section("vgpu")
+class VgpuConfig(ConfigSection):
+    """Default vGPU configuration for web runs."""
+
+    priority: Optional[int] = Field(
+        None,
+        title="Priority",
+        description="Default queue priority for vGPU runs (1 = lowest, 10 = highest).",
+    )
+
+    vgpu_allocation: Optional[int] = Field(
+        None,
+        title="vGPU allocation",
+        description="Default virtual GPU allocation for vGPU runs.",
+    )
+
+    ignore_memory_limit: Optional[bool] = Field(
+        None,
+        title="Ignore memory limit",
+        description="Default flag to allow vGPU runs above the estimated memory limit.",
+    )
+
+    @field_validator("priority")
+    @classmethod
+    def _validate_priority(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if value < 1 or value > 10:
+            raise ValueError("Priority must be between '1' and '10' if specified.")
+        return value
+
+    @field_validator("vgpu_allocation")
+    @classmethod
+    def _validate_vgpu_allocation(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if value not in VALID_VGPU_ALLOCATIONS:
+            raise ValueError(
+                f"vgpu_allocation must be one of {list(VALID_VGPU_ALLOCATIONS)} if specified."
+            )
+        return value
+
+
 class WebConfig(ConfigSection):
     """Web/HTTP configuration."""
 
@@ -579,6 +672,7 @@ __all__ = [
     "LoggingConfig",
     "MicrowaveConfig",
     "PluginsContainer",
+    "RunConfig",
     "SimulationConfig",
     "WebConfig",
 ]

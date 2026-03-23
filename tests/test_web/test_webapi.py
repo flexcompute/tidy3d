@@ -1,6 +1,7 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
+import json
 import os
 import posixpath
 from concurrent.futures import Future
@@ -37,6 +38,7 @@ from tidy3d.web.api.container import (
     WebContainer,
 )
 from tidy3d.web.api.run import _collect_by_hash, run
+from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import Tidy3dStubData, task_type_name_of
 from tidy3d.web.api.webapi import (
     abort,
@@ -394,6 +396,27 @@ def mock_metadata(monkeypatch, set_api_key):
 
 
 @pytest.fixture
+def reset_run_option_config():
+    config.dispatch.solver_version = None
+    config.dispatch.worker_group = None
+    config.dispatch.simulation_type = "tidy3d"
+    config.dispatch.additional_payload = None
+    config.run.pay_type = PayType.AUTO
+    config.vgpu.priority = None
+    config.vgpu.vgpu_allocation = None
+    config.vgpu.ignore_memory_limit = None
+    yield
+    config.dispatch.solver_version = None
+    config.dispatch.worker_group = None
+    config.dispatch.simulation_type = "tidy3d"
+    config.dispatch.additional_payload = None
+    config.run.pay_type = PayType.AUTO
+    config.vgpu.priority = None
+    config.vgpu.vgpu_allocation = None
+    config.vgpu.ignore_memory_limit = None
+
+
+@pytest.fixture
 def mock_get_run_info(monkeypatch, set_api_key):
     """Mocks webapi.get_run_info"""
     responses.add(
@@ -431,6 +454,35 @@ def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     assert upload(sim, TASK_NAME, PROJECT_NAME)
 
 
+def test_upload_logs_deprecated_run_args(monkeypatch):
+    warning_calls = []
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.log_deprecated_run_args",
+        lambda **kwargs: warning_calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.resolve_upload_options",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
+    )
+
+    with pytest.raises(RuntimeError, match="stop_after_warning"):
+        upload(
+            make_sim(),
+            TASK_NAME,
+            PROJECT_NAME,
+            simulation_type="special_type",
+            solver_version="solver_x",
+        )
+
+    assert warning_calls == [
+        {
+            "solver_version": "solver_x",
+            "simulation_type": "special_type",
+        }
+    ]
+
+
 @responses.activate
 def test_get_info(mock_get_info):
     assert get_info(TASK_ID).taskId == TASK_ID
@@ -439,6 +491,45 @@ def test_get_info(mock_get_info):
 @responses.activate
 def test_start(mock_start):
     start(TASK_ID)
+
+
+def test_start_logs_deprecated_run_args(monkeypatch):
+    warning_calls = []
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.log_deprecated_run_args",
+        lambda **kwargs: warning_calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.TaskFactory.get",
+        lambda task_id: td.web.core.task_core.SimulationTask(taskId=task_id),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.resolve_dispatch_start_options",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
+    )
+
+    with pytest.raises(RuntimeError, match="stop_after_warning"):
+        start(
+            TASK_ID,
+            solver_version="solver_x",
+            worker_group="worker_a",
+            pay_type=PayType.CREDITS,
+            priority=4,
+            vgpu_allocation=2,
+            ignore_memory_limit=True,
+        )
+
+    assert warning_calls == [
+        {
+            "solver_version": "solver_x",
+            "worker_group": "worker_a",
+            "pay_type": PayType.CREDITS,
+            "priority": 4,
+            "vgpu_allocation": 2,
+            "ignore_memory_limit": True,
+        }
+    ]
 
 
 @responses.activate
@@ -503,6 +594,369 @@ def test_run_with_invalid_vgpu_allocation(mock_webapi, vgpu_allocation):
 def test_start_with_ignore_memory_limit(mock_start, ignore_memory_limit):
     """Test start with ignore_memory_limit values."""
     start(TASK_ID, ignore_memory_limit=ignore_memory_limit)
+
+
+@responses.activate
+def test_upload_uses_dispatch_config_defaults(
+    monkeypatch, set_api_key, mock_get_info, reset_run_option_config
+):
+    sim = make_sim()
+    config.dispatch.simulation_type = "config_type"
+    config.dispatch.solver_version = "config_solver"
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
+        json={"data": {"projectId": FOLDER_ID, "projectName": PROJECT_NAME}},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "taskType": TaskType.FDTD.name,
+                    "callbackUrl": None,
+                    "simulationType": "config_type",
+                    "parentTasks": None,
+                    "fileType": "Gz",
+                },
+                strict_match=False,
+            )
+        ],
+        json={"data": {"taskId": TASK_ID, "taskName": TASK_NAME, "createdAt": CREATED_AT}},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": "config_solver",
+                    "protocolVersion": None,
+                }
+            )
+        ],
+        json={"data": {"createdAt": CREATED_AT}},
+        status=200,
+    )
+
+    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", lambda *args, **kwargs: None)
+
+    assert upload(sim, TASK_NAME, PROJECT_NAME, verbose=False) == TASK_ID
+
+
+@responses.activate
+def test_start_uses_config_defaults(set_api_key, mock_get_info, reset_run_option_config):
+    config.dispatch.solver_version = "config_solver"
+    config.dispatch.worker_group = "config_group"
+    config.dispatch.additional_payload = {"routeHint": "special"}
+    config.run.pay_type = PayType.CREDITS
+    config.vgpu.priority = 5
+    config.vgpu.vgpu_allocation = 4
+    config.vgpu.ignore_memory_limit = True
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": "config_solver",
+                    "workerGroup": "config_group",
+                    "protocolVersion": None,
+                    "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.CREDITS,
+                    "priority": 5,
+                    "vgpuAllocation": 4,
+                    "ignoreMemoryLimit": True,
+                    "additionalPayload": json.dumps({"routeHint": "special"}),
+                }
+            )
+        ],
+        json={"data": {"taskId": TASK_ID, "taskName": TASK_NAME, "createdAt": CREATED_AT}},
+        status=200,
+    )
+
+    start(TASK_ID)
+
+
+@responses.activate
+def test_start_explicit_args_override_config_defaults(
+    set_api_key, mock_get_info, reset_run_option_config
+):
+    config.dispatch.worker_group = "config_group"
+    config.run.pay_type = PayType.CREDITS
+    config.vgpu.priority = 5
+    config.vgpu.vgpu_allocation = 4
+    config.vgpu.ignore_memory_limit = True
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": None,
+                    "workerGroup": "explicit_group",
+                    "protocolVersion": td.version.__version__,
+                    "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.AUTO,
+                    "priority": 1,
+                    "vgpuAllocation": 2,
+                    "ignoreMemoryLimit": False,
+                }
+            )
+        ],
+        json={"data": {"taskId": TASK_ID, "taskName": TASK_NAME, "createdAt": CREATED_AT}},
+        status=200,
+    )
+
+    start(
+        TASK_ID,
+        worker_group="explicit_group",
+        pay_type=PayType.AUTO,
+        priority=1,
+        vgpu_allocation=2,
+        ignore_memory_limit=False,
+    )
+
+
+@responses.activate
+def test_start_uses_scoped_config_without_leaking(
+    set_api_key, mock_get_info, reset_run_option_config
+):
+    assert config.dispatch.worker_group is None
+    assert config.dispatch.additional_payload is None
+    assert config.vgpu.priority is None
+    assert config.run.pay_type == "AUTO"
+
+    with config as scoped_config:
+        scoped_config.dispatch.worker_group = "scoped_group"
+        scoped_config.dispatch.additional_payload = {"routeHint": "scoped"}
+        scoped_config.run.pay_type = PayType.CREDITS
+        scoped_config.vgpu.priority = 7
+
+        responses.add(
+            responses.POST,
+            f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+            match=[
+                matchers.json_params_matcher(
+                    {
+                        "solverVersion": None,
+                        "workerGroup": "scoped_group",
+                        "protocolVersion": td.version.__version__,
+                        "enableCaching": Env.current.enable_caching,
+                        "payType": PayType.CREDITS,
+                        "priority": 7,
+                        "vgpuAllocation": None,
+                        "ignoreMemoryLimit": None,
+                        "additionalPayload": json.dumps({"routeHint": "scoped"}),
+                    }
+                )
+            ],
+            json={"data": {"taskId": TASK_ID, "taskName": TASK_NAME, "createdAt": CREATED_AT}},
+            status=200,
+        )
+
+        start(TASK_ID)
+
+        assert config.dispatch.worker_group == "scoped_group"
+        assert config.dispatch.additional_payload == {"routeHint": "scoped"}
+        assert config.run.pay_type == PayType.CREDITS.value
+        assert config.vgpu.priority == 7
+
+    assert config.dispatch.worker_group is None
+    assert config.dispatch.additional_payload is None
+    assert config.run.pay_type == "AUTO"
+    assert config.vgpu.priority is None
+
+
+@responses.activate
+def test_start_batch_ignores_config_run_defaults(monkeypatch, set_api_key, reset_run_option_config):
+    batch_task_id = "batch-task-id"
+
+    config.dispatch.solver_version = "config_solver"
+    config.dispatch.worker_group = "config_group"
+    config.run.pay_type = PayType.CREDITS
+    config.vgpu.priority = 5
+    config.vgpu.vgpu_allocation = 4
+    config.vgpu.ignore_memory_limit = True
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.TaskFactory.get",
+        lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
+    )
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/rf/task/{batch_task_id}/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": "config_solver",
+                    "protocolVersion": td.version.__version__,
+                    "workerGroup": "config_group",
+                }
+            )
+        ],
+        json={"data": {"taskId": batch_task_id}},
+        status=200,
+    )
+
+    start(batch_task_id)
+
+
+@responses.activate
+def test_start_batch_uses_config_dispatch_additional_payload(
+    monkeypatch, set_api_key, reset_run_option_config
+):
+    batch_task_id = "batch-task-id"
+
+    config.dispatch.additional_payload = {"routeHint": "batch"}
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.TaskFactory.get",
+        lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
+    )
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/rf/task/{batch_task_id}/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": None,
+                    "protocolVersion": td.version.__version__,
+                    "workerGroup": None,
+                    "additionalPayload": json.dumps({"routeHint": "batch"}),
+                }
+            )
+        ],
+        json={"data": {"taskId": batch_task_id}},
+        status=200,
+    )
+
+    start(batch_task_id)
+
+
+@responses.activate
+def test_start_batch_explicit_priority_preserves_legacy_error(
+    monkeypatch, set_api_key, reset_run_option_config
+):
+    batch_task_id = "batch-task-id"
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.TaskFactory.get",
+        lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="The 'priority' argument is not yet supported and will be ignored.",
+    ):
+        start(batch_task_id, priority=5)
+
+
+@responses.activate
+def test_start_batch_invalid_priority_preserves_legacy_error(
+    monkeypatch, set_api_key, reset_run_option_config
+):
+    batch_task_id = "batch-task-id"
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.TaskFactory.get",
+        lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="The 'priority' argument is not yet supported and will be ignored.",
+    ):
+        start(batch_task_id, priority=0)
+
+
+@responses.activate
+def test_start_batch_invalid_vgpu_allocation_preserves_legacy_error(
+    monkeypatch, set_api_key, reset_run_option_config
+):
+    batch_task_id = "batch-task-id"
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.TaskFactory.get",
+        lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="The 'vgpu_allocation' argument is not yet supported and will be ignored.",
+    ):
+        start(batch_task_id, vgpu_allocation=3)
+
+
+def test_webapi_run_logs_deprecated_run_args_on_cache_hit(monkeypatch, tmp_path):
+    warning_calls = []
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.log_deprecated_run_args",
+        lambda **kwargs: warning_calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.restore_simulation_if_cached",
+        lambda **kwargs: (tmp_path / "cached.hdf5", None),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.load",
+        lambda **kwargs: make_sim_data(),
+    )
+
+    import tidy3d.web.api.webapi as webapi_module
+
+    webapi_module.run(
+        simulation=make_sim(),
+        worker_group="worker_a",
+        simulation_type="special_type",
+        pay_type=PayType.CREDITS,
+        priority=4,
+        vgpu_allocation=2,
+        ignore_memory_limit=True,
+    )
+
+    assert warning_calls == [
+        {
+            "solver_version": None,
+            "worker_group": "worker_a",
+            "simulation_type": "special_type",
+            "pay_type": PayType.CREDITS,
+            "priority": 4,
+            "vgpu_allocation": 2,
+            "ignore_memory_limit": True,
+        }
+    ]
+
+
+def test_log_deprecated_run_args_uses_stable_message(monkeypatch):
+    warning_calls = []
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.run_options.log.warning",
+        lambda message, **kwargs: warning_calls.append((message, kwargs)),
+    )
+
+    log_deprecated_run_args(simulation_type="special_type")
+    log_deprecated_run_args(pay_type=PayType.CREDITS, priority=4)
+
+    expected_message = (
+        "Passing run options as direct arguments is deprecated. "
+        "Set defaults via 'td.config.dispatch', 'td.config.run', and 'td.config.vgpu' instead."
+    )
+    assert warning_calls == [
+        (expected_message, {"log_once": True}),
+        (expected_message, {"log_once": True}),
+    ]
 
 
 @responses.activate

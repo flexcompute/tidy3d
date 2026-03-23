@@ -219,8 +219,8 @@ class Job(WebContainer):
         description="Whether to print info messages and progressbars.",
     )
 
-    simulation_type: BatchCategoryType = Field(
-        "tidy3d",
+    simulation_type: Optional[BatchCategoryType] = Field(
+        None,
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
@@ -246,8 +246,8 @@ class Job(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    pay_type: PayType = Field(
-        PayType.AUTO,
+    pay_type: Optional[PayType] = Field(
+        None,
         title="Payment Type",
         description="Specify the payment method.",
     )
@@ -876,8 +876,8 @@ class Batch(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    simulation_type: BatchCategoryType = Field(
-        "tidy3d",
+    simulation_type: Optional[BatchCategoryType] = Field(
+        None,
         title="Simulation Type",
         description="Type of each simulation in the batch, used internally only.",
     )
@@ -904,8 +904,8 @@ class Batch(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    pay_type: PayType = Field(
-        PayType.AUTO,
+    pay_type: Optional[PayType] = Field(
+        None,
         title="Payment Type",
         description="Specify the payment method.",
     )

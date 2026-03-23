@@ -22,11 +22,12 @@ from tidy3d.exceptions import SetupError, WebError, format_chained_exception_mes
 from tidy3d.log import get_logging_console, log
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from tidy3d.version import __version__
+from tidy3d.web.api.run_options import log_deprecated_run_args, resolve_pay_type
 from tidy3d.web.core.core_config import get_logger_console
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.s3utils import download_file, download_gz_file, upload_file
 from tidy3d.web.core.task_core import Folder
-from tidy3d.web.core.types import PayType, ResourceLifecycle, Submittable
+from tidy3d.web.core.types import ResourceLifecycle, Submittable
 
 if TYPE_CHECKING:
     import pathlib
@@ -35,6 +36,8 @@ if TYPE_CHECKING:
 
     import requests
     from rich.progress import TaskID
+
+    from tidy3d.web.core.types import PayType
 
 SIMULATION_JSON = "simulation.json"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
@@ -62,7 +65,7 @@ def run(
     progress_callback_upload: Optional[Callable[[float], None]] = None,
     progress_callback_download: Optional[Callable[[float], None]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -88,13 +91,15 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
-    pay_type: Union[PayType, str] = PayType.AUTO
-        Which method to pay the simulation.
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method. If ``None``, uses ``td.config.run.pay_type``.
     Returns
     -------
     :class:`.ModeSolverData`
         Mode solver data with the calculated results.
     """
+    log_deprecated_run_args(pay_type=pay_type)
+
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
@@ -474,19 +479,19 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
 
     def submit(
         self,
-        pay_type: Union[PayType, str] = PayType.AUTO,
+        pay_type: Optional[Union[PayType, str]] = None,
     ) -> None:
         """Start the execution of this task.
 
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
-        # convert right before sending to API
-        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
-
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
-            {"enableCaching": config.web.enable_caching, "payType": pay_type.value},
+            {
+                "enableCaching": config.web.enable_caching,
+                "payType": resolve_pay_type(pay_type).value,
+            },
         )
 
     def delete(self) -> None:

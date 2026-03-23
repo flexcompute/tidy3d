@@ -26,6 +26,7 @@ from tidy3d.config.loader import ConfigLoader, build_validated_models
 from tidy3d.config.migrations import CURRENT_CONFIG_VERSION
 from tidy3d.config.sections import ConfigSection
 from tidy3d.web.cli.app import tidy3d_cli
+from tidy3d.web.core.types import PayType
 
 
 def test_config_version_written_on_save(config_manager, mock_config_dir):
@@ -1111,6 +1112,26 @@ def test_migrations_are_idempotent():
     second = tomlkit.dumps(document)
 
     assert first == second
+
+
+def test_migration_moves_vgpu_pay_type_to_run(tmp_path):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    config_path = config_dir / "config.toml"
+    config_path.write_text(
+        'config_version = 1\n[vgpu]\npay_type = "CREDITS"\npriority = 3\n',
+        encoding="utf-8",
+    )
+
+    manager = ConfigManager(config_dir=config_dir)
+    assert manager.run.pay_type == PayType.CREDITS.value
+    assert manager.vgpu.priority == 3
+    assert not hasattr(manager.vgpu, "pay_type")
+
+    migrated = toml.loads(config_path.read_text(encoding="utf-8"))
+    assert migrated["config_version"] == CURRENT_CONFIG_VERSION
+    assert migrated["run"]["pay_type"] == "CREDITS"
+    assert "pay_type" not in migrated["vgpu"]
 
 
 def test_deprecated_field_warns(tmp_path, monkeypatch):

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 CONFIG_VERSION_KEY = "config_version"
-CURRENT_CONFIG_VERSION = 1
+CURRENT_CONFIG_VERSION = 2
 
 AUTO_MIGRATE_ENV = "TIDY3D_CONFIG_AUTO_MIGRATE"
 FORWARD_COMPAT_ENV = "TIDY3D_CONFIG_FORWARD_COMPAT"
@@ -251,6 +251,26 @@ def _migrate_v0_to_v1(document: tomlkit.TOMLDocument) -> None:
     """Initial schema migration (no-op)."""
 
     return None
+
+
+@register_migration(1)
+def _migrate_v1_to_v2(document: tomlkit.TOMLDocument) -> None:
+    """Move pay_type from vgpu defaults into the new run section."""
+
+    vgpu_table = document.get("vgpu")
+    if not isinstance(vgpu_table, tomlkit.items.Table):
+        return
+    if "pay_type" not in vgpu_table:
+        return
+
+    run_table = document.get("run")
+    if not isinstance(run_table, tomlkit.items.Table):
+        run_table = tomlkit.table()
+        document["run"] = run_table
+
+    if "pay_type" not in run_table:
+        run_table["pay_type"] = vgpu_table["pay_type"]
+    del vgpu_table["pay_type"]
 
 
 __all__ = [

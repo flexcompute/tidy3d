@@ -112,6 +112,19 @@ class LegacyConfigWrapper:
     def save(self, include_defaults: bool = False) -> None:
         self._manager.save(include_defaults=include_defaults)
 
+    def __enter__(self) -> LegacyConfigWrapper:
+        self._manager.__enter__()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self._manager.__exit__(exc_type, exc_value, traceback)
+        try:
+            from tidy3d.config import Env as _legacy_env
+        except Exception:
+            _legacy_env = None
+        if _legacy_env is not None:
+            _legacy_env._sync_to_manager(apply_env=True)
+
     def reset_manager(self, manager: ConfigManager) -> None:
         """Swap the underlying manager instance."""
 

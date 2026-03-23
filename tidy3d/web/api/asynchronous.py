@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tidy3d.web.core.types import PayType
-
 from .container import DEFAULT_DATA_DIR, Batch
+from .run_options import log_deprecated_run_args
 
 if TYPE_CHECKING:
     from os import PathLike
     from typing import Literal, Optional, Union
 
     from tidy3d.components.types.workflow import WorkflowType
+    from tidy3d.web.core.types import PayType
 
     from .container import BatchData
 
@@ -24,11 +24,11 @@ def run_async(
     callback_url: Optional[str] = None,
     num_workers: Optional[int] = None,
     verbose: bool = True,
-    simulation_type: str = "tidy3d",
+    simulation_type: Optional[str] = None,
     solver_version: Optional[str] = None,
     parent_tasks: Optional[dict[str, list[str]]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
+    pay_type: Optional[Union[PayType, str]] = None,
     priority: Optional[int] = None,
     lazy: bool = False,
     vgpu_allocation: Optional[int] = None,
@@ -55,28 +55,31 @@ def run_async(
         monitoring downloads). Upload and start use a separate fixed concurrency of 64 workers.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
-    simulation_type : str = "tidy3d"
-        Type of simulation being uploaded.
+    simulation_type : Optional[str] = None
+        Type of simulation being uploaded. If ``None``, uses
+        ``td.config.dispatch.simulation_type``.
     solver_version: Optional[str] = None
-        Target solver version.
+        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: Union[PayType, str] = PayType.AUTO
-        Specify the payment method.
+    pay_type : Optional[Union[PayType, str]] = None
+        Payment method. If ``None``, uses ``td.config.run.pay_type``.
     priority: int = None
         Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
     lazy : bool = False
         Whether to load the actual data (``lazy=False``) or return a proxy that loads
         the data when accessed (``lazy=True``).
-    vgpu_allocation : int = None
+    vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
-        Only applies to vGPU license users. If not specified, the system
+        Only applies to vGPU license users. If not specified, uses
+        ``td.config.vgpu.vgpu_allocation``.
+        If that is also unset, the system
         automatically determines the optimal GPU count.
     ignore_memory_limit : Optional[bool] = None
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
-        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
+        vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
 
     Returns
     ------
@@ -92,9 +95,21 @@ def run_async(
 
     :class:`Batch`
         Interface for submitting several :class:`.Simulation` objects to sever.
+
+    Notes
+    -----
+    Passing run options directly is deprecated. Set defaults via
+    ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+    passed here override the config for this call.
     """
-    if simulation_type is None:
-        simulation_type = "tidy3d"
+    log_deprecated_run_args(
+        solver_version=solver_version,
+        simulation_type=simulation_type,
+        pay_type=pay_type,
+        priority=priority,
+        vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
+    )
 
     batch = Batch(
         simulations=simulations,

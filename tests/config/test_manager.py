@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tidy3d.config import Env, get_manager, reload_config
+from tidy3d.config import Env, config, get_manager, reload_config
+from tidy3d.web.core.types import PayType
 
 
 def test_default_web_settings(config_manager):
@@ -123,6 +124,7 @@ def test_config_str_formatting(config_manager):
     assert "Config (profile='default')" in text
     assert "├── adjoint" in text
     assert "├── logging" in text
+    assert "├── run" in text
     assert "└── web" in text
     assert "'api_endpoint': 'https://tidy3d-api.simulation.cloud'" in text
     assert "'s3_region': 'us-gov-west-1'" in text
@@ -141,6 +143,8 @@ def test_as_dict_includes_defaults(config_manager):
     assert data["logging"]["level"] == "WARNING"
     assert "adjoint" in data
     assert data["adjoint"]["local_adjoint_dir"] == "adjoint_data"
+    assert "run" in data
+    assert data["run"]["pay_type"] == "AUTO"
     assert "simulation" in data
 
 
@@ -201,3 +205,38 @@ def test_set_default_profile_empty_raises(config_manager):
     """Test that empty profile name raises ValueError."""
     with pytest.raises(ValueError, match="Profile name cannot be empty"):
         config_manager.set_default_profile("")
+
+
+def test_config_context_manager_restores_runtime_overrides(config_manager):
+    assert config.dispatch.worker_group is None
+    assert config.vgpu.priority is None
+    assert config.run.pay_type == "AUTO"
+
+    with config as scoped_config:
+        scoped_config.dispatch.worker_group = "scoped_group"
+        scoped_config.vgpu.priority = 5
+        scoped_config.run.pay_type = PayType.CREDITS
+
+        assert config.dispatch.worker_group == "scoped_group"
+        assert config.vgpu.priority == 5
+        assert config.run.pay_type == PayType.CREDITS.value
+
+    assert config.dispatch.worker_group is None
+    assert config.vgpu.priority is None
+    assert config.run.pay_type == "AUTO"
+
+
+def test_config_context_manager_restores_nested_overrides(config_manager):
+    assert config.dispatch.worker_group is None
+
+    with config as scoped_config:
+        scoped_config.dispatch.worker_group = "outer_group"
+        assert config.dispatch.worker_group == "outer_group"
+
+        with config as nested_config:
+            nested_config.dispatch.worker_group = "inner_group"
+            assert config.dispatch.worker_group == "inner_group"
+
+        assert config.dispatch.worker_group == "outer_group"
+
+    assert config.dispatch.worker_group is None

@@ -135,6 +135,7 @@ class ConfigManager:
         self._effective_tree: dict[str, Any] = {}
         self._env_overrides: dict[str, Any] = load_environment_overrides()
         self._web_env_previous: dict[str, Optional[str]] = {}
+        self._context_stack: list[tuple[str, dict[str, Any]]] = []
 
         self._reload()
         attach_manager(self)
@@ -494,6 +495,26 @@ class ConfigManager:
 
     def __str__(self) -> str:
         return self.format()
+
+    def __enter__(self) -> ConfigManager:
+        """Temporarily scope runtime config overrides to a context block."""
+
+        snapshot = (self._profile, deepcopy(self._runtime_overrides))
+        self._context_stack.append(snapshot)
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Restore the pre-context runtime config state."""
+
+        if not self._context_stack:
+            return
+
+        profile, runtime_overrides = self._context_stack.pop()
+        self._restore_web_env()
+        self._profile = profile
+        self._runtime_overrides = deepcopy(runtime_overrides)
+        self._reload()
+        self._apply_handlers()
 
 
 def _serialize_value(value: Any) -> Any:
