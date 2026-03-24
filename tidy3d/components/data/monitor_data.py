@@ -92,6 +92,7 @@ from .data_array import (
     ModeAmpsDataArray,
     ModeDispersionDataArray,
     TimeDataArray,
+    _TracedDataset,
 )
 from .dataset import (
     AbstractFieldDataset,
@@ -2784,7 +2785,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         te_int = (diff_area * np.abs(e_field.sel(component=0, drop=True)) ** 2).sum(dim=tan_dims)
         te_frac = te_int / (te_int + tm_int)
 
-        return xr.Dataset(data_vars={"te": te_frac, "tm": 1 - te_frac})
+        return _TracedDataset(data_vars={"te": te_frac, "tm": 1 - te_frac})
 
     @cached_property
     def pol_fraction_waveguide(self) -> xr.Dataset:
@@ -2826,7 +2827,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         tot_int = norm_int + (diff_area * (field_int[0] + field_int[1])).sum(dim=tan_dims)
         tm_frac = 1 - norm_int / tot_int
 
-        return xr.Dataset(data_vars={"te": te_frac, "tm": tm_frac})
+        return _TracedDataset(data_vars={"te": te_frac, "tm": tm_frac})
 
     @property
     def TE_fraction(self) -> xr.DataArray:
@@ -2882,7 +2883,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
                 info["wg TE fraction"] = self.wg_TE_fraction
                 info["wg TM fraction"] = self.wg_TM_fraction
 
-        return xr.Dataset(data_vars=info)
+        return _TracedDataset(data_vars=info)
 
     def to_dataframe(self) -> DataFrame:
         """xarray-like method to export the ``modes_info`` into a pandas dataframe which is e.g.
@@ -3836,9 +3837,13 @@ class AbstractFieldProjectionData(MonitorData):
         return DataArray(data=data, coords=self.coords, dims=self.dims)
 
     def make_dataset(self, keys: tuple[str, ...], vals: tuple[np.ndarray, ...]) -> xr.Dataset:
-        """Make an xr.Dataset with keys and data with same coords and dims as fields."""
+        """Make a dataset with keys and data with same coords and dims as fields.
+
+        Using _TracedDataset preserves tidy3d's custom DataArray subclass when items are
+        accessed later, which is required for autograd-safe .values handling.
+        """
         data_arrays = tuple(map(self.make_data_array, vals))
-        return xr.Dataset(dict(zip(keys, data_arrays)))
+        return _TracedDataset(dict(zip(keys, data_arrays)))
 
     def make_renormalized_data(
         self, phase: np.ndarray, proj_distance: float
@@ -3903,10 +3908,10 @@ class AbstractFieldProjectionData(MonitorData):
 
         Returns
         -------
-        ``xarray.Dataset``
-            xarray dataset containing
+        xarray.Dataset
+            xarray-backed dataset containing
             (``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``)
-            in spherical coordinates.
+            in spherical coordinates. Accessing items returns tidy3d DataArrays.
         """
         return self.make_dataset(
             keys=self.field_components.keys(), vals=self.field_components.values()
@@ -3920,9 +3925,9 @@ class AbstractFieldProjectionData(MonitorData):
 
         Returns
         -------
-        ``xarray.Dataset``
-            xarray dataset containing (``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, ``Hz``)
-            in Cartesian coordinates.
+        xarray.Dataset
+            xarray-backed dataset containing (``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, ``Hz``)
+            in Cartesian coordinates. Accessing items returns tidy3d DataArrays.
         """
         # convert the field components to the Cartesian coordinate system
         coords_sph = self.coords_spherical
@@ -4683,10 +4688,10 @@ class DiffractionData(AbstractFieldProjectionData):
 
         Returns
         -------
-        ``xarray.Dataset``
-            xarray dataset containing
+        xarray.Dataset
+            xarray-backed dataset containing
             (``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``)
-            in spherical coordinates.
+            in spherical coordinates. Accessing items returns tidy3d DataArrays.
         """
         fields = [field.values for field in self.field_components.values()]
         keys = ["Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi"]
@@ -4700,9 +4705,9 @@ class DiffractionData(AbstractFieldProjectionData):
 
         Returns
         -------
-        ``xarray.Dataset``
-            xarray dataset containing (``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, ``Hz``)
-            in Cartesian coordinates.
+        xarray.Dataset
+            xarray-backed dataset containing (``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, ``Hz``)
+            in Cartesian coordinates. Accessing items returns tidy3d DataArrays.
         """
         theta, phi = self.angles
         theta = theta.values
@@ -4723,11 +4728,15 @@ class DiffractionData(AbstractFieldProjectionData):
         return self._make_dataset(fields, keys)
 
     def _make_dataset(self, fields: tuple[np.ndarray, ...], keys: tuple[str, ...]) -> xr.Dataset:
-        """Make an xr.Dataset for fields with given field names."""
+        """Make a dataset for fields with given field names.
+
+        Using _TracedDataset preserves tidy3d's custom DataArray subclass when items are
+        accessed later, which is required for autograd-safe .values handling.
+        """
         data_arrays = []
         for field in fields:
             data_arrays.append(DataArray(data=field, coords=self.coords, dims=self.dims))
-        return xr.Dataset(dict(zip(keys, data_arrays)))
+        return _TracedDataset(dict(zip(keys, data_arrays)))
 
     """ Autograd code """
 
@@ -4844,6 +4853,7 @@ class DirectivityData(FieldProjectionAngleData):
         :class:`.DirectivityData`
             New :class:`.DirectivityData` instance with computed flux from spherical field integration.
         """
+        field_dataset = _TracedDataset(field_dataset)
         f = list(monitor.freqs)
         flux = FluxDataArray(np.zeros(len(f)), coords={"f": f})
         dir_data = DirectivityData(
@@ -4951,7 +4961,7 @@ class DirectivityData(FieldProjectionAngleData):
         U_2 = (self.monitor.proj_distance**2) * 0.5 * np.real(-E2 * np.conj(H1))
 
         data_arrays = (U_1, U_2)
-        return xr.Dataset(dict(zip(keys, data_arrays)))
+        return _TracedDataset(dict(zip(keys, data_arrays)))
 
     @property
     def radiation_intensity(self) -> FieldProjectionAngleDataArray:
@@ -5015,7 +5025,7 @@ class DirectivityData(FieldProjectionAngleData):
         avg_radiation_intensity = self.radiated_power / (4 * np.pi)
         partial_U = self.partial_radiation_intensity(pol_basis=pol_basis, tilt_angle=tilt_angle)
         partial_D = partial_U / avg_radiation_intensity
-        return partial_D.rename(rename_mapping)
+        return _TracedDataset(partial_D.rename(rename_mapping))
 
     @property
     def directivity(self) -> FieldProjectionAngleDataArray:
@@ -5180,7 +5190,7 @@ class DirectivityData(FieldProjectionAngleData):
 
         keys = ("Eco", "Ecross", "Hco", "Hcross")
         data_arrays = (Eco, Ecross, Hco, Hcross)
-        return xr.Dataset(dict(zip(keys, data_arrays)))
+        return _TracedDataset(dict(zip(keys, data_arrays)))
 
     @property
     def fields_circular_polarization(self) -> xr.Dataset:
@@ -5206,4 +5216,4 @@ class DirectivityData(FieldProjectionAngleData):
 
         keys = ("Eleft", "Eright", "Hleft", "Hright")
         data_arrays = (Eleft, Eright, Hleft, Hright)
-        return xr.Dataset(dict(zip(keys, data_arrays)))
+        return _TracedDataset(dict(zip(keys, data_arrays)))

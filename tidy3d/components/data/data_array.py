@@ -35,7 +35,7 @@ from tidy3d.constants import (
 from tidy3d.exceptions import DataError, FileError, format_chained_exception_message
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Hashable, Mapping
     from os import PathLike
     from typing import Optional
 
@@ -2267,3 +2267,24 @@ ImpedanceResultType = Union[
     ImpedanceTimeDataArray,
     ImpedanceFreqTerminalTerminalDataArray,
 ]
+
+
+class _TracedDataset(xr.Dataset):
+    """Dataset subclass that preserves traced tidy3d DataArrays when accessed.
+
+    When xr.Dataset constructor is called with tidy3d DataArray objects,
+    xarray extracts the data and stores it as Variables internally. When
+    items are accessed via __getitem__, xarray wraps these Variables in
+    vanilla xr.DataArray, losing the custom .values property that's needed
+    for autograd compatibility.
+
+    This subclass overrides _construct_dataarray to return tidy3d DataArray
+    objects, preserving the custom .values behavior that returns .data
+    directly when tracing (avoiding np.asarray which breaks autodiff).
+    """
+
+    __slots__ = ()
+
+    def _construct_dataarray(self, name: Hashable) -> DataArray:
+        """Construct a tidy3d DataArray by indexing this dataset."""
+        return DataArray(super()._construct_dataarray(name))

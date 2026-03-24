@@ -30,7 +30,7 @@ from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
-from .data_array import FreqDataArray, TimeDataArray
+from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
 from .monitor_data import AbstractFieldData, FieldTimeData
 
 if TYPE_CHECKING:
@@ -234,7 +234,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             )
             poynting_components["S" + dim] *= grid_correction
 
-        return xr.Dataset(poynting_components)
+        return _TracedDataset(poynting_components)
 
     def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
         """return ``xarray.Dataset`` of the Poynting vector at Yee cell centers.

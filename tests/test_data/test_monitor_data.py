@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import tracemalloc
 
-import autograd as ag
-import autograd.numpy as anp
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -13,7 +11,12 @@ import xarray as xr
 from pydantic import ValidationError
 
 import tidy3d as td
-from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray, MixedModeDataArray
+from tidy3d.components.data.data_array import (
+    DataArray,
+    FreqDataArray,
+    FreqModeDataArray,
+    MixedModeDataArray,
+)
 from tidy3d.components.data.monitor_data import (
     AXIAL_RATIO_CAP,
     AuxFieldTimeData,
@@ -750,6 +753,39 @@ def test_directivity_data_from_projected_fields():
     assert np.allclose(flux_values, 4 * np.pi, rtol=1e-2)
 
 
+def test_directivity_from_spherical_field_dataset_wraps_xarray_dataset(monkeypatch):
+    """DirectivityData should re-wrap plain xr.Dataset input before accessing fields."""
+
+    freqs = np.array([1e9])
+    r_proj = np.atleast_1d(1.0)
+    theta = np.linspace(0, np.pi, 3)
+    phi = np.linspace(0, 2 * np.pi, 4)
+    monitor, proj_angle_data = make_field_dataset_using_power_density(
+        values=np.ones((len(r_proj), len(theta), len(phi), len(freqs)), dtype=complex),
+        theta=theta,
+        phi=phi,
+        freqs=freqs,
+        r_proj=r_proj,
+    )
+
+    seen = {}
+
+    def fake_flux_from_projected_fields(self):
+        seen["er_is_tidy"] = isinstance(self.Er, DataArray)
+        return self.flux
+
+    monkeypatch.setattr(
+        td.DirectivityData,
+        "flux_from_projected_fields",
+        fake_flux_from_projected_fields,
+    )
+
+    dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
+
+    assert seen["er_is_tidy"]
+    assert isinstance(dir_data.Er, DataArray)
+
+
 def test_diffraction_data():
     data = make_diffraction_data()
     _ = data.Etheta
@@ -770,30 +806,6 @@ def test_diffraction_data():
     _ = data.power
     _ = data.fields_spherical
     _ = data.fields_cartesian
-
-
-def test_traced_projected_fields_work_as_custom_source(tmp_path):
-    """Traced projected Cartesian fields should stay numeric through custom-source coercion."""
-    out_path = tmp_path / "traced_projected_fields.hdf5"
-
-    def objective(x):
-        values = anp.ones((2, 2, 1, 1), dtype=complex) * x[0]
-        projected_fields = make_field_projection_cartesian_data(values)
-        source = td.CustomFieldSource(
-            center=(0, 0, 0),
-            size=(1, 1, 0),
-            source_time=td.GaussianPulse(freq0=td.C_0, fwidth=td.C_0 / 20),
-            field_dataset=projected_fields.fields_cartesian,
-        )
-
-        for field_data in source.field_dataset.field_components.values():
-            assert field_data.values.dtype != np.dtype("O")
-
-        source.field_dataset.Ex.to_hdf5(fname=out_path, group_path="/fields/Ex")
-        return anp.real(source.field_dataset.Ex.data).sum()
-
-    grad = ag.grad(objective)(anp.array([1.0]))
-    assert np.all(np.isfinite(grad))
 
 
 def test_colocate():

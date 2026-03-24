@@ -28,6 +28,7 @@ from .data_array import (
     ScalarModeFieldDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
+    _TracedDataset,
 )
 from .unstructured.surface import TriangularSurfaceDataset
 from .zbf import ZBFData
@@ -225,9 +226,11 @@ class AbstractFieldDataset(Dataset, ABC):
     def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def package_colocate_results(self, centered_fields: dict[str, ScalarFieldDataArray]) -> Any:
+    def package_colocate_results(
+        self, centered_fields: dict[str, ScalarFieldDataArray]
+    ) -> xr.Dataset:
         """How to package the dictionary of fields computed via self.colocate()."""
-        return xr.Dataset(centered_fields)
+        return _TracedDataset(centered_fields)
 
     def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
         """Colocate all of the data at a set of x, y, z coordinates.
