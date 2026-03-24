@@ -20,8 +20,23 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .apodization import ApodizationSpec
+from .autograd.parallel_adjoint_bases import (
+    _build_diffraction_bases_for_freq,
+    _build_mode_bases,
+    _build_point_field_bases,
+)
 from .base import Tidy3dBaseModel, cached_property
 from .base_sim.monitor import AbstractMonitor
+from .diffraction import (
+    DIFFRACTION_POLARIZATIONS,
+    bloch_vec_at_freq,
+    compute_angles,
+    diffraction_monitor_medium,
+    diffraction_orders,
+    domain_size_2d,
+    reciprocal_coords,
+    sim_bloch_vecs,
+)
 from .medium import MediumType
 from .microwave.base import MicrowaveBaseModel
 from .mode_spec import ModeSpec
@@ -50,6 +65,8 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
 
+    from .autograd.parallel_adjoint_bases import DiffractionAdjointBasis, ParallelAdjointBasis
+    from .simulation import Simulation
     from .types import ArrayFloat1D, Ax, Bound, FreqBound, Size
 
 BYTES_REAL = 4
@@ -62,6 +79,63 @@ WARN_NUM_MODES = 100
 # This number relates directly to the standard deviation of the Gaussian function which is used
 # for windowing the monitor.
 WINDOW_FACTOR = 15
+
+
+def _diffraction_parallel_adjoint_bases(
+    monitor: PlanarMonitor,
+    simulation: Simulation,
+    monitor_index: int,
+) -> list[ParallelAdjointBasis]:
+    """Shared helper for diffraction-style parallel adjoint bases."""
+    if not isinstance(monitor, DiffractionMonitor):
+        raise ValueError("Parallel adjoint diffraction bases require a DiffractionMonitor.")
+
+    medium = diffraction_monitor_medium(simulation, monitor)
+    orders_x, orders_y = diffraction_orders(simulation, monitor, medium)
+    if orders_x.size == 0 or orders_y.size == 0:
+        return []
+
+    size_x, size_y = domain_size_2d(simulation, monitor)
+    bloch_vec_x, bloch_vec_y = sim_bloch_vecs(simulation, monitor)
+
+    bases: list[DiffractionAdjointBasis] = []
+    freqs = [float(freq) for freq in monitor.freqs]
+    for freq_index, freq in enumerate(freqs):
+        ux = reciprocal_coords(
+            orders=orders_x,
+            size=size_x,
+            bloch_vec=bloch_vec_at_freq(bloch_vec_x, freq_index),
+            f=freq,
+            medium=medium,
+        )
+        uy = reciprocal_coords(
+            orders=orders_y,
+            size=size_y,
+            bloch_vec=bloch_vec_at_freq(bloch_vec_y, freq_index),
+            f=freq,
+            medium=medium,
+        )
+        theta_vals, _ = compute_angles((ux, uy))
+        order_x_index = {int(val): idx for idx, val in enumerate(orders_x)}
+        order_y_index = {int(val): idx for idx, val in enumerate(orders_y)}
+        bases.extend(
+            _build_diffraction_bases_for_freq(
+                monitor_name=monitor.name,
+                monitor_index=monitor_index,
+                freq=freq,
+                orders_x=orders_x,
+                orders_y=orders_y,
+                pols=DIFFRACTION_POLARIZATIONS,
+                theta_for=lambda ox,
+                oy,
+                theta_vals=theta_vals,
+                order_x_index=order_x_index,
+                order_y_index=order_y_index: float(
+                    np.asarray(theta_vals[order_x_index[ox], order_y_index[oy]]).item()
+                ),
+            )
+        )
+    return bases
 
 
 class Monitor(AbstractMonitor):
@@ -126,6 +200,16 @@ class Monitor(AbstractMonitor):
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         return self.storage_size(num_cells=num_cells, tmesh=tmesh)
+
+    def supports_parallel_adjoint(self) -> bool:
+        """Return ``True`` if this monitor can provide parallel adjoint bases."""
+        return False
+
+    def parallel_adjoint_bases(
+        self, simulation: Simulation, monitor_index: int
+    ) -> list[ParallelAdjointBasis]:
+        """Return parallel adjoint bases for this monitor."""
+        return []
 
 
 class FreqMonitor(Monitor, ABC):
@@ -759,6 +843,26 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         # stores 1 complex number per grid cell, per frequency, per field
         return BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields)
 
+    def supports_parallel_adjoint(self) -> bool:
+        """Return ``True`` when the field monitor is a single-point probe."""
+        return len(self.zero_dims) == 3
+
+    def parallel_adjoint_bases(
+        self, simulation: Simulation, monitor_index: int
+    ) -> list[ParallelAdjointBasis]:
+        """Return parallel adjoint bases for single-point field monitors."""
+        if not self.supports_parallel_adjoint():
+            return []
+        if not self.colocate:
+            raise ValueError("Parallel adjoint point sources require colocated field monitors.")
+        component_freqs = {component: list(self.freqs) for component in self.fields}
+        return _build_point_field_bases(
+            component_freqs=component_freqs,
+            monitor_name=self.name,
+            monitor_index=monitor_index,
+            data_path_prefix=("data", monitor_index),
+        )
+
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """:class:`~tidy3d.Monitor` that records electromagnetic fields in the time domain.
@@ -1139,6 +1243,26 @@ class ModeMonitor(AbstractModeMonitor):
             if self.mode_spec.precision == "double":
                 fields_size *= 2
         return amps_size + fields_size
+
+    def supports_parallel_adjoint(self) -> bool:
+        """Return ``True`` for mode monitor amplitude adjoints."""
+        return True
+
+    def parallel_adjoint_bases(
+        self, simulation: Simulation, monitor_index: int
+    ) -> list[ParallelAdjointBasis]:
+        """Return parallel adjoint bases for mode monitor amplitudes."""
+        freqs = [float(freq) for freq in self._stored_freqs]
+        directions = ("+", "-")
+        mode_indices = range(self.mode_spec.num_modes)
+        return _build_mode_bases(
+            freqs=freqs,
+            directions=directions,
+            mode_indices=mode_indices,
+            monitor_name=self.name,
+            monitor_index=monitor_index,
+            data_path=("data", monitor_index, "amps"),
+        )
 
 
 class ModeSolverMonitor(AbstractModeMonitor):
@@ -1925,6 +2049,16 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         """Size of monitor storage given the number of points after discretization."""
         # assumes 1 diffraction order per frequency; actual size will be larger
         return BYTES_COMPLEX * len(self.freqs)
+
+    def supports_parallel_adjoint(self) -> bool:
+        """Return ``True`` for diffraction monitor adjoints based on amplitude data."""
+        return True
+
+    def parallel_adjoint_bases(
+        self, simulation: Simulation, monitor_index: int
+    ) -> list[ParallelAdjointBasis]:
+        """Return parallel adjoint bases for diffraction monitor amplitudes."""
+        return _diffraction_parallel_adjoint_bases(self, simulation, monitor_index)
 
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""

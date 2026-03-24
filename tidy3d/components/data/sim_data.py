@@ -7,7 +7,8 @@ import pathlib
 import re
 from abc import ABC
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Union, get_args
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Optional, Union, get_args
 
 import h5py
 import numpy as np
@@ -83,6 +84,14 @@ class AdjointSourceInfo(Tidy3dBaseModel):
         description="Whether the adjoint simulation needs to be normalized "
         "given the adjoint source pipeline used.",
     )
+
+
+@dataclass(frozen=True)
+class AdjointSourceGroup:
+    """Grouped adjoint sources that share a spatial port, with optional metadata."""
+
+    sources: tuple[SourceType, ...]
+    metadata: Optional[tuple[Any, ...]] = None
 
 
 class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
@@ -1223,32 +1232,72 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return adj_srcs_process_fwidth
 
-    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
-        """Compute list of final sources along with a post run normalization for adj fields."""
-        # dictionary mapping hash of sources with same freq dependence to list of time-dependencies
-        hashes_to_sources = defaultdict(None)
-        hashes_to_src_times = defaultdict(list)
+    @staticmethod
+    def _adjoint_port_group_hashes(
+        adj_srcs: list[SourceType], *, adjust_fwidth: bool = True
+    ) -> tuple[list[SourceType], list[str]]:
+        """Return processed adjoint sources and their spatial-port grouping hashes."""
 
-        adj_srcs_process_fwidth = self._adjoint_src_width_single(adj_srcs)
-
+        processed_sources = (
+            SimulationData._adjoint_src_width_single(adj_srcs) if adjust_fwidth else list(adj_srcs)
+        )
         min_freq_tmp_src = np.maximum(
-            0, np.min([src.source_time.freq0 - src.source_time.fwidth for src in adj_srcs])
+            0,
+            np.min([src.source_time._freq0 - src.source_time.fwidth for src in processed_sources]),
         )
         max_freq_tmp_src = np.max(
-            [src.source_time.freq0 + src.source_time.fwidth for src in adj_srcs]
+            [src.source_time._freq0 + src.source_time.fwidth for src in processed_sources]
         )
         tmp_src_f0 = 0.5 * (min_freq_tmp_src + max_freq_tmp_src)
         tmp_src_fwidth = max_freq_tmp_src - min_freq_tmp_src
-
         tmp_src_time = GaussianPulse(freq0=tmp_src_f0, fwidth=tmp_src_fwidth)
-        for src in adj_srcs_process_fwidth:
-            tmp_src = src.updated_copy(source_time=tmp_src_time)
-            tmp_src_hash = tmp_src._hash_self()
-            hashes_to_sources[tmp_src_hash] = src
-            hashes_to_src_times[tmp_src_hash].append(src.source_time)
+        port_hashes = [
+            src.updated_copy(source_time=tmp_src_time)._hash_self() for src in processed_sources
+        ]
+        return processed_sources, port_hashes
+
+    @staticmethod
+    def _group_adjoint_sources_by_port(
+        adj_srcs: list[SourceType],
+        metadata: Optional[list[Any]] = None,
+        *,
+        adjust_fwidth: bool = True,
+    ) -> list[AdjointSourceGroup]:
+        """Group adjoint sources by spatial port while preserving optional per-source metadata."""
+
+        if not adj_srcs:
+            return []
+        if metadata is not None and len(metadata) != len(adj_srcs):
+            raise ValueError("'metadata' must have the same length as 'adj_srcs'.")
+
+        processed_sources, port_hashes = SimulationData._adjoint_port_group_hashes(
+            adj_srcs, adjust_fwidth=adjust_fwidth
+        )
+        grouped: dict[str, dict[str, Any]] = {}
+        for index, (src, port_hash) in enumerate(zip(processed_sources, port_hashes)):
+            group = grouped.setdefault(
+                port_hash,
+                {"sources": [], "metadata": [] if metadata is not None else None},
+            )
+            group["sources"].append(src)
+            if metadata is not None:
+                group["metadata"].append(metadata[index])
+
+        return [
+            AdjointSourceGroup(
+                sources=tuple(group["sources"]),
+                metadata=None if group["metadata"] is None else tuple(group["metadata"]),
+            )
+            for group in grouped.values()
+        ]
+
+    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+        """Compute list of final sources along with a post run normalization for adj fields."""
+        port_groups = self._group_adjoint_sources_by_port(adj_srcs)
+        adj_srcs_process_fwidth = [src for group in port_groups for src in group.sources]
 
         # Group sources by frequency or port, whichever gives fewer groups
-        num_ports = len(hashes_to_src_times)
+        num_ports = len(port_groups)
         num_unique_freqs = len({src.source_time._freq0 for src in adj_srcs_process_fwidth})
 
         log.info(f"Found {num_ports} spatial ports and {num_unique_freqs} unique frequencies.")
@@ -1278,10 +1327,10 @@ class SimulationData(AbstractYeeGridSimulationData):
                     "optimize this problem without utilizing symmetry."
                 )
 
-            for src_hash, src_times in hashes_to_src_times.items():
-                base_src = hashes_to_sources[src_hash]
-                group = [base_src.updated_copy(source_time=src_time) for src_time in src_times]
-                processed_srcs, post_norm = self._process_adjoint_sources_broadband(group)
+            for port_group in port_groups:
+                processed_srcs, post_norm = self._process_adjoint_sources_broadband(
+                    list(port_group.sources)
+                )
                 adjoint_infos.append(
                     AdjointSourceInfo(
                         sources=processed_srcs, post_norm=post_norm, normalize_sim=True

@@ -305,6 +305,7 @@ Direction = Literal["+", "-"]
 """ monitors """
 
 
+DiffractionPolarization = Literal["s", "p"]
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 EMSurfaceField = Literal["E", "H"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]

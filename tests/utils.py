@@ -1149,20 +1149,79 @@ def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, fiel
 
 def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
+    import hashlib
+
     from scipy.ndimage import gaussian_filter
 
     x = kwargs.get("x0", 1.0)
+    is_adjoint_sim = isinstance(simulation.post_norm, td.FreqDataArray)
+
+    def _norm_factor(freqs: np.ndarray) -> np.ndarray | None:
+        if not simulation.sources:
+            return None
+        normalize_index = simulation.normalize_index
+        if normalize_index is None:
+            return None
+        if normalize_index < 0 or normalize_index >= len(simulation.sources):
+            return None
+        source_time = simulation.sources[normalize_index].source_time
+        if not hasattr(source_time, "amp_freq"):
+            return None
+        norm = np.array([source_time.amp_freq(freq) for freq in freqs], dtype=complex)
+        phase_factor = np.exp(1j * source_time.phase)
+        denom = source_time.amplitude * phase_factor
+        if np.abs(denom) < np.finfo(float).eps:
+            denom = np.finfo(float).eps * phase_factor
+        norm /= denom
+        return norm
 
     def make_data(
         coords: dict, data_array_type: type, is_complex: bool = False
     ) -> td.components.data.data_array.DataArray:
-        """make a random DataArray out of supplied coordinates and data_type."""
+        """Make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
-        np.random.seed(0)
-        data = DATA_GEN_FN(data_shape)
+        data = np.zeros(data_shape, dtype=complex if is_complex else float)
+        for source in simulation.sources:
+            source_time = source.source_time
+            source_scale = source_time.amplitude * np.exp(1j * source_time.phase)
+            if isinstance(source, td.CustomCurrentSource) and source.current_dataset is not None:
+                components = list(source.current_dataset.field_components.values())
+                if components:
+                    dataset_scale = np.sum([np.mean(comp.values) for comp in components])
+                    if dataset_scale != 0:
+                        source_scale *= dataset_scale
+            if not is_complex:
+                source_scale = abs(source_scale)
 
-        data = (1 + 0.5j) * data if is_complex else data
-        data = gaussian_filter(data, sigma=1.0)  # smooth out the data a little so it isnt random
+            source_time_norm = source_time.updated_copy(amplitude=1.0, phase=0.0)
+            if isinstance(source, td.CustomCurrentSource) and source.current_dataset is not None:
+                src_hash = (
+                    f"{type(source).__name__}:{source.center}:{source.size}:"
+                    f"{source_time_norm._hash_self()}"
+                )
+                seed = int(hashlib.md5(src_hash.encode("utf-8")).hexdigest()[:8], 16)
+            else:
+                source_norm = source.updated_copy(source_time=source_time_norm)
+                seed = int(source_norm._hash_self()[:8], 16)
+            np.random.seed(seed)
+            contrib = DATA_GEN_FN(data_shape)
+            contrib = (1 + 0.5j) * contrib if is_complex else contrib
+            contrib = gaussian_filter(contrib, sigma=1.0)
+            data += contrib * source_scale
+
+        if "f" in data_array_type._dims and not is_adjoint_sim:
+            freqs = np.array(coords["f"], dtype=float)
+            norm = _norm_factor(freqs)
+            if norm is not None:
+                if not is_complex:
+                    norm = np.abs(norm)
+                shape = [1] * len(data_shape)
+                shape[data_array_type._dims.index("f")] = len(freqs)
+                data = data / norm.reshape(shape)
+
+        data_scale = 1e-6 / max(1.0, np.sqrt(float(np.prod(data_shape))))
+        data = data * data_scale
+
         data_array = data_array_type(x * data, coords=coords)
         return data_array
 
@@ -1321,14 +1380,26 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 
     def make_diff_data(monitor: td.DiffractionMonitor) -> td.DiffractionData:
         """make a random DiffractionData from a DiffractionMonitor."""
-        f = list(monitor.freqs)
-        orders_x = np.linspace(-1, 1, 3)
-        orders_y = np.linspace(-2, 2, 5)
-        coords = {"orders_x": orders_x, "orders_y": orders_y, "f": f}
-        values = DATA_GEN_FN((len(orders_x), len(orders_y), len(f)))
+        axis_names = ("x", "y", "z")
+        normal_axis = monitor.normal_axis
+        axis_x, axis_y = [axis_names[i] for i in range(3) if i != normal_axis]
+        size_x = simulation.size[axis_names.index(axis_x)]
+        size_y = simulation.size[axis_names.index(axis_y)]
+        freqs = list(monitor.freqs)
+        orders_x = np.array([0], dtype=int) if size_x == 0 else np.arange(-1, 2, dtype=int)
+        orders_y = np.array([0], dtype=int) if size_y == 0 else np.arange(-2, 3, dtype=int)
+
+        coords = {"orders_x": orders_x, "orders_y": orders_y, "f": freqs}
+        values = DATA_GEN_FN((len(orders_x), len(orders_y), len(freqs)))
         data = td.DiffractionDataArray(values, coords=coords)
         field_data = dict.fromkeys(("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi"), data)
-        return td.DiffractionData(monitor=monitor, sim_size=(1, 1), bloch_vecs=(0, 0), **field_data)
+        return td.DiffractionData(
+            monitor=monitor,
+            sim_size=(size_x, size_y),
+            bloch_vecs=(0.0, 0.0),
+            medium=simulation.medium,
+            **field_data,
+        )
 
     def make_mode_data(monitor: td.ModeMonitor) -> td.ModeData:
         """make a random ModeData from a ModeMonitor."""

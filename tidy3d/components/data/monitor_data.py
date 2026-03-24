@@ -12,6 +12,14 @@ import autograd.numpy as np
 import xarray as xr
 from pydantic import Field, model_validator
 
+from tidy3d.components.autograd.source_factory import (
+    current_component_data_array,
+    diffraction_source_from_data,
+    mode_source_from_monitor,
+)
+from tidy3d.components.autograd.source_factory import (
+    flip_direction as _flip_direction,
+)
 from tidy3d.components.base import TYPE_TAG_STR, cached_property
 from tidy3d.components.base_sim.data.monitor_data import (
     AbstractMonitorData,
@@ -25,6 +33,7 @@ from tidy3d.components.data.utils import (
     _instantaneous_power_flow_numpy,
     _outer_dot_numpy,
 )
+from tidy3d.components.diffraction import diffraction_amplitude_norm
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
@@ -63,13 +72,8 @@ from tidy3d.components.validators import (
     enforce_monitor_fields_present,
     required_if_symmetry_present,
 )
-from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, UnitScaling, fp_eps
-from tidy3d.exceptions import (
-    DataError,
-    SetupError,
-    Tidy3dNotImplementedError,
-    ValidationError,
-)
+from tidy3d.constants import C_0, ETA_0, MICROMETER, UnitScaling, fp_eps
+from tidy3d.exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from tidy3d.log import log
 
 from .data_array import (
@@ -87,7 +91,6 @@ from .data_array import (
     MixedModeDataArray,
     ModeAmpsDataArray,
     ModeDispersionDataArray,
-    ScalarFieldDataArray,
     TimeDataArray,
 )
 from .dataset import (
@@ -115,6 +118,7 @@ if TYPE_CHECKING:
     from tidy3d.components.source.base import Source
     from tidy3d.components.source.current import PointDipole
     from tidy3d.components.source.field import ModeSource, PlaneWave
+    from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.types import (
         ArrayFloat2D,
         Direction,
@@ -124,9 +128,8 @@ if TYPE_CHECKING:
         Size,
         TrackFreq,
     )
-    from tidy3d.components.types.time import SourceTimeType
 
-    from .data_array import ModeIndexDataArray, ScalarFieldTimeDataArray
+    from .data_array import ModeIndexDataArray, ScalarFieldDataArray, ScalarFieldTimeDataArray
     from .dataset import Dataset
     from .unstructured.surface import TriangularSurfaceDataset
 
@@ -137,8 +140,6 @@ SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
 AXIAL_RATIO_CAP = 1e5
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
-# Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
-COS_THETA_THRESH = 1e-5
 MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
 
 GRID_CORRECTION_TYPE = Union[
@@ -207,9 +208,7 @@ class MonitorData(AbstractMonitorData, ABC):
     @staticmethod
     def flip_direction(direction: Union[str, DataArray]) -> str:
         """Flip the direction of a string ``('+', '-') -> ('-', '+')``."""
-        from tidy3d.components.autograd.source_factory import flip_direction
-
-        return flip_direction(direction)
+        return _flip_direction(direction)
 
     @staticmethod
     def get_amplitude(x: Union[DataArray, SupportsComplex]) -> complex:
@@ -1839,41 +1838,22 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             for name, field_component in self.field_components.items():
                 # get the VJP values at frequency and apply adjoint phase
                 field_component = field_component.sel(f=freq0)
-                values = 2 * -1j * field_component.values
 
                 # accounts for the effective size of the source when injecting into a
                 # simulation with symmetry
-                symmetry_factor = np.prod(values.shape) / np.prod(
+                symmetry_factor = np.prod(field_component.values.shape) / np.prod(
                     self.symmetry_expanded_copy.field_components[name].sel(f=freq0).values.shape
                 )
-
-                # make source go backwards
-                if "H" in name:
-                    values *= -1
-
-                coords = dict(field_component.coords.copy())
-                grid_coords = Coords(**{key: coords[key] for key in "xyz"})
-
-                size_element = grid_coords.cell_size_meshgrid
-
-                # make coords that are shifted relative to geometry (0,0,0) = geometry.center
-                for dim, key in enumerate("xyz"):
-                    coords[key] = np.array(coords[key]) - source_geo.center[dim]
-
-                coords["f"] = np.array([freq0])
-                values = np.expand_dims(values, axis=-1)
-
-                size_element = np.reshape(size_element, values.shape)
-
-                omega0 = 2 * np.pi * freq0
-                scaling_factor = 0.5 * omega0 * EPSILON_0 / size_element
-
-                values *= scaling_factor * symmetry_factor
-                values = np.nan_to_num(values, nan=0.0)
-
-                # ignore zero components
-                if not np.all(values == 0):
-                    src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+                source_data = current_component_data_array(
+                    component=name,
+                    base_values=field_component.values,
+                    spatial_coords={key: np.array(field_component.coords[key]) for key in "xyz"},
+                    source_center=source_geo.center,
+                    freq=float(freq0),
+                    symmetry_factor=float(symmetry_factor),
+                )
+                if source_data is not None:
+                    src_field_components[name] = source_data
 
             # dont include this source if no data
             if all(fld_cmp is None for fld_cmp in src_field_components.values()):
@@ -2981,7 +2961,6 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         mode_index = coords["mode_index"]
 
         amp_complex = self.get_amplitude(amp)
-        from tidy3d.components.autograd.source_factory import mode_source_from_monitor
 
         return mode_source_from_monitor(
             monitor=monitor,
@@ -4666,12 +4645,7 @@ class DiffractionData(AbstractFieldProjectionData):
         """Complex power amplitude in each order for 's' and 'p' polarizations, normalized so that
         the power carried by the wave of that order and polarization equals ``abs(amps)^2``.
         """
-        # use a small threshold to avoid blow-up near grazing angles
-        cos_theta = np.cos(np.nan_to_num(self.angles[0]))
-        # set amplitudes to 0 for angles with cos(theta) <= COS_THETA_THRESH (glancing or negative)
-        cos_theta[cos_theta <= COS_THETA_THRESH] = np.inf
-
-        norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
+        norm = diffraction_amplitude_norm(self.angles[0].values, self.eta)
         amp_theta = self.Etheta.values * norm
         amp_phi = self.Ephi.values * norm
 
@@ -4798,7 +4772,6 @@ class DiffractionData(AbstractFieldProjectionData):
         order_y = coords["orders_y"]
 
         amp_complex = self.get_amplitude(amp)
-        from tidy3d.components.autograd.source_factory import diffraction_source_from_data
 
         return diffraction_source_from_data(
             diff_data=self,

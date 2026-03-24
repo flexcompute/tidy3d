@@ -37,12 +37,14 @@ def setup_adj(
     sim_data_orig: td.SimulationData,
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
+    already_filtered: bool = False,
 ) -> list[td.Simulation]:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
 
-    data_fields_vjp = filter_vjp_map(data_fields_vjp)
+    if not already_filtered:
+        data_fields_vjp = filter_vjp_map(data_fields_vjp)
 
     # if all entries are zero, there is no adjoint sim to run
     if not data_fields_vjp:

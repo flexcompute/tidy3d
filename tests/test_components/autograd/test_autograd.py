@@ -41,7 +41,14 @@ from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom, verify_custom_vjp
 from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
-from ...utils import SIM_FULL, AssertLogLevel, custom_poleresidue_u, run_emulated, tracer_arr
+from ...utils import (
+    SIM_FULL,
+    AssertLogLevel,
+    AssertLogStr,
+    custom_poleresidue_u,
+    run_emulated,
+    tracer_arr,
+)
 
 """ Test configuration """
 
@@ -291,9 +298,16 @@ def use_emulated_run(monkeypatch):
             batch_data_orig, task_ids_fwd = {}, {}
             sim_fields_keys_dict = run_kwargs.pop("sim_fields_keys_dict", None)
             for task_name, simulation in simulations.items():
+                run_kwargs_task = dict(run_kwargs)
                 if sim_fields_keys_dict is not None:
-                    run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
-                sim_data_orig, task_name_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
+                    sim_fields_keys = sim_fields_keys_dict.get(task_name)
+                    if sim_fields_keys is not None and "_parallel_adj_" not in task_name:
+                        run_kwargs_task["sim_fields_keys"] = sim_fields_keys
+                    else:
+                        run_kwargs_task.pop("sim_fields_keys", None)
+                sim_data_orig, task_name_fwd = emulated_run_fwd(
+                    simulation, task_name, **run_kwargs_task
+                )
                 batch_data_orig[task_name] = sim_data_orig
                 task_ids_fwd[task_name] = task_name_fwd
 
@@ -1806,6 +1820,137 @@ def test_autograd_async_all_zero_grad(use_emulated_run):
 
     with AssertLogLevel("WARNING", contains_str="contains adjoint sources"):
         grad = ag.grad(objective)(params0)
+
+
+def test_async_vjp_parallel_only_keeps_full_sim_field_keys(monkeypatch):
+    """Ensure async VJP returns full per-task key coverage when only parallel contribution exists."""
+
+    task_name = "task_parallel_only"
+    sim_fields_original = {
+        ("structures", 0, "geometry", "size"): np.array([1.0, 2.0]),
+        ("structures", 0, "geometry", "center"): np.array([3.0, 4.0]),
+    }
+
+    def _fake_prepare_adjoints_from_vjp(**_kwargs):
+        return (
+            {("structures", 0, "geometry", "size"): np.array([5.0, 6.0])},
+            [],
+            True,
+        )
+
+    monkeypatch.setattr(
+        autograd_module, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
+    )
+
+    vjp_fn = autograd_module._run_async_bwd(
+        data_fields_original_dict={task_name: {("data", 0, "amps"): np.array([1.0])}},
+        sim_fields_original_dict={task_name: sim_fields_original},
+        sims_original={task_name: SIM_BASE},
+        aux_data_dict={task_name: {autograd_module.AUX_KEY_SIM_DATA_ORIGINAL: None}},
+        local_gradient=False,
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+    )
+
+    vjp_result = vjp_fn({task_name: {("data", 0, "amps"): np.array([1.0])}})
+
+    assert task_name in vjp_result
+    assert set(vjp_result[task_name]) == set(sim_fields_original)
+    assert np.allclose(vjp_result[task_name][("structures", 0, "geometry", "size")], [5.0, 6.0])
+    assert np.allclose(vjp_result[task_name][("structures", 0, "geometry", "center")], [0.0, 0.0])
+
+
+def test_async_vjp_sequential_path_keeps_full_sim_field_keys(monkeypatch):
+    """Ensure async VJP keeps full key coverage when sequential adjoints return sparse maps."""
+
+    task_name = "task_sequential_sparse"
+    sim_fields_original = {
+        ("structures", 0, "geometry", "size"): np.array([1.0, 2.0]),
+        ("structures", 0, "geometry", "center"): np.array([3.0, 4.0]),
+    }
+
+    def _fake_prepare_adjoints_from_vjp(**_kwargs):
+        return ({}, [SIM_BASE], True)
+
+    def _fake_run_async_tidy3d_bwd(simulations, **_kwargs):
+        assert f"{task_name}_adjoint_0" in simulations
+        return {
+            f"{task_name}_adjoint_0": {("structures", 0, "geometry", "size"): np.array([9.0, 10.0])}
+        }
+
+    monkeypatch.setattr(
+        autograd_module, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
+    )
+    monkeypatch.setattr(autograd_module, "_run_async_tidy3d_bwd", _fake_run_async_tidy3d_bwd)
+
+    vjp_fn = autograd_module._run_async_bwd(
+        data_fields_original_dict={task_name: {("data", 0, "amps"): np.array([1.0])}},
+        sim_fields_original_dict={task_name: sim_fields_original},
+        sims_original={task_name: SIM_BASE},
+        aux_data_dict={
+            task_name: {
+                autograd_module.AUX_KEY_SIM_DATA_ORIGINAL: None,
+                autograd_module.AUX_KEY_FWD_TASK_ID: "fwd_task_id",
+            }
+        },
+        local_gradient=False,
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+    )
+
+    vjp_result = vjp_fn({task_name: {("data", 0, "amps"): np.array([1.0])}})
+
+    assert task_name in vjp_result
+    assert set(vjp_result[task_name]) == set(sim_fields_original)
+    assert np.allclose(vjp_result[task_name][("structures", 0, "geometry", "size")], [9.0, 10.0])
+    assert np.allclose(vjp_result[task_name][("structures", 0, "geometry", "center")], [0.0, 0.0])
+
+
+def test_vjp_sequential_path_keeps_full_sim_field_keys(monkeypatch):
+    """Ensure single-run VJP keeps full key coverage when sequential adjoints return sparse maps."""
+
+    task_name = "task_single_sequential_sparse"
+    sim_fields_original = {
+        ("structures", 0, "geometry", "size"): np.array([1.0, 2.0]),
+        ("structures", 0, "geometry", "center"): np.array([3.0, 4.0]),
+    }
+
+    def _fake_prepare_adjoints_from_vjp(**_kwargs):
+        return ({}, [SIM_BASE], True)
+
+    def _fake_run_async_tidy3d_bwd(simulations, **_kwargs):
+        assert f"{task_name}_adjoint_0" in simulations
+        return {
+            f"{task_name}_adjoint_0": {("structures", 0, "geometry", "size"): np.array([9.0, 10.0])}
+        }
+
+    monkeypatch.setattr(
+        autograd_module, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
+    )
+    monkeypatch.setattr(autograd_module, "_run_async_tidy3d_bwd", _fake_run_async_tidy3d_bwd)
+
+    vjp_fn = autograd_module._run_bwd(
+        data_fields_original={("data", 0, "amps"): np.array([1.0])},
+        sim_fields_original=sim_fields_original,
+        sim_original=SIM_BASE,
+        task_name=task_name,
+        aux_data={
+            autograd_module.AUX_KEY_SIM_DATA_ORIGINAL: None,
+            autograd_module.AUX_KEY_FWD_TASK_ID: "fwd_task_id",
+        },
+        local_gradient=False,
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+    )
+
+    vjp_result = vjp_fn({("data", 0, "amps"): np.array([1.0])})
+
+    assert set(vjp_result) == set(sim_fields_original)
+    assert np.allclose(vjp_result[("structures", 0, "geometry", "size")], [9.0, 10.0])
+    assert np.allclose(vjp_result[("structures", 0, "geometry", "center")], [0.0, 0.0])
 
 
 def test_autograd_speed_num_structures(use_emulated_run):
@@ -4218,10 +4363,10 @@ def test_dispersive_no_inf(use_emulated_run):
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return postprocess(sim_data)
 
-    # the following will raise a warning (and fail) if the dispersive material
-    # model is called without a frequency
-    with AssertLogLevel("INFO"):
+    # Fail if dispersive eps_model() is evaluated without a proper finite frequency.
+    with AssertLogStr("WARNING", excludes_str="frequency passed to 'Medium.eps_model()'"):
         grad = ag.grad(objective)(params0)
+    assert np.all(np.isfinite(grad))
 
 
 def test_sim_traced_center_size(use_emulated_run):

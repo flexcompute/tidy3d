@@ -10,6 +10,7 @@ from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
 
 import tidy3d as td
+from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.geometry.utils import GeometryType
 from tidy3d.components.medium import MediumType
@@ -25,6 +26,7 @@ from .backward import postprocess_adj as _postprocess_adj_impl
 from .backward import setup_adj as _setup_adj_impl
 from .constants import (
     AUX_KEY_FWD_TASK_ID,
+    AUX_KEY_PARALLEL_ADJ,
     AUX_KEY_SIM_DATA_FWD,
     AUX_KEY_SIM_DATA_ORIGINAL,
 )
@@ -48,7 +50,18 @@ from .io_utils import (
 from .io_utils import (
     upload_sim_fields_keys as _upload_sim_fields_keys_impl,
 )
+from .parallel_adjoint import _populate_parallel_adjoint_bases, _warn_parallel_adjoint_fallback
+from .parallel_adjoint import (
+    apply_parallel_adjoint as _apply_parallel_adjoint,
+)
+from .parallel_adjoint import (
+    prepare_parallel_adjoint as _prepare_parallel_adjoint,
+)
+from .parallel_adjoint import (
+    relocate_parallel_adjoint_files as _relocate_parallel_adjoint_files,
+)
 from .types import CustomVJPConfig, NumericalStructureConfig, SetupRunResult
+from .utils import filter_vjp_map as _filter_vjp_map
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -60,6 +73,7 @@ if TYPE_CHECKING:
     from tidy3d.web.api.container import BatchData
     from tidy3d.web.core.types import PayType
 
+    from .parallel_adjoint import ParallelAdjointPayload
     from .types import CustomVJPSpec
 
 
@@ -1167,6 +1181,157 @@ def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.
     return sim_data_original._insert_traced_fields(traced_fields_data)
 
 
+def _zero_vjp_map(sim_fields_original: AutogradFieldMap) -> AutogradFieldMap:
+    return {
+        k: (type(v)(0 * x for x in v) if isinstance(v, (list, tuple)) else 0 * v)
+        for k, v in sim_fields_original.items()
+    }
+
+
+def _pad_full_key_coverage(
+    vjp_fields: AutogradFieldMap, sim_fields_original: AutogradFieldMap
+) -> AutogradFieldMap:
+    """Ensure all traced sim-field keys are present, filling only missing keys with zeros."""
+
+    full_vjp = _zero_vjp_map(sim_fields_original)
+    full_vjp.update(vjp_fields)
+    return full_vjp
+
+
+def _prepare_adjoints_from_vjp(
+    *,
+    data_fields_vjp: AutogradFieldMap,
+    sim_fields_original: AutogradFieldMap,
+    sim_data_orig: td.SimulationData,
+    sim_fields_keys: list[tuple],
+    max_num_adjoint_per_fwd: int,
+    parallel_info: dict[str, Any] | None,
+    task_name: str,
+    warn_if_no_sources: bool = True,
+) -> tuple[AutogradFieldMap, list[td.Simulation], bool]:
+    data_fields_vjp_static = _filter_vjp_map(data_fields_vjp)
+    if not data_fields_vjp_static:
+        msg = (
+            f"Adjoint simulation for task '{task_name}' contains no sources. "
+            "This can occur if the objective function does not depend on the "
+            "simulation's output. If this is unexpected, please review your "
+            "setup or contact customer support for assistance."
+        )
+        if warn_if_no_sources:
+            td.log.warning(msg)
+        else:
+            td.log.debug(msg)
+        return _zero_vjp_map(sim_fields_original), [], False
+
+    vjp_traced_fields: AutogradFieldMap = {}
+    data_fields_vjp_for_adj = data_fields_vjp_static
+    if parallel_info is not None:
+        vjp_parallel, data_fields_vjp_for_adj = _apply_parallel_adjoint(
+            data_fields_vjp=data_fields_vjp_static,
+            parallel_info=parallel_info,
+            sim_data_orig=sim_data_orig,
+        )
+        _accumulate_field_map(vjp_traced_fields, vjp_parallel)
+        data_fields_vjp_for_adj = _filter_vjp_map(data_fields_vjp_for_adj)
+
+    sims_adj = setup_adj(
+        data_fields_vjp=data_fields_vjp_for_adj,
+        sim_data_orig=sim_data_orig,
+        sim_fields_keys=sim_fields_keys,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        already_filtered=True,
+    )
+    if data_fields_vjp_for_adj and not sims_adj:
+        if parallel_info is not None:
+            raise td.exceptions.AdjointError(
+                f"Adjoint fallback for task '{task_name}' could not resolve remaining non-zero VJP "
+                "entries."
+            )
+        msg = (
+            f"Adjoint simulation for task '{task_name}' contains no sources. "
+            "This can occur if the objective function does not depend on the "
+            "simulation's output. If this is unexpected, please review your "
+            "setup or contact customer support for assistance."
+        )
+        if warn_if_no_sources:
+            td.log.warning(msg)
+        else:
+            td.log.debug(msg)
+        return _zero_vjp_map(sim_fields_original), [], False
+    if parallel_info is not None:
+        _warn_parallel_adjoint_fallback(
+            parallel_info=parallel_info,
+            sims_adj=sims_adj,
+            task_name=task_name,
+        )
+
+    return vjp_traced_fields, sims_adj, True
+
+
+def _relocate_parallel_adjoint_payload_files(
+    payloads: list[ParallelAdjointPayload],
+    batch_data: BatchData,
+    base_dir: PathLike,
+) -> None:
+    task_names = [
+        adj_task_name for payload in payloads for adj_task_name in payload.task_map.keys()
+    ]
+    _relocate_parallel_adjoint_files(
+        task_names=task_names,
+        task_paths=batch_data.task_paths,
+        base_dir=base_dir,
+    )
+
+
+def _run_parallel_adjoint_fwd_batch(
+    sim_combined: td.Simulation,
+    sim_original: td.Simulation,
+    sim_fields_keys: list[tuple],
+    task_name: str,
+    aux_data: dict,
+    payload: ParallelAdjointPayload,
+    numerical_structure_map: dict[int, NumericalStructureConfig],
+    custom_vjp: tuple[CustomVJPConfig, ...] | None,
+    run_kwargs: dict[str, Any],
+) -> AutogradFieldMap:
+    sims_batch = {task_name: sim_combined}
+    sims_batch.update(payload.sims_adj)
+
+    run_kwargs_batch = dict(run_kwargs)
+    path = run_kwargs_batch.pop("path", None)
+    if path is not None:
+        run_kwargs_batch["path_dir"] = Path(path).parent
+    run_kwargs_batch["sim_fields_keys_dict"] = {task_name: sim_fields_keys}
+
+    batch_data, _ = _run_async_tidy3d(sims_batch, **run_kwargs_batch)
+    sim_data_combined = batch_data[task_name]
+    field_map = postprocess_fwd(
+        sim_data_combined=sim_data_combined,
+        sim_original=sim_original,
+        aux_data=aux_data,
+    )
+
+    _populate_parallel_adjoint_bases(
+        batch_data=batch_data,
+        task_name=task_name,
+        payload=payload,
+        sim_fields_keys=sim_fields_keys,
+        aux_data=aux_data,
+        numerical_structure_map=numerical_structure_map,
+        custom_vjp=custom_vjp,
+    )
+
+    if path is not None:
+        _relocate_parallel_adjoint_payload_files(
+            payloads=[payload],
+            batch_data=batch_data,
+            base_dir=Path(path).parent,
+        )
+        sim_data_combined.to_file(path)
+
+    return field_map
+
+
 """ Autograd-traced Primitive for FWD pass ``run`` functions """
 
 
@@ -1188,6 +1353,7 @@ def _run_primitive(
 
     # indicate this is a forward run. not exposed to user but used internally by pipeline.
     run_kwargs["is_adjoint"] = False
+    sim_fields_keys = list(sim_fields.keys())
 
     # compute the combined simulation for both local and remote, so we can validate it
     sim_combined = setup_fwd(
@@ -1197,13 +1363,31 @@ def _run_primitive(
     )
 
     if local_gradient:
-        sim_data_combined, _ = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
-
-        field_map = postprocess_fwd(
-            sim_data_combined=sim_data_combined,
-            sim_original=sim_original,
-            aux_data=aux_data,
+        parallel_payload = _prepare_parallel_adjoint(
+            simulation=sim_original,
+            sim_fields_keys=sim_fields_keys,
+            task_name=task_name,
+            max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         )
+        if parallel_payload is not None:
+            field_map = _run_parallel_adjoint_fwd_batch(
+                sim_combined=sim_combined,
+                sim_original=sim_original,
+                sim_fields_keys=sim_fields_keys,
+                task_name=task_name,
+                aux_data=aux_data,
+                payload=parallel_payload,
+                numerical_structure_map=numerical_structures,
+                custom_vjp=custom_vjp,
+                run_kwargs=run_kwargs,
+            )
+        else:
+            sim_data_combined, _ = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
+            field_map = postprocess_fwd(
+                sim_data_combined=sim_data_combined,
+                sim_original=sim_original,
+                aux_data=aux_data,
+            )
     else:
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
         restored_path, task_id_fwd = webapi.restore_simulation_if_cached(
@@ -1215,7 +1399,7 @@ def _run_primitive(
         if restored_path is None or task_id_fwd is None:
             sim_combined.validate_pre_upload()
             run_kwargs["simulation_type"] = "autograd_fwd"
-            run_kwargs["sim_fields_keys"] = list(sim_fields.keys())
+            run_kwargs["sim_fields_keys"] = sim_fields_keys
 
             sim_data_orig, task_id_fwd = _run_tidy3d(
                 sim_original,
@@ -1249,10 +1433,11 @@ def _run_async_primitive(
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[str, dict[int, NumericalStructureConfig]],
-    custom_vjp: dict[str, Sequence[CustomVJPConfig]],
+    custom_vjp: dict[str, Sequence[CustomVJPConfig]] | None,
     **run_async_kwargs: Any,
 ) -> dict[str, AutogradFieldMap]:
     task_names = sim_fields_dict.keys()
+    custom_vjp_map = custom_vjp or {}
 
     sims_combined = {}
     for task_name in task_names:
@@ -1265,7 +1450,26 @@ def _run_async_primitive(
         )
 
     if local_gradient:
-        batch_data_combined, _ = _run_async_tidy3d(sims_combined, **run_async_kwargs)
+        sims_batch = dict(sims_combined)
+        parallel_payloads: dict[str, ParallelAdjointPayload] = {}
+        for task_name in task_names:
+            sim_fields_keys = list(sim_fields_dict[task_name].keys())
+            parallel_payload = _prepare_parallel_adjoint(
+                simulation=sims_original[task_name],
+                sim_fields_keys=sim_fields_keys,
+                task_name=task_name,
+                max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            )
+            if parallel_payload is None:
+                continue
+            parallel_payloads[task_name] = parallel_payload
+            sims_batch.update(parallel_payload.sims_adj)
+
+        run_async_kwargs_batch = dict(run_async_kwargs)
+        run_async_kwargs_batch["sim_fields_keys_dict"] = {
+            task_name: list(sim_fields_dict[task_name].keys()) for task_name in task_names
+        }
+        batch_data_combined, _ = _run_async_tidy3d(sims_batch, **run_async_kwargs_batch)
 
         field_map_fwd_dict = {}
         for task_name in task_names:
@@ -1277,6 +1481,37 @@ def _run_async_primitive(
                 sim_original=sim_original,
                 aux_data=aux_data,
             )
+
+            parallel_payload = parallel_payloads.get(task_name)
+            if parallel_payload is None:
+                continue
+
+            task_custom_vjp = custom_vjp_map.get(task_name)
+            if task_custom_vjp is None:
+                task_custom_vjp_tuple = None
+            elif isinstance(task_custom_vjp, CustomVJPConfig):
+                task_custom_vjp_tuple = (task_custom_vjp,)
+            else:
+                task_custom_vjp_tuple = tuple(task_custom_vjp)
+
+            _populate_parallel_adjoint_bases(
+                batch_data=batch_data_combined,
+                task_name=task_name,
+                payload=parallel_payload,
+                sim_fields_keys=list(sim_fields_dict[task_name].keys()),
+                aux_data=aux_data,
+                numerical_structure_map=numerical_structures.get(task_name, {}),
+                custom_vjp=task_custom_vjp_tuple,
+            )
+
+        if parallel_payloads:
+            path_dir = run_async_kwargs.get("path_dir")
+            if path_dir is not None:
+                _relocate_parallel_adjoint_payload_files(
+                    payloads=list(parallel_payloads.values()),
+                    batch_data=batch_data_combined,
+                    base_dir=path_dir,
+                )
     else:
         for sim in sims_combined.values():
             sim.validate_pre_upload()
@@ -1362,8 +1597,8 @@ def _run_bwd(
 ) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
 
-    # indicate this is an adjoint run
-    run_kwargs["is_adjoint"] = True
+    run_kwargs_base = dict(run_kwargs)
+    run_kwargs_base["is_adjoint"] = True
 
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
@@ -1382,25 +1617,19 @@ def _run_bwd(
     def vjp(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
 
-        # build the (possibly multiple) adjoint simulations
-        sims_adj = setup_adj(
+        parallel_info = aux_data.get(AUX_KEY_PARALLEL_ADJ) if local_gradient else None
+        vjp_traced_fields, sims_adj, _ = _prepare_adjoints_from_vjp(
             data_fields_vjp=data_fields_vjp,
+            sim_fields_original=sim_fields_original,
             sim_data_orig=sim_data_orig,
             sim_fields_keys=sim_fields_keys,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            parallel_info=parallel_info,
+            task_name=task_name,
         )
 
         if not sims_adj:
-            td.log.warning(
-                f"Adjoint simulation for task '{task_name}' contains no sources. "
-                "This can occur if the objective function does not depend on the "
-                "simulation's output. If this is unexpected, please review your "
-                "setup or contact customer support for assistance."
-            )
-            return {
-                k: (type(v)(0 * x for x in v) if isinstance(v, (list, tuple)) else 0 * v)
-                for k, v in sim_fields_original.items()
-            }
+            return _pad_full_key_coverage(vjp_traced_fields, sim_fields_original)
 
         # Run adjoint simulations in batch
         task_names_adj = [f"{task_name}_adjoint_{i}" for i in range(len(sims_adj))]
@@ -1408,17 +1637,17 @@ def _run_bwd(
 
         td.log.info(f"Running {len(sims_adj)} adjoint simulations")
 
-        vjp_traced_fields = {}
+        run_kwargs_local = dict(run_kwargs_base)
         if local_gradient:
             # Run all adjoint sims in batch
             td.log.info("Starting local batch adjoint simulations")
-            path = Path(run_kwargs.pop("path"))
+            path = Path(run_kwargs_local.pop("path"))
             adjoint_dir = config.adjoint.local_adjoint_dir
             path_dir_adj = path.parent / adjoint_dir
             path_dir_adj.mkdir(parents=True, exist_ok=True)
 
             batch_data_adj, _ = _run_async_tidy3d(
-                sims_adj_dict, path_dir=path_dir_adj, **run_kwargs
+                sims_adj_dict, path_dir=path_dir_adj, **run_kwargs_local
             )
             td.log.info("Completed local batch adjoint simulations")
 
@@ -1440,13 +1669,13 @@ def _run_bwd(
 
             # Link each adjoint sim to the forward task it depends on
             task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
-            run_kwargs["simulation_type"] = "autograd_bwd"
+            run_kwargs_local["simulation_type"] = "autograd_bwd"
 
             # Build a per-task parent_tasks mapping
             parent_tasks = {}
             for tname_adj in sims_adj_dict:
                 parent_tasks[tname_adj] = [task_id_fwd]
-            run_kwargs["parent_tasks"] = parent_tasks
+            run_kwargs_local["parent_tasks"] = parent_tasks
 
             # Update each simulation's type, then run them in batch
             sims_adj_dict = {
@@ -1455,25 +1684,17 @@ def _run_bwd(
             }
             vjp_fields_dict = _run_async_tidy3d_bwd(
                 simulations=sims_adj_dict,
-                **run_kwargs,
+                **run_kwargs_local,
             )
             td.log.info("Completed server-side batch of adjoint simulations.")
 
         # Accumulate gradients from all adjoint simulations
         for task_name_adj, vjp_fields in vjp_fields_dict.items():
             td.log.info(f"Processing VJP contribution from {task_name_adj}")
-            for k, v in vjp_fields.items():
-                if k in vjp_traced_fields:
-                    val = vjp_traced_fields[k]
-                    if isinstance(val, (list, tuple)) and isinstance(v, (list, tuple)):
-                        vjp_traced_fields[k] = type(val)(x + y for x, y in zip(val, v))
-                    else:
-                        vjp_traced_fields[k] = vjp_traced_fields[k] + v
-                else:
-                    vjp_traced_fields[k] = v
+            _accumulate_field_map(vjp_traced_fields, vjp_fields)
 
         td.log.debug(f"Computed gradients for {len(vjp_traced_fields)} fields")
-        return vjp_traced_fields
+        return _pad_full_key_coverage(vjp_traced_fields, sim_fields_original)
 
     return vjp
 
@@ -1486,13 +1707,13 @@ def _run_async_bwd(
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[str, dict[int, NumericalStructureConfig]],
-    custom_vjp: dict[str, Sequence[CustomVJPConfig]],
+    custom_vjp: dict[str, Sequence[CustomVJPConfig]] | None,
     **run_async_kwargs: Any,
 ) -> Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
 
-    # indicate this is an adjoint run
-    run_async_kwargs["is_adjoint"] = True
+    run_async_kwargs_base = dict(run_async_kwargs)
+    run_async_kwargs_base["is_adjoint"] = True
 
     task_names = data_fields_original_dict.keys()
 
@@ -1512,32 +1733,69 @@ def _run_async_bwd(
 
     td.log.info("Constructing custom VJP function for backwards pass.")
 
+    def _prepare_async_task_adjoints(
+        task_name: str,
+        data_fields_vjp: AutogradFieldMap,
+        sim_fields_original: AutogradFieldMap,
+        sim_data_orig: td.SimulationData,
+        sim_fields_keys: list[tuple],
+        max_num_adjoint_per_fwd_local: int,
+    ) -> tuple[AutogradFieldMap, list[td.Simulation], bool]:
+        parallel_info = (
+            aux_data_dict[task_name].get(AUX_KEY_PARALLEL_ADJ) if local_gradient else None
+        )
+        return _prepare_adjoints_from_vjp(
+            data_fields_vjp=data_fields_vjp,
+            sim_fields_original=sim_fields_original,
+            sim_data_orig=sim_data_orig,
+            sim_fields_keys=sim_fields_keys,
+            max_num_adjoint_per_fwd=max_num_adjoint_per_fwd_local,
+            parallel_info=parallel_info,
+            task_name=task_name,
+            warn_if_no_sources=False,
+        )
+
     def vjp(data_fields_dict_vjp: dict[str, AutogradFieldMap]) -> dict[str, AutogradFieldMap]:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
+
+        def _pad_task_key_coverage() -> None:
+            """Ensure all traced sim-field keys exist for tasks that had adjoint sources."""
+            for task_name in task_names:
+                if not task_has_adj_sources.get(task_name, False):
+                    continue
+                sim_fields_vjp_dict[task_name] = _pad_full_key_coverage(
+                    sim_fields_vjp_dict.get(task_name, {}),
+                    sim_fields_original_dict[task_name],
+                )
 
         # Collect all adjoint simulations across all forward tasks
         all_sims_adj = {}
         sim_fields_vjp_dict = {}
         task_name_mapping = {}  # Maps adjoint task names to original task names
+        task_has_adj_sources: dict[str, bool] = {}
+        any_adj_sources = False
 
         for task_name in task_names:
             data_fields_vjp = data_fields_dict_vjp[task_name]
             sim_data_orig = sim_data_orig_dict[task_name]
             sim_fields_keys = sim_fields_keys_dict[task_name]
 
-            sims_adj = setup_adj(
+            vjp_traced_fields, sims_adj, has_adj_sources = _prepare_async_task_adjoints(
+                task_name=task_name,
                 data_fields_vjp=data_fields_vjp,
+                sim_fields_original=sim_fields_original_dict[task_name],
                 sim_data_orig=sim_data_orig,
                 sim_fields_keys=sim_fields_keys,
-                max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+                max_num_adjoint_per_fwd_local=max_num_adjoint_per_fwd,
             )
+            task_has_adj_sources[task_name] = has_adj_sources
+            any_adj_sources = any_adj_sources or has_adj_sources
+
+            if vjp_traced_fields:
+                sim_fields_vjp_dict.setdefault(task_name, {})
+                _accumulate_field_map(sim_fields_vjp_dict[task_name], vjp_traced_fields)
 
             if not sims_adj:
-                td.log.debug(f"Adjoint simulation for task '{task_name}' contains no sources.")
-                sim_fields_vjp_dict[task_name] = {
-                    k: (type(v)(0 * x for x in v) if isinstance(v, (list, tuple)) else 0 * v)
-                    for k, v in sim_fields_original_dict[task_name].items()
-                }
                 continue
 
             # Add each adjoint simulation to the combined batch with unique task names
@@ -1547,68 +1805,69 @@ def _run_async_bwd(
                 task_name_mapping[adj_task_name] = task_name
 
         if not all_sims_adj:
-            td.log.warning(
-                "No simulation in batch contains adjoint sources and thus all gradients are zero."
-            )
-            return sim_fields_vjp_dict
-
+            if not any_adj_sources:
+                td.log.warning(
+                    "No simulation in batch contains adjoint sources and thus all gradients are zero."
+                )
         # Dictionary to store VJP results from all adjoint simulations
         vjp_results = {}
 
-        if local_gradient:
-            # Run all adjoint simulations in a single batch
-            path_dir = Path(run_async_kwargs.pop("path_dir"))
-            adjoint_dir = config.adjoint.local_adjoint_dir
-            path_dir_adj = path_dir / adjoint_dir
-            path_dir_adj.mkdir(parents=True, exist_ok=True)
+        if all_sims_adj:
+            run_async_kwargs_local = dict(run_async_kwargs_base)
+            if local_gradient:
+                # Run all adjoint simulations in a single batch
+                path_dir = Path(run_async_kwargs_local.pop("path_dir"))
+                adjoint_dir = config.adjoint.local_adjoint_dir
+                path_dir_adj = path_dir / adjoint_dir
+                path_dir_adj.mkdir(parents=True, exist_ok=True)
 
-            batch_data_adj, _ = _run_async_tidy3d(
-                all_sims_adj, path_dir=path_dir_adj, **run_async_kwargs
-            )
-
-            # Process results for each adjoint task
-            for adj_task_name, sim_data_adj in batch_data_adj.items():
-                task_name = task_name_mapping[adj_task_name]
-                sim_data_orig = sim_data_orig_dict[task_name]
-                sim_data_fwd = sim_data_fwd_dict[task_name]
-                sim_fields_keys = sim_fields_keys_dict[task_name]
-
-                # Compute VJP contribution
-                task_custom_vjp = custom_vjp.get(task_name)
-                task_numerical_structure_map = numerical_structures.get(task_name, {})
-
-                if isinstance(task_custom_vjp, CustomVJPConfig):
-                    task_custom_vjp = (task_custom_vjp,)
-
-                vjp_results[adj_task_name] = postprocess_adj(
-                    sim_data_adj=sim_data_adj,
-                    sim_data_orig=sim_data_orig,
-                    sim_data_fwd=sim_data_fwd,
-                    sim_fields_keys=sim_fields_keys,
-                    numerical_structure_map=task_numerical_structure_map,
-                    custom_vjp=task_custom_vjp,
+                batch_data_adj, _ = _run_async_tidy3d(
+                    all_sims_adj, path_dir=path_dir_adj, **run_async_kwargs_local
                 )
-        else:
-            # Set up parent tasks mapping for all adjoint simulations
-            parent_tasks = {}
-            for adj_task_name, task_name in task_name_mapping.items():
-                task_id_fwd = aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID]
-                parent_tasks[adj_task_name] = [task_id_fwd]
 
-            run_async_kwargs["parent_tasks"] = parent_tasks
-            run_async_kwargs["simulation_type"] = "autograd_bwd"
+                # Process results for each adjoint task
+                for adj_task_name, sim_data_adj in batch_data_adj.items():
+                    task_name = task_name_mapping[adj_task_name]
+                    sim_data_orig = sim_data_orig_dict[task_name]
+                    sim_data_fwd = sim_data_fwd_dict[task_name]
+                    sim_fields_keys = sim_fields_keys_dict[task_name]
 
-            # Update simulation types
-            all_sims_adj = {
-                task_name: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
-                for task_name, sim in all_sims_adj.items()
-            }
+                    # Compute VJP contribution
+                    task_custom_vjp = custom_vjp.get(task_name)
+                    task_numerical_structure_map = numerical_structures.get(task_name, {})
 
-            # Run all adjoint simulations in a single batch
-            vjp_results = _run_async_tidy3d_bwd(
-                simulations=all_sims_adj,
-                **run_async_kwargs,
-            )
+                    if isinstance(task_custom_vjp, CustomVJPConfig):
+                        task_custom_vjp = (task_custom_vjp,)
+
+                    vjp_results[adj_task_name] = postprocess_adj(
+                        sim_data_adj=sim_data_adj,
+                        sim_data_orig=sim_data_orig,
+                        sim_data_fwd=sim_data_fwd,
+                        sim_fields_keys=sim_fields_keys,
+                        numerical_structure_map=task_numerical_structure_map,
+                        custom_vjp=task_custom_vjp,
+                    )
+            else:
+                # Set up parent tasks mapping for all adjoint simulations
+                parent_tasks = {}
+                for adj_task_name, task_name in task_name_mapping.items():
+                    task_id_fwd = aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID]
+                    parent_tasks[adj_task_name] = [task_id_fwd]
+
+                run_async_kwargs_local["parent_tasks"] = parent_tasks
+                run_async_kwargs_local["simulation_type"] = "autograd_bwd"
+
+                # Update simulation types
+                all_sims_adj = {
+                    task_name: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
+                    for task_name, sim in all_sims_adj.items()
+                }
+
+                # Run all adjoint simulations in a single batch
+                vjp_results = _run_async_tidy3d_bwd(
+                    simulations=all_sims_adj,
+                    **run_async_kwargs_local,
+                )
 
         # Accumulate gradients from all adjoint simulations
         for adj_task_name, vjp_fields in vjp_results.items():
@@ -1617,16 +1876,9 @@ def _run_async_bwd(
             if task_name not in sim_fields_vjp_dict:
                 sim_fields_vjp_dict[task_name] = {}
 
-            for k, v in vjp_fields.items():
-                if k in sim_fields_vjp_dict[task_name]:
-                    val = sim_fields_vjp_dict[task_name][k]
-                    if isinstance(val, (list, tuple)) and isinstance(v, (list, tuple)):
-                        sim_fields_vjp_dict[task_name][k] = type(val)(x + y for x, y in zip(val, v))
-                    else:
-                        sim_fields_vjp_dict[task_name][k] = sim_fields_vjp_dict[task_name][k] + v
-                else:
-                    sim_fields_vjp_dict[task_name][k] = v
+            _accumulate_field_map(sim_fields_vjp_dict[task_name], vjp_fields)
 
+        _pad_task_key_coverage()
         return sim_fields_vjp_dict
 
     return vjp
@@ -1637,6 +1889,7 @@ def setup_adj(
     sim_data_orig: td.SimulationData,
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
+    already_filtered: bool = False,
 ) -> list[td.Simulation]:
     """Construct adjoint simulations (delegated)."""
     return _setup_adj_impl(
@@ -1644,6 +1897,7 @@ def setup_adj(
         sim_data_orig=sim_data_orig,
         sim_fields_keys=sim_fields_keys,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        already_filtered=already_filtered,
     )
 
 

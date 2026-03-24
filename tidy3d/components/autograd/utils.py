@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "accumulate_field_map",
+    "adjoint_fwidth_from_simulation",
     "asarray1d",
     "contains",
     "get_static",
@@ -45,6 +46,26 @@ def split_list(x: list[Any], index: int) -> tuple[list, list]:
     """Split a list at a given index."""
     x = list(x)
     return x[:index], x[index:]
+
+
+def adjoint_fwidth_from_simulation(simulation: Any) -> float:
+    """Return adjoint-source fwidth derived from the simulation normalization source."""
+
+    sources = simulation.sources
+    if not sources:
+        raise ValueError(
+            "Cannot determine adjoint source fwidth because the simulation has no sources."
+        )
+
+    normalize_index = simulation.normalize_index
+    if normalize_index is None:
+        normalize_index = 0
+    if normalize_index < 0 or normalize_index >= len(sources):
+        raise ValueError(
+            f"Invalid normalize_index {normalize_index} for simulation with {len(sources)} sources."
+        )
+
+    return sources[normalize_index].source_time.fwidth
 
 
 def is_tidy_box(x: Any) -> bool:

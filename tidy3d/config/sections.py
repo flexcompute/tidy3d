@@ -41,6 +41,10 @@ if TYPE_CHECKING:
 VALID_VGPU_ALLOCATIONS = (1, 2, 4, 8)
 
 TLS_VERSION_CHOICES = {"TLSv1", "TLSv1_1", "TLSv1_2", "TLSv1_3"}
+ParallelAdjointModeDirectionPolicy = Literal[
+    "assume_outgoing",
+    "run_both_directions",
+]
 
 
 class ConfigSection(BaseModel):
@@ -209,6 +213,28 @@ class AdjointConfig(ConfigSection):
         title="Local gradient directory",
         description=(
             "Relative directory name used to store intermediate results when local gradients are enabled."
+        ),
+        json_schema_extra={"persist": True},
+    )
+
+    parallel_run: bool = Field(
+        False,
+        title="Enable parallel adjoint sources",
+        description=(
+            "When True, run canonical adjoint simulations in parallel with the forward solve for "
+            "supported monitor types when local gradients are enabled."
+        ),
+        json_schema_extra={"persist": True},
+    )
+
+    parallel_adjoint_mode_direction_policy: ParallelAdjointModeDirectionPolicy = Field(
+        "assume_outgoing",
+        title="Parallel adjoint mode direction policy",
+        description=(
+            "Policy for selecting propagation directions when launching parallel adjoint mode "
+            "simulations. 'assume_outgoing' uses the monitor position relative to the simulation "
+            "center to choose a single outgoing direction and flips it for the adjoint source. "
+            "'run_both_directions' launches adjoint sources for both '+' and '-' mode directions."
         ),
         json_schema_extra={"persist": True},
     )
