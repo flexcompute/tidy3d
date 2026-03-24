@@ -560,7 +560,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_pre : Callable
             Function accepting arguments that correspond to the ``name`` fields
             of the ``DesignSpace.parameters``. Should return a ``WorkflowType`` or ``Batch`` object, or a
-            ``list`` / ``dict`` of these objects.
+            top-level ``list`` / nested ``dict`` tree of these objects.
 
         Returns
         -------
@@ -584,6 +584,37 @@ class DesignSpace(Tidy3dBaseModel):
 
             return estimate
 
+        def _estimate_container_cost(value: Any, allow_list: bool) -> float | None:
+            """Recursively estimate costs for supported container outputs."""
+            if isinstance(value, WORKFLOW_TYPES):
+                return _estimate_sim_cost(value)
+
+            if isinstance(value, Batch):
+                estimate = value.estimate_cost()
+                value.delete()  # Deleted as only a test with initial parameters
+                return estimate
+
+            if isinstance(value, dict):
+                total_estimate = 0.0
+                for sub_value in value.values():
+                    sub_estimate = _estimate_container_cost(sub_value, allow_list=False)
+                    if sub_estimate is None:
+                        return None
+                    total_estimate += sub_estimate
+                return total_estimate
+
+            if allow_list and isinstance(value, list):
+                total_estimate = 0.0
+                for sub_value in value:
+                    sub_estimate = _estimate_container_cost(sub_value, allow_list=False)
+                    if sub_estimate is None:
+                        return None
+                    total_estimate += sub_estimate
+                return total_estimate
+
+            # Non-workflow values inside a supported container are treated as free.
+            return 0.0
+
         if isinstance(pre_out, WORKFLOW_TYPES):
             per_run_estimate = _estimate_sim_cost(pre_out)
 
@@ -591,33 +622,11 @@ class DesignSpace(Tidy3dBaseModel):
             per_run_estimate = pre_out.estimate_cost()
             pre_out.delete()  # Deleted as only a test with initial parameters
 
-        elif isinstance(pre_out, (list, dict)):
-            # Iterate through container to get simulations and batches and sum cost
-            # Accept list or dict inputs
+        elif isinstance(pre_out, list):
+            per_run_estimate = _estimate_container_cost(pre_out, allow_list=True)
 
-            if isinstance(pre_out, dict):
-                pre_out = list(pre_out.values())
-
-            sims = []
-            batches = []
-            for value in pre_out:
-                if isinstance(value, WORKFLOW_TYPES):
-                    sims.append(value)
-                elif isinstance(value, Batch):
-                    batches.append(value)
-
-            calculated_estimates = []
-            for sim in sims:
-                calculated_estimates.append(_estimate_sim_cost(sim))
-
-            for batch in batches:
-                calculated_estimates.append(batch.estimate_cost())
-                batch.delete()  # Deleted as only a test with initial parameters
-
-            if None in calculated_estimates:
-                per_run_estimate = None
-            else:
-                per_run_estimate = sum(calculated_estimates)
+        elif isinstance(pre_out, dict):
+            per_run_estimate = _estimate_container_cost(pre_out, allow_list=False)
 
         else:
             raise ValueError("Unrecognized output from pre-function, unable to estimate cost.")

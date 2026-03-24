@@ -597,6 +597,10 @@ def emulated_estimate_cost_none(self, verbose=True):
     return None
 
 
+def emulated_estimate_cost_variable(self, verbose=True):
+    return {"estimate_cost": 1.0, "low": 1.25, "high": 2.75}[self.task_name]
+
+
 @pytest.mark.parametrize(
     "est_cost_func",
     (emulated_estimate_cost_return, emulated_estimate_cost_none),
@@ -642,6 +646,70 @@ def test_estimate_cost(est_cost_func, sweep_method, monkeypatch):
         assert isinstance(estimate, float)
     else:
         assert estimate is None
+
+
+def test_estimate_cost_sums_batch_members(monkeypatch):
+    # Mock job.delete to remove any calls to server during the testing
+    def emulated_job_delete(self):
+        pass
+
+    monkeypatch.setattr(web.Job, "delete", emulated_job_delete)
+    monkeypatch.setattr(web.Job, "estimate_cost", emulated_estimate_cost_variable)
+
+    design_space = tdd.DesignSpace(
+        parameters=[
+            tdd.ParameterFloat(name="x", span=(0.0, 1.0), num_points=1),
+        ],
+        method=tdd.MethodGrid(),
+    )
+
+    def batch_pre(**_kwargs):
+        return web.Batch(
+            simulations={
+                "low": scs_pre(radius=0.1, num_spheres=1, tag="tag1"),
+                "high": scs_pre(radius=0.2, num_spheres=2, tag="tag2"),
+            }
+        )
+
+    estimate = design_space.estimate_cost(batch_pre)
+
+    assert estimate == 4.0
+
+
+def test_estimate_cost_handles_nested_containers(monkeypatch):
+    # Mock job.delete to remove any calls to server during the testing
+    def emulated_job_delete(self):
+        pass
+
+    monkeypatch.setattr(web.Job, "delete", emulated_job_delete)
+    monkeypatch.setattr(web.Job, "estimate_cost", emulated_estimate_cost_variable)
+
+    design_space = tdd.DesignSpace(
+        parameters=[
+            tdd.ParameterFloat(name="x", span=(0.0, 1.0), num_points=1),
+        ],
+        method=tdd.MethodGrid(),
+    )
+
+    def nested_pre(**_kwargs):
+        return [
+            {"direct": scs_pre(radius=0.1, num_spheres=1, tag="tag1")},
+            {
+                "nested": {
+                    "batch": web.Batch(
+                        simulations={
+                            "low": scs_pre(radius=0.2, num_spheres=2, tag="tag2"),
+                            "high": scs_pre(radius=0.3, num_spheres=1, tag="tag1"),
+                        }
+                    ),
+                    "note": "ignored",
+                }
+            },
+        ]
+
+    estimate = design_space.estimate_cost(nested_pre)
+
+    assert estimate == 5.0
 
 
 @pytest.mark.parametrize(
