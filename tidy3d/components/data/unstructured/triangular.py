@@ -314,7 +314,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         if axis == self.normal_axis:
             if reflection_only:
                 return self.updated_copy(
-                    values=self.values * symmetry, normal_pos=2 * center - self.normal_pos
+                    values=self.values * symmetry,
+                    normal_pos=2 * center - self.normal_pos,
+                    deep=False,
                 )
             else:
                 raise DataError(

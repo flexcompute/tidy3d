@@ -466,6 +466,20 @@ def test_mode_solver_data_interp_linear():
         assert field_data.coords["f"].size == 20
 
 
+def test_mode_solver_data_interp_same_freqs_does_not_mutate_original():
+    """Interpolating at stored frequencies should not renormalize the original data in-place."""
+    mode_data = get_mode_solver_data()
+    ex_before = mode_data.Ex.copy()
+    hx_before = mode_data.Hx.copy()
+
+    data_interp = mode_data.interp_in_freq(freqs=mode_data.monitor.freqs, method="linear")
+
+    assert data_interp.Ex is not mode_data.Ex
+    assert data_interp.Hx is not mode_data.Hx
+    assert np.allclose(mode_data.Ex.values, ex_before.values)
+    assert np.allclose(mode_data.Hx.values, hx_before.values)
+
+
 def test_mode_solver_data_interp_cubic():
     """Test cubic interpolation on ModeSolverData."""
     mode_data = get_mode_solver_data()

@@ -72,4 +72,6 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
         for field, val in self.field_components.items():
             new_field_components[field] = self._symmetry_expanded_copy_base(data=val)
 
-        return self.updated_copy(symmetry=(0, 0, 0), **new_field_components)
+        return self.updated_copy(
+            symmetry=(0, 0, 0), **new_field_components, deep=False, validate=False
+        )

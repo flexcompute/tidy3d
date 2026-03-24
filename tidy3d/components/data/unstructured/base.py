@@ -288,7 +288,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     def rename(self, name: str) -> UnstructuredDataset:
         """Return a renamed array."""
-        return self.updated_copy(values=self.values.rename(name))
+        return self.updated_copy(values=self.values.rename(name), deep=False)
 
     @property
     def is_complex(self) -> bool:
@@ -415,7 +415,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
             points = self.points
             values = self.values
 
-        return self.updated_copy(points=points, values=values, cells=cells)
+        return self.updated_copy(points=points, values=values, cells=cells, deep=False)
 
     """ Arithmetic operations """
 
@@ -443,28 +443,28 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
         if type(result) is tuple:
             # multiple return values
-            return tuple(self.updated_copy(values=x) for x in result)
+            return tuple(self.updated_copy(values=x, deep=False) for x in result)
         elif method == "at":
             # no return value
             return None
         else:
             # one return value
-            return self.updated_copy(values=result)
+            return self.updated_copy(values=result, deep=False)
 
     @property
     def real(self) -> Self:
         """Real part of dataset."""
-        return self.updated_copy(values=self.values.real)
+        return self.updated_copy(values=self.values.real, deep=False)
 
     @property
     def imag(self) -> UnstructuredDataset:
         """Imaginary part of dataset."""
-        return self.updated_copy(values=self.values.imag)
+        return self.updated_copy(values=self.values.imag, deep=False)
 
     @property
     def abs(self) -> UnstructuredDataset:
         """Absolute value of dataset."""
-        return self.updated_copy(values=self.values.abs)
+        return self.updated_copy(values=self.values.abs, deep=False)
 
     def conj(self) -> UnstructuredDataset:
         """Complex conjugate value of dataset."""
@@ -1164,7 +1164,10 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
             key: value if isinstance(value, list) or key not in self._non_spatial_dims else [value]
             for key, value in sel_kwargs.items()
         }
-        return self.updated_copy(values=self.values.sel(**sel_kwargs_only_lists, method=method))
+        return self.updated_copy(
+            values=self.values.sel(**sel_kwargs_only_lists, method=method),
+            deep=False,
+        )
 
     def isel(
         self,
@@ -1202,7 +1205,10 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
                 else [value]
                 for key, value in sel_kwargs.items()
             }
-        return self.updated_copy(values=self.values.isel(**sel_kwargs_processed, drop=drop))
+        return self.updated_copy(
+            values=self.values.isel(**sel_kwargs_processed, drop=drop),
+            deep=False,
+        )
 
     """ Interpolation """
 
@@ -1330,7 +1336,8 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         interp_kwargs = {"method": method, "kwargs": {"fill_value": fill_value}}
 
         return self.updated_copy(
-            values=self.values.interp(**coords_kwargs_only_lists, **interp_kwargs)
+            values=self.values.interp(**coords_kwargs_only_lists, **interp_kwargs),
+            deep=False,
         )
 
     @abstractmethod
