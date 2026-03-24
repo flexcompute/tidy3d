@@ -6,21 +6,22 @@ CI rejects direct `CHANGELOG.md` edits in regular PRs (auto-generated `chore/bui
 
 ## File naming
 
-Create one file per change using:
+Create one file per change using a temporary `XXXX` prefix before the PR number exists. A GitHub Action renames any `XXXX.*.md` file in this directory to `<PR_NUMBER>.*.md` after the PR opens.
 
-- Single entry for a PR/type: `<PR_NUMBER>.<type>.md`
-- Multiple entries for the same PR/type: `<PR_NUMBER>.<N>.<type>.md` where `N` starts at `1`
+- Temporary single entry: `XXXX.<type>.md`
+- Temporary multiple entries for the same PR/type: `XXXX.<N>.<type>.md` where `N` starts at `1`
+- Final filenames after rename: `<PR_NUMBER>.<type>.md` and `<PR_NUMBER>.<N>.<type>.md`
 
 Examples:
 
-- `1234.added.md`
-- `1235.1.added.md`
-- `1235.2.added.md`
-- `1236.changed.md`
-- `1237.fixed.md`
-- `1238.removed.md`
-- `1239.breaking.md`
-- `1240.planned_deprecation.md`
+- `XXXX.added.md`
+- `XXXX.1.added.md`
+- `XXXX.2.added.md`
+- `XXXX.changed.md`
+- `XXXX.fixed.md`
+- `XXXX.removed.md`
+- `XXXX.breaking.md`
+- `XXXX.planned_deprecation.md`
 
 ## Allowed fragment types
 

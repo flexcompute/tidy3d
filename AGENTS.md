@@ -49,7 +49,7 @@
 - Follow Conventional Commits per `.commitlintrc.json`.
 - Branch names must use an allowed prefix (`chore`, `hotfix`, `daily-chore`) or include a Jira key to satisfy CI.
 - PRs should link issues, summarize behavior changes, list the `uv run …` checks you executed, and call out docs/schema updates.
-- For user-facing changes (new features, bug fixes, breaking changes), add a changelog fragment under `changelog.d/` using the pattern `<PR_NUMBER>.<type>.md` (for example `1234.added.md`) instead of editing `CHANGELOG.md` directly; CI rejects direct `CHANGELOG.md` edits on regular PR branches.
+- For user-facing changes (new features, bug fixes, breaking changes), add a changelog fragment under `changelog.d/` using the pattern `XXXX.<type>.md` (for example `XXXX.added.md`) instead of editing `CHANGELOG.md` directly; the GitHub Action renames `XXXX` to the PR number after the PR opens, and CI rejects direct `CHANGELOG.md` edits on regular PR branches.
 - Release managers can use the GitHub Actions workflow `public/tidy3d/python-client-build-changelog-pr` to generate `CHANGELOG.md` from fragments and open a PR (defaults source/target to `develop`).
 
 _Reminder: update this AGENTS.md whenever workflow, tooling, or review expectations change so agents stay in sync with the repo._
