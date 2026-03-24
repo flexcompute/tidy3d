@@ -71,6 +71,12 @@ def test_zero_radius():
         _ = td.ModeSpec(bend_radius=0.0, bend_axis=1)
 
 
+@pytest.mark.parametrize("bend_radius", [np.nan, np.inf, -np.inf])
+def test_bend_radius_must_be_finite(bend_radius):
+    with pytest.raises(pd.ValidationError):
+        _ = td.ModeSpec(bend_radius=bend_radius, bend_axis=1)
+
+
 def test_glancing_incidence():
     with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(angle_theta=np.pi / 2)

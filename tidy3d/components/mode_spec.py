@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 import numpy as np
 from pydantic import (
     Field,
+    FiniteFloat,
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
@@ -633,7 +634,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "conductor, single precision otherwise.",
     )
 
-    bend_radius: Optional[float] = Field(
+    bend_radius: Optional[FiniteFloat] = Field(
         None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
