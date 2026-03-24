@@ -87,7 +87,7 @@ jobs:
           echo "source_run_id=$source_run_id" >> "$GITHUB_OUTPUT"
 
       - name: download-cache-candidate-artifacts-source-run
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -191,7 +191,7 @@ jobs:
         candidate: ${{ fromJson(needs.discover-cache-candidates.outputs.candidates || '[]') }}
     steps:
       - name: download-cache-candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
