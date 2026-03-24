@@ -1164,6 +1164,69 @@ class Tidy3dBaseModel(BaseModel):
         return json_string
 
     @classmethod
+    def _load_data_from_file(
+        cls: type[T],
+        fname: PathLike,
+        model_dict: dict,
+        group_path: str = "",
+        custom_decoders: Optional[list[Callable]] = None,
+        should_load_path: Optional[Callable[[str], bool]] = None,
+    ) -> None:
+        """Materialize DataArray payloads referenced by an HDF5-backed model dict in place."""
+
+        def is_data_array(value: Any) -> bool:
+            """Whether a value is supposed to be a data array based on the contents."""
+            return isinstance(value, str) and value in DATA_ARRAY_MAP
+
+        fname_path = Path(fname)
+
+        for key, value in model_dict.items():
+            subpath = f"{group_path}/{key}"
+
+            if should_load_path is not None and not should_load_path(subpath):
+                continue
+
+            if custom_decoders:
+                for custom_decoder in custom_decoders:
+                    custom_decoder(
+                        fname=str(fname_path),
+                        group_path=subpath,
+                        model_dict=model_dict,
+                        key=key,
+                        value=value,
+                    )
+
+            if is_data_array(value):
+                data_array_type = DATA_ARRAY_MAP[value]
+                model_dict[key] = data_array_type.from_hdf5(fname=fname_path, group_path=subpath)
+                continue
+
+            if isinstance(value, (list, tuple)):
+                value_dict = cls.tuple_to_dict(tuple_values=value)
+                cls._load_data_from_file(
+                    fname=fname_path,
+                    model_dict=value_dict,
+                    group_path=subpath,
+                    custom_decoders=custom_decoders,
+                    should_load_path=should_load_path,
+                )
+
+                # handle case of nested list of DataArray elements
+                val_tuple = list(value_dict.values())
+                for ind, (model_item, value_item) in enumerate(zip(model_dict[key], val_tuple)):
+                    if is_data_array(model_item):
+                        model_dict[key][ind] = value_item
+
+            elif isinstance(value, dict):
+                cls._load_data_from_file(
+                    fname=fname_path,
+                    model_dict=value,
+                    group_path=subpath,
+                    custom_decoders=custom_decoders,
+                    should_load_path=should_load_path,
+                )
+
+    @classmethod
     def dict_from_hdf5(
         cls: type[T],
         fname: PathLike,
@@ -1193,58 +1256,17 @@ class Tidy3dBaseModel(BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
-
-        def is_data_array(value: Any) -> bool:
-            """Whether a value is supposed to be a data array based on the contents."""
-            return isinstance(value, str) and value in DATA_ARRAY_MAP
-
         fname_path = Path(fname)
-
-        def load_data_from_file(model_dict: dict, group_path: str = "") -> None:
-            """For every DataArray item in dictionary, load path of hdf5 group as value."""
-
-            for key, value in model_dict.items():
-                subpath = f"{group_path}/{key}"
-
-                # apply custom validation to the key value pair and modify model_dict
-                if custom_decoders:
-                    for custom_decoder in custom_decoders:
-                        custom_decoder(
-                            fname=str(fname_path),
-                            group_path=subpath,
-                            model_dict=model_dict,
-                            key=key,
-                            value=value,
-                        )
-
-                # write the path to the element of the json dict where the data_array should be
-                if is_data_array(value):
-                    data_array_type = DATA_ARRAY_MAP[value]
-                    model_dict[key] = data_array_type.from_hdf5(
-                        fname=fname_path, group_path=subpath
-                    )
-                    continue
-
-                # if a list, assign each element a unique key, recurse
-                if isinstance(value, (list, tuple)):
-                    value_dict = cls.tuple_to_dict(tuple_values=value)
-                    load_data_from_file(model_dict=value_dict, group_path=subpath)
-
-                    # handle case of nested list of DataArray elements
-                    val_tuple = list(value_dict.values())
-                    for ind, (model_item, value_item) in enumerate(zip(model_dict[key], val_tuple)):
-                        if is_data_array(model_item):
-                            model_dict[key][ind] = value_item
-
-                # if a dict, recurse
-                elif isinstance(value, dict):
-                    load_data_from_file(model_dict=value, group_path=subpath)
-
         model_dict = json.loads(cls._json_string_from_hdf5(fname=fname_path))
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
         if load_data_arrays:
-            load_data_from_file(model_dict=model_dict, group_path=group_path)
+            cls._load_data_from_file(
+                fname=fname_path,
+                model_dict=model_dict,
+                group_path=group_path,
+                custom_decoders=custom_decoders,
+            )
         return model_dict
 
     @classmethod

@@ -16,6 +16,7 @@ import yaml
 import tidy3d as td
 from tidy3d import __version__
 from tidy3d.components.base import DATA_ARRAY_MAP, Tidy3dBaseModel
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 from ..test_data.test_monitor_data import make_flux_data
@@ -66,6 +67,34 @@ def set_datasets_to_none(sim):
             else:
                 structure["medium"]["coeffs"] = []
     return td.Simulation.model_validate(sim_dict)
+
+
+def make_many_flux_monitor_sim_data(num_monitors: int = 8) -> td.SimulationData:
+    """Create a small SimulationData fixture with many tiny FluxData payloads."""
+
+    flux_data = make_flux_data()
+    monitor_freqs = flux_data.monitor.freqs
+    freq0 = float(np.mean(monitor_freqs))
+    fwidth = float(np.ptp(monitor_freqs)) or freq0 * 0.1
+    monitors = tuple(
+        td.FluxMonitor(center=(0, 0, 0), size=(1, 1, 0), freqs=monitor_freqs, name=f"flux_{i:03d}")
+        for i in range(num_monitors)
+    )
+    simulation = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        monitors=monitors,
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+            )
+        ],
+        run_time=2e-12,
+    )
+    data = tuple(flux_data.updated_copy(monitor=monitor) for monitor in monitors)
+    return td.SimulationData(simulation=simulation, data=data)
 
 
 def test_simulation_load_export(split_string, tmp_path):
@@ -157,6 +186,59 @@ def test_simulation_load_export_hdf5_gz_explicit(split_string, tmp_path):
     assert SIM_STATIC == SIM2, "original and loaded simulations are not the same"
 
 
+def test_simulation_data_from_file_monitor_names(split_string, tmp_path):
+    sim_data = make_sim_data(symmetry=False)
+    path = str(tmp_path / "sim_data.hdf5")
+    sim_data.to_file(path)
+
+    selected = td.SimulationData.from_file(path, monitor_names=("field", "flux"))
+    expected = [
+        monitor_data
+        for monitor_data in sim_data.data
+        if monitor_data.monitor.name in {"field", "flux"}
+    ]
+
+    assert [monitor.name for monitor in selected.simulation.monitors] == [
+        monitor_data.monitor.name for monitor_data in expected
+    ]
+    assert [monitor_data.monitor.name for monitor_data in selected.data] == [
+        monitor_data.monitor.name for monitor_data in expected
+    ]
+    for loaded_data, expected_data in zip(selected.data, expected):
+        assert loaded_data == expected_data
+
+
+def test_simulation_data_from_file_monitor_names_loads_only_selected_data_arrays(
+    monkeypatch, tmp_path
+):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_file(path)
+
+    loaded_paths = []
+    original_from_hdf5 = DataArray.from_hdf5.__func__
+
+    def tracking_from_hdf5(cls, fname, group_path):
+        loaded_paths.append(str(group_path).strip("/"))
+        return original_from_hdf5(cls, fname, group_path)
+
+    monkeypatch.setattr(DataArray, "from_hdf5", classmethod(tracking_from_hdf5))
+
+    selected = td.SimulationData.from_file(path, monitor_names="flux_003")
+
+    assert [monitor_data.monitor.name for monitor_data in selected.data] == ["flux_003"]
+    assert loaded_paths == ["data/3/flux"]
+
+
+def test_simulation_data_from_file_monitor_names_requires_hdf5(tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.hdf5.gz")
+    sim_data.to_file(path)
+
+    with pytest.raises(ValueError, match="only works with '.hdf5' or '.h5' files"):
+        td.SimulationData.from_file(path, monitor_names="flux_000")
+
+
 def test_simulation_load_export_pckl(tmp_path):
     path = str(tmp_path / "simulation.pckl")
     with open(path, "wb") as pickle_file:
@@ -234,6 +316,45 @@ def test_validation_speed(tmp_path):
         sizes_bytes.append(size)
 
         print(f"{n} structures \t {size:.1e} bytes \t {time_validate:.1f} seconds to validate")
+
+
+@pytest.mark.perf
+def test_simulation_data_selective_monitor_load_speed(tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=256)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_file(path)
+
+    target_name = "flux_255"
+    num_repeats = 5
+
+    # Warm the file-system cache before timing.
+    _ = td.SimulationData.from_file(path)
+    _ = td.SimulationData.from_file(path, monitor_names=target_name)
+
+    full_times = []
+    selective_times = []
+    for _ in range(num_repeats):
+        time_start = time()
+        full_data = td.SimulationData.from_file(path)
+        full_times.append(time() - time_start)
+
+        time_start = time()
+        selective_data = td.SimulationData.from_file(path, monitor_names=target_name)
+        selective_times.append(time() - time_start)
+
+    assert len(full_data.data) == 256
+    assert [monitor_data.monitor.name for monitor_data in selective_data.data] == [target_name]
+
+    full_time = np.median(full_times)
+    selective_time = np.median(selective_times)
+    file_size = os.path.getsize(path)
+    speedup = full_time / selective_time
+
+    print(
+        f"Selective SimulationData load benchmark \t {file_size:.1e} bytes \t "
+        f"full: {full_time * 1e3:.2f} ms \t selective: {selective_time * 1e3:.2f} ms \t "
+        f"speedup: {speedup:.2f}x"
+    )
 
 
 SIM_FILES = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]

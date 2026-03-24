@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from matplotlib.colors import Colormap
     from numpy.typing import NDArray
 
+    from tidy3d.compat import Self
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
 
@@ -391,6 +392,31 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             field_monitor_name=field_monitor_name, field_name="E", val="abs^2"
         )
 
+    @staticmethod
+    def _selected_monitor_indices(
+        monitor_dicts: list[dict[str, Any]], monitor_names: str | list[str] | tuple[str, ...]
+    ) -> tuple[int, ...]:
+        """Return monitor indices selected by name, preserving file order."""
+
+        if isinstance(monitor_names, str):
+            requested_names = (monitor_names,)
+        else:
+            requested_names = tuple(dict.fromkeys(monitor_names))
+
+        requested_name_set = set(requested_names)
+        selected_indices = tuple(
+            index
+            for index, monitor_dict in enumerate(monitor_dicts)
+            if monitor_dict["name"] in requested_name_set
+        )
+        found_names = {monitor_dicts[index]["name"] for index in selected_indices}
+        missing_names = [name for name in requested_names if name not in found_names]
+        if missing_names:
+            missing = ", ".join(repr(name) for name in missing_names)
+            raise ValueError(f"Monitor name(s) not found in data file: {missing}.")
+
+        return selected_indices
+
     @classmethod
     def mnt_data_from_file(
         cls, fname: PathLike, mnt_name: str, **model_validate_kwargs: Any
@@ -429,26 +455,84 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             json_dict = json.loads(json_string)
             monitor_list = json_dict["simulation"]["monitors"]
 
-            # loop through data
-            for monitor_index_str, _mnt_data in f_handle["data"].items():
-                # grab the monitor data for this data element
-                monitor_dict = monitor_list[int(monitor_index_str)]
+            monitor_index = cls._selected_monitor_indices(monitor_list, mnt_name)[0]
+            monitor_index_str = str(monitor_index)
+            if monitor_index_str not in f_handle["data"]:
+                raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
 
-                # if a match on the monitor name
-                if monitor_dict["name"] == mnt_name:
-                    # try to grab the monitor data type
-                    monitor_type_str = monitor_dict["type"]
-                    if monitor_type_str not in DATA_TYPE_NAME_MAP:
-                        raise ValueError(f"Could not find data type '{monitor_type_str}'.")
-                    monitor_data_type = DATA_TYPE_NAME_MAP[monitor_type_str]
+            monitor_type_str = monitor_list[monitor_index]["type"]
+            if monitor_type_str not in DATA_TYPE_NAME_MAP:
+                raise ValueError(f"Could not find data type '{monitor_type_str}'.")
+            monitor_data_type = DATA_TYPE_NAME_MAP[monitor_type_str]
 
-                    # load the monitor data from the file using the group_path
-                    group_path = f"data/{monitor_index_str}"
-                    return monitor_data_type.from_file(
-                        fname, group_path=group_path, **model_validate_kwargs
-                    )
+            # load the monitor data from the file using the group_path
+            group_path = f"data/{monitor_index_str}"
+            return monitor_data_type.from_file(
+                fname, group_path=group_path, **model_validate_kwargs
+            )
 
-        raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
+    @classmethod
+    def from_file(
+        cls,
+        fname: PathLike,
+        group_path: str | None = None,
+        lazy: bool = False,
+        on_load: Callable[[Any], None] | None = None,
+        *,
+        monitor_names: str | list[str] | tuple[str, ...] | None = None,
+        **parse_obj_kwargs: Any,
+    ) -> Self:
+        """Load a SimulationData file, optionally materializing only selected monitors."""
+
+        if monitor_names is None:
+            return super().from_file(
+                fname=fname,
+                group_path=group_path,
+                lazy=lazy,
+                on_load=on_load,
+                **parse_obj_kwargs,
+            )
+
+        if lazy:
+            raise ValueError("'monitor_names' does not support 'lazy=True'.")
+
+        if pathlib.Path(fname).suffix not in {".hdf5", ".h5"}:
+            raise ValueError("'monitor_names' only works with '.hdf5' or '.h5' files.")
+
+        group_path = cls._construct_group_path(group_path)
+        if group_path != "/":
+            raise ValueError("'monitor_names' can only be used when loading the full file.")
+
+        model_dict = cls.dict_from_file(fname=fname, group_path=group_path, load_data_arrays=False)
+        monitor_dicts = model_dict["simulation"]["monitors"]
+        selected_indices = cls._selected_monitor_indices(monitor_dicts, monitor_names)
+
+        selected_roots = {f"data/{index}" for index in selected_indices}
+
+        def should_load_path(subpath: str) -> bool:
+            normalized_subpath = subpath.strip("/")
+            if not normalized_subpath.startswith("data/"):
+                return True
+            return any(
+                normalized_subpath == selected_root
+                or normalized_subpath.startswith(f"{selected_root}/")
+                for selected_root in selected_roots
+            )
+
+        cls._load_data_from_file(
+            fname=fname,
+            model_dict=model_dict,
+            group_path=group_path,
+            should_load_path=should_load_path,
+        )
+
+        model_dict["simulation"]["monitors"] = [monitor_dicts[index] for index in selected_indices]
+        model_dict["data"] = [model_dict["data"][index] for index in selected_indices]
+
+        obj = cls._validate_model_dict(model_dict, **parse_obj_kwargs)
+        if on_load is not None:
+            on_load(obj)
+        return obj
 
     @staticmethod
     def apply_phase(data: Union[xr.DataArray, xr.Dataset], phase: float = 0.0) -> xr.DataArray:
