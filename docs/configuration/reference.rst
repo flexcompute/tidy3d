@@ -46,6 +46,10 @@ Controls the verbosity and suppression behavior of the global logger.
      - No
      - Suppress repeated log messages when ``True`` so only the first occurrence of identical
        messages is shown.
+   * - ``warn_once``
+     - ``False``
+     - No
+     - Show each unique warning message at most once per process when ``True``.
 
 
 Simulation (``config.simulation``)
