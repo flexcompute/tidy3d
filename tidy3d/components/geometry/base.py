@@ -2071,6 +2071,16 @@ class Box(SimplePlaneIntersection, Centered):
             )
         return self.size.index(0.0)
 
+    @staticmethod
+    def _surface_keys(size: Size) -> tuple[list[str], set[int]]:
+        """Return the canonical surface keys and indices dropped for infinite dimensions."""
+        surface_keys = [coord + direction for coord in "xyz" for direction in "-+"]
+        del_idx = {
+            2 * idx + offset for idx, _size in enumerate(size) if _size == inf for offset in (0, 1)
+        }
+        surface_keys = [key for idx, key in enumerate(surface_keys) if idx not in del_idx]
+        return surface_keys, del_idx
+
     @classmethod
     def surfaces(cls, size: Size, center: Coordinate, **kwargs: Any) -> list[Self]:
         """Returns a list of 6 :class:`~tidy3d.Box` instances corresponding to each surface of a 3D volume.
@@ -2117,34 +2127,18 @@ class Box(SimplePlaneIntersection, Centered):
 
                 surface_index += 1
 
+        surface_keys, del_idx = cls._surface_keys(size)
         name_base = kwargs.pop("name", "")
         kwargs.pop("normal_dir", None)
 
-        names = []
-        normal_dirs = []
-
-        for coord in "xyz":
-            for direction in "-+":
-                surface_name = name_base + "_" + coord + direction
-                names.append(surface_name)
-                normal_dirs.append(direction)
-
-        # ignore surfaces that are infinitely far away
-        del_idx = []
-        for idx, _size in enumerate(size):
-            if _size == inf:
-                del_idx.append(idx)
-        del_idx = [[2 * i, 2 * i + 1] for i in del_idx]
-        del_idx = [item for sublist in del_idx for item in sublist]
-
-        def del_items(items: Iterable, indices: int) -> list:
+        def del_items(items: Iterable, indices: set[int]) -> list:
             """Delete list items at indices."""
             return [i for j, i in enumerate(items) if j not in indices]
 
         centers = del_items(centers, del_idx)
         sizes = del_items(sizes, del_idx)
-        names = del_items(names, del_idx)
-        normal_dirs = del_items(normal_dirs, del_idx)
+        names = [name_base + "_" + surface_key for surface_key in surface_keys]
+        normal_dirs = [surface_key[-1] for surface_key in surface_keys]
 
         surfaces = []
         for _cent, _size, _name, _normal_dir in zip(centers, sizes, names, normal_dirs):
@@ -2185,8 +2179,14 @@ class Box(SimplePlaneIntersection, Centered):
         """
         exclude_surfaces = kwargs.pop("exclude_surfaces", None)
         surfaces = cls.surfaces(size=size, center=center, **kwargs)
-        if "name" in cls.model_fields and exclude_surfaces:
-            surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
+        if exclude_surfaces:
+            surface_keys, _ = cls._surface_keys(size)
+            exclude_surfaces = set(exclude_surfaces)
+            surfaces = [
+                surf
+                for surf, surface_key in zip(surfaces, surface_keys)
+                if surface_key not in exclude_surfaces
+            ]
         return surfaces
 
     @verify_packages_import(["trimesh"])

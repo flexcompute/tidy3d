@@ -857,6 +857,25 @@ def test_surfaces():
     td.Box.surfaces(size=(1, 1, 1), center=(0, 0, 0), normal_dir="+")
 
 
+def test_surfaces_with_exclusion():
+    surfaces = td.Box.surfaces_with_exclusion(
+        size=(1, 2, 3), center=(0, 0, 0), exclude_surfaces=["x-", "z+"]
+    )
+
+    assert [surface.center for surface in surfaces] == [
+        (0.5, 0, 0),
+        (0, -1.0, 0),
+        (0, 1.0, 0),
+        (0, 0, -1.5),
+    ]
+    assert [surface.size for surface in surfaces] == [
+        (0.0, 2, 3),
+        (1, 0.0, 3),
+        (1, 0.0, 3),
+        (1, 2, 0.0),
+    ]
+
+
 def test_arrow_both_dirs():
     _, ax = plt.subplots()
     GEO._plot_arrow(direction=(1, 2, 3), x=0, both_dirs=True, ax=ax)
