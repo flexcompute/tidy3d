@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from itertools import product
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, TypeVar, Union
 
 import autograd.numpy as anp
@@ -31,12 +31,13 @@ from .data.monitor_data import (
     FieldProjectionKSpaceData,
 )
 from .data.sim_data import SimulationData
+from .geometry.base import Geometry
 from .monitor import (
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
     FieldProjectionSurface,
 )
-from .types import ArrayComplex4D, Coordinate
+from .types import ArrayComplex4D, Axis, Coordinate
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -49,6 +50,10 @@ if TYPE_CHECKING:
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
+APPROX_PROJECTION_BATCH_SIZE = 512
+APPROX_PROJECTION_FREQ_CHUNK_SIZE = 8
+FIELD_COMPONENT_NAMES = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
+AXIS_WEIGHT_SHAPES = ((-1, 1, 1), (1, -1, 1), (1, 1, -1))
 
 # Numpy float array and related array types
 
@@ -75,6 +80,94 @@ def _track_if_verbose(
     )
 
 
+@dataclass(frozen=True)
+class _FarFieldIntegralSpec:
+    """Static metadata for a separable far-field integral."""
+
+    weights: tuple[np.ndarray, np.ndarray, np.ndarray]
+    idx_u: Axis
+    idx_v: Axis
+    is_2d: bool
+    idx_integration_1d: Axis | None
+
+    @property
+    def line_axis(self) -> Axis:
+        """Return the integration axis for 2D line-source projection."""
+
+        if self.idx_integration_1d in (0, 1, 2):
+            return self.idx_integration_1d
+        raise ValueError("Expected 'idx_integration_1d' for 2D far-field projection.")
+
+    @property
+    def remaining_axis(self) -> Axis:
+        """Return the non-integrated axis for 3D surface projection."""
+
+        _, planar_axes = Geometry.pop_axis((0, 1, 2), axis=self.idx_u)
+        if self.idx_v == planar_axes[0]:
+            return planar_axes[1]
+        if self.idx_v == planar_axes[1]:
+            return planar_axes[0]
+        raise ValueError(
+            f"Expected integrated axes to be distinct, got {self.idx_u}, {self.idx_v}."
+        )
+
+    @property
+    def integrated_axes(self) -> tuple[Axis, ...]:
+        """Return the axes integrated by the projection kernel."""
+
+        if self.is_2d:
+            return (self.line_axis,)
+        return Geometry.pop_axis((0, 1, 2), axis=self.remaining_axis)[1]
+
+
+@dataclass(frozen=True)
+class _PreparedFarFieldProjection:
+    """Prepared arrays reused across far-field evaluations at one frequency."""
+
+    field_components: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    integral: _FarFieldIntegralSpec
+    pts: tuple[np.ndarray, np.ndarray, np.ndarray]
+    propagation_factor: complex
+    eta: complex
+
+
+def _projection_data_from_fields(
+    data_cls: (
+        type[FieldProjectionAngleData]
+        | type[FieldProjectionCartesianData]
+        | type[FieldProjectionKSpaceData]
+    ),
+    field_array_cls: (
+        type[FieldProjectionAngleDataArray]
+        | type[FieldProjectionCartesianDataArray]
+        | type[FieldProjectionKSpaceDataArray]
+    ),
+    *,
+    monitor: AbstractFieldProjectionMonitor,
+    projection_surfaces: list[FieldProjectionSurface],
+    medium: MediumType,
+    coords: dict[str, np.ndarray],
+    fields: np.ndarray,
+    is_2d_simulation: bool | None = None,
+) -> FieldProjectionAngleData | FieldProjectionCartesianData | FieldProjectionKSpaceData:
+    """Build a projection monitor data object from raw projected field arrays."""
+
+    prototype = field_array_cls(fields[0], coords=coords)
+    field_data = {FIELD_COMPONENT_NAMES[0]: prototype}
+    for name, field in zip(FIELD_COMPONENT_NAMES[1:], fields[1:]):
+        field_data[name] = prototype.copy(deep=False, data=field)
+
+    kwargs = {
+        "monitor": monitor,
+        "projection_surfaces": projection_surfaces,
+        "medium": medium,
+        **field_data,
+    }
+    if is_2d_simulation is not None:
+        kwargs["is_2d_simulation"] = is_2d_simulation
+    return data_cls(**kwargs)
+
+
 def _trapz_weights_1d(points: np.ndarray) -> np.ndarray:
     """Trapezoidal integration weights for `trapz(y, x=points)`.
 
@@ -93,27 +186,81 @@ def _trapz_weights_1d(points: np.ndarray) -> np.ndarray:
     if num_points <= 1:
         return np.ones((num_points,), dtype=float)
 
-    d = np.diff(points)
-    weights = np.empty((num_points,), dtype=d.dtype)
-    weights[0] = d[0] / 2
-    weights[-1] = d[-1] / 2
-    if num_points > 2:
-        weights[1:-1] = (d[:-1] + d[1:]) / 2
-    return weights
+    deltas = np.diff(points)
+    interior = (deltas[:-1] + deltas[1:]) / 2
+    return np.concatenate(([deltas[0] / 2], interior, [deltas[-1] / 2]))
+
+
+def _normalize_far_field_phases(
+    phases: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pad phase arrays with trailing singleton observation dims to share one code path."""
+
+    obs_ndim = max(phase.ndim for phase in phases) - 1
+    normalized = []
+    for phase in phases:
+        trailing_dims = obs_ndim - (phase.ndim - 1)
+        normalized.append(phase.reshape(phase.shape + (1,) * trailing_dims))
+    return tuple(normalized)
+
+
+def _apply_axis_weights(
+    currents: np.ndarray,
+    weights: tuple[np.ndarray, np.ndarray, np.ndarray],
+    axes: tuple[Axis, ...],
+) -> np.ndarray:
+    """Apply separable trapezoidal weights along the requested source axes."""
+
+    weighted = currents
+    for axis in axes:
+        weighted = weighted * weights[axis].reshape(AXIS_WEIGHT_SHAPES[axis])
+    return weighted
+
+
+def _broadcast_phase_for_source_axis(
+    phase: np.ndarray, *, source_axis: Axis, num_source_axes: int
+) -> np.ndarray:
+    """Reshape a phase array for multiplication against intermediate source axes."""
+
+    return phase.reshape(
+        tuple(phase.shape[0] if axis == source_axis else 1 for axis in range(num_source_axes))
+        + phase.shape[1:]
+    )
+
+
+def _assemble_current_vectors(
+    projected_components: list[np.ndarray], *, idx_u: Axis, idx_v: Axis, surface_axis: Axis
+) -> tuple[np.ndarray, np.ndarray]:
+    """Arrange tangential projected current components onto xyz-ordered vectors."""
+
+    order = [idx_u, idx_v, surface_axis]
+    zeros = anp.zeros_like(projected_components[0])
+    electric = anp.array(
+        [projected_components[order.index(i)] if i in order[:2] else zeros for i in range(3)]
+    )
+    magnetic = anp.array(
+        [projected_components[order.index(i) + 2] if i in order[:2] else zeros for i in range(3)]
+    )
+    return electric, magnetic
+
+
+def _frequency_chunk_slices(freqs: np.ndarray, freq_chunk_size: int | None) -> tuple[slice, ...]:
+    """Return slices that partition frequencies into sequential chunks."""
+
+    if freq_chunk_size is None:
+        return (slice(0, len(freqs)),)
+    if freq_chunk_size < 1:
+        raise ValueError(f"Expected 'freq_chunk_size >= 1', got {freq_chunk_size}.")
+    return tuple(
+        slice(start, min(start + freq_chunk_size, len(freqs)))
+        for start in range(0, len(freqs), freq_chunk_size)
+    )
 
 
 def _far_field_integral(
     currents: np.ndarray,
-    phase_0: np.ndarray,
-    phase_1: np.ndarray,
-    phase_2: np.ndarray,
-    pts: list[np.ndarray],
-    idx_u: int,
-    idx_v: int,
-    *,
-    is_2d: bool,
-    idx_integration_1d: Union[int, None],
-    weights: list[np.ndarray] | None = None,
+    phases: tuple[np.ndarray, np.ndarray, np.ndarray],
+    spec: _FarFieldIntegralSpec,
 ) -> np.ndarray:
     """Evaluate the separable far-field surface/line integral.
 
@@ -124,82 +271,77 @@ def _far_field_integral(
     ----------
     currents : np.ndarray
         Complex surface current values on the monitor grid with shape ``(nx, ny, nz)``.
-    phase_0 : np.ndarray
-        Phase factor along the x-axis with shape ``(nx, n_theta, n_phi)``.
-    phase_1 : np.ndarray
-        Phase factor along the y-axis with shape ``(ny, n_theta, n_phi)``.
-    phase_2 : np.ndarray
-        Phase factor along the z-axis with shape ``(nz, n_theta)``.
-    pts : list[np.ndarray]
-        List of 1D coordinate arrays ``[x, y, z]`` matching the spatial axes of ``currents``.
-    idx_u : int
-        First surface axis index (0, 1, or 2) for 3D integration.
-    idx_v : int
-        Second surface axis index (0, 1, or 2) for 3D integration.
-    is_2d : bool
-        If ``True``, treat the source as a 1D line and integrate along ``idx_integration_1d``.
-    idx_integration_1d : int | None
-        Spatial axis index (0, 1, or 2) used for the 2D line integral.
-    weights : list[np.ndarray] | None
-        Optional trapezoidal weights for each axis. If ``None``, computed from ``pts``.
+    phases : tuple[np.ndarray, np.ndarray, np.ndarray]
+        Phase factors along ``x``, ``y``, and ``z``. Observation dimensions may differ by
+        trailing singleton axes, which are normalized internally.
+    spec : _FarFieldIntegralSpec
+        Static integration metadata, including source-axis weights and dimensionality.
 
     Returns
     -------
     np.ndarray
         Integrated values as an array with trailing axes ``(n_theta, n_phi)``.
     """
-    if weights is None:
-        weights = [_trapz_weights_1d(pt) for pt in pts]
+    phases = _normalize_far_field_phases(phases)
+    integrated_axes = spec.integrated_axes
+    weighted_currents = _apply_axis_weights(currents, spec.weights, integrated_axes)
+    first_axis = max(integrated_axes)
+    result = anp.tensordot(weighted_currents, phases[first_axis], axes=((first_axis,), (0,)))
+    remaining_axes = [axis for axis in range(3) if axis != first_axis]
 
-    optimize = not (phase_0.shape[1] == 1 and phase_0.shape[2] == 1)
+    if spec.is_2d:
+        for source_axis, axis in enumerate(remaining_axes):
+            result = result * _broadcast_phase_for_source_axis(
+                phases[axis], source_axis=source_axis, num_source_axes=len(remaining_axes)
+            )
+        return result
 
-    if is_2d:
-        if idx_integration_1d is None:
-            raise ValueError("Expected 'idx_integration_1d' for 2D far-field projection.")
-
-        if idx_integration_1d == 0:
-            equation = "xtp,ytp,zt,xyz,x->yztp"
-            weight = weights[0]
-        elif idx_integration_1d == 1:
-            equation = "xtp,ytp,zt,xyz,y->xztp"
-            weight = weights[1]
-        elif idx_integration_1d == 2:
-            equation = "xtp,ytp,zt,xyz,z->xytp"
-            weight = weights[2]
-        else:
-            raise ValueError(f"Invalid 2D integration axis: '{idx_integration_1d}'.")
-
-        return anp.einsum(
-            equation,
-            phase_0,
-            phase_1,
-            phase_2,
-            currents,
-            weight,
-            optimize=optimize,
-        )
-
-    integrated_axes = {idx_u, idx_v}
-    remaining_axis = ({0, 1, 2} - integrated_axes).pop()
-    if remaining_axis == 0:
-        equation = "xtp,ytp,zt,xyz,y,z->xtp"
-        weights_uv = (weights[1], weights[2])
-    elif remaining_axis == 1:
-        equation = "xtp,ytp,zt,xyz,x,z->ytp"
-        weights_uv = (weights[0], weights[2])
-    else:
-        equation = "xtp,ytp,zt,xyz,x,y->ztp"
-        weights_uv = (weights[0], weights[1])
-
-    return anp.einsum(
-        equation,
-        phase_0,
-        phase_1,
-        phase_2,
-        currents,
-        *weights_uv,
-        optimize=optimize,
+    second_axis = next(axis for axis in integrated_axes if axis != first_axis)
+    source_axis = remaining_axes.index(second_axis)
+    result = anp.sum(
+        result
+        * _broadcast_phase_for_source_axis(
+            phases[second_axis], source_axis=source_axis, num_source_axes=len(remaining_axes)
+        ),
+        axis=source_axis,
     )
+    return result * phases[spec.remaining_axis]
+
+
+def _far_field_integral_pairs(
+    currents: np.ndarray,
+    phases: tuple[np.ndarray, np.ndarray, np.ndarray],
+    spec: _FarFieldIntegralSpec,
+) -> np.ndarray:
+    """Evaluate the far-field integral for paired observation points."""
+
+    phase_0, phase_1, phase_2 = phases
+    if spec.is_2d:
+        line_axis = spec.line_axis
+        weighted_currents = _apply_axis_weights(currents, spec.weights, (line_axis,))
+        currents_phase = anp.tensordot(
+            weighted_currents, phases[line_axis], axes=((line_axis,), (0,))
+        )
+        remaining_axes = [axis for axis in range(3) if axis != line_axis]
+        for source_axis, axis in enumerate(remaining_axes):
+            currents_phase = currents_phase * _broadcast_phase_for_source_axis(
+                phases[axis], source_axis=source_axis, num_source_axes=len(remaining_axes)
+            )
+        return currents_phase
+
+    output_axis = spec.remaining_axis
+    integrated_axes = spec.integrated_axes
+    weighted_currents = _apply_axis_weights(currents, spec.weights, integrated_axes)
+
+    if output_axis == 0:
+        currents_phase = anp.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        return anp.sum(currents_phase * phase_1[None, :, :], axis=1) * phase_0
+    if output_axis == 1:
+        currents_phase = anp.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        return anp.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_1
+
+    currents_phase = anp.tensordot(weighted_currents, phase_1, axes=((1,), (0,)))
+    return anp.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_2
 
 
 class FieldProjector(Tidy3dBaseModel):
@@ -332,8 +474,12 @@ class FieldProjector(Tidy3dBaseModel):
             )
 
             # shift source coordinates relative to the local origin
-            for name, origin in zip(["x", "y", "z"], self.origin):
-                current_data[name] = current_data[name] - origin
+            current_data = current_data.assign_coords(
+                {
+                    name: current_data.coords[name] - origin
+                    for name, origin in zip(["x", "y", "z"], self.origin)
+                }
+            )
 
             surface_currents[surface.monitor.name] = current_data
 
@@ -568,6 +714,24 @@ class FieldProjector(Tidy3dBaseModel):
             With leading dimension containing ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``
             projected fields for each frequency.
         """
+        prepared = self._prepare_far_field_projection(
+            frequency=frequency,
+            surface=surface,
+            currents=currents,
+            medium=medium,
+        )
+        return self._far_fields_from_prepared(
+            theta=theta, phi=phi, prepared=prepared, surface_axis=surface.axis
+        )
+
+    def _prepare_far_field_projection(
+        self,
+        frequency: float,
+        surface: FieldProjectionSurface,
+        currents: xr.Dataset,
+        medium: MediumType,
+    ) -> _PreparedFarFieldProjection:
+        """Prepare raw arrays needed for repeated far-field evaluations at one frequency."""
         try:
             currents_f = currents.sel(f=frequency)
         except Exception as e:
@@ -579,7 +743,7 @@ class FieldProjector(Tidy3dBaseModel):
                 )
             ) from e
 
-        idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
+        _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
         _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
         # integration dimension for 2d far field projection
@@ -591,63 +755,97 @@ class FieldProjector(Tidy3dBaseModel):
                 raise ValueError("Expected exactly one dimension with size 0 for 2D simulation")
 
             zero_dim = zero_dim[0]
-            integration_axis = {0, 1, 2} - {zero_dim, surface.axis}
-            idx_integration_1d = integration_axis.pop()
+            _, plane_axes = Geometry.pop_axis((0, 1, 2), axis=zero_dim)
+            if surface.axis == plane_axes[0]:
+                idx_integration_1d = plane_axes[1]
+            elif surface.axis == plane_axes[1]:
+                idx_integration_1d = plane_axes[0]
+            else:
+                raise ValueError(
+                    f"Expected surface axis {surface.axis} to lie in the 2D plane {plane_axes}."
+                )
 
         idx_u, idx_v = idx_uv
         cmp_1, cmp_2 = source_names
-
-        theta = np.atleast_1d(theta)
-        phi = np.atleast_1d(phi)
 
         propagation_factor = -1j * AbstractFieldProjectionData.wavenumber(
             medium=medium, frequency=frequency
         )
 
-        sin_theta = np.sin(theta)
-        cos_theta = np.cos(theta)
-        sin_phi = np.sin(phi)
-        cos_phi = np.cos(phi)
-
-        pts = [currents[name].values for name in ["x", "y", "z"]]
-        weights = [_trapz_weights_1d(pt) for pt in pts]
-
-        phase_0 = np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[0], sin_theta, cos_phi))
-        phase_1 = np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[1], sin_theta, sin_phi))
-        phase_2 = np.exp(np.einsum("i,j->ij", propagation_factor * pts[2], cos_theta))
+        pts = tuple(currents[name].values for name in ("x", "y", "z"))
+        weights = tuple(_trapz_weights_1d(pt) for pt in pts)
 
         E1 = "E" + cmp_1
         E2 = "E" + cmp_2
         H1 = "H" + cmp_1
         H2 = "H" + cmp_2
 
-        jm = []
-        for field_component in (E1, E2, H1, H2):
-            currents_data = currents_f[field_component].data
-            currents_data = anp.reshape(currents_data, currents_f[field_component].shape)
+        field_components = tuple(
+            anp.reshape(currents_f[field_component].data, currents_f[field_component].shape)
+            for field_component in (E1, E2, H1, H2)
+        )
 
-            jm_i = _far_field_integral(
-                currents_data,
-                phase_0,
-                phase_1,
-                phase_2,
-                pts,
-                idx_u,
-                idx_v,
+        return _PreparedFarFieldProjection(
+            field_components=field_components,
+            integral=_FarFieldIntegralSpec(
+                weights=weights,
+                idx_u=idx_u,
+                idx_v=idx_v,
                 is_2d=self.is_2d_simulation,
                 idx_integration_1d=idx_integration_1d,
-                weights=weights,
+            ),
+            pts=pts,
+            propagation_factor=propagation_factor,
+            eta=ETA_0 / np.sqrt(medium.eps_model(frequency)),
+        )
+
+    def _far_fields_from_prepared(
+        self,
+        theta: ArrayLikeN2F,
+        phi: ArrayLikeN2F,
+        prepared: _PreparedFarFieldProjection,
+        surface_axis: Axis,
+    ) -> NDArray:
+        """Evaluate far fields from pre-sliced current data."""
+        theta = np.atleast_1d(theta)
+        phi = np.atleast_1d(phi)
+
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
+
+        pts = prepared.pts
+        propagation_factor = prepared.propagation_factor
+        phase_0 = np.exp(
+            (propagation_factor * pts[0])[:, None, None]
+            * sin_theta[None, :, None]
+            * cos_phi[None, None, :]
+        )
+        phase_1 = np.exp(
+            (propagation_factor * pts[1])[:, None, None]
+            * sin_theta[None, :, None]
+            * sin_phi[None, None, :]
+        )
+        phase_2 = np.exp((propagation_factor * pts[2])[:, None] * cos_theta[None, :])
+
+        jm = []
+        phases = (phase_0, phase_1, phase_2)
+        for field_component in prepared.field_components:
+            jm_i = _far_field_integral(
+                field_component,
+                phases,
+                prepared.integral,
             )
 
             jm.append(anp.reshape(jm_i, (len(theta), len(phi))))
 
-        order = [idx_u, idx_v, idx_w]
-        zeros = np.zeros(jm[0].shape)
-
-        # for each index (0, 1, 2), if it’s in the first two elements of order,
-        # select the corresponding jm element for J or the offset element (+2) for M
-        J = anp.array([jm[order.index(i)] if i in order[:2] else zeros for i in range(3)])
-        M = anp.array([jm[order.index(i) + 2] if i in order[:2] else zeros for i in range(3)])
+        J, M = _assemble_current_vectors(
+            jm,
+            idx_u=prepared.integral.idx_u,
+            idx_v=prepared.integral.idx_v,
+            surface_axis=surface_axis,
+        )
 
         cos_theta_cos_phi = cos_theta[:, None] * cos_phi[None, :]
         cos_theta_sin_phi = cos_theta[:, None] * sin_phi[None, :]
@@ -664,7 +862,7 @@ class FieldProjector(Tidy3dBaseModel):
         # Lphi  (8.34b)
         Lphi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
 
-        eta = ETA_0 / np.sqrt(medium.eps_model(frequency))
+        eta = prepared.eta
 
         Etheta = -(Lphi + eta * Ntheta)
         Ephi = Ltheta - eta * Nphi
@@ -674,6 +872,92 @@ class FieldProjector(Tidy3dBaseModel):
         Hr = anp.zeros_like(Hphi)
 
         return anp.array([Er, Etheta, Ephi, Hr, Htheta, Hphi])
+
+    def _far_fields_from_prepared_pairs(
+        self,
+        theta: ArrayLikeN2F,
+        phi: ArrayLikeN2F,
+        prepared: _PreparedFarFieldProjection,
+        surface_axis: Axis,
+    ) -> NDArray:
+        """Evaluate far fields for paired observation angles."""
+        theta = np.reshape(theta, (-1,))
+        phi = np.reshape(phi, (-1,))
+
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
+
+        pts = prepared.pts
+        propagation_factor = prepared.propagation_factor
+        phase_0 = np.exp(
+            (propagation_factor * pts[0])[:, None] * sin_theta[None, :] * cos_phi[None, :]
+        )
+        phase_1 = np.exp(
+            (propagation_factor * pts[1])[:, None] * sin_theta[None, :] * sin_phi[None, :]
+        )
+        phase_2 = np.exp((propagation_factor * pts[2])[:, None] * cos_theta[None, :])
+
+        jm = []
+        phases = (phase_0, phase_1, phase_2)
+        for field_component in prepared.field_components:
+            jm_i = _far_field_integral_pairs(field_component, phases, prepared.integral)
+            jm.append(anp.reshape(jm_i, theta.shape))
+
+        J, M = _assemble_current_vectors(
+            jm,
+            idx_u=prepared.integral.idx_u,
+            idx_v=prepared.integral.idx_v,
+            surface_axis=surface_axis,
+        )
+
+        cos_theta_cos_phi = cos_theta * cos_phi
+        cos_theta_sin_phi = cos_theta * sin_phi
+
+        Ntheta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta
+        Nphi = -J[0] * sin_phi + J[1] * cos_phi
+        Ltheta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta
+        Lphi = -M[0] * sin_phi + M[1] * cos_phi
+
+        eta = prepared.eta
+
+        Etheta = -(Lphi + eta * Ntheta)
+        Ephi = Ltheta - eta * Nphi
+        Er = anp.zeros_like(Ephi)
+        Htheta = -Ephi / eta
+        Hphi = Etheta / eta
+        Hr = anp.zeros_like(Hphi)
+
+        return anp.array([Er, Etheta, Ephi, Hr, Htheta, Hphi])
+
+    def _project_prepared_fields_pairs(
+        self,
+        theta: np.ndarray,
+        phi: np.ndarray,
+        prepared_surface_currents: list[
+            tuple[FieldProjectionSurface, list[_PreparedFarFieldProjection]]
+        ],
+        phase_by_freq: np.ndarray,
+    ) -> NDArray:
+        """Project approximate fields for paired observation points."""
+        num_points = theta.size
+        phase_by_freq = anp.asarray(phase_by_freq)
+
+        fields_by_freq = []
+        for idx_f in range(phase_by_freq.shape[0]):
+            fields_sum = anp.zeros((6, num_points), dtype=complex)
+            for surface, prepared_by_freq in prepared_surface_currents:
+                fields_surface = self._far_fields_from_prepared_pairs(
+                    theta=theta,
+                    phi=phi,
+                    prepared=prepared_by_freq[idx_f],
+                    surface_axis=surface.axis,
+                )
+                fields_sum = fields_sum + fields_surface * phase_by_freq[idx_f][None, :]
+            fields_by_freq.append(fields_sum)
+
+        return anp.moveaxis(anp.stack(fields_by_freq, axis=-1), 1, 0)
 
     @staticmethod
     def apply_window_to_currents(
@@ -714,10 +998,88 @@ class FieldProjector(Tidy3dBaseModel):
 
         return new_currents
 
+    def _windowed_surface_currents(
+        self, proj_monitor: AbstractFieldProjectionMonitor
+    ) -> list[tuple[FieldProjectionSurface, xr.Dataset]]:
+        """Collect projection surfaces together with their windowed currents."""
+
+        return [
+            (
+                surface,
+                self.apply_window_to_currents(proj_monitor, self.currents[surface.monitor.name]),
+            )
+            for surface in self.surfaces
+        ]
+
+    def _prepare_far_field_surface_currents(
+        self,
+        surface_currents: list[tuple[FieldProjectionSurface, xr.Dataset]],
+        freqs: np.ndarray,
+        medium: MediumType,
+    ) -> list[tuple[FieldProjectionSurface, list[_PreparedFarFieldProjection]]]:
+        """Prepare reusable per-frequency far-field data for each surface."""
+
+        return [
+            (
+                surface,
+                [
+                    self._prepare_far_field_projection(
+                        frequency=frequency,
+                        surface=surface,
+                        currents=currents,
+                        medium=medium,
+                    )
+                    for frequency in freqs
+                ],
+            )
+            for surface, currents in surface_currents
+        ]
+
+    def _project_exact_fields_points(
+        self,
+        x: ArrayLikeN2F,
+        y: ArrayLikeN2F,
+        z: ArrayLikeN2F,
+        surface_currents: list[tuple[FieldProjectionSurface, xr.Dataset]],
+        medium: MediumType,
+        *,
+        verbose: bool,
+    ) -> NDArray:
+        """Project exact fields for a flat list of observation points."""
+
+        x = np.reshape(x, (-1,))
+        y = np.reshape(y, (-1,))
+        z = np.reshape(z, (-1,))
+
+        field_shape = (len(FIELD_COMPONENT_NAMES), len(self.frequencies))
+        point_fields = []
+        for x_obs, y_obs, z_obs in _track_if_verbose(
+            zip(x, y, z),
+            verbose=verbose,
+            description="Computing projected fields",
+            total=x.size,
+        ):
+            fields_sum = anp.zeros(field_shape, dtype=complex)
+            for surface, currents in surface_currents:
+                fields_surface = self._fields_for_surface_exact(
+                    x=x_obs,
+                    y=y_obs,
+                    z=z_obs,
+                    surface=surface,
+                    currents=currents,
+                    medium=medium,
+                )
+                fields_surface = anp.reshape(fields_surface, field_shape)
+                fields_sum = fields_sum + fields_surface
+            point_fields.append(fields_sum)
+
+        return anp.stack(point_fields, axis=0)
+
     def project_fields(
         self,
         proj_monitor: AbstractFieldProjectionMonitor,
         verbose: bool = True,
+        freq_chunk_size: int | None = APPROX_PROJECTION_FREQ_CHUNK_SIZE,
     ) -> AbstractFieldProjectionData:
         """Compute projected fields.
 
@@ -729,17 +1091,27 @@ class FieldProjector(Tidy3dBaseModel):
             observation grid.
         verbose : bool = True
             Whether to display local progress bars while computing the projection.
+        freq_chunk_size : int | None = 8
+            Number of frequencies to prepare at once for approximate Cartesian and k-space
+            projection. If ``None``, all frequencies are prepared together. Ignored for angular
+            and exact projection paths.
 
         Returns
         -------
         :class:`.AbstractFieldProjectionData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
+        if freq_chunk_size is not None and freq_chunk_size < 1:
+            raise ValueError(f"Expected 'freq_chunk_size >= 1', got {freq_chunk_size}.")
         if isinstance(proj_monitor, FieldProjectionAngleMonitor):
             return self._project_fields_angular(proj_monitor, verbose=verbose)
         if isinstance(proj_monitor, FieldProjectionCartesianMonitor):
-            return self._project_fields_cartesian(proj_monitor, verbose=verbose)
-        return self._project_fields_kspace(proj_monitor, verbose=verbose)
+            return self._project_fields_cartesian(
+                proj_monitor, verbose=verbose, freq_chunk_size=freq_chunk_size
+            )
+        return self._project_fields_kspace(
+            proj_monitor, verbose=verbose, freq_chunk_size=freq_chunk_size
+        )
 
     def _project_fields_angular(
         self, monitor: FieldProjectionAngleMonitor, verbose: bool = True
@@ -762,8 +1134,9 @@ class FieldProjector(Tidy3dBaseModel):
         phi = np.atleast_1d(monitor.phi)
 
         # compute projected fields for the dataset associated with each monitor
-        field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-        fields = np.zeros((len(field_names), 1, len(theta), len(phi), len(freqs)), dtype=complex)
+        fields = np.zeros(
+            (len(FIELD_COMPONENT_NAMES), 1, len(theta), len(phi), len(freqs)), dtype=complex
+        )
 
         medium = monitor.medium if monitor.medium else self.medium
         k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
@@ -773,11 +1146,10 @@ class FieldProjector(Tidy3dBaseModel):
             )
         )
 
-        for surface in self.surfaces:
-            # apply windowing to currents
-            currents = self.apply_window_to_currents(monitor, self.currents[surface.monitor.name])
+        surface_currents = self._windowed_surface_currents(monitor)
 
-            if monitor.far_field_approx:
+        if monitor.far_field_approx:
+            for surface, currents in surface_currents:
                 for idx_f, frequency in enumerate(freqs):
                     _fields = self._far_fields_for_surface(
                         frequency=frequency,
@@ -788,40 +1160,42 @@ class FieldProjector(Tidy3dBaseModel):
                         medium=medium,
                     )
                     fields = add_at(fields, [..., idx_f], _fields[:, None] * phase[idx_f])
-            else:
-                iter_coords = [
-                    ([_theta, _phi], [i, j])
-                    for i, _theta in enumerate(theta)
-                    for j, _phi in enumerate(phi)
-                ]
-                for (_theta, _phi), (i, j) in _track_if_verbose(
-                    iter_coords,
-                    verbose=verbose,
-                    description=f"Processing surface monitor '{surface.monitor.name}'...",
-                ):
-                    _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, _theta, _phi)
-                    _fields = self._fields_for_surface_exact(
-                        x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
-                    )
-                    where = (slice(None), 0, i, j)
-                    _fields = anp.reshape(_fields, fields[where].shape)
-                    fields = add_at(fields, where, _fields)
+        else:
+            theta_grid, phi_grid = np.meshgrid(theta, phi, indexing="ij")
+            flat_theta = np.reshape(theta_grid, (-1,))
+            flat_phi = np.reshape(phi_grid, (-1,))
+            flat_x, flat_y, flat_z = monitor.sph_2_car(monitor.proj_distance, flat_theta, flat_phi)
+            stacked_fields = self._project_exact_fields_points(
+                x=flat_x,
+                y=flat_y,
+                z=flat_z,
+                surface_currents=surface_currents,
+                medium=medium,
+                verbose=verbose,
+            )
+            stacked_fields = anp.reshape(
+                stacked_fields,
+                (len(theta), len(phi), len(FIELD_COMPONENT_NAMES), len(freqs)),
+            )
+            fields = anp.moveaxis(stacked_fields, 2, 0)[:, None, :, :, :]
 
         coords = {"r": np.atleast_1d(monitor.proj_distance), "theta": theta, "phi": phi, "f": freqs}
-        fields = {
-            name: FieldProjectionAngleDataArray(field, coords=coords)
-            for name, field in zip(field_names, fields)
-        }
-        return FieldProjectionAngleData(
+        return _projection_data_from_fields(
+            FieldProjectionAngleData,
+            FieldProjectionAngleDataArray,
             monitor=monitor,
             projection_surfaces=self.surfaces,
             medium=medium,
+            coords=coords,
+            fields=fields,
             is_2d_simulation=self.is_2d_simulation,
-            **fields,
         )
 
     def _project_fields_cartesian(
-        self, monitor: FieldProjectionCartesianMonitor, verbose: bool = True
+        self,
+        monitor: FieldProjectionCartesianMonitor,
+        verbose: bool = True,
+        freq_chunk_size: int | None = APPROX_PROJECTION_FREQ_CHUNK_SIZE,
     ) -> FieldProjectionCartesianData:
         """Compute projected fields on a Cartesian grid in spherical coordinates.
 
@@ -842,79 +1216,104 @@ class FieldProjector(Tidy3dBaseModel):
         )
         x, y, z = list(map(np.atleast_1d, [x, y, z]))
 
-        # compute projected fields for the dataset associated with each monitor
-        field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-
         medium = monitor.medium if monitor.medium else self.medium
         wavenumber = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
 
-        surface_currents = [
-            (surface, self.apply_window_to_currents(monitor, self.currents[surface.monitor.name]))
-            for surface in self.surfaces
-        ]
-
-        total_points = len(x) * len(y) * len(z)
-
-        point_fields = []
-        for _x, _y, _z in _track_if_verbose(
-            product(x, y, z),
-            verbose=verbose,
-            description="Computing projected fields",
-            total=total_points,
-        ):
-            r, theta, phi = monitor.car_2_sph(_x, _y, _z)
-
-            if monitor.far_field_approx:
-                phase = np.atleast_1d(
-                    AbstractFieldProjectionData.propagation_factor(
-                        dist=r, k=wavenumber, is_2d_simulation=self.is_2d_simulation
+        surface_currents = self._windowed_surface_currents(monitor)
+        if monitor.far_field_approx:
+            x_grid, y_grid, z_grid = np.meshgrid(x, y, z, indexing="ij")
+            flat_x = np.reshape(x_grid, (-1,))
+            flat_y = np.reshape(y_grid, (-1,))
+            flat_z = np.reshape(z_grid, (-1,))
+            r_obs, theta_obs, phi_obs = monitor.car_2_sph(flat_x, flat_y, flat_z)
+            total_points = theta_obs.size
+            num_batches = (
+                total_points + APPROX_PROJECTION_BATCH_SIZE - 1
+            ) // APPROX_PROJECTION_BATCH_SIZE
+            freq_slices = _frequency_chunk_slices(freqs, freq_chunk_size)
+            fields_by_freq_chunk = []
+            for idx_chunk, freq_slice in enumerate(freq_slices, start=1):
+                prepared_surface_currents = self._prepare_far_field_surface_currents(
+                    surface_currents=surface_currents,
+                    freqs=freqs[freq_slice],
+                    medium=medium,
+                )
+                description = "Computing projected fields"
+                if len(freq_slices) > 1:
+                    description = (
+                        f"Computing projected fields (freq chunk {idx_chunk}/{len(freq_slices)})"
                     )
-                )
-                fields_by_freq = []
-                for idx_f, frequency in enumerate(freqs):
-                    fields_sum = anp.zeros((len(field_names),), dtype=complex)
-                    for surface, currents in surface_currents:
-                        _fields = self._far_fields_for_surface(
-                            frequency=frequency,
-                            theta=theta,
-                            phi=phi,
-                            surface=surface,
-                            currents=currents,
-                            medium=medium,
+                chunk_fields = []
+                for start in _track_if_verbose(
+                    range(0, total_points, APPROX_PROJECTION_BATCH_SIZE),
+                    verbose=verbose,
+                    description=description,
+                    total=num_batches,
+                ):
+                    stop = min(start + APPROX_PROJECTION_BATCH_SIZE, total_points)
+                    phase = AbstractFieldProjectionData.propagation_factor(
+                        dist=r_obs[None, start:stop],
+                        k=wavenumber[freq_slice, None],
+                        is_2d_simulation=self.is_2d_simulation,
+                    )
+                    chunk_fields.append(
+                        self._project_prepared_fields_pairs(
+                            theta=theta_obs[start:stop],
+                            phi=phi_obs[start:stop],
+                            prepared_surface_currents=prepared_surface_currents,
+                            phase_by_freq=phase,
                         )
-                        _fields = anp.reshape(_fields, fields_sum.shape)
-                        fields_sum = fields_sum + _fields * phase[idx_f]
-                    fields_by_freq.append(fields_sum)
+                    )
 
-                point_fields.append(anp.stack(fields_by_freq, axis=1))
-                continue
+                fields_by_freq_chunk.append(anp.concatenate(chunk_fields, axis=0))
 
-            fields_sum = anp.zeros((len(field_names), len(freqs)), dtype=complex)
-            for surface, currents in surface_currents:
-                _fields = self._fields_for_surface_exact(
-                    x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
-                )
-                _fields = anp.reshape(_fields, fields_sum.shape)
-                fields_sum = fields_sum + _fields
-            point_fields.append(fields_sum)
+            stacked_fields = anp.concatenate(fields_by_freq_chunk, axis=-1)
+            stacked_fields = anp.reshape(
+                stacked_fields, (len(x), len(y), len(z), len(FIELD_COMPONENT_NAMES), len(freqs))
+            )
+            fields = anp.moveaxis(stacked_fields, 3, 0)
 
-        stacked_fields = anp.stack(point_fields, axis=0)
+            coords = {"x": x, "y": y, "z": z, "f": freqs}
+            return _projection_data_from_fields(
+                FieldProjectionCartesianData,
+                FieldProjectionCartesianDataArray,
+                monitor=monitor,
+                projection_surfaces=self.surfaces,
+                medium=medium,
+                coords=coords,
+                fields=fields,
+            )
+
+        x_grid, y_grid, z_grid = np.meshgrid(x, y, z, indexing="ij")
+        stacked_fields = self._project_exact_fields_points(
+            x=np.reshape(x_grid, (-1,)),
+            y=np.reshape(y_grid, (-1,)),
+            z=np.reshape(z_grid, (-1,)),
+            surface_currents=surface_currents,
+            medium=medium,
+            verbose=verbose,
+        )
         stacked_fields = anp.reshape(
-            stacked_fields, (len(x), len(y), len(z), len(field_names), len(freqs))
+            stacked_fields, (len(x), len(y), len(z), len(FIELD_COMPONENT_NAMES), len(freqs))
         )
         fields = anp.moveaxis(stacked_fields, 3, 0)
 
         coords = {"x": x, "y": y, "z": z, "f": freqs}
-        fields = {
-            name: FieldProjectionCartesianDataArray(field, coords=coords)
-            for name, field in zip(field_names, fields)
-        }
-        return FieldProjectionCartesianData(
-            monitor=monitor, projection_surfaces=self.surfaces, medium=medium, **fields
+        return _projection_data_from_fields(
+            FieldProjectionCartesianData,
+            FieldProjectionCartesianDataArray,
+            monitor=monitor,
+            projection_surfaces=self.surfaces,
+            medium=medium,
+            coords=coords,
+            fields=fields,
         )
 
     def _project_fields_kspace(
-        self, monitor: FieldProjectionKSpaceMonitor, verbose: bool = True
+        self,
+        monitor: FieldProjectionKSpaceMonitor,
+        verbose: bool = True,
+        freq_chunk_size: int | None = APPROX_PROJECTION_FREQ_CHUNK_SIZE,
     ) -> FieldProjectionKSpaceData:
         """Compute projected fields on a k-space grid in spherical coordinates.
 
@@ -933,70 +1332,98 @@ class FieldProjector(Tidy3dBaseModel):
         ux = np.atleast_1d(monitor.ux)
         uy = np.atleast_1d(monitor.uy)
 
-        # compute projected fields for the dataset associated with each monitor
-        field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-
         medium = monitor.medium if monitor.medium else self.medium
         k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
         phase = np.atleast_1d(
             AbstractFieldProjectionData.propagation_factor(
                 dist=monitor.proj_distance, k=k, is_2d_simulation=self.is_2d_simulation
             )
-        )
+        )[:, None]
 
-        surface_currents = [
-            (surface, self.apply_window_to_currents(monitor, self.currents[surface.monitor.name]))
-            for surface in self.surfaces
-        ]
-
-        total_points = len(ux) * len(uy)
-
-        point_fields = []
-        for _ux, _uy in _track_if_verbose(
-            product(ux, uy),
-            verbose=verbose,
-            description="Computing projected fields",
-            total=total_points,
-        ):
-            theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.proj_axis)
-
-            if monitor.far_field_approx:
-                fields_by_freq = []
-                for idx_f, frequency in enumerate(freqs):
-                    fields_sum = anp.zeros((len(field_names),), dtype=complex)
-                    for surface, currents in surface_currents:
-                        fields_surface = self._far_fields_for_surface(
-                            frequency=frequency,
-                            theta=theta,
-                            phi=phi,
-                            surface=surface,
-                            currents=currents,
-                            medium=medium,
-                        )
-                        fields_surface = anp.reshape(fields_surface, fields_sum.shape)
-                        fields_sum = fields_sum + fields_surface * phase[idx_f]
-                    fields_by_freq.append(fields_sum)
-
-                point_fields.append(anp.stack(fields_by_freq, axis=1))
-            else:
-                x_obs, y_obs, z_obs = monitor.sph_2_car(monitor.proj_distance, theta, phi)
-                fields_sum = anp.zeros((len(field_names), len(freqs)), dtype=complex)
-                for surface, currents in surface_currents:
-                    fields_surface = self._fields_for_surface_exact(
-                        x=x_obs,
-                        y=y_obs,
-                        z=z_obs,
-                        surface=surface,
-                        currents=currents,
-                        medium=medium,
+        surface_currents = self._windowed_surface_currents(monitor)
+        if monitor.far_field_approx:
+            ux_grid, uy_grid = np.meshgrid(ux, uy, indexing="ij")
+            theta_obs, phi_obs = monitor.kspace_2_sph(
+                np.reshape(ux_grid, (-1,)),
+                np.reshape(uy_grid, (-1,)),
+                monitor.proj_axis,
+            )
+            total_points = theta_obs.size
+            num_batches = (
+                total_points + APPROX_PROJECTION_BATCH_SIZE - 1
+            ) // APPROX_PROJECTION_BATCH_SIZE
+            freq_slices = _frequency_chunk_slices(freqs, freq_chunk_size)
+            fields_by_freq_chunk = []
+            for idx_chunk, freq_slice in enumerate(freq_slices, start=1):
+                prepared_surface_currents = self._prepare_far_field_surface_currents(
+                    surface_currents=surface_currents,
+                    freqs=freqs[freq_slice],
+                    medium=medium,
+                )
+                description = "Computing projected fields"
+                if len(freq_slices) > 1:
+                    description = (
+                        f"Computing projected fields (freq chunk {idx_chunk}/{len(freq_slices)})"
                     )
-                    fields_surface = anp.reshape(fields_surface, fields_sum.shape)
-                    fields_sum = fields_sum + fields_surface
-                point_fields.append(fields_sum)
+                chunk_fields = []
+                for start in _track_if_verbose(
+                    range(0, total_points, APPROX_PROJECTION_BATCH_SIZE),
+                    verbose=verbose,
+                    description=description,
+                    total=num_batches,
+                ):
+                    stop = min(start + APPROX_PROJECTION_BATCH_SIZE, total_points)
+                    chunk_fields.append(
+                        self._project_prepared_fields_pairs(
+                            theta=theta_obs[start:stop],
+                            phi=phi_obs[start:stop],
+                            prepared_surface_currents=prepared_surface_currents,
+                            phase_by_freq=phase[freq_slice],
+                        )
+                    )
 
-        stacked_fields = anp.stack(point_fields, axis=0)
+                fields_by_freq_chunk.append(anp.concatenate(chunk_fields, axis=0))
+
+            stacked_fields = anp.concatenate(fields_by_freq_chunk, axis=-1)
+            stacked_fields = anp.reshape(
+                stacked_fields, (len(ux), len(uy), len(FIELD_COMPONENT_NAMES), len(freqs))
+            )
+            fields = anp.moveaxis(stacked_fields, 2, 0)
+            fields = fields[:, :, :, None, :]
+
+            coords = {
+                "ux": np.array(monitor.ux),
+                "uy": np.array(monitor.uy),
+                "r": np.atleast_1d(monitor.proj_distance),
+                "f": freqs,
+            }
+            return _projection_data_from_fields(
+                FieldProjectionKSpaceData,
+                FieldProjectionKSpaceDataArray,
+                monitor=monitor,
+                projection_surfaces=self.surfaces,
+                medium=medium,
+                coords=coords,
+                fields=fields,
+            )
+
+        ux_grid, uy_grid = np.meshgrid(ux, uy, indexing="ij")
+        theta_obs, phi_obs = monitor.kspace_2_sph(
+            np.reshape(ux_grid, (-1,)),
+            np.reshape(uy_grid, (-1,)),
+            monitor.proj_axis,
+        )
+        x_obs, y_obs, z_obs = monitor.sph_2_car(monitor.proj_distance, theta_obs, phi_obs)
+        stacked_fields = self._project_exact_fields_points(
+            x=x_obs,
+            y=y_obs,
+            z=z_obs,
+            surface_currents=surface_currents,
+            medium=medium,
+            verbose=verbose,
+        )
         stacked_fields = anp.reshape(
-            stacked_fields, (len(ux), len(uy), len(field_names), len(freqs))
+            stacked_fields, (len(ux), len(uy), len(FIELD_COMPONENT_NAMES), len(freqs))
         )
         fields = anp.moveaxis(stacked_fields, 2, 0)
         fields = fields[:, :, :, None, :]
@@ -1007,12 +1434,14 @@ class FieldProjector(Tidy3dBaseModel):
             "r": np.atleast_1d(monitor.proj_distance),
             "f": freqs,
         }
-        fields = {
-            name: FieldProjectionKSpaceDataArray(field, coords=coords)
-            for name, field in zip(field_names, fields)
-        }
-        return FieldProjectionKSpaceData(
-            monitor=monitor, projection_surfaces=self.surfaces, medium=medium, **fields
+        return _projection_data_from_fields(
+            FieldProjectionKSpaceData,
+            FieldProjectionKSpaceDataArray,
+            monitor=monitor,
+            projection_surfaces=self.surfaces,
+            medium=medium,
+            coords=coords,
+            fields=fields,
         )
 
     """Exact projections"""

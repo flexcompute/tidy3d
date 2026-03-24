@@ -10,7 +10,12 @@ from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.components.field_projection as field_projection
-from tidy3d.components.field_projection import FieldProjector, _far_field_integral
+from tidy3d.components.field_projection import (
+    FieldProjector,
+    _far_field_integral,
+    _far_field_integral_pairs,
+    _FarFieldIntegralSpec,
+)
 from tidy3d.exceptions import DataError
 
 MEDIUM = td.Medium(permittivity=3)
@@ -276,15 +281,16 @@ def test_proj_data(tmp_path):
     )
 
 
-def make_clientside_projector(center, size, f0, num_points=10):
+def make_clientside_projector(center, size, freqs, num_points=10, seed: int | None = None):
     """Helper to build a client-side field projector from the shared synthetic setup."""
 
-    monitor = td.FieldMonitor(size=size, center=center, freqs=[f0], name="near_field")
+    freqs = np.atleast_1d(freqs)
+    monitor = td.FieldMonitor(size=size, center=center, freqs=list(freqs), name="near_field")
 
     sim_size = (5, 5, 5)
     sim = td.Simulation(
         size=sim_size,
-        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / freqs[0]),
         monitors=(monitor,),
         run_time=1e-12,
     )
@@ -292,11 +298,14 @@ def make_clientside_projector(center, size, f0, num_points=10):
     x = np.linspace(-1, 1, num_points)
     y = np.linspace(-1, 1, num_points)
     z = np.array([0.0])
-    f = [f0]
-    coords = {"x": x, "y": y, "z": z, "f": f}
-    scalar_field = td.ScalarFieldDataArray(
-        (1 + 1j) * np.random.random((num_points, num_points, 1, 1)), coords=coords
+    coords = {"x": x, "y": y, "z": z, "f": freqs}
+    rng = np.random.default_rng(seed) if seed is not None else None
+    values = (
+        (1 + 1j) * rng.random((num_points, num_points, 1, len(freqs)))
+        if rng is not None
+        else (1 + 1j) * np.random.random((num_points, num_points, 1, len(freqs)))
     )
+    scalar_field = td.ScalarFieldDataArray(values, coords=coords)
     data = td.FieldData(
         monitor=monitor,
         Ex=scalar_field,
@@ -405,6 +414,53 @@ def test_proj_clientside():
         val.sel(f=f0)
     with pytest.raises(DataError):
         exact_fields_cartesian.renormalize_fields(proj_distance=5e6)
+
+
+def test_proj_clientside_freq_chunk_size_matches_default():
+    """Approximate multi-frequency client-side projections should be chunk-size invariant."""
+
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    freqs = [0.9e13, 1e13, 1.1e13]
+    proj = make_clientside_projector(center, size, freqs, seed=0)
+
+    _, n2f_cart_monitor, n2f_ksp_monitor, _, _ = make_proj_monitors(center, size, freqs)
+
+    far_fields_cartesian_default = proj.project_fields(n2f_cart_monitor, verbose=False)
+    far_fields_cartesian_chunked = proj.project_fields(
+        n2f_cart_monitor, verbose=False, freq_chunk_size=1
+    )
+    far_fields_kspace_default = proj.project_fields(n2f_ksp_monitor, verbose=False)
+    far_fields_kspace_chunked = proj.project_fields(
+        n2f_ksp_monitor, verbose=False, freq_chunk_size=1
+    )
+
+    for name in far_fields_cartesian_default.field_components:
+        np.testing.assert_allclose(
+            np.asarray(getattr(far_fields_cartesian_default, name).data),
+            np.asarray(getattr(far_fields_cartesian_chunked, name).data),
+            rtol=1e-12,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            np.asarray(getattr(far_fields_kspace_default, name).data),
+            np.asarray(getattr(far_fields_kspace_chunked, name).data),
+            rtol=1e-12,
+            atol=1e-12,
+        )
+
+
+def test_proj_clientside_freq_chunk_size_validation():
+    """Public projection entry point should reject nonpositive frequency chunk sizes."""
+
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+    projector = make_clientside_projector(center, size, f0, num_points=4)
+    proj_monitor = make_single_point_cart_monitor(center, size, f0, name="n2f_cart_chunk_size")
+
+    with pytest.raises(ValueError, match="freq_chunk_size >= 1"):
+        projector.project_fields(proj_monitor, verbose=False, freq_chunk_size=0)
 
 
 def test_proj_clientside_verbose_flag(monkeypatch):
@@ -747,16 +803,17 @@ def test_far_field_integral_vjp_3d(idx_u, idx_v):
         return FieldProjector.trapezoid(chunk, pts_int, axes)
 
     def primitive(currents_in):
-        return _far_field_integral(
-            currents_in,
-            phase_0,
-            phase_1,
-            phase_2,
-            pts,
-            idx_u,
-            idx_v,
+        spec = _FarFieldIntegralSpec(
+            weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+            idx_u=idx_u,
+            idx_v=idx_v,
             is_2d=False,
             idx_integration_1d=None,
+        )
+        return _far_field_integral(
+            currents_in,
+            (phase_0, phase_1, phase_2),
+            spec,
         )
 
     vjp_primitive, ans_primitive = make_vjp(primitive)(currents)
@@ -806,16 +863,17 @@ def test_far_field_integral_vjp_2d(idx_integration_1d):
         return FieldProjector.trapezoid(chunk, pts[idx_integration_1d], idx_integration_1d)
 
     def primitive(currents_in):
-        return _far_field_integral(
-            currents_in,
-            phase_0,
-            phase_1,
-            phase_2,
-            pts,
-            0,
-            1,
+        spec = _FarFieldIntegralSpec(
+            weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+            idx_u=0,
+            idx_v=1,
             is_2d=True,
             idx_integration_1d=idx_integration_1d,
+        )
+        return _far_field_integral(
+            currents_in,
+            (phase_0, phase_1, phase_2),
+            spec,
         )
 
     vjp_primitive, ans_primitive = make_vjp(primitive)(currents)
@@ -831,3 +889,90 @@ def test_far_field_integral_vjp_2d(idx_integration_1d):
     grad_primitive = np.asarray(vjp_primitive(g))
     grad_reference = np.asarray(vjp_reference(g))
     np.testing.assert_allclose(grad_primitive, grad_reference, rtol=1e-10, atol=1e-10)
+
+
+def test_far_field_integral_pairs_matches_reference():
+    rng = np.random.default_rng(2)
+    n_x, n_y, n_z = 3, 4, 5
+    n_pairs = 6
+    idx_u, idx_v = 0, 1
+
+    currents = rng.standard_normal((n_x, n_y, n_z)) + 1j * rng.standard_normal((n_x, n_y, n_z))
+    pts = [
+        np.cumsum(rng.random(n_x)),
+        np.cumsum(rng.random(n_y)),
+        np.cumsum(rng.random(n_z)),
+    ]
+    phase_0 = rng.standard_normal((n_x, n_pairs)) + 1j * rng.standard_normal((n_x, n_pairs))
+    phase_1 = rng.standard_normal((n_y, n_pairs)) + 1j * rng.standard_normal((n_y, n_pairs))
+    phase_2 = rng.standard_normal((n_z, n_pairs)) + 1j * rng.standard_normal((n_z, n_pairs))
+    spec = _FarFieldIntegralSpec(
+        weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+        idx_u=idx_u,
+        idx_v=idx_v,
+        is_2d=False,
+        idx_integration_1d=None,
+    )
+
+    actual = _far_field_integral_pairs(currents, (phase_0, phase_1, phase_2), spec)
+
+    expected = np.empty((n_z, n_pairs), dtype=complex)
+    for idx_pair in range(n_pairs):
+        chunk = (
+            phase_0[:, idx_pair][:, None, None]
+            * phase_1[:, idx_pair][None, :, None]
+            * phase_2[:, idx_pair][None, None, :]
+            * currents
+        )
+        expected[:, idx_pair] = FieldProjector.trapezoid(chunk, (pts[0], pts[1]), (0, 1))
+
+    np.testing.assert_allclose(np.asarray(actual), expected, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize("idx_integration_1d", [0, 1, 2])
+def test_far_field_integral_pairs_matches_reference_2d(idx_integration_1d):
+    rng = np.random.default_rng(3)
+    n_pairs = 6
+
+    n_x, n_y, n_z = 1, 1, 1
+    if idx_integration_1d == 0:
+        n_x = 4
+    elif idx_integration_1d == 1:
+        n_y = 4
+    else:
+        n_z = 4
+
+    currents = rng.standard_normal((n_x, n_y, n_z)) + 1j * rng.standard_normal((n_x, n_y, n_z))
+    pts = [
+        np.cumsum(rng.random(n_x)) if n_x > 1 else np.zeros((n_x,)),
+        np.cumsum(rng.random(n_y)) if n_y > 1 else np.zeros((n_y,)),
+        np.cumsum(rng.random(n_z)) if n_z > 1 else np.zeros((n_z,)),
+    ]
+    phase_0 = rng.standard_normal((n_x, n_pairs)) + 1j * rng.standard_normal((n_x, n_pairs))
+    phase_1 = rng.standard_normal((n_y, n_pairs)) + 1j * rng.standard_normal((n_y, n_pairs))
+    phase_2 = rng.standard_normal((n_z, n_pairs)) + 1j * rng.standard_normal((n_z, n_pairs))
+    spec = _FarFieldIntegralSpec(
+        weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+        idx_u=0,
+        idx_v=1,
+        is_2d=True,
+        idx_integration_1d=idx_integration_1d,
+    )
+
+    actual = _far_field_integral_pairs(currents, (phase_0, phase_1, phase_2), spec)
+
+    expected = []
+    for idx_pair in range(n_pairs):
+        chunk = (
+            phase_0[:, idx_pair][:, None, None]
+            * phase_1[:, idx_pair][None, :, None]
+            * phase_2[:, idx_pair][None, None, :]
+            * currents
+        )
+        expected.append(
+            FieldProjector.trapezoid(chunk, pts[idx_integration_1d], idx_integration_1d)
+        )
+
+    np.testing.assert_allclose(
+        np.asarray(actual), np.stack(expected, axis=-1), rtol=1e-12, atol=1e-12
+    )
