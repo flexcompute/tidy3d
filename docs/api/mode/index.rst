@@ -3,37 +3,18 @@
 Mode |:dart:|
 =============
 
+.. toctree::
+    :hidden:
+
+    simulation
+    sources
+    specification
+    output_data
+    deprecated
+
 .. include:: /api/mode/sources.rst
-
-
-Interpolation Specifications
-----------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-   :template: module.rst
-
-   tidy3d.ModeInterpSpec
-
-
-Sort Specifications
--------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-   :template: module.rst
-
-   tidy3d.ModeSortSpec
-
-
-Sampling Specifications
------------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-   :template: module.rst
-
-   tidy3d.UniformSampling
-   tidy3d.ChebSampling
-   tidy3d.CustomSampling
+.. include:: /api/mode/simulation.rst
+.. include:: /api/mode/specification.rst
+.. include:: /api/mode/output_data.rst
+.. include:: /api/mode/deprecated.rst
 
