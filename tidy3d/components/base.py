@@ -1173,19 +1173,23 @@ class Tidy3dBaseModel(BaseModel):
         return JSON_TAG
 
     @classmethod
-    def _json_string_from_hdf5(cls: type[T], fname: PathLike) -> str:
-        """Load the model json string from an hdf5 file."""
-        with h5py.File(fname, "r") as f_handle:
+    def _json_string_from_hdf5(cls: type[T], fname: Union[PathLike, h5py.File]) -> str:
+        """Load the model json string from an hdf5 file path or open file handle."""
+        if isinstance(fname, h5py.File):
+            f_handle = fname
             num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
             json_string = b""
             for ind in range(num_string_parts):
                 json_string += f_handle[cls._json_string_key(ind)][()]
-        return json_string
+            return json_string
+
+        with h5py.File(fname, "r") as f_handle:
+            return cls._json_string_from_hdf5(f_handle)
 
     @classmethod
     def _load_data_from_file(
         cls: type[T],
-        fname: PathLike,
+        fname: Union[PathLike, h5py.File],
         model_dict: dict,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
@@ -1197,7 +1201,19 @@ class Tidy3dBaseModel(BaseModel):
             """Whether a value is supposed to be a data array based on the contents."""
             return isinstance(value, str) and value in DATA_ARRAY_MAP
 
-        fname_path = Path(fname)
+        if not isinstance(fname, h5py.File):
+            with h5py.File(Path(fname), "r") as f_handle:
+                cls._load_data_from_file(
+                    fname=f_handle,
+                    model_dict=model_dict,
+                    group_path=group_path,
+                    custom_decoders=custom_decoders,
+                    should_load_path=should_load_path,
+                )
+            return
+
+        f_handle = fname
+        fname_path = Path(f_handle.filename)
 
         for key, value in model_dict.items():
             subpath = f"{group_path}/{key}"
@@ -1217,13 +1233,13 @@ class Tidy3dBaseModel(BaseModel):
 
             if is_data_array(value):
                 data_array_type = DATA_ARRAY_MAP[value]
-                model_dict[key] = data_array_type.from_hdf5(fname=fname_path, group_path=subpath)
+                model_dict[key] = data_array_type.from_hdf5(fname=f_handle, group_path=subpath)
                 continue
 
             if isinstance(value, (list, tuple)):
                 value_dict = cls.tuple_to_dict(tuple_values=value)
                 cls._load_data_from_file(
-                    fname=fname_path,
+                    fname=f_handle,
                     model_dict=value_dict,
                     group_path=subpath,
                     custom_decoders=custom_decoders,
@@ -1238,7 +1254,7 @@ class Tidy3dBaseModel(BaseModel):
 
             elif isinstance(value, dict):
                 cls._load_data_from_file(
-                    fname=fname_path,
+                    fname=f_handle,
                     model_dict=value,
                     group_path=subpath,
                     custom_decoders=custom_decoders,
@@ -1248,7 +1264,7 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def dict_from_hdf5(
         cls: type[T],
-        fname: PathLike,
+        fname: Union[PathLike, h5py.File],
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
         load_data_arrays: bool = True,
@@ -1257,8 +1273,9 @@ class Tidy3dBaseModel(BaseModel):
 
         Parameters
         ----------
-        fname : PathLike
-            Full path to the .hdf5 file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
+        fname : PathLike or h5py.File
+            Full path to the .hdf5 file, or an open HDF5 file handle, used to load the
+            :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
         custom_decoders : List[Callable]
@@ -1275,13 +1292,22 @@ class Tidy3dBaseModel(BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
-        fname_path = Path(fname)
-        model_dict = json.loads(cls._json_string_from_hdf5(fname=fname_path))
+        if not isinstance(fname, h5py.File):
+            with h5py.File(Path(fname), "r") as f_handle:
+                return cls.dict_from_hdf5(
+                    fname=f_handle,
+                    group_path=group_path,
+                    custom_decoders=custom_decoders,
+                    load_data_arrays=load_data_arrays,
+                )
+
+        f_handle = fname
+        model_dict = json.loads(cls._json_string_from_hdf5(fname=f_handle))
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
         if load_data_arrays:
             cls._load_data_from_file(
-                fname=fname_path,
+                fname=f_handle,
                 model_dict=model_dict,
                 group_path=group_path,
                 custom_decoders=custom_decoders,
@@ -1291,7 +1317,7 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def from_hdf5(
         cls: type[T],
-        fname: PathLike,
+        fname: Union[PathLike, h5py.File],
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
         **model_validate_kwargs: Any,
@@ -1300,8 +1326,9 @@ class Tidy3dBaseModel(BaseModel):
 
         Parameters
         ----------
-        fname : PathLike
-            Full path to the .hdf5 file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
+        fname : PathLike or h5py.File
+            Full path to the .hdf5 file, or an open HDF5 file handle, used to load the
+            :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
             Starting `/` is optional.

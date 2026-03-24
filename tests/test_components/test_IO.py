@@ -69,32 +69,82 @@ def set_datasets_to_none(sim):
     return td.Simulation.model_validate(sim_dict)
 
 
-def make_many_flux_monitor_sim_data(num_monitors: int = 8) -> td.SimulationData:
-    """Create a small SimulationData fixture with many tiny FluxData payloads."""
+def _average_runtime(func, repeats: int = 5, warmup: int = 1) -> float:
+    for _ in range(warmup):
+        func()
 
-    flux_data = make_flux_data()
-    monitor_freqs = flux_data.monitor.freqs
-    freq0 = float(np.mean(monitor_freqs))
-    fwidth = float(np.ptp(monitor_freqs)) or freq0 * 0.1
-    monitors = tuple(
-        td.FluxMonitor(center=(0, 0, 0), size=(1, 1, 0), freqs=monitor_freqs, name=f"flux_{i:03d}")
-        for i in range(num_monitors)
+    elapsed = []
+    for _ in range(repeats):
+        t0 = time()
+        func()
+        elapsed.append(time() - t0)
+    return sum(elapsed) / len(elapsed)
+
+
+def _make_many_small_array_sim_data(
+    num_flux_monitors: int = 64, num_freqs: int = 4
+) -> tuple[td.SimulationData, str, int]:
+    """Build a compact SimulationData fixture with many small DataArrays.
+
+    This stresses repeated HDF5 open/close overhead without making the benchmark
+    dominated by large array reads.
+    """
+
+    freqs = [2e14 + ind * 1e12 for ind in range(num_freqs)]
+    flux_monitors = [
+        td.FluxMonitor(center=(0, 0, 0), size=(1, 1, 0), freqs=freqs, name=f"flux_{ind}")
+        for ind in range(num_flux_monitors)
+    ]
+    field_monitor = td.FieldMonitor(
+        center=(0, 0, 0), size=(1, 1, 0), freqs=freqs, name="field_many"
     )
+
     simulation = td.Simulation(
-        size=(1, 1, 1),
+        size=(2, 2, 2),
         grid_spec=td.GridSpec.auto(wavelength=1.0),
-        monitors=monitors,
+        monitors=[field_monitor, *flux_monitors],
         sources=[
             td.PointDipole(
                 center=(0, 0, 0),
                 polarization="Ex",
-                source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
             )
         ],
         run_time=2e-12,
     )
-    data = tuple(flux_data.updated_copy(monitor=monitor) for monitor in monitors)
-    return td.SimulationData(simulation=simulation, data=data)
+
+    coords = {"x": [-0.5, 0.5], "y": [-0.5, 0.5], "z": [0.0], "f": freqs}
+    field_shape = (2, 2, 1, len(freqs))
+    field_array = td.ScalarFieldDataArray((1 + 1j) * np.ones(field_shape), coords=coords)
+    field_data = td.FieldData(
+        monitor=field_monitor,
+        Ex=field_array,
+        Ey=field_array,
+        Ez=field_array,
+        Hx=field_array,
+        Hy=field_array,
+        Hz=field_array,
+        grid_expanded=simulation.discretize_monitor(field_monitor),
+    )
+
+    flux_data = [
+        td.FluxData(
+            monitor=monitor,
+            flux=td.FluxDataArray(
+                np.linspace(ind, ind + 1, len(freqs)),
+                coords={"f": freqs},
+            ),
+        )
+        for ind, monitor in enumerate(flux_monitors)
+    ]
+
+    sim_data = td.SimulationData(
+        simulation=simulation,
+        data=(field_data, *flux_data),
+        log="benchmark",
+    )
+    num_data_arrays = num_flux_monitors + 6
+    return sim_data, field_monitor.name, num_data_arrays
 
 
 def test_simulation_load_export(split_string, tmp_path):
@@ -184,6 +234,34 @@ def test_simulation_load_export_hdf5_gz_explicit(split_string, tmp_path):
     SIM_STATIC.to_hdf5_gz(path)
     SIM2 = td.Simulation.from_hdf5_gz(path)
     assert SIM_STATIC == SIM2, "original and loaded simulations are not the same"
+
+
+def make_many_flux_monitor_sim_data(num_monitors: int = 8) -> td.SimulationData:
+    """Create a small SimulationData fixture with many tiny FluxData payloads."""
+
+    flux_data = make_flux_data()
+    monitor_freqs = flux_data.monitor.freqs
+    freq0 = float(np.mean(monitor_freqs))
+    fwidth = float(np.ptp(monitor_freqs)) or freq0 * 0.1
+    monitors = tuple(
+        td.FluxMonitor(center=(0, 0, 0), size=(1, 1, 0), freqs=monitor_freqs, name=f"flux_{i:03d}")
+        for i in range(num_monitors)
+    )
+    simulation = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        monitors=monitors,
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+            )
+        ],
+        run_time=2e-12,
+    )
+    data = tuple(flux_data.updated_copy(monitor=monitor) for monitor in monitors)
+    return td.SimulationData(simulation=simulation, data=data)
 
 
 def test_simulation_data_from_file_monitor_names(split_string, tmp_path):
@@ -614,6 +692,51 @@ def test_monitor_data_from_file():
     assert mode_data.monitor == sim.monitors[1]
 
 
+def test_simulation_data_from_file_reuses_hdf5_handle(monkeypatch, tmp_path):
+    sim_data = make_sim_data()
+    path = str(tmp_path / "sim_data.hdf5")
+    sim_data.to_file(path)
+
+    seen_handles = []
+    real_from_hdf5 = DataArray.from_hdf5.__func__
+
+    def recording_from_hdf5(cls, fname, group_path):
+        seen_handles.append(fname)
+        return real_from_hdf5(cls, fname, group_path)
+
+    monkeypatch.setattr(DataArray, "from_hdf5", classmethod(recording_from_hdf5))
+
+    loaded = td.SimulationData.from_file(path)
+
+    assert loaded == sim_data
+    assert seen_handles
+    assert all(isinstance(handle, h5py.File) for handle in seen_handles)
+    assert len({id(handle) for handle in seen_handles}) == 1
+
+
+def test_monitor_data_from_file_reuses_hdf5_handle(split_string, monkeypatch, tmp_path):
+    sim_data = make_sim_data()
+    path = str(tmp_path / "sim_data_split.hdf5")
+    sim_data.to_file(path)
+
+    monitor_name = sim_data.simulation.monitors[0].name
+    seen_handles = []
+    real_from_hdf5 = DataArray.from_hdf5.__func__
+
+    def recording_from_hdf5(cls, fname, group_path):
+        seen_handles.append(fname)
+        return real_from_hdf5(cls, fname, group_path)
+
+    monkeypatch.setattr(DataArray, "from_hdf5", classmethod(recording_from_hdf5))
+
+    loaded = td.SimulationData.mnt_data_from_file(path, mnt_name=monitor_name)
+
+    assert loaded == sim_data.monitor_data[monitor_name]
+    assert seen_handles
+    assert all(isinstance(handle, h5py.File) for handle in seen_handles)
+    assert len({id(handle) for handle in seen_handles}) == 1
+
+
 def test_data_array_to_hdf5(tmp_path):
     values = np.linspace(0, 1, 10)
     coords = {"f": values}
@@ -627,6 +750,30 @@ def test_data_array_to_hdf5(tmp_path):
 
     # pass a file name
     flux.to_hdf5(fname=path, group_path="test")
+
+
+@pytest.mark.perf
+def test_hdf5_handle_reuse_speed(tmp_path):
+    sim_data, monitor_name, num_data_arrays = _make_many_small_array_sim_data()
+    path = str(tmp_path / "sim_data_perf.hdf5")
+    sim_data.to_file(path)
+    file_size = os.path.getsize(path)
+
+    current_dict = _average_runtime(lambda: td.SimulationData.dict_from_hdf5(path))
+    current_mnt = _average_runtime(lambda: td.SimulationData.mnt_data_from_file(path, monitor_name))
+
+    assert td.SimulationData.from_file(path) == sim_data
+    assert (
+        td.SimulationData.mnt_data_from_file(path, monitor_name)
+        == sim_data.monitor_data[monitor_name]
+    )
+    assert file_size < 1_000_000
+
+    print(
+        "SimulationData.dict_from_hdf5 "
+        f"{current_dict * 1e3:.2f} ms ({num_data_arrays} DataArrays, {file_size / 1024:.1f} KiB)"
+    )
+    print(f"SimulationData.mnt_data_from_file {current_mnt * 1e3:.2f} ms")
 
 
 def test_data_array_to_hdf5_string_coords(tmp_path):

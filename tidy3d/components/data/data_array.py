@@ -298,17 +298,25 @@ class DataArray(xr.DataArray):
                 sub_group[key] = val
 
     @classmethod
-    def from_hdf5(cls, fname: PathLike, group_path: str) -> Self:
-        """Load a DataArray from an hdf5 file with a given path to the group."""
+    def _from_hdf5_handle(cls, f_handle: h5py.File, group_path: str) -> Self:
+        """Load a DataArray from an open hdf5 file handle with a given group path."""
+        sub_group = f_handle[group_path]
+        values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
+        coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
+        for key, val in coords.items():
+            if val.dtype == "O":
+                coords[key] = [byte_string.decode() for byte_string in val.tolist()]
+        return cls(values, coords=coords, dims=cls._dims)
+
+    @classmethod
+    def from_hdf5(cls, fname: Union[PathLike, h5py.File], group_path: str) -> Self:
+        """Load a DataArray from an hdf5 file or open file handle with a given group path."""
+        if isinstance(fname, h5py.File):
+            return cls._from_hdf5_handle(f_handle=fname, group_path=group_path)
+
         path = pathlib.Path(fname)
-        with h5py.File(path, "r") as f:
-            sub_group = f[group_path]
-            values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
-            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
-            for key, val in coords.items():
-                if val.dtype == "O":
-                    coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            return cls(values, coords=coords, dims=cls._dims)
+        with h5py.File(path, "r") as f_handle:
+            return cls._from_hdf5_handle(f_handle=f_handle, group_path=group_path)
 
     @classmethod
     def from_file(cls, fname: PathLike, group_path: str) -> Self:

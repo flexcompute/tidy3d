@@ -16,7 +16,7 @@ import xarray as xr
 from pydantic import Field
 
 from tidy3d.components.autograd.utils import split_list
-from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.simulation import Simulation
@@ -451,7 +451,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 raise ValueError(f"could not find data in the supplied file {fname}")
 
             # get the monitor list from the json string
-            json_string = f_handle[JSON_TAG][()]
+            json_string = cls._json_string_from_hdf5(f_handle)
             json_dict = json.loads(json_string)
             monitor_list = json_dict["simulation"]["monitors"]
 
@@ -467,8 +467,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
 
             # load the monitor data from the file using the group_path
             group_path = f"data/{monitor_index_str}"
-            return monitor_data_type.from_file(
-                fname, group_path=group_path, **model_validate_kwargs
+            return monitor_data_type.from_hdf5(
+                f_handle, group_path=group_path, **model_validate_kwargs
             )
 
     @classmethod
