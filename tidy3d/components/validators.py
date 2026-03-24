@@ -199,6 +199,104 @@ def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
     return check_symmetry
 
 
+def validate_field_projection_monitors_2d(
+    monitors: Sequence[Any] | None, sim_size: tuple[float, float, float]
+) -> None:
+    """Validate lower-dimensional field projection monitor settings."""
+
+    if not monitors:
+        return
+
+    non_zero_dims = sum(1 for size in sim_size if size != 0)
+    if non_zero_dims == 3:
+        return
+
+    from .monitor import (
+        AbstractFieldProjectionMonitor,
+        FieldProjectionAngleMonitor,
+        FieldProjectionCartesianMonitor,
+        FieldProjectionKSpaceMonitor,
+    )
+
+    if sim_size[0] == 0:
+        plane = "y-z"
+    elif sim_size[1] == 0:
+        plane = "x-z"
+    else:
+        plane = "x-y"
+
+    for monitor in monitors:
+        if not isinstance(monitor, AbstractFieldProjectionMonitor):
+            continue
+
+        if non_zero_dims == 1:
+            raise SetupError(f"Monitor '{monitor.name}' is not supported in 1D simulations.")
+
+        if not monitor.far_field_approx:
+            raise SetupError(
+                f"Exact far-field projection for 2D simulations is not yet available for Monitor '{monitor.name}'. "
+                "Currently, only 'far_field_approx = True' is supported."
+            )
+
+        if isinstance(monitor, FieldProjectionAngleMonitor):
+            config = {
+                "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
+                "x-z": {"valid_value": [0, np.pi], "coord": "phi"},
+                "x-y": {"valid_value": [np.pi / 2], "coord": "theta"},
+            }[plane]
+
+            coord = getattr(monitor, config["coord"])
+            if not all(value in config["valid_value"] for value in coord):
+                replacements = {
+                    np.pi: "np.pi",
+                    np.pi / 2: "np.pi/2",
+                    3 * np.pi / 2: "3*np.pi/2",
+                    0: "0",
+                }
+                valid_values_str = ", ".join(replacements.get(val) for val in config["valid_value"])
+                raise SetupError(
+                    f"For a 2D simulation in the {plane} plane, the observation "
+                    f"angle '{config['coord']}' of monitor "
+                    f"'{monitor.name}' should be set to "
+                    f"'{valid_values_str}'"
+                )
+
+            continue
+
+        if isinstance(monitor, FieldProjectionCartesianMonitor):
+            config = {
+                "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
+                "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
+                "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
+            }[plane]
+        elif isinstance(monitor, FieldProjectionKSpaceMonitor):
+            config = {
+                "y-z": {"valid_proj_axes": [1, 2], "coord": ["ux", "ux"]},
+                "x-z": {"valid_proj_axes": [0, 2], "coord": ["ux", "uy"]},
+                "x-y": {"valid_proj_axes": [0, 1], "coord": ["uy", "uy"]},
+            }[plane]
+        else:
+            continue
+
+        valid_proj_axes = config["valid_proj_axes"]
+        invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
+
+        if monitor.proj_axis in invalid_proj_axis:
+            raise SetupError(
+                f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
+                f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
+            )
+
+        for idx, axis in enumerate(valid_proj_axes):
+            coord = getattr(monitor, config["coord"][idx])
+            if monitor.proj_axis == axis and not all(value in [0] for value in coord):
+                raise SetupError(
+                    f"For a 2D simulation in the {plane} plane with "
+                    f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
+                    f"'{monitor.name}' should be set to '[0]'."
+                )
+
+
 def assert_unique_names(
     *field_names: str,
 ) -> Callable[[type, Sequence[Any], FieldValidationInfo], Sequence[Any]]:

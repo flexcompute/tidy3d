@@ -16,7 +16,9 @@ from tidy3d.components.field_projection import (
     _far_field_integral_pairs,
     _FarFieldIntegralSpec,
 )
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, SetupError
+
+from ..utils import run_emulated
 
 MEDIUM = td.Medium(permittivity=3)
 WAVELENGTH = 1
@@ -564,7 +566,7 @@ def make_2d_proj_monitors(center, size, freqs, plane):
     return (n2f_angle_monitor_2d, n2f_car_monitor_2d, n2f_k_monitor_2d)
 
 
-def make_2d_proj(plane):
+def make_2d_projector(plane):
     center = (0, 0, 0)
     f0 = 1e13
 
@@ -626,7 +628,6 @@ def make_2d_proj(plane):
         center=center, size=monitor_size, freqs=[f0], name="near_field", colocate=False
     )
 
-    # Set up the simulation
     sim = td.Simulation(
         size=sim_size,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
@@ -655,6 +656,12 @@ def make_2d_proj(plane):
         near_monitors=[monitor],
         normal_dirs=["+"],
     )
+
+    return proj, center, monitor_size, f0
+
+
+def make_2d_proj(plane):
+    proj, center, monitor_size, f0 = make_2d_projector(plane)
 
     # make near-to-far monitors
     (
@@ -708,6 +715,108 @@ def test_2d_proj_clientside():
 
     for plane in planes:
         make_2d_proj(plane)
+
+
+def test_2d_proj_clientside_cartesian_single_cell_dimension():
+    freq0 = td.C_0 / 1.55
+    sio2 = td.Medium(permittivity=1.44**2)
+    si = td.Medium(permittivity=3.47**2)
+
+    sim = td.Simulation(
+        center=(0, 0, 0),
+        size=(20, 0, 5),
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=10, wavelength=1.55),
+        structures=[
+            td.Structure(
+                geometry=td.Box.from_bounds((-td.inf, -td.inf, -1), (td.inf, td.inf, 0)),
+                medium=si,
+            ),
+        ],
+        sources=[
+            td.ModeSource(
+                center=(-8, 0, 0),
+                size=(0, td.inf, 4),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                direction="+",
+            ),
+        ],
+        monitors=[
+            td.FieldMonitor(
+                center=(0, 0, 1),
+                size=(10, td.inf, 0),
+                freqs=[freq0],
+                name="nf",
+                colocate=False,
+            ),
+        ],
+        run_time=1e-12,
+        medium=sio2,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
+    )
+
+    sim_data = run_emulated(sim)
+    near_monitor = sim_data.simulation.get_monitor_by_name("nf")
+    projector = td.FieldProjector.from_near_field_monitors(
+        sim_data=sim_data,
+        near_monitors=[near_monitor],
+        normal_dirs=["+"],
+    )
+    proj_monitor = td.FieldProjectionCartesianMonitor(
+        center=near_monitor.center,
+        size=near_monitor.size,
+        freqs=[freq0],
+        name="proj",
+        proj_axis=2,
+        proj_distance=50,
+        x=list(range(-5, 6)),
+        y=[0.0],
+        far_field_approx=True,
+    )
+
+    projected = projector.project_fields(proj_monitor)
+    for field in projected.field_components.values():
+        field.sel(f=freq0)
+
+
+@pytest.mark.parametrize("plane", ["xy", "yz", "xz"])
+@pytest.mark.parametrize("monitor_index", [0, 1, 2])
+def test_2d_proj_clientside_exact_not_supported(plane, monitor_index):
+    proj, center, monitor_size, f0 = make_2d_projector(plane)
+    monitor = make_2d_proj_monitors(center, monitor_size, [f0], plane)[monitor_index]
+    monitor = monitor.updated_copy(proj_distance=R_FAR / 50, far_field_approx=False)
+
+    with pytest.raises(
+        SetupError,
+        match="Exact far-field projection for 2D simulations is not yet available",
+    ):
+        proj.project_fields(monitor)
+
+
+@pytest.mark.parametrize(
+    "plane,monitor_index,update",
+    [
+        ("xy", 0, {"theta": [0]}),
+        ("xy", 1, {"y": [1]}),
+        ("xy", 2, {"uy": [0.1]}),
+        ("yz", 0, {"phi": [0]}),
+        ("yz", 1, {"x": [1]}),
+        ("yz", 2, {"ux": [0.1]}),
+        ("xz", 0, {"phi": [np.pi / 2]}),
+        ("xz", 1, {"x": [1]}),
+        ("xz", 2, {"ux": [0.1]}),
+    ],
+)
+def test_2d_proj_clientside_invalid_monitor_settings(plane, monitor_index, update):
+    proj, center, monitor_size, f0 = make_2d_projector(plane)
+    monitor = make_2d_proj_monitors(center, monitor_size, [f0], plane)[monitor_index]
+    monitor = monitor.updated_copy(**update)
+
+    with pytest.raises(SetupError):
+        proj.project_fields(monitor)
 
 
 def test_2d_sim_with_proj_monitors_near():

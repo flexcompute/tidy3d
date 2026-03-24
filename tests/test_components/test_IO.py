@@ -22,6 +22,7 @@ from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 from ..test_data.test_monitor_data import make_flux_data
 from ..test_data.test_sim_data import make_sim_data
 from ..utils import SIM_FULL as SIM
+from ..utils import SIM_FULL_FIELD_PROJECTION as SIM_PROJECTION
 from ..utils import SIM_MONITORS as SIM2
 from ..utils import run_emulated
 
@@ -469,6 +470,23 @@ def test_simulation_preserve_types(tmp_path):
         td.FluxTimeMonitor,
     ):
         assert M in M_types
+
+
+def test_projection_simulation_preserve_monitor_types(tmp_path):
+    """Test that field-projection monitor types survive IO roundtrips."""
+
+    path = str(tmp_path / "projection_simulation.json")
+    SIM_PROJECTION.to_file(path)
+    sim_2 = td.Simulation.from_file(path)
+
+    monitor_types = [type(monitor) for monitor in sim_2.monitors]
+    for monitor_type in (
+        td.FieldProjectionAngleMonitor,
+        td.FieldProjectionCartesianMonitor,
+        td.FieldProjectionKSpaceMonitor,
+        td.DirectivityMonitor,
+    ):
+        assert monitor_type in monitor_types
 
 
 def test_1a_simulation_load_export2(tmp_path):

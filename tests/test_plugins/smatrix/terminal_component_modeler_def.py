@@ -626,7 +626,7 @@ def make_patch_antenna_simulation(padding: tuple[float, float, float] = (0.25, 0
     sim_z = sub_z + 2 * padding_um[2]
 
     # Define PMLs on all sides
-    boundary_spec = td.BoundarySpec.pml(x=True, y=False, z=True)
+    boundary_spec = td.BoundarySpec.pml(x=True, y=True, z=True)
 
     # Create simulation object
     sim = td.Simulation(

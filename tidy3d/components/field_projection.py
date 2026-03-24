@@ -38,6 +38,7 @@ from .monitor import (
     FieldProjectionSurface,
 )
 from .types import ArrayComplex4D, Axis, Coordinate
+from .validators import validate_field_projection_monitors_2d
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -619,6 +620,17 @@ class FieldProjector(Tidy3dBaseModel):
         _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
         coord_list = sim_data.simulation.grid.boundaries.to_list
         for idx in idx_uv:
+            coord_name = "xyz"[idx]
+
+            # Skip resampling along dimensions where the current data has only one source
+            # coordinate, such as the collapsed axis of a 2D simulation.
+            if any(
+                np.array(field_data.coords[coord_name]).size <= 1
+                for field_data in currents.field_components.values()
+                if field_data is not None
+            ):
+                continue
+
             # pick sample points on the monitor and handle the possibility of an "infinite" monitor
             # Fields within PML regions are included, to match the server-side computation.
             start = np.maximum(
@@ -1103,6 +1115,7 @@ class FieldProjector(Tidy3dBaseModel):
         """
         if freq_chunk_size is not None and freq_chunk_size < 1:
             raise ValueError(f"Expected 'freq_chunk_size >= 1', got {freq_chunk_size}.")
+        validate_field_projection_monitors_2d((proj_monitor,), self.sim_data.simulation.size)
         if isinstance(proj_monitor, FieldProjectionAngleMonitor):
             return self._project_fields_angular(proj_monitor, verbose=verbose)
         if isinstance(proj_monitor, FieldProjectionCartesianMonitor):

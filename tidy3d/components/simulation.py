@@ -88,7 +88,6 @@ from .monitor import (
     DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
-    FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     FieldTimeMonitor,
     FluxMonitor,
@@ -125,6 +124,7 @@ from .validators import (
     assert_objects_in_sim_bounds,
     call_wrapped_validator,
     named_obj_descr,
+    validate_field_projection_monitors_2d,
     validate_mode_objects_symmetry,
 )
 from .viz import (
@@ -3173,6 +3173,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_absorber_in_zero_dims()
         self._warn_monitor_mediums_frequency_range()
         self._warn_monitor_simulation_frequency_range()
+        self._projection_monitors_boundaries()
         self._diffraction_monitor_boundaries()
         self._projection_monitors_homogeneous()
         self._abc_boundaries_homogeneous()
@@ -4028,6 +4029,24 @@ class Simulation(AbstractYeeGridSimulation):
                         )
         return self
 
+    def _projection_monitors_boundaries(self) -> Self:
+        """Error if 3D field projection monitors are used with periodic or Bloch boundaries."""
+        monitors = self.monitors
+
+        if not monitors or self.size.count(0.0) != 0 or not any(self._periodic):
+            return self
+
+        for monitor in monitors:
+            if isinstance(monitor, AbstractFieldProjectionMonitor):
+                raise SetupError(
+                    f"Monitor '{monitor.name}' of type '{monitor.type}' cannot be used with "
+                    "periodic/Bloch boundaries in 3D simulations. This projection would "
+                    "require a periodic Green's function. Please use 'DiffractionMonitor' for "
+                    "transmission/reflection analysis with periodic/Bloch boundaries."
+                )
+
+        return self
+
     def _projection_mnts_2d(self) -> Self:
         """
         Validate if the field projection monitor is set up for a 2D simulation and
@@ -4040,96 +4059,7 @@ class Simulation(AbstractYeeGridSimulation):
         Note: Exact far field projection is not available yet. Currently, only
         ``far_field_approx = True`` is supported.
         """
-        val = self.monitors
-
-        if val is None:
-            return self
-
-        sim_size = self.size
-
-        # Validation if is 3D simulation
-        non_zero_dims = sum(1 for size in sim_size if size != 0)
-        if non_zero_dims == 3:
-            return self
-
-        if sim_size[0] == 0:
-            plane = "y-z"
-        elif sim_size[1] == 0:
-            plane = "x-z"
-        elif sim_size[2] == 0:
-            plane = "x-y"
-
-        for monitor in val:
-            if isinstance(monitor, AbstractFieldProjectionMonitor):
-                if non_zero_dims == 1:
-                    raise SetupError(
-                        f"Monitor '{monitor.name}' is not supported in 1D simulations."
-                    )
-
-                if not monitor.far_field_approx:
-                    raise SetupError(
-                        f"Exact far-field projection for 2D simulations is not yet available for Monitor '{monitor.name}'. "
-                        "Currently, only 'far_field_approx = True' is supported."
-                    )
-
-                if isinstance(monitor, FieldProjectionAngleMonitor):
-                    config = {
-                        "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
-                        "x-z": {"valid_value": [0, np.pi], "coord": "phi"},
-                        "x-y": {"valid_value": [np.pi / 2], "coord": "theta"},
-                    }[plane]
-
-                    coord = getattr(monitor, config["coord"])
-                    if not all(value in config["valid_value"] for value in coord):
-                        replacements = {
-                            np.pi: "np.pi",
-                            np.pi / 2: "np.pi/2",
-                            3 * np.pi / 2: "3*np.pi/2",
-                            0: "0",
-                        }
-                        valid_values_str = ", ".join(
-                            replacements.get(val) for val in config["valid_value"]
-                        )
-                        raise SetupError(
-                            f"For a 2D simulation in the {plane} plane, the observation "
-                            f"angle '{config['coord']}' of monitor "
-                            f"'{monitor.name}' should be set to "
-                            f"'{valid_values_str}'"
-                        )
-
-                    continue
-
-                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
-                    config = {
-                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
-                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
-                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
-                    }[plane]
-                elif isinstance(monitor, (FieldProjectionKSpaceMonitor)):
-                    config = {
-                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["ux", "ux"]},
-                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["ux", "uy"]},
-                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["uy", "uy"]},
-                    }[plane]
-
-                valid_proj_axes = config["valid_proj_axes"]
-                invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
-
-                if monitor.proj_axis in invalid_proj_axis:
-                    raise SetupError(
-                        f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
-                        f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
-                    )
-
-                for idx, axis in enumerate(valid_proj_axes):
-                    coord = getattr(monitor, config["coord"][idx])
-                    if monitor.proj_axis == axis and not all(value in [0] for value in coord):
-                        raise SetupError(
-                            f"For a 2D simulation in the {plane} plane with "
-                            f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
-                            f"'{monitor.name}' should be set to '[0]'."
-                        )
-
+        validate_field_projection_monitors_2d(self.monitors, self.size)
         return self
 
     def _diffraction_and_directivity_monitor_medium(self) -> Self:

@@ -408,6 +408,79 @@ tracer = new_box(1.0, 0, start_node)
 tracer_arr = new_box(np.array([[[1.0]]]), 0, start_node)
 
 
+SIM_FULL_COMMON_MONITORS = (
+    td.FieldMonitor(
+        size=(0, 0, 0), center=(0, 0, 0), fields=("Ex",), freqs=[1.5e14, 2e14], name="field"
+    ),
+    td.FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
+    td.AuxFieldTimeMonitor(
+        size=(0, 0, 0), center=(0, 0, 0), fields=("Nfx",), name="aux_field_time", interval=100
+    ),
+    td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
+    td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
+    td.PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
+    td.MediumMonitor(size=(1, 1, 0.1), name="mat", freqs=[1e14]),
+    td.ModeMonitor(
+        size=(1, 1, 0),
+        center=(0, 0, 0),
+        name="mode",
+        freqs=[2e14, 2.5e14],
+        mode_spec=td.ModeSpec(),
+    ),
+)
+
+SIM_FULL_PROJECTION_MONITORS = (
+    td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(0, 2, 2),
+        freqs=[250e12, 300e12],
+        name="proj_angle",
+        custom_origin=(1, 2, 3),
+        phi=[0, np.pi / 6],
+        theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
+    ),
+    td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(0, 2, 2),
+        freqs=[250e12, 300e12],
+        name="proj_cartesian",
+        custom_origin=(1, 2, 3),
+        x=[-1, 0, 1],
+        y=[-2, -1, 0, 1, 2],
+        proj_axis=2,
+        proj_distance=5,
+    ),
+    td.FieldProjectionKSpaceMonitor(
+        center=(0, 0, 0),
+        size=(0, 2, 2),
+        freqs=[250e12, 300e12],
+        name="proj_kspace",
+        custom_origin=(1, 2, 3),
+        proj_axis=2,
+        ux=[0.02, 0.04],
+        uy=[0.03, 0.04, 0.05],
+    ),
+    td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(0, 2, 2),
+        freqs=[250e12, 300e12],
+        name="proj_angle_exact",
+        custom_origin=(1, 2, 3),
+        phi=[0, np.pi / 8],
+        theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
+        far_field_approx=False,
+    ),
+    td.DirectivityMonitor(
+        center=(0, 0, 0),
+        size=(0, 2, 2),
+        freqs=[250e12, 300e12],
+        name="directivity",
+        custom_origin=(1, 2, 3),
+        phi=[0, np.pi / 6],
+        theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
+    ),
+)
+
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
@@ -810,73 +883,7 @@ SIM_FULL = td.Simulation(
         ),
     ),
     monitors=(
-        td.FieldMonitor(
-            size=(0, 0, 0), center=(0, 0, 0), fields=("Ex",), freqs=[1.5e14, 2e14], name="field"
-        ),
-        td.FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
-        td.AuxFieldTimeMonitor(
-            size=(0, 0, 0), center=(0, 0, 0), fields=("Nfx",), name="aux_field_time", interval=100
-        ),
-        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
-        td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
-        td.PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
-        td.MediumMonitor(size=(1, 1, 0.1), name="mat", freqs=[1e14]),
-        td.ModeMonitor(
-            size=(1, 1, 0),
-            center=(0, 0, 0),
-            name="mode",
-            freqs=[2e14, 2.5e14],
-            mode_spec=td.ModeSpec(),
-        ),
-        td.FieldProjectionAngleMonitor(
-            center=(0, 0, 0),
-            size=(0, 2, 2),
-            freqs=[250e12, 300e12],
-            name="proj_angle",
-            custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 6],
-            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
-        ),
-        td.FieldProjectionCartesianMonitor(
-            center=(0, 0, 0),
-            size=(0, 2, 2),
-            freqs=[250e12, 300e12],
-            name="proj_cartesian",
-            custom_origin=(1, 2, 3),
-            x=[-1, 0, 1],
-            y=[-2, -1, 0, 1, 2],
-            proj_axis=2,
-            proj_distance=5,
-        ),
-        td.FieldProjectionKSpaceMonitor(
-            center=(0, 0, 0),
-            size=(0, 2, 2),
-            freqs=[250e12, 300e12],
-            name="proj_kspace",
-            custom_origin=(1, 2, 3),
-            proj_axis=2,
-            ux=[0.02, 0.04],
-            uy=[0.03, 0.04, 0.05],
-        ),
-        td.FieldProjectionAngleMonitor(
-            center=(0, 0, 0),
-            size=(0, 2, 2),
-            freqs=[250e12, 300e12],
-            name="proj_angle_exact",
-            custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 8],
-            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
-            far_field_approx=False,
-        ),
-        td.DirectivityMonitor(
-            center=(0, 0, 0),
-            size=(0, 2, 2),
-            freqs=[250e12, 300e12],
-            name="directivity",
-            custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 6],
-            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
-        ),
+        *SIM_FULL_COMMON_MONITORS,
         td.DiffractionMonitor(
             size=(0, td.inf, td.inf),
             center=(0, 0, 0),
@@ -923,6 +930,15 @@ SIM_FULL = td.Simulation(
                 medium=td.Medium(permittivity=2.0),
             ),
         ),
+    ),
+)
+
+SIM_FULL_FIELD_PROJECTION = SIM_FULL.updated_copy(
+    monitors=(*SIM_FULL_COMMON_MONITORS, *SIM_FULL_PROJECTION_MONITORS),
+    boundary_spec=td.BoundarySpec(
+        x=td.Boundary(plus=td.PML(num_layers=20), minus=td.Absorber(num_layers=100)),
+        y=td.Boundary.pml(num_layers=12),
+        z=td.Boundary.pml(num_layers=12),
     ),
 )
 
@@ -1122,6 +1138,7 @@ FULL_CHARGE = td.HeatChargeSimulation(
 
 SAMPLE_SIMULATIONS = {
     "full_fdtd": SIM_FULL,
+    "full_fdtd_field_projection": SIM_FULL_FIELD_PROJECTION,
     "full_steady_heat": FULL_STEADY_HEAT,
     "full_unsteady_heat": FULL_UNSTEADY_HEAT,
     "full_conduction": FULL_CONDUCTION,

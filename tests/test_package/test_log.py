@@ -113,22 +113,8 @@ def test_logging_warning_capture():
         name="time",
     )
 
-    # 1 warning: too big proj distance
-    proj_mnt = td.FieldProjectionCartesianMonitor(
-        center=(0, 0, 0),
-        size=(2, 2, 2),
-        freqs=[250e12, 300e12],
-        name="n2f_monitor",
-        custom_origin=(1, 2, 3),
-        x=[-1, 0, 1],
-        y=[-2, -1, 0, 1, 2],
-        proj_axis=2,
-        proj_distance=1e10,
-        far_field_approx=False,
-    )
-
     # 2 warnings * 4 sources = 8 total: too close to each PML
-    # 1 warning * 3 DFT monitors = 3 total: medium frequency range does not cover monitors freqs
+    # 1 warning * 2 DFT monitors = 2 total: medium frequency range does not cover monitors freqs
     box = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(11.5, 11.5, 11.5)),
         medium=td.Medium(permittivity=2, frequency_range=[0.5, 1]),
@@ -180,7 +166,9 @@ def test_logging_warning_capture():
 
     # 1 warning: bloch boundary is inconsistent with plane_wave
     bspec = td.BoundarySpec(
-        x=td.Boundary.pml(), y=td.Boundary.periodic(), z=td.Boundary.bloch(bloch_vec=0.2)
+        x=td.Boundary.pml(),
+        y=td.Boundary.periodic(),
+        z=td.Boundary.bloch(bloch_vec=0.2),
     )
 
     # 1 warning * 1 structures (perm=20) * 4 sources = 20 total: large grid step along x
@@ -197,8 +185,7 @@ def test_logging_warning_capture():
         size=[domain_size, 20, 20],
         sources=[gaussian_beam, mode_source, plane_wave, tfsf],
         structures=[box, box_in_pml, box_on_boundary, box_outside],
-        # monitors=[monitor_flux, mode_mnt, monitor_time, proj_mnt],
-        monitors=[monitor_flux, mode_mnt, proj_mnt],
+        monitors=[monitor_flux, mode_mnt],
         run_time=run_time,
         boundary_spec=bspec,
         grid_spec=gspec,
@@ -206,12 +193,6 @@ def test_logging_warning_capture():
 
     # parse the entire simulation at once to capture warnings hierarchically
     sim_dict = sim.model_dump()
-
-    # re-add projection monitors because it has been overwritten in validators (far_field_approx=False -> True)
-    monitors = list(sim_dict["monitors"])
-    monitors[2] = proj_mnt.model_dump()
-
-    sim_dict["monitors"] = monitors
 
     sim = td.Simulation.model_validate(sim_dict)
     print(sim.monitors_data_size)

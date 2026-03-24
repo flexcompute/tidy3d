@@ -19,6 +19,7 @@ from tidy3d.plugins.mode import ModeSolver
 
 from ..utils import (
     SIM_FULL,
+    SIM_FULL_FIELD_PROJECTION,
     AssertLogLevel,
     AssertLogLevelHandler,
     AssertLogStr,
@@ -1337,7 +1338,7 @@ def test_sim_monitor_homogeneous():
             sources=(src,),
             run_time=1e-12,
             monitors=(monitor,),
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
         )
 
         # with non-transparent box, raise
@@ -1349,7 +1350,7 @@ def test_sim_monitor_homogeneous():
                 sources=(src,),
                 monitors=(monitor,),
                 run_time=1e-12,
-                boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+                boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
             )
 
     # will be removed in 3.0
@@ -1382,8 +1383,45 @@ def test_sim_monitor_homogeneous():
         sources=(src,),
         monitors=(monitor_n2f_vol_exclude,),
         run_time=1e-12,
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
+
+
+def test_proj_monitor_periodic_bloch_boundaries_3d():
+    """Make sure 3D field projection monitors error with periodic or Bloch boundaries."""
+
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(2, 2, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[0],
+        phi=[0],
+        proj_distance=1e5,
+    )
+    src = td.PointDipole(
+        center=(0, 0, 0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
+    )
+
+    for boundary_spec in (
+        td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        td.BoundarySpec(
+            x=td.Boundary.bloch(bloch_vec=0.2),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        ),
+    ):
+        with pytest.raises(ValidationError, match="periodic/Bloch boundaries"):
+            _ = td.Simulation(
+                size=(2.2, 2.2, 2),
+                structures=(),
+                sources=(src,),
+                run_time=1e-12,
+                boundary_spec=boundary_spec,
+                monitors=(monitor_n2f,),
+            )
 
 
 def test_proj_monitor_distance():
@@ -1440,7 +1478,7 @@ def test_proj_monitor_distance():
             sources=(src,),
             run_time=1e-12,
             monitors=(monitor_n2f_far,),
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
         )
 
     # proj_distance not too large - don't warn
@@ -1452,7 +1490,7 @@ def test_proj_monitor_distance():
             run_time=1e-12,
             monitors=(monitor_n2f,),
             grid_spec=td.GridSpec.auto(wavelength=src.source_time.freq0),
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
         )
 
     # proj_distance large but using approximations - don't warn
@@ -1464,7 +1502,7 @@ def test_proj_monitor_distance():
             run_time=1e-12,
             monitors=(monitor_n2f_approx,),
             grid_spec=td.GridSpec.auto(wavelength=src.source_time.freq0),
-            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
         )
 
 
@@ -3048,7 +3086,7 @@ def test_sim_subsection(unstructured, nz):
             x=td.Boundary.pml(),
             y=td.Boundary.periodic(),
             z=td.Boundary.periodic(),
-        )
+        ),
     )
     # Need to update BCs to be symmetrice when we include symmetries
     sim_red = sim_full_sym.subsection(
@@ -3110,7 +3148,9 @@ def test_sim_subsection(unstructured, nz):
 
     # check grid is preserved when requested
     sim_red = SIM_FULL.subsection(
-        region=region, grid_spec="identical", boundary_spec=td.BoundarySpec.all_sides(td.Periodic())
+        region=region,
+        grid_spec="identical",
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
     )
     grids_1d = SIM_FULL.grid.boundaries
     grids_1d_red = sim_red.grid.boundaries
@@ -3126,14 +3166,14 @@ def test_sim_subsection(unstructured, nz):
 
     subsection_monitors = (
         mnt
-        for mnt in SIM_FULL.monitors
+        for mnt in SIM_FULL_FIELD_PROJECTION.monitors
         if region_xy.intersects(mnt)
         and getattr(mnt, "far_field_approx", True)  # unsupported in 2d
         and not isinstance(
             mnt, (td.FieldProjectionCartesianMonitor, td.FieldProjectionKSpaceMonitor)
         )
     )
-    sim_red = SIM_FULL.subsection(
+    sim_red = SIM_FULL_FIELD_PROJECTION.subsection(
         region=region_xy,
         grid_spec="identical",
         boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),

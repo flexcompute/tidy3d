@@ -24,7 +24,6 @@ from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
 from .test_monitor_data import (
     make_aux_field_time_data,
     make_diffraction_data,
-    make_directivity_data,
     make_field_data,
     make_field_time_data,
     make_flux_data,
@@ -52,7 +51,6 @@ MODE_SOLVER = make_mode_solver_data()
 FLUX = make_flux_data()
 FLUX_TIME = make_flux_time_data()
 DIFFRACTION = make_diffraction_data()
-DIRECTIVITY = make_directivity_data()
 
 # for constructing SimulationData
 MONITOR_DATA = (
@@ -65,7 +63,6 @@ MONITOR_DATA = (
     FLUX,
     FLUX_TIME,
     DIFFRACTION,
-    DIRECTIVITY,
     MODE_SOLVER,
 )
 MONITOR_DATA_SYM = (
@@ -78,7 +75,6 @@ MONITOR_DATA_SYM = (
     FLUX,
     FLUX_TIME,
     DIFFRACTION,
-    DIRECTIVITY,
     MODE_SOLVER,
 )
 MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
