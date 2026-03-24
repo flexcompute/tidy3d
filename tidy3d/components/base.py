@@ -70,6 +70,7 @@ MAX_STRING_LENGTH = 1_000_000_000
 FORBID_SPECIAL_CHARACTERS = ["/"]
 TRACED_FIELD_KEYS_ATTR = "__tidy3d_traced_field_keys__"
 TYPE_TO_CLASS_MAP: dict[str, type[Tidy3dBaseModel]] = {}
+_LAZY_PROXY_UNHANDLED = object()
 
 _CacheReturn = TypeVar("_CacheReturn")
 
@@ -859,6 +860,28 @@ class Tidy3dBaseModel(BaseModel):
         >>> simulation.help(methods=True) # doctest: +SKIP
         """
         rich.inspect(type(self), methods=methods)
+
+    @classmethod
+    def _lazy_proxy_copy_state_keys(cls) -> tuple[str, ...]:
+        """Return names of extra lazy-proxy state fields to preserve across ``copy()``."""
+
+        return ()
+
+    @classmethod
+    def _lazy_proxy_resolve_attr(cls, proxy: Any, name: str, lazy_state: dict[str, Any]) -> Any:
+        """Return a lazily resolved attribute value or ``_LAZY_PROXY_UNHANDLED``."""
+
+        return _LAZY_PROXY_UNHANDLED
+
+    @classmethod
+    def _lazy_proxy_materialize(cls, lazy_state: dict[str, Any]) -> Self:
+        """Build the fully loaded target instance for a lazy proxy."""
+
+        model_dict = cls.dict_from_file(
+            fname=lazy_state["_lazy_fname"],
+            group_path=lazy_state["_lazy_group_path"],
+        )
+        return cls._validate_model_dict(model_dict, **lazy_state["_lazy_parse_obj_kwargs"])
 
     @classmethod
     def from_file(
@@ -1975,20 +1998,50 @@ def _make_lazy_proxy(
 
     proxy_name = f"{target_cls.__name__}Proxy"
 
+    def materialize_proxy(proxy: Tidy3dBaseModel, target: Tidy3dBaseModel) -> None:
+        """Replace a lazy proxy instance with a fully loaded target instance."""
+
+        d = object.__getattribute__(proxy, "__dict__")
+        d.clear()
+        d.update(target.__dict__)
+
+        object.__setattr__(proxy, "__class__", target.__class__)
+        fields_set = getattr(target, "__pydantic_fields_set__", None)
+        if fields_set is not None:
+            object.__setattr__(proxy, "__pydantic_fields_set__", set(fields_set))
+
+        pvt = getattr(target, "__pydantic_private__", None)
+        if pvt is not None:
+            object.__setattr__(proxy, "__pydantic_private__", pvt)
+
+        object.__setattr__(proxy, "__pydantic_extra__", getattr(target, "__pydantic_extra__", None))
+
+        if on_load is not None:
+            on_load(proxy)
+
     class _LazyProxy(target_cls):  # type: ignore[misc]
         def __init__(
             self,
             fname: PathLike,
             group_path: Optional[str],
             parse_obj_kwargs: Any,
+            **lazy_state: Any,
         ) -> None:
             # store lazy context only in __dict__
             object.__setattr__(self, "_lazy_fname", Path(fname))
             object.__setattr__(self, "_lazy_group_path", group_path)
             object.__setattr__(self, "_lazy_parse_obj_kwargs", dict(parse_obj_kwargs or {}))
+            for key, value in lazy_state.items():
+                object.__setattr__(self, f"_lazy_{key}", value)
 
         def copy(self, **kwargs: Any) -> Self:
             """Return another lazy proxy instead of materializing."""
+            d = object.__getattribute__(self, "__dict__")
+            copy_state = {
+                key: d[f"_lazy_{key}"]
+                for key in target_cls._lazy_proxy_copy_state_keys()
+                if f"_lazy_{key}" in d
+            }
             return _LazyProxy(
                 object.__getattribute__(self, "_lazy_fname"),
                 object.__getattribute__(self, "_lazy_group_path"),
@@ -1996,6 +2049,7 @@ def _make_lazy_proxy(
                     **object.__getattribute__(self, "_lazy_parse_obj_kwargs"),
                     **kwargs,
                 },
+                **copy_state,
             )
 
         def __getattribute__(self, name: str) -> Any:
@@ -2013,32 +2067,11 @@ def _make_lazy_proxy(
             d = object.__getattribute__(self, "__dict__")
 
             if "_lazy_fname" in d:
-                fname = d["_lazy_fname"]
-                group_path = d["_lazy_group_path"]
-                kwargs = d["_lazy_parse_obj_kwargs"]
-
-                # Build the real instance
-                model_dict = target_cls.dict_from_file(fname=fname, group_path=group_path)
-                target = target_cls._validate_model_dict(model_dict, **kwargs)
-
-                d.clear()
-                d.update(target.__dict__)
-
-                object.__setattr__(self, "__class__", target.__class__)
-                fields_set = getattr(target, "__pydantic_fields_set__", None)
-                if fields_set is not None:
-                    object.__setattr__(self, "__pydantic_fields_set__", set(fields_set))
-
-                pvt = getattr(target, "__pydantic_private__", None)
-                if pvt is not None:
-                    object.__setattr__(self, "__pydantic_private__", pvt)
-
-                object.__setattr__(
-                    self, "__pydantic_extra__", getattr(target, "__pydantic_extra__", None)
-                )
-
-                if on_load is not None:
-                    on_load(self)
+                resolved = target_cls._lazy_proxy_resolve_attr(self, name, d)
+                if resolved is not _LAZY_PROXY_UNHANDLED:
+                    return resolved
+                target = target_cls._lazy_proxy_materialize(d)
+                materialize_proxy(self, target)
 
             return object.__getattribute__(self, name)
 

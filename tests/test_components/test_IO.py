@@ -317,6 +317,121 @@ def test_simulation_data_from_file_monitor_names_requires_hdf5(tmp_path):
         td.SimulationData.from_file(path, monitor_names="flux_000")
 
 
+def test_simulation_data_lazy_monitor_access_loads_only_requested_data(monkeypatch, tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.h5")
+    sim_data.to_hdf5(path)
+
+    loaded_paths = []
+    original_from_hdf5 = DataArray.from_hdf5.__func__
+
+    def tracking_from_hdf5(cls, fname, group_path):
+        loaded_paths.append(str(group_path).strip("/"))
+        return original_from_hdf5(cls, fname, group_path)
+
+    monkeypatch.setattr(DataArray, "from_hdf5", classmethod(tracking_from_hdf5))
+
+    lazy_data = td.SimulationData.from_file(path, lazy=True)
+
+    assert "_lazy_fname" in lazy_data.__dict__
+    assert [monitor.name for monitor in lazy_data.simulation.monitors] == [
+        "flux_000",
+        "flux_001",
+        "flux_002",
+        "flux_003",
+    ]
+    assert "_lazy_fname" in lazy_data.__dict__
+
+    flux_data = lazy_data["flux_003"]
+
+    assert isinstance(flux_data, td.FluxData)
+    assert flux_data.monitor.name == "flux_003"
+    assert loaded_paths == ["data/3/flux"]
+    assert "_lazy_fname" in lazy_data.__dict__
+
+
+def test_simulation_data_lazy_monitor_names_stay_selective(tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_file(path)
+
+    lazy_data = td.SimulationData.from_file(
+        path, lazy=True, monitor_names=("flux_003", "flux_001", "flux_003")
+    )
+
+    assert "_lazy_fname" in lazy_data.__dict__
+    assert [monitor.name for monitor in lazy_data.simulation.monitors] == [
+        "flux_001",
+        "flux_003",
+    ]
+    assert list(lazy_data.monitor_data) == ["flux_001", "flux_003"]
+    assert lazy_data["flux_003"].monitor.name == "flux_003"
+    assert "_lazy_fname" in lazy_data.__dict__
+
+    with pytest.raises(KeyError):
+        lazy_data["flux_000"]
+
+
+def test_simulation_data_lazy_monitor_membership_stays_lazy(monkeypatch, tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_hdf5(path)
+
+    loaded_paths = []
+    original_from_hdf5 = DataArray.from_hdf5.__func__
+
+    def tracking_from_hdf5(cls, fname, group_path):
+        loaded_paths.append(str(group_path).strip("/"))
+        return original_from_hdf5(cls, fname, group_path)
+
+    monkeypatch.setattr(DataArray, "from_hdf5", classmethod(tracking_from_hdf5))
+
+    lazy_data = td.SimulationData.from_file(path, lazy=True)
+
+    assert "flux_001" in lazy_data.monitor_data
+    assert "flux_999" not in lazy_data.monitor_data
+    assert loaded_paths == []
+
+    flux_data = lazy_data.monitor_data["flux_001"]
+
+    assert flux_data.monitor.name == "flux_001"
+    assert loaded_paths == ["data/1/flux"]
+
+
+def test_simulation_data_lazy_get_monitor_by_name_stays_lazy(tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_file(path)
+
+    lazy_data = td.SimulationData.from_file(path, lazy=True)
+
+    assert "_lazy_fname" in lazy_data.__dict__
+    monitor = lazy_data.get_monitor_by_name("flux_003")
+
+    assert monitor.name == "flux_003"
+    assert "_lazy_fname" in lazy_data.__dict__
+
+
+def test_simulation_data_lazy_data_materializes_selected_subset(tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=4)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_file(path)
+
+    lazy_data = td.SimulationData.from_file(path, lazy=True, monitor_names=("flux_001", "flux_003"))
+
+    assert "_lazy_fname" in lazy_data.__dict__
+
+    data = lazy_data.data
+
+    assert "_lazy_fname" not in lazy_data.__dict__
+    assert isinstance(lazy_data, td.SimulationData)
+    assert [monitor_data.monitor.name for monitor_data in data] == ["flux_001", "flux_003"]
+    assert [monitor.name for monitor in lazy_data.simulation.monitors] == [
+        "flux_001",
+        "flux_003",
+    ]
+
+
 def test_simulation_load_export_pckl(tmp_path):
     path = str(tmp_path / "simulation.pckl")
     with open(path, "wb") as pickle_file:
@@ -431,6 +546,43 @@ def test_simulation_data_selective_monitor_load_speed(tmp_path):
     print(
         f"Selective SimulationData load benchmark \t {file_size:.1e} bytes \t "
         f"full: {full_time * 1e3:.2f} ms \t selective: {selective_time * 1e3:.2f} ms \t "
+        f"speedup: {speedup:.2f}x"
+    )
+
+
+@pytest.mark.perf
+def test_simulation_data_lazy_monitor_access_speed(tmp_path):
+    sim_data = make_many_flux_monitor_sim_data(num_monitors=256)
+    path = str(tmp_path / "many_flux.hdf5")
+    sim_data.to_file(path)
+
+    target_name = "flux_255"
+    num_repeats = 5
+
+    _ = td.SimulationData.from_file(path)[target_name]
+    _ = td.SimulationData.from_file(path, lazy=True)[target_name]
+
+    full_times = []
+    lazy_times = []
+    for _ in range(num_repeats):
+        time_start = time()
+        full_monitor_data = td.SimulationData.from_file(path)[target_name]
+        full_times.append(time() - time_start)
+
+        time_start = time()
+        lazy_monitor_data = td.SimulationData.from_file(path, lazy=True)[target_name]
+        lazy_times.append(time() - time_start)
+
+    assert full_monitor_data == lazy_monitor_data
+
+    full_time = np.median(full_times)
+    lazy_time = np.median(lazy_times)
+    file_size = os.path.getsize(path)
+    speedup = full_time / lazy_time
+
+    print(
+        f"Lazy SimulationData monitor access benchmark \t {file_size:.1e} bytes \t "
+        f"full: {full_time * 1e3:.2f} ms \t lazy: {lazy_time * 1e3:.2f} ms \t "
         f"speedup: {speedup:.2f}x"
     )
 

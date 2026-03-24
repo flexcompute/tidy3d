@@ -157,9 +157,15 @@ def test_stub_data_lazy_loading(tmp_path):
         # the type should be still SimulationData despite being lazy
         assert isinstance(sim_data, SimulationData)
 
-        # we expect a warning from the lazy object if some field is accessed
-        with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
+        # metadata-only lazy access should not force materialization or warnings
+        with AssertLogLevel(None):
             _ = sim_data_copy.monitor_data
+
+        assert "_lazy_fname" in sim_data_copy.__dict__
+
+        # warning is emitted once the full object is materialized
+        with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
+            _ = sim_data_copy.data
     finally:
         td.log.set_capture(False)
 

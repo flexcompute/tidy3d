@@ -7,6 +7,7 @@ import pathlib
 import re
 from abc import ABC
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, Union, get_args
 
@@ -16,7 +17,12 @@ import xarray as xr
 from pydantic import Field
 
 from tidy3d.components.autograd.utils import split_list
-from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.base import (
+    _LAZY_PROXY_UNHANDLED,
+    Tidy3dBaseModel,
+    _make_lazy_proxy,
+    cached_property,
+)
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.simulation import Simulation
@@ -34,6 +40,7 @@ from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
 from .monitor_data import AbstractFieldData, FieldTimeData
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from os import PathLike
     from typing import Callable, Optional
 
@@ -64,6 +71,30 @@ NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
 # If grouped Gaussian-like source center frequencies span more than this fraction of the
 # grouped center frequency, use a small multi-frequency source approximation.
 GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD = 0.2
+
+
+class _LazyMonitorDataMap(Mapping[str, MonitorDataType]):
+    """Mapping that loads monitor data lazily by name."""
+
+    def __init__(
+        self, monitor_names: tuple[str, ...], loader: Callable[[str], MonitorDataType]
+    ) -> None:
+        self._monitor_names = monitor_names
+        self._loader = loader
+
+    def __getitem__(self, monitor_name: str) -> MonitorDataType:
+        if monitor_name not in self._monitor_names:
+            raise KeyError(monitor_name)
+        return self._loader(monitor_name)
+
+    def __contains__(self, monitor_name: object) -> bool:
+        return monitor_name in self._monitor_names
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._monitor_names)
+
+    def __len__(self) -> int:
+        return len(self._monitor_names)
 
 
 class AdjointSourceInfo(Tidy3dBaseModel):
@@ -392,6 +423,105 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             field_monitor_name=field_monitor_name, field_name="E", val="abs^2"
         )
 
+    @classmethod
+    def _lazy_proxy_copy_state_keys(cls) -> tuple[str, ...]:
+        """Preserve selected monitor names when copying a lazy proxy."""
+
+        return ("monitor_names",)
+
+    @classmethod
+    def _lazy_proxy_supports_selective_loading(cls, lazy_state: dict[str, Any]) -> bool:
+        """Whether the lazy proxy can resolve metadata and monitor data selectively."""
+
+        suffix = pathlib.Path(lazy_state["_lazy_fname"]).suffix
+        group_path = cls._construct_group_path(lazy_state["_lazy_group_path"])
+        return suffix in {".hdf5", ".h5"} and group_path == "/"
+
+    @classmethod
+    def _lazy_proxy_ensure_metadata(cls, lazy_state: dict[str, Any]) -> None:
+        """Load simulation metadata needed for selective monitor access."""
+
+        if (
+            lazy_state.get("_lazy_simulation") is not None
+            and lazy_state.get("_lazy_monitor_data_map") is not None
+        ):
+            return
+
+        model_dict = cls.dict_from_file(
+            fname=lazy_state["_lazy_fname"],
+            group_path=cls._construct_group_path(lazy_state["_lazy_group_path"]),
+            load_data_arrays=False,
+        )
+        monitor_dicts = model_dict["simulation"]["monitors"]
+        requested_monitor_names = lazy_state.get("_lazy_monitor_names")
+        if requested_monitor_names is None:
+            selected_indices = tuple(range(len(monitor_dicts)))
+        else:
+            selected_indices = cls._selected_monitor_indices(monitor_dicts, requested_monitor_names)
+            model_dict["simulation"]["monitors"] = [
+                monitor_dicts[index] for index in selected_indices
+            ]
+
+        simulation_type = cls.model_fields["simulation"].annotation
+        lazy_state["_lazy_simulation"] = simulation_type.model_validate(model_dict["simulation"])
+        lazy_state["_lazy_selected_monitor_names"] = tuple(
+            monitor_dicts[index]["name"] for index in selected_indices
+        )
+        lazy_state["_lazy_monitor_data"] = {}
+        lazy_state["_lazy_monitor_data_map"] = _LazyMonitorDataMap(
+            lazy_state["_lazy_selected_monitor_names"],
+            lambda monitor_name: cls._lazy_proxy_load_monitor_data(lazy_state, monitor_name),
+        )
+
+    @classmethod
+    def _lazy_proxy_load_monitor_data(
+        cls, lazy_state: dict[str, Any], monitor_name: str
+    ) -> MonitorDataType:
+        """Load and cache one monitor's data without materializing the full model."""
+
+        cls._lazy_proxy_ensure_metadata(lazy_state)
+        selected_monitor_names = lazy_state["_lazy_selected_monitor_names"]
+        if monitor_name not in selected_monitor_names:
+            raise KeyError(monitor_name)
+
+        loaded_monitor_data = lazy_state["_lazy_monitor_data"]
+        if monitor_name not in loaded_monitor_data:
+            loaded_monitor_data[monitor_name] = cls.mnt_data_from_file(
+                lazy_state["_lazy_fname"],
+                mnt_name=monitor_name,
+                **lazy_state["_lazy_parse_obj_kwargs"],
+            )
+        return loaded_monitor_data[monitor_name]
+
+    @classmethod
+    def _lazy_proxy_resolve_attr(cls, proxy: Any, name: str, lazy_state: dict[str, Any]) -> Any:
+        """Resolve SimulationData metadata attributes lazily without full materialization."""
+
+        if not cls._lazy_proxy_supports_selective_loading(lazy_state):
+            return _LAZY_PROXY_UNHANDLED
+        if name == "simulation":
+            cls._lazy_proxy_ensure_metadata(lazy_state)
+            return lazy_state["_lazy_simulation"]
+        if name == "monitor_data":
+            cls._lazy_proxy_ensure_metadata(lazy_state)
+            return lazy_state["_lazy_monitor_data_map"]
+        if name == "get_monitor_by_name":
+            cls._lazy_proxy_ensure_metadata(lazy_state)
+            return lazy_state["_lazy_simulation"].get_monitor_by_name
+        return _LAZY_PROXY_UNHANDLED
+
+    @classmethod
+    def _lazy_proxy_materialize(cls, lazy_state: dict[str, Any]) -> Self:
+        """Materialize the full selected SimulationData instance for a lazy proxy."""
+
+        return cls.from_file(
+            fname=lazy_state["_lazy_fname"],
+            group_path=lazy_state["_lazy_group_path"],
+            lazy=False,
+            monitor_names=lazy_state.get("_lazy_monitor_names"),
+            **lazy_state["_lazy_parse_obj_kwargs"],
+        )
+
     @staticmethod
     def _selected_monitor_indices(
         monitor_dicts: list[dict[str, Any]], monitor_names: str | list[str] | tuple[str, ...]
@@ -442,8 +572,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         >>> field_data = your_simulation_data.from_file(fname='folder/data.hdf5', mnt_name="field") # doctest: +SKIP
         """
 
-        if pathlib.Path(fname).suffix != ".hdf5":
-            raise ValueError("'mnt_data_from_file' only works with '.hdf5' files.")
+        if pathlib.Path(fname).suffix not in {".hdf5", ".h5"}:
+            raise ValueError("'mnt_data_from_file' only works with '.hdf5' or '.h5' files.")
 
         # open file and ensure it has data
         with h5py.File(fname) as f_handle:
@@ -493,15 +623,16 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 **parse_obj_kwargs,
             )
 
-        if lazy:
-            raise ValueError("'monitor_names' does not support 'lazy=True'.")
-
         if pathlib.Path(fname).suffix not in {".hdf5", ".h5"}:
             raise ValueError("'monitor_names' only works with '.hdf5' or '.h5' files.")
 
         group_path = cls._construct_group_path(group_path)
         if group_path != "/":
             raise ValueError("'monitor_names' can only be used when loading the full file.")
+
+        if lazy:
+            Proxy = _make_lazy_proxy(cls, on_load=on_load)
+            return Proxy(fname, group_path, parse_obj_kwargs, monitor_names=monitor_names)
 
         model_dict = cls.dict_from_file(fname=fname, group_path=group_path, load_data_arrays=False)
         monitor_dicts = model_dict["simulation"]["monitors"]
