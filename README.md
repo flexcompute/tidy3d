@@ -16,6 +16,7 @@ Tidy3D is a software package for solving extremely large electrodynamics problem
 
 This repository contains the python API to allow you to:
 
+
 * Programmatically define FDTD simulations.
 * Submit and manage simulations running on Flexcompute's servers.
 * Download and postprocess the results from the simulations.
