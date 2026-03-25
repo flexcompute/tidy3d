@@ -153,7 +153,7 @@ An anisotropic medium has different optical properties depending on the directio
    medium_zz = Medium(permittivity=3.9)
    my_anisotropic_medium = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
-Note that ``xx``, ``yy``, and ``zz`` can support dispersive mediums as well. To specify all 9 components of the tensor, use ``FullyAnisotropicMedium``:
+Note that ``xx``, ``yy``, and ``zz`` can support dispersive mediums as well. Because these diagonal entries are standard medium models, they also follow the usual material preprocessing path, including subpixel averaging where the relevant solver or workflow supports it. To specify all 9 components of the tensor, use ``FullyAnisotropicMedium``:
 
 .. code-block:: python
 
@@ -162,7 +162,7 @@ Note that ``xx``, ``yy``, and ``zz`` can support dispersive mediums as well. To 
    cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
    my_anisotropic_medium = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
 
-Currently, ``FullyAnisotropicMedium`` only supports non-dispersive mediums.
+Currently, ``FullyAnisotropicMedium`` only supports non-dispersive mediums and does not support subpixel averaging.
 
 The ``Medium2D`` class is used to simulate 2D materials without an out-of-plane response.
 

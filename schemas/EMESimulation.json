@@ -5242,6 +5242,14 @@
           ],
           "default": null
         },
+        "bend_medium_frame": {
+          "default": "global",
+          "enum": [
+            "co_rotating",
+            "global"
+          ],
+          "type": "string"
+        },
         "bend_radius": {
           "anyOf": [
             {
@@ -5279,6 +5287,11 @@
             }
           ],
           "default": false
+        },
+        "increasing_mode_tolerance": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "type": "number"
         },
         "interp_spec": {
           "anyOf": [

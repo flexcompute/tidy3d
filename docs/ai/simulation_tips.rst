@@ -116,6 +116,9 @@ EME (Eigenmode Expansion) is efficient for devices with slowly varying cross-sec
    eme_data = web.run(eme_sim, task_name="eme_taper")
 
 EME can sweep device length without re-solving modes using ``sweep_spec=td.EMELengthSweep(scale_factors=np.linspace(0.5, 2.0, 20))``.
+For broadband EME, prefer listing the target frequencies directly in ``EMESimulation.freqs`` and using ``td.EMEModeSpec(interp_spec=...)`` to tune the interpolation cost/accuracy tradeoff; ``EMEFreqSweep`` is deprecated.
+If EME drops weakly increasing modes because of tiny negative imaginary effective indices, set ``td.EMEModeSpec(increasing_mode_tolerance=...)``. A mode is dropped only when ``Im(n_eff)`` is more negative than that tolerance, so starting with a small value such as ``1e-6`` is usually appropriate; the default ``0.0`` preserves the previous behavior.
+For bent EME cells, choose ``td.EMEModeSpec(bend_medium_frame="global")`` when material axes are fixed in physical space, and ``"co_rotating"`` when the material profile should bend with the local cross-section. Bent custom media, including ``td.CustomAnisotropicMedium``, currently require ``"co_rotating"``, and global-frame anisotropic bends, including reciprocal ``td.FullyAnisotropicMedium``, may need multiple cells instead of reusing one bent cell, so check convergence versus the number of EME cells.
 
 .. list-table::
    :header-rows: 1

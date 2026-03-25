@@ -125,11 +125,29 @@ def test_validation_from_simulation():
         medium=td.Medium(permittivity=4.0, conductivity=1e-4),
     )
 
-    anisotropic_geometry = td.Structure(
+    anisotropic_sensitive_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=4.0, conductivity=1e-4),
+            yy=td.Medium(permittivity=3.0, conductivity=1e-4),
+            zz=td.Medium(permittivity=2.0, conductivity=1e-4),
+        ),
+    )
+
+    rotation_invariant_anisotropic_geometry = td.Structure(
         geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
         medium=td.AnisotropicMedium(
             xx=td.Medium(permittivity=4.0, conductivity=1e-4),
             yy=td.Medium(permittivity=4.0, conductivity=1e-4),
+            zz=td.Medium(permittivity=3.0, conductivity=1e-4),
+        ),
+    )
+
+    lossy_rotation_invariant_anisotropic_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=4.0, conductivity=1e8),
+            yy=td.Medium(permittivity=4.0, conductivity=1e8),
             zz=td.Medium(permittivity=3.0, conductivity=1e-4),
         ),
     )
@@ -150,23 +168,67 @@ def test_validation_from_simulation():
 
     # First test that a mode object can be added if there's no problem with the geometries
     _ = sim.updated_copy(structures=[reg_geometry], monitors=[rot_monitor])
+    _ = sim.updated_copy(
+        structures=[rotation_invariant_anisotropic_geometry], monitors=[rot_monitor]
+    )
+    _ = sim.updated_copy(
+        structures=[lossy_rotation_invariant_anisotropic_geometry], monitors=[rot_monitor]
+    )
+    _ = sim.updated_copy(
+        medium=rotation_invariant_anisotropic_geometry.medium,
+        monitors=[rot_monitor],
+    )
+    _ = sim.updated_copy(
+        medium=lossy_rotation_invariant_anisotropic_geometry.medium,
+        monitors=[rot_monitor],
+    )
 
     # Test that transforming a geometry with an infinite extent raises an error
     with pytest.raises((SetupError, pd.ValidationError)):
         sim.updated_copy(structures=[inf_geometry], monitors=[rot_monitor])
 
-    # Test that transforming an anisotropic medium raises an error
+    # Test that transforming an orientation-sensitive anisotropic medium raises an error
     with pytest.raises((SetupError, pd.ValidationError)):
-        sim.updated_copy(structures=[anisotropic_geometry], monitors=[rot_monitor])
+        sim.updated_copy(structures=[anisotropic_sensitive_geometry], monitors=[rot_monitor])
+    with pytest.raises((SetupError, pd.ValidationError)):
+        sim.updated_copy(medium=anisotropic_sensitive_geometry.medium, monitors=[rot_monitor])
 
     # Same thing with a ModeSource
+    _ = sim.updated_copy(structures=[rotation_invariant_anisotropic_geometry], sources=[rot_source])
+    _ = sim.updated_copy(
+        structures=[lossy_rotation_invariant_anisotropic_geometry], sources=[rot_source]
+    )
+    _ = sim.updated_copy(
+        medium=rotation_invariant_anisotropic_geometry.medium,
+        sources=[rot_source],
+    )
+    _ = sim.updated_copy(
+        medium=lossy_rotation_invariant_anisotropic_geometry.medium,
+        sources=[rot_source],
+    )
+
     with pytest.raises((SetupError, pd.ValidationError)):
         sim.updated_copy(structures=[inf_geometry], sources=[rot_source])
 
     with pytest.raises((SetupError, pd.ValidationError)):
-        sim.updated_copy(structures=[anisotropic_geometry], sources=[rot_source])
+        sim.updated_copy(structures=[anisotropic_sensitive_geometry], sources=[rot_source])
+    with pytest.raises((SetupError, pd.ValidationError)):
+        sim.updated_copy(medium=anisotropic_sensitive_geometry.medium, sources=[rot_source])
 
     # Same thing with ModeSimulation
+    td.ModeSimulation(
+        structures=[rotation_invariant_anisotropic_geometry],
+        size=(0, 5, 5),
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        freqs=[td.C_0],
+    )
+    td.ModeSimulation(
+        medium=rotation_invariant_anisotropic_geometry.medium,
+        size=(0, 5, 5),
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        freqs=[td.C_0],
+    )
+
     with pytest.raises((SetupError, pd.ValidationError)):
         td.ModeSimulation(
             structures=[inf_geometry],
@@ -177,11 +239,170 @@ def test_validation_from_simulation():
 
     with pytest.raises((SetupError, pd.ValidationError)):
         td.ModeSimulation(
-            structures=[anisotropic_geometry],
+            structures=[anisotropic_sensitive_geometry],
             size=(0, 5, 5),
             mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
             freqs=[td.C_0],
         )
+    with pytest.raises((SetupError, pd.ValidationError)):
+        td.ModeSimulation(
+            medium=anisotropic_sensitive_geometry.medium,
+            size=(0, 5, 5),
+            mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+            freqs=[td.C_0],
+        )
+
+
+def _matched_lorentz_media_xx_yy(freq0: float) -> tuple[td.Lorentz, td.Lorentz]:
+    """Two Lorentz media that agree at ``freq0`` but use different decompositions."""
+    eps_inf_xx = 2.0
+    delta_eps_xx = 1.0
+    resonance_xx = 1.5 * freq0
+    medium_xx = td.Lorentz(eps_inf=eps_inf_xx, coeffs=[(delta_eps_xx, resonance_xx, 0.0)])
+
+    eps_inf_yy = 1.5
+    resonance_yy = 2.0 * freq0
+    target_eps = medium_xx.eps_model(freq0).real
+    delta_eps_yy = (target_eps - eps_inf_yy) * (resonance_yy**2 - freq0**2) / resonance_yy**2
+    return (
+        medium_xx,
+        td.Lorentz(eps_inf=eps_inf_yy, coeffs=[(delta_eps_yy, resonance_yy, 0.0)]),
+    )
+
+
+def test_rotation_validation_accepts_dispersion_matched_components_at_solved_freq():
+    """Rotation validation should follow the solved complex permittivity tensor."""
+    freq0 = 2e14
+    medium_xx, medium_yy = _matched_lorentz_media_xx_yy(freq0)
+    assert np.isclose(medium_xx.eps_model(freq0), medium_yy.eps_model(freq0))
+    assert not np.isclose(medium_xx.sigma_model(freq0), medium_yy.sigma_model(freq0))
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=td.C_0 / freq0),
+        structures=[],
+        run_time=1e-12,
+        monitors=[],
+    )
+
+    structure = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
+        medium=td.AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=td.Medium(permittivity=2.5)),
+    )
+    monitor = td.ModeMonitor(
+        size=(0, 5, 5),
+        name="mode_solver",
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        freqs=[freq0],
+    )
+
+    _ = sim.updated_copy(structures=[structure], monitors=[monitor])
+
+
+def test_rotation_validation_freqs_match_mode_solver_sampling():
+    """Rotation validation must use the same sampling frequencies as the mode solver."""
+    freq0 = 2e14
+    mode_spec = td.ModeSpec(
+        angle_rotation=True,
+        angle_theta=np.pi / 4,
+        group_index_step=0.1,
+        sort_spec=td.ModeSortSpec(track_freq="central"),
+        interp_spec=td.ModeInterpSpec.uniform(num_points=3, method="linear"),
+    )
+
+    monitor_freqs = np.array([0.8, 1.0, 1.3, 1.7]) * freq0
+    monitor = td.ModeMonitor(
+        size=(0, 5, 5),
+        name="mode_monitor",
+        mode_spec=mode_spec,
+        freqs=monitor_freqs,
+    )
+    np.testing.assert_allclose(
+        ModeSolver._rotation_validation_freqs(monitor),
+        mode_spec._sampling_freqs_mode_solver(freqs=monitor_freqs),
+    )
+
+    source = td.ModeSource(
+        size=(0, 5, 5),
+        mode_spec=mode_spec,
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+        direction="+",
+        num_freqs=4,
+    )
+    np.testing.assert_allclose(
+        ModeSolver._rotation_validation_freqs(source),
+        mode_spec._sampling_freqs_mode_solver(freqs=source.frequency_grid),
+    )
+
+
+def test_rotation_validation_rejects_custom_anisotropic_media_with_matching_averages():
+    """Custom anisotropic media should not pass angled-mode validation via averaged tensors."""
+    coords = {"x": [-1.0, 1.0], "y": [-1.0, 1.0], "z": [-1.0, 1.0]}
+    xx = td.CustomMedium(
+        permittivity=td.SpatialDataArray(
+            np.array([[[2.0, 2.0], [2.0, 2.0]], [[4.0, 4.0], [4.0, 4.0]]]),
+            coords=coords,
+        )
+    )
+    yy = td.CustomMedium(
+        permittivity=td.SpatialDataArray(
+            np.array([[[4.0, 4.0], [4.0, 4.0]], [[2.0, 2.0], [2.0, 2.0]]]),
+            coords=coords,
+        )
+    )
+    zz = td.CustomMedium(permittivity=td.SpatialDataArray(5.0 * np.ones((2, 2, 2)), coords=coords))
+    structure = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -1), (1, 1, 1)),
+        medium=td.CustomAnisotropicMedium(xx=xx, yy=yy, zz=zz),
+    )
+
+    with pytest.raises((SetupError, pd.ValidationError)):
+        td.ModeSimulation(
+            structures=[structure],
+            size=(0, 5, 5),
+            mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+            freqs=[td.C_0],
+        )
+
+
+def test_validation_from_simulation_checks_group_index_rotation_sampling_freqs():
+    """Simulation validation should reject dispersive anisotropy at group-index sample points."""
+    freq0 = 2e14
+    medium_xx, medium_yy = _matched_lorentz_media_xx_yy(freq0)
+    assert np.isclose(medium_xx.eps_model(freq0), medium_yy.eps_model(freq0))
+    assert not np.isclose(medium_xx.eps_model(freq0 * 1.1), medium_yy.eps_model(freq0 * 1.1))
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=td.C_0 / freq0),
+        structures=[],
+        run_time=1e-12,
+        monitors=[],
+    )
+
+    structure = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
+        medium=td.AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=td.Medium(permittivity=2.5)),
+    )
+    mode_spec = td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4, group_index_step=0.1)
+
+    monitor = td.ModeMonitor(
+        size=(0, 5, 5),
+        name="mode_solver",
+        mode_spec=mode_spec,
+        freqs=[freq0],
+    )
+    with pytest.raises((SetupError, pd.ValidationError)):
+        sim.updated_copy(structures=[structure], monitors=[monitor])
+
+    source = td.ModeSource(
+        size=(0, 5, 5),
+        mode_spec=mode_spec,
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+        direction="+",
+    )
+    with pytest.raises((SetupError, pd.ValidationError)):
+        sim.updated_copy(structures=[structure], sources=[source])
 
 
 def test_rotated_structures_copy_drops_sources_for_angled_mode_solver():

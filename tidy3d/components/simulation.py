@@ -4505,11 +4505,28 @@ class Simulation(AbstractYeeGridSimulation):
             theta = mode_obj.mode_spec.angle_theta
             if np.abs(theta) > 0 and mode_obj.mode_spec.angle_rotation:
                 structs_in = Scene.intersecting_structures(mode_obj.geometry, self.structures)
-                translate_kwargs = dict(zip("xyz", mode_obj.center))
-                _, axes = mode_obj.pop_axis([0, 1, 2], mode_obj.size.index(0.0))
-                # we just pick one of the in-plane axes to test the roation
-                rotate_kwargs = {"angle": theta, "axis": axes[1]}
-                ModeSolver._make_rotated_structures(structs_in, translate_kwargs, rotate_kwargs)
+                total_structures = [
+                    self.scene.background_structure,
+                    *list(self.volumetric_structures),
+                ]
+                mediums_in = list(Scene.intersecting_media(mode_obj.geometry, total_structures))
+                translate_kwargs = ModeSolver._rotation_translate_kwargs_for_plane_and_mode_spec(
+                    mode_obj.geometry, mode_obj.mode_spec
+                )
+                rotate_kwargs = ModeSolver._rotation_kwargs_for_plane_and_mode_spec(
+                    mode_obj.geometry, mode_obj.mode_spec
+                )
+                ModeSolver._validate_plane_rotation_media(
+                    mediums=mediums_in,
+                    rotate_kwargs=rotate_kwargs,
+                    freqs=ModeSolver._rotation_validation_freqs(mode_obj),
+                )
+                ModeSolver._make_rotated_structures(
+                    structs_in,
+                    translate_kwargs,
+                    rotate_kwargs,
+                    ModeSolver._rotation_validation_freqs(mode_obj),
+                )
             # Validate microwave mode spec with mode solver setup
             if isinstance(mode_obj.mode_spec, MicrowaveModeSpec):
                 ModeSolver._validate_microwave_mode_spec(

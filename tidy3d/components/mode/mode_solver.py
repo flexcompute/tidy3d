@@ -33,7 +33,13 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.material.tensor_rotation import (
+    bend_axis_global_axis,
+    medium_is_rotation_invariant,
+    rotation_matrix_about_local_axis,
+)
 from tidy3d.components.medium import (
+    AnisotropicMedium,
     FullyAnisotropicMedium,
     IsotropicUniformMediumType,
     LossyMetalMedium,
@@ -85,6 +91,7 @@ if TYPE_CHECKING:
         VoltageIntegralType,
     )
     from tidy3d.components.mode_spec import ModeSpec
+    from tidy3d.components.monitor import AbstractModeMonitor
     from tidy3d.components.source.time import SourceTime
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import (
@@ -97,6 +104,7 @@ if TYPE_CHECKING:
         EpsSpecType,
         PlotScale,
         Symmetry,
+        TensorReal,
     )
     from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.packaging import (
@@ -382,19 +390,81 @@ class ModeSolver(Tidy3dBaseModel):
     def _validate_rotate_structures(self) -> None:
         """Validate that structures can be rotated if angle_rotation is True."""
         if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
-            _ = self._rotate_structures
+            self._validate_plane_rotation_media(
+                mediums=self._intersecting_media,
+                rotate_kwargs=self._rotation_kwargs,
+                freqs=self._sampling_freqs,
+            )
+            _ = self._make_rotated_structures(
+                structures=Scene.intersecting_structures(self.plane, self.simulation.structures),
+                translate_kwargs=self._rotation_translate_kwargs,
+                rotate_kwargs=self._rotation_kwargs,
+                freqs=self._sampling_freqs,
+            )
+
+    @staticmethod
+    def _medium_supports_plane_rotation(
+        medium: object, rotation_matrix: TensorReal, freqs: FreqArray
+    ) -> bool:
+        """Whether ``medium`` is supported by angled-plane structure rotation."""
+        is_uniform_isotropic = isinstance(medium, get_args(IsotropicUniformMediumType))
+        is_rotation_invariant_anisotropic = isinstance(
+            medium, (AnisotropicMedium, FullyAnisotropicMedium)
+        ) and medium_is_rotation_invariant(
+            medium=medium, rotation_matrix=rotation_matrix, freqs=freqs
+        )
+        return is_uniform_isotropic or is_rotation_invariant_anisotropic
+
+    @classmethod
+    def _validate_plane_rotation_media(
+        cls,
+        mediums: list[object],
+        rotate_kwargs: dict[str, float | Axis],
+        freqs: FreqArray,
+    ) -> None:
+        """Reject angled-plane rotations through unsupported intersecting media."""
+        rotation_matrix = rotation_matrix_about_local_axis(
+            axis=rotate_kwargs["axis"], angle=rotate_kwargs["angle"]
+        )
+        if all(
+            cls._medium_supports_plane_rotation(
+                medium=medium,
+                rotation_matrix=rotation_matrix,
+                freqs=freqs,
+            )
+            for medium in mediums
+        ):
+            return
+
+        raise SetupError(
+            "'angle_rotation' set to True but the mode solver plane intersects an unsupported "
+            "medium. Only uniform isotropic media and rotation-invariant anisotropic media are "
+            "supported for the plane rotation."
+        )
 
     @staticmethod
     def _make_rotated_structures(
-        structures: list[Structure], translate_kwargs: dict, rotate_kwargs: dict
+        structures: list[Structure],
+        translate_kwargs: dict[str, float],
+        rotate_kwargs: dict[str, float | Axis],
+        freqs: FreqArray,
     ) -> list[Structure]:
         try:
             rotated_structures = []
+            rotation_matrix = rotation_matrix_about_local_axis(
+                axis=rotate_kwargs["axis"], angle=rotate_kwargs["angle"]
+            )
             for structure in structures:
-                if not isinstance(structure.medium, get_args(IsotropicUniformMediumType)):
+                medium = structure.medium
+                if not ModeSolver._medium_supports_plane_rotation(
+                    medium=medium,
+                    rotation_matrix=rotation_matrix,
+                    freqs=freqs,
+                ):
                     raise NotImplementedError(
                         "Mode solver plane intersects an unsupported medium. "
-                        "Only uniform isotropic media are supported for the plane rotation."
+                        "Only uniform isotropic media and rotation-invariant anisotropic "
+                        "media are supported for the plane rotation."
                     )
 
                 # Rotate and apply translations
@@ -412,6 +482,17 @@ class ModeSolver(Tidy3dBaseModel):
             raise SetupError(
                 f"'angle_rotation' set to True but could not rotate structures: {e!s}"
             ) from e
+
+    @staticmethod
+    def _rotation_validation_freqs(mode_object: ModeSource | AbstractModeMonitor) -> FreqArray:
+        """Frequencies relevant to validating structure rotations for ``angle_rotation``."""
+        if isinstance(mode_object, ModeSource):
+            freqs = np.asarray(mode_object.frequency_grid, dtype=float)
+        else:
+            freqs = np.asarray(mode_object.freqs, dtype=float)
+        return np.asarray(
+            mode_object.mode_spec._sampling_freqs_mode_solver(freqs=freqs), dtype=float
+        )
 
     @classmethod
     def _validate_microwave_mode_spec(cls, mode_spec: MicrowaveModeSpec, plane: Box) -> None:
@@ -664,12 +745,16 @@ class ModeSolver(Tidy3dBaseModel):
         """Converts the 2D bend axis into its corresponding 3D axis for a bend structure.
         For a straight waveguide, the rotated axis is equivalent to the bend axis
         and can be determined using angle_phi."""
-        _, idx_plane = self.plane.pop_axis((0, 1, 2), axis=self.normal_axis)
+        return self._bend_axis_3d_from_plane_and_mode_spec(self.plane, self.mode_spec)
 
-        if self.mode_spec.bend_axis is not None:
-            return idx_plane[self.mode_spec.bend_axis]
-
-        rotation_axis_index = int(abs(np.cos(self.mode_spec.angle_phi)))
+    @staticmethod
+    def _bend_axis_3d_from_plane_and_mode_spec(plane: Box, mode_spec: ModeSpecType) -> Axis:
+        """3D bend axis used by the angled-mode rotation for ``plane`` and ``mode_spec``."""
+        normal_axis = plane.size.index(0.0)
+        if mode_spec.bend_axis is not None:
+            return bend_axis_global_axis(normal_axis=normal_axis, bend_axis=mode_spec.bend_axis)
+        _, idx_plane = plane.pop_axis((0, 1, 2), axis=normal_axis)
+        rotation_axis_index = int(abs(np.cos(mode_spec.angle_phi)))
         return idx_plane[rotation_axis_index]
 
     @cached_property
@@ -772,13 +857,45 @@ class ModeSolver(Tidy3dBaseModel):
     def _rotate_structures(self) -> list[Structure]:
         """Rotate the structures intersecting with modal plane by angle theta
         if bend_correction is enabeled for bend simulations."""
+        structs_in = Scene.intersecting_structures(self.plane, self.simulation.structures)
+        return self._make_rotated_structures(
+            structures=structs_in,
+            translate_kwargs=self._rotation_translate_kwargs,
+            rotate_kwargs=self._rotation_kwargs,
+            freqs=self._sampling_freqs,
+        )
 
-        _, (idx_u, idx_v) = self.plane.pop_axis((0, 1, 2), axis=self.bend_axis_3d)
+    @cached_property
+    def _rotation_translate_kwargs(self) -> dict[str, float]:
+        """Translations applied before and after rotating structures for ``angle_rotation``."""
+        return self._rotation_translate_kwargs_for_plane_and_mode_spec(self.plane, self.mode_spec)
 
-        mnt_center = self.plane.center
-        angle_theta = self.mode_spec.angle_theta
-        angle_phi = self.mode_spec.angle_phi
+    @classmethod
+    def _rotation_translate_kwargs_for_plane_and_mode_spec(
+        cls, plane: Box, mode_spec: ModeSpecType
+    ) -> dict[str, float]:
+        """Translations applied before and after rotating structures for ``angle_rotation``."""
+        bend_axis_3d = cls._bend_axis_3d_from_plane_and_mode_spec(plane, mode_spec)
+        _, (idx_u, idx_v) = plane.pop_axis((0, 1, 2), axis=bend_axis_3d)
+        translate_coords = [0.0, 0.0, 0.0]
+        translate_coords[idx_u] = plane.center[idx_u]
+        translate_coords[idx_v] = plane.center[idx_v]
+        return dict(zip("xyz", translate_coords))
 
+    @cached_property
+    def _rotation_kwargs(self) -> dict[str, float | Axis]:
+        """Rotation applied to intersecting structures for ``angle_rotation``."""
+        return self._rotation_kwargs_for_plane_and_mode_spec(self.plane, self.mode_spec)
+
+    @classmethod
+    def _rotation_kwargs_for_plane_and_mode_spec(
+        cls, plane: Box, mode_spec: ModeSpecType
+    ) -> dict[str, float | Axis]:
+        """Rotation applied to intersecting structures for ``angle_rotation``."""
+        normal_axis = plane.size.index(0.0)
+        bend_axis_3d = cls._bend_axis_3d_from_plane_and_mode_spec(plane, mode_spec)
+        angle_theta = mode_spec.angle_theta
+        angle_phi = mode_spec.angle_phi
         theta_map = {
             (0, 2): -angle_theta * np.cos(angle_phi),
             (0, 1): angle_theta * np.sin(angle_phi),
@@ -787,18 +904,8 @@ class ModeSolver(Tidy3dBaseModel):
             (2, 1): -angle_theta * np.cos(angle_phi),
             (2, 0): angle_theta * np.sin(angle_phi),
         }
-        theta = theta_map.get((self.normal_axis, self.bend_axis_3d), 0)
-
-        # Get the translation values
-        translate_coords = [0, 0, 0]
-        translate_coords[idx_u] = mnt_center[idx_u]
-        translate_coords[idx_v] = mnt_center[idx_v]
-        translate_kwargs = dict(zip("xyz", translate_coords))
-        # Rotation arguments
-        rotate_kwargs = {"angle": theta, "axis": self.bend_axis_3d}
-
-        structs_in = Scene.intersecting_structures(self.plane, self.simulation.structures)
-        return self._make_rotated_structures(structs_in, translate_kwargs, rotate_kwargs)
+        theta = theta_map.get((normal_axis, bend_axis_3d), 0.0)
+        return {"angle": theta, "axis": bend_axis_3d}
 
     @cached_property
     def rotated_bend_center(self) -> list:

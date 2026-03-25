@@ -42,8 +42,21 @@ class EMEModeSpec(ModeSpec):
           :meth:`.EMESimulationData.smatrix_in_basis`.
         - Default precision is ``'auto'`` (double precision for structures with good
           conductors, single precision otherwise).
+        - Includes a ``bend_medium_frame`` field to control whether media in bent
+          EME cells are interpreted in the global frame or as co-rotating with the
+          local waveguide frame.
+        - Bent sections containing orientation-sensitive anisotropic media may require
+          multiple EME cells when ``bend_medium_frame='global'``, because the local
+          mode problem can change with absolute bend angle. This applies to both
+          :class:`.AnisotropicMedium` and reciprocal :class:`.FullyAnisotropicMedium`;
+          check convergence with respect to the number of EME cells when refining
+          such bends.
         - Includes an ``interp_spec`` field for frequency interpolation of modes,
           which can significantly reduce cost for broadband simulations.
+        - Includes an ``increasing_mode_tolerance`` field for EME-only filtering of
+          weakly increasing modes. The default ``0.0`` preserves the previous behavior,
+          while positive values treat small negative imaginary effective indices as
+          numerical noise.
     """
 
     interp_spec: Optional[ModeInterpSpec] = Field(
@@ -84,6 +97,31 @@ class EMEModeSpec(ModeSpec):
         "conductor, single precision otherwise.",
     )
 
+    bend_medium_frame: Literal["global", "co_rotating"] = Field(
+        "global",
+        title="Bent medium frame",
+        description="Interpretation of media in bent EME cells. Choose ``'global'`` when the "
+        "material axes are fixed in physical space, matching the global-frame convention used "
+        "in FDTD. Choose ``'co_rotating'`` when the material profile should bend with the local "
+        "waveguide cross-section, as in a bent fiber or a custom profile defined on straight "
+        "EME coordinates. The default is ``'global'``. Custom media in bent EME cells, including "
+        "``CustomAnisotropicMedium``, are "
+        "currently supported only for ``'co_rotating'``. With ``'global'``, orientation-sensitive "
+        "anisotropic bends may need multiple cells instead of ``num_reps`` or "
+        "``EMELengthSweep``; check convergence with respect to the number of EME cells.",
+    )
+
+    increasing_mode_tolerance: float = Field(
+        0.0,
+        title="Increasing-mode filter tolerance",
+        description="Unitless tolerance on ``-Im(n_eff)`` when filtering increasing modes "
+        "from the EME propagation basis. A mode is dropped only if "
+        "``Im(n_eff) < -increasing_mode_tolerance``. Set a small positive value such as "
+        "``1e-6`` to keep weakly increasing modes caused by numerical noise; leave it at "
+        "``0.0`` to preserve historical behavior.",
+        ge=0.0,
+    )
+
     # this method is not supported because not all ModeSpec features are supported
     # @classmethod
     # def _from_mode_spec(cls, mode_spec: ModeSpec) -> EMEModeSpec:
@@ -106,6 +144,8 @@ class EMEModeSpec(ModeSpec):
         """Convert to ordinary :class:`.ModeSpec`."""
         ms_dict = self.model_dump()
         ms_dict.pop("type")
+        ms_dict.pop("bend_medium_frame")
+        ms_dict.pop("increasing_mode_tolerance")
         return ModeSpec.model_validate(ms_dict)
 
 
@@ -124,7 +164,15 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         description="Number of periodic repetitions of this EME grid. Useful for "
         "efficiently simulating long periodic structures like Bragg gratings. "
         "Instead of explicitly repeating the cells, setting 'num_reps' allows "
-        "the EME solver to reuse the modes and cell interface scattering matrices.",
+        "the EME solver to reuse the modes and cell interface scattering matrices. "
+        "However, for bent sections with orientation-sensitive anisotropic media and "
+        "``bend_medium_frame='global'``, reusing a single bent cell is "
+        "generally not exact because the local mode problem changes with absolute "
+        "bend angle. It is recommended to split such bends into multiple cells and check convergence "
+        "with respect to the number of EME cells before relying on 'num_reps'. "
+        "Bent custom media in the global-frame "
+        "interpretation are not supported when reuse would require remapping "
+        "custom-medium data into bent physical space.",
     )
 
     name: Optional[str] = Field(

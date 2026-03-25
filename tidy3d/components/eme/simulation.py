@@ -11,7 +11,12 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec, PECBoundary
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.medium import FullyAnisotropicMedium
+from tidy3d.components.material.tensor_rotation import (
+    cell_center_rotations_from_lengths,
+    medium_rotated_tensors,
+    rotated_tensors_equal,
+)
+from tidy3d.components.medium import AbstractCustomMedium, AnisotropicMedium, FullyAnisotropicMedium
 from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import (
@@ -28,7 +33,7 @@ from tidy3d.components.validators import (
     validate_freqs_not_empty,
 )
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.constants import C_0, inf
+from tidy3d.constants import C_0, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
@@ -49,9 +54,12 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.material.tensor_rotation import EMEAnisotropicMedium
+    from tidy3d.components.material.types import StructureMediumType
+    from tidy3d.components.medium import MediumType3D
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.structure import Structure
-    from tidy3d.components.types import Ax, Symmetry
+    from tidy3d.components.types import ArrayFloat1D, Ax, Coordinate, Size, Symmetry, TensorReal
     from tidy3d.components.types.monitor import MonitorType
 
     from .grid import EMEGrid, EMEGridSpec
@@ -110,9 +118,22 @@ class EMESimulation(AbstractYeeGridSimulation):
         The solver computes the full **bidirectional scattering matrix**, accounting for
         reflections and mode coupling at every cell interface, with optional passivity or
         unitarity constraints. Supported features include bent waveguides (via ``bend_radius`` in
-        :class:`.EMEModeSpec`), anisotropic materials (:class:`.AnisotropicMedium`),
-        broadband frequency interpolation, and efficient parameter sweeps over cell lengths,
-        number of modes, and periodic repetitions.
+        :class:`.EMEModeSpec`), diagonal anisotropy (:class:`.AnisotropicMedium`), reciprocal
+        full anisotropy (:class:`.FullyAnisotropicMedium` with symmetric permittivity and
+        conductivity tensors), broadband frequency interpolation, and efficient parameter sweeps
+        over cell lengths, number of modes, and periodic repetitions.
+
+        Bent-cell material interpretation is controlled by ``EMEModeSpec.bend_medium_frame``.
+        With ``"global"``, material tensors remain fixed in physical space; with
+        ``"co_rotating"``, the material profile bends with the local waveguide frame.
+        Bent custom media, including :class:`.CustomAnisotropicMedium`, are only supported with
+        ``bend_medium_frame="co_rotating"``. For bent anisotropic media in the global-frame
+        interpretation, reusing a single cell through ``num_reps`` or
+        :class:`.EMEPeriodicitySweep` is only valid when the reused mode sees the same local
+        tensor orientation; similarly, :class:`.EMELengthSweep` is rejected when changing bent
+        cell lengths would require anisotropic modes to be recomputed at new absolute bend
+        angles. When such bends are instead resolved with multiple cells, check convergence
+        with respect to the number of EME cells.
 
         The EME simulation is performed along the propagation axis ``axis`` at frequencies ``freqs``.
         The simulation is divided into cells along the propagation axis, as defined by
@@ -328,17 +349,50 @@ class EMESimulation(AbstractYeeGridSimulation):
             raise SetupError(f"'EMESimulation' 'freqs={val}' cannot contain duplicate frequencies.")
         return val
 
+    @staticmethod
+    def _validate_fully_anisotropic_medium_reciprocity(
+        medium: StructureMediumType, field_path: str
+    ) -> None:
+        """Reject non-reciprocal fully anisotropic media in EME."""
+        if not isinstance(medium, FullyAnisotropicMedium):
+            return
+
+        permittivity = np.asarray(medium.permittivity)
+        if not np.allclose(permittivity, permittivity.T, atol=fp_eps, rtol=0):
+            raise SetupError(
+                f"{field_path} has a non-reciprocal 'FullyAnisotropicMedium'. "
+                "EME currently supports only reciprocal fully anisotropic media "
+                "(symmetric permittivity and conductivity tensors)."
+            )
+
+        conductivity = np.asarray(medium.conductivity)
+        if not np.allclose(conductivity, conductivity.T, atol=fp_eps, rtol=0):
+            raise SetupError(
+                f"{field_path} has a non-reciprocal 'FullyAnisotropicMedium'. "
+                "EME currently supports only reciprocal fully anisotropic media "
+                "(symmetric permittivity and conductivity tensors)."
+            )
+
+    @field_validator("medium")
+    @classmethod
+    def _validate_medium(cls, val: MediumType3D) -> MediumType3D:
+        """Validate background medium compatibility."""
+        cls._validate_fully_anisotropic_medium_reciprocity(
+            medium=val,
+            field_path="The simulation background medium",
+        )
+        return val
+
     @field_validator("structures")
     @classmethod
     def _validate_structures(cls, val: tuple[Structure, ...]) -> tuple[Structure, ...]:
         """Validate and warn for certain medium types."""
         for ind, structure in enumerate(val):
             medium = structure.medium
-            if isinstance(medium, FullyAnisotropicMedium):
-                raise SetupError(
-                    f"Structure at 'structures[{ind}]' has a medium which is a "
-                    "'FullyAnisotropicMedium'. This medium class is not yet supported in EME."
-                )
+            cls._validate_fully_anisotropic_medium_reciprocity(
+                medium=medium,
+                field_path=f"Structure at 'structures[{ind}]'",
+            )
             if medium.is_time_modulated:
                 log.warning(
                     f"Structure at 'structures[{ind}]' is time-modulated. The "
@@ -730,6 +784,8 @@ class EMESimulation(AbstractYeeGridSimulation):
         self._validate_port_offsets()
         self._validate_symmetry()
         self._validate_sweep_spec()
+        self._validate_bent_custom_media_frames()
+        self._validate_anisotropic_bend_repetitions()
         self._validate_monitor_setup()
         self._validate_interp_specs()
         return self
@@ -912,6 +968,327 @@ class EMESimulation(AbstractYeeGridSimulation):
                 raise SetupError(
                     "'EMESimulation.store_coeffs' is not compatible with 'EMEPeriodicitySweep'."
                 )
+        return self
+
+    @cached_property
+    def _anisotropic_validation_freqs_by_cell(self) -> tuple[FreqArray, ...]:
+        """Per-cell frequencies at which anisotropic mode tensors may be evaluated."""
+        base_freqs = np.asarray(self.freqs, dtype=float)
+        solve_freq_sets = [base_freqs]
+        if isinstance(self.sweep_spec, EMEFreqSweep):
+            # Frequency sweeps perturbatively re-solve modes at scaled simulation frequencies.
+            solve_freq_sets.extend(
+                base_freqs * float(scale_factor)
+                for scale_factor in np.asarray(self.sweep_spec.freq_scale_factors, dtype=float)
+            )
+        freqs_by_cell = []
+        for mode_spec in self.eme_grid.mode_specs:
+            freqs = set()
+            for solve_freqs in solve_freq_sets:
+                freqs |= {
+                    float(freq)
+                    for freq in mode_spec._sampling_freqs_mode_solver(
+                        freqs=np.asarray(solve_freqs, dtype=float).tolist()
+                    )
+                }
+            freqs_by_cell.append(np.asarray(sorted(freqs), dtype=float))
+        return tuple(freqs_by_cell)
+
+    def _plane_anisotropic_media(self, plane: Box) -> tuple[EMEAnisotropicMedium, ...]:
+        """Anisotropic media intersecting ``plane``."""
+        total_structures = [self.scene.background_structure, *list(self.volumetric_structures)]
+        mediums = self.scene.intersecting_media(plane, total_structures)
+        return tuple(
+            sorted(
+                (
+                    medium
+                    for medium in mediums
+                    if isinstance(medium, (AnisotropicMedium, FullyAnisotropicMedium))
+                ),
+                key=hash,
+            )
+        )
+
+    def _plane_custom_media(self, plane: Box) -> tuple[AbstractCustomMedium, ...]:
+        """Custom media intersecting ``plane``."""
+        total_structures = [self.scene.background_structure, *list(self.volumetric_structures)]
+        mediums = self.scene.intersecting_media(plane, total_structures)
+        return tuple(
+            sorted(
+                (medium for medium in mediums if isinstance(medium, AbstractCustomMedium)), key=hash
+            )
+        )
+
+    def _grid_rotation_validation_data(
+        self,
+        eme_grid_spec: EMEGridSpecType,
+        center: Coordinate,
+        size: Size,
+        lengths: Optional[ArrayFloat1D] = None,
+    ) -> tuple[
+        EMEGrid, ArrayFloat1D, tuple[TensorReal, ...], tuple[int, ...], tuple[TensorReal, ...]
+    ]:
+        """Grid rotations for real and virtual EME cells."""
+        eme_grid = eme_grid_spec.make_grid(center=center, size=size, axis=self.axis)
+        real_lengths = np.asarray(eme_grid.lengths, dtype=float)
+        if lengths is not None:
+            real_lengths = np.asarray(lengths, dtype=float)
+        real_rotations = cell_center_rotations_from_lengths(
+            real_lengths, eme_grid.mode_specs, normal_axis=self.axis
+        )
+        virtual_cell_indices = tuple(int(ind) for ind in eme_grid_spec.virtual_cell_indices)
+        virtual_lengths = np.asarray(
+            [real_lengths[ind] for ind in virtual_cell_indices], dtype=float
+        )
+        virtual_mode_specs = tuple(eme_grid.mode_specs[ind] for ind in virtual_cell_indices)
+        virtual_rotations = cell_center_rotations_from_lengths(
+            virtual_lengths, virtual_mode_specs, normal_axis=self.axis
+        )
+        return eme_grid, real_lengths, real_rotations, virtual_cell_indices, virtual_rotations
+
+    @staticmethod
+    def _rotation_is_identity(rotation: TensorReal) -> bool:
+        """Whether ``rotation`` is effectively the identity."""
+        return np.allclose(rotation, np.eye(3), atol=fp_eps, rtol=0)
+
+    def _has_unsupported_global_frame_custom_media(
+        self,
+        eme_grid_spec: EMEGridSpecType,
+        center: Coordinate,
+        size: Size,
+        lengths: Optional[ArrayFloat1D] = None,
+    ) -> bool:
+        """Whether bent cells would require unsupported global-frame custom-medium remapping."""
+        eme_grid, _, real_rotations, virtual_cell_indices, virtual_rotations = (
+            self._grid_rotation_validation_data(
+                eme_grid_spec=eme_grid_spec,
+                center=center,
+                size=size,
+                lengths=lengths,
+            )
+        )
+        for plane, rotation in zip(eme_grid.mode_planes, real_rotations):
+            # ``cell_center_rotations_from_lengths()`` returns identity for co-rotating cells,
+            # so any nontrivial rotation here means global-frame custom-medium remapping.
+            if not self._rotation_is_identity(rotation) and self._plane_custom_media(plane):
+                return True
+        for real_cell_index, rotation in zip(virtual_cell_indices, virtual_rotations):
+            if not self._rotation_is_identity(rotation) and self._plane_custom_media(
+                eme_grid.mode_planes[real_cell_index]
+            ):
+                return True
+        return False
+
+    def _validate_bent_custom_media_frames(self) -> Self:
+        """Reject global-frame bent EME cells intersecting custom media."""
+        if not any(isinstance(medium, AbstractCustomMedium) for medium in self.scene.mediums):
+            return self
+
+        error_msg = (
+            "Custom media are not currently supported in EME cells that use "
+            "'bend_medium_frame=\"global\"' and see a nontrivial bend rotation. "
+            "Global-frame remapping of custom-medium data into bent physical space is "
+            "not implemented. Use 'bend_medium_frame=\"co_rotating\"' or avoid bends."
+        )
+
+        center = tuple(self.eme_grid.center)
+        size = tuple(self.eme_grid.size)
+        if self._has_unsupported_global_frame_custom_media(
+            eme_grid_spec=self.eme_grid_spec,
+            center=center,
+            size=size,
+        ):
+            raise SetupError(error_msg)
+
+        if isinstance(self.sweep_spec, EMEPeriodicitySweep):
+            for num_reps in self.sweep_spec.num_reps:
+                eme_grid_spec = self.eme_grid_spec._updated_copy_num_reps(num_reps=num_reps)
+                if self._has_unsupported_global_frame_custom_media(
+                    eme_grid_spec=eme_grid_spec,
+                    center=center,
+                    size=size,
+                ):
+                    raise SetupError(error_msg)
+
+        if isinstance(self.sweep_spec, EMELengthSweep):
+            base_lengths = np.asarray(self.eme_grid.lengths, dtype=float)
+            for lengths in self._length_sweep_scaled_lengths(base_lengths=base_lengths):
+                if self._has_unsupported_global_frame_custom_media(
+                    eme_grid_spec=self.eme_grid_spec,
+                    center=center,
+                    size=size,
+                    lengths=lengths,
+                ):
+                    raise SetupError(error_msg)
+
+        return self
+
+    def _plane_rotated_tensors_match(
+        self,
+        plane: Box,
+        freqs: FreqArray,
+        reference_rotation: TensorReal,
+        comparison_rotation: TensorReal,
+    ) -> bool:
+        """Whether anisotropic tensors on ``plane`` match under two orientations."""
+        for medium in self._plane_anisotropic_media(plane):
+            reference_tensors = medium_rotated_tensors(
+                medium=medium,
+                freqs=freqs,
+                rotation_matrix=reference_rotation,
+            )
+            comparison_tensors = medium_rotated_tensors(
+                medium=medium,
+                freqs=freqs,
+                rotation_matrix=comparison_rotation,
+            )
+            if not rotated_tensors_equal(reference_tensors, comparison_tensors):
+                return False
+        return True
+
+    def _has_incompatible_anisotropic_rotations_from_data(
+        self,
+        eme_grid: EMEGrid,
+        virtual_cell_indices: tuple[int, ...],
+        virtual_rotations: tuple[TensorReal, ...],
+        reference_rotations: tuple[TensorReal, ...],
+    ) -> bool:
+        """Whether reused modes would require different anisotropic tensors."""
+        for real_cell_index, virtual_rotation in zip(virtual_cell_indices, virtual_rotations):
+            if not self._plane_rotated_tensors_match(
+                plane=eme_grid.mode_planes[real_cell_index],
+                freqs=self._anisotropic_validation_freqs_by_cell[real_cell_index],
+                reference_rotation=reference_rotations[real_cell_index],
+                comparison_rotation=virtual_rotation,
+            ):
+                return True
+        return False
+
+    def _has_incompatible_anisotropic_rotations(
+        self,
+        eme_grid_spec: EMEGridSpecType,
+        center: Coordinate,
+        size: Size,
+        reference_rotations: tuple[TensorReal, ...],
+        lengths: Optional[ArrayFloat1D] = None,
+    ) -> bool:
+        """Whether reused modes would require different anisotropic tensors."""
+        eme_grid, _, _, virtual_cell_indices, virtual_rotations = (
+            self._grid_rotation_validation_data(
+                eme_grid_spec=eme_grid_spec,
+                center=center,
+                size=size,
+                lengths=lengths,
+            )
+        )
+        return self._has_incompatible_anisotropic_rotations_from_data(
+            eme_grid=eme_grid,
+            virtual_cell_indices=virtual_cell_indices,
+            virtual_rotations=virtual_rotations,
+            reference_rotations=reference_rotations,
+        )
+
+    def _length_sweep_scaled_lengths(self, base_lengths: ArrayFloat1D) -> tuple[ArrayFloat1D, ...]:
+        """Cell lengths for each length-sweep index after normalizing scale-factor shape."""
+        if not isinstance(self.sweep_spec, EMELengthSweep):
+            return ()
+
+        base_lengths = np.asarray(base_lengths, dtype=float)
+        scale_factors = np.asarray(self.sweep_spec.scale_factors, dtype=float)
+        if scale_factors.ndim == 1:
+            scale_factors = np.repeat(scale_factors[:, None], len(base_lengths), axis=1)
+        return tuple(
+            base_lengths * np.asarray(scale_row, dtype=float) for scale_row in scale_factors
+        )
+
+    def _validate_anisotropic_bend_repetitions(self) -> Self:
+        """Reject repeated bent units when each repetition would need a distinct anisotropy frame."""
+        if not any(
+            isinstance(medium, (AnisotropicMedium, FullyAnisotropicMedium))
+            for medium in self.scene.mediums
+        ):
+            return self
+
+        error_msg = (
+            "Bent anisotropic media with 'bend_medium_frame=\"global\"' are not compatible "
+            "with periodic repetition of EME subgrids when a reused mode would see a "
+            "nontrivial relative bend rotation. If the material profile should follow the "
+            "bend, set 'bend_medium_frame=\"co_rotating\"'. Otherwise split the bent "
+            "section into multiple cells, solve each orientation explicitly, and check "
+            "convergence with respect to the number of EME cells."
+        )
+
+        center = tuple(self.eme_grid.center)
+        size = tuple(self.eme_grid.size)
+        (
+            base_grid,
+            base_lengths,
+            base_rotations,
+            base_virtual_cell_indices,
+            base_virtual_rotations,
+        ) = self._grid_rotation_validation_data(
+            eme_grid_spec=self.eme_grid_spec,
+            center=center,
+            size=size,
+        )
+
+        if self._has_incompatible_anisotropic_rotations_from_data(
+            eme_grid=base_grid,
+            virtual_cell_indices=base_virtual_cell_indices,
+            virtual_rotations=base_virtual_rotations,
+            reference_rotations=base_rotations,
+        ):
+            raise SetupError(error_msg)
+
+        if isinstance(self.sweep_spec, EMEPeriodicitySweep):
+            for num_reps in self.sweep_spec.num_reps:
+                eme_grid_spec = self.eme_grid_spec._updated_copy_num_reps(num_reps=num_reps)
+                (
+                    sweep_grid,
+                    _,
+                    sweep_rotations,
+                    sweep_virtual_cell_indices,
+                    sweep_virtual_rotations,
+                ) = self._grid_rotation_validation_data(
+                    eme_grid_spec=eme_grid_spec,
+                    center=center,
+                    size=size,
+                )
+                if self._has_incompatible_anisotropic_rotations_from_data(
+                    eme_grid=sweep_grid,
+                    virtual_cell_indices=sweep_virtual_cell_indices,
+                    virtual_rotations=sweep_virtual_rotations,
+                    reference_rotations=sweep_rotations,
+                ):
+                    raise SetupError(error_msg)
+
+        if isinstance(self.sweep_spec, EMELengthSweep):
+            invalid_length_sweep = False
+            for lengths in self._length_sweep_scaled_lengths(base_lengths=base_lengths):
+                if np.allclose(lengths, base_lengths, atol=fp_eps, rtol=0):
+                    continue
+
+                if self._has_incompatible_anisotropic_rotations(
+                    eme_grid_spec=self.eme_grid_spec,
+                    center=center,
+                    size=size,
+                    reference_rotations=base_rotations,
+                    lengths=lengths,
+                ):
+                    invalid_length_sweep = True
+                    break
+
+            if invalid_length_sweep:
+                raise SetupError(
+                    "Bent anisotropic media with 'bend_medium_frame=\"global\"' are not "
+                    "compatible with 'EMELengthSweep' when changing bent cell lengths changes "
+                    "the absolute orientation at one or more EME cell centers. Those local "
+                    "modes would need to be recomputed. If the material profile should follow "
+                    "the bend, set 'bend_medium_frame=\"co_rotating\"'; otherwise use "
+                    "separate simulations or explicitly resolved cells for each length, "
+                    "and check convergence with respect to the number of EME cells."
+                )
+
         return self
 
     def _validate_monitor_setup(self) -> Self:

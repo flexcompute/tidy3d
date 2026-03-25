@@ -89,6 +89,20 @@ def make_eme_sim():
     return sim
 
 
+def _matched_lorentz_media_yy_zz(freq0: float) -> tuple[td.Lorentz, td.Lorentz]:
+    """Two Lorentz media that agree at ``freq0`` and diverge away from it."""
+    eps_inf = 2.0
+    delta_eps_yy = 1.0
+    resonance_yy = 1.5 * freq0
+    resonance_zz = 2.0 * freq0
+    delta_eps_zz = delta_eps_yy * resonance_yy**2 / (resonance_yy**2 - freq0**2)
+    delta_eps_zz *= (resonance_zz**2 - freq0**2) / resonance_zz**2
+    return (
+        td.Lorentz(eps_inf=eps_inf, coeffs=[(delta_eps_yy, resonance_yy, 0.0)]),
+        td.Lorentz(eps_inf=eps_inf, coeffs=[(delta_eps_zz, resonance_zz, 0.0)]),
+    )
+
+
 def test_sim_version_update():
     sim = make_eme_sim()
     sim_dict = sim.model_dump()
@@ -859,8 +873,7 @@ def test_eme_simulation():
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(freqs=[])
 
-    # test unsupported media
-    # fully anisotropic
+    # test anisotropic media support (reciprocal fully anisotropic only)
     perm_diag = [[1, 0, 0], [0, 2, 0], [0, 0, 3]]
     cond_diag = [[4, 0, 0], [0, 5, 0], [0, 0, 6]]
     rot = td.RotationAroundAxis(axis=(1, 2, 3), angle=1.23)
@@ -868,8 +881,250 @@ def test_eme_simulation():
     cond = rot.rotate_tensor(cond_diag)
     med = td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
     struct = sim.structures[0].updated_copy(medium=med)
+    _ = sim.updated_copy(structures=(struct,))
+    _ = sim.updated_copy(medium=med)
+
+    diag_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3),
+        zz=td.Medium(permittivity=4),
+    )
+    diag_struct = sim.structures[0].updated_copy(medium=diag_aniso_med)
+    _ = sim.updated_copy(structures=(diag_struct,))
+    _ = sim.updated_copy(medium=diag_aniso_med)
+
+    bend_mode_spec = td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=1)
+    repeated_grid = td.EMEUniformGrid(num_cells=1, mode_spec=bend_mode_spec, num_reps=2)
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(struct,),
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=repeated_grid,
+        )
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(diag_struct,),
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=repeated_grid,
+        )
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            medium=diag_aniso_med,
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=repeated_grid,
+        )
+
+    invariant_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3),
+        zz=td.Medium(permittivity=3),
+    )
+    invariant_struct = sim.structures[0].updated_copy(medium=invariant_aniso_med)
+    invariant_repeated_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=0),
+        num_reps=2,
+    )
+    _ = sim.updated_copy(
+        structures=(invariant_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=invariant_repeated_grid,
+    )
+
+    lossy_invariant_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3, conductivity=1e8),
+        zz=td.Medium(permittivity=3, conductivity=1e8),
+    )
+    lossy_invariant_struct = sim.structures[0].updated_copy(medium=lossy_invariant_aniso_med)
+    _ = sim.updated_copy(
+        structures=(lossy_invariant_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=invariant_repeated_grid,
+    )
+
+    invariant_periodic_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=0),
+        name="periodic_unit",
+    )
+    invariant_periodic_sweep = td.EMEPeriodicitySweep(num_reps=[{"periodic_unit": 2}])
+    _ = sim.updated_copy(
+        structures=(lossy_invariant_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=invariant_periodic_grid,
+        sweep_spec=invariant_periodic_sweep,
+    )
+
+    invariant_named_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3, name="yy_component"),
+        zz=td.Medium(permittivity=3, name="zz_component"),
+    )
+    invariant_named_struct = sim.structures[0].updated_copy(medium=invariant_named_aniso_med)
+    _ = sim.updated_copy(
+        structures=(invariant_named_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=invariant_repeated_grid,
+    )
+
+    freq0 = float(sim.freqs[0])
+    dispersive_invariant_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Sellmeier.from_dispersion(n=np.sqrt(3), freq=freq0, dn_dwvl=-0.1),
+        zz=td.Sellmeier.from_dispersion(n=np.sqrt(3), freq=freq0, dn_dwvl=-1.0),
+    )
+    dispersive_invariant_struct = sim.structures[0].updated_copy(
+        medium=dispersive_invariant_aniso_med
+    )
+    _ = sim.updated_copy(
+        structures=(dispersive_invariant_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=invariant_repeated_grid,
+    )
+    with AssertLogLevel("ERROR", contains_str="'bend_medium_frame=\"co_rotating\"'"):
+        with pytest.raises(pd.ValidationError):
+            _ = sim.updated_copy(
+                structures=(dispersive_invariant_struct,),
+                monitors=(sim.monitors[0],),
+                eme_grid_spec=invariant_repeated_grid,
+                sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1.0, 1.1]),
+            )
+
+    medium_yy, medium_zz = _matched_lorentz_media_yy_zz(freq0)
+    assert np.isclose(medium_yy.eps_model(freq0), medium_zz.eps_model(freq0))
+    assert not np.isclose(medium_yy.eps_model(freq0 * 1.1), medium_zz.eps_model(freq0 * 1.1))
+    group_index_invariant_struct = sim.structures[0].updated_copy(
+        medium=td.AnisotropicMedium(xx=td.Medium(permittivity=2), yy=medium_yy, zz=medium_zz)
+    )
+    group_index_repeated_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=0, group_index_step=0.1),
+        num_reps=2,
+    )
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(group_index_invariant_struct,),
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=group_index_repeated_grid,
+        )
+
+    periodic_grid = td.EMEUniformGrid(num_cells=1, mode_spec=bend_mode_spec, name="periodic_unit")
+    periodic_sweep = td.EMEPeriodicitySweep(num_reps=[{"periodic_unit": 2}])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(struct,),
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=periodic_grid,
+            sweep_spec=periodic_sweep,
+        )
+
+    length_sweep = td.EMELengthSweep(scale_factors=[1.0, 1.1])
+    with AssertLogLevel("ERROR", contains_str="'bend_medium_frame=\"co_rotating\"'"):
+        with pytest.raises(pd.ValidationError):
+            _ = sim.updated_copy(
+                structures=(struct,),
+                monitors=(sim.monitors[0],),
+                eme_grid_spec=periodic_grid,
+                sweep_spec=length_sweep,
+            )
+
+    second_cell_only_struct = td.Structure(
+        geometry=td.Box(center=(0, 0, 0.75), size=(0.5, 1.0, 1.4)),
+        medium=diag_aniso_med,
+    )
+    preceding_bent_grid = td.EMEExplicitGrid(
+        boundaries=[0],
+        mode_specs=[
+            td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=1),
+            td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=1),
+        ],
+    )
+    with AssertLogLevel("ERROR", contains_str="separate simulations"):
+        with pytest.raises(pd.ValidationError):
+            _ = sim.updated_copy(
+                structures=(second_cell_only_struct,),
+                monitors=(sim.monitors[0],),
+                eme_grid_spec=preceding_bent_grid,
+                sweep_spec=td.EMELengthSweep(scale_factors=[[1.1, 1.0]]),
+            )
+
+    nested_repeated_grid = td.EMECompositeGrid(
+        subgrids=[
+            td.EMEUniformGrid(num_cells=1, mode_spec=bend_mode_spec, num_reps=2),
+            td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=1)),
+        ],
+        subgrid_boundaries=[0],
+        num_reps=2,
+    )
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(second_cell_only_struct,),
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=nested_repeated_grid,
+        )
+
+    straight_repeated_grid = td.EMECompositeGrid(
+        subgrids=[
+            td.EMEUniformGrid(num_cells=1, mode_spec=bend_mode_spec),
+            td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=1), num_reps=2),
+        ],
+        subgrid_boundaries=[0],
+    )
+    _ = sim.updated_copy(
+        structures=(struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=straight_repeated_grid,
+    )
+    _ = sim.updated_copy(
+        structures=(struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=straight_repeated_grid,
+        sweep_spec=td.EMELengthSweep(scale_factors=[[1.0, 1.2], [1.0, 0.8]]),
+    )
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(struct,),
+            monitors=(sim.monitors[0],),
+            eme_grid_spec=straight_repeated_grid,
+            sweep_spec=td.EMELengthSweep(scale_factors=[[1.1, 1.0], [0.9, 1.0]]),
+        )
+
+    straight_periodic_grid = td.EMECompositeGrid(
+        subgrids=[
+            td.EMEUniformGrid(num_cells=1, mode_spec=bend_mode_spec),
+            td.EMEUniformGrid(
+                num_cells=1, mode_spec=td.EMEModeSpec(num_modes=1), name="periodic_unit"
+            ),
+        ],
+        subgrid_boundaries=[0],
+    )
+    _ = sim.updated_copy(
+        structures=(struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=straight_periodic_grid,
+        sweep_spec=periodic_sweep,
+    )
+
+    # non-reciprocal permittivity tensor is still unsupported in EME
+    perm_nonreciprocal = [[1, 1, 0], [-1, 2, 0], [0, 0, 3]]
+    med = td.FullyAnisotropicMedium.model_construct(
+        permittivity=perm_nonreciprocal, conductivity=cond_diag
+    )
+    struct = sim.structures[0].copy(validate=False, update={"medium": med})
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(structures=(struct,))
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(medium=med)
+
+    # non-reciprocal conductivity tensor is still unsupported in EME
+    cond_nonreciprocal = [[4, 1, 0], [-1, 5, 0], [0, 0, 6]]
+    med = td.FullyAnisotropicMedium(permittivity=perm_diag, conductivity=cond_nonreciprocal)
+    struct = sim.structures[0].updated_copy(medium=med)
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(structures=(struct,))
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(medium=med)
     # warn for time modulated
     FREQ_MODULATE = 1e12
     AMP_TIME = 1.1
@@ -1182,6 +1437,157 @@ def test_eme_simulation():
                 ),
             )
         )
+
+
+def test_eme_bend_medium_frames():
+    sim = make_eme_sim()
+    monitor = (sim.monitors[0],)
+
+    diag_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3),
+        zz=td.Medium(permittivity=4),
+    )
+    diag_struct = sim.structures[0].updated_copy(medium=diag_aniso_med)
+
+    global_bent_mode_spec = td.EMEModeSpec(
+        num_modes=1,
+        bend_radius=10.0,
+        bend_axis=1,
+        bend_medium_frame="global",
+    )
+    co_rotating_bent_mode_spec = global_bent_mode_spec.updated_copy(bend_medium_frame="co_rotating")
+
+    global_repeated_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=global_bent_mode_spec,
+        num_reps=2,
+    )
+    co_rotating_repeated_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=co_rotating_bent_mode_spec,
+        num_reps=2,
+    )
+
+    with AssertLogLevel("ERROR", contains_str="check convergence"):
+        with pytest.raises(pd.ValidationError):
+            _ = sim.updated_copy(
+                structures=(diag_struct,),
+                monitors=monitor,
+                eme_grid_spec=global_repeated_grid,
+            )
+
+    _ = sim.updated_copy(
+        structures=(diag_struct,),
+        monitors=monitor,
+        eme_grid_spec=co_rotating_repeated_grid,
+    )
+
+    coords = {
+        "x": np.linspace(-0.25, 0.25, 2),
+        "y": np.linspace(-0.5, 0.5, 2),
+        "z": np.linspace(-1.5, 1.5, 3),
+    }
+    permittivity = td.SpatialDataArray(np.full((2, 2, 3), 2.5), coords=coords)
+    custom_medium = td.CustomMedium(permittivity=permittivity)
+    custom_struct = sim.structures[0].updated_copy(medium=custom_medium)
+
+    global_bent_grid = td.EMEUniformGrid(num_cells=1, mode_spec=global_bent_mode_spec)
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(
+            structures=(custom_struct,),
+            monitors=monitor,
+            eme_grid_spec=global_bent_grid,
+        )
+
+    co_rotating_bent_grid = td.EMEUniformGrid(num_cells=1, mode_spec=co_rotating_bent_mode_spec)
+    _ = sim.updated_copy(
+        structures=(custom_struct,),
+        monitors=monitor,
+        eme_grid_spec=co_rotating_bent_grid,
+    )
+
+
+def test_eme_anisotropic_bend_validation_uses_cell_specific_freqs():
+    sim = make_eme_sim()
+    freq0 = float(sim.freqs[0])
+    medium_yy, medium_zz = _matched_lorentz_media_yy_zz(freq0)
+
+    first_cell_only_struct = td.Structure(
+        geometry=td.Box(center=(0, 0, -0.75), size=(0.5, 1.0, 1.4)),
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=2),
+            yy=medium_yy,
+            zz=medium_zz,
+        ),
+    )
+    bent_repeated_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(num_modes=1, bend_radius=10.0, bend_axis=0),
+        num_reps=2,
+    )
+    extra_sampling_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(num_modes=1, group_index_step=0.1),
+    )
+    mixed_grid = td.EMECompositeGrid(
+        subgrids=[bent_repeated_grid, extra_sampling_grid],
+        subgrid_boundaries=[0],
+    )
+
+    assert np.isclose(medium_yy.eps_model(freq0), medium_zz.eps_model(freq0))
+    assert not np.isclose(medium_yy.eps_model(freq0 * 1.1), medium_zz.eps_model(freq0 * 1.1))
+
+    _ = sim.updated_copy(
+        structures=(first_cell_only_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=mixed_grid,
+    )
+
+
+def test_eme_periodicity_sweep_reuses_grid_rotation_validation_data(monkeypatch):
+    sim = make_eme_sim()
+    invariant_aniso_struct = sim.structures[0].updated_copy(
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=2),
+            yy=td.Medium(permittivity=2),
+            zz=td.Medium(permittivity=2),
+        )
+    )
+    periodic_sweep = td.EMEPeriodicitySweep(num_reps=[{"periodic_unit": 2}, {"periodic_unit": 3}])
+    sim = sim.updated_copy(
+        structures=(invariant_aniso_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=1,
+            mode_spec=td.EMEModeSpec(
+                num_modes=1,
+                bend_radius=10.0,
+                bend_axis=1,
+                bend_medium_frame="global",
+            ),
+            name="periodic_unit",
+        ),
+        sweep_spec=periodic_sweep,
+    )
+
+    original_method = td.EMESimulation._grid_rotation_validation_data
+    num_calls = 0
+
+    def wrapped_grid_rotation_validation_data(self, *args, **kwargs):
+        nonlocal num_calls
+        num_calls += 1
+        return original_method(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        td.EMESimulation,
+        "_grid_rotation_validation_data",
+        wrapped_grid_rotation_validation_data,
+    )
+
+    sim._validate_anisotropic_bend_repetitions()
+
+    assert num_calls == 1 + len(periodic_sweep.num_reps)
 
 
 def _get_eme_scalar_mode_field_data_array(num_sweep=0):

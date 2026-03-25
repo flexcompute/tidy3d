@@ -33,7 +33,8 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
         :class:`.EMEPeriodicitySweep` :
             Sweep over number of periodic repetitions.
         :class:`.EMEFreqSweep` :
-            Sweep over frequency using perturbative mode solving.
+            Deprecated frequency sweep. Prefer ``EMESimulation.freqs`` with
+            ``EMEModeSpec.interp_spec``.
     """
 
     @property
@@ -66,6 +67,12 @@ class EMELengthSweep(EMESweepSpec):
         optimizing device length, since only the propagation phase accumulated within
         each cell changes. If a 2D array is provided for ``scale_factors``, different
         cells can be scaled independently at each sweep index.
+
+        For bent EME cells, this reuse remains valid only if the local mode problem is
+        unchanged. In particular, bent anisotropic cells are rejected when changing the
+        cell lengths would change the absolute tensor orientation seen by a reused mode,
+        and bent custom media are only supported when no global-frame remapping of custom
+        data is required.
 
     Example
     -------
@@ -127,10 +134,12 @@ class EMEModeSweep(EMESweepSpec):
 
 
 class EMEFreqSweep(EMESweepSpec):
-    """Spec for sweeping frequency in EME propagation step.
-    Unlike ``sim.freqs``, the frequency sweep is approximate, using a
-    perturbative mode solver relative to the simulation EME modes.
-    This can be a faster way to solve at a larger number of frequencies.
+    """Deprecated spec for sweeping frequency in the EME propagation step.
+
+    Prefer specifying the target frequencies directly in ``EMESimulation.freqs`` and
+    controlling the performance/accuracy tradeoff with ``EMEModeSpec.interp_spec``.
+    ``EMEFreqSweep`` is kept for backward compatibility and uses a perturbative mode
+    solver relative to the simulation EME modes.
 
     Example
     -------
@@ -139,11 +148,11 @@ class EMEFreqSweep(EMESweepSpec):
 
     freq_scale_factors: ArrayFloat1D = Field(
         title="Frequency Scale Factors",
-        description="Scale factors "
-        "applied to every frequency in 'EMESimulation.freqs'. After applying the scale factors, "
-        "the new modes are computed approximately using the exact modes as a basis. "
-        "If there are multiple 'EMESimulation.freqs', the exact modes are computed at each "
-        "of those frequencies, and then the scale factors are applied to each independently.",
+        description="Deprecated approximate alternative to listing frequencies directly in "
+        "``EMESimulation.freqs``. Scale factors are applied to every simulation frequency, "
+        "and the new modes are then computed approximately using the exact modes as a basis. "
+        "If there are multiple ``EMESimulation.freqs``, the exact modes are computed at each "
+        "of those frequencies and then scaled independently.",
     )
 
     @property
@@ -179,6 +188,12 @@ class EMEPeriodicitySweep(EMESweepSpec):
         Compared to setting ``num_reps`` directly in the ``eme_grid_spec``,
         this sweep spec allows varying the number of repetitions,
         effectively simulating multiple structures in a single EME simulation.
+
+        For bent EME cells, this reuse remains valid only if the local mode problem is
+        unchanged in each repeated copy. Bent anisotropic cells are therefore rejected
+        when the reused mode would see a different tensor orientation in another copy,
+        and bent custom media are only supported when no global-frame remapping of custom
+        data is required.
 
     Example
     -------
