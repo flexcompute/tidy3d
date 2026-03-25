@@ -52,6 +52,7 @@ DRC Markers
 
     tidy3d.plugins.klayout.drc.results.EdgeMarker
     tidy3d.plugins.klayout.drc.results.EdgePairMarker
+    tidy3d.plugins.klayout.drc.results.PolygonMarker
     tidy3d.plugins.klayout.drc.results.MultiPolygonMarker
 
 Utilities

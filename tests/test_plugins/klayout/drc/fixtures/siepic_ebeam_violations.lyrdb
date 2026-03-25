@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<report-database>
+ <description>SiEPIC-EBeam-PDK DRC</description>
+ <original-file/>
+ <generator>drc: script='/var/folders/hj/gqgpl1cx7w94ffrwz7_2k7jc0000gn/T/tmpp8vbdrgp.drc'</generator>
+ <top-cell>TOP</top-cell>
+ <tags>
+ </tags>
+ <categories>
+  <category>
+   <name>Si_width</name>
+   <description>Si min feature size; min 70 nm</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>Si_space</name>
+   <description>Si min space; min 70 nm</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>M1_width</name>
+   <description>M1 min feature size; min 3 um</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>M1_space</name>
+   <description>M1 min space; min 3 um</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>M2_width</name>
+   <description>M2 min feature size; min 5 um</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>M2_space</name>
+   <description>M2 min space; min 8 um</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>M2_M1_overlap</name>
+   <description>M2-M1 min overlap; min 3 um</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>DT_Metal_separation</name>
+   <description>DT-Metal min separation; min 20 um</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>Si_boundary</name>
+   <description>Si outside floor plan boundary</description>
+   <categories>
+   </categories>
+  </category>
+ </categories>
+ <cells>
+  <cell>
+   <name>TOP</name>
+   <variant/>
+   <layout-name/>
+   <references>
+   </references>
+  </cell>
+ </cells>
+ <items>
+  <item>
+   <tags/>
+   <category>Si_width</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (10,0;0,0)|(0,0.05;10,0.05)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>Si_width</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (10,5;0,5)|(0,5.05;10,5.05)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>Si_width</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (10,10;0,10)|(0,10.05;10,10.05)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>Si_space</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (20,5.5;30,5.5)|(30,5.55;20,5.55)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>Si_space</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (20,0.5;30,0.5)|(30,0.55;20,0.55)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>M2_M1_overlap</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (58,0;58,10)/(60,10;60,0)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>DT_Metal_separation</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (78,7;78,9)/(68,10;68,0)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>DT_Metal_separation</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (78,4;78,6)/(68,10;68,0)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>DT_Metal_separation</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (85,1;85,3)/(68,10;68,0)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>DT_Metal_separation</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (78,1;78,3)/(68,10;68,0)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>Si_boundary</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>polygon: (205,0;205,5;210,5;210,0)</value>
+   </values>
+  </item>
+ </items>
+</report-database>

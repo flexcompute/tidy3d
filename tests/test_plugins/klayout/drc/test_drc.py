@@ -16,6 +16,9 @@ from tidy3d.plugins.klayout.drc.results import (
     DRCResults,
     DRCViolation,
     EdgeMarker,
+    EdgePairMarker,
+    MultiPolygonMarker,
+    PolygonMarker,
     parse_violation_value,
 )
 
@@ -116,7 +119,7 @@ def test_runner_passes_drc_args_to_config(monkeypatch, tmp_path):
 
     def mock_run_drc_on_gds(config, **_kwargs):
         captured_config["config"] = config
-        return DRCResults.load(filepath / "drc_results.lyrdb")
+        return DRCResults.load(filepath / "fixtures" / "drc_results.lyrdb")
 
     monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run_drc_on_gds", mock_run_drc_on_gds)
 
@@ -329,7 +332,7 @@ class TestDRCRunner:
 
         # monkeypatch run_drc_on_gds() since the test machines do not have KLayout installed
         def mock_run_drc_on_gds(config, **_kwargs):
-            return DRCResults.load(filepath / "drc_results.lyrdb")
+            return DRCResults.load(filepath / "fixtures" / "drc_results.lyrdb")
 
         monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run_drc_on_gds", mock_run_drc_on_gds)
 
@@ -366,7 +369,7 @@ class TestDRCRunner:
             verbose=verbose,
             source=tmp_path / "test.gds",
             td_object_gds_savefile=tmp_path / "test.gds",
-            resultsfile=filepath / "drc_results.lyrdb",
+            resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
         )
 
     @pytest.mark.parametrize("verbose", [True, False])
@@ -401,7 +404,7 @@ class TestDRCRunner:
             verbose=verbose,
             source=request.getfixturevalue(td_object),
             td_object_gds_savefile=tmp_path / "test.gds",
-            resultsfile=filepath / "drc_results.lyrdb",
+            resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
             **request.getfixturevalue(obj_to_gds_kwargs),
         )
 
@@ -432,7 +435,7 @@ class TestDRCRunner:
                 verbose=True,
                 source=tmp_path / "test.gds",
                 td_object_gds_savefile=None,
-                resultsfile=filepath / "drc_results.lyrdb",
+                resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
             )
 
     def test_check_gdsfile_exists(self, monkeypatch, tmp_path, good_drcrunset_content):
@@ -445,7 +448,7 @@ class TestDRCRunner:
                 verbose=True,
                 source=tmp_path / "test.gds",
                 td_object_gds_savefile=None,
-                resultsfile=filepath / "drc_results.lyrdb",
+                resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
             )
 
     def test_check_gdsfile_filetype(
@@ -461,7 +464,7 @@ class TestDRCRunner:
                 verbose=True,
                 source=tmp_path / "test.g2ds",
                 td_object_gds_savefile=None,
-                resultsfile=filepath / "drc_results.lyrdb",
+                resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
             )
 
     def test_check_designrulefile_exists(self, monkeypatch, tmp_path, geom, geom_to_gds_kwargs):
@@ -474,7 +477,7 @@ class TestDRCRunner:
                 verbose=True,
                 source=tmp_path / "test.gds",
                 td_object_gds_savefile=None,
-                resultsfile=filepath / "drc_results.lyrdb",
+                resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
             )
 
     def test_check_designrulefile_filetype(
@@ -490,7 +493,7 @@ class TestDRCRunner:
                 verbose=True,
                 source=tmp_path / "test.gds",
                 td_object_gds_savefile=None,
-                resultsfile=filepath / "drc_results.lyrdb",
+                resultsfile=filepath / "fixtures" / "drc_results.lyrdb",
             )
 
 
@@ -500,17 +503,17 @@ class TestDRCResults:
     @pytest.fixture(scope="class")
     def drc_results(self):
         """Load the DRC results"""
-        return DRCResults.load(filepath / "drc_results.lyrdb")
+        return DRCResults.load(filepath / "fixtures" / "drc_results.lyrdb")
 
     @pytest.fixture(scope="class")
     def drc_results_clean(self):
         """Load the DRC results"""
-        return DRCResults.load(filepath / "drc_results_clean.lyrdb")
+        return DRCResults.load(filepath / "fixtures" / "drc_results_clean.lyrdb")
 
     def test_result_file_load(self, tmp_path):
         """Test that result file loading works"""
         # this should not raise an error
-        DRCResults.load(filepath / "drc_results.lyrdb")
+        DRCResults.load(filepath / "fixtures" / "drc_results.lyrdb")
 
         # file not found
         with pytest.raises(FileError):
@@ -546,26 +549,26 @@ class TestDRCResults:
         assert drc_results["min_gap"].markers[0].edge_pair[1] == ((-0.206, 0.342), (-0.31, 0.342))
         assert drc_results["min_gap"].markers[1].edge_pair[0] == ((-0.206, 0.24), (-0.206, 0.342))
         assert drc_results["min_gap"].markers[1].edge_pair[1] == ((-0.31, 0.342), (-0.31, 0.24))
-        assert len(drc_results["min_area"].markers[0].polygons) == 2
-        assert drc_results["min_area"].markers[0].polygons[0] == (
+        assert drc_results["min_area"].markers[0].hull == (
             (-0.6, -0.112),
             (-0.6, 0.555),
             (0.217, 0.555),
             (0.217, -0.112),
         )
-        assert drc_results["min_area"].markers[0].polygons[1] == (
+        assert len(drc_results["min_area"].markers[0].holes) == 1
+        assert drc_results["min_area"].markers[0].holes[0] == (
             (-0.31, 0.24),
             (-0.206, 0.24),
             (-0.206, 0.342),
             (-0.31, 0.342),
         )
-        assert len(drc_results["min_hole"].markers[0].polygons) == 1
-        assert drc_results["min_hole"].markers[0].polygons[0] == (
+        assert drc_results["min_hole"].markers[0].hull == (
             (-0.31, 0.24),
             (-0.31, 0.342),
             (-0.206, 0.342),
             (-0.206, 0.24),
         )
+        assert len(drc_results["min_hole"].markers[0].holes) == 0
         for violation in drc_results.violations_by_category.values():
             for marker in violation.markers:
                 assert marker.cell == "TOP"
@@ -643,23 +646,76 @@ class TestDRCResults:
         assert edge_pair_result.edge_pair[0] == ((1.0, 2.0), (3.0, 4.0))
         assert edge_pair_result.edge_pair[1] == ((5.0, 6.0), (7.0, 8.0))
         assert edge_pair_result.cell == "TEST_CELL"
+        assert edge_pair_result.symmetric is True
+
+    @pytest.mark.parametrize(
+        "value, expected_symmetric",
+        [
+            ("edge-pair: (1.0,2.0;3.0,4.0)|(5.0,6.0;7.0,8.0)", True),
+            ("edge-pair: (1.0,2.0;3.0,4.0)/(5.0,6.0;7.0,8.0)", False),
+        ],
+    )
+    def test_parse_edge_pair_symmetric_flag(self, value, expected_symmetric):
+        """Test that '|' yields symmetric=True and '/' yields symmetric=False."""
+        result = parse_violation_value(value, cell="TEST_CELL")
+        assert isinstance(result, EdgePairMarker)
+        assert result.symmetric is expected_symmetric
+        assert result.edge_pair[0] == ((1.0, 2.0), (3.0, 4.0))
+        assert result.edge_pair[1] == ((5.0, 6.0), (7.0, 8.0))
+
+    def test_parse_edge_pair_directed_negative_coords(self):
+        """Test parsing directed edge-pair with negative coordinates."""
+        value = "edge-pair: (-1.5,-2.0;-3.0,-4.0)/(-5.0,-6.0;-7.0,-8.0)"
+        result = parse_violation_value(value, cell="TEST_CELL")
+        assert isinstance(result, EdgePairMarker)
+        assert result.symmetric is False
+        assert result.edge_pair[0] == ((-1.5, -2.0), (-3.0, -4.0))
+        assert result.edge_pair[1] == ((-5.0, -6.0), (-7.0, -8.0))
 
     def test_parse_polygon(self):
         """Test parsing a single polygon violation string."""
         polygon_value = "polygon: (1.0,2.0;3.0,4.0;5.0,6.0;1.0,2.0)"
         polygon_result = parse_violation_value(polygon_value, cell="TEST_CELL")
-        assert polygon_result.polygons[0] == ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (1.0, 2.0))
+        assert isinstance(polygon_result, PolygonMarker)
+        assert polygon_result.hull == ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (1.0, 2.0))
+        assert polygon_result.holes == ()
         assert polygon_result.cell == "TEST_CELL"
 
-    def test_parse_multiple_polygons(self):
-        """Test parsing multiple polygons violation string."""
+    def test_parse_polygon_with_hole(self):
+        """Test parsing a polygon with one hole (hull + hole)."""
         polygon_value = (
             "polygon: (1.0,2.0;3.0,4.0;5.0,6.0;1.0,2.0/7.0,8.0;9.0,10.0;11.0,12.0;7.0,8.0)"
         )
         polygon_result = parse_violation_value(polygon_value, cell="TEST_CELL")
-        assert polygon_result.polygons[0] == ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (1.0, 2.0))
-        assert polygon_result.polygons[1] == ((7.0, 8.0), (9.0, 10.0), (11.0, 12.0), (7.0, 8.0))
+        assert isinstance(polygon_result, PolygonMarker)
+        assert polygon_result.hull == ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (1.0, 2.0))
+        assert len(polygon_result.holes) == 1
+        assert polygon_result.holes[0] == ((7.0, 8.0), (9.0, 10.0), (11.0, 12.0), (7.0, 8.0))
         assert polygon_result.cell == "TEST_CELL"
+
+    def test_parse_polygon_with_multiple_holes(self):
+        """Test parsing a polygon with multiple holes."""
+        polygon_value = "polygon: (0,0;10,0;10,10;0,10/2,2;4,2;4,4;2,4/6,6;8,6;8,8;6,8)"
+        polygon_result = parse_violation_value(polygon_value, cell="TEST_CELL")
+        assert isinstance(polygon_result, PolygonMarker)
+        assert polygon_result.hull == ((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0))
+        assert len(polygon_result.holes) == 2
+        assert polygon_result.holes[0] == ((2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0))
+        assert polygon_result.holes[1] == ((6.0, 6.0), (8.0, 6.0), (8.0, 8.0), (6.0, 8.0))
+
+    def test_multi_polygon_marker_deprecation_alias(self):
+        """MultiPolygonMarker still works as a subclass of PolygonMarker."""
+        marker = MultiPolygonMarker(
+            cell="TEST_CELL",
+            hull=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)),
+            holes=(((0.2, 0.2), (0.4, 0.2), (0.4, 0.4), (0.2, 0.4)),),
+        )
+        assert isinstance(marker, PolygonMarker)
+        assert isinstance(marker, MultiPolygonMarker)
+        # .polygons backwards-compat property returns (hull,) + holes
+        assert len(marker.polygons) == 2
+        assert marker.polygons[0] == marker.hull
+        assert marker.polygons[1] == marker.holes[0]
 
     @pytest.mark.parametrize(
         "invalid_edge",
@@ -744,3 +800,75 @@ class TestDRCResults:
         assert results["overflow"].count == 2
         assert len(warnings) == 1
         assert "only the first 2" in warnings[0]
+
+    def test_siepic_fixture_integration(self):
+        """Full integration test for the SiEPIC fixture covering all marker types and DRCResults API."""
+        results = DRCResults.load(filepath / "fixtures" / "siepic_ebeam_violations.lyrdb")
+
+        # --- DRCResults-level assertions ---
+        assert not results.is_clean
+        assert results.categories == (
+            "Si_width",
+            "Si_space",
+            "M1_width",
+            "M1_space",
+            "M2_width",
+            "M2_space",
+            "M2_M1_overlap",
+            "DT_Metal_separation",
+            "Si_boundary",
+        )
+        assert results.violation_counts == {
+            "Si_width": 3,
+            "Si_space": 2,
+            "M1_width": 0,
+            "M1_space": 0,
+            "M2_width": 0,
+            "M2_space": 0,
+            "M2_M1_overlap": 1,
+            "DT_Metal_separation": 4,
+            "Si_boundary": 1,
+        }
+        assert results.violated_cells == ("TOP",)
+
+        # --- Symmetric edge-pairs from same-layer rules ---
+        si_width = results["Si_width"]
+        assert si_width.count == 3
+        for marker in si_width.markers:
+            assert isinstance(marker, EdgePairMarker)
+            assert marker.symmetric is True
+
+        si_space = results["Si_space"]
+        assert si_space.count == 2
+        for marker in si_space.markers:
+            assert isinstance(marker, EdgePairMarker)
+            assert marker.symmetric is True
+
+        # --- Directed edge-pairs from cross-layer rules ---
+        m2_m1_overlap = results["M2_M1_overlap"]
+        assert m2_m1_overlap.count == 1
+        assert isinstance(m2_m1_overlap.markers[0], EdgePairMarker)
+        assert m2_m1_overlap.markers[0].symmetric is False
+
+        dt_metal_sep = results["DT_Metal_separation"]
+        assert dt_metal_sep.count == 4
+        for marker in dt_metal_sep.markers:
+            assert isinstance(marker, EdgePairMarker)
+            assert marker.symmetric is False
+
+        # --- Polygon from boundary check ---
+        si_boundary = results["Si_boundary"]
+        assert si_boundary.count == 1
+        assert isinstance(si_boundary.markers[0], PolygonMarker)
+        assert si_boundary.markers[0].hull == (
+            (205.0, 0.0),
+            (205.0, 5.0),
+            (210.0, 5.0),
+            (210.0, 0.0),
+        )
+        assert si_boundary.markers[0].holes == ()
+
+        # --- Clean categories have zero violations ---
+        for cat in ("M1_width", "M1_space", "M2_width", "M2_space"):
+            assert results[cat].count == 0
+            assert results[cat].markers == ()

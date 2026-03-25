@@ -58,38 +58,44 @@ def parse_edge(value: str, *, cell: str) -> EdgeMarker:
 
 def parse_edge_pair(value: str, *, cell: str) -> EdgePairMarker:
     """
-    Extract coordinates from edge-pair format: ``(x1,y1;x2,y2)|(x3,y3;x4,y4)``.
+    Extract coordinates from edge-pair format: ``(x1,y1;x2,y2)|(x3,y3;x4,y4)`` or ``(x1,y1;x2,y2)/(x3,y3;x4,y4)``.
+
+    KLayout uses ``|`` for symmetric edge-pairs (same-layer rules like width/space) and ``/``
+    for directed edge-pairs (cross-layer rules like separation/overlap/enclosing).
 
     Parameters
     ----------
     value : str
-        The edge-pair value string from DRC result database, with format ``(x1,y1;x2,y2)|(x3,y3;x4,y4)``.
+        The edge-pair value string from DRC result database, with format
+        ``(x1,y1;x2,y2)|(x3,y3;x4,y4)`` (symmetric) or ``(x1,y1;x2,y2)/(x3,y3;x4,y4)`` (directed).
     cell : str
         Cell name associated with the violation marker.
 
     Returns
     -------
     :class:`.EdgePairMarker`
-        :class:`.EdgePairMarker` containing both edges' coordinates in ``cell``.
+        :class:`.EdgePairMarker` containing both edges' coordinates in ``cell``, with ``symmetric``
+        set according to the separator used.
 
     Raises
     ------
     ValueError
         If the edge-pair format is invalid.
     """
-    # Extract coordinates from edge-pair format: (x1,y1;x2,y2)|(x3,y3;x4,y4)
-    pattern = (
-        r"\(([\d.-]+),([\d.-]+);([\d.-]+),([\d.-]+)\)\|\(([\d.-]+),([\d.-]+);([\d.-]+),([\d.-]+)\)"
-    )
+    # Extract coordinates from edge-pair format: (x1,y1;x2,y2)|(x3,y3;x4,y4) or /-separated
+    pattern = r"\(([\d.-]+),([\d.-]+);([\d.-]+),([\d.-]+)\)([|/])\(([\d.-]+),([\d.-]+);([\d.-]+),([\d.-]+)\)"
     match = re.match(pattern, value)
     if match:
-        coords = [float(x) for x in match.groups()]
+        groups = match.groups()
+        separator = groups[4]
+        coords = [float(x) for x in groups[:4] + groups[5:]]
         return EdgePairMarker(
             cell=cell,
             edge_pair=(
                 ((coords[0], coords[1]), (coords[2], coords[3])),
                 ((coords[4], coords[5]), (coords[6], coords[7])),
             ),
+            symmetric=separator == "|",
         )
     raise ValueError(f"Invalid edge-pair format: '{value}'.")
 
@@ -128,22 +134,25 @@ def parse_polygon_coordinates(coords_str: str) -> DRCPolygon:
     return tuple(coords)
 
 
-def parse_polygons(value: str, *, cell: str) -> MultiPolygonMarker:
+def parse_polygons(value: str, *, cell: str) -> PolygonMarker:
     """
-    Extract coordinates from polygon format: ``(x1,y1;x2,y2;...)`` including multiple polygons separated by ``/``.
+    Extract coordinates from polygon format: ``(x1,y1;x2,y2;...)`` including hull and holes separated by ``/``.
+
+    A single KLayout ``polygon:`` value represents one polygon: the first ``/``-separated contour
+    is the outer hull, and any subsequent contours are holes.
 
     Parameters
     ----------
     value : str
         The polygon value string from DRC result database, with format ``(x1,y1;x2,y2;...)``
-        or multiple polygons separated by ``/`` like ``(x1,y1;.../x3,y3;...)``.
+        or hull with holes like ``(x1,y1;.../x3,y3;...)``.
     cell : str
         Cell name associated with the violation marker.
 
     Returns
     -------
-    :class:`.MultiPolygonMarker`
-        :class:`.MultiPolygonMarker` containing one or more polygon shapes in ``cell``.
+    :class:`.PolygonMarker`
+        :class:`.PolygonMarker` containing the hull and any holes in ``cell``.
 
     Raises
     ------
@@ -158,13 +167,13 @@ def parse_polygons(value: str, *, cell: str) -> MultiPolygonMarker:
 
     coords_content = match.group(1)
 
-    # Parse multiple polygons separated by '/'
+    # Parse hull and holes separated by '/'
     polygon_parts = coords_content.split("/")
-    polygons = []
+    contours = []
     for part in polygon_parts:
-        polygons.append(parse_polygon_coordinates(part.strip()))
+        contours.append(parse_polygon_coordinates(part.strip()))
 
-    return MultiPolygonMarker(cell=cell, polygons=tuple(polygons))
+    return PolygonMarker(cell=cell, hull=contours[0], holes=tuple(contours[1:]))
 
 
 def parse_violation_value(value: str, *, cell: str) -> DRCMarker:
@@ -221,15 +230,34 @@ class EdgePairMarker(DRCMarker):
         title="DRC Edge Pair Marker",
         description="The edge pair marker of the DRC violation. The format is (edge1, edge2), where an edge has format ((x1, y1), (x2, y2)).",
     )
-
-
-class MultiPolygonMarker(DRCMarker):
-    """A class for storing KLayout DRC multi-polygon marker results."""
-
-    polygons: DRCMultiPolygon = Field(
-        title="DRC Multi-Polygon Marker",
-        description="The multi-polygon marker of the DRC violation. The format is (polygon1, polygon2, ...), where each polygon has format ((x1, y1), (x2, y2), ...).",
+    symmetric: bool = Field(
+        default=True,
+        title="Symmetric",
+        description="Whether the edge pair is symmetric (same-layer rules, '|' separator) or directed (cross-layer rules, '/' separator).",
     )
+
+
+class PolygonMarker(DRCMarker):
+    """A class for storing KLayout DRC polygon marker results (hull + optional holes)."""
+
+    hull: DRCPolygon = Field(
+        title="DRC Polygon Hull",
+        description="The outer hull of the polygon. The format is ((x1, y1), (x2, y2), ...).",
+    )
+    holes: tuple[DRCPolygon, ...] = Field(
+        default=(),
+        title="DRC Polygon Holes",
+        description="Holes cut from the hull. Each hole has format ((x1, y1), (x2, y2), ...).",
+    )
+
+    @cached_property
+    def polygons(self) -> DRCMultiPolygon:
+        """Return ``(hull,) + holes`` for backwards compatibility with ``MultiPolygonMarker``."""
+        return (self.hull, *self.holes)
+
+
+class MultiPolygonMarker(PolygonMarker):
+    """Deprecated alias for :class:`.PolygonMarker`. Use :class:`.PolygonMarker` instead."""
 
 
 class DRCViolation(Tidy3dBaseModel):
