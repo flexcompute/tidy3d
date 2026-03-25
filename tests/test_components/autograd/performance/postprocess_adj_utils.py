@@ -22,6 +22,12 @@ class PostprocessAdjInputs:
 
 
 DATASET_ROOT = Path(__file__).resolve().parents[3] / "_test_data" / "autograd" / "postprocess_adj"
+CUSTOM_MEDIUM_DATASET_ROOT = (
+    Path(__file__).resolve().parents[3]
+    / "_test_data"
+    / "autograd"
+    / "postprocess_adj_custom_medium"
+)
 SIM_DATA_ADJ_NAME = "sim_data_adj.hdf5"
 SIM_DATA_ORIG_NAME = "sim_data_orig.hdf5"
 SIM_DATA_FWD_NAME = "sim_data_fwd.hdf5"
@@ -145,6 +151,114 @@ def generate_postprocess_adj_inputs(output_dir: Path) -> PostprocessAdjInputs:
         sim_data_orig=sim_data_fwd,
         sim_data_fwd=sim_data_fwd,
         sim_fields_keys=tuple(sim_fields_keys),
+    )
+
+
+def generate_custom_medium_postprocess_adj_inputs(
+    output_dir: Path,
+    box_size: tuple[float, float, float] = (2.0, 2.0, 1.0),
+    pixel_size: float = 0.05,
+    num_freqs: int = 16,
+    permittivity: float = 2.25,
+    wavelength: float = 1.55,
+) -> PostprocessAdjInputs:
+    """Generate ``postprocess_adj`` inputs for a ``CustomMedium`` box."""
+    if pixel_size <= 0:
+        raise ValueError("pixel_size must be positive.")
+    if num_freqs <= 0:
+        raise ValueError("num_freqs must be positive.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    freq0 = td.C_0 / wavelength
+    fwidth = 0.2 * freq0
+    freqs = np.linspace(freq0 - 0.25 * fwidth, freq0 + 0.25 * fwidth, num_freqs)
+
+    def _axis_coords(size_dim: float) -> np.ndarray:
+        num_points = max(2, 1 + round(size_dim / pixel_size))
+        return np.linspace(-0.5 * size_dim, 0.5 * size_dim, num_points)
+
+    x = _axis_coords(box_size[0])
+    y = _axis_coords(box_size[1])
+    z = _axis_coords(box_size[2])
+    permittivity_data = permittivity * np.ones((len(x), len(y), len(z)))
+    coords = {"x": x, "y": y, "z": z}
+
+    structure = td.Structure(
+        geometry=td.Box(center=(0.0, 0.0, 0.0), size=box_size),
+        medium=td.CustomMedium(permittivity=td.SpatialDataArray(permittivity_data, coords=coords)),
+    )
+
+    mesh_overrides = [
+        td.MeshOverrideStructure(
+            geometry=structure.geometry,
+            dl=(pixel_size, pixel_size, pixel_size),
+        )
+    ]
+
+    sim_size = tuple(3.0 * val for val in box_size)
+
+    fwd_source = td.PlaneWave(
+        center=(0.0, 0.0, -0.25 * sim_size[2]),
+        size=(td.inf, td.inf, 0.0),
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+        direction="+",
+    )
+    adj_source = td.PlaneWave(
+        center=(0.0, 0.0, 0.25 * sim_size[2]),
+        size=(td.inf, td.inf, 0.0),
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+        direction="-",
+    )
+
+    adj_fld_monitor = td.FieldMonitor(
+        center=structure.geometry.center,
+        size=structure.geometry.size,
+        freqs=freqs,
+        fields=["Ex", "Ey", "Ez"],
+        name="adjoint_fld_0",
+        colocate=False,
+    )
+    adj_perm_monitor = td.PermittivityMonitor(
+        center=structure.geometry.center,
+        size=structure.geometry.size,
+        freqs=freqs,
+        name="adjoint_eps_0",
+    )
+
+    fwd_sim = td.Simulation(
+        center=(0.0, 0.0, 0.0),
+        size=sim_size,
+        structures=[structure],
+        monitors=[adj_fld_monitor, adj_perm_monitor],
+        sources=[fwd_source],
+        run_time=1e-11,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+        grid_spec=td.GridSpec.auto(
+            wavelength=wavelength,
+            min_steps_per_wvl=10,
+            override_structures=mesh_overrides,
+        ),
+    )
+    adj_sim = fwd_sim.updated_copy(sources=[adj_source])
+
+    sim_data_fwd = run(
+        fwd_sim,
+        task_name=f"perf_cm_fwd_{num_freqs}freqs",
+        path=str(output_dir / SIM_DATA_FWD_NAME),
+    )
+    sim_data_adj = run(
+        adj_sim,
+        task_name=f"perf_cm_adj_{num_freqs}freqs",
+        path=str(output_dir / SIM_DATA_ADJ_NAME),
+    )
+
+    sim_fields_keys = (("structures", 0, "medium", "permittivity"),)
+    return PostprocessAdjInputs(
+        sim_data_adj=sim_data_adj,
+        sim_data_orig=sim_data_fwd,
+        sim_data_fwd=sim_data_fwd,
+        sim_fields_keys=sim_fields_keys,
     )
 
 

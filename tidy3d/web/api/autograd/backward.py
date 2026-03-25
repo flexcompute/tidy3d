@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 
 import tidy3d as td
+import tidy3d.system as system_utils
 from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
@@ -30,6 +31,34 @@ if TYPE_CHECKING:
     from tidy3d.components.geometry.utils import GeometryType
 
     from .types import CustomVJPConfig, NumericalStructureConfig
+
+
+# Scaling factor for chunk-dependent memory growth on top of the baseline estimate.
+ADJOINT_MEMORY_MULTIPLIER = 6.0
+# Baseline factor for the always-live forward/adjoint field and permittivity datasets.
+ADJOINT_MEMORY_BASELINE_MULTIPLIER = 2.0
+
+
+def _resolve_freq_chunk_size(
+    n_freqs: int, max_freqs_from_budget: Callable[[int], int], fallback_num_freqs: int = 1
+) -> int:
+    """Resolve frequency chunk size from available memory and a budget callback."""
+    if n_freqs < 1:
+        return 0
+    fallback_chunk = min(n_freqs, fallback_num_freqs)
+
+    available_bytes = system_utils.get_available_memory_bytes()
+    if available_bytes < 0:
+        return fallback_chunk
+
+    max_freqs_by_budget = max_freqs_from_budget(available_bytes)
+    if max_freqs_by_budget < 1:
+        td.log.warning(
+            "Adjoint postprocessing may exceed the available memory budget even at one "
+            "frequency per chunk; forcing chunk size to 1.",
+            log_once=True,
+        )
+    return max(1, min(n_freqs, max_freqs_by_budget))
 
 
 def setup_adj(
@@ -122,15 +151,29 @@ def _get_freq_coords(field_data: td.FieldData) -> np.ndarray:
     return np.array(first_field_component.coords["f"].values)
 
 
-def _sort_by_freq_ascending(
-    dataset: Union[td.PermittivityData, td.FieldData],
-) -> Union[td.PermittivityData, td.FieldData]:
-    """Sort all field components by ascending frequency coordinates."""
-    dataset_sorted = {}
-    for key, val in dataset.field_components.items():
-        dataset_sorted[key] = val.sortby("f", ascending=True)
+def _estimate_dataset_bytes(dataset: Union[td.PermittivityData, td.FieldData]) -> int:
+    """Estimate total byte size of field components in a dataset."""
+    return int(sum(np.asarray(comp.values).nbytes for comp in dataset.field_components.values()))
 
-    return dataset.updated_copy(**dataset_sorted)
+
+def _require_freq_ascending(
+    dataset: Union[td.PermittivityData, td.FieldData],
+    *,
+    component_type: str,
+    component_index: int,
+    dataset_name: str,
+) -> None:
+    """Validate that all field components are already in ascending frequency order."""
+    for key, val in dataset.field_components.items():
+        freqs = np.asarray(val.coords["f"].values)
+        if len(freqs) <= 1:
+            continue
+        if np.any(freqs[1:] < freqs[:-1]):
+            raise ValueError(
+                "Adjoint postprocessing expects ascending frequency coordinates. "
+                f"Got non-ascending frequencies in {dataset_name} for {component_type} "
+                f"{component_index}, component '{key}': {freqs}."
+            )
 
 
 def _validate_adjoint_frequencies(
@@ -339,7 +382,9 @@ def _process_source_gradients(
 
     fld_adj = sim_data_adj[monitor_name]
     fld_adj = fld_adj.grid_corrected_copy
-    fld_adj = _sort_by_freq_ascending(fld_adj)
+    _require_freq_ascending(
+        fld_adj, component_type="source", component_index=source_index, dataset_name="field data"
+    )
 
     adjoint_frequencies = _get_freq_coords(fld_adj)
     monitor_freqs = np.array(fld_adj.monitor.freqs)
@@ -423,33 +468,32 @@ def _process_structure_gradients(
 
     # grab the forward and adjoint data
     fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
-    eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
     fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
-    eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
+    eps_data = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
 
-    # sort data by ascending frequency value to ensure data ordering is consistent
-    fld_fwd = _sort_by_freq_ascending(fld_fwd)
-    eps_fwd = _sort_by_freq_ascending(eps_fwd)
-    fld_adj = _sort_by_freq_ascending(fld_adj)
-    eps_adj = _sort_by_freq_ascending(eps_adj)
+    _require_freq_ascending(
+        fld_fwd,
+        component_type="structure",
+        component_index=structure_index,
+        dataset_name="forward field data",
+    )
+    _require_freq_ascending(
+        fld_adj,
+        component_type="structure",
+        component_index=structure_index,
+        dataset_name="adjoint field data",
+    )
+    _require_freq_ascending(
+        eps_data,
+        component_type="structure",
+        component_index=structure_index,
+        dataset_name="adjoint permittivity data",
+    )
 
     freqs_adj = np.array(fld_adj.monitor.freqs)
 
     # post normalize the adjoint fields if a single, broadband source
     fld_adj = scale_field_data(fld_adj, sim_data_adj.simulation.post_norm)
-
-    # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
-    der_maps = get_derivative_maps(
-        fld_fwd=fld_fwd,
-        eps_fwd=eps_fwd,
-        fld_adj=fld_adj,
-        eps_adj=eps_adj,
-    )
-    E_der_map = der_maps["E"]
-    D_der_map = der_maps["D"]
-    H_der_map = der_maps["H"]
-
-    H_info_exists = H_der_map is not None
 
     def filter_adj_freq(
         dataset: Union[td.PermittivityData, td.FieldData], filter_freqs: np.ndarray
@@ -460,18 +504,18 @@ def _process_structure_gradients(
 
         return dataset.updated_copy(**dataset_filter_freq)
 
-    fld_fwd = filter_adj_freq(fld_fwd, freqs_adj)
-    eps_fwd = filter_adj_freq(eps_fwd, freqs_adj)
+    combined_data_size = (
+        _estimate_dataset_bytes(fld_adj)
+        + _estimate_dataset_bytes(eps_data)
+        + _estimate_dataset_bytes(fld_fwd)
+    )
 
-    D_fwd = E_to_D(fld_fwd, eps_fwd)
-    D_adj = E_to_D(fld_adj, eps_fwd)
+    fld_fwd = filter_adj_freq(fld_fwd, freqs_adj)
 
     structure = sim_data_fwd.simulation.structures[structure_index]
 
-    # compute epsilon arrays for all frequencies
-    # use frequencies from the actual computed derivative map to ensure they exist
-    # in both forward and adjoint data (E_der_map = fld_fwd * fld_adj)
-    adjoint_frequencies = _get_freq_coords(E_der_map)
+    # After filtering, forward field data must match the adjoint monitor frequencies.
+    adjoint_frequencies = _get_freq_coords(fld_fwd)
     monitor_freqs = np.array(fld_adj.monitor.freqs)
     _validate_adjoint_frequencies(
         adjoint_frequencies=adjoint_frequencies,
@@ -482,7 +526,7 @@ def _process_structure_gradients(
 
     # auto permittivity detection
     sim_orig = sim_data_orig.simulation
-    plane_eps = eps_fwd.monitor.geometry
+    plane_eps = eps_data.monitor.geometry
     sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
 
     # permittivity without this structure
@@ -589,13 +633,38 @@ def _process_structure_gradients(
         sim_orig=sim_orig,
     )
 
-    # get chunk size - if None, process all frequencies as one chunk
-    freq_chunk_size = config.adjoint.solver_freq_chunk_size
     n_freqs = len(adjoint_frequencies)
-    if not freq_chunk_size or freq_chunk_size <= 0:
-        freq_chunk_size = n_freqs
+    H_info_exists = np.all([f"H{dim}" in fld_fwd.field_components for dim in "xyz"])
+
+    def estimate_peak_bytes(num_chunk_freqs: int) -> int:
+        return int(
+            ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+            + (num_chunk_freqs / n_freqs) * combined_data_size * ADJOINT_MEMORY_MULTIPLIER
+        )
+
+    user_desired_freqs = config.adjoint.solver_freq_chunk_size
+    if user_desired_freqs is not None and user_desired_freqs > 0:
+        freq_chunk_size = min(n_freqs, user_desired_freqs)
+        available_bytes = system_utils.get_available_memory_bytes()
+        if available_bytes > 0:
+            budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
+            if combined_data_size > 0 and estimate_peak_bytes(freq_chunk_size) > budget_bytes:
+                td.log.warning(
+                    "Configured adjoint frequency chunk size may exceed the available memory budget; "
+                    "continuing with the configured chunk size.",
+                    log_once=True,
+                )
     else:
-        freq_chunk_size = min(freq_chunk_size, n_freqs)
+
+        def max_freqs_from_budget(available_bytes: int) -> int:
+            budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
+            numerator = budget_bytes - ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+            denominator = combined_data_size * ADJOINT_MEMORY_MULTIPLIER
+            return int(n_freqs * numerator / denominator) if denominator > 0 else n_freqs
+
+        freq_chunk_size = _resolve_freq_chunk_size(
+            n_freqs=n_freqs, max_freqs_from_budget=max_freqs_from_budget, fallback_num_freqs=1
+        )
 
     # process in chunks
     vjp_value_map = {}
@@ -606,31 +675,56 @@ def _process_structure_gradients(
 
         select_adjoint_freqs = adjoint_frequencies[freq_slice]
 
-        # slice field data for current chunk
-        E_der_map_chunk = _slice_field_data(E_der_map.field_components, freq_slice)
-        D_der_map_chunk = _slice_field_data(D_der_map.field_components, freq_slice)
-        E_fwd_chunk = _slice_field_data(
-            fld_fwd.field_components, freq_slice, component_indicator="E"
+        fld_fwd_chunk_data = fld_fwd.updated_copy(
+            **_slice_field_data(fld_fwd.field_components, freq_slice)
         )
-        E_adj_chunk = _slice_field_data(
-            fld_adj.field_components, freq_slice, component_indicator="E"
+        eps_data_chunk_data = eps_data.updated_copy(
+            **_slice_field_data(eps_data.field_components, freq_slice)
         )
-        D_fwd_chunk = _slice_field_data(D_fwd.field_components, freq_slice)
-        D_adj_chunk = _slice_field_data(D_adj.field_components, freq_slice)
-        eps_data_chunk = _slice_field_data(eps_fwd.field_components, freq_slice)
+        fld_adj_chunk_data = fld_adj.updated_copy(
+            **_slice_field_data(fld_adj.field_components, freq_slice)
+        )
+
+        der_maps = get_derivative_maps(
+            fld_fwd=fld_fwd_chunk_data,
+            eps_fwd=eps_data_chunk_data,
+            fld_adj=fld_adj_chunk_data,
+            eps_adj=eps_data_chunk_data,
+        )
+        E_der_map_chunk = der_maps["E"].field_components
+        D_der_map_chunk = der_maps["D"].field_components
+
+        D_fwd_chunk = E_to_D(fld_fwd_chunk_data, eps_data_chunk_data).field_components
+        D_adj_chunk = E_to_D(fld_adj_chunk_data, eps_data_chunk_data).field_components
+
+        E_fwd_chunk = {
+            key: val
+            for key, val in fld_fwd_chunk_data.field_components.items()
+            if key.startswith("E")
+        }
+        E_adj_chunk = {
+            key: val
+            for key, val in fld_adj_chunk_data.field_components.items()
+            if key.startswith("E")
+        }
+        eps_data_chunk = eps_data_chunk_data.field_components
 
         H_der_map_chunk = None
         H_fwd_chunk = None
         H_adj_chunk = None
 
         if H_info_exists:
-            H_der_map_chunk = _slice_field_data(H_der_map.field_components, freq_slice)
-            H_fwd_chunk = _slice_field_data(
-                fld_fwd.field_components, freq_slice, component_indicator="H"
-            )
-            H_adj_chunk = _slice_field_data(
-                fld_adj.field_components, freq_slice, component_indicator="H"
-            )
+            H_der_map_chunk = der_maps["H"].field_components
+            H_fwd_chunk = {
+                key: val
+                for key, val in fld_fwd_chunk_data.field_components.items()
+                if key.startswith("H")
+            }
+            H_adj_chunk = {
+                key: val
+                for key, val in fld_adj_chunk_data.field_components.items()
+                if key.startswith("H")
+            }
 
         # slice epsilon arrays
         eps_no_structure_chunk = (

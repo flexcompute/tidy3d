@@ -57,6 +57,8 @@ STL_GEO = td.TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
 
 
 # custom medium
+EMULATED_PERM_MIN = 1.5**2
+EMULATED_PERM_MAX = 3.5**2
 
 
 def cartesian_to_unstructured(
@@ -1372,11 +1374,23 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         """make a random PermittivityData from a PermittivityMonitor."""
         field_mnt = td.FieldMonitor(**monitor.model_dump(exclude={"type", "fields"}))
         field_data = make_field_data(monitor=field_mnt)
+
+        def permittivity_from_field(field_component):
+            intensity = np.abs(field_component) ** 2
+            intensity_min = intensity.min()
+            intensity_max = intensity.max()
+            intensity_range = intensity_max - intensity_min
+            if float(intensity_range) == 0.0:
+                intensity_norm = xr.zeros_like(intensity)
+            else:
+                intensity_norm = (intensity - intensity_min) / intensity_range
+            return EMULATED_PERM_MIN + intensity_norm * (EMULATED_PERM_MAX - EMULATED_PERM_MIN)
+
         return td.PermittivityData(
             monitor=monitor,
-            eps_xx=field_data.Ex,
-            eps_yy=field_data.Ey,
-            eps_zz=field_data.Ez,
+            eps_xx=permittivity_from_field(field_data.Ex),
+            eps_yy=permittivity_from_field(field_data.Ey),
+            eps_zz=permittivity_from_field(field_data.Ez),
             grid_expanded=simulation.discretize_monitor(monitor),
         )
 

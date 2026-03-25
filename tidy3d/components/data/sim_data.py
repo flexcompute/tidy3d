@@ -33,7 +33,7 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.exceptions import DataError, SetupError, Tidy3dKeyError
+from tidy3d.exceptions import AdjointError, DataError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
@@ -1631,17 +1631,29 @@ class SimulationData(AbstractYeeGridSimulationData):
     def _make_post_norm_amps(adj_srcs: list[SourceType]) -> xr.DataArray:
         """Make a ``DataArray`` containing the complex amplitudes to multiply with adjoint field."""
 
-        freqs = []
-        amps_complex = []
+        entries = []
         for src in adj_srcs:
             src_time = src.source_time
-            freqs.append(src_time._freq0)
             amp_complex = src_time.amplitude * np.exp(1j * src_time.phase)
+            entries.append((src_time._freq0, amp_complex))
+
+        entries.sort(key=lambda entry: entry[0])
+
+        freqs = []
+        amps_complex = []
+        for freq, amp_complex in entries:
+            if freq in freqs:
+                if not np.allclose(amp_complex, amps_complex[-1], rtol=1e-12, atol=0.0):
+                    raise AdjointError(
+                        "Adjoint source grouping produced conflicting post-normalization values "
+                        f"for frequency {freq}. Each adjoint simulation must have a unique "
+                        "post-normalization value per frequency."
+                    )
+                continue
+            freqs.append(freq)
             amps_complex.append(amp_complex)
 
-        coords = {"f": freqs}
-        amps_complex = np.array(amps_complex)
-        return xr.DataArray(amps_complex, coords=coords)
+        return xr.DataArray(np.array(amps_complex), coords={"f": freqs})
 
     def _get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
         """Grab the field or permittivity data for a given structure index."""

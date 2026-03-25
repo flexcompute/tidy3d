@@ -300,6 +300,18 @@ class AdjointConfig(ConfigSection):
         ),
     )
 
+    memory_allotment_fraction: float = Field(
+        0.75,
+        title="Adjoint memory allotment fraction",
+        description=(
+            "Fraction of reported available RAM reserved for local adjoint postprocessing "
+            "when auto-selecting frequency chunk sizes."
+        ),
+        ge=0.0,
+        le=1.0,
+        json_schema_extra={"persist": True},
+    )
+
     max_traced_structures: PositiveInt = Field(
         500,
         title="Max traced structures",

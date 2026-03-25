@@ -281,6 +281,25 @@ def use_emulated_run(monkeypatch):
             sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
             sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
+            # Reuse forward permittivity monitor payloads in the emulated adjoint data so
+            # geometry-gradient spacing logic sees consistent permittivity on both sides.
+            data_adj = []
+            for mnt_data in sim_data_adj.data:
+                if (
+                    mnt_data.monitor.name.startswith("adjoint_eps_")
+                    and mnt_data.monitor.name in sim_data_fwd.monitor_data
+                ):
+                    fwd_eps_data = sim_data_fwd.monitor_data[mnt_data.monitor.name]
+                    monitor_freqs = np.array(mnt_data.monitor.freqs)
+                    eps_components = {
+                        key: value.sel(f=monitor_freqs)
+                        for key, value in fwd_eps_data.field_components.items()
+                    }
+                    mnt_data = fwd_eps_data.updated_copy(monitor=mnt_data.monitor, **eps_components)
+                data_adj.append(mnt_data)
+            data_adj = tuple(data_adj)
+            sim_data_adj = sim_data_adj.updated_copy(data=data_adj)
+
             # get the original traced fields
             sim_fields_keys = cache[task_name_fwd][AUX_KEY_SIM_FIELDS_KEYS]
 
@@ -2753,6 +2772,41 @@ def test_gaussian_broadband_source_num_freqs_selection():
     assert src_astig_wide.num_freqs == 3
 
 
+def test_make_post_norm_amps_deduplicates_equal_frequencies():
+    """Repeated same-frequency broadband-source normalizations collapse to one entry."""
+
+    freq0 = 2e14
+    source0 = td.PointDipole(
+        center=(0.0, 0.0, 0.0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=0.1 * freq0, amplitude=2.0, phase=0.3),
+    )
+    source1 = source0.updated_copy(center=(0.1, 0.0, 0.0))
+
+    post_norm = td.SimulationData._make_post_norm_amps([source0, source1])
+
+    assert np.allclose(post_norm.coords["f"].values, [freq0])
+    assert np.allclose(post_norm.values, [source0.source_time.amplitude * np.exp(1j * 0.3)])
+
+
+def test_make_post_norm_amps_rejects_conflicting_same_frequency_values():
+    """Repeated same-frequency broadband-source normalizations must agree."""
+
+    freq0 = 2e14
+    source0 = td.PointDipole(
+        center=(0.0, 0.0, 0.0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=0.1 * freq0, amplitude=1.0, phase=0.0),
+    )
+    source1 = source0.updated_copy(
+        center=(0.1, 0.0, 0.0),
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=0.1 * freq0, amplitude=2.0, phase=0.0),
+    )
+
+    with pytest.raises(AdjointError, match="conflicting post-normalization values"):
+        td.SimulationData._make_post_norm_amps([source0, source1])
+
+
 @pytest.mark.parametrize("colocate", [True, False])
 @pytest.mark.parametrize("objtype", ["flux", "intensity"])
 def test_interp_objectives(use_emulated_run, colocate, objtype):
@@ -3847,11 +3901,11 @@ def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn,
         return postprocess_fn(data)
 
     if label == "src_2_freq_2_mon_2":
-        with pytest.raises(ValueError):
-            g = ag.grad(objective)(params0)
+        with pytest.raises(AdjointError, match="conflicting post-normalization values"):
+            ag.grad(objective)(params0)
     else:
         g = ag.grad(objective)(params0)
-        print(g)
+        assert np.all(np.isfinite(g)), f"non-finite gradient for {label}"
 
 
 @pytest.mark.parametrize("structure_key", structure_keys_)
@@ -4627,6 +4681,135 @@ def test_frequency_coordinate_alignment():
 
     with pytest.raises(IndexError):
         _slice_field_data(field_data_multi, slice(-1, len(freqs_multi)))
+
+
+def test_require_freq_ascending_rejects_descending_coordinates():
+    """Adjoint postprocessing should reject descending frequency coordinates."""
+
+    from tidy3d.web.api.autograd.backward import _require_freq_ascending
+
+    data_desc = xr.DataArray(
+        np.array([2.0, 1.0]),
+        coords={"f": [2e14, 1e14]},
+        dims=["f"],
+    )
+    field_data = {"Ex": data_desc}
+
+    class DummyDataset:
+        def __init__(self, field_components):
+            self.field_components = field_components
+
+    with pytest.raises(ValueError, match="expects ascending frequency coordinates"):
+        _require_freq_ascending(
+            DummyDataset(field_data),
+            component_type="structure",
+            component_index=0,
+            dataset_name="forward field data",
+        )
+
+
+def test_resolve_freq_chunk_size_falls_back_without_memory(monkeypatch):
+    """Fallback chunk size is used when available memory cannot be determined."""
+
+    from tidy3d.web.api.autograd import backward as backward_module
+
+    n_freqs = 10
+    fallback_num_freqs = 4
+    monkeypatch.setattr(backward_module.system_utils, "get_available_memory_bytes", lambda: -1)
+    chunk_size = backward_module._resolve_freq_chunk_size(
+        n_freqs=n_freqs,
+        max_freqs_from_budget=lambda _available_bytes: n_freqs,
+        fallback_num_freqs=fallback_num_freqs,
+    )
+    assert chunk_size == min(n_freqs, fallback_num_freqs)
+
+
+def test_resolve_freq_chunk_size_auto_scales_to_budget(monkeypatch):
+    """Auto chunk size uses the current memory heuristic."""
+
+    from tidy3d.web.api.autograd import backward as backward_module
+
+    n_freqs = 10
+    combined_data_size = 100
+    available_bytes = 1000
+    monkeypatch.setattr(
+        backward_module.system_utils, "get_available_memory_bytes", lambda: available_bytes
+    )
+    chunk_size = backward_module._resolve_freq_chunk_size(
+        n_freqs=n_freqs,
+        max_freqs_from_budget=lambda available_bytes: int(
+            n_freqs
+            * (
+                int(available_bytes * config.adjoint.memory_allotment_fraction)
+                - backward_module.ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+            )
+            / (combined_data_size * backward_module.ADJOINT_MEMORY_MULTIPLIER)
+        )
+        if combined_data_size > 0
+        else n_freqs,
+    )
+    budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
+    numerator = (
+        budget_bytes - backward_module.ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+    )
+    denominator = combined_data_size * backward_module.ADJOINT_MEMORY_MULTIPLIER
+    expected = max(1, min(n_freqs, int(n_freqs * numerator / denominator)))
+    assert chunk_size == expected
+
+
+def test_resolve_freq_chunk_size_warns_when_auto_forces_chunk_one(monkeypatch):
+    """Auto chunk sizing warns when even one frequency appears over budget."""
+
+    from tidy3d.web.api.autograd import backward as backward_module
+
+    n_freqs = 10
+    combined_data_size = 100
+    available_bytes = 300
+    monkeypatch.setattr(
+        backward_module.system_utils, "get_available_memory_bytes", lambda: available_bytes
+    )
+    with AssertLogLevel("WARNING", contains_str="one frequency per chunk"):
+        chunk_size = backward_module._resolve_freq_chunk_size(
+            n_freqs=n_freqs,
+            max_freqs_from_budget=lambda available_bytes: int(
+                n_freqs
+                * (
+                    int(available_bytes * config.adjoint.memory_allotment_fraction)
+                    - backward_module.ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+                )
+                / (combined_data_size * backward_module.ADJOINT_MEMORY_MULTIPLIER)
+            )
+            if combined_data_size > 0
+            else n_freqs,
+        )
+    budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
+    numerator = (
+        budget_bytes - backward_module.ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+    )
+    denominator = combined_data_size * backward_module.ADJOINT_MEMORY_MULTIPLIER
+    expected = max(1, min(n_freqs, int(n_freqs * numerator / denominator)))
+    assert chunk_size == expected
+
+
+def test_resolve_freq_chunk_size_falls_back_without_available_memory(monkeypatch):
+    """Unavailable memory information falls back to the configured/default behavior."""
+
+    from tidy3d.web.api.autograd import backward as backward_module
+
+    monkeypatch.setattr(backward_module.system_utils, "get_available_memory_bytes", lambda: -1)
+
+    assert (
+        backward_module._resolve_freq_chunk_size(
+            n_freqs=10, max_freqs_from_budget=lambda _available_bytes: 3, fallback_num_freqs=10
+        )
+        == 10
+    )
+    assert (
+        backward_module._resolve_freq_chunk_size(
+            n_freqs=10, max_freqs_from_budget=lambda _available_bytes: 3, fallback_num_freqs=4
+        )
+        == 4
+    )
 
 
 def test_geometry_group_passes_intersected_bounds_to_children():
