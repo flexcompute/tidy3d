@@ -45,8 +45,8 @@ from tidy3d.web.core.types import TaskType
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .run_options import (
     log_deprecated_run_args,
-    resolve_dispatch_start_options,
     resolve_pay_type,
+    resolve_run_start_options,
     resolve_upload_options,
     resolve_vgpu_start_options,
 )
@@ -412,15 +412,15 @@ def run(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : Optional[str] = None
         Type of simulation being uploaded. If ``None``, uses
-        ``td.config.dispatch.simulation_type``.
+        ``td.config.run.simulation_type``.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     worker_group : Optional[str] = None
-        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
+        Worker group to target. If ``None``, uses ``td.config.run.worker_group``.
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type : Optional[Union[PayType, str]] = None
@@ -461,7 +461,7 @@ def run(
         :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
         display the progress of your simulation(s).
         Passing run options directly is deprecated. Set defaults via
-        ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+        ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
         passed here override the config for this call.
 
     Examples
@@ -497,7 +497,6 @@ def run(
     log_deprecated_run_args(
         solver_version=solver_version,
         worker_group=worker_group,
-        simulation_type=simulation_type,
         pay_type=pay_type,
         priority=priority,
         vgpu_allocation=vgpu_allocation,
@@ -606,13 +605,13 @@ def upload(
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     simulation_type : Optional[str] = None
         Type of simulation being uploaded. If ``None``, uses
-        ``td.config.dispatch.simulation_type``.
+        ``td.config.run.simulation_type``.
     parent_tasks : list[str]
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     verbose_estimate_cost : Optional[bool] = None
@@ -634,16 +633,15 @@ def upload(
             web.upload(simulation, task_name="task_name", verbose=verbose)
 
         It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.api.webapi.start`.
-        Passing ``solver_version`` or ``simulation_type`` directly is deprecated.
-        Set defaults via ``td.config.dispatch`` instead. Non-``None`` values passed here
-        override the config for this call.
+        Passing ``solver_version`` directly is deprecated. Set defaults via
+        ``td.config.run`` instead. Non-``None`` values passed here override the config
+        for this call.
 
     """
     console = get_logging_console() if verbose else None
 
     log_deprecated_run_args(
         solver_version=solver_version,
-        simulation_type=simulation_type,
     )
 
     upload_options = resolve_upload_options(
@@ -816,9 +814,9 @@ def start(
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     worker_group : Optional[str] = None
-        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
+        Worker group to target. If ``None``, uses ``td.config.run.worker_group``.
     pay_type : Optional[Union[PayType, str]] = None
         Payment method. If ``None``, uses ``td.config.run.pay_type``.
     priority : Optional[int] = None
@@ -839,7 +837,7 @@ def start(
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     Passing these run options directly is deprecated. Set defaults via
-    ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values passed
+    ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values passed
     here override the config for this call.
     """
     log_deprecated_run_args(
@@ -855,7 +853,7 @@ def start(
     if not task:
         raise ValueError("Task not found.")
 
-    dispatch_options = resolve_dispatch_start_options(
+    run_options = resolve_run_start_options(
         solver_version=solver_version,
         worker_group=worker_group,
     )
@@ -877,13 +875,13 @@ def start(
         resolved_ignore_memory_limit = vgpu_options.ignore_memory_limit
 
     task.submit(
-        solver_version=dispatch_options.solver_version,
-        worker_group=dispatch_options.worker_group,
+        solver_version=run_options.solver_version,
+        worker_group=run_options.worker_group,
         pay_type=resolved_pay_type,
         priority=resolved_priority,
         vgpu_allocation=resolved_vgpu_allocation,
         ignore_memory_limit=resolved_ignore_memory_limit,
-        additional_payload=dispatch_options.additional_payload,
+        additional_payload=run_options.additional_payload,
     )
 
 

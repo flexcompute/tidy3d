@@ -23,8 +23,8 @@ class ResolvedUploadOptions:
 
 
 @dataclass(frozen=True)
-class ResolvedDispatchStartOptions:
-    """Resolved config-backed dispatch options for task start."""
+class ResolvedRunStartOptions:
+    """Resolved config-backed run options for task start."""
 
     solver_version: Optional[str]
     worker_group: Optional[str]
@@ -68,7 +68,7 @@ def log_deprecated_run_args(
 
     log.warning(
         "Passing run options as direct arguments is deprecated. "
-        "Set defaults via 'td.config.dispatch', 'td.config.run', and 'td.config.vgpu' instead.",
+        "Set defaults via 'td.config.run' and 'td.config.vgpu' instead.",
         log_once=True,
     )
 
@@ -81,11 +81,9 @@ def resolve_upload_options(
     """Resolve upload options by applying config defaults."""
 
     return ResolvedUploadOptions(
-        solver_version=solver_version
-        if solver_version is not None
-        else config.dispatch.solver_version,
+        solver_version=solver_version if solver_version is not None else config.run.solver_version,
         simulation_type=(
-            simulation_type if simulation_type is not None else config.dispatch.simulation_type
+            simulation_type if simulation_type is not None else config.run.simulation_type
         ),
     )
 
@@ -93,24 +91,22 @@ def resolve_upload_options(
 def _resolve_additional_payload() -> Optional[dict[str, Any]]:
     """Resolve the additional submit payload from config."""
 
-    additional_payload = config.dispatch.additional_payload
+    additional_payload = config.run.additional_payload
     if additional_payload is None:
         return None
     return dict(additional_payload)
 
 
-def resolve_dispatch_start_options(
+def resolve_run_start_options(
     *,
     solver_version: Optional[str],
     worker_group: Optional[str],
-) -> ResolvedDispatchStartOptions:
-    """Resolve config-backed dispatch options for task start."""
+) -> ResolvedRunStartOptions:
+    """Resolve config-backed run options for task start."""
 
-    return ResolvedDispatchStartOptions(
-        solver_version=solver_version
-        if solver_version is not None
-        else config.dispatch.solver_version,
-        worker_group=worker_group if worker_group is not None else config.dispatch.worker_group,
+    return ResolvedRunStartOptions(
+        solver_version=solver_version if solver_version is not None else config.run.solver_version,
+        worker_group=(worker_group if worker_group is not None else config.run.worker_group),
         additional_payload=_resolve_additional_payload(),
     )
 

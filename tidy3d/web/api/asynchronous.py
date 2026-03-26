@@ -57,9 +57,9 @@ def run_async(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : Optional[str] = None
         Type of simulation being uploaded. If ``None``, uses
-        ``td.config.dispatch.simulation_type``.
+        ``td.config.run.simulation_type``.
     solver_version: Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type : Optional[Union[PayType, str]] = None
@@ -99,12 +99,11 @@ def run_async(
     Notes
     -----
     Passing run options directly is deprecated. Set defaults via
-    ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+    ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
     passed here override the config for this call.
     """
     log_deprecated_run_args(
         solver_version=solver_version,
-        simulation_type=simulation_type,
         pay_type=pay_type,
         priority=priority,
         vgpu_allocation=vgpu_allocation,

@@ -343,15 +343,15 @@ def run_custom(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : Optional[str] = None
         Type of simulation being uploaded. If ``None``, uses
-        ``td.config.dispatch.simulation_type``.
+        ``td.config.run.simulation_type``.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     worker_group : Optional[str] = None
-        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
+        Worker group to target. If ``None``, uses ``td.config.run.worker_group``.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculation locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -407,7 +407,7 @@ def run_custom(
         :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
         display the progress of your simulation(s).
         Passing run options directly is deprecated. Set defaults via
-        ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+        ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
         passed here override the config for this call.
 
     Examples
@@ -439,7 +439,6 @@ def run_custom(
     log_deprecated_run_args(
         solver_version=solver_version,
         worker_group=worker_group,
-        simulation_type=simulation_type,
         pay_type=pay_type,
         priority=priority,
         vgpu_allocation=vgpu_allocation,
@@ -638,9 +637,9 @@ def run_async_custom(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : Optional[str] = None
         Type of simulation being uploaded. If ``None``, uses
-        ``td.config.dispatch.simulation_type``.
+        ``td.config.run.simulation_type``.
     solver_version: Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculations locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -702,7 +701,7 @@ def run_async_custom(
     Notes
     -----
     Passing run options directly is deprecated. Set defaults via
-    ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+    ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
     passed here override the config for this call.
     """
     # validate priority if specified

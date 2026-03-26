@@ -208,35 +208,35 @@ def test_set_default_profile_empty_raises(config_manager):
 
 
 def test_config_context_manager_restores_runtime_overrides(config_manager):
-    assert config.dispatch.worker_group is None
+    assert config.run.worker_group is None
     assert config.vgpu.priority is None
     assert config.run.pay_type == "AUTO"
 
     with config as scoped_config:
-        scoped_config.dispatch.worker_group = "scoped_group"
+        scoped_config.run.worker_group = "scoped_group"
         scoped_config.vgpu.priority = 5
         scoped_config.run.pay_type = PayType.CREDITS
 
-        assert config.dispatch.worker_group == "scoped_group"
+        assert config.run.worker_group == "scoped_group"
         assert config.vgpu.priority == 5
         assert config.run.pay_type == PayType.CREDITS.value
 
-    assert config.dispatch.worker_group is None
+    assert config.run.worker_group is None
     assert config.vgpu.priority is None
     assert config.run.pay_type == "AUTO"
 
 
 def test_config_context_manager_restores_nested_overrides(config_manager):
-    assert config.dispatch.worker_group is None
+    assert config.run.worker_group is None
 
     with config as scoped_config:
-        scoped_config.dispatch.worker_group = "outer_group"
-        assert config.dispatch.worker_group == "outer_group"
+        scoped_config.run.worker_group = "outer_group"
+        assert config.run.worker_group == "outer_group"
 
         with config as nested_config:
-            nested_config.dispatch.worker_group = "inner_group"
-            assert config.dispatch.worker_group == "inner_group"
+            nested_config.run.worker_group = "inner_group"
+            assert config.run.worker_group == "inner_group"
 
-        assert config.dispatch.worker_group == "outer_group"
+        assert config.run.worker_group == "outer_group"
 
-    assert config.dispatch.worker_group is None
+    assert config.run.worker_group is None

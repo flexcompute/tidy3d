@@ -367,9 +367,9 @@ def apply_adjoint(config: AdjointConfig) -> None:
     )
 
 
-@register_section("dispatch")
-class DispatchConfig(ConfigSection):
-    """Default dispatch configuration for web runs."""
+@register_section("run")
+class RunConfig(ConfigSection):
+    """Default run configuration for web submissions."""
 
     solver_version: Optional[str] = Field(
         None,
@@ -394,11 +394,6 @@ class DispatchConfig(ConfigSection):
         title="Additional payload",
         description="Additional submit payload serialized to JSON and sent under 'additionalPayload'.",
     )
-
-
-@register_section("run")
-class RunConfig(ConfigSection):
-    """Default run configuration for web submissions."""
 
     pay_type: str = Field(
         "AUTO",

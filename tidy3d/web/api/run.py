@@ -10,6 +10,7 @@ from tidy3d.log import get_logging_console
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.autograd import run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR
+from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import task_type_name_of
 from tidy3d.web.api.webapi import default_data_filename
 
@@ -152,12 +153,12 @@ def run(
     progress_callback_download : Optional[Callable[[float], None]] = None
         Callback invoked with byte counts during download (single-run path only).
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.dispatch.solver_version``.
+        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
     worker_group : Optional[str] = None
-        Worker group to target. If ``None``, uses ``td.config.dispatch.worker_group``.
+        Worker group to target. If ``None``, uses ``td.config.run.worker_group``.
     simulation_type : Optional[str] = None
         Simulation type label passed through to the runners. If ``None``, uses
-        ``td.config.dispatch.simulation_type``.
+        ``td.config.run.simulation_type``.
     parent_tasks : Optional[List[str]] = None
         Parent task IDs, if any.
     local_gradient : Optional[bool] = None
@@ -205,7 +206,7 @@ def run(
       the returned data exposes expected convenience attributes.
     - ``progress_callback_*`` are only used in the single-run code path.
     - Passing run options directly is deprecated. Set defaults via
-      ``td.config.dispatch``, ``td.config.run``, and ``td.config.vgpu`` instead. Non-``None`` values
+      ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
       passed here override the config for this call.
 
     Raises
@@ -266,6 +267,7 @@ def run(
         h, sim = next(iter(h2sim.items()))
         if path is None:
             path = default_data_filename(task_type_name_of(sim))
+        log_deprecated_run_args(simulation_type=simulation_type)
         data = {
             h: run_autograd(
                 simulation=sim,

@@ -397,19 +397,19 @@ def mock_metadata(monkeypatch, set_api_key):
 
 @pytest.fixture
 def reset_run_option_config():
-    config.dispatch.solver_version = None
-    config.dispatch.worker_group = None
-    config.dispatch.simulation_type = "tidy3d"
-    config.dispatch.additional_payload = None
+    config.run.solver_version = None
+    config.run.worker_group = None
+    config.run.simulation_type = "tidy3d"
+    config.run.additional_payload = None
     config.run.pay_type = PayType.AUTO
     config.vgpu.priority = None
     config.vgpu.vgpu_allocation = None
     config.vgpu.ignore_memory_limit = None
     yield
-    config.dispatch.solver_version = None
-    config.dispatch.worker_group = None
-    config.dispatch.simulation_type = "tidy3d"
-    config.dispatch.additional_payload = None
+    config.run.solver_version = None
+    config.run.worker_group = None
+    config.run.simulation_type = "tidy3d"
+    config.run.additional_payload = None
     config.run.pay_type = PayType.AUTO
     config.vgpu.priority = None
     config.vgpu.vgpu_allocation = None
@@ -478,7 +478,6 @@ def test_upload_logs_deprecated_run_args(monkeypatch):
     assert warning_calls == [
         {
             "solver_version": "solver_x",
-            "simulation_type": "special_type",
         }
     ]
 
@@ -505,7 +504,7 @@ def test_start_logs_deprecated_run_args(monkeypatch):
         lambda task_id: td.web.core.task_core.SimulationTask(taskId=task_id),
     )
     monkeypatch.setattr(
-        "tidy3d.web.api.webapi.resolve_dispatch_start_options",
+        "tidy3d.web.api.webapi.resolve_run_start_options",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
     )
 
@@ -597,12 +596,12 @@ def test_start_with_ignore_memory_limit(mock_start, ignore_memory_limit):
 
 
 @responses.activate
-def test_upload_uses_dispatch_config_defaults(
+def test_upload_uses_run_config_defaults(
     monkeypatch, set_api_key, mock_get_info, reset_run_option_config
 ):
     sim = make_sim()
-    config.dispatch.simulation_type = "config_type"
-    config.dispatch.solver_version = "config_solver"
+    config.run.simulation_type = "config_type"
+    config.run.solver_version = "config_solver"
 
     responses.add(
         responses.GET,
@@ -651,9 +650,9 @@ def test_upload_uses_dispatch_config_defaults(
 
 @responses.activate
 def test_start_uses_config_defaults(set_api_key, mock_get_info, reset_run_option_config):
-    config.dispatch.solver_version = "config_solver"
-    config.dispatch.worker_group = "config_group"
-    config.dispatch.additional_payload = {"routeHint": "special"}
+    config.run.solver_version = "config_solver"
+    config.run.worker_group = "config_group"
+    config.run.additional_payload = {"routeHint": "special"}
     config.run.pay_type = PayType.CREDITS
     config.vgpu.priority = 5
     config.vgpu.vgpu_allocation = 4
@@ -688,7 +687,7 @@ def test_start_uses_config_defaults(set_api_key, mock_get_info, reset_run_option
 def test_start_explicit_args_override_config_defaults(
     set_api_key, mock_get_info, reset_run_option_config
 ):
-    config.dispatch.worker_group = "config_group"
+    config.run.worker_group = "config_group"
     config.run.pay_type = PayType.CREDITS
     config.vgpu.priority = 5
     config.vgpu.vgpu_allocation = 4
@@ -729,14 +728,14 @@ def test_start_explicit_args_override_config_defaults(
 def test_start_uses_scoped_config_without_leaking(
     set_api_key, mock_get_info, reset_run_option_config
 ):
-    assert config.dispatch.worker_group is None
-    assert config.dispatch.additional_payload is None
+    assert config.run.worker_group is None
+    assert config.run.additional_payload is None
     assert config.vgpu.priority is None
     assert config.run.pay_type == "AUTO"
 
     with config as scoped_config:
-        scoped_config.dispatch.worker_group = "scoped_group"
-        scoped_config.dispatch.additional_payload = {"routeHint": "scoped"}
+        scoped_config.run.worker_group = "scoped_group"
+        scoped_config.run.additional_payload = {"routeHint": "scoped"}
         scoped_config.run.pay_type = PayType.CREDITS
         scoped_config.vgpu.priority = 7
 
@@ -764,13 +763,13 @@ def test_start_uses_scoped_config_without_leaking(
 
         start(TASK_ID)
 
-        assert config.dispatch.worker_group == "scoped_group"
-        assert config.dispatch.additional_payload == {"routeHint": "scoped"}
+        assert config.run.worker_group == "scoped_group"
+        assert config.run.additional_payload == {"routeHint": "scoped"}
         assert config.run.pay_type == PayType.CREDITS.value
         assert config.vgpu.priority == 7
 
-    assert config.dispatch.worker_group is None
-    assert config.dispatch.additional_payload is None
+    assert config.run.worker_group is None
+    assert config.run.additional_payload is None
     assert config.run.pay_type == "AUTO"
     assert config.vgpu.priority is None
 
@@ -779,8 +778,8 @@ def test_start_uses_scoped_config_without_leaking(
 def test_start_batch_ignores_config_run_defaults(monkeypatch, set_api_key, reset_run_option_config):
     batch_task_id = "batch-task-id"
 
-    config.dispatch.solver_version = "config_solver"
-    config.dispatch.worker_group = "config_group"
+    config.run.solver_version = "config_solver"
+    config.run.worker_group = "config_group"
     config.run.pay_type = PayType.CREDITS
     config.vgpu.priority = 5
     config.vgpu.vgpu_allocation = 4
@@ -811,12 +810,12 @@ def test_start_batch_ignores_config_run_defaults(monkeypatch, set_api_key, reset
 
 
 @responses.activate
-def test_start_batch_uses_config_dispatch_additional_payload(
+def test_start_batch_uses_config_run_additional_payload(
     monkeypatch, set_api_key, reset_run_option_config
 ):
     batch_task_id = "batch-task-id"
 
-    config.dispatch.additional_payload = {"routeHint": "batch"}
+    config.run.additional_payload = {"routeHint": "batch"}
 
     monkeypatch.setattr(
         "tidy3d.web.api.webapi.TaskFactory.get",
@@ -929,13 +928,100 @@ def test_webapi_run_logs_deprecated_run_args_on_cache_hit(monkeypatch, tmp_path)
         {
             "solver_version": None,
             "worker_group": "worker_a",
-            "simulation_type": "special_type",
             "pay_type": PayType.CREDITS,
             "priority": 4,
             "vgpu_allocation": 2,
             "ignore_memory_limit": True,
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("warning_target", "stop_target", "call_kind"),
+    [
+        (
+            "tidy3d.web.api.run.log_deprecated_run_args",
+            "tidy3d.web.api.run.run_autograd",
+            "run",
+        ),
+        (
+            "tidy3d.web.api.autograd.autograd.log_deprecated_run_args",
+            "tidy3d.web.api.autograd.autograd.asynchronous_webapi.run_async",
+            "run_async",
+        ),
+    ],
+)
+def test_public_run_interfaces_log_deprecated_simulation_type(
+    monkeypatch, warning_target, stop_target, call_kind
+):
+    warning_calls = []
+
+    monkeypatch.setattr(
+        warning_target,
+        lambda **kwargs: warning_calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        stop_target,
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
+    )
+
+    with pytest.raises(RuntimeError, match="stop_after_warning"):
+        if call_kind == "run":
+            td.web.run(make_sim(), simulation_type="special_type")
+        else:
+            td.web.run_async({"sim": make_sim()}, simulation_type="special_type")
+
+    assert len(warning_calls) == 1
+    assert warning_calls[0]["simulation_type"] == "special_type"
+
+
+@pytest.mark.parametrize("call_kind", ["run", "run_async"])
+def test_regular_autograd_internal_simulation_type_does_not_warn(monkeypatch, call_kind):
+    warning_calls = []
+    upload_option_calls = []
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.run_options.log.warning",
+        lambda message, **kwargs: warning_calls.append((message, kwargs)),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.autograd.autograd.is_valid_for_autograd",
+        lambda simulation: True,
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.autograd.autograd.is_valid_for_autograd_async",
+        lambda simulations: True,
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.autograd.autograd.setup_run",
+        lambda simulation, numerical_structures=None: SimpleNamespace(
+            simulation=simulation,
+            sim_fields={("sources", 0, "center", 0): 0.0},
+            numerical_structure_map={},
+        ),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.autograd.autograd.setup_fwd",
+        lambda sim_fields, sim_original, local_gradient: sim_original,
+    )
+    monkeypatch.setattr("tidy3d.web.api.container.Folder.get", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "tidy3d.web.api.webapi.resolve_upload_options",
+        lambda **kwargs: (
+            upload_option_calls.append(kwargs),
+            (_ for _ in ()).throw(RuntimeError("stop_after_warning_check")),
+        )[1],
+    )
+
+    with pytest.raises(RuntimeError, match="stop_after_warning_check"):
+        if call_kind == "run":
+            td.web.run(make_sim(), verbose=False)
+        else:
+            td.web.run_async({"sim": make_sim()}, verbose=False)
+
+    assert len(upload_option_calls) == 1
+    assert upload_option_calls[0]["simulation_type"] == "autograd_fwd"
+    assert warning_calls == []
 
 
 def test_log_deprecated_run_args_uses_stable_message(monkeypatch):
@@ -951,7 +1037,7 @@ def test_log_deprecated_run_args_uses_stable_message(monkeypatch):
 
     expected_message = (
         "Passing run options as direct arguments is deprecated. "
-        "Set defaults via 'td.config.dispatch', 'td.config.run', and 'td.config.vgpu' instead."
+        "Set defaults via 'td.config.run' and 'td.config.vgpu' instead."
     )
     assert warning_calls == [
         (expected_message, {"log_once": True}),
