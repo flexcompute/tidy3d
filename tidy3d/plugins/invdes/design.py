@@ -22,8 +22,40 @@ if TYPE_CHECKING:
     import autograd.numpy as anp
 
     from tidy3d.compat import Self
+    from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
 
 PostProcessFnType = Callable[[td.SimulationData], float]
+
+
+def _resolve_mirror_symmetry(
+    *,
+    array_shape: tuple[int, ...],
+    design_region: DesignRegionType,
+    simulation: td.Simulation,
+) -> Optional[MirrorSymmetry]:
+    """Mirror boundaries relevant to a design-region array inside a simulation."""
+    rmin, rmax = design_region.geometry.bounds
+    mirror_symmetry = []
+    for size_axis, sim_sym, low, high, sim_center in zip(
+        array_shape, simulation.symmetry, rmin, rmax, simulation.center
+    ):
+        if sim_sym == 0 or size_axis <= 1:
+            mirror_symmetry.append(None)
+            continue
+
+        touches_low = np.isclose(low, sim_center, rtol=0.0, atol=1e-12)
+        touches_high = np.isclose(high, sim_center, rtol=0.0, atol=1e-12)
+
+        if touches_low and not touches_high:
+            mirror_symmetry.append("low")
+        elif touches_high and not touches_low:
+            mirror_symmetry.append("high")
+        else:
+            mirror_symmetry.append(None)
+
+    if any(side is not None for side in mirror_symmetry):
+        return tuple(mirror_symmetry)
+    return None
 
 
 class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
@@ -51,6 +83,10 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="Serializable expression defining the objective function.",
     )
 
+    @abc.abstractmethod
+    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> Optional[MirrorSymmetry]:
+        """Mirror boundaries relevant to a design-region array for this inverse design."""
+
     def make_objective_fn(
         self, post_process_fn: Optional[Callable] = None, maximize: bool = True
     ) -> Callable[[anp.ndarray], tuple[float, dict]]:
@@ -66,7 +102,8 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
         def objective_fn(params: anp.ndarray, aux_data: Optional[dict] = None) -> float:
             """Full objective function."""
-            data = self.to_simulation_data(params=params)
+            symmetry = self._resolve_mirror_symmetry(params.shape)
+            data = self.to_simulation_data(params=params, symmetry=symmetry)
 
             if self.metric is None:
                 post_process_val = post_process_fn(data)
@@ -77,7 +114,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
             else:
                 raise ValueError(f"Invalid data type: {type(data)}")
 
-            penalty_value = self.design_region.penalty_value(params)
+            penalty_value = self.design_region.penalty_value(params, symmetry=symmetry)
             objective_fn_val = direction_multiplier * post_process_val - penalty_value
 
             # Store auxiliary data if provided
@@ -225,11 +262,23 @@ class InverseDesign(AbstractInverseDesign):
 
         return monitor_fields
 
-    def to_simulation(self, params: anp.ndarray) -> td.Simulation:
+    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> Optional[MirrorSymmetry]:
+        """Mirror boundaries relevant to a design-region array in this simulation."""
+        return _resolve_mirror_symmetry(
+            array_shape=array_shape,
+            design_region=self.design_region,
+            simulation=self.simulation,
+        )
+
+    def to_simulation(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+    ) -> td.Simulation:
         """Convert the ``InverseDesign`` to a corresponding ``td.Simulation`` with traced fields."""
+        if symmetry is None:
+            symmetry = self._resolve_mirror_symmetry(params.shape)
 
         # construct the design region to a regular structure
-        design_region_structure = self.design_region.to_structure(params)
+        design_region_structure = self.design_region.to_structure(params, symmetry=symmetry)
 
         # construct mesh override structures and a new grid spec, if applicable
         grid_spec = self.simulation.grid_spec
@@ -244,9 +293,11 @@ class InverseDesign(AbstractInverseDesign):
             grid_spec=grid_spec,
         )
 
-    def to_simulation_data(self, params: anp.ndarray, **kwargs: Any) -> td.SimulationData:
+    def to_simulation_data(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None, **kwargs: Any
+    ) -> td.SimulationData:
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
-        simulation = self.to_simulation(params=params)
+        simulation = self.to_simulation(params=params, symmetry=symmetry)
         return self.run(simulation, **kwargs)
 
 
@@ -302,6 +353,7 @@ class InverseDesignMulti(AbstractInverseDesign):
                 "corresponding sizes of '{sizes}'."
             )
 
+        self._resolve_mirror_symmetry(self.design_region.params_shape)
         return self
 
     @property
@@ -328,14 +380,44 @@ class InverseDesignMulti(AbstractInverseDesign):
 
         return designs_list
 
-    def to_simulation(self, params: anp.ndarray) -> dict[str, td.Simulation]:
+    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> Optional[MirrorSymmetry]:
+        """Mirror boundaries relevant to a shared design-region array across all simulations."""
+        mirror_symmetries = [
+            _resolve_mirror_symmetry(
+                array_shape=array_shape,
+                design_region=self.design_region,
+                simulation=simulation,
+            )
+            for simulation in self.simulations
+        ]
+
+        if not mirror_symmetries:
+            return None
+
+        mirror_symmetry = mirror_symmetries[0]
+        if any(sym != mirror_symmetry for sym in mirror_symmetries[1:]):
+            raise ValidationError(
+                "All simulations in 'InverseDesignMulti' must resolve to the same mirror "
+                "symmetry for the shared design region."
+            )
+        return mirror_symmetry
+
+    def to_simulation(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+    ) -> dict[str, td.Simulation]:
         """Convert the ``InverseDesign`` to a corresponding dict of ``td.Simulation``s."""
-        simulation_list = [design.to_simulation(params) for design in self.designs]
+        if symmetry is None:
+            symmetry = self._resolve_mirror_symmetry(params.shape)
+        simulation_list = [
+            design.to_simulation(params, symmetry=symmetry) for design in self.designs
+        ]
         return dict(zip(self.task_names, simulation_list))
 
-    def to_simulation_data(self, params: anp.ndarray, **kwargs: Any) -> td.web.BatchData:
+    def to_simulation_data(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None, **kwargs: Any
+    ) -> td.web.BatchData:
         """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
-        simulations = self.to_simulation(params)
+        simulations = self.to_simulation(params, symmetry=symmetry)
         return self.run_async(simulations, **kwargs)
 
 

@@ -9,6 +9,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.plugins.autograd.types import PaddingType
 
 from .parametrizations import FilterAndProject
+from .symmetries import MirrorSymmetry, expand_mirror_symmetry
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -54,6 +55,12 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         title="Padding",
         description="The padding mode to use.",
     )
+    symmetry: Optional[MirrorSymmetry] = Field(
+        None,
+        title="Mirror Symmetry",
+        description="Optional per-axis mirror symmetry applied by expanding the array across "
+        "selected low or high boundaries before evaluating the penalty.",
+    )
     delta_eta: float = Field(
         0.01,
         title="Delta Eta",
@@ -73,6 +80,10 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         float
             The computed erosion/dilation penalty.
         """
+        working_array = array
+        if self.symmetry is not None:
+            working_array, _ = expand_mirror_symmetry(array, symmetry=self.symmetry)
+
         filtproj = FilterAndProject(
             radius=self.radius,
             dl=self.dl,
@@ -98,7 +109,7 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         def _close(arr: NDArray) -> NDArray:
             return _erode(_dilate(arr))
 
-        diff = _close(array) - _open(array)
+        diff = _close(working_array) - _open(working_array)
 
         if not np.any(diff):
             return 0.0
@@ -115,6 +126,7 @@ def make_erosion_dilation_penalty(
     eta: float = 0.5,
     delta_eta: float = 0.01,
     padding: PaddingType = "reflect",
+    symmetry: Optional[MirrorSymmetry] = None,
 ) -> Callable:
     """Computes a penalty for erosion/dilation of a parameter map not being unity.
 
@@ -130,6 +142,7 @@ def make_erosion_dilation_penalty(
         eta=eta,
         delta_eta=delta_eta,
         padding=padding,
+        symmetry=symmetry,
     )
 
 

@@ -18,6 +18,7 @@ from tidy3d.plugins.autograd.types import KernelType, PaddingType
 
 from .filters import make_filter
 from .projections import tanh_projection
+from .symmetries import MirrorSymmetry, expand_mirror_symmetry
 
 if TYPE_CHECKING:
     from typing import Callable, Literal
@@ -61,6 +62,12 @@ class FilterAndProject(Tidy3dBaseModel):
         title="Padding",
         description="The padding mode to use.",
     )
+    symmetry: Optional[MirrorSymmetry] = Field(
+        None,
+        title="Mirror Symmetry",
+        description="Optional per-axis mirror symmetry applied by expanding the array across "
+        "selected low or high boundaries before filtering and projection.",
+    )
 
     def __call__(
         self, array: NDArray, beta: Optional[float] = None, eta: Optional[float] = None
@@ -81,6 +88,11 @@ class FilterAndProject(Tidy3dBaseModel):
         np.ndarray
             The filtered and projected array.
         """
+        crop_slices = tuple(slice(None) for _ in range(array.ndim))
+        working_array = array
+        if self.symmetry is not None:
+            working_array, crop_slices = expand_mirror_symmetry(array, symmetry=self.symmetry)
+
         filter_instance = make_filter(
             radius=self.radius,
             dl=self.dl,
@@ -88,13 +100,13 @@ class FilterAndProject(Tidy3dBaseModel):
             filter_type=self.filter_type,
             padding=self.padding,
         )
-        filtered = filter_instance(array)
+        filtered = filter_instance(working_array)
         beta = beta if beta is not None else self.beta
         eta = eta if eta is not None else self.eta
         projected = tanh_projection(filtered, beta, eta)
         clip_projected = _straight_through_clip(projected, a_min=0.0, a_max=1.0)
 
-        return clip_projected
+        return clip_projected[crop_slices]
 
 
 def make_filter_and_project(
@@ -106,6 +118,7 @@ def make_filter_and_project(
     eta: float = ETA_DEFAULT,
     filter_type: KernelType = "conic",
     padding: PaddingType = "reflect",
+    symmetry: Optional[MirrorSymmetry] = None,
 ) -> Callable:
     """Create a function that filters and projects an array.
 
@@ -121,6 +134,7 @@ def make_filter_and_project(
         eta=eta,
         filter_type=filter_type,
         padding=padding,
+        symmetry=symmetry,
     )
 
 

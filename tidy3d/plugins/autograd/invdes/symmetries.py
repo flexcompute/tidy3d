@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+
+import autograd.numpy as np
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+MirrorSymmetrySide = Literal["low", "high"]
+MirrorSymmetry = tuple[MirrorSymmetrySide | None, ...]
+
+
+def _flip_axis(array: NDArray, axis: int) -> NDArray:
+    """Flip an array along a given axis using slicing compatible with autograd."""
+    index = [slice(None)] * array.ndim
+    index[axis] = slice(None, None, -1)
+    return array[tuple(index)]
 
 
 def symmetrize_mirror(array: NDArray, axis: int | tuple[int, int]) -> NDArray:
@@ -52,25 +64,64 @@ def symmetrize_mirror(array: NDArray, axis: int | tuple[int, int]) -> NDArray:
     ):
         raise ValueError(f"Invalid axis: expected 0, 1, or Sequence thereof, but got {axis}")
 
-    # Helper function to flip along a specific axis using slicing
-    # Autograd supports slicing (e.g. ::-1) but lacks VJP for np.flip
-    def flip_axis(arr: NDArray, ax: int) -> NDArray:
-        if ax == 0:
-            return arr[::-1, :]
-        elif ax == 1:
-            return arr[:, ::-1]
-        return arr
-
     # Case 1: Symmetrize along both axes
     if isinstance(axis, Sequence):
         # Symmetrize along axis 0
-        array = (array + flip_axis(array, 0)) / 2.0
+        array = (array + _flip_axis(array, 0)) / 2.0
         # Symmetrize along axis 1
-        array = (array + flip_axis(array, 1)) / 2.0
+        array = (array + _flip_axis(array, 1)) / 2.0
         return array
 
     # Case 2: Symmetrize along a single axis
-    return (array + flip_axis(array, axis)) / 2.0
+    return (array + _flip_axis(array, axis)) / 2.0
+
+
+def expand_mirror_symmetry(
+    array: NDArray, symmetry: MirrorSymmetry
+) -> tuple[NDArray, tuple[slice, ...]]:
+    """Expand an array across mirrored boundaries and return slices for the original domain.
+
+    Parameters
+    ----------
+    array : NDArray
+        Input array defined on the reduced symmetric domain.
+    symmetry : tuple[Literal["low", "high"] | None, ...]
+        Per-axis mirror boundary specification. ``"low"`` mirrors the lower boundary of the
+        axis, ``"high"`` mirrors the upper boundary, and ``None`` leaves the axis unchanged.
+
+    Returns
+    -------
+    tuple[NDArray, tuple[slice, ...]]
+        The expanded array and slices that recover the original domain from the expanded result.
+    """
+    if len(symmetry) != array.ndim:
+        raise ValueError(
+            f"Invalid symmetry specification: expected {array.ndim} axes, got {len(symmetry)}."
+        )
+
+    expanded = array
+    crop_slices = [slice(None)] * array.ndim
+
+    for axis, side in enumerate(symmetry):
+        if side is None:
+            crop_slices[axis] = slice(0, expanded.shape[axis])
+            continue
+        if side not in ("low", "high"):
+            raise ValueError(
+                f"Invalid symmetry side {side!r}; expected one of ('low', 'high', None)."
+            )
+
+        axis_size = expanded.shape[axis]
+        mirrored = _flip_axis(expanded, axis)
+
+        if side == "low":
+            expanded = np.concatenate((mirrored, expanded), axis=axis)
+            crop_slices[axis] = slice(axis_size, 2 * axis_size)
+        else:
+            expanded = np.concatenate((expanded, mirrored), axis=axis)
+            crop_slices[axis] = slice(0, axis_size)
+
+    return expanded, tuple(crop_slices)
 
 
 def symmetrize_rotation(array: NDArray) -> NDArray:

@@ -13,7 +13,11 @@ from tidy3d.plugins.autograd.invdes import make_filter_and_project
 from .base import InvdesBaseModel
 
 if TYPE_CHECKING:
+    from typing import Optional
+
     import autograd.numpy as anp
+
+    from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
 
 
 class AbstractTransformation(InvdesBaseModel, abc.ABC):
@@ -74,10 +78,15 @@ class FilterProject(InvdesBaseModel):
         "If ``True``, the values are snapped to the min and max values after projection.",
     )
 
-    def evaluate(self, spatial_data: anp.ndarray, design_region_dl: float) -> anp.ndarray:
-        """Evaluate this transformation on spatial data, given some grid size in the region."""
+    def evaluate(
+        self,
+        spatial_data: anp.ndarray,
+        design_region_dl: float,
+        symmetry: Optional[MirrorSymmetry] = None,
+    ) -> anp.ndarray:
+        """Evaluate this transformation on spatial data, given the region grid size."""
         filt_proj = make_filter_and_project(
-            self.radius, design_region_dl, beta=self.beta, eta=self.eta
+            self.radius, design_region_dl, beta=self.beta, eta=self.eta, symmetry=symmetry
         )
         data_projected = filt_proj(spatial_data)
 

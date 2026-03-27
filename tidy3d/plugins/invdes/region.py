@@ -23,8 +23,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
-
-# TODO: support auto handling of symmetry in parameters
+    from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
 
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
@@ -93,32 +92,54 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         """``Box`` corresponding to this design region."""
         return td.Box(center=self.center, size=self.size)
 
-    def material_density(self, params: anp.ndarray) -> anp.ndarray:
-        """Evaluate the transformations on a parameter array to give the material density (0,1)."""
+    def material_density(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+    ) -> anp.ndarray:
+        """Evaluate transformations on parameters to give the material density (0, 1)."""
         for transformation in self.transformations:
-            params = self.evaluate_transformation(transformation=transformation, params=params)
+            params = self.evaluate_transformation(
+                transformation=transformation,
+                params=params,
+                symmetry=symmetry,
+            )
         return params
 
-    def penalty_value(self, data: anp.ndarray) -> anp.ndarray:
+    def penalty_value(
+        self, data: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+    ) -> anp.ndarray:
         """Evaluate the transformations on a dataset."""
 
         if not self.penalties:
             return 0.0
 
         # sum the penalty values scaled by their weights (optional)
-        material_density = self.material_density(data)
+        material_density = self.material_density(data, symmetry=symmetry)
         penalty_values = [
-            self.evaluate_penalty(penalty=penalty, material_density=material_density)
+            self.evaluate_penalty(
+                penalty=penalty,
+                material_density=material_density,
+                symmetry=symmetry,
+            )
             for penalty in self.penalties
         ]
         return anp.sum(anp.array(penalty_values))
 
     @abc.abstractmethod
-    def evaluate_transformation(self, transformation: None) -> float:
+    def evaluate_transformation(
+        self,
+        transformation: None,
+        params: anp.ndarray,
+        symmetry: Optional[MirrorSymmetry] = None,
+    ) -> anp.ndarray:
         """How this design region evaluates a transformation given some passed information."""
 
     @abc.abstractmethod
-    def evaluate_penalty(self, penalty: None) -> float:
+    def evaluate_penalty(
+        self,
+        penalty: None,
+        material_density: anp.ndarray,
+        symmetry: Optional[MirrorSymmetry] = None,
+    ) -> float:
         """How this design region evaluates a penalty given some passed information."""
 
     @abc.abstractmethod
@@ -331,22 +352,26 @@ class TopologyDesignRegion(DesignRegion):
 
         return coords
 
-    def eps_values(self, params: anp.ndarray) -> anp.ndarray:
+    def eps_values(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+    ) -> anp.ndarray:
         """Values for the custom medium permittivity."""
 
         self._check_params(params)
 
-        material_density = self.material_density(params)
+        material_density = self.material_density(params, symmetry=symmetry)
         eps_min, eps_max = self.eps_bounds
         eps_arr = eps_min + material_density * (eps_max - eps_min)
         return eps_arr.reshape(params.shape)
 
-    def to_structure(self, params: anp.ndarray) -> td.Structure:
+    def to_structure(
+        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+    ) -> td.Structure:
         """Convert this ``DesignRegion`` into a custom ``Structure``."""
         self._check_params(params)
 
         coords = self.coords
-        eps_values = self.eps_values(params)
+        eps_values = self.eps_values(params, symmetry=symmetry)
         eps_data_array = td.SpatialDataArray(eps_values, coords=coords)
         medium = td.CustomMedium(permittivity=eps_data_array)
         return td.Structure(geometry=self.geometry, medium=medium, priority=self.priority)
@@ -376,15 +401,29 @@ class TopologyDesignRegion(DesignRegion):
         )
 
     def evaluate_transformation(
-        self, transformation: TransformationType, params: anp.ndarray
+        self,
+        transformation: TransformationType,
+        params: anp.ndarray,
+        symmetry: Optional[MirrorSymmetry] = None,
     ) -> anp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
         self._check_params(params)
-        return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
+        kwargs = {"spatial_data": params, "design_region_dl": self.pixel_size}
+        if symmetry is not None:
+            kwargs["symmetry"] = symmetry
+        return transformation.evaluate(**kwargs)
 
-    def evaluate_penalty(self, penalty: PenaltyType, material_density: anp.ndarray) -> float:
+    def evaluate_penalty(
+        self,
+        penalty: PenaltyType,
+        material_density: anp.ndarray,
+        symmetry: Optional[MirrorSymmetry] = None,
+    ) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
-        return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
+        kwargs = {"x": material_density, "pixel_size": self.pixel_size}
+        if symmetry is not None:
+            kwargs["symmetry"] = symmetry
+        return penalty.evaluate(**kwargs)
 
 
 DesignRegionType = Union[TopologyDesignRegion]

@@ -180,6 +180,8 @@ The `pixel_size` is also passed to the various penalties and transformations to 
 
 If not specified in a later step, this `pixel_size` will be used to set the FDTD grid size of the structure in the last `Simulation`. It is therefore a good idea to either set it to a low value (about equal to the simulation grid cell size) or manually set the mesh override structure resolution in the `TopologyDesignRegion.mesh_override_dl` field to overwrite it.
 
+When using `InverseDesign` or `InverseDesignMulti` with simulation symmetry together with a reduced design region that touches a symmetry plane, symmetry-aware transformations and penalties automatically inherit the mirrored boundary from the parent simulation's `symmetry` and `center`. This allows operations such as `FilterProject` and `ErosionDilationPenalty` to treat the reduced-domain boundary the same way as an explicitly mirrored full-domain design.
+
 #### Transformations
 The `TopologyDesignRegion.transformations` are specifications that tell the design region how to transform the supplied optimization parameters into a "material density" that is used to construct the permittivity grid. For example, a `FilterProject` transformation applies a conic filter convolution followed by a hyperbolic tangent function projection. If multiple transformations are added to the design region, they will be evaluated one by one, from beginning to end, on the optimization parameters.
 

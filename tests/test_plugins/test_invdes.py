@@ -11,6 +11,7 @@ import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 import tidy3d.plugins.invdes.region as invdes_region
 from tidy3d.exceptions import SetupError
+from tidy3d.plugins.autograd.invdes.symmetries import expand_mirror_symmetry
 from tidy3d.plugins.expressions import ModeAmp, ModePower
 from tidy3d.plugins.invdes.initialization import (
     CustomInitializationSpec,
@@ -56,6 +57,26 @@ simulation = td.Simulation(
 )
 
 
+def make_symmetry_test_simulation(
+    center: tuple[float, float, float], symmetry: tuple[int, int, int]
+) -> td.Simulation:
+    """Build a minimal simulation centered on a shifted symmetry plane."""
+    return td.Simulation(
+        size=(L_SIM, L_SIM, L_SIM),
+        center=center,
+        symmetry=symmetry,
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FREQ0),
+        sources=[
+            td.PointDipole(
+                center=center,
+                source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
+                polarization="Ez",
+            )
+        ],
+        run_time=1e-12,
+    )
+
+
 @pytest.fixture
 def use_emulated_to_sim_data(monkeypatch):
     """Emulate the InverseDesign.to_simulation_data to call emulated run."""
@@ -87,6 +108,51 @@ def make_design_region():
         ],
         pixel_size=0.02,
     )
+
+
+def make_shifted_symmetry_case(*, transformations=(), penalties=()):
+    """Build a reduced/full-domain symmetry test case around a shifted simulation center."""
+    pixel_size = 0.02
+    mirror_symmetry = ("low", "low", None)
+    simulation_center = (1.0, -2.0, 0.0)
+    params_half = np.linspace(0.0, 1.0, 100).reshape((10, 10, 1))
+    params_full, crop_slices = expand_mirror_symmetry(params_half, symmetry=mirror_symmetry)
+
+    half_region = tdi.TopologyDesignRegion(
+        size=(10 * pixel_size, 10 * pixel_size, td.inf),
+        center=(
+            simulation_center[0] + 5 * pixel_size,
+            simulation_center[1] + 5 * pixel_size,
+            0.0,
+        ),
+        eps_bounds=(1.0, 4.0),
+        transformations=transformations,
+        penalties=penalties,
+        pixel_size=pixel_size,
+    )
+    full_region = tdi.TopologyDesignRegion(
+        size=(20 * pixel_size, 20 * pixel_size, td.inf),
+        center=simulation_center,
+        eps_bounds=(1.0, 4.0),
+        transformations=transformations,
+        penalties=penalties,
+        pixel_size=pixel_size,
+    )
+
+    invdes = tdi.InverseDesign(
+        simulation=make_symmetry_test_simulation(simulation_center, symmetry=(1, -1, 0)),
+        design_region=half_region,
+        task_name="test",
+    )
+
+    return {
+        "crop_slices": crop_slices,
+        "full_region": full_region,
+        "invdes": invdes,
+        "mirror_symmetry": mirror_symmetry,
+        "params_full": params_full,
+        "params_half": params_half,
+    }
 
 
 def test_region_params():
@@ -122,6 +188,40 @@ def test_region_penalties():
     # test some design region functions
     region.material_density(PARAMS_0)
     region.penalty_value(PARAMS_0)
+
+
+def test_invdes_to_simulation_respects_shifted_simulation_symmetry():
+    """Simulation-derived symmetry should match a shifted explicit mirrored domain."""
+    case = make_shifted_symmetry_case(
+        transformations=[tdi.FilterProject(radius=0.05, beta=2.0)],
+    )
+
+    resolved_symmetry = case["invdes"]._resolve_mirror_symmetry(case["params_half"].shape)
+    assert resolved_symmetry == case["mirror_symmetry"]
+
+    eps_half = (
+        case["invdes"].to_simulation(case["params_half"]).structures[-1].medium.permittivity.values
+    )
+    eps_full = case["full_region"].eps_values(case["params_full"])
+
+    npt.assert_allclose(eps_half, eps_full[case["crop_slices"]])
+
+
+def test_invdes_penalties_respect_shifted_simulation_symmetry():
+    """Simulation-derived symmetry should be used for design-region penalties."""
+    case = make_shifted_symmetry_case(
+        penalties=[tdi.ErosionDilationPenalty(length_scale=0.05)],
+    )
+
+    resolved_symmetry = case["invdes"]._resolve_mirror_symmetry(case["params_half"].shape)
+    assert resolved_symmetry == case["mirror_symmetry"]
+
+    penalty_half = case["invdes"].design_region.penalty_value(
+        case["params_half"], symmetry=resolved_symmetry
+    )
+    penalty_full = case["full_region"].penalty_value(case["params_full"])
+
+    assert penalty_half == pytest.approx(penalty_full)
 
 
 def test_region_to_structure():
@@ -325,6 +425,27 @@ def test_invdes_multi_same_length():
     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
     _ = invdes.designs
+
+
+def test_invdes_multi_rejects_inconsistent_simulation_symmetry():
+    """Shared design regions require the same resolved mirror symmetry across simulations."""
+    region = tdi.TopologyDesignRegion(
+        size=(0.2, 0.4, td.inf),
+        center=(0.1, 0.0, 0.0),
+        eps_bounds=(1.0, 4.0),
+        pixel_size=0.02,
+    )
+    simulations = (
+        make_symmetry_test_simulation((0.0, 0.0, 0.0), symmetry=(1, 0, 0)),
+        make_symmetry_test_simulation((0.0, 0.0, 0.0), symmetry=(0, 1, 0)),
+    )
+
+    with pytest.raises(ValidationError, match="same mirror symmetry"):
+        _ = tdi.InverseDesignMulti(
+            design_region=region,
+            simulations=simulations,
+            task_name="base",
+        )
 
 
 def make_optimizer():

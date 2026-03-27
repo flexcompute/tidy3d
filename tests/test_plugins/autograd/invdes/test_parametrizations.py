@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import autograd.numpy as np
+import numpy.testing as npt
 import pytest
 
 from tidy3d.plugins.autograd.invdes.parametrizations import make_filter_and_project
+from tidy3d.plugins.autograd.invdes.symmetries import expand_mirror_symmetry
 from tidy3d.plugins.autograd.types import PaddingType
 
 
@@ -36,3 +38,24 @@ def test_make_filter_and_project(rng, radius, dl, size_px, beta, filter_type, pa
     result = filter_and_project_func(array)
     assert result.shape == array.shape
     assert np.all(result >= 0) and np.all(result <= 1)
+
+
+@pytest.mark.parametrize("symmetry", [("low", None), (None, "high"), ("low", "high")])
+def test_make_filter_and_project_mirror_symmetry_matches_explicit_expansion(symmetry):
+    """Mirror-aware filtering should match filtering an explicitly mirrored domain."""
+    array = np.linspace(0.0, 1.0, 35).reshape((5, 7))
+
+    filter_and_project_func = make_filter_and_project(
+        radius=1,
+        dl=0.2,
+        beta=10.0,
+        eta=0.5,
+        symmetry=symmetry,
+    )
+    baseline_func = make_filter_and_project(radius=1, dl=0.2, beta=10.0, eta=0.5)
+
+    expanded, crop_slices = expand_mirror_symmetry(array, symmetry=symmetry)
+    expected = baseline_func(expanded)[crop_slices]
+    result = filter_and_project_func(array)
+
+    npt.assert_allclose(result, expected)

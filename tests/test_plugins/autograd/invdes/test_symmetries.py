@@ -6,6 +6,7 @@ import pytest
 from autograd.test_util import check_grads
 
 from tidy3d.plugins.autograd.invdes.symmetries import (
+    expand_mirror_symmetry,
     symmetrize_diagonal,
     symmetrize_mirror,
     symmetrize_rotation,
@@ -27,6 +28,11 @@ def rect_array():
 
 
 # --- Symmetrize Mirror Tests ---
+
+
+def _slice_signature(slices):
+    """Comparable representation of a tuple of slices."""
+    return tuple((slc.start, slc.stop, slc.step) for slc in slices)
 
 
 @pytest.mark.parametrize("axis", [0, 1, (0, 1)])
@@ -90,6 +96,55 @@ def test_mirror_shapes_and_errors(rect_array):
     # Error: Invalid tuple
     with pytest.raises(ValueError, match="Invalid axis"):
         symmetrize_mirror(rect_array, axis=(0, 0))
+
+
+@pytest.mark.parametrize(
+    ("symmetry", "expected", "crop_slices"),
+    [
+        (
+            ("low", None),
+            np.array([[3.0, 4.0], [1.0, 2.0], [1.0, 2.0], [3.0, 4.0]]),
+            (slice(2, 4), slice(0, 2)),
+        ),
+        (
+            (None, "high"),
+            np.array([[1.0, 2.0, 2.0, 1.0], [3.0, 4.0, 4.0, 3.0]]),
+            (slice(0, 2), slice(0, 2)),
+        ),
+        (
+            ("low", "high"),
+            np.array(
+                [
+                    [3.0, 4.0, 4.0, 3.0],
+                    [1.0, 2.0, 2.0, 1.0],
+                    [1.0, 2.0, 2.0, 1.0],
+                    [3.0, 4.0, 4.0, 3.0],
+                ]
+            ),
+            (slice(2, 4), slice(0, 2)),
+        ),
+    ],
+)
+def test_expand_mirror_symmetry_values(symmetry, expected, crop_slices):
+    """Mirror expansion should create the expected full domain and crop slices."""
+    arr = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    expanded, result_crop_slices = expand_mirror_symmetry(arr, symmetry=symmetry)
+
+    onp.testing.assert_allclose(expanded, expected)
+    assert _slice_signature(result_crop_slices) == _slice_signature(crop_slices)
+    onp.testing.assert_allclose(expanded[result_crop_slices], arr)
+
+
+def test_expand_mirror_symmetry_errors():
+    """Invalid symmetry specifications should raise helpful errors."""
+    arr = np.ones((2, 2))
+
+    with pytest.raises(ValueError, match="expected 2 axes"):
+        expand_mirror_symmetry(arr, symmetry=("low",))
+
+    with pytest.raises(ValueError, match="Invalid symmetry side"):
+        expand_mirror_symmetry(arr, symmetry=("middle", None))
 
 
 # --- Symmetrize Rotation Tests ---

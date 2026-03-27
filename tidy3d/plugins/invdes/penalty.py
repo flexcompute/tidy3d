@@ -12,7 +12,11 @@ from tidy3d.plugins.autograd.invdes import make_erosion_dilation_penalty
 from .base import InvdesBaseModel
 
 if TYPE_CHECKING:
+    from typing import Optional
+
     import autograd.numpy as anp
+
+    from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
 
 
 class AbstractPenalty(InvdesBaseModel, abc.ABC):
@@ -90,10 +94,17 @@ class ErosionDilationPenalty(AbstractPenalty):
         "using it unless there is a good reason to set it differently.",
     )
 
-    def evaluate(self, x: anp.ndarray, pixel_size: float) -> float:
+    def evaluate(
+        self, x: anp.ndarray, pixel_size: float, symmetry: Optional[MirrorSymmetry] = None
+    ) -> float:
         """Evaluate this penalty."""
         penalty_fn = make_erosion_dilation_penalty(
-            self.length_scale, pixel_size, beta=self.beta, eta=self.eta0, delta_eta=self.delta_eta
+            self.length_scale,
+            pixel_size,
+            beta=self.beta,
+            eta=self.eta0,
+            delta_eta=self.delta_eta,
+            symmetry=symmetry,
         )
         penalty_unweighted = penalty_fn(x)
         return self.weight * penalty_unweighted
