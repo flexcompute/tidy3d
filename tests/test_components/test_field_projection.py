@@ -9,12 +9,13 @@ from autograd import make_vjp
 from pydantic import ValidationError
 
 import tidy3d as td
-import tidy3d.components.field_projection as field_projection
-from tidy3d.components.field_projection import (
-    FieldProjector,
+import tidy3d.components.field_projection.common as field_projection_common
+from tidy3d.components.field_projection import FieldProjector
+from tidy3d.components.field_projection.common import (
     _far_field_integral,
     _far_field_integral_pairs,
     _FarFieldIntegralSpec,
+    _trapz_weights_1d,
 )
 from tidy3d.exceptions import DataError, SetupError
 
@@ -480,7 +481,7 @@ def test_proj_clientside_verbose_flag(monkeypatch):
         track_calls.append(kwargs)
         return iterable
 
-    monkeypatch.setattr(field_projection, "track", fake_track)
+    monkeypatch.setattr(field_projection_common, "track", fake_track)
 
     projector.project_fields(proj_monitor)
     assert len(track_calls) == 1
@@ -913,7 +914,7 @@ def test_far_field_integral_vjp_3d(idx_u, idx_v):
 
     def primitive(currents_in):
         spec = _FarFieldIntegralSpec(
-            weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+            weights=tuple(_trapz_weights_1d(pt) for pt in pts),
             idx_u=idx_u,
             idx_v=idx_v,
             is_2d=False,
@@ -973,7 +974,7 @@ def test_far_field_integral_vjp_2d(idx_integration_1d):
 
     def primitive(currents_in):
         spec = _FarFieldIntegralSpec(
-            weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+            weights=tuple(_trapz_weights_1d(pt) for pt in pts),
             idx_u=0,
             idx_v=1,
             is_2d=True,
@@ -1016,7 +1017,7 @@ def test_far_field_integral_pairs_matches_reference():
     phase_1 = rng.standard_normal((n_y, n_pairs)) + 1j * rng.standard_normal((n_y, n_pairs))
     phase_2 = rng.standard_normal((n_z, n_pairs)) + 1j * rng.standard_normal((n_z, n_pairs))
     spec = _FarFieldIntegralSpec(
-        weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+        weights=tuple(_trapz_weights_1d(pt) for pt in pts),
         idx_u=idx_u,
         idx_v=idx_v,
         is_2d=False,
@@ -1061,7 +1062,7 @@ def test_far_field_integral_pairs_matches_reference_2d(idx_integration_1d):
     phase_1 = rng.standard_normal((n_y, n_pairs)) + 1j * rng.standard_normal((n_y, n_pairs))
     phase_2 = rng.standard_normal((n_z, n_pairs)) + 1j * rng.standard_normal((n_z, n_pairs))
     spec = _FarFieldIntegralSpec(
-        weights=tuple(field_projection._trapz_weights_1d(pt) for pt in pts),
+        weights=tuple(_trapz_weights_1d(pt) for pt in pts),
         idx_u=0,
         idx_v=1,
         is_2d=True,
