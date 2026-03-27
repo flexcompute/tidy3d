@@ -4708,6 +4708,142 @@ def test_require_freq_ascending_rejects_descending_coordinates():
         )
 
 
+def _make_field_data_for_frequency_invariant_test(
+    data_freqs: list[float], monitor_freqs: list[float] | None = None
+) -> td.FieldData:
+    """Create minimal field data with configurable data and monitor frequency order."""
+    monitor_freqs = data_freqs if monitor_freqs is None else monitor_freqs
+    coords = {"x": [0.0], "y": [0.0], "z": [0.0], "f": data_freqs}
+    ex = td.ScalarFieldDataArray(np.ones((1, 1, 1, len(data_freqs))), coords=coords)
+    monitor = td.FieldMonitor(
+        center=(0, 0, 0),
+        size=(0, 0, 0),
+        freqs=monitor_freqs,
+        fields=["Ex"],
+        name="field",
+    )
+    return td.FieldData(monitor=monitor, Ex=ex)
+
+
+def test_validate_adjoint_frequencies_accepts_exact_ascending_match():
+    """Adjoint postprocessing should accept identical ascending frequency order."""
+
+    from tidy3d.web.api.autograd.backward import _validate_adjoint_frequencies
+
+    freqs = np.array([1e14, 2e14, 3e14])
+    _validate_adjoint_frequencies(
+        adjoint_frequencies=freqs,
+        monitor_freqs=freqs,
+        component_type="structure",
+        component_index=0,
+    )
+
+
+def test_validate_adjoint_frequencies_rejects_monitor_order_mismatch():
+    """Adjoint postprocessing should reject monitor frequencies in a different order."""
+
+    from tidy3d.web.api.autograd.backward import _validate_adjoint_frequencies
+
+    with pytest.raises(ValueError, match="Frequency mismatch in adjoint postprocessing"):
+        _validate_adjoint_frequencies(
+            adjoint_frequencies=np.array([1e14, 2e14, 3e14]),
+            monitor_freqs=np.array([3e14, 2e14, 1e14]),
+            component_type="structure",
+            component_index=0,
+        )
+
+
+def test_filter_frequency_data_updates_monitor_and_preserves_ascending_order():
+    """Filtered forward field data should preserve ascending monitor and coordinate order."""
+
+    from tidy3d.web.api.autograd.backward import _filter_frequency_data
+
+    fld_fwd = _make_field_data_for_frequency_invariant_test([1e14, 2e14, 3e14])
+    filtered = _filter_frequency_data(
+        fld_fwd,
+        np.array([1e14, 3e14]),
+        component_type="structure",
+        component_index=0,
+        dataset_name="filtered forward field data",
+    )
+
+    np.testing.assert_allclose(np.asarray(filtered.monitor.freqs, dtype=float), [1e14, 3e14])
+    np.testing.assert_allclose(
+        np.asarray(filtered.Ex.coords["f"].values, dtype=float), [1e14, 3e14]
+    )
+
+
+def test_filtered_forward_field_data_matches_adjoint_monitor_frequencies():
+    """Filtered forward field data should match the adjoint monitor frequencies exactly."""
+
+    from tidy3d.web.api.autograd.backward import (
+        _filter_frequency_data,
+        _get_freq_coords,
+        _validate_adjoint_frequencies,
+    )
+
+    adjoint_monitor_freqs = np.array([1e14, 3e14])
+    fld_fwd = _make_field_data_for_frequency_invariant_test([1e14, 2e14, 3e14])
+    filtered = _filter_frequency_data(
+        fld_fwd,
+        adjoint_monitor_freqs,
+        component_type="structure",
+        component_index=0,
+        dataset_name="filtered forward field data",
+    )
+
+    _validate_adjoint_frequencies(
+        adjoint_frequencies=_get_freq_coords(filtered),
+        monitor_freqs=adjoint_monitor_freqs,
+        component_type="structure",
+        component_index=0,
+    )
+
+
+def test_filter_frequency_data_rejects_descending_filtered_order():
+    """Filtered forward field data should reject descending frequency order."""
+
+    from tidy3d.web.api.autograd.backward import _filter_frequency_data
+
+    fld_fwd = _make_field_data_for_frequency_invariant_test([1e14, 2e14])
+
+    with pytest.raises(ValueError, match="expects ascending frequency coordinates"):
+        _filter_frequency_data(
+            fld_fwd,
+            np.array([2e14, 1e14]),
+            component_type="structure",
+            component_index=0,
+            dataset_name="filtered forward field data",
+        )
+
+
+def test_validate_adjoint_frequencies_rejects_filtered_forward_data_mismatch():
+    """Filtered forward field data should fail if it does not match adjoint monitor frequencies."""
+
+    from tidy3d.web.api.autograd.backward import (
+        _filter_frequency_data,
+        _get_freq_coords,
+        _validate_adjoint_frequencies,
+    )
+
+    fld_fwd = _make_field_data_for_frequency_invariant_test([1e14, 2e14, 3e14])
+    filtered = _filter_frequency_data(
+        fld_fwd,
+        np.array([1e14, 3e14]),
+        component_type="structure",
+        component_index=0,
+        dataset_name="filtered forward field data",
+    )
+
+    with pytest.raises(ValueError, match="Frequency mismatch in adjoint postprocessing"):
+        _validate_adjoint_frequencies(
+            adjoint_frequencies=_get_freq_coords(filtered),
+            monitor_freqs=np.array([1e14, 2e14]),
+            component_type="structure",
+            component_index=0,
+        )
+
+
 def test_resolve_freq_chunk_size_falls_back_without_memory(monkeypatch):
     """Fallback chunk size is used when available memory cannot be determined."""
 

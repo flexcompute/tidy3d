@@ -183,15 +183,41 @@ def _validate_adjoint_frequencies(
     component_type: str,
     component_index: int,
 ) -> None:
-    """Validate that field-data frequencies match monitor frequencies."""
+    """Validate that field-data frequencies match monitor frequencies exactly."""
     if len(adjoint_frequencies) != len(monitor_freqs) or not np.allclose(
-        np.sort(adjoint_frequencies), np.sort(monitor_freqs), rtol=1e-10, atol=0
+        adjoint_frequencies, monitor_freqs, rtol=1e-10, atol=0
     ):
         raise ValueError(
             f"Frequency mismatch in adjoint postprocessing for {component_type} "
             f"{component_index}. Expected frequencies from monitor: {monitor_freqs}, "
             f"but derivative map has: {adjoint_frequencies}. "
         )
+
+
+def _filter_frequency_data(
+    dataset: Union[td.PermittivityData, td.FieldData],
+    filter_freqs: np.ndarray,
+    *,
+    component_type: str,
+    component_index: int,
+    dataset_name: str,
+) -> Union[td.PermittivityData, td.FieldData]:
+    """Filter a dataset to target frequencies and keep its monitor frequencies aligned."""
+    dataset_filter_freq = {}
+    for key, val in dataset.field_components.items():
+        dataset_filter_freq[key] = val.sel(f=filter_freqs)
+
+    filtered_monitor = dataset.monitor.updated_copy(freqs=list(filter_freqs))
+    filtered_dataset = dataset.updated_copy(monitor=filtered_monitor, **dataset_filter_freq)
+
+    _require_freq_ascending(
+        filtered_dataset,
+        component_type=component_type,
+        component_index=component_index,
+        dataset_name=dataset_name,
+    )
+
+    return filtered_dataset
 
 
 def _to_sim_fields_vjp(
@@ -490,32 +516,7 @@ def _process_structure_gradients(
         dataset_name="adjoint permittivity data",
     )
 
-    freqs_adj = np.array(fld_adj.monitor.freqs)
-
-    # post normalize the adjoint fields if a single, broadband source
-    fld_adj = scale_field_data(fld_adj, sim_data_adj.simulation.post_norm)
-
-    def filter_adj_freq(
-        dataset: Union[td.PermittivityData, td.FieldData], filter_freqs: np.ndarray
-    ) -> Union[td.PermittivityData, td.FieldData]:
-        dataset_filter_freq = {}
-        for key, val in dataset.field_components.items():
-            dataset_filter_freq[key] = val.sel(f=filter_freqs)
-
-        return dataset.updated_copy(**dataset_filter_freq)
-
-    combined_data_size = (
-        _estimate_dataset_bytes(fld_adj)
-        + _estimate_dataset_bytes(eps_data)
-        + _estimate_dataset_bytes(fld_fwd)
-    )
-
-    fld_fwd = filter_adj_freq(fld_fwd, freqs_adj)
-
-    structure = sim_data_fwd.simulation.structures[structure_index]
-
-    # After filtering, forward field data must match the adjoint monitor frequencies.
-    adjoint_frequencies = _get_freq_coords(fld_fwd)
+    adjoint_frequencies = _get_freq_coords(fld_adj)
     monitor_freqs = np.array(fld_adj.monitor.freqs)
     _validate_adjoint_frequencies(
         adjoint_frequencies=adjoint_frequencies,
@@ -523,6 +524,32 @@ def _process_structure_gradients(
         component_type="structure",
         component_index=structure_index,
     )
+
+    # post normalize the adjoint fields if a single, broadband source
+    fld_adj = scale_field_data(fld_adj, sim_data_adj.simulation.post_norm)
+
+    combined_data_size = (
+        _estimate_dataset_bytes(fld_adj)
+        + _estimate_dataset_bytes(eps_data)
+        + _estimate_dataset_bytes(fld_fwd)
+    )
+
+    # Filter forward field data to match adjoint monitor frequencies.
+    fld_fwd = _filter_frequency_data(
+        fld_fwd,
+        adjoint_frequencies,
+        component_type="structure",
+        component_index=structure_index,
+        dataset_name="filtered forward field data",
+    )
+    _validate_adjoint_frequencies(
+        adjoint_frequencies=_get_freq_coords(fld_fwd),
+        monitor_freqs=np.array(fld_adj.monitor.freqs),
+        component_type="structure",
+        component_index=structure_index,
+    )
+
+    structure = sim_data_fwd.simulation.structures[structure_index]
 
     # auto permittivity detection
     sim_orig = sim_data_orig.simulation
