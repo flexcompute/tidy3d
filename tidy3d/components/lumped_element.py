@@ -691,10 +691,6 @@ class RLCNetwork(MicrowaveBaseModel):
     """Class for representing a simple network consisting of a resistor, capacitor, and inductor.
     Provides additional functionality for representing the network as an equivalent medium.
 
-    .. deprecated::
-        :class:`RLCNetwork` is deprecated. Prefer :class:`CircuitImpedanceModel` for general RLC
-        circuits (e.g. :meth:`CircuitImpedanceModel.from_spice`).
-
     Notes
     -----
 
@@ -708,13 +704,10 @@ class RLCNetwork(MicrowaveBaseModel):
 
     Example
     -------
-    To suppress the deprecation warning when constructing :class:`RLCNetwork`, use
-    ``log.suppress_output()``::
 
-        >>> with log.suppress_output():
-        ...     RL_series = RLCNetwork(resistance=75,
-        ...                            inductance=1e-9,
-        ...                            network_topology="series")
+        >>> RL_series = RLCNetwork(resistance=75,
+        ...                        inductance=1e-9,
+        ...                        network_topology="series")
 
     """
 
@@ -944,15 +937,6 @@ class RLCNetwork(MicrowaveBaseModel):
         all_items_are_none = all(item is None for item in [resistance, capacitance, val])
         if all_items_are_none:
             raise ValueError("At least one element must be defined in the 'RLCNetwork'.")
-        return self
-
-    @model_validator(mode="after")
-    def _warn_deprecated(self) -> Self:
-        """Emit deprecation warning when RLCNetwork is used."""
-        log.warning(
-            "RLCNetwork is deprecated; use CircuitImpedanceModel.from_spice or "
-            "construct CircuitImpedanceModel with components and freq_range for general RLC circuits."
-        )
         return self
 
 
