@@ -70,6 +70,11 @@ BatchCategoryType = Literal[
     "tidy3d_autograd_async",
     "autograd_fwd",
     "autograd_bwd",
+    "photonforge:tidy3d",
+    "photonforge:mode_solver",
+    "photonforge:eme",
+    "photonforge:rf",
+    "photonforge:heat_charge",
 ]
 
 
