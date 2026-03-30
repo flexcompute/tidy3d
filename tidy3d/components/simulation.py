@@ -1192,6 +1192,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The supplied or created matplotlib axes.
         """
         import matplotlib as mpl
+        from matplotlib.collections import PatchCollection
 
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
@@ -1235,20 +1236,30 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             ]
 
             for structures, plot_param in zip(all_override_structures, plot_params):
+                rects = []
                 for structure in structures:
                     bounds = list(zip(*structure.geometry.bounds))
                     _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
                     xmin, xmax, ymin, ymax = (
                         self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax)
                     )
-                    rect = mpl.patches.Rectangle(
-                        xy=(xmin, ymin),
-                        width=(xmax - xmin),
-                        height=(ymax - ymin),
-                        linestyle=kwargs["override_linestyle"],
-                        **plot_param.to_kwargs(),
+                    rects.append(
+                        mpl.patches.Rectangle(
+                            xy=(xmin, ymin),
+                            width=(xmax - xmin),
+                            height=(ymax - ymin),
+                        )
                     )
-                    ax.add_patch(rect)
+                if rects:
+                    pc_kwargs = plot_param.to_kwargs()
+                    if not pc_kwargs.pop("fill", True):
+                        pc_kwargs["facecolor"] = "none"
+                    pc = PatchCollection(
+                        rects,
+                        linestyle=kwargs["override_linestyle"],
+                        **pc_kwargs,
+                    )
+                    ax.add_collection(pc)
 
         # Plot snapping points
         for points, plot_param in zip(
@@ -1259,6 +1270,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             ],
             plot_params,
         ):
+            scatter_xs = []
+            scatter_ys = []
             for point in points:
                 _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
                 if x_point is None and y_point is None:
@@ -1283,9 +1296,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                         dashes=kwargs["dashes"],
                     )
                     continue
-                x_point, y_point = (self._evaluate_inf(v) for v in (x_point, y_point))
+                scatter_xs.append(self._evaluate_inf(x_point))
+                scatter_ys.append(self._evaluate_inf(y_point))
+            if scatter_xs:
                 ax.scatter(
-                    x_point, y_point, color=plot_param.edgecolor, alpha=snapping_points_alpha
+                    scatter_xs, scatter_ys, color=plot_param.edgecolor, alpha=snapping_points_alpha
                 )
 
         ax = Scene._set_plot_bounds(
