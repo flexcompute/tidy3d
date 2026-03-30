@@ -26,7 +26,7 @@ def make_dxf(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matri
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
-    dxf = sp.csr_matrix(sp.diags([-1, 1], [0, 1], shape=(Nx, Nx)))
+    dxf = sp.diags([-1, 1], [0, 1], shape=(Nx, Nx), format="csr", dtype=float)
     if not pmc:
         dxf[0, 0] = 0.0
     dxf = sp.diags(1 / dls).dot(dxf)
@@ -41,7 +41,7 @@ def make_dxb(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matri
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
-    dxb = sp.csr_matrix(sp.diags([1, -1], [0, -1], shape=(Nx, Nx)))
+    dxb = sp.diags([1, -1], [0, -1], shape=(Nx, Nx), format="csr", dtype=float)
     if pmc:
         dxb[0, 0] = 2.0
     else:
@@ -58,7 +58,7 @@ def make_dyf(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matri
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
-    dyf = sp.csr_matrix(sp.diags([-1, 1], [0, 1], shape=(Ny, Ny)))
+    dyf = sp.diags([-1, 1], [0, 1], shape=(Ny, Ny), format="csr", dtype=float)
     if not pmc:
         dyf[0, 0] = 0.0
     dyf = sp.diags(1 / dls).dot(dyf)
@@ -73,7 +73,7 @@ def make_dyb(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matri
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
-    dyb = sp.csr_matrix(sp.diags([1, -1], [0, -1], shape=(Ny, Ny)))
+    dyb = sp.diags([1, -1], [0, -1], shape=(Ny, Ny), format="csr", dtype=float)
     if pmc:
         dyb[0, 0] = 2.0
     else:

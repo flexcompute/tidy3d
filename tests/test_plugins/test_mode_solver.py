@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import get_args
 
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import Coords, Grid, ModeIndexDataArray, ScalarFieldDataArray, ScalarModeFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
-from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
+from tidy3d.components.mode.derivatives import create_d_matrices, create_sfactor_b, create_sfactor_f
 from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
 from tidy3d.exceptions import DataError, SetupError, ValidationError
@@ -860,6 +861,54 @@ def test_pml_params():
     sf_f = create_sfactor_f(omega, dls, N, n_pml, dmin_pml=True)
     assert np.allclose(sf_f[:n_pml] / sf_f[n_pml - 1], target_profile[::-1])
     assert np.allclose(sf_f[N - n_pml :] / sf_f[N - n_pml], target_profile)
+
+
+@pytest.mark.parametrize("dmin_pmc", [(False, False), (False, True), (True, False), (True, True)])
+def test_derivative_matrices_do_not_warn_and_preserve_values(dmin_pmc):
+    """Derivative matrix construction should stay warning-free and numerically unchanged."""
+
+    def expected_dx_matrix(dls, shape, pmc, backward):
+        Nx, Ny = shape
+        matrix = np.diag(np.ones(Nx))
+        if backward:
+            matrix += np.diag(-np.ones(Nx - 1), k=-1)
+            matrix[0, 0] = 2.0 if pmc else 0.0
+        else:
+            matrix *= -1.0
+            matrix += np.diag(np.ones(Nx - 1), k=1)
+            if not pmc:
+                matrix[0, 0] = 0.0
+        return np.kron(np.diag(1 / dls) @ matrix, np.eye(Ny))
+
+    def expected_dy_matrix(dls, shape, pmc, backward):
+        Nx, Ny = shape
+        matrix = np.diag(np.ones(Ny))
+        if backward:
+            matrix += np.diag(-np.ones(Ny - 1), k=-1)
+            matrix[0, 0] = 2.0 if pmc else 0.0
+        else:
+            matrix *= -1.0
+            matrix += np.diag(np.ones(Ny - 1), k=1)
+            if not pmc:
+                matrix[0, 0] = 0.0
+        return np.kron(np.eye(Nx), np.diag(1 / dls) @ matrix)
+
+    shape = (2, 3)
+    dlf = (np.array([2.0, 4.0]), np.array([5.0, 10.0, 20.0]))
+    dlb = (np.array([3.0, 6.0]), np.array([7.0, 14.0, 28.0]))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        dxf, dxb, dyf, dyb = create_d_matrices(shape, (dlf, dlb), dmin_pmc=dmin_pmc)
+
+    assert np.allclose(
+        dxf.toarray(), expected_dx_matrix(dlf[0], shape, dmin_pmc[0], backward=False)
+    )
+    assert np.allclose(dxb.toarray(), expected_dx_matrix(dlb[0], shape, dmin_pmc[0], backward=True))
+    assert np.allclose(
+        dyf.toarray(), expected_dy_matrix(dlf[1], shape, dmin_pmc[1], backward=False)
+    )
+    assert np.allclose(dyb.toarray(), expected_dy_matrix(dlb[1], shape, dmin_pmc[1], backward=True))
 
 
 @td.packaging.disable_local_subpixel
