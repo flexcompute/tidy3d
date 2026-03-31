@@ -737,6 +737,47 @@ class TestQuadraturePaths:
         assert results[("vertices",)].shape == (4, 2)
 
 
+def test_composite_quadrature_preserves_target_sample_count():
+    """Composite quadrature should segment by target Gauss count, not uniform cells."""
+    edge_length = 2.0
+    dx = 0.1
+    gauss_order = 7
+    sample_fraction = 0.4
+
+    n_uniform = int(np.ceil(edge_length / dx))
+    n_gauss = max(2, int(n_uniform * sample_fraction))
+    expected_segments = int(np.ceil(n_gauss / gauss_order))
+
+    samples, weights = td.PolySlab._adaptive_edge_samples(
+        edge_length,
+        dx,
+        _sample_fraction=sample_fraction,
+        _gauss_order=gauss_order,
+        _dtype=float,
+    )
+
+    assert n_uniform == 20
+    assert n_gauss == 8
+    assert samples.size == expected_segments * gauss_order
+    assert weights.size == expected_segments * gauss_order
+    assert np.isclose(np.sum(weights), 1.0)
+
+
+def test_edge_quadrature_uses_at_least_two_points():
+    """Even tiny clipped edges should not collapse to a one-point sidewall quadrature."""
+    samples, weights = td.PolySlab._adaptive_edge_samples(
+        0.02,
+        0.1,
+        _sample_fraction=0.4,
+        _gauss_order=7,
+        _dtype=float,
+    )
+
+    assert samples.size == 2
+    assert weights.size == 2
+    assert np.isclose(np.sum(weights), 1.0)
+
+
 class TestPolySlabConcave:
     """Test with concave polygons."""
 

@@ -2322,7 +2322,7 @@ class PolySlab(base.Planar):
 
         L_eff = L * max(0.0, t_end - t_start)
         n_uniform = max(1, int(np.ceil(L_eff / dx)))
-        n_gauss = n_uniform if n_uniform <= 3 else max(2, int(n_uniform * _sample_fraction))
+        n_gauss = max(2, n_uniform) if n_uniform <= 3 else max(2, int(n_uniform * _sample_fraction))
         if n_gauss <= _gauss_order:
             g, w = leggauss(n_gauss)
             half_range = 0.5 * (t_end - t_start)
@@ -2332,7 +2332,7 @@ class PolySlab(base.Planar):
 
         # composite Gauss with fixed local order
         g_loc, w_loc = leggauss(_gauss_order)
-        segs = n_uniform
+        segs = max(1, int(np.ceil(n_gauss / _gauss_order)))
         edges_t = np.linspace(t_start, t_end, segs + 1, dtype=_dtype)
 
         # compute all segments at once
