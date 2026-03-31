@@ -342,7 +342,7 @@ jobs:
     - name: restore-testmon-cache
       id: testmon-cache-restore
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
-      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: .testmondata
         key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -455,7 +455,7 @@ jobs:
 
     - name: upload-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: testmon-cache-candidate-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/testmon-cache-candidate-local-py${{ matrix.python-version }}
@@ -464,7 +464,7 @@ jobs:
 
     - name: save-testmon-cache
       if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
-      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: .testmondata
         key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -609,7 +609,7 @@ jobs:
     - name: restore-testmon-cache
       id: testmon-cache-restore
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
-      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: .testmondata
         key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -725,7 +725,7 @@ jobs:
 
     - name: upload-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}
@@ -734,7 +734,7 @@ jobs:
 
     - name: save-testmon-cache
       if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
-      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: .testmondata
         key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
