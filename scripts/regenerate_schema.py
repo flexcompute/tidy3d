@@ -5,6 +5,7 @@ This utility exports JSON Schemas for key Tidy3D models and writes them into
 the repository `schemas/` directory, with two strict guarantees:
 
 - Documentation-free: remove all "title", "description", and "units" fields at every level.
+- Default-preserving: materialize zero-argument `default_factory` values into exported defaults.
 - Canonicalized: deterministically sort keys and certain lists for stable output
   across Python versions.
 
@@ -17,7 +18,9 @@ import argparse
 import json
 import pathlib
 import sys
-from typing import Any
+from typing import Any, get_args, get_origin
+
+from pydantic import BaseModel, TypeAdapter
 
 # Define the output directory relative to this script's location.
 # Assumes the script is in a subdirectory like 'scripts' and 'schemas' is a sibling.
@@ -26,6 +29,100 @@ DEFAULT_SCHEMA_DIR = pathlib.Path(__file__).parent.parent / "schemas"
 # Dictionary mapping a clean name to the Pydantic model class.
 # This is the single source of truth for which schemas to export.
 export_api_schema_dictionary = None  # populated lazily when generating
+
+
+def _schema_definitions(schema_dict: dict[str, Any]) -> dict[str, Any]:
+    """Return the definitions mapping for either pydantic v1 or v2 style schemas."""
+    for key in ("$defs", "definitions"):
+        definitions = schema_dict.get(key)
+        if isinstance(definitions, dict):
+            return definitions
+    return {}
+
+
+def _iter_model_types(annotation: Any):
+    """Yield BaseModel subclasses nested inside a field annotation."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        yield annotation
+        return
+
+    origin = get_origin(annotation)
+    if origin is None:
+        return
+
+    for arg in get_args(annotation):
+        yield from _iter_model_types(arg)
+
+
+def _find_model_schema(
+    schema_dict: dict[str, Any], model_cls: type[BaseModel]
+) -> dict[str, Any] | None:
+    """Locate the schema node corresponding to a model class."""
+    if schema_dict.get("title") == model_cls.__name__:
+        return schema_dict
+
+    definitions = _schema_definitions(schema_dict)
+    definition = definitions.get(model_cls.__name__)
+    if isinstance(definition, dict):
+        return definition
+
+    for candidate in definitions.values():
+        if isinstance(candidate, dict) and candidate.get("title") == model_cls.__name__:
+            return candidate
+    return None
+
+
+def _serialize_field_default(field: Any) -> tuple[bool, Any]:
+    """Serialize a field's default_factory value into JSON-compatible data."""
+    if field.default_factory is None:
+        return False, None
+    if getattr(field, "default_factory_takes_validated_data", False):
+        return False, None
+
+    try:
+        default_value = field.get_default(call_default_factory=True)
+    except Exception:
+        return False, None
+
+    try:
+        return True, TypeAdapter(field.annotation).dump_python(default_value, mode="json")
+    except Exception:
+        if isinstance(default_value, BaseModel):
+            return True, default_value.model_dump(mode="json")
+        return False, None
+
+
+def _materialize_default_factory_defaults(
+    schema_dict: dict[str, Any], model_cls: type[BaseModel]
+) -> dict[str, Any]:
+    """Inject defaults for zero-argument default_factory fields into a schema tree."""
+    visited: set[type[BaseModel]] = set()
+
+    def _visit(current_model: type[BaseModel]) -> None:
+        if current_model in visited:
+            return
+        visited.add(current_model)
+
+        current_schema = _find_model_schema(schema_dict, current_model)
+        if not isinstance(current_schema, dict):
+            return
+
+        properties = current_schema.get("properties")
+        if not isinstance(properties, dict):
+            return
+
+        for field_name, field in current_model.model_fields.items():
+            field_schema = properties.get(field_name)
+            if isinstance(field_schema, dict) and "default" not in field_schema:
+                has_default, default_value = _serialize_field_default(field)
+                if has_default:
+                    field_schema["default"] = default_value
+
+            for nested_model in _iter_model_types(field.annotation):
+                _visit(nested_model)
+
+    _visit(model_cls)
+    return schema_dict
 
 
 def _stable_sort_key_for_schema_item(item: Any) -> str:
@@ -138,6 +235,7 @@ def generate_schemas(output_dir: pathlib.Path = DEFAULT_SCHEMA_DIR):
 
             # Generate the schema dictionary from the class.
             schema_dict = class_instance.model_json_schema()
+            schema_dict = _materialize_default_factory_defaults(schema_dict, class_instance)
             schema_dict = _canonicalize(schema_dict)
 
             # Write the schema to a file with pretty printing.

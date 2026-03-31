@@ -2,7 +2,7 @@
 
 This directory contains JSON Schemas for Tidy3D API classes with GUI support.
 
-Schemas are intentionally docs-free: all `title` and `description` fields are stripped to improve stability and make diffs meaningful. Output is canonicalized (sorted keys and order-insensitive arrays) so files are deterministic across Python versions.
+Schemas are intentionally docs-free: all `title` and `description` fields are stripped to improve stability and make diffs meaningful. Output is canonicalized (sorted keys and order-insensitive arrays) so files are deterministic across Python versions. Zero-argument `default_factory` values are materialized into exported `default` entries when they can be instantiated and serialized.
 
 ## Regenerating Schemas
 

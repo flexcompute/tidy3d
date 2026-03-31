@@ -5,6 +5,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -55,6 +56,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "extrude_structures": {
@@ -100,6 +102,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "sigma_max": {
@@ -137,6 +140,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "b": {
@@ -174,6 +178,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_range": {
@@ -441,6 +446,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_range": {
@@ -697,6 +703,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "end": {
@@ -748,6 +755,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "c_n": {
@@ -775,6 +783,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "dl_min": {
@@ -796,7 +805,11 @@
           "type": "number"
         },
         "mesher": {
-          "$ref": "#/$defs/GradedMesher"
+          "$ref": "#/$defs/GradedMesher",
+          "default": {
+            "attrs": {},
+            "type": "GradedMesher"
+          }
         },
         "min_steps_per_sim_size": {
           "default": 10.0,
@@ -821,6 +834,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -836,6 +850,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -898,6 +913,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -960,6 +976,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "bloch_vec": {
@@ -992,6 +1009,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "minus": {
@@ -1023,7 +1041,27 @@
             {
               "$ref": "#/$defs/StablePML"
             }
-          ]
+          ],
+          "default": {
+            "attrs": {},
+            "extrude_structures": true,
+            "name": null,
+            "num_layers": 12,
+            "parameters": {
+              "alpha_max": 0.0,
+              "alpha_min": 0.0,
+              "alpha_order": 1,
+              "attrs": {},
+              "kappa_max": 3.0,
+              "kappa_min": 1.0,
+              "kappa_order": 3,
+              "sigma_max": 1.5,
+              "sigma_min": 0.0,
+              "sigma_order": 3,
+              "type": "PMLParams"
+            },
+            "type": "PML"
+          }
         },
         "plus": {
           "anyOf": [
@@ -1054,7 +1092,27 @@
             {
               "$ref": "#/$defs/StablePML"
             }
-          ]
+          ],
+          "default": {
+            "attrs": {},
+            "extrude_structures": true,
+            "name": null,
+            "num_layers": 12,
+            "parameters": {
+              "alpha_max": 0.0,
+              "alpha_min": 0.0,
+              "alpha_order": 1,
+              "attrs": {},
+              "kappa_max": 3.0,
+              "kappa_min": 1.0,
+              "kappa_order": 3,
+              "sigma_max": 1.5,
+              "sigma_min": 0.0,
+              "sigma_order": 3,
+              "type": "PMLParams"
+            },
+            "type": "PML"
+          }
         },
         "type": {
           "const": "Boundary",
@@ -1069,6 +1127,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -1077,13 +1136,145 @@
           "type": "string"
         },
         "x": {
-          "$ref": "#/$defs/Boundary"
+          "$ref": "#/$defs/Boundary",
+          "default": {
+            "attrs": {},
+            "minus": {
+              "attrs": {},
+              "extrude_structures": true,
+              "name": null,
+              "num_layers": 12,
+              "parameters": {
+                "alpha_max": 0.0,
+                "alpha_min": 0.0,
+                "alpha_order": 1,
+                "attrs": {},
+                "kappa_max": 3.0,
+                "kappa_min": 1.0,
+                "kappa_order": 3,
+                "sigma_max": 1.5,
+                "sigma_min": 0.0,
+                "sigma_order": 3,
+                "type": "PMLParams"
+              },
+              "type": "PML"
+            },
+            "plus": {
+              "attrs": {},
+              "extrude_structures": true,
+              "name": null,
+              "num_layers": 12,
+              "parameters": {
+                "alpha_max": 0.0,
+                "alpha_min": 0.0,
+                "alpha_order": 1,
+                "attrs": {},
+                "kappa_max": 3.0,
+                "kappa_min": 1.0,
+                "kappa_order": 3,
+                "sigma_max": 1.5,
+                "sigma_min": 0.0,
+                "sigma_order": 3,
+                "type": "PMLParams"
+              },
+              "type": "PML"
+            },
+            "type": "Boundary"
+          }
         },
         "y": {
-          "$ref": "#/$defs/Boundary"
+          "$ref": "#/$defs/Boundary",
+          "default": {
+            "attrs": {},
+            "minus": {
+              "attrs": {},
+              "extrude_structures": true,
+              "name": null,
+              "num_layers": 12,
+              "parameters": {
+                "alpha_max": 0.0,
+                "alpha_min": 0.0,
+                "alpha_order": 1,
+                "attrs": {},
+                "kappa_max": 3.0,
+                "kappa_min": 1.0,
+                "kappa_order": 3,
+                "sigma_max": 1.5,
+                "sigma_min": 0.0,
+                "sigma_order": 3,
+                "type": "PMLParams"
+              },
+              "type": "PML"
+            },
+            "plus": {
+              "attrs": {},
+              "extrude_structures": true,
+              "name": null,
+              "num_layers": 12,
+              "parameters": {
+                "alpha_max": 0.0,
+                "alpha_min": 0.0,
+                "alpha_order": 1,
+                "attrs": {},
+                "kappa_max": 3.0,
+                "kappa_min": 1.0,
+                "kappa_order": 3,
+                "sigma_max": 1.5,
+                "sigma_min": 0.0,
+                "sigma_order": 3,
+                "type": "PMLParams"
+              },
+              "type": "PML"
+            },
+            "type": "Boundary"
+          }
         },
         "z": {
-          "$ref": "#/$defs/Boundary"
+          "$ref": "#/$defs/Boundary",
+          "default": {
+            "attrs": {},
+            "minus": {
+              "attrs": {},
+              "extrude_structures": true,
+              "name": null,
+              "num_layers": 12,
+              "parameters": {
+                "alpha_max": 0.0,
+                "alpha_min": 0.0,
+                "alpha_order": 1,
+                "attrs": {},
+                "kappa_max": 3.0,
+                "kappa_min": 1.0,
+                "kappa_order": 3,
+                "sigma_max": 1.5,
+                "sigma_min": 0.0,
+                "sigma_order": 3,
+                "type": "PMLParams"
+              },
+              "type": "PML"
+            },
+            "plus": {
+              "attrs": {},
+              "extrude_structures": true,
+              "name": null,
+              "num_layers": 12,
+              "parameters": {
+                "alpha_max": 0.0,
+                "alpha_min": 0.0,
+                "alpha_order": 1,
+                "attrs": {},
+                "kappa_max": 3.0,
+                "kappa_min": 1.0,
+                "kappa_order": 3,
+                "sigma_max": 1.5,
+                "sigma_min": 0.0,
+                "sigma_order": 3,
+                "type": "PMLParams"
+              },
+              "type": "PML"
+            },
+            "type": "Boundary"
+          }
         }
       },
       "type": "object"
@@ -1093,6 +1284,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -1139,6 +1331,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_sampling_points": {
@@ -1171,6 +1364,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "fit_param": {
@@ -1212,6 +1406,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "exp_1": {
@@ -1269,6 +1464,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -1401,6 +1597,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_range": {
@@ -1522,6 +1719,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "num_points": {
@@ -1544,6 +1742,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "components": {
@@ -1618,6 +1817,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "geometry_a": {
@@ -1745,6 +1945,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -1828,6 +2029,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "axis": {
@@ -1899,6 +2101,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "path_specs": {
@@ -1938,6 +2141,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -1995,6 +2199,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -2013,6 +2218,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "eg": {
@@ -2035,6 +2241,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "mu": {
@@ -2062,6 +2269,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "freq0": {
@@ -2088,6 +2296,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -2109,6 +2318,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "concave_resolution": {
@@ -2181,6 +2391,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "axis": {
@@ -2221,6 +2432,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "axis": {
@@ -2272,6 +2484,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "derived_from": {
@@ -2532,6 +2745,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "electron_range": {
@@ -2611,6 +2825,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -2839,6 +3054,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -2897,6 +3113,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -3125,6 +3342,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "custom_offset": {
@@ -3161,6 +3379,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coords": {
@@ -3188,6 +3407,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "interp_method": {
@@ -3240,6 +3460,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "current_spec": {
@@ -3290,6 +3511,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -3546,6 +3768,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -3759,6 +3982,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "derived_from": {
@@ -3987,6 +4211,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "freqs": {
@@ -4018,6 +4243,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -4221,6 +4447,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "axis": {
@@ -4285,6 +4512,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -4426,6 +4654,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "rate": {
@@ -4451,6 +4680,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -4592,6 +4822,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "m_eff_hh": {
@@ -4619,6 +4850,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -4763,6 +4995,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "name": {
@@ -4823,6 +5056,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "boundaries": {
@@ -4873,6 +5107,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -5024,6 +5259,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "freq_scale_factors": {
@@ -5051,6 +5287,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "scale_factors": {
@@ -5078,6 +5315,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -5225,6 +5463,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "bend_axis": {
@@ -5348,7 +5587,20 @@
           "type": "string"
         },
         "sort_spec": {
-          "$ref": "#/$defs/ModeSortSpec"
+          "$ref": "#/$defs/ModeSortSpec",
+          "default": {
+            "attrs": {},
+            "bounding_box": null,
+            "filter_key": null,
+            "filter_order": "over",
+            "filter_reference": 0.0,
+            "keep_modes": "all",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
+            "sort_reference": null,
+            "track_freq": "central",
+            "type": "ModeSortSpec"
+          }
         },
         "target_neff": {
           "anyOf": [
@@ -5391,6 +5643,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "num_modes": {
@@ -5418,6 +5671,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "num_reps": {
@@ -5446,6 +5700,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "mode_spec": {
@@ -5488,6 +5743,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "density": {
@@ -5574,6 +5830,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "density": {
@@ -5679,6 +5936,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "tau_300": {
@@ -5711,6 +5969,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -5885,6 +6144,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -5962,6 +6222,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "geometry": {
@@ -6079,6 +6340,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "geometries": {
@@ -6149,6 +6411,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -6164,6 +6427,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "dl": {
@@ -6208,9 +6472,22 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "grid_x": {
+          "default": {
+            "attrs": {},
+            "dl_min": null,
+            "max_scale": 1.4,
+            "mesher": {
+              "attrs": {},
+              "type": "GradedMesher"
+            },
+            "min_steps_per_sim_size": 10.0,
+            "min_steps_per_wvl": 10.0,
+            "type": "AutoGrid"
+          },
           "discriminator": {
             "mapping": {
               "AutoGrid": "#/$defs/AutoGrid",
@@ -6240,6 +6517,18 @@
           ]
         },
         "grid_y": {
+          "default": {
+            "attrs": {},
+            "dl_min": null,
+            "max_scale": 1.4,
+            "mesher": {
+              "attrs": {},
+              "type": "GradedMesher"
+            },
+            "min_steps_per_sim_size": 10.0,
+            "min_steps_per_wvl": 10.0,
+            "type": "AutoGrid"
+          },
           "discriminator": {
             "mapping": {
               "AutoGrid": "#/$defs/AutoGrid",
@@ -6269,6 +6558,18 @@
           ]
         },
         "grid_z": {
+          "default": {
+            "attrs": {},
+            "dl_min": null,
+            "max_scale": 1.4,
+            "mesher": {
+              "attrs": {},
+              "type": "GradedMesher"
+            },
+            "min_steps_per_sim_size": 10.0,
+            "min_steps_per_wvl": 10.0,
+            "type": "AutoGrid"
+          },
           "discriminator": {
             "mapping": {
               "AutoGrid": "#/$defs/AutoGrid",
@@ -6391,6 +6692,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "roughness_factor": {
@@ -6418,6 +6720,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -6433,6 +6736,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -6488,6 +6792,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "sigma": {
@@ -6507,6 +6812,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "delta_k": {
@@ -6551,6 +6857,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "m_eff": {
@@ -6573,6 +6880,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "n0": {
@@ -6603,6 +6911,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "axis": {
@@ -6667,7 +6976,17 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": {
+            "angle_threshold": 0.7853981633974483,
+            "attrs": {},
+            "concave_resolution": null,
+            "convex_resolution": null,
+            "distance_threshold": null,
+            "medium": "metal",
+            "mixed_resolution": null,
+            "type": "CornerFinderSpec"
+          }
         },
         "corner_refinement": {
           "anyOf": [
@@ -6677,7 +6996,14 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": {
+            "attrs": {},
+            "dl": null,
+            "num_cells": 3,
+            "refinement_factor": null,
+            "type": "GridRefinement"
+          }
         },
         "corner_snapping": {
           "default": true,
@@ -6739,6 +7065,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "electron_coeff": {
@@ -6812,6 +7139,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeff": {
@@ -6890,6 +7218,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -7005,6 +7334,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -7154,6 +7484,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -7161,7 +7492,15 @@
           "type": "number"
         },
         "fit_param": {
-          "$ref": "#/$defs/SurfaceImpedanceFitterParam"
+          "$ref": "#/$defs/SurfaceImpedanceFitterParam",
+          "default": {
+            "attrs": {},
+            "frequency_sampling_points": 20,
+            "log_sampling": true,
+            "max_num_poles": 5,
+            "tolerance_rms": 0.001,
+            "type": "SurfaceImpedanceFitterParam"
+          }
         },
         "frequency_range": {
           "maxItems": 2,
@@ -7315,6 +7654,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "element_type": {
@@ -7360,6 +7700,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -7449,6 +7790,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -7576,6 +7918,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_range": {
@@ -7777,10 +8120,18 @@
       "additionalProperties": false,
       "properties": {
         "apodization": {
-          "$ref": "#/$defs/ApodizationSpec"
+          "$ref": "#/$defs/ApodizationSpec",
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -7876,6 +8227,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "background_medium": {
@@ -8133,6 +8485,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "bend_axis": {
@@ -8234,7 +8587,11 @@
               },
               "type": "array"
             }
-          ]
+          ],
+          "default": {
+            "attrs": {},
+            "type": "AutoImpedanceSpec"
+          }
         },
         "interp_spec": {
           "anyOf": [
@@ -8295,7 +8652,20 @@
           "type": "number"
         },
         "sort_spec": {
-          "$ref": "#/$defs/ModeSortSpec"
+          "$ref": "#/$defs/ModeSortSpec",
+          "default": {
+            "attrs": {},
+            "bounding_box": null,
+            "filter_key": null,
+            "filter_order": "over",
+            "filter_reference": 0.0,
+            "keep_modes": "all",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
+            "sort_reference": null,
+            "track_freq": "central",
+            "type": "ModeSortSpec"
+          }
         },
         "target_neff": {
           "anyOf": [
@@ -8356,6 +8726,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "bend_axis": {
@@ -8467,7 +8838,20 @@
           "type": "number"
         },
         "sort_spec": {
-          "$ref": "#/$defs/ModeSortSpec"
+          "$ref": "#/$defs/ModeSortSpec",
+          "default": {
+            "attrs": {},
+            "bounding_box": null,
+            "filter_key": null,
+            "filter_order": "over",
+            "filter_reference": 0.0,
+            "keep_modes": "all",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
+            "sort_reference": null,
+            "track_freq": "central",
+            "type": "ModeSortSpec"
+          }
         },
         "target_neff": {
           "anyOf": [
@@ -8551,6 +8935,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "freq_spec": {
@@ -8657,6 +9042,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "method": {
@@ -8708,10 +9094,18 @@
       "additionalProperties": false,
       "properties": {
         "apodization": {
-          "$ref": "#/$defs/ApodizationSpec"
+          "$ref": "#/$defs/ApodizationSpec",
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -8804,7 +9198,40 @@
           "type": "array"
         },
         "mode_spec": {
-          "$ref": "#/$defs/ModeSpec"
+          "$ref": "#/$defs/ModeSpec",
+          "default": {
+            "angle_phi": 0.0,
+            "angle_rotation": false,
+            "angle_theta": 0.0,
+            "attrs": {},
+            "bend_axis": null,
+            "bend_radius": null,
+            "filter_pol": null,
+            "group_index_step": false,
+            "interp_spec": null,
+            "num_modes": 1,
+            "num_pml": [
+              0,
+              0
+            ],
+            "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "bounding_box": null,
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "keep_modes": "all",
+              "sort_key": "n_eff",
+              "sort_order": "descending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
+            "target_neff": null,
+            "track_freq": null,
+            "type": "ModeSpec"
+          }
         },
         "name": {
           "minLength": 1,
@@ -8857,6 +9284,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "bounding_box": {
@@ -9001,6 +9429,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "bend_axis": {
@@ -9101,7 +9530,20 @@
           "type": "string"
         },
         "sort_spec": {
-          "$ref": "#/$defs/ModeSortSpec"
+          "$ref": "#/$defs/ModeSortSpec",
+          "default": {
+            "attrs": {},
+            "bounding_box": null,
+            "filter_key": null,
+            "filter_order": "over",
+            "filter_reference": 0.0,
+            "keep_modes": "all",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
+            "sort_reference": null,
+            "track_freq": "central",
+            "type": "ModeSortSpec"
+          }
         },
         "target_neff": {
           "anyOf": [
@@ -9144,6 +9586,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -9181,6 +9624,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "charge": {
@@ -9378,6 +9822,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "m_eff_long": {
@@ -9406,6 +9851,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "models": {
@@ -9443,6 +9889,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "chi3": {
@@ -9474,6 +9921,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "name": {
@@ -9500,6 +9948,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "edge_singularity_correction": {
@@ -9529,6 +9978,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_range": {
@@ -9645,6 +10095,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "name": {
@@ -9675,6 +10126,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_range": {
@@ -9791,6 +10243,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "extrude_structures": {
@@ -9857,6 +10310,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "kappa_max": {
@@ -9902,6 +10356,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "charge": {
@@ -9967,6 +10422,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "name": {
@@ -9993,6 +10449,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "eps_xx": {
@@ -10021,10 +10478,18 @@
       "additionalProperties": false,
       "properties": {
         "apodization": {
-          "$ref": "#/$defs/ApodizationSpec"
+          "$ref": "#/$defs/ApodizationSpec",
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -10120,6 +10585,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "delta_eps": {
@@ -10161,6 +10627,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "conductivity": {
@@ -10339,6 +10806,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "eps_inf": {
@@ -10549,6 +11017,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -10568,6 +11037,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "eps_inf": {
@@ -10700,6 +11170,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "axis": {
@@ -10771,6 +11242,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "dl": {
@@ -10796,7 +11268,11 @@
           "type": "number"
         },
         "mesher": {
-          "$ref": "#/$defs/GradedMesher"
+          "$ref": "#/$defs/GradedMesher",
+          "default": {
+            "attrs": {},
+            "type": "GradedMesher"
+          }
         },
         "type": {
           "const": "QuasiUniformGrid",
@@ -10814,6 +11290,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "capacitance": {
@@ -10873,6 +11350,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "r_const": {
@@ -10910,6 +11388,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "beta_n": {
@@ -10953,6 +11432,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "coeffs": {
@@ -11229,6 +11709,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "delta_E_g": {
@@ -11388,6 +11869,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "tau_n": {
@@ -11429,6 +11911,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "c2": {
@@ -11465,6 +11948,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "capacity": {
@@ -11522,6 +12006,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "capacity": {
@@ -11590,6 +12075,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "interp_method": {
@@ -11624,10 +12110,18 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "space_modulation": {
-          "$ref": "#/$defs/SpaceModulation"
+          "$ref": "#/$defs/SpaceModulation",
+          "default": {
+            "amplitude": 1.0,
+            "attrs": {},
+            "interp_method": "nearest",
+            "phase": 0.0,
+            "type": "SpaceModulation"
+          }
         },
         "time_modulation": {
           "$ref": "#/$defs/ContinuousWaveTimeModulation"
@@ -11648,6 +12142,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "center": {
@@ -11685,6 +12180,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "extrude_structures": {
@@ -11736,6 +12232,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "type": {
@@ -11751,6 +12248,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "background_medium": {
@@ -12080,9 +12578,14 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "dielectric": {
+          "default": {
+            "attrs": {},
+            "type": "PolarizedAveraging"
+          },
           "discriminator": {
             "mapping": {
               "ContourPathAveraging": "#/$defs/ContourPathAveraging",
@@ -12104,6 +12607,12 @@
           ]
         },
         "lossy_metal": {
+          "default": {
+            "attrs": {},
+            "edge_singularity_correction": true,
+            "timestep_reduction": 0.0,
+            "type": "SurfaceImpedance"
+          },
           "discriminator": {
             "mapping": {
               "Staircasing": "#/$defs/Staircasing",
@@ -12125,6 +12634,10 @@
           ]
         },
         "metal": {
+          "default": {
+            "attrs": {},
+            "type": "Staircasing"
+          },
           "discriminator": {
             "mapping": {
               "Staircasing": "#/$defs/Staircasing",
@@ -12142,6 +12655,12 @@
           ]
         },
         "pec": {
+          "default": {
+            "attrs": {},
+            "edge_singularity_correction": true,
+            "timestep_reduction": 0.3,
+            "type": "PECConformal"
+          },
           "discriminator": {
             "mapping": {
               "HeuristicPECStaircasing": "#/$defs/HeuristicPECStaircasing",
@@ -12163,6 +12682,10 @@
           ]
         },
         "pmc": {
+          "default": {
+            "attrs": {},
+            "type": "Staircasing"
+          },
           "discriminator": {
             "mapping": {
               "HeuristicPECStaircasing": "#/$defs/HeuristicPECStaircasing",
@@ -12192,6 +12715,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "edge_singularity_correction": {
@@ -12217,6 +12741,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "frequency_sampling_points": {
@@ -12251,6 +12776,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "cells": {
@@ -12317,6 +12843,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "geometry": {
@@ -12396,6 +12923,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "mesh_dataset": {
@@ -12422,6 +12950,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "surface_mesh": {
@@ -12443,6 +12972,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "cells": {
@@ -12522,6 +13052,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "beta": {
@@ -12592,6 +13123,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "dl": {
@@ -12614,6 +13146,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "num_points": {
@@ -12640,6 +13173,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "beta": {
@@ -12674,6 +13208,7 @@
         },
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "edgecolor": {
@@ -12697,6 +13232,7 @@
       "properties": {
         "attrs": {
           "additionalProperties": true,
+          "default": {},
           "type": "object"
         },
         "staircase_normal_component": {
@@ -12716,6 +13252,7 @@
   "properties": {
     "attrs": {
       "additionalProperties": true,
+      "default": {},
       "type": "object"
     },
     "axis": {
@@ -12727,7 +13264,53 @@
       "type": "integer"
     },
     "boundary_spec": {
-      "$ref": "#/$defs/BoundarySpec"
+      "$ref": "#/$defs/BoundarySpec",
+      "default": {
+        "attrs": {},
+        "type": "BoundarySpec",
+        "x": {
+          "attrs": {},
+          "minus": {
+            "attrs": {},
+            "name": null,
+            "type": "PECBoundary"
+          },
+          "plus": {
+            "attrs": {},
+            "name": null,
+            "type": "PECBoundary"
+          },
+          "type": "Boundary"
+        },
+        "y": {
+          "attrs": {},
+          "minus": {
+            "attrs": {},
+            "name": null,
+            "type": "PECBoundary"
+          },
+          "plus": {
+            "attrs": {},
+            "name": null,
+            "type": "PECBoundary"
+          },
+          "type": "Boundary"
+        },
+        "z": {
+          "attrs": {},
+          "minus": {
+            "attrs": {},
+            "name": null,
+            "type": "PECBoundary"
+          },
+          "plus": {
+            "attrs": {},
+            "name": null,
+            "type": "PECBoundary"
+          },
+          "type": "Boundary"
+        }
+      }
     },
     "center": {
       "anyOf": [
@@ -12785,7 +13368,51 @@
       "x-array-strict": false
     },
     "grid_spec": {
-      "$ref": "#/$defs/GridSpec"
+      "$ref": "#/$defs/GridSpec",
+      "default": {
+        "attrs": {},
+        "grid_x": {
+          "attrs": {},
+          "dl_min": null,
+          "max_scale": 1.4,
+          "mesher": {
+            "attrs": {},
+            "type": "GradedMesher"
+          },
+          "min_steps_per_sim_size": 10.0,
+          "min_steps_per_wvl": 10.0,
+          "type": "AutoGrid"
+        },
+        "grid_y": {
+          "attrs": {},
+          "dl_min": null,
+          "max_scale": 1.4,
+          "mesher": {
+            "attrs": {},
+            "type": "GradedMesher"
+          },
+          "min_steps_per_sim_size": 10.0,
+          "min_steps_per_wvl": 10.0,
+          "type": "AutoGrid"
+        },
+        "grid_z": {
+          "attrs": {},
+          "dl_min": null,
+          "max_scale": 1.4,
+          "mesher": {
+            "attrs": {},
+            "type": "GradedMesher"
+          },
+          "min_steps_per_sim_size": 10.0,
+          "min_steps_per_wvl": 10.0,
+          "type": "AutoGrid"
+        },
+        "layer_refinement_specs": [],
+        "override_structures": [],
+        "snapping_points": [],
+        "type": "GridSpec",
+        "wavelength": null
+      }
     },
     "internal_absorbers": {
       "default": [],
@@ -12819,6 +13446,19 @@
       "type": "array"
     },
     "medium": {
+      "default": {
+        "allow_gain": false,
+        "attrs": {},
+        "conductivity": 0.0,
+        "frequency_range": null,
+        "heat_spec": null,
+        "modulation_spec": null,
+        "name": null,
+        "nonlinear_spec": null,
+        "permittivity": 1.0,
+        "type": "Medium",
+        "viz_spec": null
+      },
       "discriminator": {
         "mapping": {
           "AnisotropicMedium": "#/$defs/AnisotropicMedium",
@@ -13063,7 +13703,35 @@
         {
           "type": "boolean"
         }
-      ]
+      ],
+      "default": {
+        "attrs": {},
+        "dielectric": {
+          "attrs": {},
+          "type": "PolarizedAveraging"
+        },
+        "lossy_metal": {
+          "attrs": {},
+          "edge_singularity_correction": true,
+          "timestep_reduction": 0.0,
+          "type": "SurfaceImpedance"
+        },
+        "metal": {
+          "attrs": {},
+          "type": "Staircasing"
+        },
+        "pec": {
+          "attrs": {},
+          "edge_singularity_correction": true,
+          "timestep_reduction": 0.3,
+          "type": "PECConformal"
+        },
+        "pmc": {
+          "attrs": {},
+          "type": "Staircasing"
+        },
+        "type": "SubpixelSpec"
+      }
     },
     "sweep_spec": {
       "anyOf": [
