@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
-from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
+from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
+from tidy3d.components.autograd import TracedFloat, TracedPositiveFloat
 from tidy3d.components.autograd.derivative_utils import (
     transpose_interp_field_to_dataset,
 )
+from tidy3d.components.autograd.utils import get_static, negate_vjp_map
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -26,7 +28,7 @@ from tidy3d.components.validators import (
     warn_if_dataset_none,
 )
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import AdjointError, SetupError
 from tidy3d.log import log
 
 from .adjoint_helpers import (
@@ -34,6 +36,7 @@ from .adjoint_helpers import (
     assign_center_path_derivatives,
     parse_source_field_component,
     split_source_paths,
+    validate_no_collapsed_bounds_for_requested_center_axes,
     validate_no_zero_dim_center_paths,
 )
 from .base import Source
@@ -42,8 +45,10 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd import AutogradFieldMap, PathType
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.beam import BeamGrid, BeamPose
+    from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.types import Ax, Coordinate
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
@@ -248,6 +253,10 @@ class CustomFieldSource(FieldSource, PlanarSource):
         simulation can then be used for proper normalization of results after ``tidy3d`` simulation.
 
         The coordinates of all provided fields are assumed to be relative to the source center.
+        In other words, the dataset is interpreted in a local coordinate frame centered at
+        :attr:`center`; when injecting/interpolating, the simulation-space coordinates are
+        ``dataset_coords + center``. This means the same dataset can be translated in space by
+        changing :attr:`center` without modifying dataset coordinates.
         If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
         but will inject equal power in both directions instead.
 
@@ -412,10 +421,13 @@ class CustomFieldSource(FieldSource, PlanarSource):
             center=center,
             bounds=bounds,
             source_size=tuple(self.size),
-            label_prefix=type(self).__name__,
             get_adjoint_and_sign=_get_adjoint_and_sign,
         )
 
+        validate_no_collapsed_bounds_for_requested_center_axes(
+            center_paths,
+            bounds=bounds,
+        )
         assign_center_path_derivatives(
             derivative_map,
             center_paths,
@@ -439,7 +451,8 @@ class CustomFieldSource(FieldSource, PlanarSource):
             )
 
         dataset_paths, center_paths = split_source_paths(
-            derivative_info.paths, dataset_tag="field_dataset"
+            derivative_info.paths,
+            primary_roots={"field_dataset"},
         )
         validate_no_zero_dim_center_paths(
             center_paths,
@@ -518,7 +531,8 @@ class AngledFieldSource(DirectionalSource, ABC):
     @classmethod
     def glancing_incidence(cls, val: float) -> float:
         """Warn if close to glancing incidence."""
-        if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
+        static_val = get_static(val)
+        if np.abs(np.pi / 2 - static_val) < GLANCING_CUTOFF:
             log.warning(
                 "Angled source propagation axis close to glancing angle. "
                 "For best results, switch the injection axis.",
@@ -792,7 +806,435 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         return self
 
 
-class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
+def _source_remap_background_index(derivative_info: DerivativeInfo, freqs: np.ndarray) -> NDArray:
+    """Background index for Gaussian-like source remap."""
+    if derivative_info.source_background_index is None:
+        raise AdjointError(
+            "Gaussian-like source derivative remap requires 'source_background_index' "
+            "in DerivativeInfo, but it was not provided."
+        )
+    sampled = derivative_info.source_background_index.sel(f=freqs, method="nearest")
+    return np.asarray(sampled.values, dtype=complex).reshape(-1)
+
+
+def _slice_field_map_at_frequency(
+    field_map: Optional[dict[str, ScalarFieldDataArray]], freq: float
+) -> dict[str, ScalarFieldDataArray]:
+    """Slice a field-component map to a single frequency."""
+    if not field_map:
+        return {}
+    return {name: data_array.sel(f=[freq]) for name, data_array in field_map.items()}
+
+
+def _slice_derivative_info_at_frequency(
+    derivative_info: DerivativeInfo, freq: float
+) -> DerivativeInfo:
+    """Create a per-frequency ``DerivativeInfo`` view for Gaussian-like remap."""
+    source_background_index = derivative_info.source_background_index
+    if source_background_index is None:
+        raise AdjointError(
+            "Gaussian-like source derivative remap requires 'source_background_index' "
+            "in DerivativeInfo, but it was not provided."
+        )
+    return derivative_info.updated_copy(
+        E_adj=_slice_field_map_at_frequency(derivative_info.E_adj, freq),
+        H_adj=_slice_field_map_at_frequency(derivative_info.H_adj, freq),
+        frequencies=np.asarray([freq], dtype=float),
+        source_background_index=source_background_index.sel(f=[freq], method="nearest"),
+    )
+
+
+def _accumulate_derivative_value(
+    derivative_map: AutogradFieldMap,
+    field_path: PathType,
+    value: Any,
+) -> None:
+    """Accumulate one per-frequency derivative contribution into ``derivative_map``."""
+    if field_path not in derivative_map:
+        derivative_map[field_path] = value
+        return
+    prev_value = derivative_map[field_path]
+    if isinstance(prev_value, tuple) or isinstance(value, tuple):
+        summed = np.asarray(prev_value, dtype=float) + np.asarray(value, dtype=float)
+        derivative_map[field_path] = tuple(summed.tolist())
+        return
+    derivative_map[field_path] = prev_value + value
+
+
+def _build_gaussian_like_field_dataset(
+    source: AbstractGaussianBeam, derivative_info: DerivativeInfo
+) -> FieldDataset:
+    """Build analytic beam fields as a ``FieldDataset`` for source VJP chaining."""
+    from tidy3d.components.data.data_array import ScalarFieldDataArray
+
+    source_center = np.asarray(source.center, dtype=float)
+    freqs = np.asarray(derivative_info.frequencies, dtype=float).reshape(-1)
+    if freqs.size != 1:
+        raise ValueError(
+            "Gaussian-like remap dataset construction expects a single frequency slice, got "
+            f"{freqs.size} frequencies."
+        )
+    background_n = _source_remap_background_index(derivative_info, freqs)
+    field_arrays = {}
+    for component in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+        field_map = derivative_info.E_adj if component.startswith("E") else derivative_info.H_adj
+        component_data = field_map[component]
+        # Keep mock dataset coordinates source-relative to match ``CustomFieldSource`` convention.
+        # In source VJP interpolation these coordinates are shifted back to simulation coordinates
+        # via ``+ center`` (see ``transpose_interp_field_to_dataset``), so this is not a double shift.
+        coords = {
+            dim: np.asarray(component_data.coords[dim].data, dtype=float) - source_center[axis]
+            for axis, dim in enumerate("xyz")
+        }
+        coords["f"] = freqs
+        component_field = _compute_component_field_on_coords(
+            source=source,
+            component=component,
+            coords=coords,
+            background_n=background_n,
+            center=(0.0, 0.0, 0.0),
+            normalize=True,
+        )
+        field_arrays[component] = ScalarFieldDataArray(component_field, coords=coords)
+
+    return FieldDataset(**field_arrays)
+
+
+def _compute_dataset_vjp_weights(
+    source: AbstractGaussianBeam, derivative_info: DerivativeInfo, field_dataset: FieldDataset
+) -> dict[tuple[str, str], np.ndarray]:
+    """Compute complex source dataset cotangents by reusing CustomFieldSource VJP."""
+    mock_source = CustomFieldSource(
+        center=tuple(float(val) for val in source.center),
+        size=tuple(float(val) for val in source.size),
+        source_time=source.source_time,
+        field_dataset=field_dataset,
+    )
+    dataset_paths = [("field_dataset", component) for component in field_dataset.field_components]
+    derivative_info_dataset = derivative_info.updated_copy(paths=dataset_paths)
+    dataset_weights = mock_source._compute_derivatives(derivative_info_dataset)
+    if source.direction == "-":
+        # Backward-propagating Gaussian-like beams require an extra global sign
+        # in the dataset cotangent remap to align with source-direction convention.
+        dataset_weights = negate_vjp_map(dataset_weights)
+    return dataset_weights
+
+
+def _autograd_param_vjp(
+    source: AbstractGaussianBeam,
+    derivative_info: DerivativeInfo,
+    path: PathType,
+    dataset_weights: dict[tuple[str, str], np.ndarray],
+    field_dataset: FieldDataset,
+) -> float:
+    """Map dataset VJP weights to one source parameter via autograd VJP."""
+    import autograd.numpy as anp
+    from autograd import grad
+
+    value0 = source.get_param(path)
+    base_center = tuple(float(val) for val in source.center)
+    weights = {
+        key: anp.asarray(val) for key, val in dataset_weights.items() if key[0] == "field_dataset"
+    }
+
+    component_grids = {
+        component: {
+            dim: np.asarray(data_array.coords[dim].data, dtype=float)
+            for dim in ("x", "y", "z", "f")
+        }
+        for component, data_array in field_dataset.field_components.items()
+    }
+    component_background_n = {
+        component: _source_remap_background_index(derivative_info, grid["f"])
+        for component, grid in component_grids.items()
+    }
+
+    def _helper_component_field(
+        params: dict[str, Any], *, normalize: bool, component: str
+    ) -> np.ndarray:
+        grid = component_grids[component]
+        shift_x = params["center"][0] - base_center[0]
+        shift_y = params["center"][1] - base_center[1]
+        shift_z = params["center"][2] - base_center[2]
+        return _compute_component_field_on_coords(
+            source=source,
+            component=component,
+            coords=grid,
+            background_n=component_background_n[component],
+            # Dataset coordinates are source-relative to the base source center.
+            # Center shifts are represented as offsets in this relative frame.
+            center=(shift_x, shift_y, shift_z),
+            normalize=normalize,
+            params=params,
+        )
+
+    def objective(param_value: Any) -> Any:
+        params = source.get_param_state(path, param_value)
+        total = 0.0 + 0.0j
+        for component in field_dataset.field_components:
+            weight = weights.get(("field_dataset", component))
+            if weight is None:
+                continue
+            component_field = _helper_component_field(params, normalize=True, component=component)
+            total += anp.sum(weight * component_field)
+        return anp.real(total)
+
+    return float(grad(objective)(value0))
+
+
+def _make_beam_pose(
+    source: AbstractGaussianBeam,
+    *,
+    center: tuple[float, float, float],
+    params: Optional[dict[str, Any]] = None,
+) -> BeamPose:
+    """Construct a ``BeamPose`` from source defaults with optional traced overrides."""
+    from tidy3d.components import beam as beam_module
+
+    params = {} if params is None else params
+    return beam_module.BeamPose(
+        injection_axis=int(source.injection_axis),
+        direction=params.get("direction", source.direction),
+        angle_theta=params.get("angle_theta", source.angle_theta),
+        angle_phi=params.get("angle_phi", source.angle_phi),
+        pol_angle=params.get("pol_angle", source.pol_angle),
+        center=center,
+    )
+
+
+def _compute_component_field_on_coords(
+    source: AbstractGaussianBeam,
+    *,
+    component: str,
+    coords: dict[str, np.ndarray],
+    background_n: np.ndarray,
+    center: tuple[float, float, float],
+    normalize: bool,
+    params: Optional[dict[str, Any]] = None,
+) -> np.ndarray:
+    """Compute one beam field component on explicit coordinate arrays."""
+    from tidy3d.components import beam as beam_module
+
+    pose = _make_beam_pose(source, center=center, params=params)
+    grid = beam_module.BeamGrid(
+        freqs=np.asarray(coords["f"], dtype=float),
+        background_n=background_n,
+        x=np.asarray(coords["x"], dtype=float),
+        y=np.asarray(coords["y"], dtype=float),
+        z=np.asarray(coords["z"], dtype=float),
+    )
+    params = {} if params is None else params
+    beam_param_overrides = {
+        key: params[key]
+        for key in ("waist_radius", "waist_distance", "waist_sizes", "waist_distances")
+        if key in params and params[key] is not None
+    }
+    fields = source.compute_beam_fields_on_grid(
+        pose=pose,
+        grid=grid,
+        normalize=normalize,
+        params=beam_param_overrides,
+    )
+    return fields[component]
+
+
+def _compute_gaussian_like_derivatives(
+    source: AbstractGaussianBeam, derivative_info: DerivativeInfo
+) -> AutogradFieldMap:
+    """Compute Gaussian-like source derivatives through dataset-remap chain rule.
+
+    Chain rule:
+    1) analytic Gaussian-like source -> mock ``FieldDataset``
+    2) reuse ``CustomFieldSource`` VJP for dataset cotangents
+    3) map dataset cotangents back to source parameters
+    """
+    derivative_map: AutogradFieldMap = {}
+    validated_paths = []
+
+    for field_path in derivative_info.paths:
+        field_path = tuple(field_path)
+        field_path = source.validate_traced_path(field_path)
+        validated_paths.append(field_path)
+
+    param_paths, center_paths = split_source_paths(validated_paths, primary_roots=None)
+
+    freqs = np.asarray(derivative_info.frequencies, dtype=float).reshape(-1)
+    for freq in freqs:
+        derivative_info_freq = _slice_derivative_info_at_frequency(derivative_info, float(freq))
+        field_dataset = _build_gaussian_like_field_dataset(
+            source, derivative_info=derivative_info_freq
+        )
+        dataset_weights = _compute_dataset_vjp_weights(source, derivative_info_freq, field_dataset)
+
+        if center_paths:
+            mock_source = CustomFieldSource(
+                center=tuple(float(val) for val in source.center),
+                size=tuple(float(val) for val in source.size),
+                source_time=source.source_time,
+                field_dataset=field_dataset,
+            )
+            derivative_info_center = derivative_info_freq.updated_copy(
+                paths=center_paths,
+                bounds=derivative_info_freq.bounds,
+                bounds_intersect=derivative_info_freq.bounds_intersect,
+            )
+            center_derivatives = mock_source._compute_derivatives(derivative_info_center)
+            if source.direction == "-":
+                center_derivatives = negate_vjp_map(center_derivatives)
+            for field_path, value in center_derivatives.items():
+                _accumulate_derivative_value(derivative_map, field_path, value)
+
+        for field_path in param_paths:
+            value = _autograd_param_vjp(
+                source,
+                derivative_info_freq,
+                field_path,
+                dataset_weights=dataset_weights,
+                field_dataset=field_dataset,
+            )
+            _accumulate_derivative_value(derivative_map, field_path, value)
+
+    return derivative_map
+
+
+class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC):
+    """Shared base class for Gaussian-like planar field sources."""
+
+    angle_theta: TracedFloat = Field(
+        0.0,
+        title="Polar Angle",
+        description="Polar angle of the propagation axis from the injection axis.",
+        json_schema_extra={"units": RADIAN},
+    )
+
+    angle_phi: TracedFloat = Field(
+        0.0,
+        title="Azimuth Angle",
+        description="Azimuth angle of the propagation axis in the plane orthogonal to the "
+        "injection axis.",
+        json_schema_extra={"units": RADIAN},
+    )
+
+    pol_angle: TracedFloat = Field(
+        0.0,
+        title="Polarization Angle",
+        description="Specifies the angle between the electric field polarization of the "
+        "source and the plane defined by the injection axis and the propagation axis (rad). "
+        "``pol_angle=0`` (default) specifies P polarization, "
+        "while ``pol_angle=np.pi/2`` specifies S polarization. "
+        "At normal incidence when S and P are undefined, ``pol_angle=0`` defines: "
+        "- ``Ey`` polarization for propagation along ``x``."
+        "- ``Ex`` polarization for propagation along ``y``."
+        "- ``Ex`` polarization for propagation along ``z``.",
+        json_schema_extra={"units": RADIAN},
+    )
+
+    num_freqs: int = Field(
+        1,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
+        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
+        "Note that larger values of 'num_freqs' could spread out the source time signal and "
+        "introduce numerical noise, or prevent timely field decay.",
+        ge=1,
+        le=50,
+    )
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives for Gaussian-like beam source parameters."""
+        return _compute_gaussian_like_derivatives(self, derivative_info)
+
+    @property
+    def _common_scalar_roots(self) -> set[str]:
+        return {"angle_theta", "angle_phi", "pol_angle"}
+
+    @property
+    @abstractmethod
+    def _beam_scalar_roots(self) -> set[str]:
+        """Traced scalar roots specific to this Gaussian-like source."""
+
+    @property
+    @abstractmethod
+    def _beam_tuple_roots(self) -> set[str]:
+        """Traced tuple-valued roots specific to this Gaussian-like source."""
+
+    @abstractmethod
+    def _beam_param_state(self) -> dict[str, Any]:
+        """Return source-parameter state used by autograd remap objective."""
+
+    @abstractmethod
+    def compute_beam_fields_on_grid(
+        self,
+        *,
+        pose: BeamPose,
+        grid: BeamGrid,
+        normalize: bool,
+        params: Optional[dict[str, Any]] = None,
+    ) -> dict[str, np.ndarray]:
+        """Compute Gaussian-like fields on a component grid."""
+
+    def get_param(self, path: PathType) -> float:
+        """Extract scalar parameter value from a traced source path."""
+        root = path[0]
+        if root == "center":
+            return float(self.center[path[1]])
+        if root in self._beam_tuple_roots:
+            return float(getattr(self, root)[path[1]])
+        return float(getattr(self, root))
+
+    def get_param_state(self, path: PathType, value: Any) -> dict[str, Any]:
+        """Return parameter state dictionary after overriding one traced parameter."""
+        params = {
+            "center": tuple(self.center),
+            "angle_theta": self.angle_theta,
+            "angle_phi": self.angle_phi,
+            "pol_angle": self.pol_angle,
+            "direction": self.direction,
+            **self._beam_param_state(),
+        }
+        root = path[0]
+        if root == "center":
+            center = list(params["center"])
+            center[path[1]] = value
+            params["center"] = tuple(center)
+        elif root in self._beam_tuple_roots:
+            values = list(params[root])
+            values[path[1]] = value
+            params[root] = tuple(values)
+        else:
+            params[root] = value
+        return params
+
+    def validate_traced_path(self, field_path: PathType) -> PathType:
+        """Validate traced Gaussian-like source paths."""
+        if not field_path:
+            raise ValueError(f"Empty traced source path encountered in '{type(self).__name__}'.")
+
+        root = field_path[0]
+        scalar_allowed = self._common_scalar_roots | self._beam_scalar_roots
+        if root in scalar_allowed or root in self._beam_tuple_roots:
+            return field_path
+
+        if root == "center":
+            try:
+                validate_no_zero_dim_center_paths(
+                    [field_path],
+                    source_size=tuple(self.size),
+                    source_name=type(self).__name__,
+                )
+            except AdjointError as err:
+                raise ValueError(str(err)) from err
+            return field_path
+
+        raise ValueError(
+            f"Unsupported traced source path '{field_path}' for '{type(self).__name__}'. "
+            "Supported parameters are beam waists, beam distances, angle_theta, angle_phi, pol_angle, "
+            "and lateral center components."
+        )
+
+
+class GaussianBeam(AbstractGaussianBeam):
     """Gaussian distribution on finite extent plane.
 
     Example
@@ -815,14 +1257,14 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    waist_radius: PositiveFloat = Field(
+    waist_radius: TracedPositiveFloat = Field(
         1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
         json_schema_extra={"units": MICROMETER},
     )
 
-    waist_distance: float = Field(
+    waist_distance: TracedFloat = Field(
         0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
@@ -834,21 +1276,44 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         json_schema_extra={"units": MICROMETER},
     )
 
-    num_freqs: int = Field(
-        1,
-        title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of the injected "
-        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
-        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
-        "Note that larger values of 'num_freqs' could spread out the source time signal and "
-        "introduce numerical noise, or prevent timely field decay.",
-        ge=1,
-        le=50,
-    )
     _backward_waist_warning = warn_backward_waist_distance("waist_distance")
 
+    @property
+    def _beam_scalar_roots(self) -> set[str]:
+        return {"waist_radius", "waist_distance"}
 
-class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
+    @property
+    def _beam_tuple_roots(self) -> set[str]:
+        return set()
+
+    def _beam_param_state(self) -> dict[str, Any]:
+        return {
+            "waist_radius": self.waist_radius,
+            "waist_distance": self.waist_distance,
+        }
+
+    def compute_beam_fields_on_grid(
+        self,
+        *,
+        pose: BeamPose,
+        grid: BeamGrid,
+        normalize: bool,
+        params: Optional[dict[str, Any]] = None,
+    ) -> dict[str, np.ndarray]:
+        """Compute Gaussian beam fields from compact pose/grid context."""
+        from tidy3d.components import beam as beam_module
+
+        params = {} if params is None else params
+        return beam_module.gaussian_like_fields_on_grid_from_context(
+            pose=pose,
+            grid=grid,
+            waist_radius=params.get("waist_radius", self.waist_radius),
+            waist_distance=params.get("waist_distance", self.waist_distance),
+            normalize=normalize,
+        )
+
+
+class AstigmaticGaussianBeam(AbstractGaussianBeam):
     """The simple astigmatic Gaussian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
     of the ellipse. When equal waist sizes and equal waist distances are specified in the two
@@ -876,14 +1341,14 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     waist_distances = (3.0, 4.0))
     """
 
-    waist_sizes: tuple[PositiveFloat, PositiveFloat] = Field(
+    waist_sizes: tuple[TracedPositiveFloat, TracedPositiveFloat] = Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         json_schema_extra={"units": MICROMETER},
     )
 
-    waist_distances: tuple[float, float] = Field(
+    waist_distances: tuple[TracedFloat, TracedFloat] = Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -894,18 +1359,41 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         json_schema_extra={"units": MICROMETER},
     )
 
-    num_freqs: int = Field(
-        1,
-        title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of the injected "
-        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
-        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
-        "Note that larger values of 'num_freqs' could spread out the source time signal and "
-        "introduce numerical noise, or prevent timely field decay.",
-        ge=1,
-        le=50,
-    )
     backward_waist_warning = warn_backward_waist_distance("waist_distances")
+
+    @property
+    def _beam_scalar_roots(self) -> set[str]:
+        return set()
+
+    @property
+    def _beam_tuple_roots(self) -> set[str]:
+        return {"waist_sizes", "waist_distances"}
+
+    def _beam_param_state(self) -> dict[str, Any]:
+        return {
+            "waist_sizes": tuple(self.waist_sizes),
+            "waist_distances": tuple(self.waist_distances),
+        }
+
+    def compute_beam_fields_on_grid(
+        self,
+        *,
+        pose: BeamPose,
+        grid: BeamGrid,
+        normalize: bool,
+        params: Optional[dict[str, Any]] = None,
+    ) -> dict[str, np.ndarray]:
+        """Compute astigmatic Gaussian beam fields from compact pose/grid context."""
+        from tidy3d.components import beam as beam_module
+
+        params = {} if params is None else params
+        return beam_module.astigmatic_gaussian_like_fields_on_grid_from_context(
+            pose=pose,
+            grid=grid,
+            waist_sizes=tuple(params.get("waist_sizes", self.waist_sizes)),
+            waist_distances=tuple(params.get("waist_distances", self.waist_distances)),
+            normalize=normalize,
+        )
 
 
 class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):

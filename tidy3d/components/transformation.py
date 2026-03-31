@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 
-import numpy as np
+import autograd.numpy as np
 from pydantic import Field, field_validator
 
 from tidy3d.constants import RADIAN
@@ -17,6 +17,24 @@ from .types import Axis, Coordinate
 
 if TYPE_CHECKING:
     from .types import ArrayFloat2D, TensorReal
+
+
+def rotation_matrix_around_axis(axis: Coordinate, angle: Any) -> TensorReal:
+    """Rotation matrix from axis-angle representation (Rodrigues form)."""
+    axis_arr = np.array(axis, dtype=float)
+    norm = np.linalg.norm(axis_arr)
+    n = axis_arr / norm
+    c = np.cos(angle)
+    s = np.sin(angle)
+    k_mat = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
+    return np.eye(3) + s * k_mat + (1 - c) * k_mat @ k_mat
+
+
+def rotate_points_around_axis(points: ArrayFloat2D, axis: Coordinate, angle: Any) -> ArrayFloat2D:
+    """Rotate point cloud or vector stack with shape ``(3, ...)``."""
+    rot = rotation_matrix_around_axis(axis=axis, angle=angle)
+    flat = points.reshape((3, -1))
+    return np.matmul(rot, flat).reshape(points.shape)
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):
@@ -122,15 +140,7 @@ class RotationAroundAxis(AbstractRotation):
 
         if self.isidentity:
             return np.eye(3)
-
-        norm = np.linalg.norm(self.axis)
-        n = self.axis / norm
-        c = np.cos(self.angle)
-        s = np.sin(self.angle)
-        K = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
-        R = np.eye(3) + s * K + (1 - c) * K @ K
-
-        return R
+        return rotation_matrix_around_axis(axis=self.axis, angle=self.angle)
 
 
 class AbstractReflection(ABC, Tidy3dBaseModel):

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 from numpy.typing import NDArray
 
-from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
+from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.utils import _zeros_like
 from tidy3d.components.grid.grid import _compute_1d_cell_sizes
 from tidy3d.components.types import ArrayLike, Bound
@@ -155,6 +155,12 @@ class DerivativeInfo:
     """Adjoint magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the adjoint
     magnetic fields used for computing gradients for a given structure."""
+
+    source_background_index: Optional[FreqDataArray] = None
+    """Background refractive index sampled at one point vs frequency.
+    Optional frequency-indexed refractive index (n) evaluated at the source-gradient
+    reference point (typically the geometric center of ``bounds_intersect``), across adjoint
+    frequencies in source derivative processing."""
 
     is_medium_pec: bool = False
     """Indicates if structure material is PEC.

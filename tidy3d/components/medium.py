@@ -92,6 +92,7 @@ from .viz import VisualizationSpec, add_ax_if_none
 if TYPE_CHECKING:
     import xarray as xr
     from autograd.numpy.numpy_boxes import ArrayBox
+    from numpy.typing import ArrayLike
     from pydantic import FieldValidationInfo
 
     from tidy3d.compat import Self
@@ -598,6 +599,16 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         ax.legend()
         ax.set_aspect("auto")
         return ax
+
+    def background_index_from_freqs(self, freqs: ArrayLike) -> NDArray:
+        """Complex refractive index sampled at the provided frequencies."""
+        freqs_arr = np.asarray(freqs, dtype=float)
+        background_n = np.zeros(freqs_arr.size, dtype=complex)
+        for freq_id, freq in enumerate(freqs_arr):
+            eps = self.eps_model(float(freq))
+            n_val, k_val = self.eps_complex_to_nk(eps)
+            background_n[freq_id] = np.squeeze(n_val) + 1j * np.squeeze(k_val)
+        return background_n
 
     """ Conversion helper functions """
 

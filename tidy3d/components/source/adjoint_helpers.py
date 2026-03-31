@@ -36,23 +36,56 @@ def collapse_source_adjoint_to_dataset_frequency(
 
 
 def split_source_paths(
-    paths: Sequence[PathType], *, dataset_tag: str
+    paths: Sequence[PathType],
+    *,
+    primary_roots: Optional[set[str]] = None,
 ) -> tuple[list[PathType], list[PathType]]:
-    """Split source paths into dataset and center paths."""
-    dataset_paths: list[PathType] = []
+    """Split source paths into primary and center groups.
+
+    Parameters
+    ----------
+    paths
+        Traced source paths.
+    primary_roots
+        Allowed non-center root names for the primary group. If ``None``, all
+        non-center roots are routed to the primary group.
+    Notes
+    -----
+    ``center`` paths are always split into the second output list. Unknown
+    non-center roots are rejected and should be validated by callers first.
+    """
+    primary_paths: list[PathType] = []
     center_paths: list[PathType] = []
     for path in paths:
         path = tuple(path)
         if path and path[0] == "center":
             center_paths.append(path)
-        elif path and path[0] == dataset_tag:
-            dataset_paths.append(path)
+        elif path and (primary_roots is None or path[0] in primary_roots):
+            primary_paths.append(path)
         else:
             raise ValueError(
                 f"Unexpected traced source path '{path}'. Paths must be validated before "
                 "calling 'split_source_paths'."
             )
-    return dataset_paths, center_paths
+    return primary_paths, center_paths
+
+
+def _center_path_axes(path: PathType) -> tuple[int, ...]:
+    """Return axis indices addressed by a traced center path."""
+    path = tuple(path)
+    if not path or path[0] != "center":
+        raise ValueError(f"Expected 'center' traced path, got '{path}'.")
+    if len(path) == 1:
+        return (0, 1, 2)
+    if len(path) == 2:
+        axis = int(path[1])
+        if axis not in (0, 1, 2):
+            raise ValueError(f"Unsupported axis index '{axis}' in traced path '{path}'.")
+        return (axis,)
+    raise ValueError(
+        f"Unsupported traced source path '{path}'. "
+        "Only full-vector paths or single-axis paths are supported for center."
+    )
 
 
 def parse_source_field_component(field_name: str, *, source_name: str) -> tuple[str, int]:
@@ -76,11 +109,17 @@ def assign_center_path_derivatives(
     vjp_center: np.ndarray,
 ) -> None:
     """Write center derivatives to traced paths."""
-    center_vjp = tuple(vjp_center.tolist())
+    center_vjp_arr = np.asarray(vjp_center, dtype=float).reshape(-1)
+    if center_vjp_arr.size != 3:
+        raise ValueError(
+            f"Expected 3 center derivative components, got shape {center_vjp_arr.shape}."
+        )
+    center_vjp = tuple(center_vjp_arr.tolist())
     for field_path in center_paths:
         field_path = tuple(field_path)
-        if len(field_path) == 2:
-            derivative_map[field_path] = center_vjp[int(field_path[1])]
+        axes = _center_path_axes(field_path)
+        if len(axes) == 1:
+            derivative_map[field_path] = center_vjp[axes[0]]
         else:
             derivative_map[field_path] = center_vjp
 
@@ -95,13 +134,7 @@ def validate_no_zero_dim_center_paths(
     source_size_arr = np.asarray(source_size, dtype=float)
     for field_path in center_paths:
         path = tuple(field_path)
-        if not path or path[0] != "center":
-            continue
-
-        if len(path) >= 2:
-            axes = (int(path[1]),)
-        else:
-            axes = (0, 1, 2)
+        axes = _center_path_axes(path)
 
         for axis in axes:
             if np.isclose(source_size_arr[axis], 0.0):
@@ -111,8 +144,26 @@ def validate_no_zero_dim_center_paths(
                 )
 
 
+def validate_no_collapsed_bounds_for_requested_center_axes(
+    center_paths: Sequence[PathType],
+    *,
+    bounds: Bound,
+) -> None:
+    """Reject requested center derivatives on collapsed bounds axes."""
+    lower, upper = _static_bounds(bounds)
+    for field_path in center_paths:
+        path = tuple(field_path)
+        axes = _center_path_axes(path)
+        for axis in axes:
+            if np.isclose(float(lower[axis]), float(upper[axis])):
+                raise AdjointError(
+                    "Center derivatives on collapsed bounds axis "
+                    f"'{'xyz'[axis]}' for traced path {path!r}."
+                )
+
+
 def _axis_bounds_or_none(
-    arr: SpatialDataArray, bounds: Bound, axis: int, label: str
+    arr: SpatialDataArray, bounds: Bound, axis: int
 ) -> Optional[tuple[np.ndarray, float, float]]:
     """Return axis coords and bounds if valid, otherwise ``None``."""
     dim = "xyz"[axis]
@@ -124,9 +175,7 @@ def _axis_bounds_or_none(
     bound_min = float(get_static(bounds[0][axis]))
     bound_max = float(get_static(bounds[1][axis]))
     if np.isclose(bound_min, bound_max):
-        raise AdjointError(
-            f"{label}: center derivatives on collapsed axis '{dim}' are not supported."
-        )
+        return None
     return coords, bound_min, bound_max
 
 
@@ -144,7 +193,6 @@ def compute_center_vjp(
     *,
     component_sign: float,
     dims_to_integrate: tuple[str, ...],
-    label: str,
 ) -> np.ndarray:
     """Compute center VJP from full-profile source/adjoint fields."""
     vjp_center = np.zeros(3, dtype=float)
@@ -156,7 +204,7 @@ def compute_center_vjp(
 
     for axis in range(3):
         dim = "xyz"[axis]
-        axis_data = _axis_bounds_or_none(adjoint_field, bounds_static, axis, label)
+        axis_data = _axis_bounds_or_none(adjoint_field, bounds_static, axis)
         if axis_data is None:
             continue
         coords, _, _ = axis_data
@@ -187,7 +235,6 @@ def accumulate_center_vjp(
     center: Coordinate,
     bounds: Bound,
     source_size: Size,
-    label_prefix: str,
     get_adjoint_and_sign: Callable[[str], tuple[SpatialDataArray, float]],
 ) -> np.ndarray:
     """Accumulate center VJPs across source dataset components."""
@@ -221,7 +268,6 @@ def accumulate_center_vjp(
             bounds=bounds,
             component_sign=component_sign,
             dims_to_integrate=dims_to_integrate,
-            label=f"{label_prefix}:{field_name}",
         )
         vjp_center += center_contrib
 

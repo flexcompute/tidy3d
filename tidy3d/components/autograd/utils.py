@@ -21,6 +21,8 @@ __all__ = [
     "get_static",
     "hasbox",
     "is_tidy_box",
+    "negate_vjp_map",
+    "negate_vjp_value",
     "pack_complex_vec",
     "split_list",
 ]
@@ -104,6 +106,20 @@ def asarray1d(x: Union[ArrayLike, ArrayBox]) -> Union[NDArray, ArrayBox]:
     """Autograd-friendly 1D flatten: returns ndarray of shape (-1,)."""
     x = anp.array(x)
     return x if x.ndim == 1 else anp.ravel(x)
+
+
+def negate_vjp_value(value: Any) -> Any:
+    """Negate a VJP value while preserving list/tuple container types."""
+    if isinstance(value, tuple):
+        return tuple(negate_vjp_value(v) for v in value)
+    if isinstance(value, list):
+        return [negate_vjp_value(v) for v in value]
+    return -value
+
+
+def negate_vjp_map(vjp_map: Mapping[Any, Any]) -> dict[Any, Any]:
+    """Negate all values in a VJP map with type-preserving value handling."""
+    return {path: negate_vjp_value(value) for path, value in vjp_map.items()}
 
 
 def accumulate_field_map(target: dict, addition: dict) -> None:

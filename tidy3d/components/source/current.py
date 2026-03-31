@@ -25,6 +25,7 @@ from .adjoint_helpers import (
     assign_center_path_derivatives,
     parse_source_field_component,
     split_source_paths,
+    validate_no_collapsed_bounds_for_requested_center_axes,
     validate_no_zero_dim_center_paths,
 )
 from .base import Source
@@ -233,6 +234,10 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current
         distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the
         source center.
+        In other words, the dataset is interpreted in a local coordinate frame centered at
+        :attr:`center`; when injecting/interpolating, the simulation-space coordinates are
+        ``dataset_coords + center``. This means the same dataset can be translated in space by
+        changing :attr:`center` without modifying dataset coordinates.
 
         The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source
         accepts a :attr:`current_dataset`. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,
@@ -378,10 +383,13 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             center=center,
             bounds=bounds,
             source_size=tuple(self.size),
-            label_prefix=type(self).__name__,
             get_adjoint_and_sign=_get_adjoint_and_sign,
         )
 
+        validate_no_collapsed_bounds_for_requested_center_axes(
+            center_paths,
+            bounds=bounds,
+        )
         assign_center_path_derivatives(
             derivative_map,
             center_paths,
@@ -406,7 +414,8 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             )
 
         dataset_paths, center_paths = split_source_paths(
-            derivative_info.paths, dataset_tag="current_dataset"
+            derivative_info.paths,
+            primary_roots={"current_dataset"},
         )
         validate_no_zero_dim_center_paths(
             center_paths,

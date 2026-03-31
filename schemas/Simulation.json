@@ -754,12 +754,10 @@
       "additionalProperties": false,
       "properties": {
         "angle_phi": {
-          "default": 0.0,
-          "type": "number"
+          "default": 0.0
         },
         "angle_theta": {
-          "default": 0.0,
-          "type": "number"
+          "default": 0.0
         },
         "attrs": {
           "additionalProperties": true,
@@ -817,8 +815,7 @@
           "type": "integer"
         },
         "pol_angle": {
-          "default": 0,
-          "type": "number"
+          "default": 0.0
         },
         "size": {
           "maxItems": 3,
@@ -888,12 +885,8 @@
           "maxItems": 2,
           "minItems": 2,
           "prefixItems": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
+            {},
+            {}
           ],
           "type": "array"
         },
@@ -905,14 +898,8 @@
           "maxItems": 2,
           "minItems": 2,
           "prefixItems": [
-            {
-              "exclusiveMinimum": 0,
-              "type": "number"
-            },
-            {
-              "exclusiveMinimum": 0,
-              "type": "number"
-            }
+            {},
+            {}
           ],
           "type": "array"
         }
@@ -8211,12 +8198,10 @@
       "additionalProperties": false,
       "properties": {
         "angle_phi": {
-          "default": 0.0,
-          "type": "number"
+          "default": 0.0
         },
         "angle_theta": {
-          "default": 0.0,
-          "type": "number"
+          "default": 0.0
         },
         "attrs": {
           "additionalProperties": true,
@@ -8274,8 +8259,7 @@
           "type": "integer"
         },
         "pol_angle": {
-          "default": 0,
-          "type": "number"
+          "default": 0.0
         },
         "size": {
           "maxItems": 3,
@@ -8338,13 +8322,10 @@
           "type": "boolean"
         },
         "waist_distance": {
-          "default": 0.0,
-          "type": "number"
+          "default": 0.0
         },
         "waist_radius": {
-          "default": 1.0,
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "default": 1.0
         }
       },
       "required": [

@@ -13,11 +13,14 @@ from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.geometry.bound_ops import bounds_intersection
 from tidy3d.components.source.adjoint_helpers import (
     collapse_source_adjoint_to_dataset_frequency,
 )
+from tidy3d.components.source.field import AbstractGaussianBeam
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
+from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel
 
 from .utils import E_to_D, filter_vjp_map, get_derivative_maps, scale_field_data
@@ -385,6 +388,11 @@ def _get_source_dataset_frequency(source: td.Source) -> float:
         dataset = source.field_dataset
     elif isinstance(source, td.CustomCurrentSource):
         dataset = source.current_dataset
+    elif isinstance(source, AbstractGaussianBeam):
+        # Gaussian-like source derivatives are remapped through an analytic mock
+        # field dataset constructed at source_time._freq0 (single frequency), so
+        # use the same reference frequency for source-time scaling.
+        return float(source.source_time._freq0)
     else:
         raise TypeError(
             f"Source dataset frequency is only defined for custom sources, got '{source.type}'."
@@ -392,6 +400,40 @@ def _get_source_dataset_frequency(source: td.Source) -> float:
     component = next(iter(dataset.field_components.values()))
     freqs = np.asarray(component.coords["f"].data, dtype=float).reshape(-1)
     return float(freqs[0])
+
+
+def _warn_if_nonuniform_gaussian_source_background(
+    simulation: td.Simulation,
+    bounds_intersect: tuple[tuple[float, float, float], tuple[float, float, float]],
+    source_freqs: np.ndarray,
+) -> None:
+    """Warn if Gaussian source bounds contain non-uniform epsilon at sampled frequencies."""
+    lower, upper = bounds_intersect
+    source_box = td.Box(
+        center=tuple(0.5 * (float(lower[axis]) + float(upper[axis])) for axis in range(3)),
+        size=tuple(float(upper[axis]) - float(lower[axis]) for axis in range(3)),
+    )
+    for freq in source_freqs:
+        eps_volume = np.asarray(
+            simulation.epsilon(
+                box=source_box,
+                coord_key="centers",
+                freq=float(freq),
+            ).values
+        ).reshape(-1)
+        if eps_volume.size == 0:
+            continue
+        eps_min = np.min(eps_volume)
+        eps_max = np.max(eps_volume)
+        if not np.isclose(eps_min, eps_max):
+            log.warning(
+                "Gaussian-like source derivative remap assumes a uniform background index "
+                "across the source extent, but epsilon is not uniform over the source bounds "
+                f"intersection at f={float(freq):.6g} Hz (eps_min={eps_min}, eps_max={eps_max}; "
+                "non-uniformity may also occur at other frequencies). "
+                "Using center-sampled refractive index for gradient computation."
+            )
+            break
 
 
 def _process_source_gradients(
@@ -432,12 +474,44 @@ def _process_source_gradients(
     # Apply both adjoint post-normalization and source-time scaling in one pass.
     combined_scale = sim_data_adj.simulation.post_norm * source_time_scaling
     fld_adj = scale_field_data(fld_adj, combined_scale)
-    fld_adj = collapse_source_adjoint_to_dataset_frequency(fld_adj, source_dataset_freq)
+    if not isinstance(source, AbstractGaussianBeam):
+        fld_adj = collapse_source_adjoint_to_dataset_frequency(
+            fld_adj, float(np.asarray(source_dataset_freq).reshape(-1)[0])
+        )
 
     e_adj = {k: v for k, v in fld_adj.field_components.items() if k.startswith("E")}
     h_adj = {k: v for k, v in fld_adj.field_components.items() if k.startswith("H")}
 
     bounds = source.geometry.bounds
+    bounds_intersect = bounds_intersection(sim_data_orig.simulation.bounds, bounds)
+
+    center = tuple(
+        0.5 * (float(bounds_intersect[0][axis]) + float(bounds_intersect[1][axis]))
+        for axis in range(3)
+    )
+    point_box = td.Box(center=center, size=(0.0, 0.0, 0.0))
+    source_freqs = np.asarray(next(iter(e_adj.values())).coords["f"].data).reshape(-1)
+    if isinstance(source, AbstractGaussianBeam):
+        _warn_if_nonuniform_gaussian_source_background(
+            simulation=sim_data_orig.simulation,
+            bounds_intersect=bounds_intersect,
+            source_freqs=source_freqs,
+        )
+    eps_samples = [
+        np.asarray(
+            sim_data_orig.simulation.epsilon(
+                box=point_box,
+                coord_key="centers",
+                freq=float(freq),
+            ).values
+        ).reshape(-1)[0]
+        for freq in source_freqs
+    ]
+    source_background_index = FreqDataArray(
+        np.sqrt(np.asarray(eps_samples, dtype=complex)),
+        coords={"f": source_freqs},
+    )
+
     # Source VJP currently does not use permittivity data.
     derivative_info = DerivativeInfo(
         paths=source_paths,
@@ -450,9 +524,10 @@ def _process_source_gradients(
         H_fwd={},
         H_adj=h_adj,
         eps_data={},
+        source_background_index=source_background_index,
         frequencies=_get_freq_coords(fld_adj),
         bounds=bounds,
-        bounds_intersect=bounds,
+        bounds_intersect=bounds_intersect,
         simulation_bounds=sim_data_orig.simulation.bounds,
         updated_epsilon=lambda _replacement_geometry: None,
     )
@@ -623,11 +698,8 @@ def _process_structure_gradients(
         )
 
     # compute bounds intersection
-    struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
-    rmin_sim, rmax_sim = sim_orig.bounds
-    rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
-    rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
-    bounds_intersect = (rmin_intersect, rmax_intersect)
+    struct_bounds = structure.geometry.bounds
+    bounds_intersect = bounds_intersection(sim_orig.bounds, struct_bounds)
 
     def updated_epsilon_full_impl(
         replacement_geometry: GeometryType,

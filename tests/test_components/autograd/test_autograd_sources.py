@@ -1283,6 +1283,61 @@ def test_mixed_structure_source_adjoint_monitors():
     assert source_monitor_found, "No source monitor found in adjoint monitors"
 
 
+@pytest.mark.parametrize(
+    ("source", "trace_path"),
+    (
+        (
+            td.GaussianBeam(
+                center=(0, 0, 0),
+                size=(0.0, 1.0, 1.0),
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+                direction="+",
+                waist_radius=0.8,
+                waist_distance=0.2,
+            ),
+            ("waist_radius",),
+        ),
+        (
+            td.AstigmaticGaussianBeam(
+                center=(0, 0, 0),
+                size=(0.0, 1.0, 1.0),
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+                direction="+",
+                waist_sizes=(0.8, 1.1),
+                waist_distances=(0.1, -0.2),
+            ),
+            ("waist_sizes", 0),
+        ),
+    ),
+    ids=("gaussian", "astigmatic"),
+)
+def test_gaussian_like_source_adjoint_monitors(source, trace_path):
+    """Gaussian-like traced source parameters should attach one source adjoint monitor."""
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[source],
+        monitors=[
+            td.FieldMonitor(
+                size=(1.0, 1.0, 0.0),
+                center=(0, 0, 0),
+                freqs=[2e14],
+                name="field_monitor",
+            )
+        ],
+    )
+    sim_fields_keys = [("sources", 0, *trace_path)]
+    adjoint_monitors_fld, adjoint_monitors_eps = sim._make_adjoint_monitors(sim_fields_keys)
+
+    assert len(adjoint_monitors_fld) == 1
+    assert len(adjoint_monitors_eps) == 0
+    field_monitor = adjoint_monitors_fld[0]
+    assert isinstance(field_monitor, td.FieldMonitor)
+    assert field_monitor.center == source.center
+    assert field_monitor.size == source.size
+
+
 def test_split_adjoint_data_logs_mixed_source_structure_counts(monkeypatch):
     """Adjoint split log should report field/eps counts without assuming 1:1 pairing."""
     from tidy3d.components.data import sim_data as sim_data_module
@@ -1327,6 +1382,94 @@ def test_split_adjoint_data_logs_mixed_source_structure_counts(monkeypatch):
         "1 monitors, 1 adjoint field monitors, 1 source adjoint monitors, 1 adjoint eps monitors."
         in msg
         for msg in messages
+    )
+
+
+def test_gaussian_source_gradient_warns_nonuniform_source_background(monkeypatch):
+    """Warning is emitted when source-box epsilon is non-uniform."""
+    from tidy3d.web.api.autograd import backward as backward_module
+
+    source = td.GaussianBeam(
+        center=(0.0, 0.2, -0.1),
+        size=(0.0, 1.0, 1.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        direction="+",
+        waist_radius=0.8,
+        waist_distance=0.2,
+        angle_theta=0.1,
+        angle_phi=0.2,
+        pol_angle=0.3,
+    )
+    monitor_name = "source_adjoint_0"
+    field_components = {
+        name: create_adjoint_field_dataarray(1.0) for name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
+    }
+
+    class _DummyFieldData:
+        def __init__(self, components):
+            self.field_components = components
+            self.monitor = SimpleNamespace(freqs=[2e14])
+
+        @property
+        def grid_corrected_copy(self):
+            return self
+
+        def updated_copy(self, **kwargs):
+            updated = dict(self.field_components)
+            updated.update(kwargs)
+            return _DummyFieldData(updated)
+
+    fld_adj = _DummyFieldData(field_components)
+
+    class _DummySimDataAdj:
+        def __init__(self):
+            self.simulation = SimpleNamespace(post_norm=1.0)
+
+        def __getitem__(self, key):
+            assert key == monitor_name
+            return fld_adj
+
+    def _epsilon_for_box(box, coord_key, freq):
+        _ = freq
+        assert coord_key == "centers"
+        if np.allclose(box.size, (0.0, 0.0, 0.0)):
+            return SimpleNamespace(values=np.array([2.25], dtype=float))
+        return SimpleNamespace(values=np.array([2.25, 2.56], dtype=float))
+
+    sim_data_orig = SimpleNamespace(
+        simulation=SimpleNamespace(
+            bounds=source.geometry.bounds,
+            epsilon=_epsilon_for_box,
+            tmesh=np.linspace(0.0, 1e-15, 4),
+            dt=2.5e-16,
+        )
+    )
+    sim_data_fwd = SimpleNamespace(simulation=SimpleNamespace(sources=[source]))
+
+    warning_messages = []
+    monkeypatch.setattr(backward_module.log, "warning", lambda msg: warning_messages.append(msg))
+    monkeypatch.setattr(backward_module, "_validate_adjoint_frequencies", lambda **kwargs: None)
+    monkeypatch.setattr(
+        backward_module, "_to_sim_fields_vjp", lambda **kwargs: kwargs["component_vjp"]
+    )
+    monkeypatch.setattr(
+        backward_module,
+        "_compute_source_time_scaling",
+        lambda **kwargs: 1.0,
+    )
+    monkeypatch.setattr(td.GaussianBeam, "_compute_derivatives", lambda self, derivative_info: {})
+
+    backward_module._process_source_gradients(
+        sim_data_adj=_DummySimDataAdj(),
+        sim_data_orig=sim_data_orig,
+        sim_data_fwd=sim_data_fwd,
+        source_index=0,
+        source_paths=[("waist_radius",)],
+    )
+
+    assert any(
+        "Gaussian-like source derivative remap assumes a uniform background index" in msg
+        for msg in warning_messages
     )
 
 

@@ -322,7 +322,8 @@ The following components are traceable as inputs to the `td.Simulation`
 | dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
 | spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
 | cylinders                                                         | `Cylinder.radius`, `Cylinder.center`                    |
-| sources                                                           | `CustomCurrentSource.center`, `CustomCurrentSource.current_dataset`, `CustomFieldSource.center`, `CustomFieldSource.field_dataset` |
+| sources (custom)                                                  | common: `center`; specific: `CustomCurrentSource.current_dataset`, `CustomFieldSource.field_dataset` |
+| sources (Gaussian)                                                | common: `center`, `angle_theta`, `angle_phi`, `pol_angle`; specific: `GaussianBeam.waist_radius`, `GaussianBeam.waist_distance`, `AstigmaticGaussianBeam.waist_sizes`, `AstigmaticGaussianBeam.waist_distances` |
 
 The following components are traceable as outputs of the `td.SimulationData`
 
