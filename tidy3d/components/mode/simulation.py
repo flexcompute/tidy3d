@@ -245,7 +245,10 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def _is_plane(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Raise validation error if not planar."""
         if hasattr(data, "get") and data.get("plane") is None:
-            val = Box(size=data.get("size"), center=data.get("center"))
+            box_kwargs = {"size": data.get("size")}
+            if data.get("center") is not None:
+                box_kwargs["center"] = data.get("center")
+            val = Box(**box_kwargs)
             if val.size.count(0.0) != 1:
                 raise ValidationError(
                     "If the 'ModeSimulation' geometry is not planar, "

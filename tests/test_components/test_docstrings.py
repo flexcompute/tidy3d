@@ -18,7 +18,7 @@ def test_docstring_type_formatting() -> None:
     _assert_clean_docstring(
         td.Box,
         [
-            "center : Optional[tuple[Union[float, autograd.tracer.Box]",
+            "center : tuple[Union[float, autograd.tracer.Box]",
             "size : tuple[Union[NonNegativeFloat, autograd.tracer.Box]",
         ],
     )

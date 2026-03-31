@@ -573,22 +573,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "size": {
           "maxItems": 3,
@@ -1169,22 +1166,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "concentration": {
           "default": 0,
@@ -1962,22 +1956,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "concentration": {
           "type": "string"
@@ -3224,22 +3215,19 @@
           "type": "integer"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "length": {},
         "radius": {},
@@ -4180,22 +4168,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "concentration": {
           "exclusiveMinimum": 0,
@@ -4514,22 +4499,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "dl_internal": {
           "exclusiveMinimum": 0,
@@ -8240,22 +8222,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "radius": {},
         "type": {
@@ -8278,22 +8257,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -8375,22 +8351,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -8436,22 +8409,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -8497,22 +8467,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -8558,22 +8525,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -8619,22 +8583,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -9165,22 +9126,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conformal": {
           "default": false,
@@ -9906,22 +9864,19 @@
       "type": "array"
     },
     "center": {
-      "anyOf": [
-        {
-          "maxItems": 3,
-          "minItems": 3,
-          "prefixItems": [
-            {},
-            {},
-            {}
-          ],
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
+      "default": [
+        0.0,
+        0.0,
+        0.0
       ],
-      "default": null
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {},
+        {},
+        {}
+      ],
+      "type": "array"
     },
     "grid_spec": {
       "discriminator": {

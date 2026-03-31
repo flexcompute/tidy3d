@@ -773,22 +773,19 @@
           "type": "string"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -938,22 +935,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -1186,22 +1180,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -1312,22 +1303,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "extrapolate_to_endpoints": {
           "default": false,
@@ -1375,22 +1363,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "extrapolate_to_endpoints": {
           "default": false,
@@ -1902,22 +1887,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "size": {
           "maxItems": 3,
@@ -2934,22 +2916,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "concentration": {
           "default": 0,
@@ -3656,22 +3635,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "confine_to_bounds": {
           "default": false,
@@ -4008,22 +3984,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "concentration": {
           "type": "string"
@@ -4296,22 +4269,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "field_dataset": {
           "anyOf": [
@@ -5577,22 +5547,19 @@
           "type": "integer"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "length": {},
         "radius": {},
@@ -5785,22 +5752,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": false,
@@ -5899,22 +5863,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -6551,22 +6512,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -6677,22 +6635,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -6965,22 +6920,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -7262,22 +7214,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -7549,22 +7498,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -7900,22 +7846,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -8033,22 +7976,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -8426,22 +8366,19 @@
           "type": "string"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -8553,22 +8490,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "concentration": {
           "exclusiveMinimum": 0,
@@ -8649,22 +8583,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -9473,22 +9404,19 @@
           ]
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -9623,22 +9551,19 @@
           "default": "lower"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "corner_finder": {
           "anyOf": [
@@ -9894,22 +9819,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "dist_type": {
           "default": "on",
@@ -10429,22 +10351,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "dist_type": {
           "default": "on",
@@ -10556,22 +10475,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "enable_snapping_points": {
           "default": true,
@@ -10987,22 +10903,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": false,
@@ -11339,22 +11252,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -11518,22 +11428,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -12187,22 +12094,19 @@
           "type": "string"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -12494,22 +12398,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -12653,22 +12554,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "default": true,
@@ -12973,22 +12871,19 @@
           "type": "string"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -14298,22 +14193,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": false,
@@ -14860,22 +14752,19 @@
           "type": "string"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -14982,22 +14871,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "confine_to_bounds": {
           "default": false,
@@ -16176,22 +16062,19 @@
           }
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "courant": {
           "default": 0.99,
@@ -16980,22 +16863,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "radius": {},
         "type": {
@@ -17563,22 +17443,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -17673,22 +17550,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "colocate": {
           "const": true,
@@ -17876,22 +17750,19 @@
           "type": "string"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "direction": {
           "enum": [
@@ -18021,22 +17892,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conjugated_dot_product": {
           "default": false,
@@ -18563,22 +18431,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "confine_to_bounds": {
           "default": false,
@@ -18834,22 +18699,19 @@
           "type": "object"
         },
         "center": {
-          "anyOf": [
-            {
-              "maxItems": 3,
-              "minItems": 3,
-              "prefixItems": [
-                {},
-                {},
-                {}
-              ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            0.0,
+            0.0,
+            0.0
           ],
-          "default": null
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
         },
         "conjugated_dot_product": {
           "default": false,

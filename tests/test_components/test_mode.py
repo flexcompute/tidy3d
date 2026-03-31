@@ -695,6 +695,19 @@ def test_plane_crosses_symmetry_plane_warning(monkeypatch):
         )
 
 
+def test_mode_simulation_uses_default_center_for_derived_plane():
+    """Omitting ``center`` should still allow planar simulations to derive their plane."""
+    sim = td.ModeSimulation(
+        size=(1, 2, 0),
+        mode_spec=td.ModeSpec(),
+        freqs=[td.C_0],
+    )
+
+    assert sim.center == (0.0, 0.0, 0.0)
+    assert sim.plane.center == (0.0, 0.0, 0.0)
+    assert sim.plane.size == (1.0, 2.0, 0.0)
+
+
 def test_track_freq_deprecation():
     """Ensure using ModeSpec.track_freq emits a deprecation warning."""
     from ..utils import AssertLogLevel

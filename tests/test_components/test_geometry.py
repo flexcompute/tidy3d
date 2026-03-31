@@ -287,6 +287,26 @@ def test_center_not_inf_validate():
         _ = td.Box(center=(-td.inf, 0, 0))
 
 
+def test_center_default_and_schema_regression():
+    box = td.Box(size=(1, 1, 1))
+    assert box.center == (0.0, 0.0, 0.0)
+
+    with pytest.raises(pd.ValidationError):
+        td.Box(size=(1, 1, 1), center=None)
+
+    box_center_schema = td.Box.model_json_schema()["properties"]["center"]
+    assert box_center_schema["default"] == [0.0, 0.0, 0.0]
+    assert "anyOf" not in box_center_schema
+
+    monitor_center_schema = td.FieldMonitor.model_json_schema()["properties"]["center"]
+    assert monitor_center_schema["default"] == [0.0, 0.0, 0.0]
+    assert "anyOf" not in monitor_center_schema
+
+    simulation_center_schema = td.Simulation.model_json_schema()["properties"]["center"]
+    assert simulation_center_schema["default"] == [0.0, 0.0, 0.0]
+    assert "anyOf" not in simulation_center_schema
+
+
 def test_radius_not_inf_validate():
     with pytest.raises(pd.ValidationError):
         _ = td.Sphere(radius=td.inf)

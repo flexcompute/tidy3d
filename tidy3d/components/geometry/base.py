@@ -1671,20 +1671,12 @@ class Geometry(Tidy3dBaseModel, ABC):
 class Centered(Geometry, ABC):
     """Geometry with a well defined center."""
 
-    center: Optional[TracedCoordinate] = Field(
-        None,
+    center: TracedCoordinate = Field(
+        (0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
         json_schema_extra={"units": MICROMETER},
     )
-
-    @field_validator("center", mode="before")
-    @classmethod
-    def _center_default(cls, val: Any) -> Any:
-        """Make sure center is not infinitiy."""
-        if val is None:
-            val = (0.0, 0.0, 0.0)
-        return val
 
     @field_validator("center")
     @classmethod
