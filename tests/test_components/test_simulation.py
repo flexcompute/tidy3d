@@ -1386,6 +1386,95 @@ def test_sim_monitor_homogeneous():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
 
+    # structures outside the simulation domain should not affect the homogeneity check
+    box_outside_sim = td.Structure(
+        geometry=td.Box(center=(0, 0, 1.5), size=(0.2, 0.2, 2.0)),
+        medium=medium_air,
+    )
+
+    monitor_n2f_outside_sim = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0.5),
+        size=(0.1, 0.1, 1.0),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f_outside_sim",
+        theta=[np.pi / 2],
+        phi=[0],
+    )
+
+    with AssertLogStr("WARNING", contains_str="outside of the simulation domain"):
+        _ = td.Simulation(
+            size=(1, 1, 0),
+            medium=medium_bg,
+            structures=(box_outside_sim,),
+            sources=(src,),
+            monitors=(monitor_n2f_outside_sim,),
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+    # in 2D, the in-domain line traces of a 3D projection monitor should still be checked
+    box_in_2d_sim = td.Structure(
+        geometry=td.Box(center=(0.075, 0, 0), size=(0.1, 0.2, 2.0)),
+        medium=medium_air,
+    )
+
+    with pytest.raises(ValidationError):
+        _ = td.Simulation(
+            size=(1, 1, 0),
+            medium=medium_bg,
+            structures=(box_in_2d_sim,),
+            sources=(src,),
+            monitors=(monitor_n2f_outside_sim,),
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+    # mixed planar and zero-measure clipped projection surfaces should still be accepted
+    monitor_n2f_edge_touch = td.FieldProjectionAngleMonitor(
+        center=(0.75, 1.0, 0.0),
+        size=(1, 1, 1),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f_edge_touch",
+        theta=[0],
+        phi=[0],
+    )
+
+    mediums = td.Simulation._projection_monitor_mediums_in_bounds(
+        center=(0, 0, 0),
+        size=(1, 1, 1),
+        monitor=monitor_n2f_edge_touch,
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+                medium=medium_bg,
+            )
+        ],
+    )
+    assert mediums == {medium_bg}
+
+    # purely zero-measure clipped projection surfaces should error explicitly
+    monitor_n2f_corner_touch = td.FieldProjectionAngleMonitor(
+        center=(1.0, 1.0, 1.0),
+        size=(1, 1, 1),
+        freqs=[250e12, 300e12],
+        name="monitor_n2f_corner_touch",
+        theta=[0],
+        phi=[0],
+    )
+
+    with pytest.raises(SetupError, match="zero-measure sets"):
+        _ = td.Simulation._projection_monitor_mediums_in_bounds(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            monitor=monitor_n2f_corner_touch,
+            structures=[
+                td.Structure(
+                    geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+                    medium=medium_bg,
+                )
+            ],
+        )
+
 
 def test_proj_monitor_periodic_bloch_boundaries_3d():
     """Make sure 3D field projection monitors error with periodic or Bloch boundaries."""

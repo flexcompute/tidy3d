@@ -3790,19 +3790,19 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for monitor_ind, monitor in enumerate(val):
                 if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
-                    mediums = Scene.intersecting_media(monitor, total_structures)
+                    mediums = self._projection_monitor_mediums_in_bounds(
+                        center=self.center,
+                        size=self.size,
+                        monitor=monitor,
+                        structures=total_structures,
+                    )
+                    if len(mediums) < 1:
+                        continue
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
                         raise SetupError(
                             f"{len(mediums)} different mediums detected on plane "
                             f"intersecting a {monitor.type}. Plane must be homogeneous."
-                        )
-                    # 0 medium, something is wrong
-                    if len(mediums) < 1:
-                        raise SetupError(
-                            f"No medium detected on plane intersecting a {monitor.type}, "
-                            "indicating an unexpected error. Please create a github issue so "
-                            "that the problem can be investigated."
                         )
                     # 1 medium, check if the medium is spatially uniform
                     if not list(mediums)[0].is_spatially_uniform:
@@ -3813,6 +3813,88 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
         return self
+
+    @classmethod
+    def _projection_monitor_mediums_in_bounds(
+        cls,
+        center: Coordinate,
+        size: Coordinate,
+        monitor: Union[SurfaceIntegrationMonitor, DiffractionMonitor],
+        structures: list[Structure],
+    ) -> set[MediumType3D]:
+        """Get media intersecting the in-domain portion of a projection monitor."""
+
+        sim_box = Box(center=center, size=size).to_static()
+        monitor = monitor.to_static()
+        structures = [structure.to_static() for structure in structures]
+        mediums = set()
+        has_nonzero_measure_region = False
+        has_zero_measure_clip = False
+        surfaces = [monitor]
+        if isinstance(monitor, SurfaceIntegrationMonitor):
+            surfaces = monitor.integration_surfaces
+
+        for surface in surfaces:
+            intersection_bounds = Box.bounds_intersection(surface.bounds, sim_box.bounds)
+            if not all(bmin <= bmax for bmin, bmax in zip(*intersection_bounds)):
+                continue
+
+            clipped_surface = Box.from_bounds(*intersection_bounds).to_static()
+            num_zero_dims = clipped_surface.size.count(0.0)
+            if num_zero_dims == 1:
+                has_nonzero_measure_region = True
+                mediums.update(
+                    cls._projection_monitor_media_on_plane(
+                        test_object=clipped_surface,
+                        plane=clipped_surface,
+                        structures=structures,
+                    )
+                )
+            elif num_zero_dims == 2 and sim_box.size.count(0.0) == 1:
+                has_nonzero_measure_region = True
+                mediums.update(
+                    cls._projection_monitor_media_on_plane(
+                        test_object=clipped_surface,
+                        plane=sim_box,
+                        structures=structures,
+                    )
+                )
+            else:
+                has_zero_measure_clip = True
+
+        if has_zero_measure_clip and not has_nonzero_measure_region:
+            raise SetupError(
+                f"All in-domain clipped portions of '{monitor.name}' ({monitor.type}) collapse "
+                "to zero-measure sets after clipping to the simulation bounds. "
+                "Field projection monitors must have a nonzero in-domain integration region "
+                "(area in 3D or line length in 2D)."
+            )
+
+        return mediums
+
+    @classmethod
+    def _projection_monitor_media_on_plane(
+        cls,
+        test_object: Box,
+        plane: Box,
+        structures: list[Structure],
+    ) -> set[MediumType3D]:
+        """Get media intersecting a planar or line-like test object within a given plane."""
+
+        test_shapes = plane.intersections_with(test_object)
+        medium_shapes = Scene._filter_structures_plane_medium(structures, plane)
+        mediums = set()
+
+        for test_shape in test_shapes:
+            if test_shape.is_empty:
+                continue
+
+            for medium, medium_shape in medium_shapes:
+                overlap = test_shape & medium_shape
+                if overlap.area > 0 or overlap.length > 0:
+                    mediums.add(medium)
+
+        return mediums
 
     @classmethod
     def _get_mediums_on_abc(
