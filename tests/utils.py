@@ -1194,6 +1194,15 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         norm /= denom
         return norm
 
+    def _stabilize_norm(norm: np.ndarray) -> np.ndarray:
+        """Avoid infs in emulated data when source normalization underflows."""
+        eps = np.finfo(float).eps
+        norm = np.array(norm, copy=True)
+        small = np.abs(norm) < eps
+        if np.any(small):
+            norm[small] = eps
+        return norm
+
     def make_data(
         coords: dict, data_array_type: type, is_complex: bool = False
     ) -> td.components.data.data_array.DataArray:
@@ -1234,6 +1243,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             if norm is not None:
                 if not is_complex:
                     norm = np.abs(norm)
+                norm = _stabilize_norm(norm)
                 shape = [1] * len(data_shape)
                 shape[data_array_type._dims.index("f")] = len(freqs)
                 data = data / norm.reshape(shape)

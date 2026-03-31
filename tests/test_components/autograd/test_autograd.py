@@ -1380,7 +1380,15 @@ def test_autograd_error_custom_vjp_indices_and_paths(
         return objective
 
     custom_vjp_val = 1.0
-    val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+    # The async branch intentionally exercises only failing custom_vjp configs, so the
+    # objective returns a constant 0.0 and autograd is expected to warn here.
+    warn_context = (
+        pytest.warns(UserWarning, match="Output seems independent of input.")
+        if use_run_async
+        else nullcontext()
+    )
+    with warn_context:
+        val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
 
 
 def test_custom_vjp_rejects_numerical_namespace_structure_indices():

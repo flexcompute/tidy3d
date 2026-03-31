@@ -288,7 +288,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         for field_name, mode_field in self.field_components.items():
             if mode_field is not None:
                 # Use xarray.dot for the matrix multiplication over mode_index
-                terminal_field = xr.dot(voltage_transform_inv, mode_field, dims="mode_index")
+                terminal_field = xr.dot(voltage_transform_inv, mode_field, dim="mode_index")
                 field_dict[field_name] = ScalarTerminalFieldDataArray(terminal_field)
 
         return TerminalFieldDataset(**field_dict)
