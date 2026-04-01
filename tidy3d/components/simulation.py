@@ -3819,10 +3819,10 @@ class Simulation(AbstractYeeGridSimulation):
         cls,
         center: Coordinate,
         size: Coordinate,
-        monitor: Union[SurfaceIntegrationMonitor, DiffractionMonitor],
+        monitor: Union[FieldMonitor, SurfaceIntegrationMonitor, DiffractionMonitor],
         structures: list[Structure],
     ) -> set[MediumType3D]:
-        """Get media intersecting the in-domain portion of a projection monitor."""
+        """Get media intersecting the in-domain portion of a projection surface or monitor."""
 
         sim_box = Box(center=center, size=size).to_static()
         monitor = monitor.to_static()
@@ -3866,7 +3866,7 @@ class Simulation(AbstractYeeGridSimulation):
             raise SetupError(
                 f"All in-domain clipped portions of '{monitor.name}' ({monitor.type}) collapse "
                 "to zero-measure sets after clipping to the simulation bounds. "
-                "Field projection monitors must have a nonzero in-domain integration region "
+                "Projection surfaces must have a nonzero in-domain integration region "
                 "(area in 3D or line length in 2D)."
             )
 

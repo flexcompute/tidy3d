@@ -13,15 +13,18 @@ from tidy3d.components.autograd.functions import trapz
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box
 from tidy3d.components.monitor import (
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
     FieldProjectionSurface,
 )
+from tidy3d.components.structure import Structure
 from tidy3d.components.types import Coordinate
 from tidy3d.components.validators import validate_field_projection_monitors_2d
 from tidy3d.constants import C_0, MICROMETER
 from tidy3d.exceptions import SetupError
+from tidy3d.log import log
 
 from .approximate_angle import _ApproximateAngleProjectionMixin
 from .approximate_paired import _ApproximatePairedProjectionMixin
@@ -106,8 +109,55 @@ class FieldProjector(
     def medium(self) -> MediumType:
         """Medium into which fields are to be projected."""
         sim = self.sim_data.simulation
-        monitor = self.surfaces[0].monitor
-        return sim.monitor_medium(monitor)
+        structure_bg = Structure(
+            geometry=Box(size=sim.size, center=sim.center),
+            medium=sim.medium,
+        )
+        total_structures = [structure_bg, *list(sim.structures or [])]
+        surface_mediums = []
+
+        with log as consolidated_logger:
+            for surface in self.surfaces:
+                mediums = sim._projection_monitor_mediums_in_bounds(
+                    center=sim.center,
+                    size=sim.size,
+                    monitor=surface.monitor,
+                    structures=total_structures,
+                )
+                if len(mediums) > 1:
+                    raise SetupError(
+                        f"{len(mediums)} different mediums detected on plane intersecting local "
+                        f"field projection monitor '{surface.monitor.name}'. Plane must be homogeneous."
+                    )
+                if len(mediums) < 1:
+                    raise SetupError(
+                        f"No in-domain medium detected on local field projection monitor "
+                        f"'{surface.monitor.name}'. The monitor must overlap the simulation with "
+                        "a nonzero line or area."
+                    )
+
+                medium = next(iter(mediums))
+                if not medium.is_spatially_uniform:
+                    consolidated_logger.warning(
+                        "Nonuniform custom medium detected on plane intersecting local field "
+                        f"projection monitor '{surface.monitor.name}'. Plane must be homogeneous. "
+                        "Make sure custom medium is uniform on the plane."
+                    )
+                surface_mediums.append(medium)
+
+        if len(set(surface_mediums)) > 1:
+            raise SetupError(
+                "All near-field monitors used for local field projection must lie in the same "
+                "homogeneous medium."
+            )
+
+        return surface_mediums[0]
+
+    @model_validator(mode="after")
+    def _validate_projection_medium(self) -> Self:
+        """Validate and cache the shared medium used for local field projection."""
+        _ = self.medium
+        return self
 
     @cached_property
     def frequencies(self) -> list[float]:

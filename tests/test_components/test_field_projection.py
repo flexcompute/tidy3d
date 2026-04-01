@@ -718,6 +718,79 @@ def test_2d_proj_clientside():
         make_2d_proj(plane)
 
 
+def test_proj_clientside_homogeneous_clips_to_sim_bounds_2d():
+    f0 = 1e13
+    medium_bg = td.Medium(permittivity=2)
+    medium_air = td.Medium(permittivity=1)
+
+    def make_sim_data(structures):
+        near_monitor = td.FieldMonitor(
+            center=(0, 0, 0.5),
+            size=(0, 0.1, 1.0),
+            freqs=[f0],
+            name="near_field",
+            colocate=False,
+        )
+        sim = td.Simulation(
+            size=(1, 1, 0),
+            medium=medium_bg,
+            structures=structures,
+            grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.pml(),
+                z=td.Boundary.periodic(),
+            ),
+            monitors=[near_monitor],
+            run_time=1e-12,
+        )
+
+        coords = {
+            "x": np.array([0.0]),
+            "y": np.linspace(-0.05, 0.05, 5),
+            "z": np.array([0.0]),
+            "f": [f0],
+        }
+        scalar_field = td.ScalarFieldDataArray(np.ones((1, 5, 1, 1), dtype=complex), coords=coords)
+        data = td.FieldData(
+            monitor=near_monitor,
+            Ex=scalar_field,
+            Ey=scalar_field,
+            Ez=scalar_field,
+            Hx=scalar_field,
+            Hy=scalar_field,
+            Hz=scalar_field,
+            symmetry=sim.symmetry,
+            symmetry_center=sim.center,
+            grid_expanded=sim.discretize_monitor(near_monitor),
+        )
+        return td.SimulationData(simulation=sim, data=(data,)), near_monitor
+
+    box_outside_sim = td.Structure(
+        geometry=td.Box(center=(0, 0.025, 1.5), size=(0.2, 0.05, 2.0)),
+        medium=medium_air,
+    )
+    sim_data, near_monitor = make_sim_data((box_outside_sim,))
+    projector = td.FieldProjector.from_near_field_monitors(
+        sim_data=sim_data,
+        near_monitors=[near_monitor],
+        normal_dirs=["+"],
+    )
+    assert projector.medium == medium_bg
+
+    box_in_2d_sim = td.Structure(
+        geometry=td.Box(center=(0, 0.025, 0), size=(0.2, 0.05, 2.0)),
+        medium=medium_air,
+    )
+    sim_data, near_monitor = make_sim_data((box_in_2d_sim,))
+    with pytest.raises(ValidationError, match="Plane must be homogeneous"):
+        td.FieldProjector.from_near_field_monitors(
+            sim_data=sim_data,
+            near_monitors=[near_monitor],
+            normal_dirs=["+"],
+        )
+
+
 def test_2d_proj_clientside_cartesian_single_cell_dimension():
     freq0 = td.C_0 / 1.55
     sio2 = td.Medium(permittivity=1.44**2)
