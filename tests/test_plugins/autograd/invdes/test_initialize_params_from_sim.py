@@ -7,6 +7,8 @@ from scipy.ndimage import zoom
 import tidy3d as td
 from tidy3d.plugins.autograd.invdes.parametrizations import initialize_params_from_simulation
 
+from ....utils import AssertLogLevel
+
 
 def _loss_like_impl(sim: td.Simulation, design_box: td.Box, p: np.ndarray, param_to_structure):
     """Compute a similar loss to the initializer's, for verification only.
@@ -23,6 +25,26 @@ def _loss_like_impl(sim: td.Simulation, design_box: td.Box, p: np.ndarray, param
 
     res = eps_base_interp - eps_param
     return 0.5 * np.sum(res.real**2 + res.imag**2) / denom
+
+
+def _make_centered_linear_structure_case(shape: tuple[int, int]):
+    """Construct a centered 2D initialization case with linear epsilon mapping."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 0.0),
+        grid_spec=td.GridSpec.uniform(dl=1.0),
+        boundary_spec=td.BoundarySpec.pml(x=True, y=True),
+        run_time=1e-12,
+        medium=td.Medium(permittivity=1.0),
+    )
+    box = td.Box(center=(0, 0, 0), size=(1.0, 1.0, 0.0))
+
+    def param_to_structure(p: np.ndarray) -> td.Structure:
+        eps3d = (1.0 + 3.0 * p).reshape((*p.shape, 1))
+        return td.Structure.from_permittivity_array(geometry=box, eps_data=eps3d)
+
+    params0 = np.full(shape, 0.5)
+    return sim, param_to_structure, params0
 
 
 def test_initialize_params_from_simulation_basic_known_optimum():
@@ -284,3 +306,62 @@ def test_param_to_structure_kwargs_forwarded():
     )
     assert params.shape == params0.shape
     assert np.all(params >= 0.0) and np.all(params <= 1.0)
+
+
+def test_initialize_params_from_simulation_warns_when_center_is_between_design_pixels():
+    """Centered even grids warn because the geometry center lies between design pixels."""
+
+    sim, param_to_structure, params0 = _make_centered_linear_structure_case((4, 4))
+    with AssertLogLevel(
+        "WARNING", contains_str="Design coordinates do not include the geometry center"
+    ):
+        initialize_params_from_simulation(
+            sim=sim,
+            param_to_structure=param_to_structure,
+            params0=params0,
+            maxiter=2,
+        )
+
+
+def test_initialize_params_from_simulation_no_warning_when_center_is_sampled():
+    """Centered odd grids include the geometry center and should not warn."""
+
+    sim, param_to_structure, params0 = _make_centered_linear_structure_case((5, 5))
+    with AssertLogLevel(None):
+        initialize_params_from_simulation(
+            sim=sim,
+            param_to_structure=param_to_structure,
+            params0=params0,
+            maxiter=2,
+        )
+
+
+def test_initialize_params_from_simulation_no_warning_for_singleton_axis_off_center():
+    """A singleton axis is invariant and should not warn if its lone sample is off-center."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 1.0),
+        grid_spec=td.GridSpec.uniform(dl=1.0),
+        boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
+        run_time=1e-12,
+        medium=td.Medium(permittivity=1.0),
+    )
+    box = td.Box(center=(0, 0, 0), size=(1.0, 1.0, 0.2))
+    coords_x = np.linspace(-0.4, 0.4, 5)
+    coords_y = np.linspace(-0.4, 0.4, 5)
+    coords_z = np.array([0.03])
+
+    def param_to_structure(p: np.ndarray) -> td.Structure:
+        eps3d = (1.0 + 3.0 * p).reshape((*p.shape, 1))
+        eps_da = td.SpatialDataArray(eps3d, coords={"x": coords_x, "y": coords_y, "z": coords_z})
+        med = td.CustomMedium(permittivity=eps_da)
+        return td.Structure(geometry=box, medium=med)
+
+    params0 = np.full((len(coords_x), len(coords_y)), 0.5)
+    with AssertLogLevel(None):
+        initialize_params_from_simulation(
+            sim=sim,
+            param_to_structure=param_to_structure,
+            params0=params0,
+            maxiter=2,
+        )
