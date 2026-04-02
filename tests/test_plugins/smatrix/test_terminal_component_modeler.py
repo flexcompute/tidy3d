@@ -32,6 +32,7 @@ from tidy3d.plugins.smatrix import (
     TerminalComponentModeler,
     TerminalComponentModelerData,
     TerminalPortDataArray,
+    TerminalWavePort,
     WavePort,
 )
 from tidy3d.plugins.smatrix.component_modelers.terminal import AUTO_RADIATION_MONITOR_NAME
@@ -2143,6 +2144,77 @@ def test_wave_port_extrusion_differential_stripline():
     # make sure that the error is triggered even when ports are reshuffled
     with pytest.raises(SetupError):
         sim = tcm.base_sim
+
+
+def test_wave_port_extrusion_vertex_tolerance():
+    """Test that extrusion captures structures whose vertices are slightly offset from the port plane.
+
+    Geometry vertices in PCB layouts may not land exactly on the waveport plane
+    due to coordinate precision. The extrusion tolerance should bridge these
+    small gaps (up to ~10 nm) for both WavePort and TerminalWavePort.
+    """
+    tcm = make_differential_stripline_modeler()
+    sim = tcm.simulation
+    num_original_structures = len(sim.structures)
+
+    # Shorten structures by a small offset so they don't quite reach the port planes,
+    # mimicking common coordinate precision gaps in PCB layouts.
+    gap_offset = 0.001
+    shortened_structures = []
+    for structure in sim.structures:
+        geom = structure.geometry
+        if isinstance(geom, td.GeometryGroup):
+            new_geoms = []
+            for sub_geom in geom.geometries:
+                size = list(sub_geom.size)
+                size[2] -= 2 * gap_offset
+                new_geoms.append(sub_geom.updated_copy(size=tuple(size)))
+            new_geom = geom.updated_copy(geometries=new_geoms)
+        else:
+            size = list(geom.size)
+            size[2] -= 2 * gap_offset
+            new_geom = geom.updated_copy(size=tuple(size))
+        shortened_structures.append(structure.updated_copy(geometry=new_geom))
+
+    sim = sim.updated_copy(structures=shortened_structures)
+
+    # Keep one WavePort and replace the other with a TerminalWavePort using
+    # automatic terminal detection so the regression covers both port types.
+    port_1 = tcm.ports[0].updated_copy(extrude_structures=True)
+    port_2 = TerminalWavePort(
+        center=tcm.ports[1].center,
+        size=tcm.ports[1].size,
+        direction=tcm.ports[1].direction,
+        name="TWP2",
+        absorber=True,
+        extrude_structures=True,
+    )
+
+    tcm = tcm.updated_copy(simulation=sim, ports=[port_1, port_2])
+
+    # Verify extrusion happens early in the pipeline (in _base_sim_with_grid_and_lumped_elements),
+    # before conductor detection, so that downstream steps see the extruded structures.
+    grid_sim = tcm._base_sim_with_grid_and_lumped_elements
+    num_extruded_early = len(grid_sim.structures) - num_original_structures
+    assert num_extruded_early > 0, (
+        "Extrusion did not happen in _base_sim_with_grid_and_lumped_elements"
+    )
+    assert num_extruded_early == 2 * num_original_structures
+
+    # Build the full base sim and verify the same extruded structures propagate through
+    base_sim = tcm.base_sim
+    num_extruded = len(base_sim.structures) - num_original_structures
+    assert num_extruded == num_extruded_early
+    assert len(base_sim.internal_absorbers) == 2
+
+    # Verify plotting works with extrusion enabled for both WavePort and TerminalWavePort.
+    ax = tcm.plot_port("WP1")
+    assert ax is not None
+    plt.close()
+
+    ax = tcm.plot_port("TWP2")
+    assert ax is not None
+    plt.close()
 
 
 def test_custom_source_time(monkeypatch, tmp_path):

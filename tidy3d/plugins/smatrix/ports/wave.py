@@ -421,26 +421,36 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             Resolved mode specification with integer num_modes. If None,
             uses self._mode_spec but raises SetupError if num_modes='auto'.
         """
+        absorber = self._to_absorber_geometry(snap_center=snap_center)
+        if isinstance(self.absorber, (ABCBoundary, ModeABCBoundary)):
+            return absorber.updated_copy(boundary_spec=self.absorber)
+
+        mode_spec = self._validate_resolved_mode_spec(mode_spec)
+        # TODO: ModeABCBoundary currently only accepts one mode, so
+        # we choose the first mode for now until we have multimodal absorber support.
+        mode_index = self._mode_indices(mode_spec)[0]
+        boundary_spec = ModeABCBoundary(
+            mode_spec=mode_spec,
+            mode_index=mode_index,
+            plane=self.geometry,
+            freq_spec=freq_spec,
+        )
+        return absorber.updated_copy(boundary_spec=boundary_spec)
+
+    def _to_absorber_geometry(self, snap_center: Optional[float] = None) -> InternalAbsorber:
+        """Create an internal absorber with the correct geometry for geometry-only calculations.
+
+        A dummy ABC boundary is used so geometry can be created before the real
+        absorber boundary conditions are resolved.
+        """
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center
-        if isinstance(self.absorber, (ABCBoundary, ModeABCBoundary)):
-            boundary_spec = self.absorber
-        else:
-            mode_spec = self._validate_resolved_mode_spec(mode_spec)
-            # TODO: ModeABCBoundary currently only accepts one mode, so
-            # we choose the first mode for now until we have multimodal absorber support.
-            mode_index = self._mode_indices(mode_spec)[0]
-            boundary_spec = ModeABCBoundary(
-                mode_spec=mode_spec,
-                mode_index=mode_index,
-                plane=self.geometry,
-                freq_spec=freq_spec,
-            )
+
         return InternalAbsorber(
             center=center,
             size=self.size,
-            boundary_spec=boundary_spec,
+            boundary_spec=ABCBoundary(permittivity=1.0),
             direction="-"
             if self.direction == "+"
             else "+",  # absorb in the opposite direction of source

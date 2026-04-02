@@ -32,7 +32,7 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Complex, Coordinate
 from tidy3d.components.types.base import PriorityMode, discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_lumped_element
-from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
+from tidy3d.constants import C_0, MICROMETER, OHM, inf
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dKeyError,
@@ -58,6 +58,7 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType, WavePortType
 from tidy3d.plugins.smatrix.ports.wave import (
     DEFAULT_DIFFERENTIAL_PAIR_LABEL_PREFIX,
+    MONITOR_COLOCATE,
     AbstractWavePort,
     TerminalWavePort,
     WavePort,
@@ -73,6 +74,11 @@ if TYPE_CHECKING:
     from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
     from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
     from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
+
+# Tolerance (in um) for finding structures that intersect the waveport plane.
+# PCB modeler exports often have polygon vertices that don't exactly touch the
+# port plane; 10 nm covers typical coordinate precision gaps.
+EXTRUDE_STRUCTURES_TOL = 0.01
 
 AUTO_RADIATION_MONITOR_NAME = "radiation"
 AUTO_RADIATION_MONITOR_BUFFER = 2
@@ -433,20 +439,17 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @property
     def _sim_with_sources(self) -> Simulation:
-        """Instance of :class:`.Simulation` with all sources and absorbers added for each port, for plotting."""
+        """Instance of :class:`.Simulation` used for plotting the full setup with all sources.
+
+        Starts from :attr:`base_sim` so that the frozen grid, monitors, absorbers,
+        and extruded structures are all present.
+        """
 
         sources = [
             port.to_source(self._source_time, mode_spec=self._resolved_mode_specs.get(port.name))
             for port in self.ports
         ]
-        absorbers = [
-            port.to_absorber(mode_spec=self._resolved_mode_specs.get(port.name))
-            for port in self.ports
-            if isinstance(port, AbstractWavePort) and port.absorber
-        ]
-        return self.simulation.updated_copy(
-            sources=sources, internal_absorbers=absorbers, validate=False
-        )
+        return self.base_sim.updated_copy(sources=sources, validate=False, deep=False)
 
     @equal_aspect
     @add_ax_if_none
@@ -1445,12 +1448,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         new_grid_spec = sim_intermediate.grid_spec.updated_copy(override_structures=mesh_overrides)
 
         # Update simulation (no monitors, no absorbers yet)
-        return sim_intermediate.updated_copy(
+        sim = sim_intermediate.updated_copy(
             lumped_elements=new_lumped_elements,
             grid_spec=new_grid_spec,
             validate=False,
             deep=False,
         )
+
+        # Extrude structures at wave ports before conductor detection
+        return self._extrude_port_structures(sim=sim)
 
     @cached_property
     def _base_sim_no_radiation_monitors(self) -> Simulation:
@@ -1530,9 +1536,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             validate=False,
             deep=False,
         )
-
-        # extrude port structures
-        sim_wo_source = self._extrude_port_structures(sim=sim_wo_source)
 
         return sim_wo_source
 
@@ -2106,7 +2109,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         else:
             return self.get_task_name(port=port)
 
-    def _extrude_port_structures(self, sim: Simulation) -> Simulation:
+    def _extrude_port_structures(
+        self, sim: Simulation, tol: float = EXTRUDE_STRUCTURES_TOL
+    ) -> Simulation:
         """
         Extrude structures intersecting a port plane when a wave port lies on a structure boundary.
 
@@ -2117,8 +2122,11 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         Parameters
         ----------
         sim : Simulation
-            Simulation object containing mode sources, internal absorbers, and monitors,
-            after mesh overrides and snapping points are applied.
+            Simulation with finalized structures and grid spec so that the grid
+            is fully resolved.
+        tol : float
+            Spatial tolerance in micrometers for the cutting plane offset. Structures
+            whose vertices are within this distance of the port plane will be captured.
 
         Returns
         -------
@@ -2132,10 +2140,10 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
         # get all mode sources from TerminalComponentModeler that correspond to ports with ``extrude_structures`` flag set to ``True``.
         for port in self.ports:
-            if isinstance(port, WavePort) and port.extrude_structures:
+            if isinstance(port, AbstractWavePort) and port.extrude_structures:
                 # compute snap_center and shift the internal absorber associated with the current port
                 snap_center = port.center[port.injection_axis] + self._shift_value_signed(port)
-                absorber = port.to_absorber(snap_center=snap_center)
+                absorber = port._to_absorber_geometry(snap_center=snap_center)
                 shifted_absorber = _shift_object(
                     obj=absorber,
                     grid=sim.grid,
@@ -2155,10 +2163,16 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 # get extrusion extent along injection axis
                 extrude_to = back_pec_plane.center[inj_axis]
 
-                # move cutting plane beyond the waveport plane along the `ModeSource` injection direction.
-                center = list(back_pec_plane.center)
-                center[inj_axis] = port.center[inj_axis] - sign * fp_eps * box.size[inj_axis]
-                cutting_plane = back_pec_plane.updated_copy(center=center)
+                # Build the cutting plane from the discretized monitor bounds so that
+                # it covers the same region the mode solver sees (slightly larger
+                # than the port box due to grid snapping).
+                span_inds = sim._discretize_inds_monitor(port, colocate=MONITOR_COLOCATE)
+                bds = sim._subgrid(span_inds=span_inds).boundaries.to_list
+                rmin = [b[0] for b in bds]
+                rmax = [b[-1] for b in bds]
+                rmin[inj_axis] = port.center[inj_axis] - sign * tol
+                rmax[inj_axis] = rmin[inj_axis]
+                cutting_plane = Box.from_bounds(rmin=rmin, rmax=rmax)
 
                 # define extrusion bounds
                 extrusion_bounds = [cutting_plane.center[inj_axis], extrude_to][::sign]
