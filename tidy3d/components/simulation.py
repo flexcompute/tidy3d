@@ -70,6 +70,7 @@ from .medium import (
     AbstractMedium,
     AbstractPerturbationMedium,
     AnisotropicMedium,
+    AnisotropicMediumFromMedium2D,
     FullyAnisotropicMedium,
     LossyMetalMedium,
     Medium,
@@ -3609,7 +3610,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for i, structure in enumerate(val):
-                if isinstance(structure.medium, Medium2D):
+                if isinstance(structure.medium, (Medium2D, AnisotropicMediumFromMedium2D)):
                     continue
                 for geom in flatten_groups(structure.geometry):
                     zero_dims = geom.zero_dims

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components import scene, simulation
+from tidy3d.components.medium import AnisotropicMediumFromMedium2D
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.mode import ModeSolver
@@ -3963,6 +3964,36 @@ def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
         vol_structures = sim.volumetric_structures
         assert len(vol_structures) == 2
         assert np.isclose(vol_structures[1].geometry.bounding_box.size[0], 0, rtol=RTOL)
+
+
+def test_finalized_sim_with_lumped_element_avoids_2d_medium_warning():
+    """Converted lumped-element structures should not trigger the zero-thickness warning."""
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
+        size=(0, 0, 0),
+        polarization="Ex",
+        current_amplitude_definition="total",
+    )
+    resistor = td.LumpedResistor(
+        center=(-2, 0, 0),
+        size=(0, 1, 2),
+        name="resistor",
+        voltage_axis=1,
+        resistance=54,
+    )
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        sources=(src,),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML(num_layers=6)),
+        lumped_elements=(resistor,),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+    )
+
+    with AssertLogStr("WARNING", excludes_str="zero size along dimensions"):
+        finalized = sim._finalized
+
+    assert isinstance(finalized.structures[0].medium, AnisotropicMediumFromMedium2D)
 
 
 def test_create_sim_multiphysics():
