@@ -120,6 +120,39 @@ def make_field_projection_cartesian_data(values, freq=td.C_0):
     return projected_fields
 
 
+def test_run_emulated_stabilizes_underflowing_source_normalization():
+    """Synthetic emulation should clamp near-zero normalization values."""
+
+    freq0 = 2e14
+    monitor_freq = 1e15
+    source = td.PointDipole(
+        center=(0, 0, 0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+    )
+    monitor = td.FieldMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        fields=["Ex"],
+        freqs=[monitor_freq],
+        name="field",
+    )
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec.uniform(dl=0.2),
+        boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
+        sources=[source],
+        monitors=[monitor],
+        run_time=1e-12,
+        normalize_index=0,
+    )
+
+    sim_data = run_emulated(sim)
+    values = sim_data["field"].Ex.values
+
+    assert np.all(np.isfinite(values))
+
+
 def make_field_data(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return FieldData(
