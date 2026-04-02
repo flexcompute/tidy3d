@@ -674,11 +674,37 @@ def test_delta_model():
     delta_model.model_dump_json()
 
     # make sure it's interpolating correctly
+    # coefficients are ordered: a, b, c, d, p, q, r, s
+    # amplitude coefficients (a, c, p, r) use log-space interpolation (geometric mean at midpoint)
+    # exponent coefficients (b, d, q, s) use linear interpolation (arithmetic mean at midpoint)
     coeffs_3_5 = np.array([3.10e-21, 1.210, 6.05e-20, 1.145, 6.95e-21, 0.986, 9.28e-18, 0.834])
-    coeffs_4 = np.array([7.4e-22, 1.245, 5.43e-20, 1.153, 7.25e-21, 0.991, 9.99e-18, 0.839])
+    coeffs_4 = np.array([7.45e-22, 1.245, 5.43e-20, 1.153, 7.25e-21, 0.991, 9.99e-18, 0.839])
 
-    averaged_vals = (coeffs_3_5 + coeffs_4) / 2
-    interpolated_results = [v.item() for v in delta_model._coeffs_at_ref_freq.data.flat]
-    error = np.abs(np.mean(averaged_vals - np.array(interpolated_results)))
+    amp_indices = [0, 2, 4, 6]  # a, c, p, r
+    exp_indices = [1, 3, 5, 7]  # b, d, q, s
+    expected = np.empty(8)
+    expected[amp_indices] = np.sqrt(coeffs_3_5[amp_indices] * coeffs_4[amp_indices])
+    expected[exp_indices] = (coeffs_3_5[exp_indices] + coeffs_4[exp_indices]) / 2
 
-    assert error < 1e-16
+    interpolated_results = np.array([v.item() for v in delta_model._coeffs_at_ref_freq.data.flat])
+    assert np.allclose(expected, interpolated_results, rtol=1e-12)
+
+    # test linear interpolation
+    delta_model_linear = td.NedeljkovicSorefMashanovich(ref_freq=freq, interp_method="linear")
+    expected_linear = (coeffs_3_5 + coeffs_4) / 2
+    results_linear = np.array([v.item() for v in delta_model_linear._coeffs_at_ref_freq.data.flat])
+    assert np.allclose(expected_linear, results_linear, rtol=1e-12)
+
+    # test nearest interpolation (midpoint is equidistant; scipy picks the lower index)
+    delta_model_nearest = td.NedeljkovicSorefMashanovich(ref_freq=freq, interp_method="nearest")
+    results_nearest = np.array(
+        [v.item() for v in delta_model_nearest._coeffs_at_ref_freq.data.flat]
+    )
+    assert np.allclose(coeffs_3_5, results_nearest, rtol=1e-12) or np.allclose(
+        coeffs_4, results_nearest, rtol=1e-12
+    )
+
+    # test zero-order (step) interpolation — should return the left bracket value
+    delta_model_zero = td.NedeljkovicSorefMashanovich(ref_freq=freq, interp_method="zero")
+    results_zero = np.array([v.item() for v in delta_model_zero._coeffs_at_ref_freq.data.flat])
+    assert np.allclose(coeffs_3_5, results_zero, rtol=1e-12)

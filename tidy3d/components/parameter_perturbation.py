@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Literal, Optional, TypeVar, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, model_validator
@@ -35,8 +35,6 @@ from .viz import add_ax_if_none
 
 if TYPE_CHECKING:
     from typing import Callable
-
-    import xarray as xr
 
     from tidy3d.compat import Self
 
@@ -1539,6 +1537,15 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
         "i.e., `np.concatenate(([0], np.logspace(-6, 22, num=200)))`.",
     )
 
+    interp_method: Literal["linear", "nearest", "zero", "log"] = Field(
+        default="log",
+        title="Interpolation Method",
+        description="Method used to interpolate perturbation coefficients between tabulated "
+        "wavelengths. 'log' uses log-space interpolation for amplitude coefficients (a, c, p, r) "
+        "and linear interpolation for exponent coefficients (b, d, q, s). 'linear', 'nearest', "
+        "and 'zero' use scipy's ``interp1d`` with the corresponding kind.",
+    )
+
     @model_validator(mode="after")
     def _check_freq_in_range(self) -> Self:
         """Check that the given frequency is within validity range.
@@ -1564,9 +1571,53 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
         return C_0 / self.ref_freq
 
     @cached_property
-    def _coeffs_at_ref_freq(self) -> xr.Dataset:
-        """Coefficients at reference frequency."""
-        return self.perturb_coeffs.interp(wvl=self.ref_wavelength)
+    def _coeffs_at_ref_freq(self) -> PerturbationCoefficientDataArray:
+        """Coefficients at reference frequency.
+
+        When ``interp_method='log'``, uses log-space interpolation for amplitude coefficients
+        (a, c, p, r) and linear interpolation for exponent coefficients (b, d, q, s).
+        Other methods ('linear', 'nearest', 'zero') delegate to ``scipy.interpolate.interp1d``.
+        """
+        wvl = self.ref_wavelength
+        wvls = np.array(self.perturb_coeffs.coords["wvl"])
+
+        # If exact match, no interpolation needed
+        if wvl in wvls:
+            return self.perturb_coeffs.sel(wvl=wvl)
+
+        if self.interp_method == "log":
+            # Find bracketing wavelengths
+            idx = np.searchsorted(wvls, wvl) - 1
+            idx = np.clip(idx, 0, len(wvls) - 2)
+            wvl0, wvl1 = wvls[idx], wvls[idx + 1]
+            t = (wvl - wvl0) / (wvl1 - wvl0)
+
+            c0 = self.perturb_coeffs.sel(wvl=wvl0)
+            c1 = self.perturb_coeffs.sel(wvl=wvl1)
+
+            result = c0.copy()
+            amp_coeffs = ["a", "c", "p", "r"]
+            for c in self.perturb_coeffs.coords["coeff"].values:
+                v0 = c0.sel(coeff=c).item()
+                v1 = c1.sel(coeff=c).item()
+                if c in amp_coeffs and v0 > 0 and v1 > 0:
+                    # log-space interpolation for amplitude coefficients
+                    val = np.exp(np.log(v0) * (1 - t) + np.log(v1) * t)
+                else:
+                    # linear interpolation for exponent coefficients
+                    val = v0 * (1 - t) + v1 * t
+                result.loc[{"coeff": c}] = val
+        else:
+            from scipy.interpolate import interp1d
+
+            result = self.perturb_coeffs.isel(wvl=0).copy()
+            for c in self.perturb_coeffs.coords["coeff"].values:
+                vals = self.perturb_coeffs.sel(coeff=c).values
+                f = interp1d(wvls, vals, kind=self.interp_method)
+                result.loc[{"coeff": c}] = float(f(wvl))
+
+        result = result.assign_coords(wvl=wvl)
+        return result
 
     def delta_k(self) -> ChargePerturbationType:
         """Return the perturbation range of the model."""
