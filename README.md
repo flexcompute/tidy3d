@@ -42,7 +42,7 @@ tidy3d configure --apikey=XXX
 
 Where `XXX` is your API key, which can be copied from your [account page](https://tidy3d.simulation.cloud/account) in the web interface.
 
-In a hosted jupyter notebook environment (eg google colab), it may be more convenient to install and configure via the following lines at the top of the notebook.
+In a hosted jupyter notebook environment (eg google  colab), it may be more convenient to install and configure via the following lines at the top of the notebook.
 
 ```
 !pip install tidy3d

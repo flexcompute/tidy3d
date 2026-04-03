@@ -134,6 +134,7 @@ FIELD_DECAY_CUTOFF = 1e-2
 # Maximum allowed size of the field data produced by the mode solver
 MAX_MODES_DATA_SIZE_GB = 20
 
+
 MODE_SIMULATION_TYPE = discriminated_union(Union[Simulation, EMESimulation])
 MODE_SIMULATION_DATA_TYPE = discriminated_union(Union[SimulationData, EMESimulationData])
 MODE_PLANE_TYPE = discriminated_union(Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor])
@@ -325,12 +326,15 @@ class ModeSolver(Tidy3dBaseModel):
 
     @model_validator(mode="after")
     def _validate_num_grid_points(self) -> Self:
-        """Upper bound of the product of the number of grid points and the number of modes. The bound is very loose: subspace
-        size times the size of eigenvector can be indexed by a 32bit integer.
+        """Upper bound on mode plane grid points.
+
+        ARPACK subspace x eigenvector size must fit in a 32-bit integer.
+        Tensorial problems build a 4N x 4N matrix (vs 2N x 2N for scalar),
+        so the dimension factor is doubled.
         """
         num_cells, _, num_modes = self._num_cells_freqs_modes
-        relaxation_factor = 2
-        if num_cells * (20 + 2 * num_modes) * relaxation_factor > 2**32 - 1:
+        matrix_dim_factor = 4 if self._is_tensorial else 2
+        if num_cells * (20 + 2 * num_modes) * matrix_dim_factor > 2**32 - 1:
             raise SetupError(
                 "Too many grid points on the modal plane. Please reduce the modal plane size, apply a coarser grid, "
                 "or reduce the number of modes."
@@ -1357,10 +1361,12 @@ class ModeSolver(Tidy3dBaseModel):
         """Solve for all modes, and construct data with fields on the Yee grid."""
         solver = self._reduced_simulation_copy_with_fallback
 
-        # set freqs to the sampling frequencies
-        # temporary remove interp_spec
+        # Replace freqs with the pre-expanded sampling frequencies and strip
+        # interp_spec / group_index_step so they are not re-applied on the copy
+        # (the expansion has already been folded into _sampling_freqs).
         solver = solver.updated_copy(
-            freqs=self._sampling_freqs, mode_spec=self.mode_spec.updated_copy(interp_spec=None)
+            freqs=self._sampling_freqs,
+            mode_spec=self.mode_spec.updated_copy(interp_spec=None, group_index_step=False),
         )
 
         _, _solver_coords = solver.plane.pop_axis(
@@ -2437,9 +2443,14 @@ class ModeSolver(Tidy3dBaseModel):
     def _is_tensorial(self) -> bool:
         """Whether the mode computation should be fully tensorial. This is either due to fully
         anisotropic media, or due to an angled waveguide, in which case the transformed eps and mu
-        become tensorial. A separate check is done inside the solver, which looks at the actual
-        eps and mu and uses a tolerance to determine whether to invoke the tensorial solver, so
-        the actual behavior may differ from what's predicted by this property."""
+        become tensorial. When ``angle_rotation`` is enabled, the geometry is rotated so that the
+        effective angle is zero, avoiding the tensorial path — anisotropic and fully anisotropic
+        media are currently not supported with ``angle_rotation``, so we return ``False`` in that
+        case. A separate check is done inside the solver, which looks at the actual eps and mu and
+        uses a tolerance to determine whether to invoke the tensorial solver, so the actual
+        behavior may differ from what's predicted by this property."""
+        if self.mode_spec.angle_rotation and abs(self.mode_spec.angle_theta) > 0:
+            return False
         return abs(self.mode_spec.angle_theta) > 0 or self._has_fully_anisotropic_media
 
     @cached_property
@@ -2462,10 +2473,20 @@ class ModeSolver(Tidy3dBaseModel):
 
     @cached_property
     def _has_complex_eps(self) -> bool:
-        """Check if there are media with a complex-valued epsilon in the plane of the mode.
+        """Whether the eigenvalue problem is effectively complex-valued.
+
+        Returns ``True`` when at least one medium has a non-negligible imaginary
+        part of epsilon at any sampled frequency (lossy material), or when PML
+        layers are present in the mode plane (PML introduces complex coordinate
+        stretching, making the problem lossy even with real-valued materials).
+
         A separate check is done inside the solver, which looks at the actual
-        eps and mu and uses a tolerance to determine whether to use real or complex fields, so
-        the actual behavior may differ from what's predicted by this property."""
+        eps and mu and uses a tolerance to determine whether to use real or
+        complex fields, so the actual behavior may differ from what's predicted
+        by this property.
+        """
+        if any(n > 0 for n in self.mode_spec.num_pml):
+            return True
         check_freqs = np.unique(
             [
                 np.amin(self._sampling_freqs),
@@ -2477,8 +2498,8 @@ class ModeSolver(Tidy3dBaseModel):
             for freq in check_freqs:
                 max_imag_eps = np.amax(np.abs(np.imag(int_mat.eps_model(freq))))
                 if not isclose(max_imag_eps, 0):
-                    return False
-        return True
+                    return True
+        return False
 
     @cached_property
     def _contain_good_conductor(self) -> bool:

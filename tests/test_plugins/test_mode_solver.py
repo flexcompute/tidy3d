@@ -23,6 +23,39 @@ from tidy3d.web.core.environment import Env
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured
 
+
+def assert_property_vs_runtime(mode_solver, mode_data):
+    """Assert that _is_tensorial and _has_complex_eps never under-predict the runtime solver path.
+
+    The runtime ``eps_spec`` per frequency tells us what the solver actually observed:
+      - "diagonal"           → scalar (not tensorial)
+      - "tensorial_real"     → tensorial, real matrix
+      - "tensorial_complex"  → tensorial, complex matrix
+
+    The frontend properties must be at least as conservative as the runtime to avoid
+    memory under-allocation.  Over-prediction (wasteful but safe) is acceptable.
+    """
+    eps_spec = mode_data.eps_spec
+    if eps_spec is None:
+        return
+
+    runtime_tensorial = any(s != "diagonal" for s in eps_spec)
+    runtime_complex = any(s == "tensorial_complex" for s in eps_spec)
+
+    if runtime_tensorial:
+        assert mode_solver._is_tensorial, (
+            f"Runtime solved tensorial (eps_spec={eps_spec}) but "
+            f"_is_tensorial={mode_solver._is_tensorial} — would under-allocate memory"
+        )
+
+    if runtime_complex:
+        assert mode_solver._has_complex_eps or mode_solver._is_tensorial, (
+            f"Runtime solved complex (eps_spec={eps_spec}) but "
+            f"_has_complex_eps={mode_solver._has_complex_eps}, "
+            f"_is_tensorial={mode_solver._is_tensorial} — would under-allocate memory"
+        )
+
+
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
 WAVEGUIDE = td.Structure(geometry=td.Box(size=(1.5, 100, 1)), medium=WG_MEDIUM)
 PLANE = td.Box(center=(0, 0, 0), size=(5, 0, 5))
@@ -240,6 +273,7 @@ def mock_remote_api(monkeypatch):
 def compare_colocation(ms):
     """Compare mode-solver fields with colocation applied during run or post-run."""
     data_col = ms.solve()
+    assert_property_vs_runtime(ms, data_col)
     ms_nocol = ms.updated_copy(colocate=False)
     data = ms_nocol.solve()
     data_at_boundaries = ms_nocol.sim_data.at_boundaries(MODE_MONITOR_NAME)
@@ -312,6 +346,7 @@ def check_ms_reduction(ms):
     assert np.allclose(grids_1d.y, grids_1d_red.y)
     assert np.allclose(grids_1d.z, grids_1d_red.z)
     modes_red = ms.solve()
+    assert_property_vs_runtime(ms, modes_red)
     assert np.allclose(ms.data.n_eff.values, modes_red.n_eff.values)
     assert len(ms_red.simulation.sources) == 0
     assert len(ms_red.simulation.internal_absorbers) == 0
@@ -423,6 +458,7 @@ def test_mode_solver_fields():
         fields=["Ex", "Hz"],
     )
     mode_data = ms.solve()
+    assert_property_vs_runtime(ms, mode_data)
     components = mode_data.field_components.keys()
     for comp in ["Ex", "Hz"]:
         assert comp in components
@@ -573,6 +609,8 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         modes = (
             ms.solve() if local else msweb.run(ms, results_file=tmp_path / "ms_custom_medium.hdf5")
         )
+        if local:
+            assert_property_vs_runtime(ms, modes)
         n_eff.append(modes.n_eff.values)
 
         if local:
@@ -638,6 +676,7 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
             direction="+",
         )
         modes = ms.solve()
+        assert_property_vs_runtime(ms, modes)
         md.append(modes)
 
     # ms.plot_field(mode_index=0, f=freq0, field_name="Ez")
@@ -687,7 +726,9 @@ def test_mode_bend_radius():
     )
     ms2 = ms1.updated_copy(plane=plane2, mode_spec=mode_spec2)
     data1 = ms1.solve()
+    assert_property_vs_runtime(ms1, data1)
     data2 = ms2.solve()
+    assert_property_vs_runtime(ms2, data2)
 
     print(data1.n_complex)
     print(data2.n_complex * 5 / 5.5)
@@ -946,6 +987,7 @@ def test_mode_solver_nan_pol_fraction():
     )
 
     md = ms.solve()
+    assert_property_vs_runtime(ms, md)
     check_ms_reduction(ms)
     # Inject NaN at mode_index=5 for selected field components
     nan_fields = {}
@@ -1090,6 +1132,7 @@ def test_mode_solver_relative():
         colocate=False,
     )
     basis = ms.data_raw
+    assert_property_vs_runtime(ms, basis)
     new_freqs = np.array(freqs) * 1.01
     ms = ms.updated_copy(freqs=new_freqs)
     _ = ms._data_on_yee_grid_relative(basis=basis)
@@ -1148,7 +1191,8 @@ def test_modes_eme_sim(mock_remote_api, local, tmp_path):
         plane=sim.eme_grid.mode_planes[0],
     )
     if local:
-        _ = solver.data
+        data = solver.data
+        assert_property_vs_runtime(solver, data)
     else:
         with pytest.raises(SetupError):
             _ = msweb.run(solver, results_file=tmp_path / "eme_solver_remote.hdf5")
@@ -1241,6 +1285,8 @@ def test_high_order_mode_normalization():
     # 3D simulation
     ms1 = make_high_order_mode_solver(1)
     ms2 = make_high_order_mode_solver(-1)
+    assert_property_vs_runtime(ms1, ms1.data)
+    assert_property_vs_runtime(ms2, ms2.data)
     overlap = ms1.data.outer_dot(ms2.data).isel(mode_index_0=2, mode_index_1=2).values.item()
     assert abs(1 - overlap) < 1e-3
 
@@ -1280,6 +1326,7 @@ def test_translated_dot():
     mode_solver = ModeSolver(simulation=sim, plane=mode_plane, mode_spec=mode_spec, freqs=[freq0])
 
     data = mode_solver.data_raw
+    assert_property_vs_runtime(mode_solver, data)
 
     # now create a translated copy
     vector = (0.5, 0, 0)
@@ -1346,6 +1393,7 @@ def test_modes_filter_sort():
         direction="-",
     )
     modes = ms.solve()
+    assert_property_vs_runtime(ms, modes)
     n_eff = modes.n_eff
     print(n_eff.diff(dim="mode_index"))
     assert np.all(n_eff.diff(dim="mode_index") >= 0)
@@ -1571,6 +1619,7 @@ def test_degenerate_mode_processing():
     )
 
     mode_data = ms.data_raw
+    assert_property_vs_runtime(ms, mode_data)
 
     degen_sets = EigSolver._identify_degenerate_modes(
         mode_data.n_complex.values[0, :], TOL_DEGENERATE_CANDIDATE
