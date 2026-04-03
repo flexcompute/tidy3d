@@ -17,9 +17,10 @@ from tidy3d.components.microwave.path_integrals.viz import (
     plot_params_voltage_path,
     plot_params_voltage_plus,
 )
+from tidy3d.components.types import ArrayFloat2D
 from tidy3d.components.types.base import Direction
 from tidy3d.components.viz import add_ax_if_none
-from tidy3d.constants import fp_eps
+from tidy3d.constants import MICROMETER, fp_eps
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -167,6 +168,16 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
     near conductors will not be accurate.
 
     .. TODO Improve by including extrapolate_to_endpoints field, non-trivial extension."""
+
+    vertices: ArrayFloat2D = Field(
+        title="Vertices",
+        description="List of (d1, d2) defining the 2 dimensional positions of the path. "
+        "The index of dimension should be in the ascending order, which means "
+        "if the axis corresponds with ``y``, the coordinates of the vertices should be (x, z). "
+        "The path is open: the first vertex defines position a and the last vertex defines "
+        "position b for the voltage computation V = V_b - V_a.",
+        json_schema_extra={"units": MICROMETER},
+    )
 
     @add_ax_if_none
     def plot(
