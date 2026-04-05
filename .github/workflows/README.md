@@ -122,6 +122,7 @@ Dedicated integration test workflow for `tidy3d-extras` package. Tests the optio
 - **Architecture coverage**: Full mode tests all runner architectures where wheels are built (x86_64, aarch64, arm64)
 - **Python version coverage**: Full mode tests both minimum supported (3.10) and latest (3.13) Python versions
 - **AWS CodeArtifact integration**: Authenticates with CodeArtifact to access private dependencies
+- **Runner-side lock refresh**: Regenerates `uv.lock` after CodeArtifact authentication and before installation so the test environment resolves against current private package metadata without committing the regenerated file
 - **Comprehensive test coverage**: Includes doctests, extras license verification, and full test suite with coverage reporting
 - **Release tag support**: Can test against a specific release tag via the `release_tag` input
 - **Invocation**: Called from `tidy3d-python-client-tests.yml` when `extras_integration_tests` is enabled, or run manually via `workflow_dispatch`
