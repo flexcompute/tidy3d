@@ -9,70 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
-## [2.11.0.dev2] - 2026-03-19
-
-### Added
-
-- Added `TerminalWavePort` for terminal-driven modal excitation in transmission line simulations. Added `reference_impedance` field on both `WavePort` and `TerminalWavePort` to allow user-specified reference impedance for S-parameter calculations.
-- Monitors with `colocate=False` now compute flux, dot product, and outer dot product directly on the Yee grid without interpolation, improving accuracy.
-- Added `TerminalComponentModelerData.renormalize()` method for renormalizing S-parameters to arbitrary reference impedances, supporting scalar, per-port, and full-matrix impedance specifications.
-- Added `use_colocated_integration` field on sources and monitors to control whether flux, dot products, and overlap integrals use colocated or native Yee grid fields. RF wave ports now default to non-colocated integration for improved accuracy.
-- Added `bulges` parameter to `PolySlab` geometry for defining arc segments in 2D polygon cross-sections using the standard bulge convention (bulge = tan(theta/4)), enabling curved edges between vertices.
-- Added `CircuitImpedanceModel` to support arbitrary RLC circuits in `LinearLumpedElement`. Users can construct it directly with a valid list of components or use the class method `from_spice()` for instantiation from a SPICE netlist.
-- Implemented batch execution optimizations by reducing HTTP calls and increasing parallelization.
-- Added ``pole_residue`` broadband method for ``ModeSource`` and ``GaussianBeam`` sources, using vector fitting with auxiliary differential equations as an alternative to Chebyshev interpolation for frequency-dependent field injection.
-- Added adjoint support for `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor`.
-- Added autograd support for `center` derivatives on `CustomFieldSource` and `CustomCurrentSource` for dimensions where source `size > 0`.
-- Added `plot_port` support for `LumpedPort`, `CoaxialLumpedPort`, and `WavePort` in `TerminalComponentModeler`.
-- Added native Claude Code and Gemini CLI plugin manifests for the Tidy3D MCP integration.
-
-### Changed
-
-- The fully tensorial mode solver (required for fully anisotropic media or non-zero `ModeSpec.angle_theta`) now requires `tidy3d-extras` for local runs; install with `pip install tidy3d[extras]` or run through the server.
-- Mode solver normalization now uses the dot product with the monitor's `conjugated_dot_product` setting instead of flux magnitude.
-
-### Fixed
-
-- Fixed `num_workers` propagation in batch async/autograd paths so explicit values are respected, while defaults are preserved when omitted. Upload/start uses a separate fixed concurrency of 64 workers.
-- Batch upload/start now logs per-task errors during upload/validation/start.
-- Fixed adjoint SimulationData splitting to match monitor data by monitor name, with warnings for missing or unexpected monitor entries.
-- Fixed autograd derivatives for `CustomFieldSource` and `CustomCurrentSource` datasets to preserve complex-valued gradients instead of dropping the imaginary component.
-- Fixed simulation validation failure when WavePort `extrude_structures` was enabled with named structures by assigning unique names to extruded structures.
-- Fixed incorrect far-field results from ``DirectivityMonitor`` when symmetry is used.
-- Fixed local ``FieldProjector.project_fields()`` runs to support ``verbose=False`` when progress-bar output needs to be suppressed.
-- Fixed traced Cartesian field projection conversion so projected fields can be used directly as custom source datasets without producing object-dtype arrays during serialization.
-- Fixed autograd deserialization of remote complex-array VJP payloads used by traced field and custom source gradients.
-
-### Planned Deprecation
-
-- `RLCNetwork` (a deprecation warning is now issued). Use `CircuitImpedanceModel` instead. `AdmittanceNetwork` may be renamed to `AdmittanceModel` in a future release.
-
-## [2.11.0.dev1] - 2026-03-06
-
-### Added
-
-- Added `SurfaceFieldMonitor` and `SurfaceFieldTimeMonitor` for recording electromagnetic fields on PEC surfaces in frequency and time domains, along with corresponding data classes (`SurfaceFieldData`, `SurfaceFieldTimeData`) and documentation.
-- - Add ``numerical_structures`` hook to custom autograd run paths for user-defined structure creation and gradients in simulation and component-modeler workflows.
-- Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. Users can access the default medium via the ``medium`` property (fitted for the default microwave frequency range of 0.3-300 GHz) or get a medium fitted for a specific frequency range via ``medium_in_range(frequency_range)``. For dielectrics, if the requested range extends beyond the original fitting range, a new model is created with averaged properties and a warning is issued.
-- Added autograd support for custom source gradients with respect to `field_dataset` and `current_dataset`.
-- Added optional `vgpu_allocation` parameter to `web.run`, `web.run_async`, `Job`, and `Batch` to control virtual GPU allocation for cloud task submission.
-
-### Changed
-
-- Improved charge simulation documentation: clarified 2D vs 3D output units, added unit metadata to monitor data fields, and fixed docstring formatting and formula inaccuracies across TCAD components.
-- Changed field decay checking from percentage-based intervals to a fixed number of time steps (default 400), enabling quicker automatic shutoff in long-running simulations.
-- `Scene.perturbed_mediums_copy()` now generates unique medium names based on structure names, eliminating duplicate medium name warnings.
-- Refactored adjoint source and monitor preparation internals to support parallel adjoint workflows.
-
-### Fixed
-
-- Fixed premature simulation shutoff when sources have a delayed peak (e.g. large GaussianPulse offset), where zero field energy before the source activates was incorrectly interpreted as full decay.
-- Improved KLayout executable discovery on macOS for Homebrew cask app-suite installs under `/Applications/KLayout`.
-- Fixed angled mode-solving for ModeMonitor runs with GaussianBeam sources by preventing rotated-reference simulations from revalidating retained sources.
-- Fixed loading of medium settings so empty `NonlinearSpec` inputs are ignored instead of unintentionally enabling nonlinearity.
-- Reformulated axial ratio calculation to avoid catastrophic cancellation for near-linear polarization, and raised the safety-net cap from 100 (40 dB) to 1e5 (100 dB).
-
-## [2.11.0.dev0] - 2026-02-19
+## [2.11.0] - 2026-04-06
 
 ### Added
 
@@ -94,6 +31,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `current_amplitude_definition` parameter to `UniformCurrentSource` for size-independent total current injection. Set to `"total"` to interpret the source amplitude as total current rather than current density.
 - Added baseband source time classes (`BasebandStep`, `BasebandGaussianPulse`, `BasebandRectangularPulse`, `BasebandCustomSourceTime`) for transient RF simulations with real-valued time signals.
 
+- Added `SurfaceFieldMonitor` and `SurfaceFieldTimeMonitor` for recording electromagnetic fields on PEC surfaces in frequency and time domains, along with corresponding data classes (`SurfaceFieldData`, `SurfaceFieldTimeData`) and documentation.
+- - Add ``numerical_structures`` hook to custom autograd run paths for user-defined structure creation and gradients in simulation and component-modeler workflows.
+- Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. Users can access the default medium via the ``medium`` property (fitted for the default microwave frequency range of 0.3-300 GHz) or get a medium fitted for a specific frequency range via ``medium_in_range(frequency_range)``. For dielectrics, if the requested range extends beyond the original fitting range, a new model is created with averaged properties and a warning is issued.
+- Added autograd support for custom source gradients with respect to `field_dataset` and `current_dataset`.
+- Added optional `vgpu_allocation` parameter to `web.run`, `web.run_async`, `Job`, and `Batch` to control virtual GPU allocation for cloud task submission.
+
+- Added `TerminalWavePort` for terminal-driven modal excitation in transmission line simulations. Added `reference_impedance` field on both `WavePort` and `TerminalWavePort` to allow user-specified reference impedance for S-parameter calculations.
+- Monitors with `colocate=False` now compute flux, dot product, and outer dot product directly on the Yee grid without interpolation, improving accuracy.
+- Added `TerminalComponentModelerData.renormalize()` method for renormalizing S-parameters to arbitrary reference impedances, supporting scalar, per-port, and full-matrix impedance specifications.
+- Added `use_colocated_integration` field on sources and monitors to control whether flux, dot products, and overlap integrals use colocated or native Yee grid fields. RF wave ports now default to non-colocated integration for improved accuracy.
+- Added `bulges` parameter to `PolySlab` geometry for defining arc segments in 2D polygon cross-sections using the standard bulge convention (bulge = tan(theta/4)), enabling curved edges between vertices.
+- Added `CircuitImpedanceModel` to support arbitrary RLC circuits in `LinearLumpedElement`. Users can construct it directly with a valid list of components or use the class method `from_spice()` for instantiation from a SPICE netlist.
+- Implemented batch execution optimizations by reducing HTTP calls and increasing parallelization.
+- Added ``pole_residue`` broadband method for ``ModeSource`` and ``GaussianBeam`` sources, using vector fitting with auxiliary differential equations as an alternative to Chebyshev interpolation for frequency-dependent field injection.
+- Added adjoint support for `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor`.
+- Added autograd support for `center` derivatives on `CustomFieldSource` and `CustomCurrentSource` for dimensions where source `size > 0`.
+- Added `plot_port` support for `LumpedPort`, `CoaxialLumpedPort`, and `WavePort` in `TerminalComponentModeler`.
+- Added native Claude Code and Gemini CLI plugin manifests for the Tidy3D MCP integration.
+
+- Added parallel adjoint execution for local gradients when `config.adjoint.parallel_run = True`; this only works for eligible monitors and can make gradient calculations up to 2x faster.
+- Added EME support for `EMEModeSpec.increasing_mode_tolerance` so weakly increasing modes caused by numerical noise can be retained without changing the default `0.0` behavior. Added `EMEModeSpec.bend_medium_frame` to choose whether bent-cell media are interpreted in the global frame or as co-rotating with the local waveguide frame; bent custom media are currently supported only in the co-rotating interpretation.
+- Added `WavePort.to_mode_simulation()` and improved standalone wave-port mode solving to preserve local mesh refinement, PEC frames, and port extrusions, while also allowing optional structure/grid overrides, configurable structure-priority handling, and auto mode-spec resolution from the prepared local simulation.
+- Added config-backed `run` and `vgpu` web run options, including scoped `with tidy3d.config as tmp_config:` overrides.
+- Added support for `FilterProject` and `ErosionDilationPenalty` on symmetry-reduced inverse-design regions.
+- Enabled `GaussianBeam` and `AstigmaticGaussianBeam` gradients.
+- Added `PolygonMarker` with explicit `hull` and `holes` fields, and `symmetric` flag on `EdgePairMarker` to distinguish same-layer vs cross-layer DRC violations.
+- Added `interp_method` parameter to `NedeljkovicSorefMashanovich` to support different interpolation methods (`linear`, `nearest`, `zero`, `log`) for perturbation coefficients between tabulated wavelengths.
+
 ### Changed
 
 - Added deprecation warning for `TemperatureMonitor` and `SteadyPotentialMonitor` when `unstructured` parameter is not explicitly set. The default value of `unstructured` will change from `False` to `True` after the 2.11 release.
@@ -106,6 +71,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unstructured data plots are now "crinkled", showing the full mesh elements that cover given monitor boundaries. Previously, the mesh elements were "clipped" to the monitor boundaries.
 - `Scene.perturbed_mediums_copy()` now generates unique medium names based on structure names, eliminating duplicate medium name warnings.
 - Changed the default value of `fill_value` in `UnstructuredGridDataset.interp()` from `0` to `"extrapolate"`. This means points outside the mesh will now use nearest-neighbor extrapolation instead of being filled with zeros.
+
+- Improved charge simulation documentation: clarified 2D vs 3D output units, added unit metadata to monitor data fields, and fixed docstring formatting and formula inaccuracies across TCAD components.
+- Changed field decay checking from percentage-based intervals to a fixed number of time steps (default 400), enabling quicker automatic shutoff in long-running simulations.
+- `Scene.perturbed_mediums_copy()` now generates unique medium names based on structure names, eliminating duplicate medium name warnings.
+- Refactored adjoint source and monitor preparation internals to support parallel adjoint workflows.
+
+- The fully tensorial mode solver (required for fully anisotropic media or non-zero `ModeSpec.angle_theta`) now requires `tidy3d-extras` for local runs; install with `pip install tidy3d[extras]` or run through the server.
+- Mode solver normalization now uses the dot product with the monitor's `conjugated_dot_product` setting instead of flux magnitude.
+
+- Lazy `SimulationData` objects now load monitors on demand instead of materializing every monitor up front.
+- Improved local approximate field projection performance for forward and autodiff workloads.
+- Improved CustomMedium adjoint postprocessing memory usage by chunking structure-frequency work, auto-selecting chunk sizes from available memory, and removing avoidable data copies in the chunked pipeline.
+- Improved `Simulation.plot_grid()` performance by batching matplotlib draw calls for override structures and snapping points.
 
 ### Fixed
 
@@ -126,6 +104,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed spurious `ModeSimulation` error logs during deserialization of `SimulationDataMap` by adding discriminators to `SimulationType` and `SimulationDataType` unions.
 - Fixed unintended model output in Jupyter notebooks during `import tidy3d` by preventing `Tidy3dBaseModel.__str__` from triggering notebook display side effects.
 
+- Fixed premature simulation shutoff when sources have a delayed peak (e.g. large GaussianPulse offset), where zero field energy before the source activates was incorrectly interpreted as full decay.
+- Improved KLayout executable discovery on macOS for Homebrew cask app-suite installs under `/Applications/KLayout`.
+- Fixed angled mode-solving for ModeMonitor runs with GaussianBeam sources by preventing rotated-reference simulations from revalidating retained sources.
+- Fixed loading of medium settings so empty `NonlinearSpec` inputs are ignored instead of unintentionally enabling nonlinearity.
+- Reformulated axial ratio calculation to avoid catastrophic cancellation for near-linear polarization, and raised the safety-net cap from 100 (40 dB) to 1e5 (100 dB).
+
+- Fixed `num_workers` propagation in batch async/autograd paths so explicit values are respected, while defaults are preserved when omitted. Upload/start uses a separate fixed concurrency of 64 workers.
+- Batch upload/start now logs per-task errors during upload/validation/start.
+- Fixed adjoint SimulationData splitting to match monitor data by monitor name, with warnings for missing or unexpected monitor entries.
+- Fixed autograd derivatives for `CustomFieldSource` and `CustomCurrentSource` datasets to preserve complex-valued gradients instead of dropping the imaginary component.
+- Fixed simulation validation failure when WavePort `extrude_structures` was enabled with named structures by assigning unique names to extruded structures.
+- Fixed incorrect far-field results from ``DirectivityMonitor`` when symmetry is used.
+- Fixed local ``FieldProjector.project_fields()`` runs to support ``verbose=False`` when progress-bar output needs to be suppressed.
+- Fixed traced Cartesian field projection conversion so projected fields can be used directly as custom source datasets without producing object-dtype arrays during serialization.
+- Fixed autograd deserialization of remote complex-array VJP payloads used by traced field and custom source gradients.
+
+- Fixed EME bent-waveguide mode preprocessing for anisotropic media in the default global-frame interpretation by tracking cumulative bend angle per cell and rotating anisotropic tensor data in a Yee-grid-aware way that preserves subpixel sampling before each local mode solve. Before this fix, bent orientation-sensitive media were effectively interpreted in the co-rotating frame; set `EMEModeSpec.bend_medium_frame="co_rotating"` to preserve that behavior. Also allow only reciprocal fully anisotropic media in EME validation, include swept frequencies in bent anisotropy checks, and reject bent-cell length sweeps that would reuse anisotropic modes at the wrong absolute bend angle.
+- Fixed `Box.surfaces_with_exclusion()` so exclude_surfaces is respected for box surface generation.
+- `ModeSpec` now rejects non-finite bend_radius values during validation.
+- Fixed traced projected field, poynting, mode-solver summary, and directivity datasets so accessing items preserves tidy3d `DataArray` behavior under autograd.
+- Fixed `DesignSpace.estimate_cost()` so nested container outputs are estimated by summing all simulations and batches instead of undercounting them.
+- Fixed local 2D field projection validation and single-cell Cartesian resampling failures in the Tidy3D client.
+- Fixed KLayout DRC parser crash on directed edge-pairs from cross-layer rules (separation, overlap, enclosing).
+- Removed premature deprecation warning from `RLCNetwork` as the intended replacement is not yet available.
+- Fixed autograd backward postprocessing to enforce ascending, aligned frequency ordering between adjoint monitor metadata and field datasets.
+- Fixed generated JSON schemas for geometries, monitors, and simulations so `center` now shows the correct default value `(0, 0, 0)` instead of `null`.
+- Fixed exported JSON schemas to include defaults for fields defined with zero-argument default factories.
+- Fixed `FieldProjectionAngleMonitor`, `FieldProjectionCartesianMonitor`, and `FieldProjectionKSpaceMonitor` validation so structures outside the simulation domain no longer trigger homogeneous-medium errors.
+- Fixed abrupt PolySlab sidewall edge oversampling near the composite quadrature threshold and avoided single-point quadrature on tiny edge fragments.
+- Increased `WavePort` structure extrusion tolerance so that structures whose vertices are slightly offset from the port plane are reliably captured during extrusion.
+- Fixed a spurious zero-thickness geometry warning for finalized simulations containing lumped elements or converted 2D materials.
+
 ### Breaking Changes
 
 - `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
@@ -134,6 +144,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
 - Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
 - `web.Batch(simulations=...)` now requires string task names when simulations are passed as a dictionary. Numeric keys (for example `0`, `1`) are no longer converted automatically; convert them to strings first (for example `"0"`, `"1"`).
+
+### Planned Deprecation
+
+- `RLCNetwork` (a deprecation warning is now issued). Use `CircuitImpedanceModel` instead. `AdmittanceNetwork` may be renamed to `AdmittanceModel` in a future release.
 
 ## [2.10.2] - 2026-01-21
 
@@ -340,7 +354,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
   - Path integral and impedance calculator classes have been refactored and moved from the microwave plugin into Tidy3D components. They are now publicly exported via the top-level package `__init__.py`.
 
-
 ## [2.9.3]
 
 ### Added
@@ -350,7 +363,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed `pyproject.toml` and `tidy3d.__version__` mismatch.
 
-
 ## [2.9.2]
 
 ### Added
@@ -359,7 +371,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved Nexus platform configuration support and instantiation. Includes improvements to use the new `tidy3d configure ... --nexus-url <url>` CLI functionality.
 
 ### Fixed
-
 
 ## [2.9.1] - 2025-08-13
 
@@ -377,7 +388,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed sources from `sim_inf_structure` simulation object in `postprocess_adj` to avoid source and background medium validation errors.
 - Revert overly restrictive validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
-
 
 ## [2.9.0] - 2025-08-04
 
@@ -458,8 +468,6 @@ with fewer layers than recommended.
 - Fixed performance regression for multi-frequency adjoint calculations.
 - Disallow `EMEFieldMonitor` in EME simulations with `EMELengthSweep`.
 - Fixed bug in adjoint postprocessing frequency batching that was causing gradients to be zero or incorrect. The error was surfacing when selecting a subset of the monitor frequencies in the objective function.
-
-
 
 ## [2.8.5] - 2025-07-07
 
@@ -726,7 +734,6 @@ with fewer layers than recommended.
 - Validate against nonlinearity or modulation in `FullyAnisotropicMedium.from_diagonal`.
 - Add warning to complex-field nonlinearities, which may require more careful physical interpretation.
 
-
 ## [2.7.6] - 2024-10-30
 
 ### Added
@@ -783,7 +790,6 @@ with fewer layers than recommended.
 ### Fixed
 - Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
 - Bug in `Simulation.subsection` (used in the mode solver) when nonlinear materials rely on information about sources outside of the region.
-
 
 ## [2.7.3] - 2024-09-12
 
@@ -1142,7 +1148,6 @@ with fewer layers than recommended.
 - Properly handle `JaxDataArray * xr.DataArray` broadcasting.
 - Stricter validation of `JaxDataArray` coordinates and values shape.
 
-
 ## [2.4.1] - 2023-9-20
 
 ### Added
@@ -1224,7 +1229,6 @@ the difference that can be observed when slightly modifying the grid resolution.
 - Set `colocate=False` automatically in output `FieldMonitor` objects in adjoint plugin, warning instead of erroring for backwards compatibility.
 - Validation for `ModeSpec.group_index_step` working incorrectly if the value was set to 1.
 
-
 ## [2.3.3] - 2023-07-28
 
 ### Added
@@ -1271,7 +1275,6 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - `ArrayLike` validation properly fails with `None` or `nan` contents.
 - Apply finite grid correction to the fields when calculating the Poynting vector from 2D monitors.
 - `JaxCustomMedium` properly handles complex-valued permittivity.
-
 
 ## [2.3.0] - 2023-6-30
 
@@ -1362,7 +1365,6 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - Retry for set number of seconds in web functions if internet connection errors.
 - Argument `scale` to `ModeSolver.plot_field` to control plot scaling.
 - `Simulation.plot_3d()` method to make 3D rendering of simulation.
-
 
 ### Changed
 - Perfect electric conductors (PECs) are now modeled as high-conductivity media in both the frontend and backend mode solvers, and their presence triggers the use of a preconditioner to improve numerical stability and robustness. Consequently, the mode solver provides more accurate eigenvectors and field distributions when PEC structures are present.
@@ -1610,7 +1612,6 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 - Native broadband support for `GassuainBeam` `AstigmaticGaussianBeam`, and `ModeSource` through the `num_freqs` argument.
 - Apodization option for frequency-domain monitors to ignore temporal data in the beginning and/or end of a simulation
 
-
 ### Changed
 - Minimum flex unit charge reduced from `0.1` to `0.025`.
 - Default Courant factor was changed from `0.9` to `0.99`.
@@ -1636,7 +1637,6 @@ generated and returned in the resulting `DiffractionData`.
 which fields are to be projected is now determined automatically based on the medium in which the monitor is placed.
 - The following attributes of `AbstractFieldProjectionMonitor` are now properties rather than methods:
 `fields_spherical`, `fields_cartesian`, `power`, `radar_cross_section`.
-
 
 ### Fixed
 - Some issues in `DiffractionMonitor` that is not `z`-normal that could lead to solver errors or wrong results.
@@ -1748,7 +1748,6 @@ which fields are to be projected is now determined automatically based on the me
  while `Cylinder` through `center` and `length`.
 - In mode solver, allow precision to switch between double and single precision.
 - Near-to-far transformation tool is no longer a plugin, but is now part of Tidy3D's new core data structures
-
 
 ## [1.4.1] - 2022-6-13
 
@@ -2027,12 +2026,10 @@ which fields are to be projected is now determined automatically based on the me
 ### 21.4.0
 - A few small fixes.
 
-
 ### 21.3.1.6
 - Fixed nonlinear constraint in dispersive material fitting tool.
 - Fixed potential issue when a monitor stores neither `'E'` nor `'H'`.
 - Fixed some backwards compatibility issues introduced in 21.3.1.5.
-
 
 ### 21.3.1.5
  - Frequency monitors can now optionally store the complex permittivity at the same locations where 
@@ -2079,8 +2076,6 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[2.11.0.dev2]: https://github.com/flexcompute/tidy3d/compare/v2.11.0.dev1...v2.11.0.dev2
-[2.11.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0.dev0...v2.11.0.dev1
 [2.11.0]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1
