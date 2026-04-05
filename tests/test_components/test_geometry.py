@@ -31,6 +31,7 @@ from tidy3d.components.geometry.utils import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,
+    filter_intersecting_geometries,
     flatten_groups,
     flatten_shapely_geometries,
     merging_geometries_on_plane,
@@ -2448,6 +2449,173 @@ def test_geometry_array_equivalence_with_geometry_group():
     # Inside matches
     for point in [(0, 0, 0), (2, 0, 0), (0, 2, 0), (1, 1, 0), (10, 10, 10)]:
         assert array.inside(*point) == group.inside(*point)
+
+
+def test_filter_geometry_array_preserves_array_type():
+    """Filtering a GeometryArray should preserve the array when multiple instances survive."""
+    box = td.Box(size=(1, 1, 1))
+    rotation = td.Transformed.rotation(np.pi / 2, 2)
+    array = td.GeometryArray(
+        geometry=box,
+        offsets=[[0, 0, 0], [2, 0, 0], [5, 0, 0]],
+        transforms=[np.eye(4), rotation, np.eye(4)],
+    )
+    region = td.Box(center=(1, 0, 0), size=(4, 3, 3))
+
+    filtered = filter_intersecting_geometries([array], region)[0]
+
+    assert isinstance(filtered, td.GeometryArray)
+    assert filtered.geometry == box
+    assert filtered.offsets == ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0))
+    assert filtered.transforms is not None
+    np.testing.assert_allclose(filtered.transforms[0], np.eye(4))
+    np.testing.assert_allclose(filtered.transforms[1], rotation)
+
+
+def test_filter_geometry_array_prunes_composite_base_and_rebuilds_array():
+    """Filtering should recurse into composite bases before rebuilding GeometryArray."""
+    keep_box = td.Box(center=(-1, 0, 0), size=(1, 1, 1))
+    drop_box = td.Box(center=(5, 0, 0), size=(1, 1, 1))
+    array = td.GeometryArray(
+        geometry=td.GeometryGroup(geometries=(keep_box, drop_box)),
+        offsets=[[0, 0, 0], [0, 3, 0]],
+    )
+    region = td.Box(center=(-1, 1.5, 0), size=(2, 5, 2))
+
+    filtered = filter_intersecting_geometries([array], region)[0]
+
+    assert isinstance(filtered, td.GeometryArray)
+    assert filtered.geometry == keep_box
+    assert filtered.offsets == ((0.0, 0.0, 0.0), (0.0, 3.0, 0.0))
+    assert filtered.transforms is None
+
+
+def test_filter_geometry_array_matches_equivalent_geometry_group():
+    """Filtering a GeometryArray should match filtering its equivalent GeometryGroup."""
+    keep_box = td.Box(center=(-1, 0, 0), size=(1, 1, 1))
+    drop_box = td.Box(center=(5, 0, 0), size=(1, 1, 1))
+    array = td.GeometryArray(
+        geometry=td.GeometryGroup(geometries=(keep_box, drop_box)),
+        offsets=[[0, 0, 0], [0, 3, 0], [0, 6, 0]],
+    )
+    region = td.Box(center=(-1, 1.5, 0), size=(2, 5, 2))
+
+    filtered_array = filter_intersecting_geometries([array], region)[0]
+    filtered_group = filter_intersecting_geometries([array._geometry_group], region)[0]
+
+    assert isinstance(filtered_array, td.GeometryArray)
+    assert filtered_array._geometry_group == filtered_group
+
+
+def test_filter_nested_geometry_array_matches_equivalent_geometry_group():
+    """Filtering should agree for nested GeometryGroup and GeometryArray compositions."""
+    nested_group = td.GeometryGroup(
+        geometries=(
+            td.Box(center=(-1, 0, 0), size=(1, 1, 1)),
+            td.Box(center=(4, 0, 0), size=(1, 1, 1)),
+        )
+    )
+    nested_array = td.GeometryArray(
+        geometry=td.GeometryGroup(
+            geometries=(
+                td.Box(center=(-1, 2, 0), size=(1, 1, 1)),
+                td.Box(center=(4, 2, 0), size=(1, 1, 1)),
+            )
+        ),
+        offsets=[[0, 0, 0], [0, 3, 0]],
+    )
+    array = td.GeometryArray(
+        geometry=td.GeometryGroup(geometries=(nested_group, nested_array)),
+        offsets=[[0, 0, 0], [0, 0, 4]],
+    )
+    region = td.Box(center=(-1, 1.5, 2), size=(2, 4, 6))
+
+    filtered_array = filter_intersecting_geometries([array], region)[0]
+    filtered_group = filter_intersecting_geometries([array._geometry_group], region)[0]
+
+    assert isinstance(filtered_array, td.GeometryArray)
+    assert isinstance(filtered_array.geometry, td.GeometryGroup)
+    assert filtered_array.geometry == td.GeometryGroup(
+        geometries=(
+            td.Box(center=(-1, 0, 0), size=(1, 1, 1)),
+            td.Box(center=(-1, 2, 0), size=(1, 1, 1)),
+        )
+    )
+    assert filtered_array._geometry_group == filtered_group
+
+
+def test_filter_geometry_array_single_survivor_collapses_to_transformed_geometry():
+    """A single surviving GeometryArray instance should collapse to one geometry."""
+    box = td.Box(size=(1, 1, 1))
+    array = td.GeometryArray(geometry=box, offsets=[[2, 0, 0], [6, 0, 0]])
+    region = td.Box(center=(2, 0, 0), size=(2, 2, 2))
+
+    filtered = filter_intersecting_geometries([array], region)[0]
+
+    assert filtered == td.Transformed(geometry=box, transform=td.Transformed.translation(2, 0, 0))
+
+
+def test_filter_geometry_array_groups_distinct_filtered_bases():
+    """Filtering should bucket surviving instances by their filtered local base geometry."""
+    left_box = td.Box(center=(-1, 0, 0), size=(0.5, 1, 1))
+    right_box = td.Box(center=(1, 0, 0), size=(0.5, 1, 1))
+    rotation = td.Transformed.rotation(np.pi, 2)
+    array = td.GeometryArray(
+        geometry=td.GeometryGroup(geometries=(left_box, right_box)),
+        transforms=[np.eye(4), rotation],
+    )
+    region = td.Box(center=(-1, 0, 0), size=(0.75, 2, 2))
+
+    filtered = filter_intersecting_geometries([array], region)[0]
+
+    assert isinstance(filtered, td.GeometryGroup)
+    assert filtered.geometries[0] == left_box
+    assert isinstance(filtered.geometries[1], td.Transformed)
+    assert filtered.geometries[1].geometry == right_box
+    np.testing.assert_allclose(filtered.geometries[1].transform, rotation)
+
+
+def test_filter_transformed_geometry_array_preserves_nested_array():
+    """Filtering should preserve an outer Transformed wrapper around a GeometryArray."""
+    array = td.GeometryArray(
+        geometry=td.Box(size=(1, 1, 1)),
+        offsets=[[0, 0, 0], [2, 0, 0], [6, 0, 0]],
+    )
+    translation = td.Transformed.translation(1, 0, 0)
+    transformed = td.Transformed(geometry=array, transform=translation)
+    region = td.Box(center=(2, 0, 0), size=(4, 2, 2))
+
+    filtered = filter_intersecting_geometries([transformed], region)[0]
+
+    assert isinstance(filtered, td.Transformed)
+    np.testing.assert_allclose(filtered.transform, translation)
+    assert isinstance(filtered.geometry, td.GeometryArray)
+    assert filtered.geometry.offsets == ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0))
+
+
+def test_filter_union_clip_operation_prunes_non_intersecting_children():
+    """Union clip operations should prune children recursively when localizing geometry."""
+    left_box = td.Box(center=(-2, 0, 0), size=(1, 1, 1))
+    right_box = td.Box(center=(2, 0, 0), size=(1, 1, 1))
+    union = td.ClipOperation(operation="union", geometry_a=left_box, geometry_b=right_box)
+
+    filtered_left = filter_intersecting_geometries(
+        [union], td.Box(center=(-2, 0, 0), size=(1.5, 2, 2))
+    )[0]
+    assert filtered_left == left_box
+
+    filtered_right = filter_intersecting_geometries(
+        [union], td.Box(center=(2, 0, 0), size=(1.5, 2, 2))
+    )[0]
+    assert filtered_right == right_box
+
+    filtered_both = filter_intersecting_geometries(
+        [union], td.Box(center=(0, 0, 0), size=(5, 2, 2))
+    )[0]
+    assert isinstance(filtered_both, td.ClipOperation)
+    assert filtered_both.operation == "union"
+    assert filtered_both.geometry_a == left_box
+    assert filtered_both.geometry_b == right_box
 
 
 def test_geometry_array_with_different_geometries():

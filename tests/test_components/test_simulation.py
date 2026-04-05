@@ -3312,6 +3312,114 @@ def test_sim_subsection(unstructured, nz):
     assert sim_1d_red.size[2] == 0
 
 
+def _make_auto_grid_subsection_sim():
+    keep_override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 0, 0), size=(1, 1, 1)),
+        dl=(None, 0.1, 0.1),
+    )
+    drop_override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 10, 0), size=(1, 1, 1)),
+        dl=(0.1, 0.1, 0.1),
+    )
+    layer_spec = td.LayerRefinementSpec.from_bounds(
+        axis=2,
+        rmin=(1.5, -1.0, -4.0),
+        rmax=(3.5, 1.0, 4.0),
+    )
+    simulation = td.Simulation(
+        center=(0, 0, 0),
+        size=(12, 12, 12),
+        run_time=1e-12,
+        structures=(
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+                medium=td.Medium(permittivity=2.0),
+            ),
+        ),
+        grid_spec=td.GridSpec.auto(
+            wavelength=1.0,
+            override_structures=(keep_override, drop_override),
+            layer_refinement_specs=(layer_spec,),
+            snapping_points=((0.0, 0.0, 5.0), (10.0, 0.0, 5.0), (10.0, 10.0, 5.0)),
+        ),
+    )
+    region = td.Box(center=(0, 0, 0), size=(4.0, 6.0, td.inf))
+    return simulation, region, layer_spec
+
+
+def test_sim_subsection_filters_auto_grid_entities():
+    simulation, region, layer_spec = _make_auto_grid_subsection_sim()
+
+    sim_full = simulation.subsection(region=region, remove_outside_grid_spec=False)
+    assert len(sim_full.grid_spec.override_structures) == 2
+    assert len(sim_full.grid_spec.layer_refinement_specs) == 1
+    assert len(sim_full.grid_spec.snapping_points) == 3
+
+    sim_red = simulation.subsection(region=region, remove_outside_grid_spec=True)
+    assert len(sim_red.grid_spec.override_structures) == 2
+    assert sim_red.grid_spec.override_structures[0].dl == (None, 0.1, 0.1)
+    assert sim_red.grid_spec.override_structures[1].dl == (None, None, 0.1)
+
+    clipped_spec = sim_red.grid_spec.layer_refinement_specs[0]
+    assert clipped_spec.bounds[0][0] == pytest.approx(layer_spec.bounds[0][0])
+    assert clipped_spec.bounds[1][0] == pytest.approx(region.bounds[1][0])
+    assert clipped_spec.bounds[0][2] == pytest.approx(layer_spec.bounds[0][2])
+    assert clipped_spec.bounds[1][2] == pytest.approx(layer_spec.bounds[1][2])
+
+    assert sim_red.grid_spec.snapping_points == (
+        (0.0, 0.0, 5.0),
+        (None, 0.0, 5.0),
+        (None, None, 5.0),
+    )
+
+
+def test_sim_subsection_prunes_grouped_geometries():
+    region = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    geometry_in = td.Box(center=(0, 0, 0), size=(1, 1, 1))
+    geometry_out = td.Box(center=(4, 0, 0), size=(1, 1, 1))
+    grouped_geometry = td.GeometryGroup(geometries=(geometry_in, geometry_out))
+    structure = td.Structure(geometry=grouped_geometry, medium=td.Medium(permittivity=2.0))
+    sim = td.Simulation(
+        center=(0, 0, 0),
+        size=(10, 10, 10),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.5),
+        structures=(structure,),
+    )
+
+    sim_red = sim.subsection(region=region)
+    assert len(sim_red.structures) == 1
+    assert sim_red.structures[0].geometry == geometry_in
+
+    sim_full = sim.subsection(region=region, remove_outside_structures=False)
+    assert sim_full.structures[0].geometry == grouped_geometry
+
+
+def test_sim_subsection_preserves_geometry_array_structures():
+    region = td.Box(center=(1, 0, 0), size=(4, 2, 2))
+    geometry_array = td.GeometryArray(
+        geometry=td.Box(size=(1, 1, 1)),
+        offsets=[[0, 0, 0], [2, 0, 0], [6, 0, 0]],
+    )
+    structure = td.Structure(geometry=geometry_array, medium=td.Medium(permittivity=2.0))
+    sim = td.Simulation(
+        center=(0, 0, 0),
+        size=(12, 12, 12),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.5),
+        structures=(structure,),
+    )
+
+    sim_red = sim.subsection(region=region)
+
+    assert len(sim_red.structures) == 1
+    assert isinstance(sim_red.structures[0].geometry, td.GeometryArray)
+    assert sim_red.structures[0].geometry.offsets == (
+        (0.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0),
+    )
+
+
 def test_2d_material_subdivision():
     units = 1e3
     plane_pos = 1.0 * units

@@ -10,7 +10,11 @@ import xarray as xr
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.boundary import ABCBoundary, InternalAbsorber, ModeABCBoundary
+from tidy3d.components.boundary import (
+    ABCBoundary,
+    InternalAbsorber,
+    ModeABCBoundary,
+)
 from tidy3d.components.data.data_array import (
     FreqModeDataArray,
     ImpedanceFreqModeModeDataArray,
@@ -19,7 +23,14 @@ from tidy3d.components.data.data_array import (
     ImpedanceTerminalDataArray,
 )
 from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.base import Box, ClipOperation, GeometryGroup
+from tidy3d.components.geometry.polyslab import PolySlab
+from tidy3d.components.geometry.utils import (
+    _shift_object,
+    _shift_value_signed,
+    filter_intersecting_geometries,
+)
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.microwave.mode_spec import (
     MONITOR_COLOCATE,
     MicrowaveModeSpec,
@@ -32,15 +43,15 @@ from tidy3d.components.microwave.path_integrals.specs.impedance import (
     CustomImpedanceSpec,
 )
 from tidy3d.components.microwave.source import MicrowaveTerminalSource
+from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import Complex, Direction
 from tidy3d.components.validators import assert_plane
-from tidy3d.constants import OHM
+from tidy3d.constants import OHM, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
-from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.smatrix.ports.base_terminal import AbstractTerminalPort
 
 if TYPE_CHECKING:
@@ -58,6 +69,8 @@ if TYPE_CHECKING:
     from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import Axis, FreqArray, Shapely, Symmetry
+    from tidy3d.components.types.base import PriorityMode
+    from tidy3d.plugins.mode import ModeSolver
 
 DEFAULT_WAVE_PORT_NUM_CELLS = 5
 MIN_WAVE_PORT_NUM_CELLS = 3
@@ -65,6 +78,12 @@ DEFAULT_WAVE_PORT_FRAME = PECFrame()
 DEFAULT_REFERENCE_IMPEDANCE_VALUE = 50
 DEFAULT_TERMINAL_LABEL_PREFIX = "T"
 DEFAULT_DIFFERENTIAL_PAIR_LABEL_PREFIX = "Diff"
+# Tolerance (in um) for finding structures that intersect the waveport plane.
+# PCB modeler exports often have polygon vertices that don't exactly touch the
+# port plane; 10 nm covers typical coordinate precision gaps.
+EXTRUDE_STRUCTURES_TOL = 0.01
+# Keep a thin buffer so near-edge meshing hints survive local port filtering.
+REFINEMENT_BOX_SCALE = 1.25
 
 
 class AbstractWavePort(AbstractTerminalPort, Box):
@@ -259,6 +278,27 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         return trans_axes
 
     @cached_property
+    def _mode_filter_box(self) -> Box:
+        """Expanded bounding box used to filter structures and grid-spec entities
+        when building a reduced ModeSimulation for this port.
+
+        The transverse dimensions are scaled by ``REFINEMENT_BOX_SCALE`` so
+        that nearby mesh overrides and snapping points that influence the grid
+        around the port are captured (not just those strictly inside the port).
+
+        The normal (injection) axis is set to infinity so that structures
+        along this axis are always included when creating the final grid.
+        This will give the closest possible match to the grid produced by
+        the full simulation constructed in the TerminalComponentModeler.
+        """
+        center = list(self.center)
+        size = list(self.size)
+        for ax in self.transverse_axes:
+            size[ax] *= REFINEMENT_BOX_SCALE
+        size[self.injection_axis] = inf
+        return Box(center=center, size=size)
+
+    @cached_property
     def _mode_monitor_name(self) -> str:
         """Return the name of the :class:`.MicrowaveModeMonitor` associated with this port."""
         return f"{self.name}_mode"
@@ -312,6 +352,38 @@ class AbstractWavePort(AbstractTerminalPort, Box):
 
         return {label: (shape, bbox) for label, shape, bbox in zip(labels, shapes, bounding_boxes)}
 
+    def _isolated_floating_conductors_from_simulation(
+        self, simulation: Simulation
+    ) -> dict[str, tuple[Shapely, Box]]:
+        """Get isolated floating conductors from a prepared simulation."""
+        interior_disjoint_geometries = ModePlaneAnalyzer.apply_interior_disjoint_geometries(
+            simulation.structure_priority_mode
+        )
+        return self._get_isolated_floating_conductors(
+            simulation.volumetric_structures,
+            simulation.grid,
+            simulation.symmetry,
+            simulation.simulation_geometry,
+            interior_disjoint_geometries=interior_disjoint_geometries,
+        )
+
+    def _resolve_mode_spec_from_simulation(
+        self,
+        simulation: Simulation,
+        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        conductors: Optional[dict[str, tuple[Shapely, Box]]] = None,
+    ) -> MicrowaveModeSpecType:
+        """Resolve the mode specification from a prepared simulation when needed."""
+        if mode_spec is not None:
+            return self._validate_resolved_mode_spec(mode_spec)
+
+        if self._mode_spec is not None:
+            return self._mode_spec
+
+        if conductors is None:
+            conductors = self._isolated_floating_conductors_from_simulation(simulation)
+        return self._mode_spec_from_isolated_floating_conductors(conductors)
+
     def _validate_resolved_mode_spec(
         self, mode_spec: Optional[MicrowaveModeSpecType] = None
     ) -> MicrowaveModeSpecType:
@@ -330,6 +402,23 @@ class AbstractWavePort(AbstractTerminalPort, Box):
                 "Please pass a mode_spec with an explicit number of modes."
             )
         return self._mode_spec
+
+    def _validate_resolved_mode(self, mode_spec: MicrowaveModeSpecType) -> None:
+        """Validate mode-field bounds against a resolved mode spec. Override in subclasses."""
+
+    def _warn_resolved_multimode_absorber(
+        self, mode_spec: MicrowaveModeSpecType, include_port_name: bool = False
+    ) -> None:
+        """Warn when absorber is enabled with multiple resolved modes."""
+        if not self.absorber or mode_spec.num_modes <= 1:
+            return
+
+        warning_prefix = f"Port '{self.name}': " if include_port_name else ""
+        log.warning(
+            f"{warning_prefix}Absorber is enabled with {mode_spec.num_modes} modes. "
+            "Absorption is not properly implemented for multimode cases yet and will be "
+            "added in a future release. For now, please extend the transmission line into the PML region."
+        )
 
     def to_monitors(
         self,
@@ -373,13 +462,212 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         )
         return [mode_mon]
 
+    def _extruded_structures(
+        self,
+        simulation: Simulation,
+        tol: float = EXTRUDE_STRUCTURES_TOL,
+    ) -> tuple[Structure, ...]:
+        """Extrude local structures for this port using a simulation."""
+
+        if not self.extrude_structures:
+            return ()
+
+        snap_center = self.center[self.injection_axis] + _shift_value_signed(
+            self,
+            simulation.grid,
+            bounds=simulation.bounds,
+            direction=self.direction,
+            shift=-2,
+            name=f"Port {self.name}",
+        )
+        absorber = self._to_absorber_geometry(snap_center=snap_center)
+        shifted_absorber = _shift_object(
+            obj=absorber,
+            grid=simulation.grid,
+            bounds=simulation.bounds,
+            direction=absorber.direction,
+            shift=absorber.grid_shift,
+        )
+        (box, inj_axis, direction) = simulation._pec_frame_box(shifted_absorber, expand=True)
+        surfaces = box.surfaces(box.size, box.center)
+
+        sign = 1 if direction == "+" else -1
+        back_pec_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
+        extrude_to = back_pec_plane.center[inj_axis]
+
+        # Build the cutting plane from the discretized monitor bounds so that
+        # it covers the same region the mode solver sees (slightly larger
+        # than the port box due to grid snapping).
+        span_inds = simulation._discretize_inds_monitor(self, colocate=MONITOR_COLOCATE)
+        bds = simulation._subgrid(span_inds=span_inds).boundaries.to_list
+        rmin = [b[0] for b in bds]
+        rmax = [b[-1] for b in bds]
+        rmin[inj_axis] = self.center[inj_axis] - sign * tol
+        rmax[inj_axis] = rmin[inj_axis]
+        cutting_plane = Box.from_bounds(rmin=rmin, rmax=rmax)
+        extrusion_bounds = [cutting_plane.center[inj_axis], extrude_to][::sign]
+
+        new_structures = []
+        for structure in simulation.structures:
+            shapely_geom = cutting_plane.intersections_with(structure.geometry)
+
+            polygon_list = []
+            for geom in shapely_geom:
+                polygon_list.extend(ClipOperation.to_polygon_list(geom))
+
+            if not polygon_list:
+                continue
+
+            new_geoms = []
+            for polygon in polygon_list:
+                exterior_vertices = np.array(polygon.exterior.coords)
+                outer_shell = PolySlab(
+                    axis=inj_axis,
+                    slab_bounds=extrusion_bounds,
+                    vertices=exterior_vertices,
+                )
+                hole_polyslabs = [
+                    PolySlab(
+                        axis=inj_axis,
+                        slab_bounds=extrusion_bounds,
+                        vertices=np.array(hole.coords),
+                    )
+                    for hole in polygon.interiors
+                ]
+
+                if hole_polyslabs:
+                    holes = GeometryGroup(geometries=hole_polyslabs)
+                    extruded_slab = ClipOperation(
+                        operation="difference",
+                        geometry_a=outer_shell,
+                        geometry_b=holes,
+                    )
+                else:
+                    extruded_slab = outer_shell
+
+                new_geoms.append(extruded_slab)
+
+            extruded_name = f"{structure.name}_extruded_{self.name}" if structure.name else None
+            new_structures.append(
+                structure.updated_copy(
+                    geometry=GeometryGroup(geometries=new_geoms),
+                    name=extruded_name,
+                )
+            )
+
+        if not new_structures:
+            raise SetupError(
+                f"The 'WavePort' '{self.name}' does not intersect any structures. "
+                "Please ensure that it is located within or at the boundary of a structure."
+            )
+
+        return tuple(new_structures)
+
+    def _prepare_simulation_for_mode(
+        self,
+        simulation: Simulation,
+        structures: Optional[tuple[Structure, ...] | list[Structure]] = None,
+        grid_spec: Optional[GridSpec] = None,
+        reduce_simulation: bool = False,
+    ) -> Simulation:
+        """Return the local simulation prepared for this port's mode solve.
+
+        By default the simulation is used as-is except for appending port mesh
+        overrides and extruded structures.  When ``reduce_simulation`` is True,
+        structures and grid spec are pruned to the port region for faster
+        mode simulation/solver set up on large simulations.
+
+        Parameters
+        ----------
+        reduce_simulation : bool = False
+            When True, use ``simulation.subsection`` and
+            ``filter_intersecting_geometries`` to prune structures and grid
+            entities to the port region before assembling the mode simulation.
+        """
+
+        if reduce_simulation:
+            # Extract a baseline localized simulation from the full one.
+            localized_sim = simulation.subsection(
+                region=self._mode_filter_box,
+                sources=(),
+                monitors=(),
+                internal_absorbers=(),
+                remove_outside_structures=True,
+                remove_outside_grid_spec=True,
+                warn_symmetry_expansion=False,
+                deep_copy=False,
+                validate_geometries=False,
+            )
+
+            # Use caller-supplied structures/grid_spec when provided,
+            # filtering them to the port region; otherwise use the localized sim's.
+            if structures is None:
+                filtered_structures = localized_sim.structures
+            else:
+                input_structures = tuple(structures)
+                pruned_geometries = filter_intersecting_geometries(
+                    [structure.geometry for structure in input_structures], self._mode_filter_box
+                )
+                filtered_structures = tuple(
+                    structure.updated_copy(geometry=geometry, deep=False)
+                    for structure, geometry in zip(input_structures, pruned_geometries)
+                    if geometry is not None
+                )
+
+            if grid_spec is None:
+                filtered_grid_spec = localized_sim.grid_spec
+            else:
+                filtered_grid_spec = grid_spec._localized_copy(region=self._mode_filter_box)
+        else:
+            filtered_structures = (
+                tuple(structures) if structures is not None else simulation.structures
+            )
+            filtered_grid_spec = grid_spec if grid_spec is not None else simulation.grid_spec
+
+        # Append port-specific mesh overrides for the mode region.
+        if self._is_using_mesh_refinement:
+            overrides = list(filtered_grid_spec.override_structures)
+            overrides.extend(self.to_mesh_overrides())
+            filtered_grid_spec = filtered_grid_spec.updated_copy(override_structures=overrides)
+
+        simulation = simulation.updated_copy(
+            grid_spec=filtered_grid_spec,
+            structures=filtered_structures,
+            deep=False,
+            validate=False,
+        )
+
+        # Step 4: Apply extrusion if used.  Freeze the grid first so the
+        # extruded structures don't change the mesh.
+        extra_structures = self._extruded_structures(
+            simulation=simulation,
+        )
+        if not extra_structures:
+            return simulation
+
+        return simulation.updated_copy(
+            grid_spec=GridSpec.from_grid(simulation.grid),
+            structures=[*simulation.structures, *extra_structures],
+            validate=False,
+            deep=False,
+        )
+
     def to_mode_solver(
         self,
         simulation: Simulation,
         freqs: FreqArray,
         mode_spec: Optional[MicrowaveModeSpecType] = None,
+        reduce_simulation: bool = False,
+        structures: Optional[tuple[Structure, ...] | list[Structure]] = None,
+        grid_spec: Optional[GridSpec] = None,
+        structure_priority_mode: Optional[PriorityMode] = "conductor",
     ) -> ModeSolver:
         """Helper to create a :class:`.ModeSolver` instance.
+
+        Passing ``structures`` and/or ``grid_spec`` separately allows
+        ``simulation`` to be a lightweight domain-only carrier that is fast
+        to instantiate, while the heavy components are reduced to the port
+        region independently.
 
         Parameters
         ----------
@@ -389,10 +677,111 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             Frequencies to solve at.
         mode_spec : MicrowaveModeSpecType, optional
             Resolved mode specification with integer num_modes. If None,
-            uses self._mode_spec but raises SetupError if num_modes='auto'.
+            the mode specification is resolved from the prepared local simulation.
+            Explicitly passed specs must already have integer ``num_modes``.
+        reduce_simulation : bool = False
+            When True, prune structures and grid entities to the port region
+            for faster mode simulation/solver set up on large simulations.
+        structures : list[:class:`.Structure`] or tuple[:class:`.Structure`, ...], optional
+            Structures to use in place of ``simulation.structures``. Passing
+            structures separately allows ``simulation`` to be a lightweight
+            domain-only carrier that is fast to instantiate, while the
+            structures are reduced to the port region independently.
+        grid_spec : :class:`.GridSpec`, optional
+            Grid specification to use in place of ``simulation.grid_spec``.
+            Like ``structures``, passing this separately avoids embedding
+            a full grid spec in the simulation, speeding up instantiation.
+        structure_priority_mode : :class:`.PriorityMode`, optional
+            Optional structure-priority mode override. Defaults to
+            ``"conductor"`` to match :class:`.TerminalComponentModeler`. Pass
+            ``None`` to use ``simulation.structure_priority_mode`` as-is.
+
+        Returns
+        -------
+        :class:`.ModeSolver`
+            Standalone mode solver with port mesh overrides applied.
         """
-        mode_spec = self._validate_resolved_mode_spec(mode_spec)
-        mode_solver = ModeSolver(
+        mode_sim = self.to_mode_simulation(
+            simulation=simulation,
+            freqs=freqs,
+            mode_spec=mode_spec,
+            structures=structures,
+            grid_spec=grid_spec,
+            structure_priority_mode=structure_priority_mode,
+            reduce_simulation=reduce_simulation,
+        )
+        return mode_sim._mode_solver
+
+    def to_mode_simulation(
+        self,
+        simulation: Simulation,
+        freqs: FreqArray,
+        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        reduce_simulation: bool = False,
+        structures: Optional[tuple[Structure, ...] | list[Structure]] = None,
+        grid_spec: Optional[GridSpec] = None,
+        structure_priority_mode: Optional[PriorityMode] = "conductor",
+    ) -> ModeSimulation:
+        """Create a :class:`.ModeSimulation` with port mesh refinement applied.
+
+        Passing ``structures`` and/or ``grid_spec`` separately allows
+        ``simulation`` to be a lightweight domain-only carrier that is fast
+        to instantiate, while the heavy components are reduced to the port
+        region independently.
+
+        Parameters
+        ----------
+        simulation : :class:`.Simulation`
+            Base simulation defining the simulation domain and default structures,
+            materials, and grid.
+        freqs : :class:`.FreqArray`
+            Frequencies at which to solve for modes.
+        mode_spec : MicrowaveModeSpecType, optional
+            Resolved mode specification with integer num_modes. If None,
+            the mode specification is resolved from the prepared local simulation.
+            Explicitly passed specs must already have integer ``num_modes``.
+        reduce_simulation : bool = False
+            When True, prune structures and grid entities to the port region
+            for faster mode simulation/solver set up on large simulations.
+        structures : list[:class:`.Structure`] or tuple[:class:`.Structure`, ...], optional
+            Structures to use in place of ``simulation.structures``. Passing
+            structures separately allows ``simulation`` to be a lightweight
+            domain-only carrier that is fast to instantiate, while the
+            structures are reduced to the port region independently.
+        grid_spec : :class:`.GridSpec`, optional
+            Grid specification to use in place of ``simulation.grid_spec``.
+            Like ``structures``, passing this separately avoids embedding
+            a full grid spec in the simulation, speeding up instantiation.
+        structure_priority_mode : :class:`.PriorityMode`, optional
+            Optional structure-priority mode override. Defaults to
+            ``"conductor"`` to match :class:`.TerminalComponentModeler`. Pass
+            ``None`` to use ``simulation.structure_priority_mode`` as-is.
+
+        Returns
+        -------
+        :class:`.ModeSimulation`
+            Standalone mode simulation with port mesh overrides applied.
+        """
+
+        if structure_priority_mode is not None:
+            simulation = simulation.updated_copy(
+                structure_priority_mode=structure_priority_mode,
+                validate=False,
+                deep=False,
+            )
+
+        # TODO: Propagate `WavePort.frame` when ModeSimulation support PEC frames.
+        simulation = self._prepare_simulation_for_mode(
+            simulation=simulation,
+            structures=structures,
+            grid_spec=grid_spec,
+            reduce_simulation=reduce_simulation,
+        )
+
+        mode_spec = self._resolve_mode_spec_from_simulation(simulation, mode_spec=mode_spec)
+        self._validate_resolved_mode(mode_spec)
+
+        return ModeSimulation.from_simulation(
             simulation=simulation,
             plane=self.geometry,
             mode_spec=mode_spec,
@@ -400,8 +789,8 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             direction=self.direction,
             colocate=MONITOR_COLOCATE,
             use_colocated_integration=MONITOR_COLOCATE,
+            conjugated_dot_product=self.conjugated_dot_product,
         )
-        return mode_solver
 
     def to_absorber(
         self,
@@ -633,15 +1022,9 @@ class WavePort(AbstractWavePort):
 
         # Check that indices are within range of num_modes
         mode_spec = self.mode_spec
-        num_modes = mode_spec.num_modes
-        if num_modes == "auto":
+        if mode_spec.num_modes == "auto":
             return self
-        invalid_indices = [idx for idx in indices if idx >= num_modes]
-        if invalid_indices:
-            raise ValidationError(
-                f"'mode_selection' contains indices {invalid_indices} that are >= "
-                f"'mode_spec.num_modes' ({num_modes}). Valid range is 0 to {num_modes - 1}."
-            )
+        self._validate_resolved_mode_selection_bounds(mode_spec)
 
         return self
 
@@ -658,7 +1041,7 @@ class WavePort(AbstractWavePort):
 
     @model_validator(mode="after")
     def _validate_mode_index(self) -> Self:
-        """Validate that mode_selection contains valid, unique indices within range.
+        """Validate that mode_index is within the valid range.
         if mode_spec.num_modes is 'auto', it'll be validated in the component modeler.
         """
         val = self.mode_index
@@ -666,12 +1049,7 @@ class WavePort(AbstractWavePort):
             return self
         if self.mode_spec is None or self.mode_spec.num_modes == "auto":
             return self
-        num_modes = self.mode_spec.num_modes
-        if val >= num_modes:
-            raise ValidationError(
-                f"'mode_index' is >= "
-                f"'mode_spec.num_modes' ({num_modes}). Valid range is 0 to {num_modes - 1}."
-            )
+        self._validate_resolved_mode_index_bounds(self.mode_spec)
         return self
 
     @model_validator(mode="after")
@@ -679,16 +1057,49 @@ class WavePort(AbstractWavePort):
         """Warn when absorber is enabled with multiple modes.
         if mode_spec.num_modes is 'auto', it'll be validated in the component modeler.
         """
-        if not self.absorber:
-            return self
-        num_modes = self.mode_spec.num_modes
-        if num_modes != "auto" and num_modes > 1:
-            log.warning(
-                f"Absorber is enabled with {num_modes} modes. "
-                "Absorption is not properly implemented for multimode cases yet and will be "
-                "added in a future release. For now, please extend the transmission line into the PML region."
-            )
+        if self.mode_spec.num_modes != "auto":
+            self._warn_resolved_multimode_absorber(self.mode_spec)
         return self
+
+    def _validate_resolved_mode(self, mode_spec: MicrowaveModeSpecType) -> None:
+        """Validate mode-field bounds against a resolved mode spec."""
+        self._validate_resolved_mode_selection_bounds(mode_spec)
+        self._validate_resolved_mode_index_bounds(mode_spec)
+
+    def _validate_resolved_mode_selection_bounds(
+        self,
+        mode_spec: MicrowaveModeSpecType,
+        field_name: str = "mode_selection",
+        include_port_name: bool = False,
+    ) -> None:
+        """Validate ``mode_selection`` against a resolved mode specification."""
+        if self.mode_selection is None:
+            return
+
+        invalid_indices = [idx for idx in self.mode_selection if idx >= mode_spec.num_modes]
+        if not invalid_indices:
+            return
+
+        port_suffix = f" for port '{self.name}'" if include_port_name else ""
+        raise ValidationError(
+            f"'{field_name}' contains indices {invalid_indices} that are >= "
+            f"'mode_spec.num_modes' ({mode_spec.num_modes}){port_suffix}. "
+            f"Valid range is 0 to {mode_spec.num_modes - 1}."
+        )
+
+    def _validate_resolved_mode_index_bounds(
+        self, mode_spec: MicrowaveModeSpecType, include_port_name: bool = False
+    ) -> None:
+        """Validate ``mode_index`` against a resolved mode specification."""
+        if self.mode_index is None or self.mode_index < mode_spec.num_modes:
+            return
+
+        port_suffix = f" for port '{self.name}'" if include_port_name else ""
+        raise ValidationError(
+            f"'mode_index' is >= "
+            f"'mode_spec.num_modes' ({mode_spec.num_modes}){port_suffix}. "
+            f"Valid range is 0 to {mode_spec.num_modes - 1}."
+        )
 
     def to_source(
         self,

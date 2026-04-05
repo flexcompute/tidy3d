@@ -270,6 +270,10 @@ def test_terminal_wave_port_modeler_auto_detection():
     sim, port = _make_differential_stripline_sim_and_port()
     freqs = np.array([1e9, 10e9])
 
+    # AutoImpedanceSpec leaves the mode spec unresolved until the modeler
+    # infers floating conductors from the simulation geometry.
+    assert port._mode_spec is None
+
     modeler = TerminalComponentModeler(
         simulation=sim,
         ports=[port],

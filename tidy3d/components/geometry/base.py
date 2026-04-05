@@ -2316,14 +2316,14 @@ class Box(SimplePlaneIntersection, Centered):
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
     def intersections_with(
-        self, other: Shapely, cleanup: bool = True, quad_segs: Optional[int] = None
+        self, other: Geometry, cleanup: bool = True, quad_segs: Optional[int] = None
     ) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         this 2D box.
 
         Parameters
         ----------
-        other : Shapely
+        other : :class:`~tidy3d.Geometry`
             Geometry to intersect with.
         cleanup : bool = True
             If True, removes extremely small features from each polygon's boundary.

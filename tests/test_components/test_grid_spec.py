@@ -555,3 +555,64 @@ def test_custom_grid_boundary_validation():
 
     with pytest.raises(ValidationError):
         _ = td.CustomGridBoundaries(coords=[9, 10, 9, 10, 11, 9, 8])
+
+
+def test_grid_spec_localized_copy_filters_quasiuniform_entities():
+    region = td.Box(center=(0, 0, 0), size=(4.0, 6.0, td.inf))
+    keep_override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 0, 0), size=(1, 1, 1)),
+        dl=(None, 0.1, 0.1),
+    )
+    drop_override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 10, 0), size=(1, 1, 1)),
+        dl=(0.1, 0.1, 0.1),
+    )
+    grid_spec = td.GridSpec.quasiuniform(
+        dl=0.25,
+        override_structures=(keep_override, drop_override),
+        snapping_points=((0.0, 0.0, 5.0), (10.0, 0.0, 5.0), (10.0, 10.0, 5.0)),
+    )
+
+    localized = grid_spec._localized_copy(region=region)
+
+    assert len(localized.override_structures) == 2
+    assert localized.override_structures[0].dl == (None, 0.1, 0.1)
+    assert localized.override_structures[1].dl == (None, None, 0.1)
+    assert localized.snapping_points == (
+        (0.0, 0.0, 5.0),
+        (None, 0.0, 5.0),
+        (None, None, 5.0),
+    )
+
+
+def test_grid_spec_localized_copy_preserves_override_structure_order():
+    region = td.Box(center=(0, 0, 0), size=(4.0, 6.0, td.inf))
+    mesh_override_a = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 0, 0), size=(1, 1, 1)),
+        dl=(0.1, 0.1, 0.1),
+        name="mesh_override_a",
+    )
+    structure_override_b = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+        medium=td.Medium(permittivity=2.0),
+        name="structure_override_b",
+    )
+    mesh_override_c = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, 10, 0), size=(1, 1, 1)),
+        dl=(0.1, 0.1, 0.1),
+        name="mesh_override_c",
+    )
+    grid_spec = td.GridSpec.auto(
+        wavelength=1.0,
+        override_structures=(mesh_override_a, structure_override_b, mesh_override_c),
+    )
+
+    localized = grid_spec._localized_copy(region=region)
+
+    assert [struct.name for struct in localized.override_structures] == [
+        "mesh_override_a",
+        "structure_override_b",
+        "mesh_override_c",
+    ]
+    assert localized.override_structures[0].dl == (None, 0.1, 0.1)
+    assert localized.override_structures[2].dl == (0.1, None, 0.1)

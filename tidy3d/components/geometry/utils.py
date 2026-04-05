@@ -198,7 +198,8 @@ def merging_geometries_on_plane(
                 # mark background shape for removal if nothing left
                 if diff_shape.is_empty or len(diff_shape.bounds) == 0:
                     background_shapes[index] = None
-                background_shapes[index] = (_prop, diff_shape, diff_shape.bounds)
+                else:
+                    background_shapes[index] = (_prop, diff_shape, diff_shape.bounds)
             # same prop, unionize shapes and mark background shape for removal
             else:
                 shape = (shape | _shape).buffer(0).normalize()
@@ -311,6 +312,202 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
     elif isinstance(geometry, base.GeometryArray):
         yield from traverse_geometries(geometry.geometry)
     yield geometry
+
+
+# ---------------------------------------------------------------------------
+# Geometry filtering helpers (for more accurate subsection)
+#
+# These functions prune geometry trees so that only the parts intersecting a
+# given bounding box survive.  Tidy3D geometries form a tree: a Structure's
+# geometry may be a leaf primitive (Box, Sphere, PolySlab, ...) or a
+# container (GeometryGroup, GeometryArray, Transformed, union ClipOperation)
+# whose children are themselves geometries.
+#
+# `_filter_intersecting_geometry` walks this tree recursively:
+#   - Leaf primitives are kept or discarded based on a bounding-box check.
+#   - Containers recurse into their children, then rebuild with only the
+#     surviving children.  Single-child containers are collapsed for
+#     simplicity.
+#   - GeometryArray (instanced geometry) groups surviving instances by their
+#     filtered base geometry so the compact array representation is preserved.
+# ---------------------------------------------------------------------------
+
+
+def filter_intersecting_geometries(
+    geometries: list[GeometryType],
+    bounds: Box,
+) -> list[Optional[GeometryType]]:
+    """Filter a list of geometries using recursive bounds checks.
+
+    Returns a list of the same length as *geometries*, with ``None`` for
+    geometries that do not intersect *bounds*. Container types
+    (``GeometryGroup``, ``GeometryArray``, union ``ClipOperation``) are
+    recursively pruned.
+    """
+    return [_filter_intersecting_geometry(geometry, bounds) for geometry in geometries]
+
+
+def _compose_transforms(
+    parent_transform: Optional[MatrixReal4x4], child_transform: MatrixReal4x4
+) -> MatrixReal4x4:
+    """Compose a child transform with its parent transform."""
+
+    if parent_transform is None:
+        return np.array(child_transform, copy=True)
+    return np.matmul(parent_transform, child_transform)
+
+
+def _geometry_with_transform(
+    geometry: GeometryType, transform: Optional[MatrixReal4x4]
+) -> GeometryType:
+    """Return ``geometry`` with ``transform`` applied when it is not trivial."""
+
+    if transform is None or np.allclose(transform, base.Transformed.identity()):
+        return geometry
+    return base.Transformed(geometry=geometry, transform=transform)
+
+
+def _split_full_transform(
+    transform: MatrixReal4x4,
+) -> tuple[tuple[float, float, float], MatrixReal4x4]:
+    """Split a full affine transform into GeometryArray offsets and linear transforms."""
+
+    transform_array = np.array(transform, copy=True)
+    offset = tuple(float(val) for val in transform_array[:3, 3])
+    linear_transform = transform_array.copy()
+    linear_transform[:3, 3] = 0.0
+    linear_transform[3, :] = (0.0, 0.0, 0.0, 1.0)
+    return offset, linear_transform
+
+
+def _rebuild_filtered_geometry_array(
+    geometry: base.GeometryArray,
+    filtered_groups: dict[GeometryType, list[MatrixReal4x4]],
+) -> Optional[GeometryType]:
+    """Rebuild a filtered ``GeometryArray`` or grouped geometries from surviving instances."""
+
+    survivors = []
+    identity = base.Transformed.identity()
+
+    for filtered_geometry, instance_transforms in filtered_groups.items():
+        if len(instance_transforms) == 1:
+            survivors.append(_geometry_with_transform(filtered_geometry, instance_transforms[0]))
+            continue
+
+        offsets = []
+        transforms = []
+        for instance_transform in instance_transforms:
+            offset, linear_transform = _split_full_transform(instance_transform)
+            offsets.append(offset)
+            transforms.append(linear_transform)
+
+        offsets_tuple = tuple(offsets)
+        transforms_tuple = tuple(transforms)
+
+        offsets_are_zero = all(np.allclose(offset, 0.0) for offset in offsets_tuple)
+        transforms_are_identity = all(
+            np.allclose(transform, identity) for transform in transforms_tuple
+        )
+
+        array_offsets = None if offsets_are_zero and not transforms_are_identity else offsets_tuple
+        array_transforms = None if transforms_are_identity else transforms_tuple
+
+        if array_offsets is None and array_transforms is None:
+            array_offsets = offsets_tuple
+
+        survivors.append(
+            geometry.updated_copy(
+                geometry=filtered_geometry,
+                offsets=array_offsets,
+                transforms=array_transforms,
+            )
+        )
+
+    if not survivors:
+        return None
+    if len(survivors) == 1:
+        return survivors[0]
+    return base.GeometryGroup(geometries=tuple(survivors))
+
+
+def _filter_intersecting_geometry(
+    geometry: GeometryType,
+    bounds: Box,
+    transform: Optional[MatrixReal4x4] = None,
+) -> Optional[GeometryType]:
+    """Recursively prune non-intersecting geometry children while preserving type.
+
+    ``transform`` accumulates parent transforms as we descend into
+    ``Transformed`` and ``GeometryArray`` nodes so that the bounding-box
+    intersection test is performed in world coordinates even though the
+    child geometry is stored in local coordinates.
+    """
+
+    if not _geometry_with_transform(geometry, transform).intersects(bounds):
+        return None
+
+    if isinstance(geometry, base.GeometryGroup):
+        # Recurse into each child independently; drop non-intersecting ones.
+        survivors = tuple(
+            child
+            for child in (
+                _filter_intersecting_geometry(g, bounds, transform=transform)
+                for g in geometry.geometries
+            )
+            if child is not None
+        )
+        if not survivors:
+            return None
+        if len(survivors) == 1:
+            return survivors[0]
+        return geometry.updated_copy(geometries=survivors)
+
+    if isinstance(geometry, base.Transformed):
+        # Compose the parent transform with this node's transform before
+        # recursing into the inner geometry.
+        filtered_geometry = _filter_intersecting_geometry(
+            geometry.geometry,
+            bounds,
+            transform=_compose_transforms(transform, geometry.transform),
+        )
+        if filtered_geometry is None:
+            return None
+        return geometry.updated_copy(geometry=filtered_geometry)
+
+    if isinstance(geometry, base.GeometryArray):
+        # Each instance shares the same base geometry but has its own
+        # transform (offset + rotation).  We test each instance separately,
+        # then group survivors by their filtered base geometry so the
+        # compact array representation is preserved where possible.
+        filtered_groups: dict[GeometryType, list[MatrixReal4x4]] = defaultdict(list)
+        for index in range(geometry.num_geometries):
+            instance_transform = geometry._get_full_transform(index)
+            filtered_geometry = _filter_intersecting_geometry(
+                geometry.geometry,
+                bounds,
+                transform=_compose_transforms(transform, instance_transform),
+            )
+            if filtered_geometry is None:
+                continue
+            filtered_groups[filtered_geometry].append(np.array(instance_transform, copy=True))
+
+        return _rebuild_filtered_geometry_array(geometry, filtered_groups)
+
+    if isinstance(geometry, base.ClipOperation) and geometry.operation == "union":
+        # Only unions can be decomposed: filtering each operand independently
+        # preserves union semantics.  For intersection/difference the operands
+        # are interdependent, so we fall through and return unchanged.
+        geometry_a = _filter_intersecting_geometry(geometry.geometry_a, bounds, transform=transform)
+        geometry_b = _filter_intersecting_geometry(geometry.geometry_b, bounds, transform=transform)
+        if geometry_a is None and geometry_b is None:
+            return None
+        if geometry_a is None:
+            return geometry_b
+        if geometry_b is None:
+            return geometry_a
+        return geometry.updated_copy(geometry_a=geometry_a, geometry_b=geometry_b)
+
+    return geometry
 
 
 def from_shapely(

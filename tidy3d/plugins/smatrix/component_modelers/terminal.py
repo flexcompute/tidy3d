@@ -8,7 +8,7 @@ import matplotlib.patches as mpl_patches
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
-from tidy3d import ClipOperation, GeometryGroup, GridSpec, PolySlab
+from tidy3d import GridSpec
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.frequency_extrapolation import (
@@ -17,12 +17,10 @@ from tidy3d.components.frequency_extrapolation import (
 )
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
-from tidy3d.components.geometry.utils import _shift_object
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.lumped_element import CircuitImpedanceModel, LinearLumpedElement
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.microwave.path_integrals.specs.impedance import (
     AutoImpedanceSpec,
     CustomImpedanceSpec,
@@ -58,7 +56,7 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType, WavePortType
 from tidy3d.plugins.smatrix.ports.wave import (
     DEFAULT_DIFFERENTIAL_PAIR_LABEL_PREFIX,
-    MONITOR_COLOCATE,
+    EXTRUDE_STRUCTURES_TOL,
     AbstractWavePort,
     TerminalWavePort,
     WavePort,
@@ -74,11 +72,6 @@ if TYPE_CHECKING:
     from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
     from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
     from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-
-# Tolerance (in um) for finding structures that intersect the waveport plane.
-# PCB modeler exports often have polygon vertices that don't exactly touch the
-# port plane; 10 nm covers typical coordinate precision gaps.
-EXTRUDE_STRUCTURES_TOL = 0.01
 
 AUTO_RADIATION_MONITOR_NAME = "radiation"
 AUTO_RADIATION_MONITOR_BUFFER = 2
@@ -1926,17 +1919,12 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             if port.mode_spec.num_modes != "auto":
                 continue
 
-            # Get the resolved mode spec for this port
             resolved_mode_spec = self._resolved_mode_specs.get(port.name)
-            num_modes = resolved_mode_spec.num_modes
-
-            # Check that indices are within range of num_modes
-            invalid_indices = [idx for idx in mode_selection if idx >= num_modes]
-            if invalid_indices:
-                raise ValidationError(
-                    f"'mode_spec.mode_selection' contains indices {invalid_indices} that are >= "
-                    f"'mode_spec.num_modes' ({num_modes}) for port '{port.name}'. Valid range is 0 to {num_modes - 1}."
-                )
+            port._validate_resolved_mode_selection_bounds(
+                resolved_mode_spec,
+                field_name="mode_spec.mode_selection",
+                include_port_name=True,
+            )
 
     def _validate_wave_port_mode_index(self) -> None:
         """Validate that mode_index is within range for WavePort instances.
@@ -1953,12 +1941,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             if port.mode_spec.num_modes != "auto":
                 continue
 
-            num_modes = self._resolved_mode_specs[port.name].num_modes
-            if mode_index >= num_modes:
-                raise ValidationError(
-                    f"'mode_index' is >= "
-                    f"'mode_spec.num_modes' ({num_modes}) for port '{port.name}'. Valid range is 0 to {num_modes - 1}."
-                )
+            port._validate_resolved_mode_index_bounds(
+                self._resolved_mode_specs[port.name], include_port_name=True
+            )
 
     def _warn_multimode_absorption(self) -> None:
         """Warn when absorber is enabled with multiple modes.
@@ -1976,14 +1961,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
             # Get the resolved mode spec for this port
             resolved_mode_spec = self._resolved_mode_specs.get(port.name)
-
-            num_modes = resolved_mode_spec.num_modes
-            if num_modes > 1:
-                log.warning(
-                    f"Port '{port.name}': Absorber is enabled with {num_modes} modes. "
-                    "Absorption is not properly implemented for multimode cases yet and will be "
-                    "added in a future release. For now, please extend the transmission line into the PML region."
-                )
+            port._warn_resolved_multimode_absorber(resolved_mode_spec, include_port_name=True)
 
     @staticmethod
     def _check_grid_size_at_ports(
@@ -2040,33 +2018,24 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         """
         conductors_dict = {}
         sim = self._base_sim_with_grid_and_lumped_elements
-        interior_disjoint_geometries = ModePlaneAnalyzer.apply_interior_disjoint_geometries(
-            self.structure_priority_mode
-        )
         for port in self._terminal_wave_ports + self._wave_ports:
-            conductors_dict[port.name] = port._get_isolated_floating_conductors(
-                sim.volumetric_structures,
-                sim.grid,
-                sim.symmetry,
-                sim.simulation_geometry,
-                interior_disjoint_geometries=interior_disjoint_geometries,
-            )
+            conductors_dict[port.name] = port._isolated_floating_conductors_from_simulation(sim)
         return conductors_dict
 
     @cached_property
     def _resolved_mode_specs(self) -> dict[str, MicrowaveModeSpecType]:
         """Returns a dict mapping port names to their mode specs."""
         mode_specs = {}
+        sim = self._base_sim_with_grid_and_lumped_elements
 
         for port in self._wave_ports + self._terminal_wave_ports:
-            mode_spec = port._mode_spec
-            # handled unresolved mode spec here.
-            if mode_spec is None:
-                # Get number of conductors
-                conductors = self._floating_isolated_conductors_at_waveport[port.name]
-                mode_spec = port._mode_spec_from_isolated_floating_conductors(conductors)
-
-            mode_specs[port.name] = mode_spec
+            conductors = None
+            if port._mode_spec is None:
+                conductors = self._floating_isolated_conductors_at_waveport.get(port.name)
+            mode_specs[port.name] = port._resolve_mode_spec_from_simulation(
+                sim,
+                conductors=conductors,
+            )
 
         return mode_specs
 
@@ -2133,111 +2102,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         Simulation
             Updated simulation with extruded structures added to ``simulation.structures``.
         """
-
-        # create list with extruded structures
-        new_structures = []
         all_new_structures = []
 
-        # get all mode sources from TerminalComponentModeler that correspond to ports with ``extrude_structures`` flag set to ``True``.
         for port in self.ports:
             if isinstance(port, AbstractWavePort) and port.extrude_structures:
-                # compute snap_center and shift the internal absorber associated with the current port
-                snap_center = port.center[port.injection_axis] + self._shift_value_signed(port)
-                absorber = port._to_absorber_geometry(snap_center=snap_center)
-                shifted_absorber = _shift_object(
-                    obj=absorber,
-                    grid=sim.grid,
-                    bounds=sim.bounds,
-                    direction=absorber.direction,
-                    shift=absorber.grid_shift,
+                new_structures = port._extruded_structures(
+                    simulation=sim,
+                    tol=tol,
                 )
-
-                # get the PEC box with its face surfaces
-                (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber, expand=True)
-                surfaces = box.surfaces(box.size, box.center)
-
-                # get extrusion coordinates and a cutting plane for inference of intersecting structures.
-                sign = 1 if direction == "+" else -1
-                back_pec_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
-
-                # get extrusion extent along injection axis
-                extrude_to = back_pec_plane.center[inj_axis]
-
-                # Build the cutting plane from the discretized monitor bounds so that
-                # it covers the same region the mode solver sees (slightly larger
-                # than the port box due to grid snapping).
-                span_inds = sim._discretize_inds_monitor(port, colocate=MONITOR_COLOCATE)
-                bds = sim._subgrid(span_inds=span_inds).boundaries.to_list
-                rmin = [b[0] for b in bds]
-                rmax = [b[-1] for b in bds]
-                rmin[inj_axis] = port.center[inj_axis] - sign * tol
-                rmax[inj_axis] = rmin[inj_axis]
-                cutting_plane = Box.from_bounds(rmin=rmin, rmax=rmax)
-
-                # define extrusion bounds
-                extrusion_bounds = [cutting_plane.center[inj_axis], extrude_to][::sign]
-
-                # loop over structures and extrude those that intersect a waveport plane
-                for structure in sim.structures:
-                    # get geometries that intersect the plane on which the waveport is defined
-
-                    shapely_geom = cutting_plane.intersections_with(structure.geometry)
-
-                    polygon_list = []
-                    for geom in shapely_geom:
-                        polygon_list = polygon_list + ClipOperation.to_polygon_list(geom)
-
-                    new_geoms = []
-                    # loop over identified geometries and extrude them
-                    for polygon in polygon_list:
-                        # construct outer shell of an extruded geometry first
-                        exterior_vertices = np.array(polygon.exterior.coords)
-                        outer_shell = PolySlab(
-                            axis=inj_axis, slab_bounds=extrusion_bounds, vertices=exterior_vertices
-                        )
-
-                        # construct innner shells that represent holes
-                        hole_polyslabs = [
-                            PolySlab(
-                                axis=inj_axis,
-                                slab_bounds=extrusion_bounds,
-                                vertices=np.array(hole.coords),
-                            )
-                            for hole in polygon.interiors
-                        ]
-
-                        # construct final geometry by removing inner holes from outer shell
-                        if hole_polyslabs:
-                            holes = GeometryGroup(geometries=hole_polyslabs)
-                            extruded_slab_new = ClipOperation(
-                                operation="difference", geometry_a=outer_shell, geometry_b=holes
-                            )
-                        else:
-                            extruded_slab_new = outer_shell
-
-                        # append extruded geometry
-                        new_geoms.append(extruded_slab_new)
-                    if len(polygon_list) != 0:
-                        # update structure and add it to the list; assign unique name to avoid
-                        # duplicate structure names (which would fail simulation validation)
-                        extruded_name = (
-                            f"{structure.name}_extruded_{port.name}" if structure.name else None
-                        )
-                        new_struct = structure.updated_copy(
-                            geometry=GeometryGroup(geometries=new_geoms),
-                            name=extruded_name,
-                        )
-                        new_structures.append(new_struct)
-
-                        # if current port does not intersect any structures raise error
-                if not new_structures:
-                    raise SetupError(
-                        f"The 'WavePort' '{port.name}' does not intersect any structures."
-                        f"Please ensure that it is located within or at the boundary of a structure."
-                    )
-
-                all_new_structures = all_new_structures + new_structures
-                new_structures = []
+                all_new_structures.extend(new_structures)
 
         # if new structures are extruded (Lumped Port extrusion is ignored)
         if all_new_structures:

@@ -60,7 +60,12 @@ from .diffraction import diffraction_monitor_storage_size, diffraction_order_gri
 from .frequency_extrapolation import LowFrequencySmoothingSpec
 from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
-from .geometry.utils import _shift_object, flatten_groups, traverse_geometries
+from .geometry.utils import (
+    _shift_object,
+    filter_intersecting_geometries,
+    flatten_groups,
+    traverse_geometries,
+)
 from .geometry.utils_2d import get_bounds, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Grid
 from .grid.grid_spec import GridSpec, UniformGrid
@@ -2016,13 +2021,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         sources: Optional[tuple[SourceType, ...]] = None,
         monitors: Optional[tuple[MonitorType, ...]] = None,
         remove_outside_structures: bool = True,
+        remove_outside_grid_spec: bool = False,
         remove_outside_custom_mediums: bool = False,
         include_pml_cells: bool = False,
         validate_geometries: bool = True,
         deep_copy: bool = True,
         internal_absorbers: Optional[tuple[InternalAbsorber, ...]] = None,
         **kwargs: Any,
-    ) -> AbstractYeeGridSimulation:
+    ) -> Self:
         """Generate a simulation instance containing only the ``region``.
 
         Parameters
@@ -2051,6 +2057,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             domain are inherited from the original simulation.
         remove_outside_structures : bool = True
             Remove structures outside of the new simulation domain.
+        remove_outside_grid_spec : bool = False
+            Prune or clip ``override_structures``, ``layer_refinement_specs``, and
+            ``snapping_points`` in ``grid_spec`` to the requested region. Only
+            applies when at least one axis uses :class:`.AutoGrid` or
+            :class:`.QuasiUniformGrid`.
         remove_outside_custom_mediums : bool = True
             Remove custom medium data outside of the new simulation domain.
         include_pml_cells : bool = False
@@ -2136,9 +2147,20 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # thus, recreate a box instance
         new_box = Box.from_bounds(*new_bounds)
 
-        # inheritance of structures, lumped elements, sources, monitors, and boundary specs
+        if remove_outside_grid_spec:
+            grid_spec = grid_spec._localized_copy(region=region)
+
+        # Filter structures to those intersecting the subsection region using recursive
+        # geometry pruning, then replace each structure's geometry with the pruned version.
         if remove_outside_structures:
-            new_structures = [strc for strc in self.structures if new_box.intersects(strc.geometry)]
+            pruned_geometries = filter_intersecting_geometries(
+                [strc.geometry for strc in self.structures], new_box
+            )
+            new_structures = [
+                strc.updated_copy(geometry=geometry, deep=False)
+                for strc, geometry in zip(self.structures, pruned_geometries)
+                if geometry is not None
+            ]
         else:
             new_structures = list(self.structures)
 

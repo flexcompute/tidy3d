@@ -24,9 +24,18 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.components.microwave.data.monitor_data import MicrowaveModeData
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
+from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.exceptions import (
+    SetupError,
+    Tidy3dError,
+    Tidy3dKeyError,
+)
+from tidy3d.exceptions import (
+    ValidationError as Tidy3dValidationError,
+)
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
+    DirectivityMonitorSpec,
     LumpedPort,
     PortDataArray,
     TerminalComponentModeler,
@@ -35,8 +44,12 @@ from tidy3d.plugins.smatrix import (
     TerminalWavePort,
     WavePort,
 )
-from tidy3d.plugins.smatrix.component_modelers.terminal import AUTO_RADIATION_MONITOR_NAME
+from tidy3d.plugins.smatrix.component_modelers.terminal import (
+    AUTO_RADIATION_MONITOR_NAME,
+    ModelerLowFrequencySmoothingSpec,
+)
 from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
+from tidy3d.plugins.smatrix.data.terminal import MicrowaveSMatrixData
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import compute_F, s_to_z, validate_square_matrix
 
@@ -589,8 +602,6 @@ def test_data_s_to_z(monkeypatch):
         "port_in": port_names,
     }
     s_matrix_data = TerminalPortDataArray(data=values, coords=coords)
-
-    from tidy3d.plugins.smatrix.data.terminal import MicrowaveSMatrixData
 
     s_matrix_container = MicrowaveSMatrixData(data=s_matrix_data)
 
@@ -1758,7 +1769,6 @@ def test_wave_port_to_absorber(tmp_path):
 
 def test_low_freq_smoothing_spec_initialization_default_values():
     """Test that LowFrequencySmoothingSpec initializes with correct default values."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     spec = ModelerLowFrequencySmoothingSpec()
     assert spec.min_sampling_time == 1
@@ -1769,7 +1779,6 @@ def test_low_freq_smoothing_spec_initialization_default_values():
 
 def test_low_freq_smoothing_spec_initialization_custom_values():
     """Test that LowFrequencySmoothingSpec initializes with custom values."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     spec = ModelerLowFrequencySmoothingSpec(
         min_sampling_time=2, max_sampling_time=8, order=2, max_deviation=0.3
@@ -1782,7 +1791,6 @@ def test_low_freq_smoothing_spec_initialization_custom_values():
 
 def test_low_freq_smoothing_spec_edge_cases():
     """Test edge cases and boundary conditions."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     # Test with order 0 (constant fit)
     spec = ModelerLowFrequencySmoothingSpec(order=0)
@@ -1803,7 +1811,6 @@ def test_low_freq_smoothing_spec_edge_cases():
 
 def test_low_freq_smoothing_spec_validation_sampling_times_invalid():
     """Test validation of sampling time parameters."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     # Test invalid range where min_sampling_time >= max_sampling_time
     with pytest.raises(
@@ -1819,7 +1826,6 @@ def test_low_freq_smoothing_spec_validation_sampling_times_invalid():
 
 def test_low_freq_smoothing_spec_validation_order_bounds():
     """Test validation of order parameter bounds."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     # Test valid orders
     ModelerLowFrequencySmoothingSpec(order=0)
@@ -1835,7 +1841,6 @@ def test_low_freq_smoothing_spec_validation_order_bounds():
 
 def test_low_freq_smoothing_spec_validation_max_deviation_bounds():
     """Test validation of max_deviation parameter bounds."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     # Test valid max_deviation
     ModelerLowFrequencySmoothingSpec(max_deviation=0.0)
@@ -1848,7 +1853,6 @@ def test_low_freq_smoothing_spec_validation_max_deviation_bounds():
 
 def test_low_freq_smoothing_spec_sim_dict():
     """Test that LowFrequencySmoothingSpec is correctly added to the sim_dict."""
-    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
 
     spec = ModelerLowFrequencySmoothingSpec(
         min_sampling_time=2, max_sampling_time=8, order=2, max_deviation=0.3
@@ -2295,7 +2299,6 @@ def test_validate_run_only_with_wave_ports():
 
 def test_radiation_monitors_auto():
     """Test DirectivityMonitorSpec with various configurations."""
-    from tidy3d.plugins.smatrix import DirectivityMonitorSpec
 
     # Test 1: DirectivityMonitorSpec with default values
     auto_spec = DirectivityMonitorSpec()
@@ -2954,8 +2957,8 @@ def test_wave_port_mode_spec_resolution():
     assert port_auto_default._mode_spec is None
 
 
-def test_wave_port_auto_num_modes_modeler():
-    """Integration test: auto num_modes detection for WavePort via TerminalComponentModeler."""
+def _make_wave_port_auto_num_modes_setup():
+    """Build a stripline setup whose wave port resolves to a single floating conductor."""
     # Build a single-strip stripline: one signal trace between two ground planes.
     # PEC boundary on y ensures ground planes touching y-boundary are filtered out,
     # leaving only the signal strip as a floating conductor.
@@ -3020,6 +3023,12 @@ def test_wave_port_auto_num_modes_modeler():
     )
 
     freqs = np.array([1e9, 10e9])
+    return sim, port, freqs
+
+
+def test_wave_port_auto_num_modes_modeler():
+    """Integration test: auto num_modes detection for WavePort via TerminalComponentModeler."""
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
     modeler = TerminalComponentModeler(simulation=sim, ports=[port], freqs=freqs)
 
     # Modeler should identify 1 wave port
@@ -3038,6 +3047,68 @@ def test_wave_port_auto_num_modes_modeler():
     # mode_solver_for_port should return a ModeSolver
     ms = modeler.mode_solver_for_port("wave_auto")
     assert isinstance(ms, ModeSolver)
+
+
+def test_wave_port_auto_num_modes_modeler_validates_mode_selection_bounds():
+    """Modeler construction should validate deferred mode-selection bounds for auto mode specs."""
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
+    port = port.updated_copy(mode_selection=(1,))
+
+    with pytest.raises(
+        ValidationError,
+        match="'mode_spec.mode_selection' contains indices \\[1\\].*for port 'wave_auto'",
+    ):
+        TerminalComponentModeler(simulation=sim, ports=[port], freqs=freqs)
+
+
+def test_wave_port_auto_num_modes_modeler_validates_mode_index_bounds():
+    """Modeler construction should validate deferred mode-index bounds for auto mode specs."""
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
+    port = port.updated_copy(mode_index=1)
+
+    with pytest.raises(ValidationError, match="'mode_index' is >= .*for port 'wave_auto'"):
+        TerminalComponentModeler(simulation=sim, ports=[port], freqs=freqs)
+
+
+def test_wave_port_auto_num_modes_to_mode_simulation():
+    """Standalone mode-simulation creation should resolve ``num_modes='auto'``."""
+
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
+
+    mode_sim = port.to_mode_simulation(sim, freqs=freqs, structure_priority_mode="conductor")
+
+    assert isinstance(mode_sim, ModeSimulation)
+    assert isinstance(mode_sim.mode_spec, td.MicrowaveModeSpec)
+    assert mode_sim.mode_spec.num_modes == 1
+
+
+def test_wave_port_auto_num_modes_to_mode_solver():
+    """Standalone mode-solver creation should resolve ``num_modes='auto'``."""
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
+
+    mode_solver = port.to_mode_solver(sim, freqs=freqs, structure_priority_mode="conductor")
+
+    assert isinstance(mode_solver, ModeSolver)
+    assert isinstance(mode_solver.mode_spec, td.MicrowaveModeSpec)
+    assert mode_solver.mode_spec.num_modes == 1
+
+
+def test_wave_port_auto_num_modes_to_mode_simulation_validates_mode_selection_bounds():
+    """Deferred mode-selection bounds should be checked after auto mode-spec resolution."""
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
+    port = port.updated_copy(mode_selection=(1,))
+
+    with pytest.raises(Tidy3dValidationError, match="'mode_selection' contains indices \\[1\\]"):
+        port.to_mode_simulation(sim, freqs=freqs)
+
+
+def test_wave_port_auto_num_modes_to_mode_simulation_validates_mode_index_bounds():
+    """Deferred mode-index bounds should be checked after auto mode-spec resolution."""
+    sim, port, freqs = _make_wave_port_auto_num_modes_setup()
+    port = port.updated_copy(mode_index=1)
+
+    with pytest.raises(Tidy3dValidationError, match="'mode_index' is >="):
+        port.to_mode_simulation(sim, freqs=freqs)
 
 
 def test_compute_F_full_matrix():
@@ -3142,3 +3213,613 @@ def test_wave_port_get_port_impedance():
 
     z_mode1 = port.get_port_impedance(mode_data, mode_index=1)
     assert np.isclose(z_mode1.values.item(), 75.0)
+
+
+def test_wave_port_to_mode_simulation():
+    """Test that to_mode_simulation creates a valid ModeSimulation."""
+
+    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
+    port = modeler.ports[0]
+    sim = modeler.simulation
+    freqs = [1e9, 2e9, 3e9]
+
+    mode_sim = port.to_mode_simulation(sim, freqs=freqs, reduce_simulation=True)
+
+    assert isinstance(mode_sim, ModeSimulation)
+    assert mode_sim.mode_spec == port.mode_spec
+    assert mode_sim.direction == port.direction
+    assert mode_sim.colocate is False
+    assert mode_sim.conjugated_dot_product == port.conjugated_dot_product
+    # Plane matches port geometry
+    assert mode_sim.plane.center == port.center
+    assert mode_sim.plane.size == port.size
+
+    localized_sim = sim.subsection(
+        region=port._mode_filter_box,
+        sources=(),
+        monitors=(),
+        internal_absorbers=(),
+        remove_outside_grid_spec=True,
+        warn_symmetry_expansion=False,
+        deep_copy=False,
+        validate_geometries=False,
+    )
+    filtered_grid_spec = localized_sim.grid_spec
+    filtered_grid_spec = filtered_grid_spec.updated_copy(
+        override_structures=[*filtered_grid_spec.override_structures, *port.to_mesh_overrides()]
+    )
+    filtered_structures = localized_sim.structures
+
+    assert len(mode_sim.grid_spec.override_structures) == len(
+        filtered_grid_spec.override_structures
+    )
+    assert len(mode_sim.grid_spec.layer_refinement_specs) == len(
+        filtered_grid_spec.layer_refinement_specs
+    )
+    assert len(mode_sim.grid_spec.snapping_points) == len(filtered_grid_spec.snapping_points)
+    assert len(mode_sim.structures) == len(filtered_structures)
+    assert not any(
+        structure.name and structure.name.endswith(f"_extruded_{port.name}")
+        for structure in mode_sim.structures
+    )
+
+
+def test_wave_port_to_mode_simulation_includes_single_port_extrusions():
+    """WavePort mode simulations should include the same named extrusions for the active port."""
+
+    modeler = make_coaxial_component_modeler(length=100000, port_types=(WavePort, WavePort))
+    named_structures = [
+        structure.updated_copy(name=f"structure_{index}")
+        for index, structure in enumerate(modeler.simulation.structures)
+    ]
+    simulation = modeler.simulation.updated_copy(structures=named_structures)
+    port = modeler.ports[0].updated_copy(center=(0, 0, -50000), extrude_structures=True)
+    modeler = modeler.updated_copy(simulation=simulation, ports=(port, modeler.ports[1]))
+
+    mode_sim = port.to_mode_simulation(
+        simulation,
+        freqs=modeler.freqs,
+        mode_spec=modeler._resolved_mode_specs[port.name],
+    )
+    base_sim = modeler.base_sim
+
+    mode_extruded = [
+        structure
+        for structure in mode_sim.structures
+        if structure.name and structure.name.endswith(f"_extruded_{port.name}")
+    ]
+    base_extruded = [
+        structure
+        for structure in base_sim.structures
+        if structure.name and structure.name.endswith(f"_extruded_{port.name}")
+    ]
+
+    assert len(mode_extruded) == len(base_extruded) > 0
+    mode_bounds = np.array(
+        [
+            tuple(coord for endpoint in struct.geometry.bounds for coord in endpoint)
+            for struct in mode_extruded
+        ]
+    )
+    base_bounds = np.array(
+        [
+            tuple(coord for endpoint in struct.geometry.bounds for coord in endpoint)
+            for struct in base_extruded
+        ]
+    )
+    assert np.allclose(mode_bounds, base_bounds)
+
+
+def _make_z_normal_wave_port():
+    """Helper: z-normal WavePort at (0, 0, 5) with size (4, 6, 0)."""
+    return WavePort(
+        center=(0, 0, 5),
+        size=(4, 6, 0),
+        direction="+",
+        name="test_port",
+        num_grid_cells=10,
+    )
+
+
+def _localize_grid_spec_to_port(port, grid_spec):
+    return grid_spec._localized_copy(region=port._mode_filter_box)
+
+
+def test_wave_port_filter_override_keeps_axis_relevant_mesh_refinement():
+    """Mesh overrides are kept when they affect a transverse axis inside the port region."""
+    port = _make_z_normal_wave_port()
+    override_y_only = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 0, 5), size=(1, 1, 1)),
+        dl=(None, 0.1, 0.1),
+    )
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, override_structures=(override_y_only,))
+    ).override_structures
+    assert len(result) == 1
+    assert result[0].dl == (None, 0.1, 0.1)
+
+    override_y_far = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, 10, 5), size=(1, 1, 1)),
+        dl=(0.1, None, 0.1),
+    )
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, override_structures=(override_y_far,))
+    ).override_structures
+    assert len(result) == 1
+    assert result[0].dl == (0.1, None, 0.1)
+
+    override_far = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 10, 5), size=(1, 1, 1)),
+        dl=(0.1, 0.1, 0.1),
+    )
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, override_structures=(override_far,))
+    ).override_structures
+    assert len(result) == 1
+    assert result[0].dl == (None, None, 0.1)
+
+
+def test_wave_port_filter_override_preserves_geometry():
+    """Intersecting mesh overrides keep their geometry and only localize mesh hints."""
+    port = _make_z_normal_wave_port()
+    override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(2.75, 0, 5), size=(1.5, 1.0, 1.0)),
+        dl=(0.1, 0.1, 0.1),
+    )
+
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, override_structures=(override,))
+    ).override_structures
+    assert len(result) == 1
+
+    assert result[0].dl == (0.1, 0.1, 0.1)
+    assert result[0].geometry == override.geometry
+
+
+def test_wave_port_filter_override_keeps_near_edge_context():
+    """The buffered refinement box retains overrides slightly outside the port footprint."""
+    port = _make_z_normal_wave_port()
+    override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(2.35, 0, 5), size=(0.4, 1.0, 1.0)),
+        dl=(0.1, 0.1, 0.1),
+    )
+
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, override_structures=(override,))
+    ).override_structures
+    assert len(result) == 1
+
+    preserved = result[0].geometry
+    ref_bounds = port._mode_filter_box.bounds
+    assert port.bounds[1][0] < preserved.bounds[0][0]
+    assert np.allclose(preserved.bounds, override.geometry.bounds)
+    assert preserved.bounds[1][0] > ref_bounds[1][0]
+
+
+def test_wave_port_filter_structure_override_prunes_grouped_geometry():
+    """Non-mesh structure overrides use recursive geometry pruning."""
+    port = _make_z_normal_wave_port()
+    geometry_in = td.Box(center=(0, 0, 5), size=(1, 1, 1))
+    geometry_out = td.Box(center=(8, 0, 5), size=(1, 1, 1))
+    override = td.Structure(
+        geometry=td.GeometryGroup(geometries=(geometry_in, geometry_out)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, override_structures=(override,))
+    ).override_structures
+    assert len(result) == 1
+    assert result[0].geometry == geometry_in
+
+
+def test_wave_port_filter_layer_refinement_specs_clips_to_mode_filter_box():
+    """Intersecting layer refinement specs are clipped to the refinement box."""
+    port = _make_z_normal_wave_port()
+    spec = td.LayerRefinementSpec.from_bounds(axis=2, rmin=(2.0, -1.0, 4.0), rmax=(4.0, 1.0, 6.0))
+
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, layer_refinement_specs=(spec,))
+    ).layer_refinement_specs
+    assert len(result) == 1
+
+    clipped = result[0]
+    ref_bounds = port._mode_filter_box.bounds
+    assert clipped.bounds[0][0] == pytest.approx(spec.bounds[0][0])
+    assert clipped.bounds[1][0] == pytest.approx(ref_bounds[1][0])
+    assert clipped.bounds[0][1:] == pytest.approx(spec.bounds[0][1:])
+    assert clipped.bounds[1][1:] == pytest.approx(spec.bounds[1][1:])
+
+
+def test_wave_port_filter_snapping_points_keeps_axis_relevant_coords():
+    """Snapping points keep coordinates on axes that remain within the local mode region."""
+    port = _make_z_normal_wave_port()
+    points = (
+        (0.0, 0.0, 5.0),
+        (10.0, 0.0, 5.0),
+        (0.0, 10.0, 5.0),
+        (10.0, 10.0, 5.0),
+        (None, None, 5.0),
+    )
+
+    result = _localize_grid_spec_to_port(
+        port, td.GridSpec.auto(wavelength=1.0, snapping_points=points)
+    ).snapping_points
+    assert result == (
+        (0.0, 0.0, 5.0),
+        (None, 0.0, 5.0),
+        (0.0, None, 5.0),
+        (None, None, 5.0),
+        (None, None, 5.0),
+    )
+
+
+def _shift_vertices(vertices, dx):
+    return [(x + dx, y) for x, y in vertices]
+
+
+def _boundaries_in_bounds(boundaries, lower, upper, atol=1e-12):
+    boundaries = np.asarray(boundaries)
+    return boundaries[(boundaries >= lower - atol) & (boundaries <= upper + atol)]
+
+
+def _effective_override_count(simulation):
+    return len(simulation.grid_spec.override_structures) + len(
+        simulation.internal_override_structures
+    )
+
+
+def _effective_snapping_count(simulation):
+    return len(simulation.grid_spec.snapping_points) + len(simulation.internal_snapping_points)
+
+
+def _make_wave_port_filtering_cpw_simulation():
+    trace_centers_x = (-4.0, 0.0, 4.0)
+    trace_length_y = 12.0
+    substrate_thickness = 0.6
+    trace_thickness = 0.05
+    ground_thickness = 0.06
+    sim_size = (14.0, 14.0, 1.4)
+    trace_zmin = substrate_thickness / 2
+    trace_zmax = trace_zmin + trace_thickness
+    trace_zmid = (trace_zmin + trace_zmax) / 2
+    ground_zmid = -(substrate_thickness + ground_thickness) / 2
+
+    trace_vertices = [
+        (-0.35, -trace_length_y / 2),
+        (0.35, -trace_length_y / 2),
+        (0.35, 1.5),
+        (0.5, 1.5),
+        (0.5, 2.5),
+        (0.35, 2.5),
+        (0.35, trace_length_y / 2),
+        (-0.35, trace_length_y / 2),
+        (-0.35, 2.5),
+        (-0.5, 2.5),
+        (-0.5, 1.5),
+        (-0.35, 1.5),
+    ]
+
+    signal_structures = [
+        td.Structure(
+            geometry=td.PolySlab(
+                vertices=_shift_vertices(trace_vertices, dx=center_x),
+                slab_bounds=(trace_zmin, trace_zmax),
+                axis=2,
+            ),
+            medium=td.PECMedium(),
+            name=f"trace_{ind}",
+        )
+        for ind, center_x in enumerate(trace_centers_x)
+    ]
+
+    substrate = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(td.inf, sim_size[1], substrate_thickness)),
+        medium=td.Medium(permittivity=4.1),
+        name="substrate",
+    )
+    ground = td.Structure(
+        geometry=td.Box(center=(0, 0, ground_zmid), size=(td.inf, sim_size[1], ground_thickness)),
+        medium=td.PECMedium(),
+        name="ground",
+    )
+
+    override_structures = [
+        td.MeshOverrideStructure(
+            geometry=td.Box(
+                center=(center_x, 0, trace_zmid),
+                size=(1.1, trace_length_y, trace_thickness),
+            ),
+            dl=(0.04, None, None),
+        )
+        for center_x in trace_centers_x
+    ]
+    snapping_points = [(center_x, 0.0, None) for center_x in trace_centers_x]
+
+    layer_refinement = td.LayerRefinementSpec.from_structures(
+        structures=signal_structures,
+        axis=2,
+        bounds_snapping="bounds",
+        bounds_refinement=td.GridRefinement(dl=trace_thickness / 2, num_cells=2),
+        corner_refinement=td.GridRefinement(dl=0.08, num_cells=2),
+    )
+
+    simulation = td.Simulation(
+        center=(0, 0, 0.05),
+        size=sim_size,
+        structures=[substrate, ground, *signal_structures],
+        grid_spec=td.GridSpec.auto(
+            wavelength=4.0,
+            min_steps_per_wvl=12,
+            override_structures=override_structures,
+            layer_refinement_specs=[layer_refinement],
+            snapping_points=snapping_points,
+        ),
+        sources=[],
+        monitors=[],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+    )
+
+    port = WavePort(
+        center=(0, 0, 0.02),
+        size=(2.0, 0.0, 1.0),
+        direction="+",
+        name="cpw_port",
+        num_grid_cells=10,
+        mode_spec=td.MicrowaveModeSpec(num_modes=1, target_neff=np.sqrt(4.1)),
+    )
+
+    return simulation, port
+
+
+def _simulation_with_port_mesh_overrides(simulation, port):
+    grid_spec = simulation.grid_spec.updated_copy(
+        override_structures=list(simulation.grid_spec.override_structures)
+        + port.to_mesh_overrides()
+    )
+    return simulation.updated_copy(grid_spec=grid_spec)
+
+
+def _make_wave_port_bare_simulation(simulation, *, structures=None, grid_spec=None):
+    if structures is None:
+        structures = simulation.structures
+    if grid_spec is None:
+        grid_spec = simulation.grid_spec
+    return simulation.updated_copy(
+        structures=structures,
+        grid_spec=grid_spec,
+        validate=False,
+        deep=False,
+    )
+
+
+def _wave_port_localized_scene(simulation, port):
+    return simulation.subsection(
+        region=port._mode_filter_box,
+        sources=(),
+        monitors=(),
+        internal_absorbers=(),
+        remove_outside_grid_spec=True,
+        warn_symmetry_expansion=False,
+        deep_copy=False,
+        validate_geometries=False,
+    )
+
+
+def test_wave_port_unfiltered_mode_simulation_matches_augmented_full_grid():
+    """An unfiltered mode simulation should exactly reproduce the augmented full grid."""
+
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    reference_sim = _simulation_with_port_mesh_overrides(simulation, port)
+    mode_sim = ModeSimulation.from_simulation(
+        simulation=reference_sim,
+        plane=port.geometry,
+        mode_spec=port.mode_spec,
+        freqs=[20e9],
+        direction=port.direction,
+        colocate=False,
+        conjugated_dot_product=port.conjugated_dot_product,
+    )
+
+    x_bounds = (port.bounds[0][0], port.bounds[1][0])
+    z_bounds = (port.bounds[0][2], port.bounds[1][2])
+
+    full_x = _boundaries_in_bounds(reference_sim.grid.boundaries.to_list[0], *x_bounds)
+    full_z = _boundaries_in_bounds(reference_sim.grid.boundaries.to_list[2], *z_bounds)
+    mode_x = _boundaries_in_bounds(mode_sim.grid.boundaries.to_list[0], *x_bounds)
+    mode_z = _boundaries_in_bounds(mode_sim.grid.boundaries.to_list[2], *z_bounds)
+
+    assert np.allclose(full_x, mode_x)
+    assert np.allclose(full_z, mode_z)
+    assert len(reference_sim.grid_spec.override_structures) == len(
+        mode_sim.grid_spec.override_structures
+    )
+    assert len(reference_sim.grid_spec.layer_refinement_specs) == len(
+        mode_sim.grid_spec.layer_refinement_specs
+    )
+    assert len(reference_sim.grid_spec.snapping_points) == len(mode_sim.grid_spec.snapping_points)
+
+
+def test_wave_port_to_mode_simulation_freezes_grid_when_extrusions_are_added():
+    """WavePort mode simulations should freeze meshing inputs once port extrusions are added."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    port = port.updated_copy(extrude_structures=True)
+    mode_sim = port.to_mode_simulation(simulation, freqs=[20e9], reduce_simulation=True)
+
+    localized_sim = _wave_port_localized_scene(simulation, port)
+    filtered_grid_spec = localized_sim.grid_spec
+    filtered_grid_spec = filtered_grid_spec.updated_copy(
+        override_structures=[*filtered_grid_spec.override_structures, *port.to_mesh_overrides()]
+    )
+    filtered_structures = localized_sim.structures
+    filtered_sim = simulation.updated_copy(
+        grid_spec=filtered_grid_spec,
+        structures=filtered_structures,
+        validate=False,
+        deep=False,
+    )
+
+    extra_structures = port._extruded_structures(
+        simulation=filtered_sim,
+    )
+
+    assert len(extra_structures) > 0
+    assert len(mode_sim.grid_spec.override_structures) == 0
+    assert len(mode_sim.grid_spec.layer_refinement_specs) == 0
+    assert len(mode_sim.grid_spec.snapping_points) == 0
+    assert _effective_override_count(mode_sim) == 0
+    assert _effective_snapping_count(mode_sim) == 0
+
+    assert len(mode_sim.structures) == len(filtered_structures) + len(extra_structures)
+
+    # The frozen mode grid should match the filtered local grid in the port region.
+    x_bounds = (port.bounds[0][0], port.bounds[1][0])
+    z_bounds = (port.bounds[0][2], port.bounds[1][2])
+    filtered_x = _boundaries_in_bounds(filtered_sim.grid.boundaries.to_list[0], *x_bounds)
+    filtered_z = _boundaries_in_bounds(filtered_sim.grid.boundaries.to_list[2], *z_bounds)
+    mode_x = _boundaries_in_bounds(mode_sim.grid.boundaries.to_list[0], *x_bounds)
+    mode_z = _boundaries_in_bounds(mode_sim.grid.boundaries.to_list[2], *z_bounds)
+    assert np.allclose(filtered_x, mode_x)
+    assert np.allclose(filtered_z, mode_z)
+
+
+def test_wave_port_to_mode_simulation_keeps_transverse_axis_grid_hints():
+    """Filtered mode simulations keep overrides and snapping points that affect a local transverse axis."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    zmin, zmax = port.bounds[0][2], port.bounds[1][2]
+    override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(port.bounds[1][0] + 0.4, 0, port.center[2]), size=(0.2, 2.0, 0.3)),
+        dl=(0.03, None, 0.03),
+    )
+    snap_z = zmin + 0.2 * (zmax - zmin)
+    augmented_sim = simulation.updated_copy(
+        grid_spec=simulation.grid_spec.updated_copy(
+            override_structures=[*simulation.grid_spec.override_structures, override],
+            snapping_points=[
+                *simulation.grid_spec.snapping_points,
+                (port.bounds[1][0] + 0.6, 0, snap_z),
+            ],
+        ),
+        validate=False,
+        deep=False,
+    )
+
+    mode_sim = port.to_mode_simulation(augmented_sim, freqs=[20e9], reduce_simulation=True)
+
+    kept_override = next(
+        mesh_override
+        for mesh_override in mode_sim.grid_spec.override_structures
+        if isinstance(mesh_override, td.MeshOverrideStructure)
+        and mesh_override.dl == (None, None, 0.03)
+    )
+    assert kept_override.dl == (None, None, 0.03)
+    assert kept_override.geometry.bounds[0][0] == pytest.approx(override.geometry.bounds[0][0])
+    assert kept_override.geometry.bounds[1][0] == pytest.approx(override.geometry.bounds[1][0])
+    assert mode_sim.grid_spec.snapping_points[-1] == (None, 0, snap_z)
+
+
+def test_wave_port_to_mode_simulation_accepts_structure_and_grid_overrides():
+    """Override structures and grid spec can be supplied separately from a bare simulation."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    freqs = [20e9]
+    bare_sim = _make_wave_port_bare_simulation(
+        simulation,
+        structures=(),
+        grid_spec=td.GridSpec.auto(wavelength=simulation.grid_spec.wavelength),
+    )
+
+    mode_sim = port.to_mode_simulation(
+        bare_sim,
+        freqs=freqs,
+        structures=simulation.structures,
+        grid_spec=simulation.grid_spec,
+        reduce_simulation=True,
+    )
+
+    assert mode_sim == port.to_mode_simulation(simulation, freqs=freqs, reduce_simulation=True)
+
+
+def test_wave_port_to_mode_simulation_accepts_structure_override_only():
+    """Structure overrides can reuse the passed simulation grid spec."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    freqs = [20e9]
+    bare_sim = _make_wave_port_bare_simulation(simulation, structures=())
+
+    mode_sim = port.to_mode_simulation(
+        bare_sim,
+        freqs=freqs,
+        structures=simulation.structures,
+        reduce_simulation=True,
+    )
+
+    assert mode_sim == port.to_mode_simulation(simulation, freqs=freqs, reduce_simulation=True)
+
+
+def test_wave_port_to_mode_simulation_accepts_grid_override_only():
+    """Grid-spec overrides can reuse the passed simulation structures."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    freqs = [20e9]
+    bare_sim = _make_wave_port_bare_simulation(
+        simulation,
+        grid_spec=td.GridSpec.auto(wavelength=simulation.grid_spec.wavelength),
+    )
+
+    mode_sim = port.to_mode_simulation(
+        bare_sim,
+        freqs=freqs,
+        grid_spec=simulation.grid_spec,
+        reduce_simulation=True,
+    )
+
+    assert mode_sim == port.to_mode_simulation(simulation, freqs=freqs, reduce_simulation=True)
+
+
+def test_wave_port_to_mode_simulation_override_path_preserves_extrusions():
+    """The override path should preserve the existing extrusion and frozen-grid behavior."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    port = port.updated_copy(extrude_structures=True)
+    freqs = [20e9]
+    bare_sim = _make_wave_port_bare_simulation(
+        simulation,
+        structures=(),
+        grid_spec=td.GridSpec.auto(wavelength=simulation.grid_spec.wavelength),
+    )
+
+    mode_sim = port.to_mode_simulation(
+        bare_sim,
+        freqs=freqs,
+        structures=simulation.structures,
+        grid_spec=simulation.grid_spec,
+        reduce_simulation=True,
+    )
+
+    assert mode_sim == port.to_mode_simulation(simulation, freqs=freqs, reduce_simulation=True)
+
+
+def test_wave_port_to_mode_solver_uses_mode_simulation_override_path():
+    """Mode-solver conversion should delegate through the mode-simulation helper."""
+    simulation, port = _make_wave_port_filtering_cpw_simulation()
+    freqs = [20e9]
+    bare_sim = _make_wave_port_bare_simulation(
+        simulation,
+        structures=(),
+        grid_spec=td.GridSpec.auto(wavelength=simulation.grid_spec.wavelength),
+    )
+
+    mode_sim = port.to_mode_simulation(
+        bare_sim,
+        freqs=freqs,
+        structures=simulation.structures,
+        grid_spec=simulation.grid_spec,
+        reduce_simulation=True,
+    )
+    mode_solver = port.to_mode_solver(
+        bare_sim,
+        freqs=freqs,
+        structures=simulation.structures,
+        grid_spec=simulation.grid_spec,
+        reduce_simulation=True,
+    )
+
+    assert mode_solver == mode_sim._mode_solver
