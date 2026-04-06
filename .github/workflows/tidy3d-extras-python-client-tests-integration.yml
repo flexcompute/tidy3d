@@ -121,6 +121,9 @@ jobs:
         echo "UV_INDEX_CODEARTIFACT_PASSWORD=$CODEARTIFACT_AUTH_TOKEN" >> "$GITHUB_ENV"
         echo "✅ CodeArtifact authentication configured for uv"
 
+    - name: regenerate-lockfile
+      run: uv lock --refresh-package tidy3d-extras
+
     - name: install-project
       shell: bash
       run: |
@@ -246,6 +249,9 @@ jobs:
         echo "UV_INDEX_CODEARTIFACT_USERNAME=aws" >> "$GITHUB_ENV"
         echo "UV_INDEX_CODEARTIFACT_PASSWORD=$CODEARTIFACT_AUTH_TOKEN" >> "$GITHUB_ENV"
         echo "✅ CodeArtifact authentication configured for uv"
+
+    - name: regenerate-lockfile
+      run: uv lock --refresh-package tidy3d-extras
 
     - name: install-project
       shell: bash
