@@ -2187,7 +2187,7 @@ class SurfaceFieldData(ElectromagneticSurfaceFieldData):
 
 
 class SurfaceFieldTimeData(ElectromagneticSurfaceFieldData):
-    """Data associated with a :class:`.SurfaceFieldTimeMonitor`: E and H fields on a surface.
+    """
 
     Example
     -------

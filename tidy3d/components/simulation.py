@@ -1852,6 +1852,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     red_coords = Coords(**dict(zip("xyz", coords_reduced)))
                     eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
 
+                    # Ensure eps_structure is 3D; drop trailing singleton frequency axes.
+                    expected_ndim = len(coords_reduced)
+                    if np.ndim(eps_structure) > expected_ndim:
+                        while np.ndim(eps_structure) > expected_ndim:
+                            if np.shape(eps_structure)[-1] != 1:
+                                raise SetupError(
+                                    "Expected custom-medium permittivity to be spatially 3D "
+                                    f"for reduced coords of shape {tuple(len(c) for c in coords_reduced)}, "
+                                    f"but got array shape {np.shape(eps_structure)}."
+                                )
+                            eps_structure = np.squeeze(eps_structure, axis=-1)
+
                     if structure.medium.nonlinear_spec is not None:
                         consolidated_logger.warning(
                             "Evaluating permittivity of a nonlinear "

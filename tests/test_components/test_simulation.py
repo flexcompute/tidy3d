@@ -2451,6 +2451,21 @@ def test_tfsf_structures_grid():
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
     eps_dataset = td.PermittivityDataset(**eps_components)
     custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
+    eps_sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        structures=(
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2.0, 2.0, 2.0)),
+                medium=custom_medium,
+            ),
+        ),
+    )
+    eps = eps_sim.epsilon(box=td.Box(center=(0, 0, 0), size=(2.0, 2.0, 2.0)), freq=td.C_0)
+    assert eps.ndim == 3
+    assert np.allclose(eps.values, 1.0)
+
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
         grid_spec=td.GridSpec.auto(wavelength=1.0),

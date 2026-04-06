@@ -1001,14 +1001,19 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             at the supplied coordinate.
         """
         eps_spatial = self.eps_dataarray_freq(frequency)
+
+        def _interp_and_squeeze(eps_comp: Any, comp: int) -> NDArray[Any]:
+            """Interpolate spatially and drop any leftover frequency dimension."""
+            result = coords.spatial_interp(eps_comp, self._interp_method(comp))
+            if hasattr(result, "dims") and "f" in result.dims:
+                result = result.squeeze("f", drop=True)
+            return _get_numpy_array(result)
+
         if self.is_isotropic:
-            eps_interp = _get_numpy_array(
-                coords.spatial_interp(eps_spatial[0], self._interp_method(0))
-            )
+            eps_interp = _interp_and_squeeze(eps_spatial[0], 0)
             return (eps_interp, eps_interp, eps_interp)
         return tuple(
-            _get_numpy_array(coords.spatial_interp(eps_comp, self._interp_method(comp)))
-            for comp, eps_comp in enumerate(eps_spatial)
+            _interp_and_squeeze(eps_comp, comp) for comp, eps_comp in enumerate(eps_spatial)
         )
 
     def eps_comp_on_grid(
