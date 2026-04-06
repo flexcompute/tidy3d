@@ -2,7 +2,7 @@ Extras Plugin |:sparkles:|
 ==========================
 .. currentmodule:: tidy3d-extras
 
-``tidy3d-extras`` is an optional plugin for Tidy3D providing additional, more advanced local functionality. This additional functionality includes a more accurate local mode solver with subpixel averaging.
+``tidy3d-extras`` is an optional plugin for Tidy3D providing additional, more advanced local functionality. This includes subpixel-averaged permittivity and mode solving, broadband source injection, transmission line terminal analysis, and vector fitting of frequency-domain data.
 
 
 Installation
@@ -49,6 +49,10 @@ Currently, ``tidy3d-extras`` provides the following features:
 - Local subpixel-averaged permittivity. This is what one would obtain
   with a ``PermittivityMonitor`` in an FDTD ``Simulation``.
 - More accurate local mode solver with subpixel averaging.
+- Mode solver for fully tensorial media, or for a mode specification with nonzero ``angle_theta`` and ``angle_rotation=False``, which creates an equivalent fully tensorial solve.
+- ``BroadbandPulse`` source time for injecting significant energy across a wide custom frequency range.
+- Computation of voltage and current transformation matrices for transmission line terminals. Requires an **RF license**.
+- Vector fitting of array-valued frequency-domain data via ``_vector_fit``.
 
 By default, these features are automatically enabled if the ``tidy3d-extras``
 package is installed. The following functions benefit from local subpixel
