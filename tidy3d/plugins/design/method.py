@@ -11,6 +11,7 @@ from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import inf
+from tidy3d.log import log
 
 from .parameter import ParameterAny, ParameterFloat, ParameterInt
 
@@ -286,14 +287,6 @@ class MethodBayOpt(MethodOptimize, ABC):
         the ``BayesianOptimization`` helper class as this allows more control over batching and preprocessing.
         More details of the package can be found `here <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>`_.
         """
-        try:
-            from bayes_opt import BayesianOptimization, UtilityFunction
-        except ImportError:
-            raise ImportError(
-                "Cannot run Bayesian optimization as 'bayes_opt' module not found. "
-                "Please check installation or run 'pip install bayesian-optimization==1.5.1'."
-            ) from None
-
         # Identify non-numeric params and define boundaries for Bay-opt
         param_converter: dict[str, dict[int, Any]] = {}
         boundary_dict: dict[str, tuple[float, float]] = {}
@@ -313,18 +306,15 @@ class MethodBayOpt(MethodOptimize, ABC):
             for param_name, param_values in param_converter.items()
         }
 
-        # Initialize optimizer and utility function. Carry out optimization manually instead of using helper for more control
-        utility = UtilityFunction(kind=self.acq_func, kappa=self.kappa, xi=self.xi)
-        opt = BayesianOptimization(
-            f=run_fn, pbounds=boundary_dict, random_state=self.seed, allow_duplicate_points=True
-        )
+        # Use the modern acquisition object API from bayesian-optimization>=2.0.0.
+        opt, suggest = self._get_bayopt_optimizer(run_fn=run_fn, boundary_dict=boundary_dict)
 
         # Build the initial starting set of solutions - randomly chosen and batched together
         arg_list = []
         total_aux_out = []
         result = []
         for _ in range(self.initial_iter):
-            next_point = opt.suggest(utility)
+            next_point = suggest()
             self._force_int(next_point, parameters)
             self._handle_param_convert(param_converter, [next_point])
             arg_list.append(next_point)
@@ -347,7 +337,7 @@ class MethodBayOpt(MethodOptimize, ABC):
         # Handle further iterations sequentially
         # BayOpt package does not allow for batched non-random predictions
         for iter_num in range(self.n_iter):
-            next_point = opt.suggest(utility)
+            next_point = suggest()
             self._force_int(next_point, parameters)
             self._handle_param_convert(param_converter, [next_point])
 
@@ -377,6 +367,51 @@ class MethodBayOpt(MethodOptimize, ABC):
             fn_args.append(output["params"])
 
         return fn_args, result, total_aux_out, opt
+
+    def _get_bayopt_optimizer(
+        self,
+        run_fn: RunFunction,
+        boundary_dict: dict[str, tuple[float, float]],
+    ) -> tuple[Any, Callable[[], dict[str, Any]]]:
+        """Construct a Bayesian optimizer for bayes_opt 2.x+."""
+        try:
+            from bayes_opt import BayesianOptimization
+            from bayes_opt.acquisition import (
+                ExpectedImprovement,
+                ProbabilityOfImprovement,
+                UpperConfidenceBound,
+            )
+        except ImportError:
+            raise ImportError(
+                "Cannot run Bayesian optimization as the modern 'bayes_opt' API is unavailable. "
+                "Please install 'bayesian-optimization>=2.0.0'."
+            ) from None
+
+        acquisition_map = {
+            "ucb": self._build_bayopt_acquisition(UpperConfidenceBound, kappa=self.kappa),
+            "ei": self._build_bayopt_acquisition(ExpectedImprovement, xi=self.xi),
+            "poi": self._build_bayopt_acquisition(ProbabilityOfImprovement, xi=self.xi),
+        }
+        opt = BayesianOptimization(
+            f=run_fn,
+            pbounds=boundary_dict,
+            acquisition_function=acquisition_map[self.acq_func],
+            random_state=self.seed,
+            allow_duplicate_points=True,
+        )
+        return opt, opt.suggest
+
+    def _build_bayopt_acquisition(self, acquisition_cls: Any, **kwargs: Any) -> Any:
+        """Instantiate bayes_opt acquisition classes with/without random_state support."""
+        try:
+            return acquisition_cls(random_state=self.seed, **kwargs)
+        except TypeError:
+            log.warning(
+                "Bayes acquisition class does not accept 'random_state'; optimization may be "
+                "non-deterministic for this bayesian-optimization version.",
+                log_once=True,
+            )
+            return acquisition_cls(**kwargs)
 
 
 class MethodGenAlg(MethodOptimize, ABC):

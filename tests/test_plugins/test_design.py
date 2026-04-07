@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import types
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -97,6 +98,73 @@ def run_emulated_workflow(simulation, path=None, **kwargs):
             freqs=simulation.freqs, num_modes=simulation.mode_spec.num_modes
         )
     raise TypeError(f"Unsupported workflow type for emulation: {type(simulation).__name__}")
+
+
+@pytest.mark.parametrize(
+    ("acq_func", "expected_type", "expected_attr", "expected_value"),
+    [
+        ("ucb", "UpperConfidenceBound", "kappa", 2.5),
+        ("ei", "ExpectedImprovement", "xi", 0.0),
+        ("poi", "ProbabilityOfImprovement", "xi", 0.0),
+    ],
+)
+def test_bayopt_new_api_supports_acquisition_constructors_without_random_state(
+    monkeypatch, acq_func, expected_type, expected_attr, expected_value
+):
+    class UpperConfidenceBound:
+        def __init__(self, kappa):
+            self.kappa = kappa
+
+    class ExpectedImprovement:
+        def __init__(self, xi):
+            self.xi = xi
+
+    class ProbabilityOfImprovement:
+        def __init__(self, xi):
+            self.xi = xi
+
+    class ModernBayesianOptimization:
+        def __init__(
+            self,
+            f,
+            pbounds,
+            acquisition_function=None,
+            random_state=None,
+            allow_duplicate_points=False,
+        ):
+            self.f = f
+            self.pbounds = pbounds
+            self.acquisition_function = acquisition_function
+            self.random_state = random_state
+            self.allow_duplicate_points = allow_duplicate_points
+
+        def suggest(self):
+            return {"x": 0.5}
+
+    bayes_opt = types.ModuleType("bayes_opt")
+    bayes_opt.__version__ = "2.0.0"
+    bayes_opt.__path__ = []
+    bayes_opt.BayesianOptimization = ModernBayesianOptimization
+
+    acquisition = types.ModuleType("bayes_opt.acquisition")
+    acquisition.UpperConfidenceBound = UpperConfidenceBound
+    acquisition.ExpectedImprovement = ExpectedImprovement
+    acquisition.ProbabilityOfImprovement = ProbabilityOfImprovement
+
+    monkeypatch.setitem(sys.modules, "bayes_opt", bayes_opt)
+    monkeypatch.setitem(sys.modules, "bayes_opt.acquisition", acquisition)
+
+    method = tdd.MethodBayOpt(initial_iter=1, n_iter=1, seed=1, acq_func=acq_func)
+    optimizer, suggest = method._get_bayopt_optimizer(
+        run_fn=lambda args_list: [0.0 for _ in args_list],
+        boundary_dict={"x": (0.0, 1.0)},
+    )
+
+    assert isinstance(optimizer, ModernBayesianOptimization)
+    assert type(optimizer.acquisition_function).__name__ == expected_type
+    assert getattr(optimizer.acquisition_function, expected_attr) == expected_value
+    assert optimizer.random_state == 1
+    assert suggest() == {"x": 0.5}
 
 
 def emulated_batch_run(simulations, path_dir: Optional[str] = None, **kwargs):
