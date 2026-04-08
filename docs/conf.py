@@ -26,6 +26,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import get_args, get_origin
 
@@ -64,7 +65,14 @@ master_doc = "index"  # The master toctree document.s
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 add_module_names = False  # Remove namespaces from class/method signatures
-autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
+if full_build:
+    autosummary_generate = sorted(
+        str(path.relative_to(here))
+        for path in Path(here).rglob("*.rst")
+        if "_autosummary" not in path.parts
+    )
+else:
+    autosummary_generate = False
 autosummary_generate_overwrite = True  # Regenerate autosummary stubs to match templates
 # autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 # autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
@@ -89,6 +97,7 @@ exclude_patterns = [
     "_docs/",
     "_templates/",
     "_ext/",
+    "**/.venv/**",
     "**.ipynb_checkpoints",
     ".DS_Store",
     "Thumbs.db",
@@ -190,6 +199,22 @@ include_patterns = [
     "**.txt",
     "**/sitemap.xml",
 ]
+_docs_only = os.environ.get("TIDY3D_DOCS_ONLY", "").strip()
+if _docs_only:
+    selected_docs = {"index.rst"}
+    for doc in _docs_only.split(","):
+        doc = doc.strip()
+        if not doc:
+            continue
+        if not doc.endswith(".rst"):
+            doc = f"{doc}.rst"
+        selected_docs.add(doc)
+    include_patterns = [
+        *sorted(selected_docs),
+        "**.png",
+        "**.svg",
+        "**.txt",
+    ]
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -309,6 +334,72 @@ class AutosummaryFilter(logging.Filter):
         return True
 
 
+def _env_flag(name: str) -> bool:
+    """Parse common truthy environment variable values."""
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _emit_autosummary_profile(message: str) -> None:
+    """Write autosummary profiling messages directly to stderr."""
+    print(f"[autosummary-profile] {message}", file=sys.stderr, flush=True)
+
+
+def _install_autosummary_profiler() -> None:
+    """Optionally instrument Sphinx autosummary to identify slow objects."""
+    if not _env_flag("TIDY3D_DOCS_PROFILE_AUTOSUMMARY"):
+        return
+
+    from sphinx.ext.autosummary import generate as autosummary_generate
+
+    if getattr(autosummary_generate, "_tidy3d_profile_installed", False):
+        return
+
+    verbose = _env_flag("TIDY3D_DOCS_PROFILE_AUTOSUMMARY_VERBOSE")
+    threshold_s = float(os.environ.get("TIDY3D_DOCS_PROFILE_AUTOSUMMARY_THRESHOLD", "2.0"))
+
+    original_generate_content = autosummary_generate.generate_autosummary_content
+    original_get_members = autosummary_generate._get_members
+
+    def _describe_obj(obj: object) -> str:
+        module = getattr(obj, "__module__", None)
+        qualname = getattr(obj, "__qualname__", None) or getattr(obj, "__name__", None)
+        if module and qualname:
+            return f"{module}.{qualname}"
+        if qualname:
+            return str(qualname)
+        return repr(obj)
+
+    def profiled_generate_autosummary_content(*args, **kwargs):
+        name = args[0] if args else kwargs.get("name", "<unknown>")
+        start = time.perf_counter()
+        if verbose:
+            _emit_autosummary_profile(f"start content {name}")
+        try:
+            return original_generate_content(*args, **kwargs)
+        finally:
+            elapsed = time.perf_counter() - start
+            if verbose or elapsed >= threshold_s:
+                _emit_autosummary_profile(f"done content {name} in {elapsed:.2f}s")
+
+    def profiled_get_members(doc, obj, types, *args, **kwargs):
+        owner = _describe_obj(obj)
+        kind = ",".join(sorted(types))
+        start = time.perf_counter()
+        if verbose:
+            _emit_autosummary_profile(f"start members {kind} for {owner}")
+        try:
+            return original_get_members(doc, obj, types, *args, **kwargs)
+        finally:
+            elapsed = time.perf_counter() - start
+            if verbose or elapsed >= threshold_s:
+                _emit_autosummary_profile(f"done members {kind} for {owner} in {elapsed:.2f}s")
+
+    autosummary_generate.generate_autosummary_content = profiled_generate_autosummary_content
+    autosummary_generate._get_members = profiled_get_members
+    autosummary_generate._tidy3d_profile_installed = True
+    _emit_autosummary_profile(f"enabled threshold={threshold_s:.2f}s verbose={verbose}")
+
+
 def add_import_warning_filter(app):
     # Get the Sphinx logger
     logger = logging.getLogger("sphinx")
@@ -321,6 +412,9 @@ def add_autosummary_filter(app):
     logger = logging.getLogger("sphinx")
     # Add the custom filter to the logger
     logger.addFilter(AutosummaryFilter())
+
+
+_install_autosummary_profiler()
 
 
 _PYDANTIC_MODEL_DOCS: dict[str, str] | None = None
