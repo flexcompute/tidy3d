@@ -711,6 +711,26 @@ def test_validate_size_spatial_and_time(monkeypatch):
         s._validate_size()
 
 
+def test_validate_size_min_cells_excluding_pml(monkeypatch):
+    monkeypatch.setattr(simulation, "WARN_SIM_DOMAIN_CELLS_EXCLUDING_PML", 100)
+    pml_boundaries = td.BoundarySpec.all_sides(boundary=td.PML(num_layers=40))
+    sim = td.Simulation(
+        size=(0.2, 0.2, 0.2),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-13,
+        boundary_spec=pml_boundaries,
+    )
+
+    # Interior domain has 8 cells (2 x 2 x 2), while the full grid has many more due to PML.
+    with AssertLogLevel("WARNING", contains_str="below the recommended"):
+        sim._validate_size()
+
+    # Interior domain has 125 cells (5 x 5 x 5), above warning threshold.
+    sim = sim.updated_copy(size=(0.5, 0.5, 0.5))
+    with AssertLogStr("WARNING", excludes_str="below the recommended"):
+        sim._validate_size()
+
+
 def test_validate_mnt_size(monkeypatch):
     # warning for monitor size
     monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)

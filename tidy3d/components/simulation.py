@@ -197,6 +197,7 @@ MAX_TIME_STEPS = 1e7
 WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
+WARN_SIM_DOMAIN_CELLS_EXCLUDING_PML = 100
 
 # monitor warnings and restrictions
 MAX_TIME_MONITOR_STEPS = 5000  # does not apply to 0D monitors
@@ -5015,6 +5016,16 @@ class Simulation(AbstractYeeGridSimulation):
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
 
+        num_domain_cells_excluding_pml = self._num_non_pml_cells()
+        if num_domain_cells_excluding_pml < WARN_SIM_DOMAIN_CELLS_EXCLUDING_PML:
+            log.warning(
+                f"Simulation has {num_domain_cells_excluding_pml} grid cells in the simulation "
+                "domain excluding PML, which is below the recommended "
+                f"{WARN_SIM_DOMAIN_CELLS_EXCLUDING_PML}. Please double-check that the setup "
+                "is intended (for example, units).",
+                custom_loc=["size"],
+            )
+
         num_comp_cells = self.num_cells / 2 ** (np.sum(np.abs(self.symmetry)))
         if num_comp_cells > MAX_GRID_CELLS:
             raise SetupError(
@@ -5041,6 +5052,14 @@ class Simulation(AbstractYeeGridSimulation):
                 f"Simulation has {num_cells_times_steps:.2e} grid cells * time steps, "
                 f"a maximum of {MAX_CELLS_TIMES_STEPS:.2e} are allowed."
             )
+
+    def _num_non_pml_cells(self) -> int:
+        """Number of grid cells in the simulation domain excluding PML/absorber layers."""
+        non_pml_cells_dim = []
+        for num_cells_dim, num_pml_layers_dim in zip(self.grid.num_cells, self.num_pml_layers):
+            num_pml_cells_dim = num_pml_layers_dim[0] + num_pml_layers_dim[1]
+            non_pml_cells_dim.append(num_cells_dim - num_pml_cells_dim)
+        return int(np.prod(non_pml_cells_dim))
 
     def _validate_monitor_size(self) -> None:
         """Ensures the monitors aren't storing too much data before simulation is uploaded."""
