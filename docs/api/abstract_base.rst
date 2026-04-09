@@ -19,6 +19,8 @@ Base classes that represent abstractions of common components. Provide inherited
    tidy3d.components.data.dataset.AbstractFieldDataset
    tidy3d.components.data.dataset.AuxFieldTimeDataset
    tidy3d.components.data.dataset.ElectromagneticFieldDataset
+   tidy3d.components.data.dataset.ElectromagneticSurfaceFieldDataset
+   tidy3d.components.data.monitor_data.ElectromagneticSurfaceFieldData
    tidy3d.components.data.data_array.AbstractSpatialDataArray
    tidy3d.components.data.monitor_data.AbstractFieldData
    tidy3d.components.data.monitor_data.AbstractFieldProjectionData
