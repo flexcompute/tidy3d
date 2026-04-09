@@ -87,11 +87,11 @@ def setup_adj(
     full_sim_data_dict = sim_data_orig._strip_traced_fields(
         include_untraced_data_arrays=True, starting_paths=(("data",),)
     )
-    for path in full_sim_data_dict.keys():
+    for path, value in full_sim_data_dict.items():
         if path in data_fields_vjp:
             full_sim_data_dict[path] = data_fields_vjp[path]
         else:
-            full_sim_data_dict[path] *= 0
+            full_sim_data_dict[path] = 0 * value
 
     # insert the raw VJP data into the .data of the original SimulationData
     sim_data_vjp = sim_data_orig._insert_traced_fields(field_mapping=full_sim_data_dict)
