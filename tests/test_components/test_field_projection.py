@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.components.field_projection.common as field_projection_common
+import tidy3d.components.field_projection.exact as field_projection_exact
 from tidy3d.components.field_projection import FieldProjector
 from tidy3d.components.field_projection.common import (
     _far_field_integral,
@@ -453,6 +454,66 @@ def test_proj_clientside_freq_chunk_size_matches_default():
         )
 
 
+def test_proj_clientside_exact_freq_chunk_size_matches_default():
+    """Exact multi-frequency client-side projections should be chunk-size invariant."""
+
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    freqs = np.linspace(0.9e13, 1.1e13, 9)
+    proj = make_clientside_projector(center, size, freqs, num_points=4, seed=1)
+
+    n2f_angle_monitor, _, n2f_ksp_monitor, exact_cart_monitor, _ = make_proj_monitors(
+        center, size, freqs
+    )
+    exact_angle_monitor = n2f_angle_monitor.updated_copy(
+        name="exact_angle_chunked",
+        far_field_approx=False,
+        theta=[float(n2f_angle_monitor.theta[0])],
+        phi=[float(n2f_angle_monitor.phi[0])],
+    )
+    exact_cart_monitor = exact_cart_monitor.updated_copy(
+        x=[float(exact_cart_monitor.x[0])],
+        y=[float(exact_cart_monitor.y[0])],
+    )
+    exact_kspace_monitor = n2f_ksp_monitor.updated_copy(
+        name="exact_ksp_chunked",
+        far_field_approx=False,
+        ux=[float(n2f_ksp_monitor.ux[0])],
+        uy=[float(n2f_ksp_monitor.uy[0])],
+    )
+
+    exact_angle_default = proj.project_fields(exact_angle_monitor, verbose=False)
+    exact_angle_chunked = proj.project_fields(exact_angle_monitor, verbose=False, freq_chunk_size=1)
+    exact_cartesian_default = proj.project_fields(exact_cart_monitor, verbose=False)
+    exact_cartesian_chunked = proj.project_fields(
+        exact_cart_monitor, verbose=False, freq_chunk_size=1
+    )
+    exact_kspace_default = proj.project_fields(exact_kspace_monitor, verbose=False)
+    exact_kspace_chunked = proj.project_fields(
+        exact_kspace_monitor, verbose=False, freq_chunk_size=1
+    )
+
+    for name in exact_angle_default.field_components:
+        np.testing.assert_allclose(
+            np.asarray(getattr(exact_angle_default, name).data),
+            np.asarray(getattr(exact_angle_chunked, name).data),
+            rtol=1e-12,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            np.asarray(getattr(exact_cartesian_default, name).data),
+            np.asarray(getattr(exact_cartesian_chunked, name).data),
+            rtol=1e-12,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            np.asarray(getattr(exact_kspace_default, name).data),
+            np.asarray(getattr(exact_kspace_chunked, name).data),
+            rtol=1e-12,
+            atol=1e-12,
+        )
+
+
 def test_proj_clientside_freq_chunk_size_validation():
     """Public projection entry point should reject nonpositive frequency chunk sizes."""
 
@@ -464,6 +525,26 @@ def test_proj_clientside_freq_chunk_size_validation():
 
     with pytest.raises(ValueError, match="freq_chunk_size >= 1"):
         projector.project_fields(proj_monitor, verbose=False, freq_chunk_size=0)
+
+
+def test_resample_surface_currents_raises_on_out_of_bounds_interp():
+    """Surface-current colocation should raise rather than silently produce NaN."""
+
+    center = (0, 0, 0)
+    size = (4, 4, 0)
+    projector = make_clientside_projector(center, size, F0, num_points=4)
+    surface = projector.surfaces[0]
+    field_data = projector.sim_data.monitor_data[surface.monitor.name].symmetry_expanded
+    currents = FieldProjector._fields_to_currents(field_data, surface)
+
+    with pytest.raises(ValueError, match="below the interpolation range's minimum value"):
+        FieldProjector._resample_surface_currents(
+            currents,
+            projector.sim_data,
+            surface,
+            projector.medium,
+            projector.pts_per_wavelength,
+        )
 
 
 def test_proj_clientside_verbose_flag(monkeypatch):
@@ -1159,3 +1240,109 @@ def test_far_field_integral_pairs_matches_reference_2d(idx_integration_1d):
     np.testing.assert_allclose(
         np.asarray(actual), np.stack(expected, axis=-1), rtol=1e-12, atol=1e-12
     )
+
+
+def test_fields_for_surface_exact_kernel_vjp():
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=4)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+    point = (3.0, 0.4, -0.2)
+
+    prepared = field_projection_exact._prepare_exact_surface_projection_point(
+        x=point[0],
+        y=point[1],
+        z=point[2],
+        prepared=field_projection_exact._prepare_exact_surface_projection_static(
+            surface=surface,
+            currents=currents,
+            medium=projector.medium,
+            frequencies=projector.frequencies,
+        ),
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+
+    def reference(currents_in):
+        return field_projection_exact._fields_for_surface_exact_impl(currents_in, prepared)
+
+    def primitive(currents_in):
+        return field_projection_exact._fields_for_surface_exact_primitive(currents_in, prepared)
+
+    vjp_primitive, ans_primitive = make_vjp(primitive)(components)
+    vjp_reference, ans_reference = make_vjp(reference)(components)
+
+    np.testing.assert_allclose(
+        np.asarray(ans_primitive), np.asarray(ans_reference), rtol=1e-12, atol=1e-12
+    )
+
+    rng = np.random.default_rng(2)
+    g = rng.standard_normal(np.asarray(ans_reference).shape) + 1j * rng.standard_normal(
+        np.asarray(ans_reference).shape
+    )
+    grad_primitive = np.asarray(vjp_primitive(g))
+    grad_reference = np.asarray(vjp_reference(g))
+    np.testing.assert_allclose(grad_primitive, grad_reference, rtol=1e-10, atol=1e-10)
+
+
+def test_fields_for_surface_exact_batch_kernel_vjp():
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=4)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+    points = np.array(
+        [
+            (3.0, 0.4, -0.2),
+            (2.8, -0.1, 0.3),
+            (3.2, 0.2, 0.1),
+        ]
+    )
+
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
+    prepared_batch = field_projection_exact._prepare_exact_surface_projection_batch(
+        x=points[:, 0],
+        y=points[:, 1],
+        z=points[:, 2],
+        prepared=prepared_static,
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+
+    def reference(currents_in):
+        return anp.stack(
+            [
+                field_projection_exact._fields_for_surface_exact_impl(
+                    currents_in,
+                    field_projection_exact._prepare_exact_surface_projection_point(
+                        x=point[0], y=point[1], z=point[2], prepared=prepared_static
+                    ),
+                )
+                for point in points
+            ],
+            axis=0,
+        )
+
+    def primitive(currents_in):
+        return field_projection_exact._fields_for_surface_exact_batch_primitive(
+            currents_in, prepared_batch
+        )
+
+    vjp_primitive, ans_primitive = make_vjp(primitive)(components)
+    vjp_reference, ans_reference = make_vjp(reference)(components)
+
+    np.testing.assert_allclose(
+        np.asarray(ans_primitive), np.asarray(ans_reference), rtol=1e-12, atol=1e-12
+    )
+
+    rng = np.random.default_rng(3)
+    g = rng.standard_normal(np.asarray(ans_reference).shape) + 1j * rng.standard_normal(
+        np.asarray(ans_reference).shape
+    )
+    grad_primitive = np.asarray(vjp_primitive(g))
+    grad_reference = np.asarray(vjp_reference(g))
+    np.testing.assert_allclose(grad_primitive, grad_reference, rtol=1e-10, atol=1e-10)

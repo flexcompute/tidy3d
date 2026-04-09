@@ -11,7 +11,6 @@ from pydantic import Field, model_validator
 
 from tidy3d.components.autograd.functions import trapz
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.monitor import (
@@ -23,12 +22,12 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types import Coordinate
 from tidy3d.components.validators import validate_field_projection_monitors_2d
 from tidy3d.constants import C_0, MICROMETER
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.log import log
 
 from .approximate_angle import _ApproximateAngleProjectionMixin
 from .approximate_paired import _ApproximatePairedProjectionMixin
-from .common import APPROX_PROJECTION_FREQ_CHUNK_SIZE, PTS_PER_WVL
+from .common import PROJECTION_FREQ_CHUNK_SIZE, PTS_PER_WVL
 from .exact import _ExactFieldProjectionMixin
 
 if TYPE_CHECKING:
@@ -37,7 +36,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
-    from tidy3d.components.data.monitor_data import AbstractFieldProjectionData
+    from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, FieldData
     from tidy3d.components.medium import MediumType
     from tidy3d.components.monitor import AbstractFieldProjectionMonitor, FieldMonitor
     from tidy3d.components.types import Direction
@@ -268,7 +267,9 @@ class FieldProjector(
         if monitor_name not in sim_data.monitor_data.keys():
             raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
 
-        field_data = sim_data[monitor_name]
+        # Field projection only reads from the monitor data, so it can use the
+        # non-copying symmetry-expanded view instead of SimulationData.__getitem__().
+        field_data = sim_data.monitor_data[monitor_name].symmetry_expanded
 
         currents = FieldProjector._fields_to_currents(field_data, surface)
         currents = FieldProjector._resample_surface_currents(
@@ -278,8 +279,10 @@ class FieldProjector(
         return currents
 
     @staticmethod
-    def _fields_to_currents(field_data: FieldData, surface: FieldProjectionSurface) -> FieldData:
-        """Returns surface current densities associated with a given :class:`.FieldData` object.
+    def _fields_to_currents(
+        field_data: FieldData, surface: FieldProjectionSurface
+    ) -> dict[str, xr.DataArray]:
+        """Returns surface current-density components associated with a field monitor.
 
         Parameters
         ----------
@@ -290,8 +293,8 @@ class FieldProjector(
 
         Returns
         -------
-        :class:`.FieldData`
-            Surface current densities for the given surface.
+        dict[str, xarray.DataArray]
+            Surface current-density components for the given surface.
         """
 
         # figure out which field components are tangential or normal to the monitor
@@ -316,19 +319,11 @@ class FieldProjector(
         surface_currents[H2] = field_data.field_components[E1] * signs[0]
         surface_currents[H1] = field_data.field_components[E2] * signs[1]
 
-        new_monitor = surface.monitor.copy(update={"fields": (E1, E2, H1, H2)})
-
-        return FieldData(
-            monitor=new_monitor,
-            symmetry=field_data.symmetry,
-            symmetry_center=field_data.symmetry_center,
-            grid_expanded=field_data.grid_expanded,
-            **surface_currents,
-        )
+        return surface_currents
 
     @staticmethod
     def _resample_surface_currents(
-        currents: FieldData,
+        currents: dict[str, xr.DataArray],
         sim_data: SimulationData,
         surface: FieldProjectionSurface,
         medium: MediumType,
@@ -338,7 +333,7 @@ class FieldProjector(
 
         Parameters
         ----------
-        currents : :class:`.FieldData`
+        currents : dict[str, xarray.DataArray]
             Surface currents defined on the original Yee grid.
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
@@ -375,8 +370,8 @@ class FieldProjector(
             # Skip resampling along dimensions where the current data has only one source
             # coordinate, such as the collapsed axis of a 2D simulation.
             if any(
-                np.array(field_data.coords[coord_name]).size <= 1
-                for field_data in currents.field_components.values()
+                field_data.coords[coord_name].size <= 1
+                for field_data in currents.values()
                 if field_data is not None
             ):
                 continue
@@ -392,9 +387,7 @@ class FieldProjector(
                 coord_list[idx][-1],
             )
             if pts_per_wavelength is None:
-                points = sim_data.simulation.grid.boundaries.to_list[idx].copy()
-                points[np.argwhere(points < start)] = start
-                points[np.argwhere(points > stop)] = stop
+                points = np.clip(coord_list[idx], start, stop)
                 colocation_points[idx] = np.unique(points)
             else:
                 size = stop - start
@@ -403,11 +396,31 @@ class FieldProjector(
                 colocation_points[idx] = points
 
         for idx, points in enumerate(colocation_points):
-            if np.array(points).size <= 1:
+            if np.size(points) <= 1:
                 colocation_points[idx] = None
 
-        currents = currents.colocate(*colocation_points)
-        return currents
+        supplied_coord_map = {
+            name: points for name, points in zip("xyz", colocation_points) if points is not None
+        }
+        if not supplied_coord_map:
+            return xr.Dataset(currents)
+
+        centered_fields = {}
+        for field_name, field_data in currents.items():
+            for coord_name, coords_supplied in supplied_coord_map.items():
+                coord_data = field_data.coords[coord_name].values
+                if coord_data.size == 1:
+                    raise DataError(
+                        f"colocate given {coord_name}={coords_supplied}, but data only has one "
+                        f"coordinate at {coord_name}={coord_data[0]}. Therefore, can't colocate "
+                        f"along this dimension. supply {coord_name}=None to skip it."
+                    )
+
+            centered_fields[field_name] = field_data.interp(
+                **supplied_coord_map, kwargs={"bounds_error": True}
+            )
+
+        return xr.Dataset(centered_fields)
 
     @staticmethod
     def trapezoid(
@@ -498,7 +511,7 @@ class FieldProjector(
         self,
         proj_monitor: AbstractFieldProjectionMonitor,
         verbose: bool = True,
-        freq_chunk_size: int | None = APPROX_PROJECTION_FREQ_CHUNK_SIZE,
+        freq_chunk_size: int | None = PROJECTION_FREQ_CHUNK_SIZE,
     ) -> AbstractFieldProjectionData:
         """Compute projected fields.
 
@@ -511,9 +524,9 @@ class FieldProjector(
         verbose : bool = True
             Whether to display local progress bars while computing the projection.
         freq_chunk_size : int | None = 8
-            Number of frequencies to prepare at once for approximate Cartesian and k-space
-            projection. If ``None``, all frequencies are prepared together. Ignored for angular
-            and exact projection paths.
+            Number of frequencies to prepare at once for chunked projection paths. If ``None``,
+            all frequencies are prepared together. Used for exact projection and approximate
+            Cartesian and k-space projection. Ignored for approximate angular projection.
 
         Returns
         -------
@@ -524,7 +537,9 @@ class FieldProjector(
             raise ValueError(f"Expected 'freq_chunk_size >= 1', got {freq_chunk_size}.")
         validate_field_projection_monitors_2d((proj_monitor,), self.sim_data.simulation.size)
         if isinstance(proj_monitor, FieldProjectionAngleMonitor):
-            return self._project_fields_angular(proj_monitor, verbose=verbose)
+            return self._project_fields_angular(
+                proj_monitor, verbose=verbose, freq_chunk_size=freq_chunk_size
+            )
         if isinstance(proj_monitor, FieldProjectionCartesianMonitor):
             return self._project_fields_cartesian(
                 proj_monitor, verbose=verbose, freq_chunk_size=freq_chunk_size

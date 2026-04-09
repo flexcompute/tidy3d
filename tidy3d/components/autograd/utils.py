@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import fields, is_dataclass
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
@@ -90,6 +91,8 @@ def hasbox(obj: Any) -> bool:
     """True if any element inside obj is an autograd Box."""
     if isbox(obj):
         return True
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return any(hasbox(getattr(obj, field.name)) for field in fields(obj))
     if isinstance(obj, Mapping):
         return any(hasbox(v) for v in obj.values())
     if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):

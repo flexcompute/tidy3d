@@ -37,7 +37,8 @@ if TYPE_CHECKING:
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
 APPROX_PROJECTION_BATCH_SIZE = 512
-APPROX_PROJECTION_FREQ_CHUNK_SIZE = 8
+EXACT_PROJECTION_BATCH_SIZE = 32
+PROJECTION_FREQ_CHUNK_SIZE = 8
 FIELD_COMPONENT_NAMES = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
 AXIS_WEIGHT_SHAPES = ((-1, 1, 1), (1, -1, 1), (1, 1, -1))
 
@@ -227,7 +228,7 @@ def _projection_data_from_fields(
     }
     if is_2d_simulation is not None:
         kwargs["is_2d_simulation"] = is_2d_simulation
-    return data_cls(**kwargs)
+    return data_cls.model_construct(**kwargs)
 
 
 def _trapz_weights_1d(points: np.ndarray) -> np.ndarray:

@@ -27,7 +27,7 @@ import tidy3d.web as web
 from tidy3d import Box, Geometry, GeometryGroup
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.field_map import FieldMap
-from tidy3d.components.autograd.utils import get_static, is_tidy_box
+from tidy3d.components.autograd.utils import get_static, hasbox, is_tidy_box
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.primitives import discretization_wavelength
@@ -4206,6 +4206,18 @@ class TestTidyArrayBox:
     def test_is_tidy_box(self):
         da = DataArray(tracer_arr, dims=tuple(map(str, range(tracer_arr.ndim))))
         assert is_tidy_box(da.data)
+
+    def test_hasbox_dataclass(self):
+        @dataclass(frozen=True)
+        class _Leaf:
+            value: object
+
+        @dataclass(frozen=True)
+        class _Node:
+            leaf: _Leaf
+
+        assert not hasbox(_Node(leaf=_Leaf(value=1.0)))
+        assert hasbox(_Node(leaf=_Leaf(value=tracer_arr)))
 
     def test_real(self):
         npt.assert_allclose(tracer_arr.real._value, tracer_arr._value.real)

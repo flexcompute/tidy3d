@@ -19,8 +19,8 @@ from tidy3d.components.data.monitor_data import (
 
 from .common import (
     APPROX_PROJECTION_BATCH_SIZE,
-    APPROX_PROJECTION_FREQ_CHUNK_SIZE,
     FIELD_COMPONENT_NAMES,
+    PROJECTION_FREQ_CHUNK_SIZE,
     _far_field_integral_pairs,
     _frequency_chunk_slices,
     _prepare_far_field_projection,
@@ -206,7 +206,7 @@ class _ApproximatePairedProjectionMixin:
         self,
         monitor: FieldProjectionCartesianMonitor,
         verbose: bool = True,
-        freq_chunk_size: int | None = APPROX_PROJECTION_FREQ_CHUNK_SIZE,
+        freq_chunk_size: int | None = PROJECTION_FREQ_CHUNK_SIZE,
     ) -> FieldProjectionCartesianData:
         """Compute projected fields on a Cartesian grid in spherical coordinates."""
 
@@ -266,6 +266,7 @@ class _ApproximatePairedProjectionMixin:
             surface_currents=surface_currents,
             medium=medium,
             verbose=verbose,
+            freq_chunk_size=freq_chunk_size,
         )
         stacked_fields = anp.reshape(
             stacked_fields, (len(x), len(y), len(z), len(FIELD_COMPONENT_NAMES), len(freqs))
@@ -286,7 +287,7 @@ class _ApproximatePairedProjectionMixin:
         self,
         monitor: FieldProjectionKSpaceMonitor,
         verbose: bool = True,
-        freq_chunk_size: int | None = APPROX_PROJECTION_FREQ_CHUNK_SIZE,
+        freq_chunk_size: int | None = PROJECTION_FREQ_CHUNK_SIZE,
     ) -> FieldProjectionKSpaceData:
         """Compute projected fields on a k-space grid in spherical coordinates."""
 
@@ -356,6 +357,7 @@ class _ApproximatePairedProjectionMixin:
             surface_currents=surface_currents,
             medium=medium,
             verbose=verbose,
+            freq_chunk_size=freq_chunk_size,
         )
         stacked_fields = anp.reshape(
             stacked_fields, (len(ux), len(uy), len(FIELD_COMPONENT_NAMES), len(freqs))
