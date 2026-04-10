@@ -6,6 +6,8 @@ if TYPE_CHECKING:
     import tidy3d as td
     from tidy3d.components.autograd import AutogradFieldMap
 
+    from .context import AutogradContext
+
 
 def setup_fwd(
     sim_fields: AutogradFieldMap,
@@ -26,17 +28,16 @@ def setup_fwd(
 def postprocess_fwd(
     sim_data_combined: td.SimulationData,
     sim_original: td.Simulation,
-    aux_data: dict,
+    context: AutogradContext,
 ) -> AutogradFieldMap:
     """Postprocess the combined simulation data into an Autograd field map."""
-
     num_mnts_original = len(sim_original.monitors)
     sim_data_original, sim_data_fwd = sim_data_combined._split_original_fwd(
         num_mnts_original=num_mnts_original
     )
 
-    aux_data["sim_data"] = sim_data_original
-    aux_data["sim_data_fwd_adjoint"] = sim_data_fwd
+    context.simulation_data_original = sim_data_original
+    context.simulation_data_forward = sim_data_fwd
 
     # strip out the tracer AutogradFieldMap for the .data from the original sim
     data_traced = sim_data_original._strip_traced_fields(

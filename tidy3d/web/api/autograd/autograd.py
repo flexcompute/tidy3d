@@ -24,12 +24,7 @@ from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 
 from .backward import postprocess_adj as _postprocess_adj_impl
 from .backward import setup_adj as _setup_adj_impl
-from .constants import (
-    AUX_KEY_FWD_TASK_ID,
-    AUX_KEY_PARALLEL_ADJ,
-    AUX_KEY_SIM_DATA_FWD,
-    AUX_KEY_SIM_DATA_ORIGINAL,
-)
+from .context import AutogradContext
 from .engine import (
     _run_async_tidy3d as _run_async_tidy3d_engine,
 )
@@ -73,6 +68,7 @@ if TYPE_CHECKING:
     from tidy3d.web.api.container import BatchData
     from tidy3d.web.core.types import PayType
 
+    from .context import ParallelAdjointState
     from .parallel_adjoint import ParallelAdjointPayload
     from .types import CustomVJPSpec
 
@@ -1033,7 +1029,7 @@ def _run(
         return data
 
     # will store the SimulationData for original and forward so we can access them later
-    aux_data = {}
+    context = AutogradContext()
 
     payload = simulation._serialized_traced_field_keys(traced_fields_sim)
     sim_original = simulation.to_static()
@@ -1045,7 +1041,7 @@ def _run(
         traced_fields_sim,  # if you pass as a kwarg it will not trace :/
         sim_original=sim_original,
         task_name=task_name,
-        aux_data=aux_data,
+        context=context,
         local_gradient=local_gradient,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         numerical_structures=setup_result.numerical_structure_map,
@@ -1053,7 +1049,7 @@ def _run(
         **run_kwargs,
     )
 
-    return postprocess_run(traced_fields_data=traced_fields_data, aux_data=aux_data)
+    return postprocess_run(traced_fields_data=traced_fields_data, context=context)
 
 
 def _run_async(
@@ -1076,7 +1072,7 @@ def _run_async(
 
     numerical_structures = numerical_structures or {}
     custom_vjp = custom_vjp or {}
-    aux_data_dict = {task_name: {} for task_name in task_names}
+    contexts = {task_name: AutogradContext() for task_name in task_names}
 
     for task_name in task_names:
         sim = simulations[task_name]
@@ -1105,7 +1101,7 @@ def _run_async(
     traced_fields_data_dict = _run_async_primitive(
         traced_fields_sim_dict,  # if you pass as a kwarg it will not trace :/
         sims_original=sims_original,
-        aux_data_dict=aux_data_dict,
+        contexts=contexts,
         local_gradient=local_gradient,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         numerical_structures=numerical_structure_maps,
@@ -1117,8 +1113,8 @@ def _run_async(
     sim_data_dict = {}
     for task_name in traced_fields_sim_dict.keys():
         traced_fields_data = traced_fields_data_dict[task_name]
-        aux_data = aux_data_dict[task_name]
-        sim_data = postprocess_run(traced_fields_data=traced_fields_data, aux_data=aux_data)
+        context = contexts[task_name]
+        sim_data = postprocess_run(traced_fields_data=traced_fields_data, context=context)
         sim_data_dict[task_name] = sim_data
 
     return sim_data_dict
@@ -1171,11 +1167,12 @@ def setup_run(
     )
 
 
-def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.SimulationData:
+def postprocess_run(
+    traced_fields_data: AutogradFieldMap, context: AutogradContext
+) -> td.SimulationData:
     """Process the return from ``_run_primitive`` into ``SimulationData`` for user."""
-
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
-    sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+    sim_data_original = context.simulation_data_original
 
     return sim_data_original._insert_traced_fields(traced_fields_data)
 
@@ -1204,7 +1201,7 @@ def _prepare_adjoints_from_vjp(
     sim_data_orig: td.SimulationData,
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
-    parallel_info: dict[str, Any] | None,
+    parallel_info: ParallelAdjointState | None,
     task_name: str,
     warn_if_no_sources: bool = True,
 ) -> tuple[AutogradFieldMap, list[td.Simulation], bool]:
@@ -1287,7 +1284,7 @@ def _run_parallel_adjoint_fwd_batch(
     sim_original: td.Simulation,
     sim_fields_keys: list[tuple],
     task_name: str,
-    aux_data: dict,
+    context: AutogradContext,
     payload: ParallelAdjointPayload,
     numerical_structure_map: dict[int, NumericalStructureConfig],
     custom_vjp: tuple[CustomVJPConfig, ...] | None,
@@ -1307,7 +1304,7 @@ def _run_parallel_adjoint_fwd_batch(
     field_map = postprocess_fwd(
         sim_data_combined=sim_data_combined,
         sim_original=sim_original,
-        aux_data=aux_data,
+        context=context,
     )
 
     _populate_parallel_adjoint_bases(
@@ -1315,7 +1312,7 @@ def _run_parallel_adjoint_fwd_batch(
         task_name=task_name,
         payload=payload,
         sim_fields_keys=sim_fields_keys,
-        aux_data=aux_data,
+        context=context,
         numerical_structure_map=numerical_structure_map,
         custom_vjp=custom_vjp,
     )
@@ -1339,7 +1336,7 @@ def _run_primitive(
     sim_fields: AutogradFieldMap,
     sim_original: td.Simulation,
     task_name: str,
-    aux_data: dict,
+    context: AutogradContext,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[int, NumericalStructureConfig],
@@ -1374,7 +1371,7 @@ def _run_primitive(
                 sim_original=sim_original,
                 sim_fields_keys=sim_fields_keys,
                 task_name=task_name,
-                aux_data=aux_data,
+                context=context,
                 payload=parallel_payload,
                 numerical_structure_map=numerical_structures,
                 custom_vjp=custom_vjp,
@@ -1385,7 +1382,7 @@ def _run_primitive(
             field_map = postprocess_fwd(
                 sim_data_combined=sim_data_combined,
                 sim_original=sim_original,
-                aux_data=aux_data,
+                context=context,
             )
     else:
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
@@ -1414,9 +1411,8 @@ def _run_primitive(
                 lazy=run_kwargs.get("lazy", None),
             )
 
-        # TODO: put this in postprocess?
-        aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
-        aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
+        context.forward_task_id = task_id_fwd
+        context.simulation_data_original = sim_data_orig
         field_map = sim_data_orig._strip_traced_fields(
             include_untraced_data_arrays=True, starting_paths=(("data",),)
         )
@@ -1428,7 +1424,7 @@ def _run_primitive(
 def _run_async_primitive(
     sim_fields_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[str, dict[str, Any]],
+    contexts: dict[str, AutogradContext],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[str, dict[int, NumericalStructureConfig]],
@@ -1474,11 +1470,11 @@ def _run_async_primitive(
         for task_name in task_names:
             sim_data_combined = batch_data_combined[task_name]
             sim_original = sims_original[task_name]
-            aux_data = aux_data_dict[task_name]
+            context = contexts[task_name]
             field_map_fwd_dict[task_name] = postprocess_fwd(
                 sim_data_combined=sim_data_combined,
                 sim_original=sim_original,
-                aux_data=aux_data,
+                context=context,
             )
 
             parallel_payload = parallel_payloads.get(task_name)
@@ -1498,7 +1494,7 @@ def _run_async_primitive(
                 task_name=task_name,
                 payload=parallel_payload,
                 sim_fields_keys=list(sim_fields_dict[task_name].keys()),
-                aux_data=aux_data,
+                context=context,
                 numerical_structure_map=numerical_structures.get(task_name, {}),
                 custom_vjp=task_custom_vjp_tuple,
             )
@@ -1532,9 +1528,9 @@ def _run_async_primitive(
         field_map_fwd_dict = {}
         for task_name, task_id_fwd in task_ids_fwd_dict.items():
             sim_data_orig = sim_data_orig_dict[task_name]
-            aux_data = aux_data_dict[task_name]
-            aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
-            aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
+            context = contexts[task_name]
+            context.forward_task_id = task_id_fwd
+            context.simulation_data_original = sim_data_orig
             field_map = sim_data_orig._strip_traced_fields(
                 include_untraced_data_arrays=True, starting_paths=(("data",),)
             )
@@ -1557,11 +1553,11 @@ def setup_fwd(
 def postprocess_fwd(
     sim_data_combined: td.SimulationData,
     sim_original: td.Simulation,
-    aux_data: dict,
+    context: AutogradContext,
 ) -> AutogradFieldMap:
     """Postprocess the combined simulation data into an Autograd field map (delegated)."""
     return _postprocess_fwd_impl(
-        sim_data_combined=sim_data_combined, sim_original=sim_original, aux_data=aux_data
+        sim_data_combined=sim_data_combined, sim_original=sim_original, context=context
     )
 
 
@@ -1587,7 +1583,7 @@ def _run_bwd(
     sim_fields_original: AutogradFieldMap,
     sim_original: td.Simulation,
     task_name: str,
-    aux_data: dict,
+    context: AutogradContext,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[int, NumericalStructureConfig],
@@ -1599,16 +1595,17 @@ def _run_bwd(
     run_kwargs_base = dict(run_kwargs)
     run_kwargs_base["is_adjoint"] = True
 
-    # get the fwd epsilon and field data from the cached aux_data
-    sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+    # get the forward epsilon and field data from the cached context
+    sim_data_orig = context.simulation_data_original
     sim_fields_keys = list(sim_fields_original.keys())
 
     td.log.info(f"Number of fields to compute gradients for: {len(sim_fields_keys)}")
 
     if local_gradient:
-        sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
+        sim_data_fwd = context.simulation_data_forward
         td.log.info("Using local gradient computation mode")
     else:
+        sim_data_fwd = None
         td.log.info("Using server-side gradient computation mode")
 
     td.log.info("Constructing custom VJP function for backwards pass.")
@@ -1616,7 +1613,7 @@ def _run_bwd(
     def vjp(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
 
-        parallel_info = aux_data.get(AUX_KEY_PARALLEL_ADJ) if local_gradient else None
+        parallel_info = context.parallel_adjoint_state if local_gradient else None
         vjp_traced_fields, sims_adj, _ = _prepare_adjoints_from_vjp(
             data_fields_vjp=data_fields_vjp,
             sim_fields_original=sim_fields_original,
@@ -1667,7 +1664,7 @@ def _run_bwd(
             td.log.info("Starting server-side batch of adjoint simulations ...")
 
             # Link each adjoint sim to the forward task it depends on
-            task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
+            task_id_fwd = context.forward_task_id
             run_kwargs_local["simulation_type"] = "autograd_bwd"
 
             # Build a per-task parent_tasks mapping
@@ -1702,7 +1699,7 @@ def _run_async_bwd(
     data_fields_original_dict: dict[str, AutogradFieldMap],
     sim_fields_original_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[str, dict[str, Any]],
+    contexts: dict[str, AutogradContext],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[str, dict[int, NumericalStructureConfig]],
@@ -1718,17 +1715,19 @@ def _run_async_bwd(
 
     custom_vjp = custom_vjp or {}
 
-    # get the fwd epsilon and field data from the cached aux_data
+    # get the forward epsilon and field data from the cached contexts
     sim_data_orig_dict = {}
     sim_data_fwd_dict = {}
     sim_fields_keys_dict = {}
     for task_name in task_names:
-        aux_data = aux_data_dict[task_name]
-        sim_data_orig_dict[task_name] = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+        context = contexts[task_name]
+        sim_data_orig = context.simulation_data_original
+        sim_data_orig_dict[task_name] = sim_data_orig
         sim_fields_keys_dict[task_name] = list(sim_fields_original_dict[task_name].keys())
 
         if local_gradient:
-            sim_data_fwd_dict[task_name] = aux_data[AUX_KEY_SIM_DATA_FWD]
+            sim_data_fwd = context.simulation_data_forward
+            sim_data_fwd_dict[task_name] = sim_data_fwd
 
     td.log.info("Constructing custom VJP function for backwards pass.")
 
@@ -1740,9 +1739,8 @@ def _run_async_bwd(
         sim_fields_keys: list[tuple],
         max_num_adjoint_per_fwd_local: int,
     ) -> tuple[AutogradFieldMap, list[td.Simulation], bool]:
-        parallel_info = (
-            aux_data_dict[task_name].get(AUX_KEY_PARALLEL_ADJ) if local_gradient else None
-        )
+        task_context = contexts[task_name]
+        parallel_info = task_context.parallel_adjoint_state if local_gradient else None
         return _prepare_adjoints_from_vjp(
             data_fields_vjp=data_fields_vjp,
             sim_fields_original=sim_fields_original,
@@ -1850,7 +1848,7 @@ def _run_async_bwd(
                 # Set up parent tasks mapping for all adjoint simulations
                 parent_tasks = {}
                 for adj_task_name, task_name in task_name_mapping.items():
-                    task_id_fwd = aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID]
+                    task_id_fwd = contexts[task_name].forward_task_id
                     parent_tasks[adj_task_name] = [task_id_fwd]
 
                 run_async_kwargs_local["parent_tasks"] = parent_tasks

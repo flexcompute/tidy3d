@@ -26,11 +26,7 @@ from tidy3d.components.data.sim_data import AdjointSourceInfo, make_adjoint_simu
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.config import config
 from tidy3d.web.api.autograd.backward import postprocess_adj
-from tidy3d.web.api.autograd.constants import (
-    AUX_KEY_PARALLEL_ADJ,
-    AUX_KEY_SIM_DATA_FWD,
-    AUX_KEY_SIM_DATA_ORIGINAL,
-)
+from tidy3d.web.api.autograd.context import ParallelAdjointState
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -41,6 +37,7 @@ if TYPE_CHECKING:
     from tidy3d.components.data.monitor_data import MonitorData
     from tidy3d.components.source.utils import SourceType
     from tidy3d.components.types.monitor import MonitorType
+    from tidy3d.web.api.autograd.context import AutogradContext
     from tidy3d.web.api.container import BatchData
 
 
@@ -79,14 +76,17 @@ def collect_parallel_adjoint_bases_from_simulation(
 
 def _warn_parallel_adjoint_fallback(
     *,
-    parallel_info: Optional[dict[str, Any]],
+    parallel_info: Optional[ParallelAdjointState],
     sims_adj: list[td.Simulation],
     task_name: str,
 ) -> None:
-    if not parallel_info or not sims_adj:
+    if parallel_info is None or not sims_adj:
+        return
+
+    if not parallel_info.has_parallel_state:
         return
     td.log.warning(
-        f"Parallel adjoint incomplete for task '{parallel_info.get('task_name', task_name)}'; "
+        f"Parallel adjoint incomplete for task '{parallel_info.task_name or task_name}'; "
         f"running {len(sims_adj)} sequential adjoint simulation(s) for remaining VJP entries."
     )
 
@@ -183,12 +183,12 @@ def _populate_parallel_adjoint_bases(
     task_name: str,
     payload: ParallelAdjointPayload,
     sim_fields_keys: list[tuple],
-    aux_data: dict,
+    context: AutogradContext,
     numerical_structure_map: Optional[dict[int, Any]] = None,
     custom_vjp: Optional[tuple[Any, ...]] = None,
 ) -> None:
-    sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
-    sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
+    sim_data_orig = context.simulation_data_original
+    sim_data_fwd = context.simulation_data_forward
     basis_maps: dict[ParallelAdjointBasis, dict[str, AutogradFieldMap]] = {}
     for adj_task_name, basis_specs in payload.task_map.items():
         if not basis_specs:
@@ -222,18 +222,18 @@ def _populate_parallel_adjoint_bases(
             )
 
     if basis_maps:
-        basis_task_map = {}
+        basis_task_map: dict[ParallelAdjointBasis, str] = {}
         for adj_task_name, bases in payload.task_map.items():
             for basis in bases:
                 if basis in basis_maps:
                     basis_task_map[basis] = adj_task_name
-        aux_data[AUX_KEY_PARALLEL_ADJ] = {
-            "basis_specs": list(basis_maps.keys()),
-            "basis_maps": basis_maps,
-            "basis_task_map": basis_task_map,
-            "num_sims": len(payload.task_map),
-            "task_name": payload.task_name,
-        }
+        context.parallel_adjoint_state = ParallelAdjointState(
+            basis_specs=list(basis_maps.keys()),
+            basis_maps=basis_maps,
+            basis_task_map=basis_task_map,
+            num_sims=len(payload.task_map),
+            task_name=payload.task_name,
+        )
 
 
 def _group_parallel_adjoint_bases_by_port(
@@ -419,18 +419,16 @@ def relocate_parallel_adjoint_files(
 
 def apply_parallel_adjoint(
     data_fields_vjp: AutogradFieldMap,
-    parallel_info: dict[str, Any],
+    parallel_info: ParallelAdjointState,
     sim_data_orig: td.SimulationData,
 ) -> tuple[AutogradFieldMap, AutogradFieldMap]:
-    basis_maps = parallel_info.get("basis_maps")
-    if basis_maps is None:
-        return {}, data_fields_vjp
+    basis_maps = parallel_info.basis_maps
 
     data_fields_vjp_fallback = copy.deepcopy(data_fields_vjp)
     vjp_parallel: AutogradFieldMap = {}
-    basis_specs = list(parallel_info.get("basis_specs", []))
-    basis_task_map = parallel_info.get("basis_task_map", {})
-    num_sims = parallel_info.get("num_sims")
+    basis_specs = list(parallel_info.basis_specs)
+    basis_task_map = parallel_info.basis_task_map
+    num_sims = parallel_info.num_sims
     used_sims: set[str] = set()
     tracked_bases = 0
     used_bases = 0
@@ -460,7 +458,7 @@ def apply_parallel_adjoint(
 
     if tracked_bases and used_bases < tracked_bases:
         unused_bases = tracked_bases - used_bases
-        if num_sims is not None and basis_task_map:
+        if basis_task_map:
             used_sims_count = len(used_sims)
             unused_sims = num_sims - used_sims_count
             if unused_sims > 0:

@@ -39,6 +39,7 @@ from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom, verify_custom_vjp
+from tidy3d.web.api.autograd.context import AutogradContext
 from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
 from ...utils import (
@@ -236,8 +237,6 @@ def use_emulated_run(monkeypatch):
 
         # reload(tidy3d.web.api.autograd.autograd)
         from tidy3d.web.api.autograd.autograd import (
-            AUX_KEY_SIM_DATA_FWD,
-            AUX_KEY_SIM_DATA_ORIGINAL,
             postprocess_adj,
             postprocess_fwd,
         )
@@ -252,20 +251,22 @@ def use_emulated_run(monkeypatch):
                 sim_combined = sim_original._with_adjoint_monitors(sim_fields_keys)
                 sim_data_combined = run_emulated(sim_combined, task_name=task_name)
 
-                # store both original and fwd data aux_data
-                aux_data = {}
+                # store both original and forward data in the typed context
+                context = AutogradContext()
 
                 _ = postprocess_fwd(
                     sim_data_combined=sim_data_combined,
                     sim_original=sim_original,
-                    aux_data=aux_data,
+                    context=context,
                 )
 
-                # cache original and fwd data locally for test
-                cache[task_name_fwd] = copy.copy(aux_data)
-                cache[task_name_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
+                # cache original and forward data locally for test
+                cache[task_name_fwd] = {
+                    "context": copy.copy(context),
+                    AUX_KEY_SIM_FIELDS_KEYS: sim_fields_keys,
+                }
                 # return original data only
-                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_name_fwd
+                return context.simulation_data_original, task_name_fwd
             else:
                 return run_emulated(simulation, task_name=task_name), task_name_fwd
 
@@ -277,9 +278,9 @@ def use_emulated_run(monkeypatch):
             sim_data_adj = run_emulated(simulation, task_name="task_name")
 
             # grab the fwd and original data from the cache
-            aux_data_fwd = cache[task_name_fwd]
-            sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
-            sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
+            cached_context = cache[task_name_fwd]["context"]
+            sim_data_orig = cached_context.simulation_data_original
+            sim_data_fwd = cached_context.simulation_data_forward
 
             # Reuse forward permittivity monitor payloads in the emulated adjoint data so
             # geometry-gradient spacing logic sees consistent permittivity on both sides.
@@ -1873,7 +1874,11 @@ def test_async_vjp_parallel_only_keeps_full_sim_field_keys(monkeypatch):
         data_fields_original_dict={task_name: {("data", 0, "amps"): np.array([1.0])}},
         sim_fields_original_dict={task_name: sim_fields_original},
         sims_original={task_name: SIM_BASE},
-        aux_data_dict={task_name: {autograd_module.AUX_KEY_SIM_DATA_ORIGINAL: None}},
+        contexts={
+            task_name: AutogradContext(
+                simulation_data_original=object(),
+            )
+        },
         local_gradient=False,
         max_num_adjoint_per_fwd=1,
         numerical_structures={},
@@ -1915,11 +1920,11 @@ def test_async_vjp_sequential_path_keeps_full_sim_field_keys(monkeypatch):
         data_fields_original_dict={task_name: {("data", 0, "amps"): np.array([1.0])}},
         sim_fields_original_dict={task_name: sim_fields_original},
         sims_original={task_name: SIM_BASE},
-        aux_data_dict={
-            task_name: {
-                autograd_module.AUX_KEY_SIM_DATA_ORIGINAL: None,
-                autograd_module.AUX_KEY_FWD_TASK_ID: "fwd_task_id",
-            }
+        contexts={
+            task_name: AutogradContext(
+                simulation_data_original=object(),
+                forward_task_id="fwd_task_id",
+            )
         },
         local_gradient=False,
         max_num_adjoint_per_fwd=1,
@@ -1963,10 +1968,10 @@ def test_vjp_sequential_path_keeps_full_sim_field_keys(monkeypatch):
         sim_fields_original=sim_fields_original,
         sim_original=SIM_BASE,
         task_name=task_name,
-        aux_data={
-            autograd_module.AUX_KEY_SIM_DATA_ORIGINAL: None,
-            autograd_module.AUX_KEY_FWD_TASK_ID: "fwd_task_id",
-        },
+        context=AutogradContext(
+            simulation_data_original=object(),
+            forward_task_id="fwd_task_id",
+        ),
         local_gradient=False,
         max_num_adjoint_per_fwd=1,
         numerical_structures={},
@@ -2234,7 +2239,7 @@ def test_autograd_run_does_not_mutate_input_attrs(monkeypatch):
         sim_fields,
         sim_original,
         task_name,
-        aux_data,
+        context,
         local_gradient,
         max_num_adjoint_per_fwd,
         **run_kwargs,
@@ -2242,12 +2247,12 @@ def test_autograd_run_does_not_mutate_input_attrs(monkeypatch):
         captured["sim_original"] = sim_original
         captured["payload"] = sim_original.attrs.get(TRACED_FIELD_KEYS_ATTR)
         captured["sim_fields"] = sim_fields
-        captured["aux_data"] = aux_data
+        captured["context"] = context
         return sim_fields
 
-    def fake_postprocess_run(traced_fields_data, aux_data):
+    def fake_postprocess_run(traced_fields_data, context):
         captured["postprocess_data"] = traced_fields_data
-        captured["postprocess_aux"] = aux_data
+        captured["postprocess_context"] = context
         return "sentinel"
 
     monkeypatch.setattr(autograd_module, "_run_primitive", fake_run_primitive)
@@ -2261,8 +2266,12 @@ def test_autograd_run_does_not_mutate_input_attrs(monkeypatch):
     assert captured["sim_original"] is not sim
     assert captured["sim_original"].attrs.get(TRACED_FIELD_KEYS_ATTR) == payload
     assert captured["postprocess_data"] == captured["sim_fields"]
-    assert captured["postprocess_aux"] is captured["aux_data"]
-    assert captured["postprocess_aux"] == {}
+    assert captured["postprocess_context"] is captured["context"]
+    assert isinstance(captured["postprocess_context"], AutogradContext)
+    assert captured["postprocess_context"].simulation_data_original is None
+    assert captured["postprocess_context"].simulation_data_forward is None
+    assert captured["postprocess_context"].forward_task_id is None
+    assert captured["postprocess_context"].parallel_adjoint_state is None
 
 
 def test_sim_traced_override_structures():

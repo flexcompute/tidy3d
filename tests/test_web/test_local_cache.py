@@ -30,11 +30,7 @@ from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.autograd import autograd, engine, io_utils
 from tidy3d.web.api.autograd.autograd import run as run_autograd
-from tidy3d.web.api.autograd.constants import (
-    AUX_KEY_SIM_DATA_FWD,
-    AUX_KEY_SIM_DATA_ORIGINAL,
-    SIM_VJP_FILE,
-)
+from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
 from tidy3d.web.api.container import Batch, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import (
@@ -328,7 +324,7 @@ def _patch_run_pipeline(
         if str(remote_filename) == SIM_VJP_FILE:
             counters["download"] += 1
 
-    def _fake_postprocess_fwd(*, sim_data_combined=None, sim_original=None, aux_data=None, **_):
+    def _fake_postprocess_fwd(*, sim_data_combined=None, sim_original=None, context=None, **_):
         """Mimic ``autograd.postprocess_fwd`` side effects for tests."""
         if sim_original is None:
             sim_original = next(iter(PATH_TO_SIM.values()), None)
@@ -339,9 +335,9 @@ def _patch_run_pipeline(
                 run_time=1e-12,
             )
         stub_data = _FakeStubData(sim_original)
-        if aux_data is not None:
-            aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = stub_data
-            aux_data[AUX_KEY_SIM_DATA_FWD] = stub_data
+        if context is not None:
+            context.simulation_data_original = stub_data
+            context.simulation_data_forward = stub_data
         return stub_data._strip_traced_fields()
 
     def _fake_postprocess_adj(
