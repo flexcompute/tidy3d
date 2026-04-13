@@ -58,6 +58,16 @@ MIN_FREQUENCY = 1e5
 FloatArray = Union[Sequence[float], NDArray]
 
 
+def wrapped_angle_distance(angle: float, target: float, period: float) -> float:
+    """Return the shortest distance between two angles on a periodic domain."""
+    return abs((angle - target + period / 2) % period - period / 2)
+
+
+def is_close_to_glancing_angle(angle_theta: float, cutoff: float) -> bool:
+    """Check whether ``angle_theta`` is close to any odd multiple of ``π/2``."""
+    return wrapped_angle_distance(angle_theta, np.pi / 2, np.pi) < cutoff
+
+
 def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
     """Generate a string describing a named object which can be used in error messages."""
     descr = f"simulation.{field_name}[{position_index}] (no `name` was specified)"

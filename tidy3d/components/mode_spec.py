@@ -24,6 +24,7 @@ from tidy3d.log import log
 
 from .base import Tidy3dBaseModel
 from .types import Axis2D, FreqArray, TrackFreq
+from .validators import is_close_to_glancing_angle
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
@@ -777,7 +778,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     @classmethod
     def _validate_angle_theta_glancing(cls, val: float) -> float:
         """Disallow incidence too close to glancing."""
-        if abs(np.pi / 2 - val) < GLANCING_CUTOFF:
+        if is_close_to_glancing_angle(val, GLANCING_CUTOFF):
             raise SetupError(
                 "Mode propagation axis too close to glancing angle for accurate injection. "
                 "For best results, switch the injection axis."

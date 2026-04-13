@@ -298,10 +298,11 @@ inf = np.inf
 Representation of infinity used within tidy3d.
 """
 
-# if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning
+# if angle_theta is within GLANCING_CUTOFF of an odd multiple of np.pi/2, raise warning
 GLANCING_CUTOFF = 0.1
 """
-if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning.
+If ``angle_theta`` is within ``GLANCING_CUTOFF`` of an odd multiple of ``np.pi/2`` in an
+angled source or in mode spec, raise warning.
 """
 
 UnitScaling = MappingProxyType(

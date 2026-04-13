@@ -24,6 +24,7 @@ from tidy3d.components.validators import (
     assert_plane,
     assert_single_freq_in_range,
     assert_volumetric,
+    is_close_to_glancing_angle,
     warn_backward_waist_distance,
     warn_if_dataset_none,
 )
@@ -532,7 +533,7 @@ class AngledFieldSource(DirectionalSource, ABC):
     def glancing_incidence(cls, val: float) -> float:
         """Warn if close to glancing incidence."""
         static_val = get_static(val)
-        if np.abs(np.pi / 2 - static_val) < GLANCING_CUTOFF:
+        if is_close_to_glancing_angle(static_val, GLANCING_CUTOFF):
             log.warning(
                 "Angled source propagation axis close to glancing angle. "
                 "For best results, switch the injection axis.",

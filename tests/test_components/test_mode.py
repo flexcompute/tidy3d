@@ -77,9 +77,10 @@ def test_bend_radius_must_be_finite(bend_radius):
         _ = td.ModeSpec(bend_radius=bend_radius, bend_axis=1)
 
 
-def test_glancing_incidence():
+@pytest.mark.parametrize("angle_theta", [np.pi / 2, -np.pi / 2, 5 * np.pi / 2])
+def test_glancing_incidence(angle_theta):
     with pytest.raises(pd.ValidationError):
-        _ = td.ModeSpec(angle_theta=np.pi / 2)
+        _ = td.ModeSpec(angle_theta=angle_theta)
 
 
 def test_group_index_step_validation():

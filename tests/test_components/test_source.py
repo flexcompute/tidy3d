@@ -429,6 +429,18 @@ def test_astigmatic_gaussian_beam_backward_waist_distance_warning():
         )
 
 
+def test_wrapped_glancing_incidence_warning():
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    with AssertLogLevel("WARNING", contains_str="close to glancing angle"):
+        td.PlaneWave(
+            size=(0, td.inf, td.inf),
+            source_time=g,
+            direction="+",
+            angle_theta=5 * np.pi / 2,
+        )
+
+
 def test_pol_arrow():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
