@@ -10,8 +10,8 @@ Specifications
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatBoundarySpec
-   tidy3d.HeatChargeBoundarySpec
+   HeatBoundarySpec
+   HeatChargeBoundarySpec
 
 
 Types
@@ -21,9 +21,9 @@ Types
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.VoltageBC
-   tidy3d.CurrentBC
-   tidy3d.InsulatingBC
+   VoltageBC
+   CurrentBC
+   InsulatingBC
 
 Placement
 ^^^^^^^^^^^^^^^^^
@@ -32,8 +32,8 @@ Placement
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.StructureStructureInterface
-   tidy3d.StructureBoundary
-   tidy3d.MediumMediumInterface
-   tidy3d.StructureSimulationBoundary
-   tidy3d.SimulationBoundary
+   StructureStructureInterface
+   StructureBoundary
+   MediumMediumInterface
+   StructureSimulationBoundary
+   SimulationBoundary

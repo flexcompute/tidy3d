@@ -8,4 +8,4 @@ Resonance Finder
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.resonance.ResonanceFinder
+   plugins.resonance.ResonanceFinder

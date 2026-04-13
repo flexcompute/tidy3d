@@ -25,7 +25,7 @@
 
    .. autosummary::
       {% for item in ns_attrs.items %}
-        ~{{ fullname }}.{{ item }}
+        ~{{ objname }}.{{ item }}
       {%- endfor %}
    {% endif %}
    {% endif %}
@@ -46,7 +46,7 @@
 
    .. autosummary::
        {% for item in ns_methods.items %}
-            ~{{ fullname }}.{{ item }}
+            ~{{ objname }}.{{ item }}
        {%- endfor %}
    {% endif %}
    {% endif %}

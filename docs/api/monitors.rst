@@ -36,8 +36,8 @@ Field
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.FieldMonitor
-   tidy3d.FieldTimeMonitor
+   FieldMonitor
+   FieldTimeMonitor
 
 The ``FieldMonitor`` records the EM field components within a spatial region at specified frequency point(s). The ``FieldTimeMonitor`` does the same, except at specified time intervals instead of frequency.
 
@@ -73,8 +73,8 @@ Flux
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.FluxMonitor
-   tidy3d.FluxTimeMonitor
+   FluxMonitor
+   FluxTimeMonitor
 
 The ``FluxMonitor`` records EM power flux through a 2D surface or 3D bounding box at specified frequency point(s). The ``FluxTimeMonitor`` does the same, except at specified time intervals instead of frequency.
 
@@ -114,9 +114,9 @@ Mode
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.ModeSpec
-   tidy3d.ModeMonitor
-   tidy3d.ModeSolverMonitor
+   ModeSpec
+   ModeMonitor
+   ModeSolverMonitor
 
 The ``ModeMonitor`` records the mode coefficients of the incident field at specified frequency point(s).
 
@@ -157,7 +157,7 @@ Diffraction
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.DiffractionMonitor
+   DiffractionMonitor
 
 The ``DiffractionMonitor`` records the diffraction coefficients of the allowed diffraction orders in a periodic simulation.
 
@@ -191,8 +191,8 @@ Gaussian Overlap
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.GaussianOverlapMonitor
-   tidy3d.AstigmaticGaussianOverlapMonitor
+   GaussianOverlapMonitor
+   AstigmaticGaussianOverlapMonitor
 
 These monitors decompose fields onto Gaussian beams to record overlap amplitudes.
 
@@ -205,11 +205,11 @@ Far-field
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.FieldProjectionCartesianMonitor
-   tidy3d.FieldProjectionAngleMonitor
-   tidy3d.FieldProjectionKSpaceMonitor
-   tidy3d.rf.DirectivityMonitor
-   tidy3d.AuxFieldTimeMonitor
+   FieldProjectionCartesianMonitor
+   FieldProjectionAngleMonitor
+   FieldProjectionKSpaceMonitor
+   rf.DirectivityMonitor
+   AuxFieldTimeMonitor
 
 The far-field monitor records the near-field within the simulation domain in order to project it to some far away location. This can be a very efficient way to simulate the scattering or radiative response of devices such as lenses and antenna.
 
@@ -236,8 +236,8 @@ When including far-field projection monitors in the :class:`.Simulation` object,
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.FieldProjector
-   tidy3d.FieldProjectionSurface
+   FieldProjector
+   FieldProjectionSurface
 
 The user also has the option of performing the far-field calculation on their local machine using ``FieldProjector`` object. In that case, they should first set up one or more ``FieldMonitor`` in the simulation. After the simulation is completed, the ``FieldProjector`` object operates on the recorded field data.
 
@@ -277,8 +277,8 @@ Surface
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SurfaceFieldMonitor
-   tidy3d.SurfaceFieldTimeMonitor
+   SurfaceFieldMonitor
+   SurfaceFieldTimeMonitor
 
 The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``) and lossy metal (``LossyMetalMedium``) surfaces within a 3D region at specified frequency point(s). The ``SurfaceFieldTimeMonitor`` does the same, except at specified time intervals instead of frequency. These monitors store the normal E and tangential H fields on these surfaces.
 
@@ -318,8 +318,8 @@ Permittivity and Permeability
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PermittivityMonitor
-   tidy3d.MediumMonitor
+   PermittivityMonitor
+   MediumMonitor
 
 The ``PermittivityMonitor`` is used to record local relative permittivity data in the region of interest, and the ``MediumMonitor`` can additionally record permeability data. Those data can be useful for post-simulation calculations that require permittivity or permeability values, such as mode volume and absorption density.
 
@@ -347,6 +347,6 @@ Apodization
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.ApodizationSpec
+   ApodizationSpec
 
 The ``ApodizationSpec`` is used to specify apodization specifications for frequency-domain monitors. Typically, the default Tidy3D settings are acceptable and it is not necessary to define a custom instance. Please refer to the documentation page for more details.

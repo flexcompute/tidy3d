@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _microwave_mode_solver:
 
 RF Mode Analysis
@@ -7,12 +9,12 @@ RF Mode Analysis
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.MicrowaveModeSpec
-   tidy3d.rf.AutoImpedanceSpec
-   tidy3d.rf.CustomImpedanceSpec
-   tidy3d.rf.MicrowaveModeMonitor
-   tidy3d.rf.MicrowaveModeSolverMonitor
-   tidy3d.ModeSimulation
+   rf.MicrowaveModeSpec
+   rf.AutoImpedanceSpec
+   rf.CustomImpedanceSpec
+   rf.MicrowaveModeMonitor
+   rf.MicrowaveModeSolverMonitor
+   ModeSimulation
 
 The :class:`~tidy3d.rf.MicrowaveModeSpec` extends the standard :class:`~tidy3d.ModeSpec` to include automatic characteristic impedance calculation for transmission line modes. This is particularly useful for microwave and RF applications where the characteristic impedance :math:`Z_0` is a critical parameter.
 

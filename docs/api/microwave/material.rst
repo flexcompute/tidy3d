@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _rf_material_models:
 
 RF Materials Models
@@ -7,12 +9,12 @@ RF Materials Models
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.PECMedium
-   tidy3d.PMCMedium
-   tidy3d.rf.LossyMetalMedium
-   tidy3d.rf.SurfaceImpedanceFitterParam
-   tidy3d.rf.HammerstadSurfaceRoughness
-   tidy3d.rf.HuraySurfaceRoughness
+   PECMedium
+   PMCMedium
+   rf.LossyMetalMedium
+   rf.SurfaceImpedanceFitterParam
+   rf.HammerstadSurfaceRoughness
+   rf.HuraySurfaceRoughness
 
 The :class:`~tidy3d.PECMedium` and :class:`~tidy3d.rf.LossyMetalMedium` classes can be used to model metallic materials.
 
@@ -35,8 +37,8 @@ Note that the unit of ``conductivity`` is ``S/um`` and the unit of ``freq_range`
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.Medium
-   tidy3d.plugins.dispersion.FastDispersionFitter
+   Medium
+   plugins.dispersion.FastDispersionFitter
 
 To model lossless dielectrics, use the regular :class:`~tidy3d.Medium`.
 

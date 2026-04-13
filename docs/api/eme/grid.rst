@@ -92,8 +92,8 @@ change the underlying mode solve itself.
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.EMEUniformGrid
-   tidy3d.EMECompositeGrid
-   tidy3d.EMEExplicitGrid
-   tidy3d.EMEGrid
-   tidy3d.EMEModeSpec
+   EMEUniformGrid
+   EMECompositeGrid
+   EMEExplicitGrid
+   EMEGrid
+   EMEModeSpec

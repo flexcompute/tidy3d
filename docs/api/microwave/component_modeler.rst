@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _TerminalComponentModeler:
 
 TerminalComponentModeler
@@ -7,11 +9,11 @@ TerminalComponentModeler
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.TerminalComponentModeler
-   tidy3d.rf.TerminalComponentModelerData
-   tidy3d.rf.MicrowaveSMatrixData
-   tidy3d.rf.TerminalPortDataArray
-   tidy3d.rf.PortDataArray
+   rf.TerminalComponentModeler
+   rf.TerminalComponentModelerData
+   rf.MicrowaveSMatrixData
+   rf.TerminalPortDataArray
+   rf.PortDataArray
 
 The :class:`~tidy3d.rf.TerminalComponentModeler` is the core simulation object for 3D RF/microwave simulations in Tidy3D. Its primary function is to simulate the system over ``N`` number of ports and ``M`` number of frequency points, with the end result being a ``MxNxN`` S-parameter matrix.
 

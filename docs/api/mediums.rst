@@ -37,7 +37,7 @@ Non-Dispersive
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Medium
+   Medium
 
 A simple, non-dispersive optical medium can be described by constant relative permittivity :math:`\varepsilon_r` and conductivity :math:`\sigma` (units: S/um). Alternatively, it can also be defined using the real (:math:`n`) and imaginary (:math:`k`) components of the refractive index, but note that this is exact only at a single specified frequency (units: Hz). Thus the latter option is only appropriate for narrow-band simulations.
 
@@ -69,11 +69,11 @@ Dispersive
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PoleResidue
-   tidy3d.Lorentz
-   tidy3d.Sellmeier
-   tidy3d.Drude
-   tidy3d.Debye
+   PoleResidue
+   Lorentz
+   Sellmeier
+   Drude
+   Debye
 
 There are many different models that can be used to describe dispersive mediums. For detailed usage instructions, please visit their respective documentation page.
 
@@ -81,7 +81,7 @@ There are many different models that can be used to describe dispersive mediums.
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.plugins.dispersion.FastDispersionFitter
+   plugins.dispersion.FastDispersionFitter
 
 Alternatively, the :class:`~tidy3d.plugins.dispersion.FastDispersionFitter` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
 
@@ -138,10 +138,10 @@ Anisotropic
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.AnisotropicMedium
-   tidy3d.components.medium.AnisotropicMediumFromMedium2D
-   tidy3d.FullyAnisotropicMedium
-   tidy3d.Medium2D
+   AnisotropicMedium
+   components.medium.AnisotropicMediumFromMedium2D
+   FullyAnisotropicMedium
+   Medium2D
 
 An anisotropic medium has different optical properties depending on the direction of light propagation. Its relative permittivity is thus specified in the form of a 3x3 tensor. For diagonally anisotropic mediums, use ``AnisotropicMedium``:
 
@@ -188,12 +188,12 @@ Metallic/PEC/PMC
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PECMedium
-   tidy3d.PMCMedium
-   tidy3d.rf.LossyMetalMedium
-   tidy3d.rf.SurfaceImpedanceFitterParam
-   tidy3d.rf.HammerstadSurfaceRoughness
-   tidy3d.rf.HuraySurfaceRoughness
+   PECMedium
+   PMCMedium
+   rf.LossyMetalMedium
+   rf.SurfaceImpedanceFitterParam
+   rf.HammerstadSurfaceRoughness
+   rf.HuraySurfaceRoughness
 
 At lower frequencies, the EM field typically does not penetrate very far into the metallic medium. In this regime, metallic structures are commonly modeled as boundary conditions. In Tidy3D, a metallic medium is assigned to a structure and the corresponding boundary conditions are automatically applied to its geometric boundaries.
 
@@ -222,8 +222,8 @@ Spatial Variation
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SpatialDataArray
-   tidy3d.CustomMedium
+   SpatialDataArray
+   CustomMedium
 
 The ``CustomMedium`` class is used to define a spatially-varying non-dispersive medium. The spatial distribution of the optical property is defined using the ``SpatialDataArray`` class. Below, we define an example spherical profile :math:`n(r) = \sqrt{2-(r/R)^2}` as in a Luneburg lens:
 
@@ -254,12 +254,12 @@ Analogous classes also exist for spatially-varying dispersive and anisotropic me
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.CustomPoleResidue
-   tidy3d.CustomLorentz
-   tidy3d.CustomSellmeier
-   tidy3d.CustomDrude
-   tidy3d.CustomDebye
-   tidy3d.CustomAnisotropicMedium
+   CustomPoleResidue
+   CustomLorentz
+   CustomSellmeier
+   CustomDrude
+   CustomDebye
+   CustomAnisotropicMedium
 
 .. seealso::
 
@@ -282,12 +282,12 @@ Perturbation (Multiphysics)
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PerturbationMedium
-   tidy3d.PerturbationPoleResidue
-   tidy3d.NedeljkovicSorefMashanovich
-   tidy3d.ParameterPerturbation
-   tidy3d.PermittivityPerturbation
-   tidy3d.IndexPerturbation
+   PerturbationMedium
+   PerturbationPoleResidue
+   NedeljkovicSorefMashanovich
+   ParameterPerturbation
+   PermittivityPerturbation
+   IndexPerturbation
 
 When performing a multiphysics simulation, the temperature or carrier density field will result in a perturbation to the optical medium.
 
@@ -327,10 +327,10 @@ Nonlinearity
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.NonlinearSpec
-   tidy3d.NonlinearSusceptibility
-   tidy3d.KerrNonlinearity
-   tidy3d.TwoPhotonAbsorption
+   NonlinearSpec
+   NonlinearSusceptibility
+   KerrNonlinearity
+   TwoPhotonAbsorption
 
 Nonlinear mediums are modeled as regular mediums with an added `NonlinearSpec` specification.
 
@@ -366,10 +366,10 @@ Spatio-temporal Modulation
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.ModulationSpec
-   tidy3d.SpaceTimeModulation
-   tidy3d.ContinuousWaveTimeModulation
-   tidy3d.SpaceModulation
+   ModulationSpec
+   SpaceTimeModulation
+   ContinuousWaveTimeModulation
+   SpaceModulation
 
 In active nanophotonic devices, the medium can be modulated both spatially and temporally. The ``ModulationSpec`` class allows the user to specify such modulations. This modulation is then passed as a parameter into one of the standard medium classes.
 
@@ -406,7 +406,7 @@ Multiphysics Medium
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.MultiPhysicsMedium
+   MultiPhysicsMedium
 
 This section is still under construction. 
 
@@ -418,8 +418,8 @@ Abstract Base Classes
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.components.medium.AbstractPerturbationMedium
-   tidy3d.components.medium.NonlinearModel
+   components.medium.AbstractPerturbationMedium
+   components.medium.NonlinearModel
 
 These are abstract base classes that are inherited by some of the medium classes above. The user should not need to interact with these classes during regular usage. 
    

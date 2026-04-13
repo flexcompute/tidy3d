@@ -33,11 +33,11 @@ Primitives
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Box
-   tidy3d.Sphere
-   tidy3d.Cylinder
-   tidy3d.PolySlab
-   tidy3d.plugins.polyslab.ComplexPolySlab
+   Box
+   Sphere
+   Cylinder
+   PolySlab
+   plugins.polyslab.ComplexPolySlab
 
 
 Create 1D lines, 2D planes, and 3D boxes with ``Box``.
@@ -122,7 +122,7 @@ Boolean Operations
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.ClipOperation
+   ClipOperation
 
 The ``ClipOperation`` class supports union, intersection, difference, and symmetric difference between two geometry objects.
 
@@ -172,11 +172,11 @@ Spatial Transformations
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Geometry.translated
-   tidy3d.Geometry.scaled
-   tidy3d.Geometry.rotated
-   tidy3d.Transformed
-   tidy3d.RotationAroundAxis
+   Geometry.translated
+   Geometry.scaled
+   Geometry.rotated
+   Transformed
+   RotationAroundAxis
 
 You can use ``translated()``, ``scaled()``, and ``rotated()`` with any geometry object to perform the respective transformation.
 
@@ -225,7 +225,7 @@ Geometry Groups
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.GeometryGroup
+   GeometryGroup
 
 When working with a large number of geometry objects belonging to the same ``tidy3d.Structure``, it is more computationally efficient to combine them into a single ``GeometryGroup``.
 
@@ -251,8 +251,8 @@ Geometry Arrays
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.GeometryArray
-   tidy3d.Geometry.array
+   GeometryArray
+   Geometry.array
 
 ``GeometryArray`` provides a memory-efficient way to represent arrays of repeated geometries
 by storing a single base geometry along with per-instance transformations. Each instance can
@@ -288,10 +288,10 @@ Working with GDS
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Geometry.from_gds
-   tidy3d.Geometry.to_gds_file
-   tidy3d.Geometry.to_gds
-   tidy3d.Geometry.to_gdstk
+   Geometry.from_gds
+   Geometry.to_gds_file
+   Geometry.to_gds
+   Geometry.to_gdstk
 
 The GDSII file format is commonly used in integrated circuit design to specify geometric shapes, labels, and other simulation metadata. Tidy3D supports the creation, import, and export of GDSII files via the third party package ``gdstk``. Please find detailed usage instructions in the linked articles below.
 
@@ -311,7 +311,7 @@ Working with Trimesh and STL
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.TriangleMesh
+   TriangleMesh
 
 The ``TriangleMesh`` class is an alternative way to represent geometry using vertex and face information, similar to the STL file format.
 

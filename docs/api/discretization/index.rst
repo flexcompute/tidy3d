@@ -36,12 +36,12 @@ Grid Specification
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.GridSpec
-   tidy3d.AutoGrid
-   tidy3d.UniformGrid
-   tidy3d.QuasiUniformGrid
-   tidy3d.CustomGrid
-   tidy3d.CustomGridBoundaries
+   GridSpec
+   AutoGrid
+   UniformGrid
+   QuasiUniformGrid
+   CustomGrid
+   CustomGridBoundaries
 
 The :class:`.GridSpec` object in Tidy3D contains grid definition along all three spatial axes. Each spatial axis accepts one of the basic grid types, :class:`.AutoGrid`, :class:`.UniformGrid`, :class:`.QuasiUniformGrid`, or :class:`.CustomGrid`. A typical Tidy3D :class:`.Simulation` object contains one instance of :class:`.GridSpec`, which in turn contains three instances of the grid types, which specify the grid along that particular axis:
 
@@ -98,10 +98,10 @@ Refinement
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.MeshOverrideStructure
-   tidy3d.LayerRefinementSpec
-   tidy3d.GridRefinement
-   tidy3d.CornerFinderSpec
+   MeshOverrideStructure
+   LayerRefinementSpec
+   GridRefinement
+   CornerFinderSpec
 
 For certain applications, the user may wish to apply additional grid refinement in specific regions, layers, or points in the simulation domain. The :class:`.GridSpec` class accepts the following optional parameters:
 
@@ -169,7 +169,7 @@ Subpixel Averaging
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SubpixelSpec
+   SubpixelSpec
 
 Subpixel averaging is used to accurately resolve material boundaries which do not line up with the grid boundaries. Under normal circumstances, the default settings are appropriate and the user does not need to provide a custom :class:`.SubpixelSpec`.
 
@@ -190,13 +190,13 @@ In the example above, the chosen method of subpixel averaging is specified for e
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Staircasing
-   tidy3d.VolumetricAveraging
-   tidy3d.HeuristicPECStaircasing
-   tidy3d.PolarizedAveraging
-   tidy3d.ContourPathAveraging
-   tidy3d.PECConformal
-   tidy3d.SurfaceImpedance
+   Staircasing
+   VolumetricAveraging
+   HeuristicPECStaircasing
+   PolarizedAveraging
+   ContourPathAveraging
+   PECConformal
+   SurfaceImpedance
 
 .. seealso::
 
@@ -214,10 +214,10 @@ Utility Classes
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Coords
-   tidy3d.FieldGrid
-   tidy3d.YeeGrid
-   tidy3d.Grid
+   Coords
+   FieldGrid
+   YeeGrid
+   Grid
 
 These classes contain information of the grid and related quantities. Advanced users may refer to their respective documentation pages to find specific attributes and methods. 
 

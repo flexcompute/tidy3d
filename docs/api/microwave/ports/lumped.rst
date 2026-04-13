@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _lumped_port:
 
 Lumped Port & Elements
@@ -7,8 +9,8 @@ Lumped Port & Elements
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.LumpedPort
-   tidy3d.rf.CoaxialLumpedPort
+   rf.LumpedPort
+   rf.CoaxialLumpedPort
 
 The :class:`~tidy3d.rf.LumpedPort` feature represents a planar, uniform current excitation with a fixed impedance termination.
 
@@ -52,11 +54,11 @@ The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.LumpedResistor
-   tidy3d.rf.CoaxialLumpedResistor
-   tidy3d.rf.LinearLumpedElement
-   tidy3d.rf.RLCNetwork
-   tidy3d.rf.AdmittanceNetwork
+   rf.LumpedResistor
+   rf.CoaxialLumpedResistor
+   rf.LinearLumpedElement
+   rf.RLCNetwork
+   rf.AdmittanceNetwork
 
 For a simple resistive lumped element, use ``LumpedResistor``.
 

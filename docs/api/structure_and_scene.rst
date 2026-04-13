@@ -19,7 +19,7 @@ Structure
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Structure
+   Structure
 
 
 A :class:`.Structure` in Tidy3D consists of a geometry and a medium. It represents a physical object to be included in the simulation domain. 
@@ -69,7 +69,7 @@ Scene
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Scene
+   Scene
 
 A ``Scene`` holds a collection of structures and a background medium. You can also define the plotting units. Typically, one would use a ``Scene`` to visualize the physical layout prior to defining the rest of the simulation.
 

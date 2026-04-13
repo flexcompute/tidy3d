@@ -7,7 +7,7 @@ Logging
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.log
-   tidy3d.set_logging_level
-   tidy3d.set_logging_file
+   log
+   set_logging_level
+   set_logging_file
 

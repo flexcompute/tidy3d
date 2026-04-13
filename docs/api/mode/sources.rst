@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 Mode Source
 -----------
 
@@ -5,9 +7,9 @@ Mode Source
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.ModeSource
-   tidy3d.ModeSpec
-   tidy3d.PECFrame
+   ModeSource
+   ModeSpec
+   PECFrame
 
 The ``ModeSource`` class represents a propagating mode in a given structure cross section.
 

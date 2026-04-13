@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _radiation_scattering:
 
 Radiation & Scattering
@@ -7,10 +9,10 @@ Radiation & Scattering
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.DirectivityMonitor
-   tidy3d.rf.DirectivityMonitorSpec
-   tidy3d.rf.RectangularAntennaArrayCalculator
-   tidy3d.rf.LobeMeasurer
+   rf.DirectivityMonitor
+   rf.DirectivityMonitorSpec
+   rf.RectangularAntennaArrayCalculator
+   rf.LobeMeasurer
 
 When modeling antennas or scattering problems, it is vital to analyze the radiated far-field. For such applications, the :class:`~tidy3d.rf.DirectivityMonitor` should be used.
 

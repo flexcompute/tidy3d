@@ -25,9 +25,9 @@ Boundary Specification
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.BoundarySpec
-   tidy3d.Boundary
-   tidy3d.BoundaryEdge
+   BoundarySpec
+   Boundary
+   BoundaryEdge
 
 The :class:`BoundarySpec` object contains information on the boundary conditions on all six sides of the simulation domain. The :class:`Boundary` object specifies the boundary conditions along a single axis, i.e. x, y, or z. Typically, the :class:`.Simulation` object contains a :class:`BoundarySpec` instance, which in turn contains three :class:`Boundary` instances.
 
@@ -76,10 +76,10 @@ PEC/PMC
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PECBoundary
-   tidy3d.PMCBoundary
-   tidy3d.Boundary.pec
-   tidy3d.Boundary.pmc
+   PECBoundary
+   PMCBoundary
+   Boundary.pec
+   Boundary.pmc
 
 These boundary conditions simulate a perfect electric or magnetic conductor by placing constraints on the normal and tangential components of the electric/magnetic fields.
 
@@ -104,11 +104,11 @@ Periodic
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Periodic
-   tidy3d.BlochBoundary
-   tidy3d.Boundary.periodic
-   tidy3d.Boundary.bloch
-   tidy3d.Boundary.bloch_from_source
+   Periodic
+   BlochBoundary
+   Boundary.periodic
+   Boundary.bloch
+   Boundary.bloch_from_source
 
 Periodic boundary conditions are commonly used in unit cell simulations. The :class:`Periodic` boundary type enforces field continuity, i.e.
 
@@ -142,19 +142,19 @@ Absorbing
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PML
-   tidy3d.PMLParams
-   tidy3d.Boundary.pml
-   tidy3d.StablePML
-   tidy3d.Boundary.stable_pml
-   tidy3d.Absorber
-   tidy3d.AbsorberParams
-   tidy3d.Boundary.absorber
-   tidy3d.InternalAbsorber
-   tidy3d.ABCBoundary
-   tidy3d.ModeABCBoundary
-   tidy3d.BroadbandModeABCSpec
-   tidy3d.BroadbandModeABCFitterParam
+   PML
+   PMLParams
+   Boundary.pml
+   StablePML
+   Boundary.stable_pml
+   Absorber
+   AbsorberParams
+   Boundary.absorber
+   InternalAbsorber
+   ABCBoundary
+   ModeABCBoundary
+   BroadbandModeABCSpec
+   BroadbandModeABCFitterParam
 
 For simulations with radiative modes, it is recommended to surround the simulation domain with absorbing boundary conditions, i.e. either the Perfectly Matched Layer :class:`PML` type, or the :class:`Absorber` type.
 

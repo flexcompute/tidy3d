@@ -25,7 +25,7 @@ The ``SimulationData`` Object
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SimulationData
+   SimulationData
 
 ~~~~
 
@@ -36,7 +36,7 @@ The ``BatchData`` Object
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.container.BatchData
+   web.api.container.BatchData
 
 
 ~~~~
@@ -48,21 +48,21 @@ List of Monitor Data Types
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.FieldData
-   tidy3d.FieldTimeData
-   tidy3d.ModeSolverData
-   tidy3d.PermittivityData
-   tidy3d.FluxData
-   tidy3d.FluxTimeData
-   tidy3d.ModeData
-   tidy3d.FieldProjectionAngleData
-   tidy3d.FieldProjectionCartesianData
-   tidy3d.FieldProjectionKSpaceData
-   tidy3d.DiffractionData
-   tidy3d.rf.DirectivityData
-   tidy3d.AuxFieldTimeData
-   tidy3d.SurfaceFieldData
-   tidy3d.SurfaceFieldTimeData
+   FieldData
+   FieldTimeData
+   ModeSolverData
+   PermittivityData
+   FluxData
+   FluxTimeData
+   ModeData
+   FieldProjectionAngleData
+   FieldProjectionCartesianData
+   FieldProjectionKSpaceData
+   DiffractionData
+   rf.DirectivityData
+   AuxFieldTimeData
+   SurfaceFieldData
+   SurfaceFieldTimeData
 
 
 ~~~~
@@ -74,24 +74,24 @@ List of Dataset Types
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SpatialDataArray
-   tidy3d.PermittivityDataset
-   tidy3d.ScalarFieldDataArray
-   tidy3d.ScalarModeFieldDataArray
-   tidy3d.ScalarFieldTimeDataArray
-   tidy3d.components.data.data_array.FreqDataArray
-   tidy3d.components.data.data_array.FreqModeDataArray
-   tidy3d.ModeAmpsDataArray
-   tidy3d.ModeIndexDataArray
-   tidy3d.FluxDataArray
-   tidy3d.FluxTimeDataArray
-   tidy3d.FieldProjectionAngleDataArray
-   tidy3d.FieldProjectionCartesianDataArray
-   tidy3d.FieldProjectionKSpaceDataArray
-   tidy3d.DiffractionDataArray
-   tidy3d.SteadyVoltageDataArray
-   tidy3d.IndexedSurfaceFieldDataArray
-   tidy3d.IndexedSurfaceFieldTimeDataArray
-   tidy3d.IndexedSurfaceFreqDataArray
-   tidy3d.IndexedSurfaceTimeDataArray
-   tidy3d.TriangularSurfaceDataset
+   SpatialDataArray
+   PermittivityDataset
+   ScalarFieldDataArray
+   ScalarModeFieldDataArray
+   ScalarFieldTimeDataArray
+   components.data.data_array.FreqDataArray
+   components.data.data_array.FreqModeDataArray
+   ModeAmpsDataArray
+   ModeIndexDataArray
+   FluxDataArray
+   FluxTimeDataArray
+   FieldProjectionAngleDataArray
+   FieldProjectionCartesianDataArray
+   FieldProjectionKSpaceDataArray
+   DiffractionDataArray
+   SteadyVoltageDataArray
+   IndexedSurfaceFieldDataArray
+   IndexedSurfaceFieldTimeDataArray
+   IndexedSurfaceFreqDataArray
+   IndexedSurfaceTimeDataArray
+   TriangularSurfaceDataset

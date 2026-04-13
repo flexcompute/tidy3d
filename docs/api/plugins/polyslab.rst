@@ -8,4 +8,4 @@ Self-intersecting Polyslab
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.polyslab.ComplexPolySlab
+   plugins.polyslab.ComplexPolySlab

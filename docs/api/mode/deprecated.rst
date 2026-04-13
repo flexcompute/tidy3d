@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 Deprecated
 ----------
 
@@ -8,5 +10,5 @@ Deprecated
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.mode.ModeSolver
-   tidy3d.plugins.mode.ModeSolverData
+   plugins.mode.ModeSolver
+   plugins.mode.ModeSolverData

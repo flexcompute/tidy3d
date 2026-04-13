@@ -11,8 +11,8 @@ Simulation Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatSimulationData
-   tidy3d.HeatChargeSimulationData
+   HeatSimulationData
+   HeatChargeSimulationData
 
 
 Monitor Data
@@ -22,4 +22,4 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.TemperatureData
+   TemperatureData

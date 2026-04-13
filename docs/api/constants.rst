@@ -10,13 +10,13 @@ Physical Constants
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.constants.C_0
-   tidy3d.constants.HBAR
-   tidy3d.constants.Q_e
-   tidy3d.constants.ETA_0
-   tidy3d.constants.EPSILON_0
-   tidy3d.constants.MU_0
-   tidy3d.constants.K_B
+   constants.C_0
+   constants.HBAR
+   constants.Q_e
+   constants.ETA_0
+   constants.EPSILON_0
+   constants.MU_0
+   constants.K_B
 
 
 Tidy3D Special Constants
@@ -26,7 +26,7 @@ Tidy3D Special Constants
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.constants.inf
+   constants.inf
 
 Tidy3D Configuration
 ---------------------
@@ -35,7 +35,7 @@ Tidy3D Configuration
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.ConfigManager
+   config.ConfigManager
 
 Default Absorber Parameters
 ----------------------------
@@ -44,9 +44,9 @@ Default Absorber Parameters
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.DefaultPMLParameters
-   tidy3d.DefaultStablePMLParameters
-   tidy3d.DefaultAbsorberParameters
+   DefaultPMLParameters
+   DefaultStablePMLParameters
+   DefaultAbsorberParameters
 
 Units
 ------
@@ -55,30 +55,30 @@ Units
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.constants.HERTZ
-   tidy3d.constants.TERAHERTZ
-   tidy3d.constants.SECOND
-   tidy3d.constants.PICOSECOND
-   tidy3d.constants.METER
-   tidy3d.constants.MICROMETER
-   tidy3d.constants.NANOMETER
-   tidy3d.constants.RADIAN
-   tidy3d.constants.CONDUCTIVITY
-   tidy3d.constants.PERMITTIVITY
-   tidy3d.constants.PML_SIGMA
-   tidy3d.constants.RADPERSEC
-   tidy3d.constants.ELECTRON_VOLT
-   tidy3d.constants.KELVIN
-   tidy3d.constants.PML_SIGMA
-   tidy3d.constants.CMCUBE
-   tidy3d.constants.PERCMCUBE
-   tidy3d.constants.WATT
-   tidy3d.constants.VOLT
-   tidy3d.constants.THERMAL_CONDUCTIVITY
-   tidy3d.constants.SPECIFIC_HEAT_CAPACITY
-   tidy3d.constants.HEAT_FLUX
-   tidy3d.constants.VOLUMETRIC_HEAT_RATE
-   tidy3d.constants.HEAT_TRANSFER_COEFF
+   constants.HERTZ
+   constants.TERAHERTZ
+   constants.SECOND
+   constants.PICOSECOND
+   constants.METER
+   constants.MICROMETER
+   constants.NANOMETER
+   constants.RADIAN
+   constants.CONDUCTIVITY
+   constants.PERMITTIVITY
+   constants.PML_SIGMA
+   constants.RADPERSEC
+   constants.ELECTRON_VOLT
+   constants.KELVIN
+   constants.PML_SIGMA
+   constants.CMCUBE
+   constants.PERCMCUBE
+   constants.WATT
+   constants.VOLT
+   constants.THERMAL_CONDUCTIVITY
+   constants.SPECIFIC_HEAT_CAPACITY
+   constants.HEAT_FLUX
+   constants.VOLUMETRIC_HEAT_RATE
+   constants.HEAT_TRANSFER_COEFF
 
 
 Precision & Comparator Values
@@ -88,8 +88,8 @@ Precision & Comparator Values
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.constants.dp_eps
-   tidy3d.constants.fp_eps
-   tidy3d.constants.pec_val
-   tidy3d.constants.LARGE_NUMBER
-   tidy3d.constants.GLANCING_CUTOFF
+   constants.dp_eps
+   constants.fp_eps
+   constants.pec_val
+   constants.LARGE_NUMBER
+   constants.GLANCING_CUTOFF

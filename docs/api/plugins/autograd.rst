@@ -14,8 +14,8 @@ Differential Operators
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.autograd.differential_operators.grad
-    tidy3d.plugins.autograd.differential_operators.value_and_grad
+    plugins.autograd.differential_operators.grad
+    plugins.autograd.differential_operators.value_and_grad
 
 Functions
 ~~~~~~~~~
@@ -24,23 +24,23 @@ Functions
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.autograd.functions.add_at
-    tidy3d.plugins.autograd.functions.convolve
-    tidy3d.plugins.autograd.functions.grey_closing
-    tidy3d.plugins.autograd.functions.grey_dilation
-    tidy3d.plugins.autograd.functions.grey_erosion
-    tidy3d.plugins.autograd.functions.grey_opening
-    tidy3d.plugins.autograd.functions.interpn
-    tidy3d.plugins.autograd.functions.least_squares
-    tidy3d.plugins.autograd.functions.morphological_gradient
-    tidy3d.plugins.autograd.functions.morphological_gradient_external
-    tidy3d.plugins.autograd.functions.morphological_gradient_internal
-    tidy3d.plugins.autograd.functions.pad
-    tidy3d.plugins.autograd.functions.rescale
-    tidy3d.plugins.autograd.functions.smooth_max
-    tidy3d.plugins.autograd.functions.smooth_min
-    tidy3d.plugins.autograd.functions.threshold
-    tidy3d.plugins.autograd.functions.trapz
+    plugins.autograd.functions.add_at
+    plugins.autograd.functions.convolve
+    plugins.autograd.functions.grey_closing
+    plugins.autograd.functions.grey_dilation
+    plugins.autograd.functions.grey_erosion
+    plugins.autograd.functions.grey_opening
+    plugins.autograd.functions.interpn
+    plugins.autograd.functions.least_squares
+    plugins.autograd.functions.morphological_gradient
+    plugins.autograd.functions.morphological_gradient_external
+    plugins.autograd.functions.morphological_gradient_internal
+    plugins.autograd.functions.pad
+    plugins.autograd.functions.rescale
+    plugins.autograd.functions.smooth_max
+    plugins.autograd.functions.smooth_min
+    plugins.autograd.functions.threshold
+    plugins.autograd.functions.trapz
 
 Utilities
 ~~~~~~~~~
@@ -49,10 +49,10 @@ Utilities
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.autograd.utilities.chain
-    tidy3d.plugins.autograd.utilities.get_kernel_size_px
-    tidy3d.plugins.autograd.utilities.make_kernel
-    tidy3d.plugins.autograd.utilities.scalar_objective
+    plugins.autograd.utilities.chain
+    plugins.autograd.utilities.get_kernel_size_px
+    plugins.autograd.utilities.make_kernel
+    plugins.autograd.utilities.scalar_objective
 
 Primitives
 ~~~~~~~~~~
@@ -61,8 +61,8 @@ Primitives
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.autograd.primitives.gaussian_filter
-    tidy3d.plugins.autograd.primitives.interpolate_spline
+    plugins.autograd.primitives.gaussian_filter
+    plugins.autograd.primitives.interpolate_spline
 
 Inverse Design
 ~~~~~~~~~~~~~~
@@ -71,21 +71,21 @@ Inverse Design
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.autograd.invdes.CircularFilter
-    tidy3d.plugins.autograd.invdes.ConicFilter
-    tidy3d.plugins.autograd.invdes.ErosionDilationPenalty
-    tidy3d.plugins.autograd.invdes.FilterAndProject
-    tidy3d.plugins.autograd.invdes.grey_indicator
-    tidy3d.plugins.autograd.invdes.make_circular_filter
-    tidy3d.plugins.autograd.invdes.make_conic_filter
-    tidy3d.plugins.autograd.invdes.make_curvature_penalty
-    tidy3d.plugins.autograd.invdes.make_erosion_dilation_penalty
-    tidy3d.plugins.autograd.invdes.make_filter
-    tidy3d.plugins.autograd.invdes.make_filter_and_project
-    tidy3d.plugins.autograd.invdes.ramp_projection
-    tidy3d.plugins.autograd.invdes.tanh_projection
-    tidy3d.plugins.autograd.invdes.smoothed_projection
-    tidy3d.plugins.autograd.invdes.symmetrize_mirror
-    tidy3d.plugins.autograd.invdes.symmetrize_rotation
-    tidy3d.plugins.autograd.invdes.symmetrize_diagonal
+    plugins.autograd.invdes.CircularFilter
+    plugins.autograd.invdes.ConicFilter
+    plugins.autograd.invdes.ErosionDilationPenalty
+    plugins.autograd.invdes.FilterAndProject
+    plugins.autograd.invdes.grey_indicator
+    plugins.autograd.invdes.make_circular_filter
+    plugins.autograd.invdes.make_conic_filter
+    plugins.autograd.invdes.make_curvature_penalty
+    plugins.autograd.invdes.make_erosion_dilation_penalty
+    plugins.autograd.invdes.make_filter
+    plugins.autograd.invdes.make_filter_and_project
+    plugins.autograd.invdes.ramp_projection
+    plugins.autograd.invdes.tanh_projection
+    plugins.autograd.invdes.smoothed_projection
+    plugins.autograd.invdes.symmetrize_mirror
+    plugins.autograd.invdes.symmetrize_rotation
+    plugins.autograd.invdes.symmetrize_diagonal
 

@@ -30,7 +30,7 @@ Simulation Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatChargeSimulationData
+   HeatChargeSimulationData
 
 
 Monitor Data
@@ -40,12 +40,12 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.SteadyPotentialData
-   tidy3d.SteadyFreeCarrierData
-   tidy3d.SteadyEnergyBandData
-   tidy3d.SteadyCapacitanceData
-   tidy3d.SteadyElectricFieldData
-   tidy3d.SteadyCurrentDensityData
+   SteadyPotentialData
+   SteadyFreeCarrierData
+   SteadyEnergyBandData
+   SteadyCapacitanceData
+   SteadyElectricFieldData
+   SteadyCurrentDensityData
 
 Device Data
 ^^^^^^^^^^^^
@@ -54,4 +54,4 @@ Device Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.DeviceCharacteristics
+   DeviceCharacteristics

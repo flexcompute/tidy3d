@@ -13,13 +13,13 @@ Core Workflow
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.run
-   tidy3d.web.upload
-   tidy3d.web.start
-   tidy3d.web.monitor
-   tidy3d.web.download
-   tidy3d.web.load
-   tidy3d.web.api.asynchronous.run_async
+   web.run
+   web.upload
+   web.start
+   web.monitor
+   web.download
+   web.load
+   web.api.asynchronous.run_async
 
 Download Utilities
 ~~~~~~~~~~~~~~~~~~
@@ -28,9 +28,9 @@ Download Utilities
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.download_json
-   tidy3d.web.download_log
-   tidy3d.web.load_simulation
+   web.download_json
+   web.download_log
+   web.load_simulation
 
 Task Information
 ~~~~~~~~~~~~~~~~
@@ -39,9 +39,9 @@ Task Information
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.get_info
-   tidy3d.web.get_run_info
-   tidy3d.web.get_tasks
+   web.get_info
+   web.get_run_info
+   web.get_tasks
 
 Cost Estimation
 ~~~~~~~~~~~~~~~
@@ -50,8 +50,8 @@ Cost Estimation
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.estimate_cost
-   tidy3d.web.real_cost
+   web.estimate_cost
+   web.real_cost
 
 Task Management
 ~~~~~~~~~~~~~~~
@@ -60,9 +60,9 @@ Task Management
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.delete
-   tidy3d.web.delete_old
-   tidy3d.web.abort
+   web.delete
+   web.delete_old
+   web.abort
 
 Account and System
 ~~~~~~~~~~~~~~~~~~
@@ -71,8 +71,8 @@ Account and System
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.account
-   tidy3d.web.test
+   web.account
+   web.test
 
 Job and Batch Containers
 -------------------------
@@ -81,9 +81,9 @@ Job and Batch Containers
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.Job
-   tidy3d.web.Batch
-   tidy3d.web.BatchData
+   web.Job
+   web.Batch
+   web.BatchData
 
 Information Containers
 ----------------------
@@ -92,7 +92,7 @@ Information Containers
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.core.task_info.TaskInfo
+   web.core.task_info.TaskInfo
 
 
 Mode Solver Web API
@@ -102,6 +102,6 @@ Mode Solver Web API
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.mode.run
-   tidy3d.web.api.mode.run_batch
-   tidy3d.web.api.mode.ModeSolverTask
+   web.api.mode.run
+   web.api.mode.run_batch
+   web.api.mode.ModeSolverTask

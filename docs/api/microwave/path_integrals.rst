@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _path_integrals:
 
 Path Integrals
@@ -16,8 +18,8 @@ Voltage Path Integrals
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.AxisAlignedVoltageIntegral
-   tidy3d.rf.Custom2DVoltageIntegral
+   rf.AxisAlignedVoltageIntegral
+   rf.Custom2DVoltageIntegral
 
 Voltage path integrals compute voltage by integrating the electric field :math:`\mathbf{E}` along a line path:
 
@@ -84,9 +86,9 @@ Current Path Integrals
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.AxisAlignedCurrentIntegral
-   tidy3d.rf.Custom2DCurrentIntegral
-   tidy3d.rf.CompositeCurrentIntegral
+   rf.AxisAlignedCurrentIntegral
+   rf.Custom2DCurrentIntegral
+   rf.CompositeCurrentIntegral
 
 Current path integrals compute current using Ampère's circuital law by integrating the magnetic field :math:`\mathbf{H}` around a closed contour:
 
@@ -218,11 +220,11 @@ The classes documented above (``*Integral``) are **execution classes** that perf
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.AxisAlignedVoltageIntegralSpec
-   tidy3d.rf.Custom2DVoltageIntegralSpec
-   tidy3d.rf.AxisAlignedCurrentIntegralSpec
-   tidy3d.rf.Custom2DCurrentIntegralSpec
-   tidy3d.rf.CompositeCurrentIntegralSpec
+   rf.AxisAlignedVoltageIntegralSpec
+   rf.Custom2DVoltageIntegralSpec
+   rf.AxisAlignedCurrentIntegralSpec
+   rf.Custom2DCurrentIntegralSpec
+   rf.CompositeCurrentIntegralSpec
 
 These specification classes have the same parameters but are used for configuration (in :class:`~tidy3d.rf.CustomImpedanceSpec`) rather than direct computation. See :ref:`microwave_mode_solver` for their usage in mode analysis.
 

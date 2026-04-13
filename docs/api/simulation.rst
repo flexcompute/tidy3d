@@ -17,7 +17,7 @@ Defining a FDTD Simulation
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Simulation
+   Simulation
 
 
 ~~~~
@@ -29,7 +29,7 @@ Batch Jobs
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.container.Batch
+   web.api.container.Batch
 
 ~~~~
 
@@ -40,17 +40,17 @@ Other Simulation Types
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.ModeSimulation
-   tidy3d.EMESimulation
-   tidy3d.HeatSimulation
-   tidy3d.HeatChargeSimulation
+   ModeSimulation
+   EMESimulation
+   HeatSimulation
+   HeatChargeSimulation
 
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.ComponentModeler
-   tidy3d.plugins.smatrix.TerminalComponentModeler
+   plugins.smatrix.ComponentModeler
+   plugins.smatrix.TerminalComponentModeler
 
 ~~~~
 
@@ -61,8 +61,8 @@ Logging
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.log.set_logging_level
-   tidy3d.log.set_log_suppression
-   tidy3d.log.set_logging_file
+   log.set_logging_level
+   log.set_log_suppression
+   log.set_logging_file
 
 ~~~~

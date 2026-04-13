@@ -32,11 +32,11 @@ Source Time Dependence
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.GaussianPulse
-   tidy3d.ContinuousWave
-   tidy3d.BroadbandPulse
-   tidy3d.SourceTime
-   tidy3d.CustomSourceTime
+   GaussianPulse
+   ContinuousWave
+   BroadbandPulse
+   SourceTime
+   CustomSourceTime
 
 Each source requires the ``source_time`` parameter to be defined, which provides the time-dependence of the source.
 
@@ -72,8 +72,8 @@ Dipole and Uniform Current
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PointDipole
-   tidy3d.UniformCurrentSource
+   PointDipole
+   UniformCurrentSource
 
 The ``PointDipole`` represents an infinitesimally small isotropic radiator.
 
@@ -113,9 +113,9 @@ Plane Wave
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.PlaneWave
-   tidy3d.FixedInPlaneKSpec
-   tidy3d.FixedAngleSpec
+   PlaneWave
+   FixedInPlaneKSpec
+   FixedAngleSpec
 
 The ``PlaneWave`` class represents an incident plane wave of a certain polarization and orientation. This is typically used in conjunction with periodic boundary conditions, e.g. in a unit cell simulation.
 
@@ -153,8 +153,8 @@ Gaussian Beam
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.GaussianBeam
-   tidy3d.AstigmaticGaussianBeam
+   GaussianBeam
+   AstigmaticGaussianBeam
 
 The ``GaussianBeam`` and ``AstigmaticGaussianBeam`` classes implement the paraxial form of the Gaussian beam.
 
@@ -196,7 +196,7 @@ Total-Field/Scattered-Field (TFSF)
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.TFSF
+   TFSF
 
 The ``TFSF`` class represents an incident plane wave source that is confined to a specific TFSF region. This type of source is typically used for scattering simulations. Within the TFSF region, the overall field comprises of the incident plane wave and the scattered field. At the edges of the TFSF region, the incident plane wave field is deliberately cancelled out, such that outside the TFSF region, the total field only contains the scattered field.
 
@@ -220,8 +220,8 @@ User-defined
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.CustomFieldSource
-   tidy3d.CustomCurrentSource
+   CustomFieldSource
+   CustomCurrentSource
 
 It is possible to define an arbitrary field source in Tidy3D using ``CustomFieldSource`` or ``CustomCurrentSource``. Possible usage scenarios include defining a field profile that is not currently available in Tidy3D, or injecting a source that is based on the output of a previous simulation. 
 

@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _layer_grid_refinement:
 
 Layer-based Grid Refinement
@@ -7,9 +9,9 @@ Layer-based Grid Refinement
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.LayerRefinementSpec
-   tidy3d.CornerFinderSpec
-   tidy3d.GridRefinement
+   LayerRefinementSpec
+   CornerFinderSpec
+   GridRefinement
 
 The :class:`.LayerRefinementSpec` class allows the user to specify automated refinement within a layered region, for instance, the metallic trace plane of a printed circuit board. The grid will be automatically refined near any metallic corners and edges in that layer.
 

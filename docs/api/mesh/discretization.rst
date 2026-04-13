@@ -7,7 +7,7 @@ Grid Specification
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.UniformUnstructuredGrid
-   tidy3d.DistanceUnstructuredGrid
-   tidy3d.GridRefinementRegion
-   tidy3d.GridRefinementLine
+   UniformUnstructuredGrid
+   DistanceUnstructuredGrid
+   GridRefinementRegion
+   GridRefinementLine

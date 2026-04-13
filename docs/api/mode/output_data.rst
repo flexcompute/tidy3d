@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 Output Data
 -----------
 
@@ -8,7 +10,7 @@ Simulation Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ModeSimulationData
+   ModeSimulationData
 
 
 Monitor Data
@@ -18,7 +20,7 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.mode.ModeSolverData
+   plugins.mode.ModeSolverData
 
 
 Datasets
@@ -28,4 +30,4 @@ Datasets
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ModeSolverDataset
+   ModeSolverDataset

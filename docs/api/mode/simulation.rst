@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 Mode Simulation
 ---------------
 
@@ -5,4 +7,4 @@ Mode Simulation
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ModeSimulation
+   ModeSimulation

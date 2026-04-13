@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 Mode Specifications
 -------------------
 
@@ -5,9 +7,9 @@ Mode Specifications
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ModeSpec
-   tidy3d.ModeSortSpec
-   tidy3d.ModeInterpSpec
+   ModeSpec
+   ModeSortSpec
+   ModeInterpSpec
 
 
 Sampling Specifications
@@ -17,6 +19,6 @@ Sampling Specifications
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.UniformSampling
-   tidy3d.ChebSampling
-   tidy3d.CustomSampling
+   UniformSampling
+   ChebSampling
+   CustomSampling

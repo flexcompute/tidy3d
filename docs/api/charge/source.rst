@@ -7,4 +7,4 @@ Charge-Heat Coupled Sources
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatFromElectricSource
+   HeatFromElectricSource

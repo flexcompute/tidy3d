@@ -11,15 +11,15 @@ Design Space Exploration
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.design.parameter.Parameter
-   tidy3d.plugins.design.ParameterFloat
-   tidy3d.plugins.design.ParameterInt
-   tidy3d.plugins.design.ParameterAny
-   tidy3d.plugins.design.method.Method
-   tidy3d.plugins.design.MethodGrid
-   tidy3d.plugins.design.MethodMonteCarlo
-   tidy3d.plugins.design.MethodBayOpt
-   tidy3d.plugins.design.MethodGenAlg
-   tidy3d.plugins.design.MethodParticleSwarm
-   tidy3d.plugins.design.DesignSpace
-   tidy3d.plugins.design.Result
+   plugins.design.parameter.Parameter
+   plugins.design.ParameterFloat
+   plugins.design.ParameterInt
+   plugins.design.ParameterAny
+   plugins.design.method.Method
+   plugins.design.MethodGrid
+   plugins.design.MethodMonteCarlo
+   plugins.design.MethodBayOpt
+   plugins.design.MethodGenAlg
+   plugins.design.MethodParticleSwarm
+   plugins.design.DesignSpace
+   plugins.design.Result

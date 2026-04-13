@@ -7,4 +7,4 @@ Volume mesher
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.VolumeMesher
+   VolumeMesher

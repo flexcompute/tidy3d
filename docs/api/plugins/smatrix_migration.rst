@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _smatrix_migration:
 
 v2.10 Refactor Migration
@@ -148,12 +150,12 @@ For more details, see the API documentation for the new classes and functions:
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.ModalComponentModeler
-   tidy3d.plugins.smatrix.ModalComponentModelerData
-   tidy3d.rf.TerminalComponentModeler
-   tidy3d.rf.TerminalComponentModelerData
-   tidy3d.SimulationMap
-   tidy3d.SimulationDataMap
-   tidy3d.plugins.smatrix.run.create_batch
-   tidy3d.plugins.smatrix.run.compose_modeler_data_from_batch_data
-   tidy3d.plugins.smatrix.run.compose_modeler_data
+   plugins.smatrix.ModalComponentModeler
+   plugins.smatrix.ModalComponentModelerData
+   rf.TerminalComponentModeler
+   rf.TerminalComponentModelerData
+   SimulationMap
+   SimulationDataMap
+   plugins.smatrix.run.create_batch
+   plugins.smatrix.run.compose_modeler_data_from_batch_data
+   plugins.smatrix.run.compose_modeler_data

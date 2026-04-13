@@ -7,4 +7,4 @@ Mesh monitors
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.VolumeMeshMonitor
+   VolumeMeshMonitor

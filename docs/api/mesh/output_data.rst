@@ -11,7 +11,7 @@ Simulation Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.VolumeMesherData
+   VolumeMesherData
 
 
 Monitor Data
@@ -21,7 +21,7 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.VolumeMeshData
+   VolumeMeshData
 
 
 Unstructured Data Classes
@@ -31,8 +31,8 @@ Unstructured Data Classes
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.TriangularGridDataset
-   tidy3d.TetrahedralGridDataset
+   TriangularGridDataset
+   TetrahedralGridDataset
 
 
 Individual Datasets
@@ -42,9 +42,9 @@ Individual Datasets
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.PointDataArray
-   tidy3d.CellDataArray
-   tidy3d.IndexedDataArray
-   tidy3d.IndexedVoltageDataArray
-   tidy3d.IndexedTimeDataArray
-   tidy3d.IndexedFieldVoltageDataArray
+   PointDataArray
+   CellDataArray
+   IndexedDataArray
+   IndexedVoltageDataArray
+   IndexedTimeDataArray
+   IndexedFieldVoltageDataArray

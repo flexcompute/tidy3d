@@ -21,7 +21,7 @@ DRC Configuration
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.klayout.DRCConfig
+    plugins.klayout.DRCConfig
 
 DRC Runner
 ^^^^^^^^^^
@@ -30,8 +30,8 @@ DRC Runner
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.klayout.DRCRunner
-    tidy3d.plugins.klayout.run_drc_on_gds
+    plugins.klayout.DRCRunner
+    plugins.klayout.run_drc_on_gds
 
 DRC Results
 ^^^^^^^^^^^
@@ -40,8 +40,8 @@ DRC Results
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.klayout.DRCResults
-    tidy3d.plugins.klayout.drc.results.DRCViolation
+    plugins.klayout.DRCResults
+    plugins.klayout.drc.results.DRCViolation
 
 DRC Markers
 ^^^^^^^^^^^
@@ -50,10 +50,10 @@ DRC Markers
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.klayout.drc.results.EdgeMarker
-    tidy3d.plugins.klayout.drc.results.EdgePairMarker
-    tidy3d.plugins.klayout.drc.results.PolygonMarker
-    tidy3d.plugins.klayout.drc.results.MultiPolygonMarker
+    plugins.klayout.drc.results.EdgeMarker
+    plugins.klayout.drc.results.EdgePairMarker
+    plugins.klayout.drc.results.PolygonMarker
+    plugins.klayout.drc.results.MultiPolygonMarker
 
 Utilities
 ~~~~~~~~~
@@ -62,4 +62,4 @@ Utilities
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.klayout.check_installation 
+    plugins.klayout.check_installation 

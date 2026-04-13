@@ -21,10 +21,10 @@ For photonics applications, use the **ModalComponentModeler** which computes mod
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.ModalComponentModeler
-   tidy3d.plugins.smatrix.ModalComponentModelerData
-   tidy3d.plugins.smatrix.Port
-   tidy3d.plugins.smatrix.ModalPortDataArray
+   plugins.smatrix.ModalComponentModeler
+   plugins.smatrix.ModalComponentModelerData
+   plugins.smatrix.Port
+   plugins.smatrix.ModalPortDataArray
 
 RF/Microwave Component Modelers
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -44,15 +44,15 @@ For RF and microwave applications, use the **TerminalComponentModeler** (availab
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.TerminalComponentModeler
-   tidy3d.plugins.smatrix.TerminalComponentModelerData
-   tidy3d.plugins.smatrix.LumpedPort
-   tidy3d.plugins.smatrix.CoaxialLumpedPort
-   tidy3d.rf.WavePort
-   tidy3d.rf.TerminalWavePort
-   tidy3d.rf.MicrowaveSMatrixData
-   tidy3d.rf.TerminalPortDataArray
-   tidy3d.rf.PortDataArray
+   plugins.smatrix.TerminalComponentModeler
+   plugins.smatrix.TerminalComponentModelerData
+   plugins.smatrix.LumpedPort
+   plugins.smatrix.CoaxialLumpedPort
+   rf.WavePort
+   rf.TerminalWavePort
+   rf.MicrowaveSMatrixData
+   rf.TerminalPortDataArray
+   rf.PortDataArray
 
 .. seealso::
    For complete RF/microwave documentation, see:
@@ -69,7 +69,7 @@ Further Details
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.AbstractComponentModeler
-   tidy3d.plugins.smatrix.data.base.AbstractComponentModelerData
-   tidy3d.SimulationMap
-   tidy3d.SimulationDataMap
+   plugins.smatrix.AbstractComponentModeler
+   plugins.smatrix.data.base.AbstractComponentModelerData
+   SimulationMap
+   SimulationDataMap

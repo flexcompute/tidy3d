@@ -7,9 +7,9 @@ Charge Mediums
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ChargeConductorMedium
-   tidy3d.ChargeInsulatorMedium
-   tidy3d.SemiconductorMedium
+   ChargeConductorMedium
+   ChargeInsulatorMedium
+   SemiconductorMedium
 
 Mobility
 ^^^^^^^^^^^^^^
@@ -18,8 +18,8 @@ Mobility
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ConstantMobilityModel
-   tidy3d.CaugheyThomasMobility
+   ConstantMobilityModel
+   CaugheyThomasMobility
 
 
 Generation Recombination
@@ -29,13 +29,13 @@ Generation Recombination
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.AugerRecombination
-   tidy3d.RadiativeRecombination
-   tidy3d.ShockleyReedHallRecombination
-   tidy3d.FossumCarrierLifetime
-   tidy3d.DistributedGeneration
-   tidy3d.HurkxDirectBandToBandTunneling
-   tidy3d.SelberherrImpactIonization
+   AugerRecombination
+   RadiativeRecombination
+   ShockleyReedHallRecombination
+   FossumCarrierLifetime
+   DistributedGeneration
+   HurkxDirectBandToBandTunneling
+   SelberherrImpactIonization
 
 
 Doping
@@ -45,8 +45,8 @@ Doping
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ConstantDoping
-   tidy3d.GaussianDoping
+   ConstantDoping
+   GaussianDoping
 
 
 Bandgap
@@ -56,7 +56,7 @@ Bandgap
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.SlotboomBandGapNarrowing
+   SlotboomBandGapNarrowing
 
 
 Effective Density Of States (DOS)
@@ -66,10 +66,10 @@ Effective Density Of States (DOS)
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ConstantEffectiveDOS
-   tidy3d.IsotropicEffectiveDOS
-   tidy3d.MultiValleyEffectiveDOS
-   tidy3d.DualValleyEffectiveDOS
+   ConstantEffectiveDOS
+   IsotropicEffectiveDOS
+   MultiValleyEffectiveDOS
+   DualValleyEffectiveDOS
 
 Energy Bandgap
 ^^^^^^^^^^^^^^
@@ -78,8 +78,8 @@ Energy Bandgap
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ConstantEnergyBandGap
-   tidy3d.VarshniEnergyBandGap
+   ConstantEnergyBandGap
+   VarshniEnergyBandGap
 
 Charge Carrier Properties
 ------------------------------------
@@ -88,5 +88,5 @@ Charge Carrier Properties
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.LinearChargePerturbation
-   tidy3d.CustomChargePerturbation
+   LinearChargePerturbation
+   CustomChargePerturbation

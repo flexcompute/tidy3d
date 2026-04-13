@@ -7,4 +7,4 @@ Waveguide
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.waveguide.RectangularDielectric
+   plugins.waveguide.RectangularDielectric

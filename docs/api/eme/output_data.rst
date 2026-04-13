@@ -10,9 +10,9 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.EMECoefficientData
-   tidy3d.EMEModeSolverData
-   tidy3d.EMEFieldData
+   EMECoefficientData
+   EMEModeSolverData
+   EMEFieldData
 
 
 Simulation Data
@@ -22,7 +22,7 @@ Simulation Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.EMESimulationData
+   EMESimulationData
 
 
 Datasets
@@ -32,8 +32,8 @@ Datasets
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.EMESMatrixDataset
-   tidy3d.EMECoefficientDataset
-   tidy3d.EMEOverlapDataset
-   tidy3d.EMEFieldDataset
-   tidy3d.EMEModeSolverDataset
+   EMESMatrixDataset
+   EMECoefficientDataset
+   EMEOverlapDataset
+   EMEFieldDataset
+   EMEModeSolverDataset

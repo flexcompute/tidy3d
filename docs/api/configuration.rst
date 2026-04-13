@@ -12,9 +12,9 @@ Manager and Helpers
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.ConfigManager
-   tidy3d.config.get_manager
-   tidy3d.config.reload_config
+   ConfigManager
+   get_manager
+   reload_config
 
 Legacy Compatibility
 --------------------
@@ -23,9 +23,9 @@ Legacy Compatibility
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.LegacyConfigWrapper
-   tidy3d.config.Environment
-   tidy3d.config.EnvironmentConfig
+   LegacyConfigWrapper
+   Environment
+   EnvironmentConfig
 
 Registration Utilities
 ----------------------
@@ -34,11 +34,11 @@ Registration Utilities
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.register_section
-   tidy3d.config.register_plugin
-   tidy3d.config.register_handler
-   tidy3d.config.get_sections
-   tidy3d.config.get_handlers
+   register_section
+   register_plugin
+   register_handler
+   get_sections
+   get_handlers
 
 Schema Versioning
 -----------------
@@ -47,5 +47,5 @@ Schema Versioning
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.CURRENT_CONFIG_VERSION
-   tidy3d.config.register_migration
+   CURRENT_CONFIG_VERSION
+   register_migration

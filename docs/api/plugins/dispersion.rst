@@ -8,9 +8,9 @@ Dispersive Model Fitting
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.dispersion.FastDispersionFitter
-   tidy3d.plugins.dispersion.AdvancedFastFitterParam
-   tidy3d.plugins.dispersion.DispersionFitter
-   tidy3d.plugins.dispersion.AdvancedFitterParam
-   tidy3d.plugins.dispersion.web.run
-   tidy3d.plugins.dispersion.StableDispersionFitter
+   plugins.dispersion.FastDispersionFitter
+   plugins.dispersion.AdvancedFastFitterParam
+   plugins.dispersion.DispersionFitter
+   plugins.dispersion.AdvancedFitterParam
+   plugins.dispersion.web.run
+   plugins.dispersion.StableDispersionFitter

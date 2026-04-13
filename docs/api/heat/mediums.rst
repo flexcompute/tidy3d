@@ -7,11 +7,11 @@ Material Thermal
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.FluidMedium
-   tidy3d.SolidMedium
+   FluidMedium
+   SolidMedium
 
-   tidy3d.FluidSpec
-   tidy3d.SolidSpec
+   FluidSpec
+   SolidSpec
 
 
 Thermal Perturbation Specification
@@ -21,6 +21,6 @@ Thermal Perturbation Specification
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.LinearHeatPerturbation
-   tidy3d.CustomHeatPerturbation
+   LinearHeatPerturbation
+   CustomHeatPerturbation
 

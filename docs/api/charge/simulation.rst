@@ -7,5 +7,5 @@ Simulation
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatSimulation
-   tidy3d.HeatChargeSimulation
+   HeatSimulation
+   HeatChargeSimulation

@@ -10,10 +10,10 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.MicrowaveModeData
-   tidy3d.rf.MicrowaveModeSolverData
-   tidy3d.rf.DirectivityData
-   tidy3d.rf.AntennaMetricsData
+   rf.MicrowaveModeData
+   rf.MicrowaveModeSolverData
+   rf.DirectivityData
+   rf.AntennaMetricsData
 
 - **MicrowaveModeData**: Mode amplitudes with transmission line parameters (Z0, voltage, current) and propagation characteristics (γ, α, β).
 - **MicrowaveModeSolverData**: Complete 2D mode field profiles with transmission line parameters and mode classification.
@@ -46,8 +46,8 @@ Datasets and Data Arrays
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.components.microwave.data.dataset.TransmissionLineDataset
-   tidy3d.components.microwave.data.dataset.TransmissionLineTerminalDataset
+   components.microwave.data.dataset.TransmissionLineDataset
+   components.microwave.data.dataset.TransmissionLineTerminalDataset
 
 **Data Arrays**
 
@@ -55,31 +55,31 @@ Datasets and Data Arrays
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.components.data.data_array.ModeDataArray
-   tidy3d.components.data.data_array.TerminalDataArray
-   tidy3d.components.data.data_array.FreqTerminalDataArray
-   tidy3d.components.data.data_array.FreqTerminalModeDataArray
-   tidy3d.components.data.data_array.FreqTerminalTerminalDataArray
-   tidy3d.components.data.data_array.VoltageTimeDataArray
-   tidy3d.components.data.data_array.VoltageFreqDataArray
-   tidy3d.components.data.data_array.VoltageFreqModeDataArray
-   tidy3d.components.data.data_array.VoltageFreqTerminalModeDataArray
-   tidy3d.components.data.data_array.CurrentTimeDataArray
-   tidy3d.components.data.data_array.CurrentFreqDataArray
-   tidy3d.components.data.data_array.CurrentFreqModeDataArray
-   tidy3d.components.data.data_array.CurrentFreqTerminalDataArray
-   tidy3d.components.data.data_array.CurrentFreqTerminalModeDataArray
-   tidy3d.components.data.data_array.ImpedanceModeDataArray
-   tidy3d.components.data.data_array.ImpedanceTerminalDataArray
-   tidy3d.components.data.data_array.ImpedanceTimeDataArray
-   tidy3d.components.data.data_array.ImpedanceFreqDataArray
-   tidy3d.components.data.data_array.ImpedanceFreqModeDataArray
-   tidy3d.components.data.data_array.ImpedanceFreqTerminalTerminalDataArray
-   tidy3d.components.microwave.data.data_array.PropagationConstantArray
-   tidy3d.components.microwave.data.data_array.PhaseConstantArray
-   tidy3d.components.microwave.data.data_array.AttenuationConstantArray
-   tidy3d.components.microwave.data.data_array.PhaseVelocityArray
-   tidy3d.components.microwave.data.data_array.GroupVelocityArray
+   components.data.data_array.ModeDataArray
+   components.data.data_array.TerminalDataArray
+   components.data.data_array.FreqTerminalDataArray
+   components.data.data_array.FreqTerminalModeDataArray
+   components.data.data_array.FreqTerminalTerminalDataArray
+   components.data.data_array.VoltageTimeDataArray
+   components.data.data_array.VoltageFreqDataArray
+   components.data.data_array.VoltageFreqModeDataArray
+   components.data.data_array.VoltageFreqTerminalModeDataArray
+   components.data.data_array.CurrentTimeDataArray
+   components.data.data_array.CurrentFreqDataArray
+   components.data.data_array.CurrentFreqModeDataArray
+   components.data.data_array.CurrentFreqTerminalDataArray
+   components.data.data_array.CurrentFreqTerminalModeDataArray
+   components.data.data_array.ImpedanceModeDataArray
+   components.data.data_array.ImpedanceTerminalDataArray
+   components.data.data_array.ImpedanceTimeDataArray
+   components.data.data_array.ImpedanceFreqDataArray
+   components.data.data_array.ImpedanceFreqModeDataArray
+   components.data.data_array.ImpedanceFreqTerminalTerminalDataArray
+   components.microwave.data.data_array.PropagationConstantArray
+   components.microwave.data.data_array.PhaseConstantArray
+   components.microwave.data.data_array.AttenuationConstantArray
+   components.microwave.data.data_array.PhaseVelocityArray
+   components.microwave.data.data_array.GroupVelocityArray
 
 ~~~~
 

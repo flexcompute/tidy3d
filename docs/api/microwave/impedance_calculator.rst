@@ -1,3 +1,5 @@
+.. currentmodule:: tidy3d
+
 .. _impedance_calculator:
 
 Impedance Calculator
@@ -7,7 +9,7 @@ Impedance Calculator
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.ImpedanceCalculator
+   ImpedanceCalculator
 
 The :class:`~tidy3d.ImpedanceCalculator` computes characteristic impedance from electromagnetic field data using voltage and current path integrals. It supports three calculation methods depending on which integrals are provided:
 

@@ -10,8 +10,8 @@ Specifications
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatBoundarySpec
-   tidy3d.HeatChargeBoundarySpec
+   HeatBoundarySpec
+   HeatChargeBoundarySpec
 
 
 Types
@@ -21,9 +21,9 @@ Types
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.TemperatureBC
-   tidy3d.ConvectionBC
-   tidy3d.HeatFluxBC
+   TemperatureBC
+   ConvectionBC
+   HeatFluxBC
 
 
 Placement
@@ -33,11 +33,11 @@ Placement
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.StructureStructureInterface
-   tidy3d.StructureBoundary
-   tidy3d.MediumMediumInterface
-   tidy3d.StructureSimulationBoundary
-   tidy3d.SimulationBoundary
+   StructureStructureInterface
+   StructureBoundary
+   MediumMediumInterface
+   StructureSimulationBoundary
+   SimulationBoundary
 
 Coefficient Models
 ^^^^^^^^^^^^^^^^^
@@ -46,4 +46,4 @@ Coefficient Models
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.VerticalNaturalConvectionCoeffModel
+   VerticalNaturalConvectionCoeffModel

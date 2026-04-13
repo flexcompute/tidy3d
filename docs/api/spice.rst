@@ -10,10 +10,10 @@ Sources
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SSACVoltageSource
-   tidy3d.DCVoltageSource
-   tidy3d.GroundVoltage
-   tidy3d.DCCurrentSource
+   SSACVoltageSource
+   DCVoltageSource
+   GroundVoltage
+   DCCurrentSource
 
 Analysis
 ----------------
@@ -22,10 +22,10 @@ Analysis
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SteadyChargeDCAnalysis
-   tidy3d.IsothermalSteadyChargeDCAnalysis
-   tidy3d.components.spice.analysis.ac.AbstractSSACAnalysis
-   tidy3d.SSACAnalysis
-   tidy3d.IsothermalSSACAnalysis
-   tidy3d.SteadyChargeDCAnalysis
-   tidy3d.ChargeToleranceSpec
+   SteadyChargeDCAnalysis
+   IsothermalSteadyChargeDCAnalysis
+   components.spice.analysis.ac.AbstractSSACAnalysis
+   SSACAnalysis
+   IsothermalSSACAnalysis
+   SteadyChargeDCAnalysis
+   ChargeToleranceSpec
