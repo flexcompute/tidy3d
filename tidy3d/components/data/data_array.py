@@ -2285,6 +2285,19 @@ class _TracedDataset(xr.Dataset):
 
     __slots__ = ()
 
+    @classmethod
+    def from_dataset(cls, dataset: xr.Dataset) -> _TracedDataset:
+        """Construct a traced dataset from an existing Dataset instance."""
+        return cls._construct_direct(
+            variables=dataset._variables.copy(),
+            coord_names=dataset._coord_names.copy(),
+            dims=dict(dataset._dims),
+            attrs=None if dataset._attrs is None else dataset._attrs.copy(),
+            indexes=dataset._indexes.copy(),
+            encoding=None if dataset._encoding is None else dataset._encoding.copy(),
+            close=dataset._close,
+        )
+
     def _construct_dataarray(self, name: Hashable) -> DataArray:
         """Construct a tidy3d DataArray by indexing this dataset."""
         return DataArray(super()._construct_dataarray(name))

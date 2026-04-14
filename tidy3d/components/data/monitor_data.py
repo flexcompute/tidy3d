@@ -4853,7 +4853,7 @@ class DirectivityData(FieldProjectionAngleData):
         :class:`.DirectivityData`
             New :class:`.DirectivityData` instance with computed flux from spherical field integration.
         """
-        field_dataset = _TracedDataset(field_dataset)
+        field_dataset = _TracedDataset.from_dataset(field_dataset)
         f = list(monitor.freqs)
         flux = FluxDataArray(np.zeros(len(f)), coords={"f": f})
         dir_data = DirectivityData(
@@ -5025,7 +5025,7 @@ class DirectivityData(FieldProjectionAngleData):
         avg_radiation_intensity = self.radiated_power / (4 * np.pi)
         partial_U = self.partial_radiation_intensity(pol_basis=pol_basis, tilt_angle=tilt_angle)
         partial_D = partial_U / avg_radiation_intensity
-        return _TracedDataset(partial_D.rename(rename_mapping))
+        return _TracedDataset.from_dataset(partial_D.rename(rename_mapping))
 
     @property
     def directivity(self) -> FieldProjectionAngleDataArray:
