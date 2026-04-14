@@ -342,7 +342,7 @@ jobs:
     - name: restore-testmon-cache
       id: testmon-cache-restore
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
-      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .testmondata
         key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -455,7 +455,7 @@ jobs:
 
     - name: upload-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: testmon-cache-candidate-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/testmon-cache-candidate-local-py${{ matrix.python-version }}
@@ -464,7 +464,7 @@ jobs:
 
     - name: save-testmon-cache
       if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
-      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .testmondata
         key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -609,7 +609,7 @@ jobs:
     - name: restore-testmon-cache
       id: testmon-cache-restore
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
-      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .testmondata
         key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -725,7 +725,7 @@ jobs:
 
     - name: upload-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}
@@ -734,7 +734,7 @@ jobs:
 
     - name: save-testmon-cache
       if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
-      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: .testmondata
         key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
@@ -742,7 +742,7 @@ jobs:
     - name: create-badge
       if: ${{ github.ref == 'refs/heads/develop' }}
       # https://gist.githubusercontent.com/nedbat/8c6980f77988a327348f9b02bbaf67f5
-      uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483  # v1.7.0
+      uses: schneegans/dynamic-badges-action@0e50b8bad39e7e1afd3e4e9c2b7dd145fad07501  # v1.8.0
       with:
         auth: ${{ secrets.GH_TIDY3D_COVERAGE_GIST }}
         gistID: 4702549574741e87deaadba436218ebd
