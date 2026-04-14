@@ -340,14 +340,19 @@ class EMEExplicitGrid(EMEGridSpec):
         mode_specs = self.mode_specs
         boundaries = val
         if len(mode_specs) - 1 != len(boundaries):
-            raise ValidationError(
-                "There must be exactly one fewer item in 'boundaries' than in 'mode_specs'."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "There must be exactly one fewer item in 'boundaries' than in 'mode_specs'."
+                ),
+                "boundaries",
             )
         if len(boundaries) > 0:
             rmin = boundaries[0]
             for rmax in boundaries[1:]:
                 if rmax < rmin:
-                    raise ValidationError("The 'boundaries' must be increasing.")
+                    self._raise_validation_error_at_loc(
+                        ValidationError("The 'boundaries' must be increasing."), "boundaries"
+                    )
                 rmin = rmax
         return self
 
@@ -490,14 +495,21 @@ class EMECompositeGrid(EMEGridSpec):
         subgrids = self.subgrids
         subgrid_boundaries = val
         if len(subgrids) - 1 != len(subgrid_boundaries):
-            raise ValidationError(
-                "There must be exactly one fewer item in 'subgrid_boundaries' than in 'subgrids'."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "There must be exactly one fewer item in 'subgrid_boundaries' than in 'subgrids'."
+                ),
+                "subgrid_boundaries",
             )
-        rmin = subgrid_boundaries[0]
-        for rmax in subgrid_boundaries[1:]:
-            if rmax < rmin:
-                raise ValidationError("The 'subgrid_boundaries' must be increasing.")
-            rmin = rmax
+        if len(subgrid_boundaries) > 0:
+            rmin = subgrid_boundaries[0]
+            for rmax in subgrid_boundaries[1:]:
+                if rmax < rmin:
+                    self._raise_validation_error_at_loc(
+                        ValidationError("The 'subgrid_boundaries' must be increasing."),
+                        "subgrid_boundaries",
+                    )
+                rmin = rmax
         return self
 
     def subgrid_bounds(

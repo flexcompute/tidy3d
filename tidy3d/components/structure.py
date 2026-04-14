@@ -311,9 +311,12 @@ class Structure(AbstractStructure):
         if isinstance(val, Medium2D):
             # the geometry needs to be supported by 2d materials
             if not geom:
-                raise SetupError(
-                    "Found a 'Structure' with a 'Medium2D' medium, "
-                    "but the geometry already did not pass validation."
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        "Found a 'Structure' with a 'Medium2D' medium, "
+                        "but the geometry already did not pass validation."
+                    ),
+                    "geometry",
                 )
             # _normal_2dmaterial checks that the geometry is supported by 2d materials
             # and gives helpful error messages depending on the geometry details
@@ -894,7 +897,10 @@ class MeshOverrideStructure(AbstractStructure):
     def _unshadowed_cannot_be_enforced(self) -> Self:
         """Unshadowed structure cannot be enforced."""
         if not self.shadow and self.enforce:
-            raise SetupError("A structure cannot be simultaneously enforced and unshadowed.")
+            self._raise_validation_error_at_loc(
+                SetupError("A structure cannot be simultaneously enforced and unshadowed."),
+                "enforce",
+            )
         return self
 
 

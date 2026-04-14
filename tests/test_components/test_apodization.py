@@ -8,6 +8,8 @@ from pydantic import ValidationError
 
 import tidy3d as td
 
+from ..utils import assert_single_value_error_loc
+
 
 def test_apodization():
     _ = td.ApodizationSpec(width=0.2)
@@ -17,17 +19,21 @@ def test_apodization():
 
 
 def test_end_lt_start():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         _ = td.ApodizationSpec(start=2, end=1, width=0.2)
+    assert_single_value_error_loc(excinfo, ("end",), "End apodization begins before start")
 
 
 def test_no_width():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         _ = td.ApodizationSpec(start=1, end=2)
-    with pytest.raises(ValidationError):
+    assert_single_value_error_loc(excinfo, ("width",), "Apodization width must be set")
+    with pytest.raises(ValidationError) as excinfo:
         _ = td.ApodizationSpec(start=1)
-    with pytest.raises(ValidationError):
+    assert_single_value_error_loc(excinfo, ("width",), "Apodization width must be set")
+    with pytest.raises(ValidationError) as excinfo:
         _ = td.ApodizationSpec(end=2)
+    assert_single_value_error_loc(excinfo, ("width",), "Apodization width must be set")
 
 
 def test_negative_times():

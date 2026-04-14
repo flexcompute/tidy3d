@@ -688,10 +688,13 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if isclose(self.sidewall_angle, 0) or not np.isinf(self.length):
             return self
         if self.reference_plane != "middle":
-            raise SetupError(
-                "For a slanted cylinder here is of infinite length, "
-                "defining the reference_plane other than 'middle' "
-                "leads to undefined cylinder behaviors near 'center'."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "For a slanted cylinder here is of infinite length, "
+                    "defining the reference_plane other than 'middle' "
+                    "leads to undefined cylinder behaviors near 'center'."
+                ),
+                "reference_plane",
             )
         return self
 

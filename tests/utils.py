@@ -1161,6 +1161,16 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     )
 
 
+def assert_single_value_error_loc(excinfo, expected_loc, message_contains=None):
+    """Assert a single pydantic ``value_error`` with the expected location."""
+    errors = excinfo.value.errors(include_input=False, include_url=False)
+    assert len(errors) == 1
+    assert errors[0]["type"] == "value_error"
+    assert errors[0]["loc"] == expected_loc
+    if message_contains is not None:
+        assert message_contains in errors[0]["msg"]
+
+
 class BatchDataTest(Tidy3dBaseModel):
     """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
 

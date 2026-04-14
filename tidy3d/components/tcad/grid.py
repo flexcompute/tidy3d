@@ -148,7 +148,10 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
     def names_exist_bcs(self) -> Self:
         """Error if distance_bulk is less than distance_near"""
         if self.distance_near > self.distance_bulk:
-            raise ValidationError("'distance_bulk' cannot be smaller than 'distance_near'.")
+            self._raise_validation_error_at_loc(
+                ValidationError("'distance_bulk' cannot be smaller than 'distance_near'."),
+                "distance_bulk",
+            )
 
         return self
 
@@ -227,7 +230,10 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
     def names_exist_bcs(self) -> Self:
         """Error if distance_bulk is less than distance_interface"""
         if self.distance_interface > self.distance_bulk:
-            raise ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'.")
+            self._raise_validation_error_at_loc(
+                ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'."),
+                "distance_bulk",
+            )
 
         return self
 

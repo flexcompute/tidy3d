@@ -142,21 +142,27 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         if num_modes == "auto":
             if not isinstance(val, (tuple, list)):
                 if not isinstance(val, AutoImpedanceSpec):
-                    raise SetupError(
-                        "num_modes='auto' with a single non-AutoImpedanceSpec cannot determine "
-                        "the number of modes. Provide a tuple of specs, "
-                        "or use AutoImpedanceSpec for automatic conductor detection."
+                    self._raise_validation_error_at_loc(
+                        SetupError(
+                            "num_modes='auto' with a single non-AutoImpedanceSpec cannot determine "
+                            "the number of modes. Provide a tuple of specs, "
+                            "or use AutoImpedanceSpec for automatic conductor detection."
+                        ),
+                        "impedance_specs",
                     )
             return self
 
         # For explicit num_modes, check tuple length matches
         if isinstance(val, (tuple, list)):
             if len(val) != num_modes:
-                raise SetupError(
-                    f"Given {len(val)} impedance specifications in the 'MicrowaveModeSpec', "
-                    f"but the number of modes requested is {num_modes}. Please ensure that the "
-                    "number of impedance specifications is equal to the number of modes, or provide "
-                    "a single specification to apply to all modes."
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        f"Given {len(val)} impedance specifications in the 'MicrowaveModeSpec', "
+                        f"but the number of modes requested is {num_modes}. Please ensure that the "
+                        "number of impedance specifications is equal to the number of modes, or provide "
+                        "a single specification to apply to all modes."
+                    ),
+                    "impedance_specs",
                 )
 
         return self
@@ -291,24 +297,33 @@ class MicrowaveTerminalModeSpec(MicrowaveModeSpec):
             first_definition = specs[0].impedance_definition
             for impedance_spec in specs[1:]:
                 if impedance_spec.impedance_definition != first_definition:
-                    raise SetupError("Inconsistent impedance definitions across terminals.")
+                    self._raise_validation_error_at_loc(
+                        SetupError("Inconsistent impedance definitions across terminals."),
+                        "impedance_specs",
+                    )
 
         # Check impedance specs consistent with num_modes
         if len(val) != self.num_modes:
-            raise SetupError(
-                f"Given {len(val)} impedance specifications in the 'MicrowaveTerminalModeSpec', "
-                f"but the number of modes requested is {self.num_modes}. Please ensure that the "
-                "number of impedance specifications is equal to the number of modes."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    f"Given {len(val)} impedance specifications in the 'MicrowaveTerminalModeSpec', "
+                    f"but the number of modes requested is {self.num_modes}. Please ensure that the "
+                    "number of impedance specifications is equal to the number of modes."
+                ),
+                "num_modes",
             )
 
         # Check terminals mapping consistency with impedance specs
         terminals_mapping = self.terminals_mapping
         if terminals_mapping is not None:
             if len(terminals_mapping) != len(val):
-                raise SetupError(
-                    f"Given {len(terminals_mapping)} terminals mapping in the 'MicrowaveTerminalModeSpec', "
-                    f"but the number of impedance specifications is {len(val)}. Please ensure that the "
-                    "number of terminals mapping is equal to the number of impedance specifications."
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        f"Given {len(terminals_mapping)} terminals mapping in the 'MicrowaveTerminalModeSpec', "
+                        f"but the number of impedance specifications is {len(val)}. Please ensure that the "
+                        "number of terminals mapping is equal to the number of impedance specifications."
+                    ),
+                    "terminals_mapping",
                 )
 
             for terminal_label in terminals_mapping.values():
@@ -318,8 +333,11 @@ class MicrowaveTerminalModeSpec(MicrowaveModeSpec):
                 )
                 for label in labels_to_check:
                     if label not in val.keys():
-                        raise SetupError(
-                            f"Terminal label '{label}' is not present in the impedance specifications."
+                        self._raise_validation_error_at_loc(
+                            SetupError(
+                                f"Terminal label '{label}' is not present in the impedance specifications."
+                            ),
+                            "terminals_mapping",
                         )
 
         return self

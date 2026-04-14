@@ -184,8 +184,11 @@ class ModeSortSpec(Tidy3dBaseModel):
     def _drop_requires_filter(self: Self) -> Self:
         val = self.keep_modes
         if val == "filtered" and self.filter_key is None:
-            raise ValidationError(
-                "ModeSortSpec.keep_modes 'filtered' requires 'filter_key' to be set."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "ModeSortSpec.keep_modes 'filtered' requires 'filter_key' to be set."
+                ),
+                "filter_key",
             )
         return self
 
@@ -433,16 +436,22 @@ class ModeInterpSpec(Tidy3dBaseModel):
 
         num_points = sampling_spec._num_points
         if val == "cubic" and num_points < 4:
-            raise ValidationError(
-                "Cubic interpolation requires at least 4 frequency points. "
-                f"Got {num_points} points. "
-                "Use method='linear' or increase num_points."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "Cubic interpolation requires at least 4 frequency points. "
+                    f"Got {num_points} points. "
+                    "Use method='linear' or increase num_points."
+                ),
+                "method",
             )
         if val == "poly" and num_points < 3:
-            raise ValidationError(
-                "Polynomial interpolation requires at least 3 frequency points. "
-                f"Got {num_points} points. "
-                "Use method='linear' or increase num_points."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "Polynomial interpolation requires at least 3 frequency points. "
+                    f"Got {num_points} points. "
+                    "Use method='linear' or increase num_points."
+                ),
+                "method",
             )
         return self
 

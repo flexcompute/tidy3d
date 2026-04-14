@@ -273,7 +273,10 @@ class ModeSimulation(AbstractYeeGridSimulation):
         """Check that the plane is at least partially inside the simulation bounds."""
         sim_box = Box(size=self.size, center=self.center)
         if not sim_box.intersects(self.plane):
-            raise SetupError("'ModeSimulation.plane' must intersect 'ModeSimulation.geometry.")
+            self._raise_validation_error_at_loc(
+                "'ModeSimulation.plane' must intersect 'ModeSimulation.geometry'.",
+                "plane",
+            )
         return self
 
     def _validate_mode_solver(self) -> Self:

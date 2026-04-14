@@ -258,26 +258,32 @@ def validate_boundaries_for_zero_dims(
                         )
 
                 if num_bloch_bdries > 0:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"The simulation has zero size along the {axis} axis, "
                         "using a Bloch boundary along such an axis is not supported because of "
                         "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
-                        "but nonzero size along the dimension instead."
+                        "but nonzero size along the dimension instead.",
+                        "boundary_spec",
+                        axis,
                     )
 
                 if symmetry_dim != 0:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"The simulation has zero size along the {axis} axis, so "
                         "using symmetry along that axis is incorrect. Use 'PECBoundary' "
                         "or 'PMCBoundary' to select source polarization if needed and set "
-                        f"Simulation.symmetry to 0 along {axis}."
+                        f"Simulation.symmetry to 0 along {axis}.",
+                        "symmetry",
+                        dim,
                     )
 
                 if boundary[0] != boundary[1]:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"The simulation has zero size along the {axis} axis. "
                         f"The boundary condition for {axis} plus and {axis} "
-                        "minus must be the same."
+                        "minus must be the same.",
+                        "boundary_spec",
+                        axis,
                     )
 
         # Update boundary_spec if it was modified
@@ -446,9 +452,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         mediums = {structure.medium for structure in structures}
         total_num_mediums = len(val) + len(mediums)
         if total_num_mediums > MAX_NUM_MEDIUMS:
-            raise ValidationError(
+            self._raise_validation_error_at_loc(
                 f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct lumped elements and structures."
-                f"{total_num_mediums} were supplied."
+                f" {total_num_mediums} were supplied.",
+                "lumped_elements",
             )
 
         return self
@@ -458,8 +465,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         val = self.lumped_elements
         size = self.size
         if val and size.count(0.0) > 0:
-            raise ValidationError(
-                f"'{self.__class__.__name__}' must be a 3D simulation when a 'LumpedElement' is present."
+            self._raise_validation_error_at_loc(
+                f"'{self.__class__.__name__}' must be a 3D simulation when a 'LumpedElement' is present.",
+                "size",
             )
         return self
 
@@ -500,9 +508,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundaries = [bs.x, bs.y, bs.z]
         for ax, symmetry, ax_bounds in zip("xyz", self.symmetry, boundaries):
             if symmetry != 0 and not equivalent(ax_bounds.plus, ax_bounds.minus):
-                raise ValidationError(
+                self._raise_validation_error_at_loc(
                     f"Symmetry '{symmetry}' along axis {ax} requires the same boundary "
-                    f"condition on both sides of the axis."
+                    f"condition on both sides of the axis.",
+                    "boundary_spec",
+                    ax,
                 )
         return self
 
@@ -3274,8 +3284,10 @@ class Simulation(AbstractYeeGridSimulation):
         for dim, boundary in enumerate(boundaries):
             num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
             if num_bloch > 0 and symmetry[dim] != 0:
-                raise SetupError(
-                    f"Bloch boundaries cannot be used with a symmetry along dimension {dim}."
+                self._raise_validation_error_at_loc(
+                    f"Bloch boundaries cannot be used with a symmetry along dimension {dim}.",
+                    "boundary_spec",
+                    "xyz"[dim],
                 )
         return self
 
@@ -3300,23 +3312,27 @@ class Simulation(AbstractYeeGridSimulation):
                 # check the PML/absorber + angled plane wave case
                 num_pml = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
                 if num_pml > 0 and source.angle_theta != 0:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         "Angled plane wave sources are not compatible with the absorbing boundary "
                         f"along dimension {tan_dir}. Either set the source ``angle_theta`` to "
-                        "``0``, or use Bloch boundaries that match the source angle."
+                        "``0``, or use Bloch boundaries that match the source angle.",
+                        "sources",
+                        source_ind,
                     )
 
                 # check the Bloch boundary + angled plane wave case
                 if isinstance(source.angular_spec, FixedAngleSpec):
                     num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
                     if num_bloch > 0:
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             "Fixed angle plane wave sources ('FixedAngleSpec' and 'angle_theta' != 0) do "
                             f"not require the Bloch boundary along dimension {tan_dir}. "
                             "Either set the boundary conditions to 'Periodic' to proceed to simulate a plane "
                             "wave with frequency-independent propagation direction, or switch to "
                             "'FixedInPlaneKSpec' specification to simulate a plane wave with a fixed "
-                            "in-plane Bloch vector (frequency-dependent propagation direction)."
+                            "in-plane Bloch vector (frequency-dependent propagation direction).",
+                            "sources",
+                            source_ind,
                         )
                 else:
                     num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
@@ -3408,9 +3424,11 @@ class Simulation(AbstractYeeGridSimulation):
                 src_bounds[0][norm_dir] <= sim_bounds[0][norm_dir]
                 or src_bounds[1][norm_dir] >= sim_bounds[1][norm_dir]
             ):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"The TFSF source at index '{src_idx}' must not touch or cross the "
-                    f"simulation boundary along its injection axis, '{['x', 'y', 'z'][norm_dir]}'."
+                    f"simulation boundary along its injection axis, '{['x', 'y', 'z'][norm_dir]}'.",
+                    "sources",
+                    src_idx,
                 )
 
             for tan_dir in tan_dirs:
@@ -3436,19 +3454,23 @@ class Simulation(AbstractYeeGridSimulation):
                         continue
 
                     # for any other boundary, the source must not cross the boundary
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"The TFSF source at index '{src_idx}' must not touch or cross the "
                         f"simulation boundary in the '{['x', 'y', 'z'][tan_dir]}' direction, "
-                        "unless that boundary is 'Periodic' or 'BlochBoundary'."
+                        "unless that boundary is 'Periodic' or 'BlochBoundary'.",
+                        "sources",
+                        src_idx,
                     )
 
         return self
 
     def _tfsf_with_symmetry(self) -> Self:
         """Error if a TFSF source is applied with symmetry"""
-        for source in self.sources:
+        for source_ind, source in enumerate(self.sources):
             if isinstance(source, TFSF) and not all(sym == 0 for sym in self.symmetry):
-                raise SetupError("TFSF sources cannot be used with symmetries.")
+                self._raise_validation_error_at_loc(
+                    "TFSF sources cannot be used with symmetries.", "sources", source_ind
+                )
         return self
 
     @staticmethod
@@ -3467,8 +3489,9 @@ class Simulation(AbstractYeeGridSimulation):
 
         if len(fixed_angle_sources) > 0:
             if len(fixed_angle_sources) > 1:
-                raise SetupError(
-                    "A fixed-angle plane wave source cannot be combined with other sources."
+                self._raise_validation_error_at_loc(
+                    "A fixed-angle plane wave source cannot be combined with other sources.",
+                    "sources",
                 )
 
             structures = self.structures
@@ -3477,31 +3500,39 @@ class Simulation(AbstractYeeGridSimulation):
             mediums = [medium_bg] + [structure.medium for structure in structures]
 
             if any(med.is_fully_anisotropic for med in mediums):
-                raise SetupError(
-                    "Fixed-angle plane wave sources cannot be used in the presence of 'FullyAnisotropicMedium'."
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle plane wave sources cannot be used in the presence of 'FullyAnisotropicMedium'.",
+                    "sources",
                 )
 
             if any(med.is_nonlinear for med in mediums):
-                raise SetupError(
-                    "Fixed-angle plane wave sources cannot be used in the presence of nonlinear materials."
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle plane wave sources cannot be used in the presence of nonlinear materials.",
+                    "sources",
                 )
 
             if any(med.is_time_modulated for med in mediums):
-                raise SetupError(
-                    "Fixed-angle plane wave sources cannot be used in the presence of time-modulated materials."
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle plane wave sources cannot be used in the presence of time-modulated materials.",
+                    "sources",
                 )
 
             if any(med.allow_gain for med in mediums):
-                raise SetupError(
-                    "Fixed-angle plane wave sources cannot be used in the presence of gain materials."
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle plane wave sources cannot be used in the presence of gain materials.",
+                    "sources",
                 )
 
             if any(isinstance(mnt, TimeMonitor) for mnt in self.monitors):
-                raise SetupError("Time monitors cannot be used in fixed-angle simulations.")
+                self._raise_validation_error_at_loc(
+                    "Time monitors cannot be used in fixed-angle simulations.",
+                    "monitors",
+                )
 
             if len(self.internal_absorbers) > 0:
-                raise SetupError(
-                    "Fixed-angle plane wave sources cannot be used in the presence of internal absorbers."
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle plane wave sources cannot be used in the presence of internal absorbers.",
+                    "internal_absorbers",
                 )
 
         return self
@@ -3551,8 +3582,9 @@ class Simulation(AbstractYeeGridSimulation):
 
         if incompatible:
             detail = "\n".join(f"  - {item}" for item in incompatible)
-            raise SetupError(
-                "'relax_courant' is incompatible with the current simulation:\n" + detail
+            self._raise_validation_error_at_loc(
+                "'relax_courant' is incompatible with the current simulation:\n" + detail,
+                "relax_courant",
             )
 
         return self
@@ -3584,9 +3616,10 @@ class Simulation(AbstractYeeGridSimulation):
             sources = self.sources
 
             if len(sources) == 0:
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     "At least one 'ModeABCBoundary'/'ABCBoundary' needs specification of frequency at which the absorbed mode must be evaluated. "
                     "Add at least one source or use parameter 'frequency' for 'ModeABCBoundary'.",
+                    "sources",
                 )
 
             freq0s = [source.source_time._freq0 for source in sources]
@@ -3606,10 +3639,12 @@ class Simulation(AbstractYeeGridSimulation):
             return val
 
         sim_size = self.size
-        for abc in val:
+        for abc_index, abc in enumerate(val):
             if sim_size[abc._normal_axis] == 0:
-                raise SetupError(
-                    "Port absorbers are not allowed to be oriented along simulation zero size dimensions."
+                self._raise_validation_error_at_loc(
+                    "Port absorbers are not allowed to be oriented along simulation zero size dimensions.",
+                    "internal_absorbers",
+                    abc_index,
                 )
 
         return self
@@ -3786,7 +3821,7 @@ class Simulation(AbstractYeeGridSimulation):
         transverse directions are periodic or Bloch."""
         monitors = self.monitors
         boundary_spec = self.boundary_spec
-        for monitor in monitors:
+        for monitor_index, monitor in enumerate(monitors):
             if isinstance(monitor, DiffractionMonitor):
                 _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis)
                 boundaries = [
@@ -3798,9 +3833,11 @@ class Simulation(AbstractYeeGridSimulation):
                 # make sure the transverse boundaries are either periodic or Bloch
                 for boundary in boundaries:
                     if not isinstance(boundary, (Periodic, BlochBoundary)):
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"The 'DiffractionMonitor' {monitor.name} requires periodic "
-                            f"or Bloch boundaries along dimensions {n_x} and {n_y}."
+                            f"or Bloch boundaries along dimensions {n_x} and {n_y}.",
+                            "monitors",
+                            monitor_index,
                         )
         return self
 
@@ -3826,7 +3863,9 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for monitor_ind, monitor in enumerate(val):
                 if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
-                    mediums = self._projection_monitor_mediums_in_bounds(
+                    mediums = self._call_with_validation_loc(
+                        ["monitors", monitor_ind],
+                        self._projection_monitor_mediums_in_bounds,
                         center=self.center,
                         size=self.size,
                         monitor=monitor,
@@ -3836,9 +3875,11 @@ class Simulation(AbstractYeeGridSimulation):
                         continue
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"{len(mediums)} different mediums detected on plane "
-                            f"intersecting a {monitor.type}. Plane must be homogeneous."
+                            f"intersecting a {monitor.type}. Plane must be homogeneous.",
+                            "monitors",
+                            monitor_ind,
                         )
                     # 1 medium, check if the medium is spatially uniform
                     if not list(mediums)[0].is_spatially_uniform:
@@ -3985,23 +4026,37 @@ class Simulation(AbstractYeeGridSimulation):
             sim_structure=sim_structure,
             structures=self.structures or [],
         )
+        boundary_locs = [
+            ("x", "minus"),
+            ("x", "plus"),
+            ("y", "minus"),
+            ("y", "plus"),
+            ("z", "minus"),
+            ("z", "plus"),
+        ]
 
         with log as consolidated_logger:
-            for mediums in mediums_all_sides:
+            for (axis_name, side_name), mediums in zip(boundary_locs, mediums_all_sides):
                 if mediums is not None:
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"{len(mediums)} different mediums detected on an 'ABCBoundary'. Boundary must be homogeneous."
                             "Alternatively, effective permeability and conductivity can be directly provided as "
-                            "parameters for an 'ABCBoundary', in which case this medium check is skipped."
+                            "parameters for an 'ABCBoundary', in which case this medium check is skipped.",
+                            "boundary_spec",
+                            axis_name,
+                            side_name,
                         )
                     # 0 medium, something is wrong
                     if len(mediums) < 1:
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             "No medium detected on plane containing 'ABCBoundary', "
                             "indicating an unexpected error. Please create a github issue so "
-                            "that the problem can be investigated."
+                            "that the problem can be investigated.",
+                            "boundary_spec",
+                            axis_name,
+                            side_name,
                         )
                     # 1 medium, check if the medium is spatially uniform
                     if not list(mediums)[0].is_spatially_uniform:
@@ -4011,9 +4066,12 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
                     if isinstance(list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)):
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             "An anisotropic medium is detected on an 'ABCBoundary'. "
-                            "Boundary medium must be homogeneous and isotropic."
+                            "Boundary medium must be homogeneous and isotropic.",
+                            "boundary_spec",
+                            axis_name,
+                            side_name,
                         )
 
         return self
@@ -4121,11 +4179,15 @@ class Simulation(AbstractYeeGridSimulation):
         sim_size = self.size
         sim_box = Box(size=sim_size, center=sim_center)
 
-        for mnt in (mnt for mnt in val if isinstance(mnt, SurfaceIntegrationMonitor)):
+        for monitor_ind, mnt in enumerate(val):
+            if not isinstance(mnt, SurfaceIntegrationMonitor):
+                continue
             if not any(sim_box.intersects(surf) for surf in mnt.integration_surfaces):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"All integration surfaces of monitor '{mnt.name}' are outside of the "
-                    "simulation bounds."
+                    "simulation bounds.",
+                    "monitors",
+                    monitor_ind,
                 )
 
         return self
@@ -4169,13 +4231,15 @@ class Simulation(AbstractYeeGridSimulation):
         if not monitors or self.size.count(0.0) != 0 or not any(self._periodic):
             return self
 
-        for monitor in monitors:
+        for monitor_ind, monitor in enumerate(monitors):
             if isinstance(monitor, AbstractFieldProjectionMonitor):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"Monitor '{monitor.name}' of type '{monitor.type}' cannot be used with "
                     "periodic/Bloch boundaries in 3D simulations. This projection would "
                     "require a periodic Green's function. Please use 'DiffractionMonitor' for "
-                    "transmission/reflection analysis with periodic/Bloch boundaries."
+                    "transmission/reflection analysis with periodic/Bloch boundaries.",
+                    "monitors",
+                    monitor_ind,
                 )
 
         return self
@@ -4192,7 +4256,13 @@ class Simulation(AbstractYeeGridSimulation):
         Note: Exact far field projection is not available yet. Currently, only
         ``far_field_approx = True`` is supported.
         """
-        validate_field_projection_monitors_2d(self.monitors, self.size)
+        validate_field_projection_monitors_2d(
+            self.monitors,
+            self.size,
+            raise_error=lambda message, monitor_ind: self._raise_validation_error_at_loc(
+                message, "monitors", monitor_ind
+            ),
+        )
         return self
 
     def _diffraction_and_directivity_monitor_medium(self) -> Self:
@@ -4200,7 +4270,7 @@ class Simulation(AbstractYeeGridSimulation):
         monitors = self.monitors
         structures = self.structures
         medium = self.medium
-        for monitor in monitors:
+        for monitor_ind, monitor in enumerate(monitors):
             if isinstance(monitor, (DiffractionMonitor, DirectivityMonitor)):
                 medium_set = Scene.intersecting_media(monitor, structures)
                 medium = medium_set.pop() if medium_set else medium
@@ -4209,27 +4279,33 @@ class Simulation(AbstractYeeGridSimulation):
                     freqs = 0.5 * (np.min(freqs) + np.max(freqs))
                 _, index_k = medium.nk_model(frequency=freqs)
                 if not np.all(index_k == 0):
-                    raise SetupError(f"'{monitor.type}' must not lie in a lossy medium.")
+                    self._raise_validation_error_at_loc(
+                        f"'{monitor.type}' must not lie in a lossy medium.",
+                        "monitors",
+                        monitor_ind,
+                    )
         return self
 
     def _diffraction_monitor_order_grid_size(self) -> Self:
         """Error if a diffraction monitor would generate an excessively large order grid."""
 
-        for monitor in self.monitors:
+        for monitor_ind, monitor in enumerate(self.monitors):
             if not isinstance(monitor, DiffractionMonitor):
                 continue
 
             medium = self.monitor_medium(monitor)
             total_orders = diffraction_order_grid_size(self, monitor, medium)
             if total_orders > MAX_DIFFRACTION_ORDER_GRID_SIZE:
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"The 'DiffractionMonitor' {monitor.name} would generate "
                     f"{total_orders} diffraction order combinations, which exceeds "
                     f"the supported limit of {MAX_DIFFRACTION_ORDER_GRID_SIZE}. "
                     "Verify that units are set correctly (by default, lengths are specified "
                     "in microns and frequencies in Hz). Reduce the monitor frequencies, "
                     "the refractive index on the monitor plane, or the simulation size "
-                    "along the transverse directions."
+                    "along the transverse directions.",
+                    "monitors",
+                    monitor_ind,
                 )
 
         return self
@@ -4262,27 +4338,30 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _error_empty_surface_monitor(self) -> Self:
         """Error if any surface monitor does not at least cross a bounding box of a PEC/LossyMetal structure."""
-        for mnt in self.monitors:
+        for monitor_ind, mnt in enumerate(self.monitors):
             if isinstance(mnt, get_args(SurfaceMonitorType)):
                 bounds = self._get_surface_monitor_bounds(
                     self.center, self.size, mnt, self.medium, self.structures
                 )
                 if len(bounds) == 0:
-                    raise SetupError(
-                        f"Surface monitor {mnt.name} does not cross any PEC or LossyMetalMedium structures."
+                    self._raise_validation_error_at_loc(
+                        f"Surface monitor {mnt.name} does not cross any PEC or LossyMetalMedium structures.",
+                        "monitors",
+                        monitor_ind,
                     )
         return self
 
     def _error_surface_monitors_with_zero_size(self) -> Self:
         """Error if simulation has surface monitors and the size of domain is zero along any dimension."""
         not_3d = any(dim == 0 for dim in self.size)
-        surface_monitors_present = any(
-            isinstance(mnt, get_args(SurfaceMonitorType)) for mnt in self.monitors
-        )
-        if not_3d and surface_monitors_present:
-            raise SetupError(
-                "Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case."
-            )
+        if not_3d:
+            for monitor_ind, mnt in enumerate(self.monitors):
+                if isinstance(mnt, get_args(SurfaceMonitorType)):
+                    self._raise_validation_error_at_loc(
+                        "Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case.",
+                        "monitors",
+                        monitor_ind,
+                    )
         return self
 
     def _warn_grid_size_too_small(self) -> Self:
@@ -4375,23 +4454,29 @@ class Simulation(AbstractYeeGridSimulation):
                     mediums = Scene.intersecting_media(source, total_structures)
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"{len(mediums)} different mediums detected on plane "
-                            f"intersecting a {source.type} source. Plane must be homogeneous."
+                            f"intersecting a {source.type} source. Plane must be homogeneous.",
+                            "sources",
+                            source_id,
                         )
                     # 0 medium, something is wrong
                     if len(mediums) < 1:
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"No medium detected on plane intersecting a {source.type}, "
                             "indicating an unexpected error. Please create a github issue so "
-                            "that the problem can be investigated."
+                            "that the problem can be investigated.",
+                            "sources",
+                            source_id,
                         )
                     src_medium = list(mediums)[0]
                     if isinstance(src_medium, (AnisotropicMedium, FullyAnisotropicMedium)):
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"An anisotropic medium is detected on plane intersecting a {source.type} "
                             f"source. Injection of {source.type} into anisotropic media currently is "
-                            "not supported."
+                            "not supported.",
+                            "sources",
+                            source_id,
                         )
 
                     # check if the medium is spatially uniform
@@ -4408,9 +4493,11 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
                         if not is_lossless_dieletric:
-                            raise SetupError(
+                            self._raise_validation_error_at_loc(
                                 "A fixed angle plane wave can only be injected into a homogeneous isotropic"
-                                "dispersionless medium."
+                                "dispersionless medium.",
+                                "sources",
+                                source_id,
                             )
 
                     # check if broadband angled gaussian beam frequency variation is too fast
@@ -4475,13 +4562,17 @@ class Simulation(AbstractYeeGridSimulation):
         if num_sources > 0:
             # No check if no sources, but it should be irrelevant anyway
             if val >= num_sources:
-                raise ValidationError(
-                    f"'normalize_index' {val} out of bounds for number of sources {num_sources}."
+                self._raise_validation_error_at_loc(
+                    f"'normalize_index' {val} out of bounds for number of sources {num_sources}.",
+                    "normalize_index",
                 )
 
             # Also error if normalizing by a zero-amplitude source
             if sources[val].source_time.amplitude == 0:
-                raise ValidationError("Cannot set 'normalize_index' to source with zero amplitude.")
+                self._raise_validation_error_at_loc(
+                    "Cannot set 'normalize_index' to source with zero amplitude.",
+                    "normalize_index",
+                )
 
             # Warn if normalizing by a ContinuousWave or CustomSourceTime source, if frequency-domain monitors are present.
             if isinstance(sources[val].source_time, ContinuousWave):
@@ -4510,10 +4601,13 @@ class Simulation(AbstractYeeGridSimulation):
         present_mode_monitor_names = [
             monitor.name for monitor in monitors if isinstance(monitor, ModeMonitor)
         ]
-        for monitor in val.monitors:
+        for monitor_ind, monitor in enumerate(val.monitors):
             if monitor not in present_mode_monitor_names:
-                raise SetupError(
-                    f"Low frequency smoothing specification refers to monitor '{monitor}' which either does not exist or is not a mode monitor."
+                self._raise_validation_error_at_loc(
+                    f"Low frequency smoothing specification refers to monitor '{monitor}' which either does not exist or is not a mode monitor.",
+                    "low_freq_smoothing",
+                    "monitors",
+                    monitor_ind,
                 )
         return self
 
@@ -4672,16 +4766,26 @@ class Simulation(AbstractYeeGridSimulation):
                 try:
                     validate_mode_object(mode_obj=monitor, msg_prefix=f"'monitors[{imnt}]'")
                 except Exception as e:
-                    raise SetupError(
-                        f"Monitor at 'monitors[{imnt}]' failed validation: {e!s}"
-                    ) from e
+                    self._raise_validation_error_at_loc(
+                        format_chained_exception_message(
+                            f"Monitor at 'monitors[{imnt}]' failed validation", e
+                        ),
+                        "monitors",
+                        imnt,
+                    )
 
         for isrc, source in enumerate(self.sources):
             if isinstance(source, AbstractModeSource):
                 try:
                     validate_mode_object(mode_obj=source, msg_prefix=f"'sources[{isrc}]'")
                 except Exception as e:
-                    raise SetupError(f"Source at 'sources[{isrc}]' failed validation: {e!s}") from e
+                    self._raise_validation_error_at_loc(
+                        format_chained_exception_message(
+                            f"Source at 'sources[{isrc}]' failed validation", e
+                        ),
+                        "sources",
+                        isrc,
+                    )
 
     def _validate_custom_source_time(self) -> None:
         """Warn if all simulation times are outside CustomSourceTime definition range."""
@@ -4941,9 +5045,11 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_tfsf_aux_sources(self) -> None:
         """Validate that PlaneWave sources auxiliary to TFSF sources can be successfully created."""
-        for source in self.sources:
+        for source_ind, source in enumerate(self.sources):
             if isinstance(source, TFSF):
-                _ = self._aux_tfsf_source(source)
+                _ = self._call_with_validation_loc(
+                    ["sources", source_ind], self._aux_tfsf_source, source=source
+                )
 
     def _validate_nonlinear_specs(self) -> None:
         """Run :class:`.NonlinearSpec` validators that depend on knowing the central
@@ -4980,11 +5086,15 @@ class Simulation(AbstractYeeGridSimulation):
 
         total_structures = [self.scene.background_structure, *list(self.structures)]
 
-        for abc in self._shifted_internal_absorbers:
+        for abc_index, abc in enumerate(self._shifted_internal_absorbers):
             mediums = Scene.intersecting_media(abc, tuple(total_structures))
 
             if any(isinstance(med, FullyAnisotropicMedium) for med in mediums):
-                raise SetupError("A 'InternalAbsorber' cannot cross a 'FullyAnisotropicMedium'.")
+                self._raise_validation_error_at_loc(
+                    "A 'InternalAbsorber' cannot cross a 'FullyAnisotropicMedium'.",
+                    "internal_absorbers",
+                    abc_index,
+                )
         return self
 
     """ Pre submit validation (before web.upload()) """
@@ -5618,7 +5728,9 @@ class Simulation(AbstractYeeGridSimulation):
         """
         medium_set = Scene.intersecting_media(monitor, self.structures)
         if len(medium_set) > 1:
-            raise SetupError(f"Monitor '{monitor.name}' intersects more than one medium.")
+            raise SetupError(  # post-init-tidy3d-error: ignore
+                f"Monitor '{monitor.name}' intersects more than one medium."
+            )
         medium = medium_set.pop() if medium_set else self.medium
         return medium
 

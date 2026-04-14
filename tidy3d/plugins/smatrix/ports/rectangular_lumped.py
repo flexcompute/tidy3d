@@ -107,7 +107,9 @@ class LumpedPort(AbstractLumpedPort, Box):
         if self.size is None:
             return self
         if self.voltage_axis == self.size.index(0.0):
-            raise ValidationError("'voltage_axis' must lie in the port's plane.")
+            self._raise_validation_error_at_loc(
+                ValidationError("'voltage_axis' must lie in the port's plane."), "voltage_axis"
+            )
         return self
 
     @cached_property

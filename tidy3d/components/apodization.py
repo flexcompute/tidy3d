@@ -8,7 +8,6 @@ import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.constants import SECOND
-from tidy3d.exceptions import SetupError
 
 from .base import Tidy3dBaseModel
 from .viz import add_ax_if_none
@@ -58,14 +57,16 @@ class ApodizationSpec(Tidy3dBaseModel):
     def end_greater_than_start(self) -> Self:
         """Ensure end is greater than or equal to start."""
         if self.end is not None and self.start is not None and self.end < self.start:
-            raise SetupError("End apodization begins before start apodization ends.")
+            self._raise_validation_error_at_loc(
+                "End apodization begins before start apodization ends.", "end"
+            )
         return self
 
     @model_validator(mode="after")
     def width_provided(self) -> Self:
         """Check that width is provided if either start or end apodization is requested."""
         if (self.start is not None or self.end is not None) and self.width is None:
-            raise SetupError("Apodization width must be set.")
+            self._raise_validation_error_at_loc("Apodization width must be set.", "width")
         return self
 
     @add_ax_if_none

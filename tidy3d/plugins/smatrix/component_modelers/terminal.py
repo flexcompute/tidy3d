@@ -1857,9 +1857,14 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 is_subset = modeler_freqs.issuperset(mon_freqs)
                 if not is_subset:
                     mon_name = rad_mon.name or f"{AUTO_RADIATION_MONITOR_NAME}_{index}"
-                    raise ValidationError(
-                        f"The frequencies in the radiation monitor '{mon_name}' "
-                        f"must be equal to or a subset of the frequencies in the '{self.__class__.__name__}'."
+                    self._raise_validation_error_at_loc(
+                        ValidationError(
+                            f"The frequencies in the radiation monitor '{mon_name}' "
+                            f"must be equal to or a subset of the frequencies in the '{self.__class__.__name__}'."
+                        ),
+                        "radiation_monitors",
+                        index,
+                        "freqs",
                     )
 
         return self

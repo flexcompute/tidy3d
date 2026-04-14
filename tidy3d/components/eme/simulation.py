@@ -34,7 +34,7 @@ from tidy3d.components.validators import (
 )
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, fp_eps, inf
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGridSpecType
@@ -823,26 +823,30 @@ class EMESimulation(AbstractYeeGridSimulation):
         cell_centers = self.eme_grid.centers
         yee_centers = list(self.grid.centers.to_dict.values())[self.axis]
         if cell_centers[0] < yee_centers[0]:
-            raise SetupError(
+            self._raise_validation_error_at_loc(
                 "The first EME cell center must be further from the boundary "
                 "than the first Yee cell center, "
-                f"currently {cell_centers[0]} compared to {yee_centers[0]}."
+                f"currently {cell_centers[0]} compared to {yee_centers[0]}.",
+                "eme_grid_spec",
             )
         if cell_centers[-1] > yee_centers[-1]:
-            raise SetupError(
+            self._raise_validation_error_at_loc(
                 "The last EME cell center must be further from the boundary "
                 "than the last Yee cell center, "
-                f"currently {cell_centers[-1]} compared to {yee_centers[-1]}."
+                f"currently {cell_centers[-1]} compared to {yee_centers[-1]}.",
+                "eme_grid_spec",
             )
         for ind, monitor in enumerate(self.monitors):
             if isinstance(monitor, ModeSolverMonitor) and monitor.normal_axis == self.axis:
                 center = monitor.center[monitor.normal_axis]
                 if center < yee_centers[0] or center > yee_centers[-1]:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"'ModeSolverMonitor' at 'monitors[{ind}]' has "
                         f"center {center}, which is within half a Yee cell "
                         "of the simulation boundary along the propagation axis. "
-                        "Please move the monitor further from the boundary."
+                        "Please move the monitor further from the boundary.",
+                        "monitors",
+                        ind,
                     )
         return self
 
@@ -865,16 +869,21 @@ class EMESimulation(AbstractYeeGridSimulation):
         size = self.size
         axis = self.axis
         if size[axis] < total_offset:
-            raise ValidationError(
+            self._raise_validation_error_at_loc(
                 "The sum of the two 'port_offset' fields "
-                "cannot exceed the simulation 'size' in the 'axis' direction."
+                "cannot exceed the simulation 'size' in the 'axis' direction.",
+                "port_offsets",
             )
         return self
 
     def _validate_symmetry(self) -> Self:
         """Symmetry in propagation direction is not supported."""
         if self.symmetry[self.axis] != 0:
-            raise SetupError("Symmetry in the propagation diretion is not currently supported.")
+            self._raise_validation_error_at_loc(
+                "Symmetry in the propagation direction is not currently supported.",
+                "symmetry",
+                self.axis,
+            )
         return self
 
     # uncomment once interval_space != 1 is supported in any monitors
@@ -906,36 +915,48 @@ class EMESimulation(AbstractYeeGridSimulation):
             return self
         num_sweep = self.sweep_spec.num_sweep
         if num_sweep == 0:
-            raise SetupError("Simulation 'sweep_spec' has 'num_sweep=0'.")
+            self._raise_validation_error_at_loc(
+                "Simulation 'sweep_spec' has 'num_sweep=0'.",
+                "sweep_spec",
+                "num_sweep",
+            )
         if isinstance(self.sweep_spec, EMEModeSweep):
             if any(self.sweep_spec.num_modes > self.max_num_modes):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     "Simulation 'sweep_spec' is an 'EMEModeSweep'. "
                     "The number of modes should not exceed the maximum number of "
                     "modes in any EME cell. Provided "
                     f"'num_modes={self.sweep_spec.num_modes}'; the maximum "
-                    f"number of EME modes is '{self.max_num_modes}'."
+                    f"number of EME modes is '{self.max_num_modes}'.",
+                    "sweep_spec",
+                    "num_modes",
                 )
         elif isinstance(self.sweep_spec, EMELengthSweep):
             scale_factors_shape = self.sweep_spec.scale_factors.shape
             if len(scale_factors_shape) > 2:
-                raise SetupError(
-                    "Simulation 'sweep_spec.scale_factors' must have either one or two dimensions."
+                self._raise_validation_error_at_loc(
+                    "Simulation 'sweep_spec.scale_factors' must have either one or two dimensions.",
+                    "sweep_spec",
+                    "scale_factors",
                 )
             if len(scale_factors_shape) == 2:
                 num_scale_factors = scale_factors_shape[1]
                 if num_scale_factors != self.eme_grid.num_cells:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         "Simulation 'sweep_spec.scale_factors' has shape "
                         f"'{scale_factors_shape}'. The size of the second dimension "
                         "must equal the number of EME cells in the simulation, which is "
-                        f"'{self.eme_grid.num_cells}'."
+                        f"'{self.eme_grid.num_cells}'.",
+                        "sweep_spec",
+                        "scale_factors",
                     )
             for i, monitor in enumerate(self.monitors):
                 if isinstance(monitor, EMEFieldMonitor):
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
-                        "which is not compatible with 'EMELengthSweep'."
+                        "which is not compatible with 'EMELengthSweep'.",
+                        "monitors",
+                        i,
                     )
         elif isinstance(self.sweep_spec, EMEFreqSweep):
             log.warning(
@@ -947,26 +968,34 @@ class EMESimulation(AbstractYeeGridSimulation):
             for i, scale_factor in enumerate(self.sweep_spec.freq_scale_factors):
                 scaled_freqs = np.array(self.freqs) * scale_factor
                 if np.min(scaled_freqs) < MIN_FREQUENCY:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"Simulation 'sweep_spec' at sweep index {i} results in "
                         f"scaled frequencies {scaled_freqs}; the minimum allowed is "
-                        f"{MIN_FREQUENCY:.0e} Hz."
+                        f"{MIN_FREQUENCY:.0e} Hz.",
+                        "sweep_spec",
+                        "freq_scale_factors",
+                        i,
                     )
         elif isinstance(self.sweep_spec, EMEPeriodicitySweep):
             for i, monitor in enumerate(self.monitors):
                 if isinstance(monitor, EMEFieldMonitor):
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
-                        "which is not compatible with 'EMEPeriodicitySweep'."
+                        "which is not compatible with 'EMEPeriodicitySweep'.",
+                        "monitors",
+                        i,
                     )
                 if isinstance(monitor, EMECoefficientMonitor):
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMECoefficientMonitor', "
-                        "which is not compatible with 'EMEPeriodicitySweep'."
+                        "which is not compatible with 'EMEPeriodicitySweep'.",
+                        "monitors",
+                        i,
                     )
             if self.store_coeffs:
-                raise SetupError(
-                    "'EMESimulation.store_coeffs' is not compatible with 'EMEPeriodicitySweep'."
+                self._raise_validation_error_at_loc(
+                    "'EMESimulation.store_coeffs' is not compatible with 'EMEPeriodicitySweep'.",
+                    "store_coeffs",
                 )
         return self
 
@@ -1098,7 +1127,7 @@ class EMESimulation(AbstractYeeGridSimulation):
             center=center,
             size=size,
         ):
-            raise SetupError(error_msg)
+            self._raise_validation_error_at_loc(error_msg, "eme_grid_spec")
 
         if isinstance(self.sweep_spec, EMEPeriodicitySweep):
             for num_reps in self.sweep_spec.num_reps:
@@ -1108,7 +1137,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                     center=center,
                     size=size,
                 ):
-                    raise SetupError(error_msg)
+                    self._raise_validation_error_at_loc(error_msg, "sweep_spec", "num_reps")
 
         if isinstance(self.sweep_spec, EMELengthSweep):
             base_lengths = np.asarray(self.eme_grid.lengths, dtype=float)
@@ -1119,7 +1148,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                     size=size,
                     lengths=lengths,
                 ):
-                    raise SetupError(error_msg)
+                    self._raise_validation_error_at_loc(error_msg, "sweep_spec", "scale_factors")
 
         return self
 
@@ -1238,7 +1267,7 @@ class EMESimulation(AbstractYeeGridSimulation):
             virtual_rotations=base_virtual_rotations,
             reference_rotations=base_rotations,
         ):
-            raise SetupError(error_msg)
+            self._raise_validation_error_at_loc(error_msg, "eme_grid_spec")
 
         if isinstance(self.sweep_spec, EMEPeriodicitySweep):
             for num_reps in self.sweep_spec.num_reps:
@@ -1260,7 +1289,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                     virtual_rotations=sweep_virtual_rotations,
                     reference_rotations=sweep_rotations,
                 ):
-                    raise SetupError(error_msg)
+                    self._raise_validation_error_at_loc(error_msg, "sweep_spec", "num_reps")
 
         if isinstance(self.sweep_spec, EMELengthSweep):
             invalid_length_sweep = False
@@ -1279,14 +1308,16 @@ class EMESimulation(AbstractYeeGridSimulation):
                     break
 
             if invalid_length_sweep:
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     "Bent anisotropic media with 'bend_medium_frame=\"global\"' are not "
                     "compatible with 'EMELengthSweep' when changing bent cell lengths changes "
                     "the absolute orientation at one or more EME cell centers. Those local "
                     "modes would need to be recomputed. If the material profile should follow "
                     "the bend, set 'bend_medium_frame=\"co_rotating\"'; otherwise use "
                     "separate simulations or explicitly resolved cells for each length, "
-                    "and check convergence with respect to the number of EME cells."
+                    "and check convergence with respect to the number of EME cells.",
+                    "sweep_spec",
+                    "scale_factors",
                 )
 
         return self
@@ -1295,31 +1326,41 @@ class EMESimulation(AbstractYeeGridSimulation):
         """Check monitor setup."""
         for i, monitor in enumerate(self.monitors):
             if isinstance(monitor, EMEMonitor):
-                _ = self._monitor_eme_cell_indices(monitor=monitor)
+                _ = self._call_with_validation_loc(
+                    ["monitors", i], self._monitor_eme_cell_indices, monitor=monitor
+                )
             if (
                 hasattr(monitor, "freqs")
                 and monitor.freqs is not None
                 and not (len(set(monitor.freqs)) == len(monitor.freqs))
             ):
-                raise SetupError(f"Monitor 'freqs={monitor.freqs}' cannot contain duplicates.")
+                self._raise_validation_error_at_loc(
+                    f"Monitor 'freqs={monitor.freqs}' cannot contain duplicates.",
+                    "monitors",
+                    i,
+                )
             if (
                 hasattr(monitor, "freqs")
                 and monitor.freqs is not None
                 and not (set(monitor.freqs).issubset(set(self.freqs)))
             ):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"Monitor 'freqs={monitor.freqs}' "
-                    f"must be a subset of simulation 'freqs={self.freqs}'."
+                    f"must be a subset of simulation 'freqs={self.freqs}'.",
+                    "monitors",
+                    i,
                 )
             if (
                 hasattr(monitor, "num_modes")
                 and monitor.num_modes is not None
                 and not (monitor.num_modes <= self.max_num_modes)
             ):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"Monitor has 'num_modes={monitor.num_modes}', which exceeds the "
                     "maximum number of modes in the 'eme_grid', which is "
-                    f"'mode_spec.num_modes={self.max_num_modes}'."
+                    f"'mode_spec.num_modes={self.max_num_modes}'.",
+                    "monitors",
+                    i,
                 )
             if (
                 hasattr(monitor, "num_sweep")
@@ -1327,10 +1368,12 @@ class EMESimulation(AbstractYeeGridSimulation):
                 and self.sweep_spec is not None
                 and not (monitor.num_sweep <= self.sweep_spec.num_sweep)
             ):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"Monitor has 'num_sweep={monitor.num_sweep}', which exceeds the "
                     "number of sweep indices in the simulation 'sweep_spec', which is "
-                    f"'{self.sweep_spec.num_sweep}'."
+                    f"'{self.sweep_spec.num_sweep}'.",
+                    "monitors",
+                    i,
                 )
 
             if (
@@ -1338,19 +1381,23 @@ class EMESimulation(AbstractYeeGridSimulation):
                 and monitor.num_modes is not None
                 and not (monitor.num_modes <= self.max_port_modes)
             ):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"EMEFieldMonitor has 'num_modes={monitor.num_modes}', which exceeds the "
                     "max number of modes of the two EME ports, which is "
-                    f"'mode_spec.num_modes={self.max_port_modes}'."
+                    f"'mode_spec.num_modes={self.max_port_modes}'.",
+                    "monitors",
+                    i,
                 )
             if isinstance(monitor, EMEFieldMonitor):
                 if not np.array_equal(
                     self.eme_grid_spec.virtual_cell_indices, self.eme_grid_spec.real_cell_indices
                 ):
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
                         "which is not compatible with periodic repetition "
-                        "('num_reps != 1' in any 'EMEGridSpec'.)"
+                        "('num_reps != 1' in any 'EMEGridSpec'.)",
+                        "monitors",
+                        i,
                     )
         return self
 
@@ -1360,9 +1407,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         for mode_spec in self.eme_grid.mode_specs:
             interp_specs.append(mode_spec.interp_spec)
         if len(set(interp_specs)) > 1:
-            raise SetupError(
+            self._raise_validation_error_at_loc(
                 "All of the 'mode_spec.interp_spec' in the EME grid must be identical. "
-                f"Currently, they are {set(interp_specs)}."
+                f"Currently, they are {set(interp_specs)}.",
+                "eme_grid_spec",
             )
         return self
 

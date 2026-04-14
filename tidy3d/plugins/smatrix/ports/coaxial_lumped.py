@@ -108,9 +108,12 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         """Ensures that the inner diameter is smaller than the outer diameter, so that the final
         shape is an annulus."""
         if self.inner_diameter >= self.outer_diameter:
-            raise ValidationError(
-                f"The 'inner_diameter' {self.inner_diameter} of a coaxial lumped element "
-                f"must be less than its 'outer_diameter' {self.outer_diameter}."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    f"The 'inner_diameter' {self.inner_diameter} of a coaxial lumped element "
+                    f"must be less than its 'outer_diameter' {self.outer_diameter}."
+                ),
+                "inner_diameter",
             )
         return self
 

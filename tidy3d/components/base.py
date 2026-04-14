@@ -35,9 +35,20 @@ import xarray as xr
 import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
+from pydantic import (
+    ValidationError as PydanticValidationError,
+)
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
-from tidy3d.exceptions import FileError, format_chained_exception_message
+from tidy3d.exceptions import FileError, Tidy3dError, format_chained_exception_message
 from tidy3d.log import log
 
 from .autograd.types import TracedDict
@@ -54,7 +65,7 @@ from .types import TYPE_TAG_STR, Undefined
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Callable
+    from typing import Callable, NoReturn
 
     from pydantic.fields import FieldInfo
     from pydantic.functional_validators import ModelWrapValidatorHandler
@@ -373,6 +384,34 @@ class Tidy3dBaseModel(BaseModel):
         except Exception:
             log.abort_capture()
             raise
+
+    def _raise_validation_error_at_loc(
+        self, message: Any, *loc: Any, log_error: bool = True
+    ) -> NoReturn:
+        """Raise a Pydantic validation error anchored to a specific field path."""
+        message_str = str(message)
+        if log_error and not isinstance(message, Tidy3dError):
+            log.error(message_str)
+        raise PydanticValidationError.from_exception_data(
+            type(self).__name__,
+            [
+                InitErrorDetails(
+                    type=PydanticCustomError("value_error", message_str),
+                    loc=loc,
+                    input=None,
+                )
+            ],
+            hide_input=True,
+        )
+
+    def _call_with_validation_loc(
+        self, loc: Sequence[Any], func: Any, *args: Any, **kwargs: Any
+    ) -> Any:
+        """Call a helper that may raise ``Tidy3dError`` and attach a concrete location."""
+        try:
+            return func(*args, **kwargs)
+        except Tidy3dError as error:
+            self._raise_validation_error_at_loc(str(error), *loc, log_error=False)
 
     def __hash__(self) -> int:
         """Hash method."""

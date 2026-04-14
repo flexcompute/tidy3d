@@ -146,9 +146,10 @@ class ABCBoundary(AbstractABCBoundary):
     def _conductivity_only_with_float_permittivity(self) -> Self:
         """Validate that conductivity can be provided only with float permittivity."""
         if self.conductivity is not None and self.permittivity is None:
-            raise ValidationError(
+            self._raise_validation_error_at_loc(
                 "Field 'conductivity' in 'ABCBoundary' can only be provided "
-                "simultaneously with 'permittivity'."
+                "simultaneously with 'permittivity'.",
+                "conductivity",
             )
         return self
 
@@ -1039,8 +1040,9 @@ class Boundary(Tidy3dBaseModel):
         """Error if a Bloch boundary is applied on only one side."""
         num_bloch = isinstance(self.plus, BlochBoundary) + isinstance(self.minus, BlochBoundary)
         if num_bloch == 1:
-            raise SetupError(
-                "Bloch boundaries must be applied either on both sides or on neither side."
+            loc = "plus" if isinstance(self.plus, BlochBoundary) else "minus"
+            self._raise_validation_error_at_loc(
+                "Bloch boundaries must be applied either on both sides or on neither side.", loc
             )
         return self
 
@@ -1052,7 +1054,10 @@ class Boundary(Tidy3dBaseModel):
             self.plus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary)
         ) + isinstance(self.minus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary))
         if num_pbc == 1 and num_pml == 1:
-            raise SetupError("Cannot have both 'PML' and 'Periodic' along the same dimension.")
+            loc = "plus" if isinstance(self.plus, Periodic) else "minus"
+            self._raise_validation_error_at_loc(
+                "Cannot have both 'PML' and 'Periodic' along the same dimension.", loc
+            )
         return self
 
     @model_validator(mode="after")

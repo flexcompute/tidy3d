@@ -1008,23 +1008,32 @@ class WavePort(AbstractWavePort):
 
         # Check for non-negative integers
         if any(idx < 0 for idx in indices):
-            raise ValidationError(
-                f"'mode_selection' must contain non-negative integers. Got: {indices}"
+            self._raise_validation_error_at_loc(
+                f"'mode_selection' must contain non-negative integers. Got: {indices}",
+                "mode_selection",
             )
 
         # Check for duplicates
         if len(indices) != len(set(indices)):
             duplicates = [idx for idx in set(indices) if list(indices).count(idx) > 1]
-            raise ValidationError(
+            self._raise_validation_error_at_loc(
                 f"'mode_selection' contains duplicate entries: {duplicates}. "
-                "Each index must appear only once."
+                "Each index must appear only once.",
+                "mode_selection",
             )
 
         # Check that indices are within range of num_modes
         mode_spec = self.mode_spec
         if mode_spec.num_modes == "auto":
             return self
-        self._validate_resolved_mode_selection_bounds(mode_spec)
+        invalid_indices = [idx for idx in self.mode_selection if idx >= mode_spec.num_modes]
+        if invalid_indices:
+            self._raise_validation_error_at_loc(
+                f"'mode_selection' contains indices {invalid_indices} that are >= "
+                f"'mode_spec.num_modes' ({mode_spec.num_modes}). "
+                f"Valid range is 0 to {mode_spec.num_modes - 1}.",
+                "mode_selection",
+            )
 
         return self
 
@@ -1049,7 +1058,13 @@ class WavePort(AbstractWavePort):
             return self
         if self.mode_spec is None or self.mode_spec.num_modes == "auto":
             return self
-        self._validate_resolved_mode_index_bounds(self.mode_spec)
+        if val >= self.mode_spec.num_modes:
+            self._raise_validation_error_at_loc(
+                f"'mode_index' is >= "
+                f"'mode_spec.num_modes' ({self.mode_spec.num_modes}). "
+                f"Valid range is 0 to {self.mode_spec.num_modes - 1}.",
+                "mode_index",
+            )
         return self
 
     @model_validator(mode="after")
@@ -1292,10 +1307,13 @@ class TerminalWavePort(AbstractWavePort):
 
         # Check for empty tuple/list
         if len(val) == 0:
-            raise ValidationError(
-                "Empty 'terminal_specs' tuple is not allowed. "
-                "Please provide at least one CustomImpedanceSpec, or use AutoImpedanceSpec "
-                "for automatic terminal detection."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "Empty 'terminal_specs' tuple is not allowed. "
+                    "Please provide at least one CustomImpedanceSpec, or use AutoImpedanceSpec "
+                    "for automatic terminal detection."
+                ),
+                "terminal_specs",
             )
 
         # Check consistency of voltage_spec and current_spec across all CustomImpedanceSpec
@@ -1308,16 +1326,22 @@ class TerminalWavePort(AbstractWavePort):
 
         # Check if voltage_spec consistency: all None or all not None
         if not all(has_voltage_spec) and any(has_voltage_spec):
-            raise ValidationError(
-                "Inconsistent voltage specifications in terminal_specs: "
-                "If voltage_spec is defined for one terminal, it must be defined for all terminals."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "Inconsistent voltage specifications in terminal_specs: "
+                    "If voltage_spec is defined for one terminal, it must be defined for all terminals."
+                ),
+                "terminal_specs",
             )
 
         # Check if current_spec consistency: all None or all not None
         if not all(has_current_spec) and any(has_current_spec):
-            raise ValidationError(
-                "Inconsistent current specifications in terminal_specs: "
-                "If current_spec is defined for one terminal, it must be defined for all terminals."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "Inconsistent current specifications in terminal_specs: "
+                    "If current_spec is defined for one terminal, it must be defined for all terminals."
+                ),
+                "terminal_specs",
             )
 
         return self

@@ -24,6 +24,7 @@ from ..utils import (
     AssertLogLevel,
     AssertLogLevelHandler,
     AssertLogStr,
+    assert_single_value_error_loc,
     cartesian_to_unstructured,
     run_emulated,
 )
@@ -32,6 +33,11 @@ SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavele
 
 RTOL = 0.01
 TEST_MAX_NUM_MEDIUMS = 3
+
+
+@pytest.fixture(name="fdtd_base_sim")
+def fixture_fdtd_base_sim():
+    return td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.uniform(dl=0.1), run_time=1e-12)
 
 
 def test_sim_init():
@@ -301,6 +307,50 @@ def test_sim_size():
             run_time=1e-7,
         )
         s._validate_size()
+
+
+def _with_source_out_of_bounds(sim):
+    src = td.PointDipole(
+        center=(2, 0, 0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
+        name="src",
+    )
+    return sim.updated_copy(sources=(src,))
+
+
+def _with_normalize_index_zero_amplitude(sim):
+    src = td.PointDipole(
+        center=(0, 0, 0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13, amplitude=0),
+    )
+    return sim.updated_copy(sources=(src,), normalize_index=0)
+
+
+@pytest.mark.parametrize(
+    "sim_updater,expected_loc,message_contains",
+    [
+        (
+            _with_source_out_of_bounds,
+            ("sources", 0),
+            "'src' (simulation.sources[0]) is outside of the simulation domain.",
+        ),
+        (
+            _with_normalize_index_zero_amplitude,
+            ("normalize_index",),
+            "Cannot set 'normalize_index' to source with zero amplitude.",
+        ),
+    ],
+    ids=["source_out_of_bounds", "normalize_index_zero_amplitude"],
+)
+def test_simulation_validation_error_locs(
+    fdtd_base_sim, sim_updater, expected_loc, message_contains
+):
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim_updater(fdtd_base_sim)
+
+    assert_single_value_error_loc(excinfo, expected_loc, message_contains)
 
 
 def _test_monitor_size():
@@ -650,6 +700,49 @@ def test_validate_zero_dim_boundaries():
         ),
     )
 
+    # zero-dim simulation cannot use Bloch boundaries along collapsed axis
+    with pytest.raises(ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 0),
+            run_time=1e-12,
+            sources=(src,),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.bloch(bloch_vec=0.1),
+            ),
+        )
+    assert_single_value_error_loc(excinfo, ("boundary_spec", "z"), "Bloch boundary")
+
+    # zero-dim simulation cannot use symmetry along collapsed axis
+    with pytest.raises(ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 0),
+            run_time=1e-12,
+            symmetry=(0, 0, 1),
+            sources=(src,),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.periodic(),
+            ),
+        )
+    assert_single_value_error_loc(excinfo, ("symmetry", 2), "using symmetry")
+
+    # zero-dim simulation requires matching plus/minus boundary along collapsed axis
+    with pytest.raises(ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 0),
+            run_time=1e-12,
+            sources=(src,),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary(plus=td.PECBoundary(), minus=td.PMCBoundary()),
+            ),
+        )
+    assert_single_value_error_loc(excinfo, ("boundary_spec", "z"), "must be the same")
+
 
 def test_validate_symmetry_boundaries():
     # simulation with symmetry along an axis should have the same boundaries defined on both sides
@@ -668,7 +761,7 @@ def test_validate_symmetry_boundaries():
             z=td.Boundary.pml(),
         ),
     )
-    with pytest.raises(ValidationError, match="Symmetry"):
+    with pytest.raises(ValidationError) as excinfo:
         td.Simulation(
             size=(1, 1, 1),
             symmetry=(1, 1, 1),
@@ -680,6 +773,7 @@ def test_validate_symmetry_boundaries():
                 z=td.Boundary.pml(),
             ),
         )
+    assert_single_value_error_loc(excinfo, ("boundary_spec", "y"), "Symmetry")
 
 
 def test_validate_components_none():
@@ -1750,6 +1844,40 @@ def test_diffraction_medium():
             run_time=1e-12,
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
+
+
+def test_diffraction_monitor_boundary_validation_error_loc():
+    """Make sure diffraction monitor boundary errors point to the monitor entry."""
+
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            monitors=(monitor,),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.pml(),
+                z=td.Boundary.pml(),
+            ),
+        )
+
+    assert excinfo.value.errors(include_input=False, include_url=False) == [
+        {
+            "type": "value_error",
+            "loc": ("monitors", 0),
+            "msg": "The 'DiffractionMonitor' monitor_diffraction requires periodic or Bloch "
+            "boundaries along dimensions x and y.",
+        }
+    ]
 
 
 def test_diffraction_monitor_order_grid_size():
@@ -3708,7 +3836,7 @@ def test_num_lumped_elements(monkeypatch):
         lumped_elements=(resistor,) * TEST_MAX_NUM_MEDIUMS,
         run_time=1e-12,
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         _ = td.Simulation(
             size=(5, 5, 5),
             grid_spec=grid_spec,
@@ -3716,6 +3844,7 @@ def test_num_lumped_elements(monkeypatch):
             lumped_elements=(resistor,) * (TEST_MAX_NUM_MEDIUMS + 1),
             run_time=1e-12,
         )
+    assert_single_value_error_loc(excinfo, ("lumped_elements",), "distinct lumped elements")
 
 
 def test_validate_lumped_elements():
@@ -3730,21 +3859,23 @@ def test_validate_lumped_elements():
         lumped_elements=(resistor,),
     )
     # error for 1D/2D simulation with lumped elements
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         td.Simulation(
             size=(1, 0, 3),
             run_time=1e-12,
             grid_spec=td.GridSpec.uniform(dl=0.1),
             lumped_elements=(resistor,),
         )
+    assert_single_value_error_loc(excinfo, ("size",), "must be a 3D simulation")
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         td.Simulation(
             size=(1, 0, 0),
             run_time=1e-12,
             grid_spec=td.GridSpec.uniform(dl=0.1),
             lumped_elements=(resistor,),
         )
+    assert_single_value_error_loc(excinfo, ("size",), "must be a 3D simulation")
 
 
 def test_suggested_mesh_overrides():
@@ -4060,6 +4191,108 @@ def test_fixed_angle_sim():
     )
     with pytest.raises(ValidationError):
         _ = sim.updated_copy(structures=(sphere.updated_copy(medium=time_modulated_med),))
+
+
+@pytest.fixture(name="fixed_angle_base_sim")
+def fixture_fixed_angle_base_sim():
+    wvl_um = 1.0
+    freq0 = td.C_0 / wvl_um
+    fwidth = freq0 / 5
+    source = td.PlaneWave(
+        angle_phi=np.pi / 6,
+        angle_theta=np.pi / 5,
+        angular_spec=td.FixedAngleSpec(),
+        direction="+",
+        center=(-0.9, 0, 0),
+        size=(0, td.inf, td.inf),
+        pol_angle=np.pi / 4,
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+    )
+    sphere = td.Structure(geometry=td.Sphere(radius=0.5), medium=td.Medium(permittivity=5))
+    return td.Simulation(
+        structures=(sphere,),
+        sources=(source,),
+        monitors=(
+            td.FluxMonitor(center=(-1, 0, 0), size=(0, td.inf, td.inf), freqs=[freq0], name="f"),
+        ),
+        size=(2.2, 2.2, 2.2),
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=15),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.absorber(), y=td.Boundary.periodic(), z=td.Boundary.periodic()
+        ),
+        run_time=10 / fwidth,
+    )
+
+
+@pytest.mark.parametrize(
+    "sim_updater,expected_loc,message_contains",
+    [
+        (
+            lambda sim: sim.updated_copy(sources=(sim.sources[0], sim.sources[0])),
+            ("sources",),
+            "cannot be combined with other sources",
+        ),
+        (
+            lambda sim: sim.updated_copy(
+                structures=(
+                    sim.structures[0].updated_copy(
+                        medium=td.FullyAnisotropicMedium(
+                            permittivity=[[2, 0, 0], [0, 1, 0], [0, 0, 3]]
+                        )
+                    ),
+                )
+            ),
+            ("sources",),
+            "FullyAnisotropicMedium",
+        ),
+        (
+            lambda sim: sim.updated_copy(
+                monitors=(td.FieldTimeMonitor(size=[td.inf, td.inf, 0], name="time"),)
+            ),
+            ("monitors",),
+            "Time monitors cannot be used in fixed-angle simulations.",
+        ),
+    ],
+    ids=[
+        "fixed_angle_duplicate_sources",
+        "fixed_angle_fully_anisotropic",
+        "fixed_angle_time_monitor",
+    ],
+)
+def test_fixed_angle_validation_error_locs(
+    fixed_angle_base_sim, sim_updater, expected_loc, message_contains
+):
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim_updater(fixed_angle_base_sim)
+    assert_single_value_error_loc(excinfo, expected_loc, message_contains)
+
+
+def test_relax_courant_validation_error_loc():
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        ),
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim.updated_copy(relax_courant=True)
+    assert_single_value_error_loc(excinfo, ("relax_courant",), "relax_courant")
+
+
+def test_frequency_mode_abc_validation_error_loc():
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.ABCBoundary()),
+            sources=(),
+        )
+    assert_single_value_error_loc(excinfo, ("sources",), "needs specification of frequency")
 
 
 def test_sim_volumetric_structures_with_lumped_elements(tmp_path):

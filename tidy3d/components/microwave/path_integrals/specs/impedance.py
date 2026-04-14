@@ -102,8 +102,11 @@ class CustomImpedanceSpec(AbstractImpedanceSpec):
         val = self.current_spec
         voltage_spec = self.voltage_spec
         if val is None and voltage_spec is None:
-            raise SetupError(
-                "Not a valid 'CustomImpedanceSpec', the 'voltage_spec' and 'current_spec' cannot both be 'None'."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Not a valid 'CustomImpedanceSpec', the 'voltage_spec' and 'current_spec' cannot both be 'None'."
+                ),
+                "voltage_spec",
             )
         return self
 

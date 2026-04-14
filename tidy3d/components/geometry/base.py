@@ -3851,14 +3851,19 @@ class GeometryArray(Geometry):
 
         # If offsets provided, must not be empty
         if offsets is not None and len(offsets) < 1:
-            raise ValidationError("'offsets' must have at least one offset when provided.")
+            self._raise_validation_error_at_loc(
+                ValidationError("'offsets' must have at least one offset when provided."), "offsets"
+            )
 
         # If both provided, lengths must match
         if offsets is not None and transforms is not None:
             if len(offsets) != len(transforms):
-                raise ValidationError(
-                    f"Number of transforms ({len(transforms)}) must match "
-                    f"number of offsets ({len(offsets)}) when both are provided."
+                self._raise_validation_error_at_loc(
+                    ValidationError(
+                        f"Number of transforms ({len(transforms)}) must match "
+                        f"number of offsets ({len(offsets)}) when both are provided."
+                    ),
+                    "transforms",
                 )
 
         return self

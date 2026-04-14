@@ -25,7 +25,7 @@ from tidy3d.components.source.field import PlaneWave
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import DataError, SetupError
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, assert_single_value_error_loc
 
 
 def test_bloch_phase():
@@ -84,12 +84,28 @@ def test_boundary_validators():
     periodic = Periodic()
 
     # test `bloch_on_both_sides`
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         _ = Boundary(plus=bloch, minus=pec)
+    assert_single_value_error_loc(
+        excinfo,
+        ("plus",),
+        "Bloch boundaries must be applied either on both sides or on neither side",
+    )
 
     # test `periodic_with_pml`
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as excinfo:
         _ = Boundary(plus=periodic, minus=pml)
+    assert_single_value_error_loc(
+        excinfo,
+        ("plus",),
+        "Cannot have both 'PML' and 'Periodic' along the same dimension",
+    )
+
+
+def test_abc_conductivity_requires_permittivity_loc():
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.ABCBoundary(conductivity=1.0)
+    assert_single_value_error_loc(excinfo, ("conductivity",), "simultaneously with 'permittivity'")
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])

@@ -1332,7 +1332,9 @@ class LayerRefinementSpec(Box):
             return self
         """size must be finite along axis."""
         if np.isinf(self.size[self.axis]):
-            raise SetupError("'size' must take finite values along 'axis' dimension.")
+            self._raise_validation_error_at_loc(
+                SetupError("'size' must take finite values along 'axis' dimension."), "size"
+            )
         return self
 
     @classmethod

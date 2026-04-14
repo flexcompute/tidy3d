@@ -199,9 +199,11 @@ def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
                         and geometric_object.center[dim] != sim_center[dim]
                     ):
                         obj_descr = named_obj_descr(geometric_object, field_name, position_index)
-                        raise SetupError(
+                        self._raise_validation_error_at_loc(
                             f"{obj_type}: {obj_descr} in presence of symmetries must be in the main "
-                            "quadrant, or centered on the symmetry axis."
+                            "quadrant, or centered on the symmetry axis.",
+                            field_name,
+                            position_index,
                         )
 
         return self
@@ -210,7 +212,9 @@ def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
 
 
 def validate_field_projection_monitors_2d(
-    monitors: Sequence[Any] | None, sim_size: tuple[float, float, float]
+    monitors: Sequence[Any] | None,
+    sim_size: tuple[float, float, float],
+    raise_error: Optional[Callable[[str, int], None]] = None,
 ) -> None:
     """Validate lower-dimensional field projection monitor settings."""
 
@@ -235,18 +239,24 @@ def validate_field_projection_monitors_2d(
     else:
         plane = "x-y"
 
-    for monitor in monitors:
+    for monitor_ind, monitor in enumerate(monitors):
         if not isinstance(monitor, AbstractFieldProjectionMonitor):
             continue
 
         if non_zero_dims == 1:
-            raise SetupError(f"Monitor '{monitor.name}' is not supported in 1D simulations.")
+            message = f"Monitor '{monitor.name}' is not supported in 1D simulations."
+            if raise_error is not None:
+                raise_error(message, monitor_ind)
+            raise SetupError(message)
 
         if not monitor.far_field_approx:
-            raise SetupError(
+            message = (
                 f"Exact far-field projection for 2D simulations is not yet available for Monitor '{monitor.name}'. "
                 "Currently, only 'far_field_approx = True' is supported."
             )
+            if raise_error is not None:
+                raise_error(message, monitor_ind)
+            raise SetupError(message)
 
         if isinstance(monitor, FieldProjectionAngleMonitor):
             config = {
@@ -264,12 +274,15 @@ def validate_field_projection_monitors_2d(
                     0: "0",
                 }
                 valid_values_str = ", ".join(replacements.get(val) for val in config["valid_value"])
-                raise SetupError(
+                message = (
                     f"For a 2D simulation in the {plane} plane, the observation "
                     f"angle '{config['coord']}' of monitor "
                     f"'{monitor.name}' should be set to "
                     f"'{valid_values_str}'"
                 )
+                if raise_error is not None:
+                    raise_error(message, monitor_ind)
+                raise SetupError(message)
 
             continue
 
@@ -292,19 +305,25 @@ def validate_field_projection_monitors_2d(
         invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
 
         if monitor.proj_axis in invalid_proj_axis:
-            raise SetupError(
+            message = (
                 f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
                 f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
             )
+            if raise_error is not None:
+                raise_error(message, monitor_ind)
+            raise SetupError(message)
 
         for idx, axis in enumerate(valid_proj_axes):
             coord = getattr(monitor, config["coord"][idx])
             if monitor.proj_axis == axis and not all(value in [0] for value in coord):
-                raise SetupError(
+                message = (
                     f"For a 2D simulation in the {plane} plane with "
                     f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
                     f"'{monitor.name}' should be set to '[0]'."
                 )
+                if raise_error is not None:
+                    raise_error(message, monitor_ind)
+                raise SetupError(message)
 
 
 def assert_unique_names(
@@ -350,7 +369,7 @@ def assert_objects_in_sim_bounds(
                     message = f"{obj_descr} is outside of the simulation domain."
                     custom_loc = [field_name, position_index]
                     if error:
-                        raise SetupError(message)
+                        self._raise_validation_error_at_loc(message, *custom_loc)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
 
         return self
@@ -391,7 +410,7 @@ def assert_objects_contained_in_sim_bounds(
                     message = f"{obj_descr} is not completely inside the simulation domain."
                     custom_loc = [field_name, position_index]
                     if error:
-                        raise SetupError(message)
+                        self._raise_validation_error_at_loc(message, *custom_loc)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
 
         return self
@@ -407,7 +426,7 @@ def enforce_monitor_fields_present() -> Callable[[AbstractFieldData], AbstractFi
         """Make sure the initially specified fields are here."""
         for field_name in self.monitor.fields:
             if getattr(self, field_name) is None:
-                raise SetupError(f"missing field {field_name}")
+                self._raise_validation_error_at_loc(f"missing field {field_name}", field_name)
         return self
 
     return _contains_fields
@@ -422,7 +441,9 @@ def required_if_symmetry_present(field_name: str) -> Callable[[T], T]:
         val = getattr(self, field_name)
         symmetry = self.symmetry
         if any(sym_val != 0 for sym_val in symmetry) and val is None:
-            raise SetupError(f"'{field_name}' must be provided if symmetry present.")
+            self._raise_validation_error_at_loc(
+                f"'{field_name}' must be provided if symmetry present.", field_name
+            )
         return self
 
     return _make_required
@@ -488,15 +509,19 @@ def assert_single_freq_in_range(field_name: str) -> Callable[[T], T]:
         for name, scalar_field in val.field_components.items():
             freqs = scalar_field.f
             if len(freqs) != 1:
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"'{field_name}.{name}' must have a single frequency, "
-                    f"contains {len(freqs)} frequencies."
+                    f"contains {len(freqs)} frequencies.",
+                    field_name,
+                    name,
                 )
             freq = float(freqs[0])
             if (freq < fmin) or (freq > fmax):
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     f"'{field_name}.{name}' contains frequency: {freq:.2e} Hz, which is outside "
-                    f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
+                    f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz.",
+                    field_name,
+                    name,
                 )
         return self
 

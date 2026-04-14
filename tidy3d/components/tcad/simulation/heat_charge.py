@@ -93,6 +93,7 @@ if TYPE_CHECKING:
     from pydantic import FiniteFloat
 
     from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import SpatialDataArray
     from tidy3d.components.types import Ax, Bound, Shapely
     from tidy3d.components.types.base import ArrayFloat1D
     from tidy3d.components.viz import PlotParams
@@ -499,26 +500,48 @@ class HeatChargeSimulation(AbstractSimulation):
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._structures_not_at_edges()
-        self._validate_scene()
-        self._monitors_cross_solids()
-        self._check_voltage_array_if_capacitance()
-        self._names_exist_bcs()
-        self._check_natural_convection_bc()
-        self._check_freqs_requires_ac_source()
-        self._check_charge_simulation()
-        self._not_all_neumann()
-        self._names_exist_grid_spec()
-        self._warn_if_minimal_mesh_size_override()
-        self._names_exist_sources()
-        self._check_medium_specs()
-        self._check_coupling_source_can_be_applied()
-        self._check_heat_sim()
-        self._check_conduction_sim()
-        self._estimate_charge_mesh_size()
-        self._check_transient_heat()
-        self._check_non_isothermal_is_possible()
+        self._call_with_validation_loc(("structures",), super()._run_after_validators)
+        self._call_with_validation_loc(("structures",), self._structures_not_at_edges)
+        self._call_with_validation_loc(("structures",), self._validate_scene)
+        self._call_with_validation_loc(("monitors",), self._monitors_cross_solids)
+        self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
+        self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
+        self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
+        self._call_with_validation_loc(("boundary_spec",), self._check_freqs_requires_ac_source)
+        simulation_types = self._check_simulation_types()
+        if TCADAnalysisTypes.CHARGE in simulation_types:
+            self._call_with_validation_loc(
+                ("boundary_spec",), self._check_charge_simulation_voltage_bcs
+            )
+            self._call_with_validation_loc(("monitors",), self._check_charge_simulation_monitors)
+            self._call_with_validation_loc(
+                ("structures",), self._check_charge_simulation_semiconductors
+            )
+        self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
+        self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
+        self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
+        self._call_with_validation_loc(("sources",), self._names_exist_sources)
+        self._call_with_validation_loc(("structures",), self._check_medium_specs)
+        self._call_with_validation_loc(("sources",), self._check_coupling_source_can_be_applied)
+        if TCADAnalysisTypes.HEAT in simulation_types:
+            self._call_with_validation_loc(("monitors",), self._check_heat_sim)
+        if TCADAnalysisTypes.CONDUCTION in simulation_types:
+            self._call_with_validation_loc(("monitors",), self._check_conduction_sim_monitors)
+            self._call_with_validation_loc(
+                ("boundary_spec",), self._check_conduction_sim_voltage_arrays
+            )
+            self._call_with_validation_loc(("structures",), self._check_conduction_sim_structures)
+        self._call_with_validation_loc(("grid_spec",), self._estimate_charge_mesh_size)
+        if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
+            self._call_with_validation_loc(("monitors",), self._check_transient_heat_monitors)
+            self._call_with_validation_loc(
+                ("structures",), self._check_transient_heat_solid_properties
+            )
+            self._call_with_validation_loc(
+                ("analysis_spec",), self._check_transient_heat_time_steps
+            )
+            self._check_transient_heat_time_warning()
+        self._call_with_validation_loc(("structures",), self._check_non_isothermal_is_possible)
         return self
 
     def _monitors_cross_solids(self) -> Self:
@@ -536,19 +559,23 @@ class HeatChargeSimulation(AbstractSimulation):
         failed_volt_mnt = [idx for idx in volt_monitors if idx in failed_elect_idx]
 
         if len(failed_temp_mnt) > 0:
-            monitor_names = [f"'{val[ind].name}'" for ind in failed_temp_mnt]
-            raise SetupError(
-                f"Monitors {monitor_names} do not cross any solid materials "
+            failed_idx = failed_temp_mnt[0]
+            self._raise_validation_error_at_loc(
+                "Temperature monitor does not cross any solid materials "
                 "('heat_spec=SolidSpec(...)'). Temperature distribution is only recorded inside solid "
-                "materials. Thus, no information will be recorded in these monitors."
+                "materials. Thus, no information will be recorded in this monitor.",
+                "monitors",
+                failed_idx,
             )
 
         if len(failed_volt_mnt) > 0:
-            monitor_names = [f"'{val[ind].name}'" for ind in failed_volt_mnt]
-            raise SetupError(
-                f"Monitors {monitor_names} do not cross any conducting materials "
+            failed_idx = failed_volt_mnt[0]
+            self._raise_validation_error_at_loc(
+                "Steady potential monitor does not cross any conducting materials "
                 "('charge=ChargeConductorMedium(...)'). The voltage is only stored inside conducting "
-                "materials. Thus, no information will be recorded in these monitors."
+                "materials. Thus, no information will be recorded in this monitor.",
+                "monitors",
+                failed_idx,
             )
 
         return self
@@ -775,47 +802,47 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
-    def _check_charge_simulation(self) -> Self:
-        """Makes sure that Charge simulations are set correctly."""
+    def _check_charge_simulation_voltage_bcs(self) -> Self:
+        """Validate Charge simulation has enough voltage BCs."""
+        voltage_bcs = 0
+        for bc in self.boundary_spec:
+            if isinstance(bc.condition, VoltageBC):
+                voltage_bcs = voltage_bcs + 1
+        if voltage_bcs < 2:
+            raise SetupError(
+                "Defining a Charge simulation requires the definition of 'VoltageBC' boundaries. "
+                f"So far {voltage_bcs} 'VoltageBC' have been set."
+            )
+        return self
 
-        simulation_types = self._check_simulation_types()
+    def _check_charge_simulation_monitors(self) -> Self:
+        """Validate Charge simulation has at least one charge monitor."""
+        if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in self.monitors):
+            raise SetupError(
+                "Charge simulations require the definition of, at least, one of these monitors: "
+                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor]' "
+                "but none have been defined."
+            )
+        # NOTE: in Charge we're only supporting unstructured monitors.
+        # only Temperature and Potential monitors can be structured.
+        for mnt in self.monitors:
+            if isinstance(mnt, SteadyPotentialMonitor) or isinstance(mnt, TemperatureMonitor):
+                if not mnt.unstructured:
+                    log.warning(
+                        "Currently, Charge simulations support only unstructured monitors. Please set "
+                        f"monitor '{mnt.name}' to 'unstructured = True'."
+                    )
+        return self
 
-        if TCADAnalysisTypes.CHARGE in simulation_types:
-            # check that we have at least 2 'VoltageBC's
-            voltage_bcs = 0
-            for bc in self.boundary_spec:
-                if isinstance(bc.condition, VoltageBC):
-                    voltage_bcs = voltage_bcs + 1
-            if voltage_bcs < 2:
-                raise SetupError(
-                    "Defining a Charge simulation requires the definition of 'VoltageBC' boundaries. "
-                    f"So far {voltage_bcs} 'VoltageBC' have been set."
-                )
-
-            # check that we have at least one charge monitor
-            if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in self.monitors):
-                raise SetupError(
-                    "Charge simulations require the definition of, at least, one of these monitors: "
-                    "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor]' "
-                    "but none have been defined."
-                )
-
-            # NOTE: in Charge we're only supporting unstructured monitors.
-            # only Temperature and Potential monitors can be structured.
-            for mnt in self.monitors:
-                if isinstance(mnt, SteadyPotentialMonitor) or isinstance(mnt, TemperatureMonitor):
-                    if not mnt.unstructured:
-                        log.warning(
-                            "Currently, Charge simulations support only unstructured monitors. Please set "
-                            f"monitor '{mnt.name}' to 'unstructured = True'."
-                        )
-            # check that we have at least one semiconductor medium
-            structures = self.structures
-            sc_present = HeatChargeSimulation._check_if_semiconductor_present(structures=structures)
-            if not sc_present:
-                raise SetupError(
-                    f"{TCADAnalysisTypes.CHARGE} simulations require the definition of at least one semiconductor medium."
-                )
+    def _check_charge_simulation_semiconductors(self) -> Self:
+        """Validate Charge simulation has at least one semiconductor medium."""
+        sc_present = HeatChargeSimulation._check_if_semiconductor_present(
+            structures=self.structures
+        )
+        if not sc_present:
+            raise SetupError(
+                f"{TCADAnalysisTypes.CHARGE} simulations require the definition of at least one semiconductor medium."
+            )
         return self
 
     def _not_all_neumann(self) -> Self:
@@ -994,56 +1021,51 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _check_heat_sim(self) -> Self:
         """Make sure that heat simulations have at least one monitor defined."""
-
-        simulation_types = self._check_simulation_types()
-
-        if TCADAnalysisTypes.HEAT in simulation_types:
-            if not any(isinstance(mnt, TemperatureMonitor) for mnt in self.monitors):
-                raise SetupError(
-                    "Heat simulations require the definition of, at least, one "
-                    "'TemperatureMonitor' but none have been defined."
-                )
-
+        if not any(isinstance(mnt, TemperatureMonitor) for mnt in self.monitors):
+            raise SetupError(
+                "Heat simulations require the definition of, at least, one "
+                "'TemperatureMonitor' but none have been defined."
+            )
         return self
 
-    def _check_conduction_sim(self) -> Self:
-        """Make sure that conduction simulations have at least one monitor defined."""
-
-        simulation_types = self._check_simulation_types()
-
-        if TCADAnalysisTypes.CONDUCTION in simulation_types:
-            if not any(isinstance(mnt, SteadyPotentialMonitor) for mnt in self.monitors):
-                if any(isinstance(s, HeatFromElectricSource) for s in self.sources):
-                    log.warning(
-                        "A Conduction simulation has been defined but no "
-                        "SteadyPotentialMonitor has been defined. "
-                    )
-                else:
-                    raise SetupError(
-                        "Conduction simulations require the definition of, at least, one "
-                        "'SteadyPotentialMonitor' but none have been defined."
-                    )
-
-            # now make sure we only have one voltage per VoltageBC
-            for bc in self.boundary_spec:
-                if isinstance(bc.condition, VoltageBC):
-                    if isinstance(bc.condition.source, DCVoltageSource):
-                        if len(bc.condition.source.voltage) > 1:
-                            raise SetupError(
-                                "A Conduction simulation has been defined but a VoltageBC with an array of voltages "
-                                "has been defined. This is not supported in Conduction simulations."
-                            )
-
-            # make sure that at least one structure has appropriate charge medium
-            if all(isinstance(s.medium, Medium) for s in self.structures):
-                raise SetupError(
-                    "Conduction simulations must be defined using 'MultiPhysicsMedium' but none have been defined."
+    def _check_conduction_sim_monitors(self) -> Self:
+        """Validate conduction simulations have at least one potential monitor."""
+        if not any(isinstance(mnt, SteadyPotentialMonitor) for mnt in self.monitors):
+            if any(isinstance(s, HeatFromElectricSource) for s in self.sources):
+                log.warning(
+                    "A Conduction simulation has been defined but no "
+                    "SteadyPotentialMonitor has been defined. "
                 )
-            if not any(isinstance(s.medium.charge, ChargeConductorMedium) for s in self.structures):
+            else:
                 raise SetupError(
-                    "Conduction simulations require at least one structure with a 'ChargeConductorMedium' "
-                    "but none have been defined."
+                    "Conduction simulations require the definition of, at least, one "
+                    "'SteadyPotentialMonitor' but none have been defined."
                 )
+        return self
+
+    def _check_conduction_sim_voltage_arrays(self) -> Self:
+        """Validate conduction simulations don't use voltage arrays."""
+        for bc in self.boundary_spec:
+            if isinstance(bc.condition, VoltageBC):
+                if isinstance(bc.condition.source, DCVoltageSource):
+                    if len(bc.condition.source.voltage) > 1:
+                        raise SetupError(
+                            "A Conduction simulation has been defined but a VoltageBC with an array of voltages "
+                            "has been defined. This is not supported in Conduction simulations."
+                        )
+        return self
+
+    def _check_conduction_sim_structures(self) -> Self:
+        """Validate conduction simulations include conductive multiphysics media."""
+        if all(isinstance(s.medium, Medium) for s in self.structures):
+            raise SetupError(
+                "Conduction simulations must be defined using 'MultiPhysicsMedium' but none have been defined."
+            )
+        if not any(isinstance(s.medium.charge, ChargeConductorMedium) for s in self.structures):
+            raise SetupError(
+                "Conduction simulations require at least one structure with a 'ChargeConductorMedium' "
+                "but none have been defined."
+            )
 
         return self
 
@@ -1104,69 +1126,84 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    def _check_transient_heat(self) -> Self:
-        """Make sure transient heat simulations can run."""
+    def _check_transient_heat_monitors(self) -> Self:
+        """Validate monitor settings for transient heat simulations."""
+        monitors = self.monitors
+        for mnt in monitors:
+            if isinstance(mnt, TemperatureMonitor):
+                if not mnt.unstructured:
+                    raise SetupError(
+                        f"Unsteady simulations require the temperature monitor '{mnt.name}' to be unstructured."
+                    )
+        return self
 
-        analysis_type = self.analysis_spec
-        if isinstance(analysis_type, UnsteadyHeatAnalysis):
-            monitors = self.monitors
-            for mnt in monitors:
-                if isinstance(mnt, TemperatureMonitor):
-                    if not mnt.unstructured:
-                        raise SetupError(
-                            f"Unsteady simulations require the temperature monitor '{mnt.name}' to be unstructured."
-                        )
-            # additionally check that the SolidSpec has capacity and density defined
-            capacities = []
-            densities = []
-            conductivities = []
-            structures = self.structures
-            for structure in structures:
-                heat_properties = None
-                if isinstance(structure.medium, MultiPhysicsMedium):
-                    heat_properties = structure.medium.heat
-                # now check legacy Medium too
-                elif isinstance(structure.medium, Medium):
-                    heat_properties = structure.medium.heat_spec
+    def _transient_heat_material_lists(
+        self,
+    ) -> tuple[list[float], list[float], list[Union[float, SpatialDataArray]]]:
+        """Collect thermal property values used by transient heat validators."""
+        capacities = []
+        densities = []
+        conductivities = []
+        structures = self.structures
+        for structure in structures:
+            heat_properties = None
+            if isinstance(structure.medium, MultiPhysicsMedium):
+                heat_properties = structure.medium.heat
+            # now check legacy Medium too
+            elif isinstance(structure.medium, Medium):
+                heat_properties = structure.medium.heat_spec
 
-                if isinstance(heat_properties, SolidMedium):
-                    if heat_properties.capacity is not None:
-                        capacities.append(heat_properties.capacity)
-                    if heat_properties.density is not None:
-                        densities.append(heat_properties.density)
-                    conductivities.append(heat_properties.conductivity)
+            if isinstance(heat_properties, SolidMedium):
+                if heat_properties.capacity is not None:
+                    capacities.append(heat_properties.capacity)
+                if heat_properties.density is not None:
+                    densities.append(heat_properties.density)
+                conductivities.append(heat_properties.conductivity)
+        return capacities, densities, conductivities
 
-            if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
-                raise SetupError(
-                    "Unsteady simulations require the SolidSpec to have 'capacity', 'density', and 'conductivity' "
-                    "defined. Please check the definition of the SolidSpec in the Medium or MultiPhysicsMedium."
-                )
-
-            # check that we don't have too many time-steps
-            if analysis_type.unsteady_spec.total_time_steps > TRANSIENT_HEAT_MAX_STEPS:
-                raise SetupError(
-                    "Unsteady simulations require the number of time-steps to be less than "
-                    f"{TRANSIENT_HEAT_MAX_STEPS} but {analysis_type.unsteady_spec.total_time_steps} were provided."
-                )
-
-            # check simulation time
-            domain_length = np.max([d for d in self.size if d != np.inf])
-            characteristic_time = (
-                domain_length**2
-                * np.mean(capacities)
-                * np.mean(densities)
-                / np.mean(conductivities)
-                * 1e-18
+    def _check_transient_heat_solid_properties(self) -> Self:
+        """Validate thermal material properties for transient heat simulations."""
+        capacities, densities, conductivities = self._transient_heat_material_lists()
+        if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
+            raise SetupError(
+                "Unsteady simulations require the SolidSpec to have 'capacity', 'density', and 'conductivity' "
+                "defined. Please check the definition of the SolidSpec in the Medium or MultiPhysicsMedium."
             )
-            if (
-                analysis_type.unsteady_spec.time_step * analysis_type.unsteady_spec.total_time_steps
-                > 100 * characteristic_time
-            ):
-                log.warning(
-                    "The simulation time is larger than 100 times the estimated characteristic time of the system. "
-                    "This may lead to unnecessary long simulation times. "
-                    "Consider reducing the simulation time or the time step size."
-                )
+        return self
+
+    def _check_transient_heat_time_steps(self) -> Self:
+        """Validate transient heat analysis time-step count."""
+        analysis_type = self.analysis_spec
+        if analysis_type.unsteady_spec.total_time_steps > TRANSIENT_HEAT_MAX_STEPS:
+            raise SetupError(
+                "Unsteady simulations require the number of time-steps to be less than "
+                f"{TRANSIENT_HEAT_MAX_STEPS} but {analysis_type.unsteady_spec.total_time_steps} were provided."
+            )
+        return self
+
+    def _check_transient_heat_time_warning(self) -> Self:
+        """Warn when transient heat simulation time is likely excessive."""
+        analysis_type = self.analysis_spec
+        capacities, densities, conductivities = self._transient_heat_material_lists()
+        if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
+            return self
+        domain_length = np.max([d for d in self.size if d != np.inf])
+        characteristic_time = (
+            domain_length**2
+            * np.mean(capacities)
+            * np.mean(densities)
+            / np.mean(conductivities)
+            * 1e-18
+        )
+        if (
+            analysis_type.unsteady_spec.time_step * analysis_type.unsteady_spec.total_time_steps
+            > 100 * characteristic_time
+        ):
+            log.warning(
+                "The simulation time is larger than 100 times the estimated characteristic time of the system. "
+                "This may lead to unnecessary long simulation times. "
+                "Consider reducing the simulation time or the time step size."
+            )
         return self
 
     def _check_non_isothermal_is_possible(self) -> Self:

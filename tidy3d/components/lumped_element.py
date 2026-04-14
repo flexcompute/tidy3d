@@ -541,8 +541,11 @@ class CoaxialLumpedResistor(LumpedElement):
         val = self.inner_diameter
         outer_diameter = self.outer_diameter
         if val >= outer_diameter:
-            raise ValidationError(
-                f"The 'inner_diameter' {val} of a coaxial lumped element must be less than its 'outer_diameter' {outer_diameter}."
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    f"The 'inner_diameter' {val} of a coaxial lumped element must be less than its 'outer_diameter' {outer_diameter}."
+                ),
+                "inner_diameter",
             )
         return self
 

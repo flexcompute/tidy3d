@@ -1020,9 +1020,12 @@ class ParameterPerturbation(Tidy3dBaseModel):
         charge = self.charge
 
         if heat is None and charge is None:
-            raise DataError(
-                "Perturbation models 'heat' and 'charge' in 'ParameterPerturbation' cannot be "
-                "simultaneously 'None'."
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'heat' and 'charge' in 'ParameterPerturbation' cannot be "
+                    "simultaneously 'None'."
+                ),
+                "heat",
             )
 
         return self
@@ -1180,10 +1183,21 @@ class PermittivityPerturbation(Tidy3dBaseModel):
         delta_eps_complex = False if delta_eps is None else delta_eps.is_complex
         delta_sigma_complex = False if delta_sigma is None else delta_sigma.is_complex
 
-        if delta_eps_complex or delta_sigma_complex:
-            raise DataError(
-                "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
-                "complex-valued."
+        if delta_eps_complex:
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
+                    "complex-valued."
+                ),
+                "delta_eps",
+            )
+        if delta_sigma_complex:
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
+                    "complex-valued."
+                ),
+                "delta_sigma",
             )
 
         return self
@@ -1196,9 +1210,12 @@ class PermittivityPerturbation(Tidy3dBaseModel):
         delta_sigma = self.delta_sigma
 
         if delta_eps is None and delta_sigma is None:
-            raise DataError(
-                "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
-                "simultaneously 'None'."
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
+                    "simultaneously 'None'."
+                ),
+                "delta_eps",
             )
 
         return self
@@ -1733,9 +1750,19 @@ class IndexPerturbation(Tidy3dBaseModel):
         dn_complex = False if dn is None else dn.is_complex
         dk_complex = False if dk is None else dk.is_complex
 
-        if dn_complex or dk_complex:
-            raise DataError(
-                "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be complex-valued."
+        if dn_complex:
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be complex-valued."
+                ),
+                "delta_n",
+            )
+        if dk_complex:
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be complex-valued."
+                ),
+                "delta_k",
             )
 
         return self
@@ -1748,9 +1775,12 @@ class IndexPerturbation(Tidy3dBaseModel):
         dk = self.delta_k
 
         if dn is None and dk is None:
-            raise DataError(
-                "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
-                "simultaneously 'None'."
+            self._raise_validation_error_at_loc(
+                DataError(
+                    "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
+                    "simultaneously 'None'."
+                ),
+                "delta_n",
             )
 
         return self

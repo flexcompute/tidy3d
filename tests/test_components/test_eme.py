@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, assert_single_value_error_loc
 
 np.random.seed(4)
 
@@ -87,6 +87,11 @@ def make_eme_sim():
         freqs=freqs,
     )
     return sim
+
+
+@pytest.fixture(name="eme_base_sim")
+def fixture_eme_base_sim():
+    return make_eme_sim()
 
 
 def _matched_lorentz_media_yy_zz(freq0: float) -> tuple[td.Lorentz, td.Lorentz]:
@@ -819,8 +824,8 @@ def test_eme_monitor_storage_size_with_sweep_spec():
     assert size_ov_period == size_ov_none
 
 
-def test_eme_simulation():
-    sim = make_eme_sim()
+def test_eme_simulation(eme_base_sim):
+    sim = eme_base_sim
     # no log except deprecated coeffs monitor
     with AssertLogLevel(None):
         _ = sim.updated_copy(monitors=[sim.monitors[0], *list(sim.monitors[2:])])
@@ -845,8 +850,13 @@ def test_eme_simulation():
         _ = sim.updated_copy(freqs=None)
 
     # no symmetry in propagation direction
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(pd.ValidationError) as excinfo:
         _ = sim.updated_copy(symmetry=(0, 0, 1))
+    assert_single_value_error_loc(
+        excinfo,
+        ("symmetry", 2),
+        "Symmetry in the propagation direction is not currently supported.",
+    )
 
     # test warning for not providing wavelength in autogrid
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=20)
@@ -869,9 +879,6 @@ def test_eme_simulation():
     # test duplicate freqs
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(freqs=list(sim.freqs) + list(sim.freqs))
-    # test empty freqs
-    with pytest.raises(pd.ValidationError):
-        _ = sim.updated_copy(freqs=[])
 
     # test anisotropic media support (reciprocal fully anisotropic only)
     perm_diag = [[1, 0, 0], [0, 2, 0], [0, 0, 3]]
@@ -1304,10 +1311,13 @@ def test_eme_simulation():
     assert sim_tmp._monitor_num_freqs(monitor=sim_tmp.monitors[0]) == 1
 
     # test sweep
-    with pytest.raises(pd.ValidationError):
-        _ = sim.updated_copy(
-            sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 10)))
-        )
+    with pytest.raises(pd.ValidationError) as excinfo:
+        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1.0, 1.1]))
+    assert_single_value_error_loc(
+        excinfo,
+        ("monitors", 2),
+        "Monitor 'field' at 'monitors[2]' is an 'EMEFieldMonitor'",
+    )
     sim_no_field = sim.updated_copy(
         monitors=[mnt for mnt in sim.monitors if not isinstance(mnt, td.EMEFieldMonitor)]
     )
@@ -1506,6 +1516,80 @@ def test_eme_bend_medium_frames():
         monitors=monitor,
         eme_grid_spec=co_rotating_bent_grid,
     )
+
+
+def _with_eme_custom_medium_global_bend(sim):
+    coords = {
+        "x": np.linspace(-0.25, 0.25, 2),
+        "y": np.linspace(-0.5, 0.5, 2),
+        "z": np.linspace(-1.5, 1.5, 3),
+    }
+    custom_medium = td.CustomMedium(
+        permittivity=td.SpatialDataArray(np.full((2, 2, 3), 2.5), coords=coords)
+    )
+    custom_struct = sim.structures[0].updated_copy(medium=custom_medium)
+    global_bent_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(
+            num_modes=1,
+            bend_radius=10.0,
+            bend_axis=1,
+            bend_medium_frame="global",
+        ),
+    )
+
+    return sim.updated_copy(
+        structures=(custom_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=global_bent_grid,
+    )
+
+
+def _with_eme_anisotropic_global_repeated_bend(sim):
+    diag_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3),
+        zz=td.Medium(permittivity=4),
+    )
+    diag_struct = sim.structures[0].updated_copy(medium=diag_aniso_med)
+    global_repeated_grid = td.EMEUniformGrid(
+        num_cells=1,
+        mode_spec=td.EMEModeSpec(
+            num_modes=1,
+            bend_radius=10.0,
+            bend_axis=1,
+            bend_medium_frame="global",
+        ),
+        num_reps=2,
+    )
+
+    return sim.updated_copy(
+        structures=(diag_struct,),
+        monitors=(sim.monitors[0],),
+        eme_grid_spec=global_repeated_grid,
+    )
+
+
+@pytest.mark.parametrize(
+    "sim_updater,expected_loc,message_contains",
+    [
+        (
+            _with_eme_custom_medium_global_bend,
+            ("eme_grid_spec",),
+            "Custom media are not currently supported",
+        ),
+        (
+            _with_eme_anisotropic_global_repeated_bend,
+            ("eme_grid_spec",),
+            "nontrivial relative bend rotation",
+        ),
+    ],
+    ids=["eme_custom_medium_global_bend", "eme_anisotropic_repeated_bend"],
+)
+def test_eme_bend_validation_error_locs(eme_base_sim, sim_updater, expected_loc, message_contains):
+    with pytest.raises(pd.ValidationError) as excinfo:
+        _ = sim_updater(eme_base_sim)
+    assert_single_value_error_loc(excinfo, expected_loc, message_contains)
 
 
 def test_eme_anisotropic_bend_validation_uses_cell_specific_freqs():

@@ -288,8 +288,11 @@ class ModulationSpec(Tidy3dBaseModel):
         """Assert same time-modulation applied to permittivity and conductivity."""
         if self.conductivity is not None and self.permittivity is not None:
             if self.conductivity.time_modulation != self.permittivity.time_modulation:
-                raise ValidationError(
-                    "'permittivity' and 'conductivity' should have the same time modulation."
+                self._raise_validation_error_at_loc(
+                    ValidationError(
+                        "'permittivity' and 'conductivity' should have the same time modulation."
+                    ),
+                    "conductivity",
                 )
         return self
 

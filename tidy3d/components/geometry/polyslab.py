@@ -547,10 +547,13 @@ class PolySlab(base.Planar):
         if self.bulges is None:
             return self
         if len(self.bulges) != self.vertices.shape[0]:
-            raise SetupError(
-                "The number of bulge values in 'bulges' must match the number of 'vertices'. "
-                f"However, this polyslab contains {self.vertices.shape[0]} vertices, but {len(self.bulges)} "
-                "bulge values."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "The number of bulge values in 'bulges' must match the number of 'vertices'. "
+                    f"However, this polyslab contains {self.vertices.shape[0]} vertices, but {len(self.bulges)} "
+                    "bulge values."
+                ),
+                "bulges",
             )
         return self
 
@@ -560,8 +563,11 @@ class PolySlab(base.Planar):
         if self.bulges is None:
             return self
         if not np.all(np.isfinite(self.bulges)):
-            raise SetupError(
-                "All 'bulges' values must be finite. Infinite or NaN bulge values are not allowed."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "All 'bulges' values must be finite. Infinite or NaN bulge values are not allowed."
+                ),
+                "bulges",
             )
         return self
 
@@ -583,9 +589,12 @@ class PolySlab(base.Planar):
         invalid_edges = is_zero_length & has_nonzero_bulge
         if np.any(invalid_edges):
             invalid_idx = np.where(invalid_edges)[0][0]  # Report first invalid edge
-            raise SetupError(
-                f"Zero-length edge at vertex index {invalid_idx} has a non-zero bulge value "
-                f"({bulges[invalid_idx]}). A zero-length edge cannot define an arc segment."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    f"Zero-length edge at vertex index {invalid_idx} has a non-zero bulge value "
+                    f"({bulges[invalid_idx]}). A zero-length edge cannot define an arc segment."
+                ),
+                "bulges",
             )
         return self
 
@@ -596,15 +605,21 @@ class PolySlab(base.Planar):
             return self
         if not np.allclose(self.bulges, 0):
             if not math.isclose(self.sidewall_angle, 0):
-                raise SetupError(
-                    "Arc segments are present in the polygon. 'sidewall_angle' must be 0. "
-                    "A general treatment for slanted polyslab containing arc segments "
-                    "will be available in future releases."
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        "Arc segments are present in the polygon. 'sidewall_angle' must be 0. "
+                        "A general treatment for slanted polyslab containing arc segments "
+                        "will be available in future releases."
+                    ),
+                    "sidewall_angle",
                 )
             if not math.isclose(self.dilation, 0):
-                raise SetupError(
-                    "Arc segments are present in the polygon. 'dilation' value must be 0. "
-                    "A general treatment will be available in future releases."
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        "Arc segments are present in the polygon. 'dilation' value must be 0. "
+                        "A general treatment will be available in future releases."
+                    ),
+                    "dilation",
                 )
         return self
 
@@ -628,9 +643,12 @@ class PolySlab(base.Planar):
         # Check if the resulting polygon is valid
         poly = shapely.Polygon(discretized)
         if not poly.is_valid or not poly.is_simple:
-            raise SetupError(
-                "Polygon with arc segments is self-intersecting. "
-                "Please adjust the bulge values to avoid self-intersection."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Polygon with arc segments is self-intersecting. "
+                    "Please adjust the bulge values to avoid self-intersection."
+                ),
+                "bulges",
             )
         return self
 
@@ -655,7 +673,10 @@ class PolySlab(base.Planar):
 
         # 0) fully eroded
         if dist < 0 and dist < -PolySlab._maximal_erosion(val_np):
-            raise SetupError("Erosion value is too large. The polygon is fully eroded.")
+            self._raise_validation_error_at_loc(
+                SetupError("Erosion value is too large. The polygon is fully eroded."),
+                "dilation",
+            )
 
         # no edge events
         if not PolySlab._edge_events_detection(val_np, dist, ignore_at_dist=False):
@@ -663,17 +684,23 @@ class PolySlab(base.Planar):
 
         poly_offset = PolySlab._shift_vertices(val_np, dist)[0]
         if PolySlab._area(poly_offset) < fp_eps**2:
-            raise SetupError("Erosion value is too large. The polygon is fully eroded.")
+            self._raise_validation_error_at_loc(
+                SetupError("Erosion value is too large. The polygon is fully eroded."),
+                "dilation",
+            )
 
         # edge events
         poly_offset = shapely.make_valid(self.make_shapely_polygon(poly_offset))
         # 1) polygon split or create holes/islands
         if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
-            raise SetupError(
-                "Dilation/Erosion value is too large, resulting in "
-                "polygon splitting or generation of holes/islands. "
-                "A general treatment to self-intersecting polygon will be available "
-                "in future releases."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Dilation/Erosion value is too large, resulting in "
+                    "polygon splitting or generation of holes/islands. "
+                    "A general treatment to self-intersecting polygon will be available "
+                    "in future releases."
+                ),
+                "dilation",
             )
 
         # case 2
@@ -735,22 +762,28 @@ class PolySlab(base.Planar):
 
         if len(max_thick) > 0:
             max_thick = min(max_thick)
-            raise SetupError(
-                "Sidewall angle or structure thickness is so large that the polygon "
-                "is self-intersecting during extrusion. "
-                f"Please either reduce structure thickness to be < {max_thick:.3e}, "
-                "or use our plugin 'ComplexPolySlab' to divide the complex polyslab "
-                "into a list of simple polyslabs."
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Sidewall angle or structure thickness is so large that the polygon "
+                    "is self-intersecting during extrusion. "
+                    f"Please either reduce structure thickness to be < {max_thick:.3e}, "
+                    "or use our plugin 'ComplexPolySlab' to divide the complex polyslab "
+                    "into a list of simple polyslabs."
+                ),
+                "sidewall_angle",
             )
 
         # vertex-edge crossing event.
         for dist_val in dist:
             if PolySlab._edge_events_detection(poly_ref, dist_val):
-                raise SetupError(
-                    "Sidewall angle or structure thickness is too large, "
-                    "resulting in polygon splitting or generation of holes/islands. "
-                    "A general treatment to self-intersecting polygon will be available "
-                    "in future releases."
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        "Sidewall angle or structure thickness is too large, "
+                        "resulting in polygon splitting or generation of holes/islands. "
+                        "A general treatment to self-intersecting polygon will be available "
+                        "in future releases."
+                    ),
+                    "sidewall_angle",
                 )
         return self
 

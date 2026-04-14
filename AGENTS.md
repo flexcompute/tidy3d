@@ -27,12 +27,14 @@
 - Reuse types from `tidy3d/components/types`, domain constants from `tidy3d/constants`, and runtime defaults from `tidy3d/config`.
 - For the `Medium` and `Simulation` class families, centralize `@model_validator(mode="after")` logic in `_run_after_validators()` with a short docstring, and call dependent checks in explicit order instead of relying on decorator registration.
 - For those same families, prefix validator helpers with `_` (e.g., `_check_*`, `_validate_*`) and use `call_wrapped_validator(...)` for validator factories so ordering stays explicit.
+- In post-init validation (`@model_validator(mode="after")`, `_run_after_validators()`, and helpers they call), use loc-aware validation errors whenever a failure can be tied to a concrete field or indexed item. Prefer `self._raise_validation_error_at_loc(...)` and `self._call_with_validation_loc(...)`; reserve plain `SetupError` for model-global invariants.
 
 ## Testing Guidelines
 - Mirror the source tree with `test_<feature>.py`, add a short module docstring, and import `tidy3d as td`; keep single-use fixtures local but upstream broadly useful helpers into `tests/conftest.py`.
 - Lean on `tests/conftest.py` for RNG seeding, matplotlib cleanup, logger reset, and autograd helpers, and use pytest’s `tmp_path` for artifacts.
 - `uv run pytest` is the canonical entry point; the `pyproject` config already selects markers, doctests, coverage, xdist, and env vars, so reproduce CI locally before opening a PR.
 - Prefer pytest primitives (`pytest.raises`, `pytest.approx`, `@pytest.mark.parametrize`) for coverage, and add doctest snippets for new public APIs to keep docs and runtime behavior aligned.
+- Every new or changed loc-attributable post-init validation should include a regression test asserting the error `loc` via `assert_single_value_error_loc(...)` from `tests/utils.py`.
 - Mock all external/web APIs in tests (e.g., `web.run`, HTTP clients) and assert the contract instead of hitting live services; CI must stay hermetic.
 - Numerical tests require explicit maintainer confirmation. They run real simulations and are excluded by default (`-m 'not numerical'`). When approved, run selectively via `uv run pytest -m numerical path/to/test.py -k specific_case`.
 - Scope tests by path: `uv run pytest -q tests/test_web/` or `uv run pytest -q tidy3d/components/geometry/`.
