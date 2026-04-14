@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as anp
 import numpy as np
 import shapely
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field, model_validator
 
 from tidy3d.components.autograd import TracedSize1D, get_static
-from tidy3d.components.base import cached_property
+from tidy3d.components.base import cached_property, keyed_cache
 from tidy3d.components.geometry import base
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
@@ -128,8 +128,6 @@ class Sphere(base.Centered, base.Circular):
         description="Radius of geometry.",
         json_schema_extra={"units": MICROMETER},
     )
-
-    _icosphere_cache: dict[int, tuple[np.ndarray, float]] = PrivateAttr(default_factory=dict)
 
     @verify_packages_import(["trimesh"])
     def to_triangle_mesh(
@@ -616,11 +614,8 @@ class Sphere(base.Centered, base.Circular):
 
         return basis1, basis2
 
+    @keyed_cache()
     def _icosphere_data(self, subdivisions: int) -> tuple[np.ndarray, float]:
-        cache = self._icosphere_cache
-        if subdivisions in cache:
-            return cache[subdivisions]
-
         vertices = np.asarray(_ICOSAHEDRON_VERTS, dtype=float)
         faces = np.asarray(_ICOSAHEDRON_FACES, dtype=int)
         if subdivisions > 0:
@@ -635,7 +630,6 @@ class Sphere(base.Centered, base.Circular):
 
         triangles = vertices[faces]
         max_edge = self._max_edge_length(triangles)
-        cache[subdivisions] = (triangles, max_edge)
         return triangles, max_edge
 
     @staticmethod

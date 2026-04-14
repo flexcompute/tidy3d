@@ -6,11 +6,11 @@ from typing import Any, Literal, Optional
 
 import numpy as np
 import pytest
-from pydantic import Field, ValidationError
+from pydantic import Field, PrivateAttr, ValidationError
 from pydantic_core import PydanticSerializationError
 
 import tidy3d as td
-from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel, keyed_cache
 from tidy3d.components.types import Undefined
 
 M = td.Medium()
@@ -126,6 +126,39 @@ def test_cached_property_unvalidated_copy():
     _ = b.bounds
     c = b.updated_copy(size=(2, 2, 2), validate=False)
     assert c.bounds[0][0] == -1
+
+
+def test_keyed_cache():
+    class KeyedCacheModel(Tidy3dBaseModel):
+        offset: int = 0
+        _default_calls: int = PrivateAttr(default=0)
+        _custom_calls: int = PrivateAttr(default=0)
+
+        @keyed_cache()
+        def add(self, x: int, y: int = 1) -> int:
+            self._default_calls += 1
+            return self.offset + x + y
+
+        @keyed_cache(lambda self, values: tuple(values))
+        def sum_values(self, values: Any) -> int:
+            self._custom_calls += 1
+            return self.offset + sum(values)
+
+    model = KeyedCacheModel(offset=10)
+
+    assert model.add(2) == 13
+    assert model.add(x=2) == 13
+    assert model._default_calls == 1
+
+    assert model.add(2, y=3) == 15
+    assert model._default_calls == 2
+
+    assert model.sum_values(np.array([1, 2, 3])) == 16
+    assert model.sum_values([1, 2, 3]) == 16
+    assert model._custom_calls == 1
+
+    assert len(model._cached_properties["add"]) == 2
+    assert len(model._cached_properties["sum_values"]) == 1
 
 
 def test_updated_copy_path():

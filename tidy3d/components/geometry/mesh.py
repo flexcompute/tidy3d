@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from autograd import numpy as anp
-from numpy.typing import NDArray
-from pydantic import Field, PrivateAttr, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd import get_static
 from tidy3d.components.base import cached_property
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Callable, Literal, Union
 
+    from numpy.typing import NDArray
     from trimesh import Trimesh
 
     from tidy3d.components.autograd import AutogradFieldMap
@@ -54,7 +54,6 @@ class TriangleMesh(base.Geometry, ABC):
     )
 
     _no_nans_mesh = validate_no_nans("mesh_dataset")
-    _barycentric_samples: dict[int, NDArray] = PrivateAttr(default_factory=dict)
 
     @verify_packages_import(["trimesh"])
     @model_validator(mode="before")
@@ -1210,10 +1209,12 @@ class TriangleMesh(base.Geometry, ABC):
     def _get_barycentric_samples(self, subdivisions: int, dtype: np.dtype) -> np.ndarray:
         """Return barycentric sample coordinates for a subdivision level."""
 
-        cache = self._barycentric_samples
-        if subdivisions not in cache:
-            cache[subdivisions] = self._build_barycentric_samples(subdivisions)
-        return cache[subdivisions].astype(dtype, copy=False)
+        barycentric = self._get_cached_value_by_key(
+            "_get_barycentric_samples",
+            subdivisions,
+            lambda: self._build_barycentric_samples(subdivisions),
+        )
+        return barycentric.astype(dtype, copy=False)
 
     @staticmethod
     def _build_barycentric_samples(subdivisions: int) -> np.ndarray:

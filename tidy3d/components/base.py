@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import io
 import json
 import math
@@ -101,6 +102,48 @@ def cached_property(cached_property_getter: Callable[[Any], _CacheReturn]) -> pr
     """Shortcut for property(cache()) of a getter."""
 
     return property(cache(cached_property_getter))
+
+
+def _default_keyed_cache_key(
+    signature: inspect.Signature, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> Any:
+    """Build a canonical cache key from bound method arguments."""
+
+    bound = signature.bind(None, *args, **kwargs)
+    bound.apply_defaults()
+    bound.arguments.pop("self", None)
+    return tuple(bound.arguments.items())
+
+
+def keyed_cache(
+    key_func: Optional[Callable[..., Any]] = None,
+) -> Callable[[Callable[..., _CacheReturn]], Callable[..., _CacheReturn]]:
+    """Decorate a method so it caches multiple values keyed by call arguments.
+
+    Cached entries are stored in ``self._cached_properties[method_name]``. By default,
+    the key is derived from the method signature, so equivalent calls such as
+    ``fn(1)`` and ``fn(x=1)`` share a cache entry. Pass ``key_func`` to provide a
+    custom key builder for unhashable or normalized arguments.
+    """
+
+    def _decorator(method: Callable[..., _CacheReturn]) -> Callable[..., _CacheReturn]:
+        signature = inspect.signature(method)
+        cache_name = method.__name__
+
+        @wraps(method)
+        def _cached(self: Any, *args: Any, **kwargs: Any) -> _CacheReturn:
+            key = (
+                key_func(self, *args, **kwargs)
+                if key_func is not None
+                else _default_keyed_cache_key(signature, args, kwargs)
+            )
+            return self._get_cached_value_by_key(
+                cache_name, key, lambda: method(self, *args, **kwargs)
+            )
+
+        return _cached
+
+    return _decorator
 
 
 _GuardedReturn = TypeVar("_GuardedReturn")
@@ -216,6 +259,33 @@ class Tidy3dBaseModel(BaseModel):
 
     _cached_properties: dict = PrivateAttr(default_factory=dict)
     _has_tracers: Optional[bool] = PrivateAttr(default=None)
+
+    def _get_keyed_cache_store(self, cache_name: str) -> dict[Any, Any]:
+        """Return a keyed cache dict stored under ``cache_name``."""
+
+        cache_store = self._cached_properties.get(cache_name)
+        if cache_store is None:
+            cache_store = {}
+            self._cached_properties[cache_name] = cache_store
+        elif not isinstance(cache_store, dict):
+            raise TypeError(
+                f"Cached entry {cache_name!r} is not a keyed cache store: "
+                f"{type(cache_store).__name__}."
+            )
+        return cache_store
+
+    def _get_cached_value_by_key(
+        self,
+        cache_name: str,
+        key: Any,
+        builder: Callable[[], _CacheReturn],
+    ) -> _CacheReturn:
+        """Return a keyed cached value, computing and storing it on a cache miss."""
+
+        cache_store = self._get_keyed_cache_store(cache_name)
+        if key not in cache_store:
+            cache_store[key] = builder()
+        return cache_store[key]
 
     @field_validator("name", check_fields=False)
     @classmethod

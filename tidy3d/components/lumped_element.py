@@ -17,7 +17,6 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
-    PrivateAttr,
     field_validator,
     model_validator,
 )
@@ -29,7 +28,7 @@ from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, SpiceUnit
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
-from .base import cached_property
+from .base import cached_property, keyed_cache
 from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from .geometry.primitives import Cylinder
 from .geometry.utils import (
@@ -1144,8 +1143,6 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
         description="Whether to show the fitter progress bar when fitting.",
     )
 
-    _fitted_medium_cache: dict = PrivateAttr(default_factory=dict)
-
     # Design note: current implementation is nodal analysis with R/L/C only. A future
     # augmented-MNA backend could support DC-safe inductor branches and ideal/controlled
     # sources by adding auxiliary branch-current equations; see class docstring Notes.
@@ -1211,15 +1208,13 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
             return np.asarray(freqs, dtype=float)
         return self._get_fit_frequencies(frequency_range=None)
 
+    @keyed_cache(lambda self, freqs: tuple(float(x) for x in np.asarray(freqs).ravel()))
     def _get_fitted_medium_for_freqs(self, freqs: np.ndarray) -> PoleResidue:
         """Fit circuit admittance at the given frequencies and return unscaled PoleResidue; cache by freqs."""
-        key = tuple(float(x) for x in np.asarray(freqs).ravel())
-        if key not in self._fitted_medium_cache:
-            frequencies = np.asarray(freqs, dtype=float)
-            Y_complex = self._get_effective_admittance(frequencies)
-            medium, _ = self._fit_admittance_to_pole_residue(frequencies, Y_complex)
-            self._fitted_medium_cache[key] = medium
-        return self._fitted_medium_cache[key]
+        frequencies = np.asarray(freqs, dtype=float)
+        Y_complex = self._get_effective_admittance(frequencies)
+        medium, _ = self._fit_admittance_to_pole_residue(frequencies, Y_complex)
+        return medium
 
     def _to_medium(
         self,

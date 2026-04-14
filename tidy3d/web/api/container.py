@@ -709,7 +709,6 @@ class BatchData(Tidy3dBaseModel, Mapping):
         description="Whether the simulation data was downloaded before.",
     )
 
-    _data_cache: dict[TaskName, WorkflowDataType] = PrivateAttr(default_factory=dict)
     _cache_enabled: Optional[bool] = PrivateAttr(default=None)
 
     def _should_cache_data(self) -> bool:
@@ -754,25 +753,29 @@ class BatchData(Tidy3dBaseModel, Mapping):
         memory for subsequent accesses.
         """
         cache_enabled = self._should_cache_data()
-        if cache_enabled and task_name in self._data_cache:
-            return self._data_cache[task_name]
 
-        task_data_path = Path(self.task_paths[task_name])
-        task_id = self.task_ids[task_name]
-        from_cache = self.cached_tasks[task_name] if self.cached_tasks else False
+        def _load() -> WorkflowDataType:
+            task_data_path = Path(self.task_paths[task_name])
+            task_id = self.task_ids[task_name]
+            from_cache = self.cached_tasks[task_name] if self.cached_tasks else False
 
-        data = web.load(
-            task_id=None if from_cache else task_id,
-            path=task_data_path,
-            verbose=False,
-            replace_existing=not (from_cache or self.is_downloaded),
-            lazy=self.lazy,
-        )
+            return web.load(
+                task_id=None if from_cache else task_id,
+                path=task_data_path,
+                verbose=False,
+                replace_existing=not (from_cache or self.is_downloaded),
+                lazy=self.lazy,
+            )
+
+        if cache_enabled:
+            return self._get_cached_value_by_key("load_sim_data", task_name, _load)
+
+        data = _load()
 
         if not cache_enabled and self._cache_enabled is None:
             cache_enabled = self._should_cache_data()
         if cache_enabled:
-            self._data_cache[task_name] = data
+            return self._get_cached_value_by_key("load_sim_data", task_name, lambda: data)
         return data
 
     def __getitem__(self, task_name: TaskName) -> WorkflowDataType:
