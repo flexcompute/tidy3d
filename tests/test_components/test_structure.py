@@ -288,3 +288,88 @@ def test_to_gdstk_pixel_exact(tmp_path):
     cell = cells[0]
     assert np.allclose(cell.bounding_box(), ((-0.2, -0.2), (0.2, 0.2)), atol=0.01)
     assert gdstk.inside([(0.1, 0.9), (0.5, 2.5), (0, 0)], cell.polygons) == (False, False, True)
+
+
+def test_to_gdstk_pixel_exact_supports_3d_custom_medium():
+    box = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    nx, ny, nz = 41, 39, 5
+    x = np.linspace(-1, 1, nx)
+    y = np.linspace(-1, 1, ny)
+    z = np.linspace(-0.6, 0.6, nz)
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+    eps_xyz = np.ones((nx, ny, nz), dtype=float)
+    for iz, z_val in enumerate(z):
+        radius = 0.15 + 0.25 * max(0.0, 1.0 - abs(z_val) / float(np.max(np.abs(z))))
+        eps_xyz[:, :, iz] = np.where(xx**2 + yy**2 <= radius**2, 2.0, 1.0)
+
+    f = np.array([td.C_0])
+    eps_diagonal_data = td.ScalarFieldDataArray(
+        eps_xyz[..., None], coords={"x": x, "y": y, "z": z, "f": f}
+    )
+    eps_dataset = td.PermittivityDataset(
+        eps_xx=eps_diagonal_data,
+        eps_yy=eps_diagonal_data,
+        eps_zz=eps_diagonal_data,
+    )
+    structure = td.Structure(geometry=box, medium=td.CustomMedium(eps_dataset=eps_dataset))
+
+    polygons = structure.to_gdstk(
+        z=0.0,
+        frequency=td.C_0,
+        permittivity_threshold=1.5,
+        pixel_exact=True,
+    )
+
+    assert polygons
+    assert sum(poly.area() for poly in polygons) > 0.0
+
+
+def test_to_gdstk_pixel_exact_respects_geometry_extent_override():
+    box = td.Box(center=(0, 0, 0), size=(4, 4, 2))
+    x = np.array([-0.5, 0.5], dtype=float)
+    y = np.array([-0.5, 0.5], dtype=float)
+    z = np.array([0.0], dtype=float)
+    arr = np.full((len(x), len(y), len(z)), 2.0, dtype=float)
+    permittivity = td.SpatialDataArray(arr, coords={"x": x, "y": y, "z": z})
+
+    structure = td.Structure(geometry=box, medium=td.CustomMedium(permittivity=permittivity))
+    polygons = structure.to_gdstk(
+        z=0.0, frequency=3e14, permittivity_threshold=1.5, pixel_exact=True
+    )
+
+    assert polygons
+    bboxes = np.asarray([poly.bounding_box() for poly in polygons], dtype=float)
+    bbox = (tuple(np.min(bboxes[:, 0, :], axis=0)), tuple(np.max(bboxes[:, 1, :], axis=0)))
+    assert np.allclose(bbox, ((-2.0, -2.0), (2.0, 2.0)))
+    assert np.isclose(sum(poly.area() for poly in polygons), 16.0)
+
+
+def test_to_gdstk_supports_mixed_component_interp_methods():
+    box = td.Box(center=(0, 0, 0), size=(2, 2, 0))
+    x = np.linspace(-1.0, 1.0, 9)
+    y = np.linspace(-1.0, 1.0, 9)
+    z = np.array([0.0], dtype=float)
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+    eps = np.where(xx**2 + yy**2 <= 0.45**2, 2.0, 1.0).astype(float)[..., None]
+    coords = {"x": x, "y": y, "z": z}
+    medium = td.CustomAnisotropicMedium(
+        xx=td.CustomMedium(
+            permittivity=td.SpatialDataArray(eps, coords=coords), interp_method="nearest"
+        ),
+        yy=td.CustomMedium(
+            permittivity=td.SpatialDataArray(eps, coords=coords), interp_method="linear"
+        ),
+        zz=td.CustomMedium(
+            permittivity=td.SpatialDataArray(eps, coords=coords), interp_method="nearest"
+        ),
+    )
+    structure = td.Structure(geometry=box, medium=medium)
+
+    polygons = structure.to_gdstk(
+        z=0.0,
+        frequency=td.C_0,
+        permittivity_threshold=1.5,
+        pixel_exact=False,
+    )
+
+    assert polygons

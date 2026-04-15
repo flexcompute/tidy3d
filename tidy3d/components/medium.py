@@ -70,6 +70,7 @@ from .dispersion_fitter import (
     imag_resp_extrema_locs,
 )
 from .geometry.base import Geometry
+from .geometry.contour_conversion import gdstk_contours_from_custom_medium
 from .grid.grid import Coords, Grid
 from .material.tcad.heat import ThermalSpecType
 from .nonlinear import (  # noqa: F401
@@ -109,6 +110,7 @@ if TYPE_CHECKING:
         Ax,
         Axis,
         Bound,
+        Bound2D,
         Complex,
         PermittivityComponent,
     )
@@ -1001,6 +1003,14 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             at the supplied coordinate.
         """
         eps_spatial = self.eps_dataarray_freq(frequency)
+        return self._interp_eps_diagonal_on_grid(eps_spatial=eps_spatial, coords=coords)
+
+    def _interp_eps_diagonal_on_grid(
+        self,
+        eps_spatial: tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType],
+        coords: Coords,
+    ) -> tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+        """Interpolate already-evaluated permittivity data onto supplied coordinates."""
 
         def _interp_and_squeeze(eps_comp: Any, comp: int) -> NDArray[Any]:
             """Interpolate spatially and drop any leftover frequency dimension."""
@@ -1158,6 +1168,32 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         if isinstance(field, UnstructuredGridDataset):
             return any(len(subfield) == 0 for subfield in [field.points, field.cells, field.values])
         return False
+
+    def _gdstk_contours(
+        self,
+        *,
+        axis: int,
+        plane_position: float,
+        bounds_xyz: tuple[tuple[float, float, float], tuple[float, float, float]],
+        permittivity_threshold: float,
+        frequency: float,
+        pixel_exact: bool,
+        eps_components: Optional[
+            tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]
+        ] = None,
+    ) -> tuple[list[Any], Bound2D, float]:
+        """Create GDS contour polygons from this medium on one planar slice."""
+        contours, frame_bounds, in_plane_step, *_ = gdstk_contours_from_custom_medium(
+            self,
+            axis=axis,
+            plane_position=plane_position,
+            bounds_xyz=bounds_xyz,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            pixel_exact=pixel_exact,
+            eps_components=eps_components,
+        )
+        return contours, frame_bounds, in_plane_step
 
     def _derivative_field_cmp_custom(
         self,

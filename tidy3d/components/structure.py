@@ -21,19 +21,31 @@ from .autograd.utils import contains, get_static
 from .base import Tidy3dBaseModel
 from .data.data_array import ScalarFieldDataArray
 from .geometry.base import Box, Geometry
+from .geometry.contour_conversion import (
+    _custom_medium_to_polyslab_data_and_permittivity_bounds,
+    _dataarray_to_polyslab_data_and_permittivity_bounds,
+    ordered_ring_refs_by_area,
+    smooth_polyslabs,
+)
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
-from .grid.grid import Coords
 from .material.multi_physics import MultiPhysicsMedium
 from .material.types import StructureMediumType
-from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
+from .medium import (
+    AbstractCustomMedium,
+    AbstractMedium,
+    CustomMedium,
+    LossyMetalMedium,
+    Medium,
+    Medium2D,
+)
 from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
     from os import PathLike
-    from typing import Callable
 
     import gdstk
     from pydantic import NonNegativeFloat, NonNegativeInt
@@ -43,6 +55,10 @@ if TYPE_CHECKING:
 
     from .autograd.derivative_utils import DerivativeInfo
     from .autograd.types import AutogradFieldMap
+    from .data.data_array import SpatialDataArray
+    from .geometry.contour_conversion import ContourPolyslabData
+    from .geometry.polyslab import PolySlab
+    from .grid.grid import Coords
     from .types import Ax, Axis, PriorityMode
 
 try:
@@ -50,6 +66,114 @@ try:
     import gdstk
 except ImportError:
     gdstk_available = False
+
+
+def validate_structure_medium(medium: Any, *, name: str) -> Any:
+    """Validate that a structure medium is non-custom and defines optical properties."""
+    optical_medium = medium
+    if isinstance(medium, MultiPhysicsMedium):
+        optical_medium = medium.optical
+        if optical_medium is None:
+            raise ValueError(f"'{name}' must define optical properties.")
+    elif not isinstance(medium, AbstractMedium):
+        raise ValueError(
+            f"'{name}' must be an optical medium or a multiphysics medium with optical properties."
+        )
+
+    if optical_medium.is_custom:
+        raise ValueError(f"'{name}' must be non-custom.")
+    return medium
+
+
+def infer_structure_medium(
+    *,
+    default_permittivity: float | None,
+    permittivity_name: str,
+    medium_name: str,
+    missing_message: str,
+) -> StructureMediumType:
+    """Infer a scalar ``Medium`` from a default permittivity value."""
+    if default_permittivity is None:
+        raise ValueError(missing_message)
+
+    permittivity_use = float(default_permittivity)
+    if not np.isfinite(permittivity_use):
+        raise ValueError(f"'{permittivity_name}' must be finite.")
+
+    try:
+        return Medium(permittivity=permittivity_use)
+    except Exception as exc:
+        raise ValueError(
+            f"Could not infer '{medium_name}' from '{permittivity_name}'. "
+            f"Provide '{medium_name}' explicitly. Original error: {exc}"
+        ) from exc
+
+
+def resolve_foreground_background_media(
+    *,
+    default_foreground_permittivity: float | None,
+    default_background_permittivity: float | None,
+    foreground_medium: StructureMediumType | None = None,
+    background_medium: StructureMediumType | None = None,
+    missing_message: str,
+) -> tuple[StructureMediumType, StructureMediumType]:
+    """Resolve foreground/background structure media from explicit media or inferred defaults."""
+    foreground_use = (
+        validate_structure_medium(foreground_medium, name="foreground_medium")
+        if foreground_medium is not None
+        else infer_structure_medium(
+            default_permittivity=default_foreground_permittivity,
+            permittivity_name="default_foreground_permittivity",
+            medium_name="foreground_medium",
+            missing_message=missing_message,
+        )
+    )
+    background_use = (
+        validate_structure_medium(background_medium, name="background_medium")
+        if background_medium is not None
+        else infer_structure_medium(
+            default_permittivity=default_background_permittivity,
+            permittivity_name="default_background_permittivity",
+            medium_name="background_medium",
+            missing_message=missing_message,
+        )
+    )
+    return foreground_use, background_use
+
+
+def polyslabs_to_structures(
+    *,
+    solid_polyslabs: Sequence[PolySlab],
+    hole_polyslabs: Sequence[PolySlab],
+    foreground_medium: StructureMediumType,
+    background_medium: StructureMediumType,
+    ring_refs: Sequence[tuple[str, int]] | None = None,
+    name_prefix: str = "design_polyslab",
+) -> tuple[Structure, ...]:
+    """Convert solid/hole polyslabs to structures with area-ordered emission."""
+    foreground_use = validate_structure_medium(foreground_medium, name="foreground_medium")
+    background_use = validate_structure_medium(background_medium, name="background_medium")
+
+    ordered_refs = (
+        tuple(ring_refs)
+        if ring_refs is not None
+        else ordered_ring_refs_by_area(solid_polyslabs, hole_polyslabs)
+    )
+    ring_type_counts = {"solid": 0, "hole": 0}
+    structures: list[Structure] = []
+    for ring_type, ring_idx in ordered_refs:
+        polyslab = solid_polyslabs[ring_idx] if ring_type == "solid" else hole_polyslabs[ring_idx]
+        medium = foreground_use if ring_type == "solid" else background_use
+        emitted_number = ring_type_counts[ring_type]
+        ring_type_counts[ring_type] += 1
+        structures.append(
+            Structure(
+                geometry=polyslab,
+                medium=medium,
+                name=f"{name_prefix}_{ring_type}_{emitted_number}",
+            )
+        )
+    return tuple(structures)
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -564,73 +688,15 @@ class Structure(AbstractStructure):
         if isinstance(self.medium, AbstractCustomMedium):
             axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
             bb_min, bb_max = self.geometry.bounds
-
-            eps, _, _ = self.medium.eps_dataarray_freq(frequency=frequency)
-            if pixel_exact:
-                coords = Coords(
-                    x=eps.x if x is None else x,
-                    y=eps.y if y is None else y,
-                    z=eps.z if z is None else z,
-                )
-            else:
-                # Set the contour scale to be the minimal cooridante step size w.r.t. the 3 main axes,
-                # skipping those with a single coordniate. In case all axes have only a single coordinate,
-                # use the largest bounding box dimension.
-                scale = max(b - a for a, b in zip(bb_min, bb_max))
-                for coord in (eps.x, eps.y, eps.z):
-                    if len(coord) > 1:
-                        scale = min(scale, np.diff(coord).min())
-                coords = Coords(
-                    x=np.arange(bb_min[0], bb_max[0] + scale * 0.9, scale) if x is None else x,
-                    y=np.arange(bb_min[1], bb_max[1] + scale * 0.9, scale) if y is None else y,
-                    z=np.arange(bb_min[2], bb_max[2] + scale * 0.9, scale) if z is None else z,
-                )
-
-            eps = self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
-            eps = (
-                np.stack((eps[0].real, eps[1].real, eps[2].real), axis=3)
-                .max(axis=3)
-                .squeeze(axis=axis)
+            position = (x, y, z)[axis]
+            contours, _, _ = self.medium._gdstk_contours(
+                axis=axis,
+                plane_position=position,
+                bounds_xyz=(bb_min, bb_max),
+                permittivity_threshold=permittivity_threshold,
+                frequency=frequency,
+                pixel_exact=pixel_exact,
             )
-
-            if pixel_exact:
-                # Convert coordinates to numpy arrays for efficient processing
-                _, (w, h) = self.geometry.pop_axis((coords.x, coords.y, coords.z), axis)
-                w, h = np.asarray(w), np.asarray(h)
-                _, (wmin, hmin) = self.geometry.pop_axis(bb_min, axis)
-                _, (wmax, hmax) = self.geometry.pop_axis(bb_max, axis)
-
-                # Determine boundaries by taking the midpoint between adjacent coordinates
-                if w.size > 1:
-                    dw = np.diff(w) * 0.5
-                    wb = np.concatenate(([wmin], w[:-1] + dw, [wmax]))
-                else:
-                    wb = np.array([wmin, wmax])
-
-                if h.size > 1:
-                    dh = np.diff(h) * 0.5
-                    hb = np.concatenate(([hmin], h[:-1] + dh, [hmax]))
-                else:
-                    hb = np.array([hmin, hmax])
-
-                # Create boolean mask where permittivity exceeds threshold
-                mask = eps > permittivity_threshold
-                w_idxs, h_idxs = np.where(mask)
-
-                # Generate list of gdstk.Polygon (rectangles)
-                contours = [
-                    gdstk.rectangle((wb[wi], hb[hi]), (wb[wi + 1], hb[hi + 1]))
-                    for wi, hi in zip(w_idxs, h_idxs)
-                ]
-
-            else:
-                contours = gdstk.contour(
-                    eps.T, permittivity_threshold, scale, precision=scale * 1e-3
-                )
-
-                _, (dx, dy) = self.geometry.pop_axis(bb_min, axis)
-                for polygon in contours:
-                    polygon.translate(dx, dy)
 
             polygons = gdstk.boolean(polygons, contours, "and", layer=gds_layer, datatype=gds_dtype)
 
@@ -758,6 +824,127 @@ class Structure(AbstractStructure):
         fname = pathlib.Path(fname)
         fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
+
+    @classmethod
+    def list_from_custom_medium(
+        cls,
+        *,
+        medium: AbstractCustomMedium,
+        slab_bounds: tuple[float, float] | None = None,
+        axis: int | None = None,
+        frequency: float | None = None,
+        threshold: float | None = None,
+        foreground_medium: StructureMediumType | None = None,
+        background_medium: StructureMediumType | None = None,
+        pixel_exact: bool = False,
+        boundary_step: float | None = None,
+        smooth_sigma: float = 0.0,
+        min_hole_area: float = 0.0,
+        min_island_area: float = 0.0,
+        name_prefix: str = "design_polyslab",
+    ) -> tuple[Structure, ...]:
+        """Create structures from a thresholded 2D slice of a custom medium."""
+        contour_data, permittivity_min, permittivity_max = (
+            _custom_medium_to_polyslab_data_and_permittivity_bounds(
+                medium,
+                slab_bounds=slab_bounds,
+                axis=axis,
+                frequency=frequency,
+                threshold=threshold,
+                pixel_exact=pixel_exact,
+                boundary_step=boundary_step,
+                min_hole_area=min_hole_area,
+                min_island_area=min_island_area,
+            )
+        )
+        return cls._list_from_contour_data(
+            contour_data=contour_data,
+            default_foreground_permittivity=permittivity_max,
+            default_background_permittivity=permittivity_min,
+            foreground_medium=foreground_medium,
+            background_medium=background_medium,
+            smooth_sigma=smooth_sigma,
+            name_prefix=name_prefix,
+            missing_message=(
+                "Could not infer default foreground/background media from the medium slice. "
+                "Provide 'foreground_medium' and 'background_medium' explicitly."
+            ),
+        )
+
+    @classmethod
+    def list_from_dataarray(
+        cls,
+        *,
+        data: SpatialDataArray,
+        slab_bounds: tuple[float, float] | None = None,
+        axis: int | None = None,
+        threshold: float | None = None,
+        foreground_medium: StructureMediumType | None = None,
+        background_medium: StructureMediumType | None = None,
+        pixel_exact: bool = False,
+        boundary_step: float | None = None,
+        smooth_sigma: float = 0.0,
+        min_hole_area: float = 0.0,
+        min_island_area: float = 0.0,
+        name_prefix: str = "design_polyslab",
+    ) -> tuple[Structure, ...]:
+        """Create structures from a permittivity data array."""
+        contour_data, permittivity_min, permittivity_max = (
+            _dataarray_to_polyslab_data_and_permittivity_bounds(
+                data,
+                slab_bounds=slab_bounds,
+                axis=axis,
+                threshold=threshold,
+                pixel_exact=pixel_exact,
+                boundary_step=boundary_step,
+                min_hole_area=min_hole_area,
+                min_island_area=min_island_area,
+            )
+        )
+        return cls._list_from_contour_data(
+            contour_data=contour_data,
+            default_foreground_permittivity=permittivity_max,
+            default_background_permittivity=permittivity_min,
+            foreground_medium=foreground_medium,
+            background_medium=background_medium,
+            smooth_sigma=smooth_sigma,
+            name_prefix=name_prefix,
+            missing_message=(
+                "Could not infer default foreground/background media from the permittivity "
+                "data slice. Provide 'foreground_medium' and 'background_medium' explicitly."
+            ),
+        )
+
+    @classmethod
+    def _list_from_contour_data(
+        cls,
+        *,
+        contour_data: ContourPolyslabData,
+        default_foreground_permittivity: float | None,
+        default_background_permittivity: float | None,
+        foreground_medium: StructureMediumType | None,
+        background_medium: StructureMediumType | None,
+        smooth_sigma: float,
+        name_prefix: str,
+        missing_message: str,
+    ) -> tuple[Structure, ...]:
+        """Convert shared contour polyslab data into structures."""
+        foreground_use, background_use = resolve_foreground_background_media(
+            default_foreground_permittivity=default_foreground_permittivity,
+            default_background_permittivity=default_background_permittivity,
+            foreground_medium=foreground_medium,
+            background_medium=background_medium,
+            missing_message=missing_message,
+        )
+
+        sigma_val = float(smooth_sigma)
+        return polyslabs_to_structures(
+            solid_polyslabs=smooth_polyslabs(contour_data.solid_polyslabs, sigma_val),
+            hole_polyslabs=smooth_polyslabs(contour_data.hole_polyslabs, sigma_val),
+            foreground_medium=foreground_use,
+            background_medium=background_use,
+            name_prefix=name_prefix,
+        )
 
     @classmethod
     def from_permittivity_array(
