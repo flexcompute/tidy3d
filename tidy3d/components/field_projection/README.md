@@ -17,7 +17,10 @@ The intended public interface of this package is `FieldProjector`.
 
 Typical lifecycle:
 
-1. Build a projector with `FieldProjector.from_near_field_monitors(...)` or instantiate `FieldProjector(...)` directly.
+1. Build a projector with `FieldProjector.from_near_field_monitors(...)` when the source fields
+   come from simulation monitor data.
+   Alternatively, use `FieldProjector.from_near_field_data(...)` to project custom or modified
+   `FieldData` independently, using only the inputs needed for the projection.
 2. Reuse the projector for one or more calls to `project_fields(...)`.
 3. Receive one of the projection monitor data models:
    - `FieldProjectionAngleData`
@@ -36,12 +39,13 @@ It owns:
 
 - the `FieldProjector` model
 - default projector configuration such as `pts_per_wavelength` and `origin`
-- source-surface current extraction from simulation monitor data
+- source-surface current extraction from simulation monitor data or raw `FieldData`
 - current resampling / colocation
 - apodization window application
 - dispatch from `project_fields(...)` to the monitor-specific implementations
 
-This is the only module that needs to know about the full `SimulationData` object and how near-field monitor data is converted into equivalent surface currents.
+This is the module that knows how near-field monitor data is converted into equivalent surface
+currents, whether the source comes from a full `SimulationData` object or from raw `FieldData`.
 
 ### `common.py`
 
@@ -156,7 +160,7 @@ The main configuration points are on `FieldProjector` and `project_fields(...)`.
 `FieldProjector` stores:
 
 - `sim_data`
-  - the simulation data source
+  - the simulation-backed data source when projection starts from monitor results
 - `surfaces`
   - the source surfaces used for projection
 - `pts_per_wavelength`
@@ -165,6 +169,10 @@ The main configuration points are on `FieldProjector` and `project_fields(...)`.
 - `origin`
   - local coordinate origin for observation points
   - if omitted, the average of all source-surface centers is used
+
+When using `FieldProjector.from_near_field_data(...)`, the projector is configured from the
+provided `FieldData`, homogeneous `medium`, source normal direction, and projection-point
+arguments, without requiring a full simulation object.
 
 ### Per-call options
 
@@ -190,8 +198,8 @@ The monitor itself also controls important behavior:
 
 At a high level, a local projection call works as follows.
 
-1. `FieldProjector` validates and stores source-monitor information.
-2. Source monitor fields are converted into equivalent electric and magnetic surface currents.
+1. `FieldProjector` validates and stores source-surface information.
+2. Source fields are converted into equivalent electric and magnetic surface currents.
 3. Currents are colocated onto the projection surface grid and optionally resampled.
 4. Coordinates are shifted into the projector-local origin.
 5. `project_fields(...)` dispatches by monitor type.
@@ -201,7 +209,7 @@ At a high level, a local projection call works as follows.
 
 The module split is designed so that:
 
-- `projector.py` owns simulation-facing preparation
+- `projector.py` owns source-facing preparation
 - the monitor-specific modules own output-shape logic
 - `common.py` owns shared approximate helpers and wrappers
 - `exact.py` owns exact kernel math
@@ -228,4 +236,3 @@ When adding or changing functionality:
 - prefer adding private helper structures only when they clarify repeated state or repeated contracts
 
 As a rule, split by algorithmic responsibility rather than by monitor label alone.
-

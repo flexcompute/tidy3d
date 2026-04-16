@@ -140,7 +140,7 @@ class _ApproximatePairedProjectionMixin:
                         currents=currents,
                         medium=medium,
                         is_2d_simulation=self.is_2d_simulation,
-                        simulation_size=self.sim_data.simulation.size,
+                        simulation_size=self.effective_simulation_size,
                     )
                     for frequency in freqs
                 ],

@@ -52,7 +52,7 @@ class _ApproximateAngleProjectionMixin:
             currents=currents,
             medium=medium,
             is_2d_simulation=self.is_2d_simulation,
-            simulation_size=self.sim_data.simulation.size,
+            simulation_size=self.effective_simulation_size,
         )
         return self._far_fields_from_prepared(
             theta=theta, phi=phi, prepared=prepared, surface_axis=surface.axis

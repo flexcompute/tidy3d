@@ -285,9 +285,8 @@ def test_proj_data(tmp_path):
     )
 
 
-def make_clientside_projector(center, size, freqs, num_points=10, seed: int | None = None):
-    """Helper to build a client-side field projector from the shared synthetic setup."""
-
+def make_clientside_projection_inputs(center, size, freqs, num_points=10, seed: int | None = None):
+    """Build the synthetic near-field setup used by client-side projection tests."""
     freqs = np.atleast_1d(freqs)
     monitor = td.FieldMonitor(size=size, center=center, freqs=list(freqs), name="near_field")
 
@@ -323,6 +322,13 @@ def make_clientside_projector(center, size, freqs, num_points=10, seed: int | No
         grid_expanded=sim.discretize_monitor(monitor),
     )
     sim_data = td.SimulationData(simulation=sim, data=(data,))
+    return sim_data, monitor, data
+
+
+def make_clientside_projector(center, size, freqs, num_points=10, seed: int | None = None):
+    """Helper to build a client-side field projector from the shared synthetic setup."""
+
+    sim_data, monitor, _ = make_clientside_projection_inputs(center, size, freqs, num_points, seed)
     return td.FieldProjector.from_near_field_monitors(
         sim_data=sim_data,
         near_monitors=[monitor],
@@ -418,6 +424,363 @@ def test_proj_clientside():
         val.sel(f=f0)
     with pytest.raises(DataError):
         exact_fields_cartesian.renormalize_fields(proj_distance=5e6)
+
+
+def test_proj_clientside_from_near_field_data():
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+
+    sim_data, _, field_data = make_clientside_projection_inputs(center, size, f0, seed=0)
+    phase = np.exp(1j * np.pi / 7)
+    modified_data = field_data.copy(
+        update={
+            "Ex": 2.0 * field_data.Ex,
+            "Hy": phase * field_data.Hy,
+            "grid_primal_correction": 2.0,
+            "grid_dual_correction": 3.0,
+        }
+    )
+
+    projector_manual = td.FieldProjector.from_near_field_monitors(
+        sim_data=td.SimulationData(simulation=sim_data.simulation, data=(modified_data,)),
+        near_monitors=[modified_data.monitor],
+        normal_dirs=["+"],
+    )
+
+    projector_from_data, proj_monitor = td.FieldProjector.from_near_field_data(
+        near_field_data=modified_data,
+        medium=projector_manual.medium,
+        name="n2f_cart_direct",
+        x=[0.0],
+        y=[0.0],
+        proj_axis=0,
+        proj_distance=R_FAR,
+        normal_dir="+",
+    )
+
+    projected_from_data = projector_from_data.project_fields(proj_monitor)
+    projected_manual = projector_manual.project_fields(
+        make_single_point_cart_monitor(center, size, f0, "n2f_cart_manual")
+    )
+
+    for field_name, field_data_from_data in projected_from_data.field_components.items():
+        np.testing.assert_allclose(
+            field_data_from_data.values,
+            projected_manual.field_components[field_name].values,
+        )
+
+
+def test_proj_clientside_from_custom_near_field_data():
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+    coords = {
+        "x": np.linspace(-1, 1, 10),
+        "y": np.linspace(-1, 1, 10),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    scalar_field = td.ScalarFieldDataArray(np.ones((10, 10, 1, 1), dtype=complex), coords=coords)
+    near_field_data = td.FieldData(
+        monitor=td.FieldMonitor(size=size, center=center, freqs=[f0], name="raw_near_field"),
+        Ex=scalar_field,
+        Ey=scalar_field,
+        Ez=scalar_field,
+        Hx=scalar_field,
+        Hy=scalar_field,
+        Hz=scalar_field,
+    )
+
+    projector, proj_monitor = td.FieldProjector.from_near_field_data(
+        near_field_data=near_field_data,
+        medium=td.Medium(),
+        name="raw_proj",
+        x=[0.0],
+        y=[0.0],
+        proj_axis=0,
+        proj_distance=R_FAR,
+        normal_dir="+",
+    )
+
+    projected = projector.project_fields(proj_monitor)
+    for field in projected.field_components.values():
+        field.sel(f=f0)
+
+
+def test_proj_clientside_from_near_field_data_without_resampling_keeps_finite_fields():
+    f0 = 1e13
+    center = (1.0, 1.5, 0.0)
+    size = (2.0, 1.0, 0.0)
+    monitor = td.FieldMonitor(size=size, center=center, freqs=[f0], name="raw_near_field_staggered")
+
+    coords_xy0 = {
+        "x": np.array([0.0, 1.0, 2.0]),
+        "y": np.array([0.0, 2.0]),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    coords_xy1 = {
+        "x": np.array([0.0, 1.0, 2.0]),
+        "y": np.array([1.0, 3.0]),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    field_xy0 = td.ScalarFieldDataArray(np.ones((3, 2, 1, 1), dtype=complex), coords=coords_xy0)
+    field_xy1 = td.ScalarFieldDataArray(
+        2.0 * np.ones((3, 2, 1, 1), dtype=complex), coords=coords_xy1
+    )
+    near_field_data = td.FieldData(
+        monitor=monitor,
+        Ex=field_xy1,
+        Ey=field_xy0,
+        Ez=field_xy0,
+        Hx=field_xy0,
+        Hy=field_xy1,
+        Hz=field_xy0,
+    )
+
+    projector, proj_monitor = td.FieldProjector.from_near_field_data(
+        near_field_data=near_field_data,
+        medium=td.Medium(),
+        name="raw_proj_no_resample",
+        x=[0.0],
+        y=[0.0],
+        proj_axis=0,
+        proj_distance=R_FAR,
+        normal_dir="+",
+        pts_per_wavelength=None,
+    )
+
+    projected = projector.project_fields(proj_monitor)
+    for field_name, field in projected.field_components.items():
+        assert np.all(np.isfinite(np.asarray(field.data))), field_name
+
+
+def test_from_near_field_data_validates_monitor_span():
+    center = (0, 0, 0)
+    f0 = 1e13
+    monitor = td.FieldMonitor(size=(4, 4, 0), center=center, freqs=[f0], name="near_field")
+    coords = {
+        "x": np.linspace(-1, 1, 5),
+        "y": np.linspace(-1, 1, 5),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    scalar_field = td.ScalarFieldDataArray(np.ones((5, 5, 1, 1), dtype=complex), coords=coords)
+    near_field_data = td.FieldData(
+        monitor=monitor,
+        Ex=scalar_field,
+        Ey=scalar_field,
+        Ez=scalar_field,
+        Hx=scalar_field,
+        Hy=scalar_field,
+        Hz=scalar_field,
+    )
+
+    with pytest.raises(SetupError, match="does not cover the full monitor span"):
+        td.FieldProjector.from_near_field_data(
+            near_field_data=near_field_data,
+            medium=td.Medium(),
+            name="invalid_proj",
+            x=[0.0],
+            y=[0.0],
+            proj_axis=0,
+            proj_distance=R_FAR,
+            normal_dir="+",
+        )
+
+
+def test_from_near_field_data_validates_component_span_intersection():
+    center = (0, 0, 0)
+    f0 = 1e13
+    monitor = td.FieldMonitor(size=(4, 4, 0), center=center, freqs=[f0], name="near_field")
+    full_coords = {
+        "x": np.linspace(-2, 2, 5),
+        "y": np.linspace(-2, 2, 5),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    narrow_x_coords = {
+        "x": np.linspace(-1, 1, 3),
+        "y": np.linspace(-2, 2, 5),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    scalar_field_full = td.ScalarFieldDataArray(
+        np.ones((5, 5, 1, 1), dtype=complex), coords=full_coords
+    )
+    scalar_field_narrow_x = td.ScalarFieldDataArray(
+        np.ones((3, 5, 1, 1), dtype=complex), coords=narrow_x_coords
+    )
+    near_field_data = td.FieldData(
+        monitor=monitor,
+        Ex=scalar_field_full,
+        Ey=scalar_field_full,
+        Ez=scalar_field_full,
+        Hx=scalar_field_full,
+        Hy=scalar_field_narrow_x,
+        Hz=scalar_field_full,
+    )
+
+    with pytest.raises(SetupError, match="does not cover the full monitor span"):
+        td.FieldProjector.from_near_field_data(
+            near_field_data=near_field_data,
+            medium=td.Medium(),
+            name="invalid_proj_intersection",
+            x=[0.0],
+            y=[0.0],
+            proj_axis=0,
+            proj_distance=R_FAR,
+            normal_dir="+",
+        )
+
+
+def test_from_near_field_data_validates_single_source_plane():
+    center = (0, 0, 0)
+    f0 = 1e13
+    monitor = td.FieldMonitor(size=(4, 4, 0), center=center, freqs=[f0], name="near_field")
+    coords = {
+        "x": np.linspace(-2, 2, 5),
+        "y": np.linspace(-2, 2, 5),
+        "z": np.array([-0.1, 0.1]),
+        "f": [f0],
+    }
+    scalar_field = td.ScalarFieldDataArray(np.ones((5, 5, 2, 1), dtype=complex), coords=coords)
+    near_field_data = td.FieldData(
+        monitor=monitor,
+        Ex=scalar_field,
+        Ey=scalar_field,
+        Ez=scalar_field,
+        Hx=scalar_field,
+        Hy=scalar_field,
+        Hz=scalar_field,
+    )
+
+    with pytest.raises(SetupError, match="single monitor plane"):
+        td.FieldProjector.from_near_field_data(
+            near_field_data=near_field_data,
+            medium=td.Medium(),
+            name="invalid_proj_plane",
+            x=[0.0],
+            y=[0.0],
+            proj_axis=0,
+            proj_distance=R_FAR,
+            normal_dir="+",
+        )
+
+
+def test_field_projector_direct_construction_requires_sim_data():
+    _, monitor, _ = make_clientside_projection_inputs((0, 0, 0), (2, 2, 0), 1e13)
+    surface = td.FieldProjectionSurface(monitor=monitor, normal_dir="+")
+
+    with pytest.raises(ValidationError, match="Field required"):
+        td.FieldProjector(surfaces=(surface,))
+
+
+def test_from_near_field_data_uses_standard_field_validation():
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+    _, _, field_data = make_clientside_projection_inputs(center, size, f0, seed=1)
+
+    with pytest.raises(ValidationError, match="valid integer"):
+        td.FieldProjector.from_near_field_data(
+            near_field_data=field_data,
+            medium=td.Medium(),
+            name="n2f_cart_invalid_ppw",
+            x=[0.0],
+            y=[0.0],
+            proj_axis=0,
+            proj_distance=R_FAR,
+            normal_dir="+",
+            pts_per_wavelength="bad",
+        )
+
+
+def test_from_near_field_data_with_direct_medium_matches_2d_monitor_path():
+    plane = "xz"
+    projector_manual, center, monitor_size, f0 = make_2d_projector(plane)
+    field_data = projector_manual.sim_data.monitor_data["near_field"]
+    proj_monitor_manual = make_2d_proj_monitors(center, monitor_size, [f0], plane)[1]
+
+    projector_from_data, proj_monitor = td.FieldProjector.from_near_field_data(
+        near_field_data=field_data,
+        medium=projector_manual.medium,
+        name="n2f_cart_direct_2d_structures",
+        x=list(proj_monitor_manual.x),
+        y=list(proj_monitor_manual.y),
+        proj_axis=proj_monitor_manual.proj_axis,
+        proj_distance=proj_monitor_manual.proj_distance,
+        normal_dir="+",
+        dimensionality="auto",
+    )
+
+    projected_from_data = projector_from_data.project_fields(proj_monitor)
+    projected_manual = projector_manual.project_fields(proj_monitor_manual)
+
+    for field_name, field_data_from_data in projected_from_data.field_components.items():
+        np.testing.assert_allclose(
+            field_data_from_data.values,
+            projected_manual.field_components[field_name].values,
+        )
+
+
+def test_proj_clientside_from_near_field_data_auto_infers_2d():
+    plane = "xz"
+    projector_manual, center, monitor_size, f0 = make_2d_projector(plane)
+    field_data = projector_manual.sim_data.monitor_data["near_field"]
+    field_data = field_data.copy(
+        update={"grid_primal_correction": 2.0, "grid_dual_correction": 3.0}
+    )
+    projector_manual = td.FieldProjector.from_near_field_monitors(
+        sim_data=td.SimulationData(
+            simulation=projector_manual.sim_data.simulation, data=(field_data,)
+        ),
+        near_monitors=[field_data.monitor],
+        normal_dirs=["+"],
+    )
+    proj_monitor_manual = make_2d_proj_monitors(center, monitor_size, [f0], plane)[1]
+
+    projector_from_data, proj_monitor = td.FieldProjector.from_near_field_data(
+        near_field_data=field_data,
+        medium=projector_manual.medium,
+        name="n2f_cart_direct_2d",
+        x=list(proj_monitor_manual.x),
+        y=list(proj_monitor_manual.y),
+        proj_axis=proj_monitor_manual.proj_axis,
+        proj_distance=proj_monitor_manual.proj_distance,
+        normal_dir="+",
+        dimensionality="auto",
+    )
+
+    projected_from_data = projector_from_data.project_fields(proj_monitor)
+    projected_manual = projector_manual.project_fields(proj_monitor_manual)
+
+    for field_name, field_data_from_data in projected_from_data.field_components.items():
+        np.testing.assert_allclose(
+            field_data_from_data.values,
+            projected_manual.field_components[field_name].values,
+        )
+
+
+def test_from_near_field_data_rejects_line_like_source_as_3d():
+    plane = "xz"
+    projector_manual, _, _, _ = make_2d_projector(plane)
+    field_data = projector_manual.sim_data.monitor_data["near_field"]
+
+    with pytest.raises(SetupError, match='dimensionality="3D"'):
+        td.FieldProjector.from_near_field_data(
+            near_field_data=field_data,
+            medium=projector_manual.medium,
+            name="invalid_proj_dimensionality",
+            x=[0.0],
+            y=[0.0],
+            proj_axis=0,
+            proj_distance=R_FAR,
+            normal_dir="+",
+            dimensionality="3D",
+        )
 
 
 def test_proj_clientside_freq_chunk_size_matches_default():
@@ -527,24 +890,99 @@ def test_proj_clientside_freq_chunk_size_validation():
         projector.project_fields(proj_monitor, verbose=False, freq_chunk_size=0)
 
 
-def test_resample_surface_currents_raises_on_out_of_bounds_interp():
-    """Surface-current colocation should raise rather than silently produce NaN."""
+def test_resample_surface_currents_clips_to_data_bounds():
+    """Surface-current colocation should stay within the available field-data bounds."""
 
     center = (0, 0, 0)
     size = (4, 4, 0)
     projector = make_clientside_projector(center, size, F0, num_points=4)
     surface = projector.surfaces[0]
-    field_data = projector.sim_data.monitor_data[surface.monitor.name].symmetry_expanded
+    field_data = projector.sim_data.monitor_data[surface.monitor.name].symmetry_expanded.copy(
+        update={"grid_expanded": None}
+    )
     currents = FieldProjector._fields_to_currents(field_data, surface)
 
-    with pytest.raises(ValueError, match="below the interpolation range's minimum value"):
-        FieldProjector._resample_surface_currents(
-            currents,
-            projector.sim_data,
-            surface,
-            projector.medium,
-            projector.pts_per_wavelength,
+    resampled = FieldProjector._resample_surface_currents(
+        currents,
+        field_data,
+        surface,
+        projector.medium,
+        projector.pts_per_wavelength,
+    )
+
+    for field_name, current_component in resampled.data_vars.items():
+        assert np.all(np.isfinite(np.asarray(current_component.data))), field_name
+
+    for coord_name in ("x", "y"):
+        mins = [
+            np.min(np.asarray(current_component.coords[coord_name].values))
+            for current_component in currents.values()
+        ]
+        maxs = [
+            np.max(np.asarray(current_component.coords[coord_name].values))
+            for current_component in currents.values()
+        ]
+        coord_values = np.asarray(resampled.coords[coord_name].values)
+        assert coord_values[0] >= max(mins)
+        assert coord_values[-1] <= min(maxs)
+
+
+def test_compute_surface_currents_applies_grid_correction():
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+    coords = {
+        "x": np.linspace(-1, 1, 5),
+        "y": np.linspace(-1, 1, 5),
+        "z": np.array([0.0]),
+        "f": [f0],
+    }
+    scalar_field = td.ScalarFieldDataArray(np.ones((5, 5, 1, 1), dtype=complex), coords=coords)
+    near_field_data = td.FieldData(
+        monitor=td.FieldMonitor(size=size, center=center, freqs=[f0], name="grid_corrected_field"),
+        Ex=scalar_field,
+        Ey=2.0 * scalar_field,
+        Ez=scalar_field,
+        Hx=3.0 * scalar_field,
+        Hy=5.0 * scalar_field,
+        Hz=scalar_field,
+        grid_primal_correction=2.0,
+        grid_dual_correction=3.0,
+    )
+    surface = td.FieldProjectionSurface(monitor=near_field_data.monitor, normal_dir="+")
+
+    corrected_field_data = near_field_data.grid_corrected_copy
+    expected_currents = FieldProjector._resample_surface_currents(
+        FieldProjector._fields_to_currents(corrected_field_data, surface),
+        corrected_field_data,
+        surface,
+        td.Medium(),
+        None,
+    )
+    raw_currents = FieldProjector._resample_surface_currents(
+        FieldProjector._fields_to_currents(near_field_data, surface),
+        near_field_data,
+        surface,
+        td.Medium(),
+        None,
+    )
+    actual_currents = FieldProjector.compute_surface_currents(
+        near_field_data, surface, td.Medium(), None
+    )
+
+    for field_name in expected_currents.data_vars:
+        np.testing.assert_allclose(
+            np.asarray(actual_currents[field_name].data),
+            np.asarray(expected_currents[field_name].data),
         )
+
+    assert any(
+        not np.allclose(
+            np.asarray(actual_currents[field_name].data),
+            np.asarray(raw_currents[field_name].data),
+        )
+        for field_name in actual_currents.data_vars
+    )
 
 
 def test_proj_clientside_verbose_flag(monkeypatch):
