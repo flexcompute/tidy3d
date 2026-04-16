@@ -6,13 +6,18 @@ from typing import Optional
 
 import autograd as ag
 import autograd.numpy as np
+import matplotlib.pyplot as plt
 import numpy
 import pytest
 import xarray.testing as xrt
 from autograd.test_util import check_grads
 
 import tidy3d as td
+from tidy3d.components.autograd.utils import hasbox
+from tidy3d.components.data.utils import static_dataarray_for_plot
 from tidy3d.exceptions import DataError
+
+pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 np.random.seed(4)
 
@@ -346,6 +351,27 @@ def test_mode_amps_data_array():
     data = data.interp(f=1.5e14)
     data = data.isel(direction=0)
     _ = data.sel(mode_index=1)
+
+
+def test_traced_mode_amps_data_array_plot():
+    """Generic DataArray.plot() should work on traced non-spatial arrays too."""
+
+    captured = {}
+
+    def objective(x):
+        amps = make_mode_amps_data_array() * x[0]
+        transmission_percent = 100 * abs(amps.sel(direction="-", mode_index=0)) ** 2
+        captured["arr"] = transmission_percent
+        return np.sum(transmission_percent.data)
+
+    grad = ag.grad(objective)(np.array([1.0]))
+    assert np.isfinite(grad[0])
+    assert isinstance(captured["arr"], td.ModeAmpsDataArray)
+    assert hasbox(captured["arr"].data)
+
+    ax = captured["arr"].plot(x="f")
+    assert ax is not None
+    plt.close("all")
 
 
 def test_mode_index_data_array():
@@ -702,3 +728,58 @@ def test_spatial_data_array_plot_grid():
         data_2d.sel(z=0.0).plot(grid=True, field=False)
 
     plt.close("all")
+
+
+def test_traced_spatial_data_array_plot():
+    """Structured DataArray.plot() should work on autograd-traced arrays."""
+
+    captured = {}
+
+    def objective(x):
+        data_2d = td.SpatialDataArray(
+            np.ones((5, 4, 1)) * x[0],
+            coords={
+                "x": np.linspace(0.0, 1.0, 5),
+                "y": np.linspace(0.0, 2.0, 4),
+                "z": [0.0],
+            },
+        )
+        captured["arr"] = data_2d.sel(z=0.0)
+        return np.sum(data_2d.data)
+
+    grad = ag.grad(objective)(np.array([1.0]))
+    assert np.isfinite(grad[0])
+    assert isinstance(captured["arr"], td.SpatialDataArray)
+    assert hasbox(captured["arr"].data)
+
+    _, ax = plt.subplots()
+    captured["arr"].plot(ax=ax)
+    plt.close("all")
+
+
+def test_static_dataarray_for_plot_strips_traced_coords():
+    """Plot sanitization helper should convert traced coords/data to numeric dtypes."""
+
+    captured = {}
+
+    def objective(x):
+        data_2d = td.SpatialDataArray(
+            np.ones((5, 4, 1)) * x[0],
+            coords={
+                "x": np.linspace(0.0, 1.0, 5),
+                "y": np.linspace(0.0, 2.0, 4),
+                "z": [0.0],
+            },
+        )
+        captured["arr"] = data_2d.sel(z=0.0)
+        return np.sum(data_2d.data)
+
+    _ = ag.grad(objective)(np.array([1.0]))
+    assert isinstance(captured["arr"], td.SpatialDataArray)
+    assert hasbox(captured["arr"].data)
+    plot_ready = static_dataarray_for_plot(captured["arr"])
+
+    assert not hasbox(plot_ready.data)
+    assert plot_ready.data.dtype != object
+    assert plot_ready.coords["x"].data.dtype != object
+    assert plot_ready.coords["y"].data.dtype != object

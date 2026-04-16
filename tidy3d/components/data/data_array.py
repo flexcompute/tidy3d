@@ -259,6 +259,16 @@ class DataArray(xr.DataArray):
         """Return `.data` when traced to avoid `dtype=object` NumPy conversion."""
         return self.data if isbox(self.data) else super().to_numpy()
 
+    def plot(self, *args: Any, **kwargs: Any) -> Any:
+        """Plot the data after converting traced payloads and coordinates to static values."""
+
+        # Local import avoids a circular dependency because ``data.utils`` also
+        # imports tidy3d DataArray subclasses for spatial data typing.
+        from .utils import static_dataarray_for_plot
+
+        PlotAccessor = xr.DataArray.plot
+        return PlotAccessor(static_dataarray_for_plot(self))(*args, **kwargs)
+
     @property
     def abs(self) -> Self:
         """Absolute value of data array."""
@@ -808,9 +818,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
             raise DataError("The 'grid' argument is only supported for unstructured data.")
         if not field:
             raise DataError("The 'field' argument is only supported for unstructured data.")
-
-        PlotAccessor = xr.DataArray.plot
-        return PlotAccessor(self)(*args, **kwargs)
+        return super().plot(*args, **kwargs)
 
     @property
     def _spatially_sorted(self) -> Self:

@@ -38,6 +38,7 @@ from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
 from .monitor_data import AbstractFieldData, FieldTimeData
+from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -1067,7 +1068,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
         x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
-        field_data.plot(
+        field_data_plot = static_dataarray_for_plot(field_data)
+        field_data_plot.plot(
             ax=ax,
             x=x_coord_label,
             y=y_coord_label,
@@ -1091,8 +1093,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         )
 
         # set the limits based on the xarray coordinates min and max
-        x_coord_values = field_data.coords[x_coord_label]
-        y_coord_values = field_data.coords[y_coord_label]
+        x_coord_values = field_data_plot.coords[x_coord_label]
+        y_coord_values = field_data_plot.coords[y_coord_label]
         ax.set_xlim(min(x_coord_values), max(x_coord_values))
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
 
