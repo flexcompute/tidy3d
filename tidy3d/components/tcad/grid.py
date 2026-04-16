@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
 
 
+REFINEMENT_LINE_TOLERANCE = 1e-6
+
+
 class UnstructuredGrid(Tidy3dBaseModel, ABC):
     """Abstract unstructured grid."""
 
@@ -99,6 +102,19 @@ class GridRefinementRegion(Box):
         json_schema_extra={"units": MICROMETER},
     )
 
+    @model_validator(mode="after")
+    def _validate_supported_region_shape(self) -> Self:
+        """Allow only volumetric or planar refinement regions."""
+        if self.size.count(0.0) > 1:
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "Refinement region must be volumetric or planar; 'size' cannot have more than one zero-sized dimension."
+                ),
+                "size",
+            )
+
+        return self
+
 
 class GridRefinementLine(Tidy3dBaseModel, ABC):
     """Refinement line for the unstructured mesh. The cell size depends on the distance from the line."""
@@ -151,6 +167,15 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
             self._raise_validation_error_at_loc(
                 ValidationError("'distance_bulk' cannot be smaller than 'distance_near'."),
                 "distance_bulk",
+            )
+        line_length = float(np.linalg.norm(np.asarray(self.r2) - np.asarray(self.r1)))
+        if line_length <= REFINEMENT_LINE_TOLERANCE:
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    f"Refinement line endpoints are too close; the line length must be greater than "
+                    f"{REFINEMENT_LINE_TOLERANCE:.1e} um."
+                ),
+                "r2",
             )
 
         return self

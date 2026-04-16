@@ -1272,6 +1272,23 @@ def test_grid_spec_validation(grid_specs):
         distance_grid.updated_copy(dl_interface=-1)
     with pytest.raises(ValidationError):
         distance_grid.updated_copy(distance_interface=2, distance_bulk=1)
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.GridRefinementRegion(
+            center=(0, 0, 0),
+            size=(1, 0, 0),
+            dl_internal=0.1,
+            transition_thickness=0.2,
+        )
+    assert_single_value_error_loc(excinfo, ("size",), "volumetric or planar")
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.GridRefinementLine(
+            r1=(0, 0, 0),
+            r2=(1e-7, 0, 0),
+            dl_near=0.1,
+            distance_near=0.2,
+            distance_bulk=0.4,
+        )
+    assert_single_value_error_loc(excinfo, ("r2",), "line length must be greater than")
 
 
 def test_min_mesh_size(grid_specs):
