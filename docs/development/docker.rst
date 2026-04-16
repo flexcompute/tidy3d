@@ -429,18 +429,7 @@ To run GitHub Actions locally, install the `act <https://github.com/nektos/gh-ac
 
     gh extension install nektos/gh-act
 
-You can then run remote-tests locally using your dev container image:
-
-.. code-block:: bash
-
-    gh act --pull=false \
-        -W .github/workflows/tidy3d-python-client-tests.yml \
-        -P "ubuntu-latest=tidy3d-python-client-dev:latest" \
-        --input remote_tests=true \
-        "workflow_dispatch"
-
-.. note::
-    The image name must match the one you built: ``tidy3d-python-client-dev:latest``
+This repository no longer tracks GitHub Actions workflow files, so there is nothing here to run with ``gh act``.
 
 VSCode Integration
 ^^^^^^^^^^^^^^^^^^
