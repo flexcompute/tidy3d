@@ -2766,7 +2766,7 @@ class ModeSolver(Tidy3dBaseModel):
     def plot_field(
         self,
         field_name: str,
-        val: Literal["real", "imag", abs] = "real",
+        val: Literal["real", "imag", "abs"] = "real",
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
@@ -2828,6 +2828,46 @@ class ModeSolver(Tidy3dBaseModel):
             vmax=vmax,
             ax=ax,
             cmap=cmap,
+            **sel_kwargs,
+        )
+
+    def plot_field_components(
+        self,
+        field_names: Union[str, tuple[str, ...]],
+        mode_indices: Optional[Union[int, tuple[int, ...]]] = None,
+        val: Literal["real", "imag", "abs"] = "real",
+        scale: PlotScale = "lin",
+        eps_alpha: float = 0.2,
+        robust: bool = True,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+        ax: Any = None,
+        cmap: Optional[Union[str, Colormap]] = None,
+        figsize: Optional[tuple[float, float]] = None,
+        titles: bool = True,
+        show_n_eff: bool = False,
+        **sel_kwargs: Any,
+    ) -> tuple[Any, np.ndarray]:
+        """Plot multiple field components for one or more modes in a single call."""
+        from tidy3d.components.mode.data.sim_data import ModeSimulationData
+        from tidy3d.components.mode.simulation import ModeSimulation
+
+        mode_sim = ModeSimulation.from_mode_solver(self)
+        mode_sim_data = ModeSimulationData(simulation=mode_sim, modes_raw=self.data_raw)
+        return mode_sim_data.plot_field_components(
+            field_names=field_names,
+            mode_indices=mode_indices,
+            val=val,
+            scale=scale,
+            eps_alpha=eps_alpha,
+            robust=robust,
+            vmin=vmin,
+            vmax=vmax,
+            ax=ax,
+            cmap=cmap,
+            figsize=figsize,
+            titles=titles,
+            show_n_eff=show_n_eff,
             **sel_kwargs,
         )
 

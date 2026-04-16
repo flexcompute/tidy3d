@@ -645,6 +645,152 @@ def test_mode_sim_data():
     assert np.all(sim_data_sorted.modes_raw.k_eff.diff(dim="mode_index") >= 0)
 
 
+def test_mode_sim_data_plot_field_components():
+    sim_data = get_mode_sim_data()
+
+    fig, axs = sim_data.plot_field_components(
+        field_names=("Ex", "Ey"),
+        mode_indices=(0, 1),
+        show_n_eff=True,
+        f=FS[0],
+    )
+
+    assert axs.shape == (2, 2)
+    assert axs[0, 0].get_title().startswith("Ex, mode_index=0")
+    assert "n_eff=" in axs[0, 0].get_title()
+    assert axs[1, 1].get_title().startswith("Ey, mode_index=1")
+    assert len(fig.axes) > axs.size
+    plt.close(fig)
+
+    fig, axs = sim_data.plot_field_components(
+        field_names=("Ex",),
+        mode_indices=(0,),
+        f=FS[0],
+    )
+
+    assert axs.shape == (1, 1)
+    assert "n_eff=" not in axs[0, 0].get_title()
+    assert len(fig.axes) > axs.size
+    plt.close(fig)
+
+
+def test_mode_sim_data_plot_field_components_custom_axes():
+    sim_data = get_mode_sim_data()
+    fig, axs = plt.subplots(2, 1, squeeze=False)
+
+    fig_out, axs_out = sim_data.plot_field_components(
+        field_names=("Ex",),
+        mode_indices=(0, 1),
+        ax=axs[:, 0],
+        titles=False,
+        show_n_eff=True,
+        f=FS[0],
+    )
+
+    assert fig_out is fig
+    assert axs_out.shape == (2, 1)
+    assert axs_out[0, 0] is axs[0, 0]
+    assert axs_out[0, 0].get_title().startswith("n_eff=")
+    plt.close(fig)
+
+
+def test_mode_sim_data_plot_field_components_clears_titles_on_custom_axes():
+    sim_data = get_mode_sim_data()
+    fig, axs = plt.subplots(1, 1, squeeze=False)
+    axs[0, 0].set_title("existing title")
+
+    fig_out, axs_out = sim_data.plot_field_components(
+        field_names=("Ex",),
+        mode_indices=(0,),
+        ax=axs,
+        titles=False,
+        show_n_eff=False,
+        f=FS[0],
+    )
+
+    assert fig_out is fig
+    assert axs_out[0, 0].get_title() == ""
+    plt.close(fig)
+
+
+def test_mode_sim_data_plot_field_components_show_neff_with_freq_alias():
+    sim_data = get_mode_sim_data()
+
+    fig, axs = sim_data.plot_field_components(
+        field_names=("Ex",),
+        mode_indices=(0,),
+        show_n_eff=True,
+        freq=FS[0],
+    )
+
+    assert "n_eff=" in axs[0, 0].get_title()
+    plt.close(fig)
+
+
+def test_mode_sim_data_plot_field_components_show_neff_with_interpolated_freq():
+    sim_data = get_mode_sim_data()
+    freq_mid = float((FS[0] + FS[1]) / 2)
+
+    fig, axs = sim_data.plot_field_components(
+        field_names=("Ex",),
+        mode_indices=(0,),
+        show_n_eff=True,
+        f=freq_mid,
+    )
+
+    assert "n_eff=" in axs[0, 0].get_title()
+    plt.close(fig)
+
+
+def test_mode_sim_data_plot_field_components_warns_once_for_freq_alias(monkeypatch):
+    import tidy3d.components.mode.data.sim_data as mode_sim_data_module
+
+    sim_data = get_mode_sim_data()
+    warning_messages = []
+
+    monkeypatch.setattr(
+        mode_sim_data_module.log, "warning", lambda msg: warning_messages.append(msg)
+    )
+
+    fig, axs = sim_data.plot_field_components(
+        field_names=("Ex", "Ey"),
+        mode_indices=(0, 1),
+        show_n_eff=True,
+        freq=FS[0],
+    )
+
+    freq_warnings = [
+        msg for msg in warning_messages if "frequency selection key renamed to 'f'" in msg
+    ]
+    assert len(freq_warnings) == 1
+    assert "n_eff=" in axs[0, 0].get_title()
+    plt.close(fig)
+
+
+def test_mode_sim_data_plot_field_components_mode_index_conflict():
+    sim_data = get_mode_sim_data()
+
+    with pytest.raises(SetupError):
+        sim_data.plot_field_components(
+            field_names=("Ex",), mode_indices=(0,), mode_index=0, f=FS[0]
+        )
+
+
+def test_mode_sim_data_plot_field_components_scalar_ax_shape_conflict():
+    sim_data = get_mode_sim_data()
+    _, ax = plt.subplots()
+
+    with pytest.raises(SetupError, match=r"expected \(2, 1\)"):
+        sim_data.plot_field_components(
+            field_names=("Ex",),
+            mode_indices=(0, 1),
+            ax=ax,
+            f=FS[0],
+        )
+
+    plt.close(ax.figure)
+
+
 def test_plane_crosses_symmetry_plane_warning(monkeypatch):
     """Test that a warning is issued if the mode plane crosses a symmetry plane but the centers do not match."""
 

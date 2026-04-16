@@ -13,6 +13,7 @@ import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import Coords, Grid, ModeIndexDataArray, ScalarFieldDataArray, ScalarModeFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
+from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.derivatives import create_d_matrices, create_sfactor_b, create_sfactor_f
 from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
@@ -1173,6 +1174,102 @@ def test_mode_solver_plot():
     ms.plot_pml(ax=ax[1, 1])
     ms.plot_grid(linewidth=0.3, ax=ax[1, 1])
     plt.close()
+
+
+def make_test_mode_solver(freqs: list[float] | None = None, plane: td.Box = PLANE) -> ModeSolver:
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=(WAVEGUIDE,),
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=(SRC,),
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        target_neff=2.0,
+        num_pml=[8, 4],
+    )
+    if freqs is None:
+        freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    return ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+        colocate=False,
+    )
+
+
+def test_mode_solver_plot_field_components():
+    ms = make_test_mode_solver()
+    freq = ms.freqs[0]
+
+    fig, axs = ms.plot_field_components(
+        field_names=("Ex", "Ey"),
+        mode_indices=(0, 1),
+        show_n_eff=True,
+        f=freq,
+    )
+
+    assert axs.shape == (2, 2)
+    assert axs[0, 0].get_title().startswith("Ex, mode_index=0")
+    assert "n_eff=" in axs[0, 0].get_title()
+    assert axs[1, 1].get_title().startswith("Ey, mode_index=1")
+    assert len(fig.axes) > axs.size
+    plt.close(fig)
+
+
+def test_mode_solver_plot_field_components_default_figsize_scales_with_span_ratio():
+    freq = td.C_0 / 1.0
+
+    widths = []
+    for plane_size in ((0, 1, 3), (0, 1, 1), (0, 3, 1)):
+        ms = make_test_mode_solver(freqs=[freq], plane=td.Box(center=(0, 0, 0), size=plane_size))
+        fig, _ = ms.plot_field_components(
+            field_names=("Ex",),
+            mode_indices=(0,),
+            show_n_eff=False,
+            f=freq,
+        )
+        widths.append(float(fig.get_size_inches()[0]))
+        plt.close(fig)
+
+    assert widths[0] < widths[1] < widths[2]
+
+
+def test_mode_solver_plot_field_components_forwards_to_mode_sim_data(monkeypatch):
+    freq = td.C_0 / 1.0
+    ms = make_test_mode_solver(freqs=[freq])
+
+    fig, axs = plt.subplots(1, 1, squeeze=False)
+    calls = {}
+
+    def fake_plot_field_components(self, **kwargs):
+        calls["self"] = self
+        calls["kwargs"] = kwargs
+        return fig, axs
+
+    monkeypatch.setattr(ModeSimulationData, "plot_field_components", fake_plot_field_components)
+
+    fig_out, axs_out = ms.plot_field_components(
+        field_names=("Ex",),
+        mode_indices=(0,),
+        show_n_eff=True,
+        f=freq,
+    )
+
+    assert fig_out is fig
+    assert axs_out is axs
+    assert isinstance(calls["self"], ModeSimulationData)
+    assert calls["self"].modes_raw.monitor.name == ms.data_raw.monitor.name
+    assert calls["kwargs"]["field_names"] == ("Ex",)
+    assert calls["kwargs"]["mode_indices"] == (0,)
+    assert calls["kwargs"]["show_n_eff"] is True
+    assert calls["kwargs"]["f"] == freq
+    plt.close(fig)
 
 
 @pytest.mark.parametrize("local", [True, False])
