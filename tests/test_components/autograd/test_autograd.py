@@ -122,12 +122,6 @@ def _make_di(paths, freq):
         },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_out=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
-        eps_in=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(
@@ -3071,12 +3065,6 @@ def test_pole_residue(monkeypatch):
         },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_out=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
-        ),
-        eps_in=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
-        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(
@@ -3123,12 +3111,6 @@ def test_adaptive_spacing(eps_real):
             )
             for key in eps_keys
         },
-        eps_in=td.ScalarFieldDataArray(
-            [[[[eps_real]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
-        eps_out=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
@@ -3207,12 +3189,6 @@ def test_adaptive_spacing_cache(rng, redirect_stdout_to_stderr, monkeypatch):
         },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_out=td.ScalarFieldDataArray(
-            eps_out_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
-        ),
-        eps_in=td.ScalarFieldDataArray(
-            eps_in_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
-        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(
@@ -3258,12 +3234,6 @@ def test_cylinder_discretization(eps_real):
             )
             for key in eps_keys
         },
-        eps_in=td.ScalarFieldDataArray(
-            [[[[eps_real]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
-        eps_out=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
@@ -3282,6 +3252,114 @@ def test_cylinder_discretization(eps_real):
         assert np.isclose(expected_wvl_mat, wvl_mat), (
             "Unexpected wavelength for discretizing cylinder!"
         )
+
+
+def test_outside_snapped_points_reach_simulation_boundary_true():
+    freq = 2.0e14
+    coords = {"x": [0.0, 0.2], "y": [0.0], "z": [0.0], "f": [freq]}
+
+    def scalar_field(value):
+        return td.ScalarFieldDataArray(
+            np.full((2, 1, 1, 1), value, dtype=float),
+            coords=coords,
+            dims=("x", "y", "z", "f"),
+        )
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={key: scalar_field(2.0) for key in ("eps_xx", "eps_yy", "eps_zz")},
+        frequencies=[freq],
+        bounds=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        bounds_intersect=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        simulation_bounds=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
+    )
+
+    spatial_coords = np.array([[1.0, 0.0, 0.0]])
+    normals = np.array([[1.0, 0.0, 0.0]])
+    assert info._outside_snapped_points_reach_simulation_boundary(
+        spatial_coords=spatial_coords, normals=normals
+    )
+
+
+def test_outside_snapped_points_reach_simulation_boundary_false():
+    freq = 2.0e14
+    coords = {"x": [0.0, 0.2], "y": [0.0], "z": [0.0], "f": [freq]}
+
+    def scalar_field(value):
+        return td.ScalarFieldDataArray(
+            np.full((2, 1, 1, 1), value, dtype=float),
+            coords=coords,
+            dims=("x", "y", "z", "f"),
+        )
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={key: scalar_field(2.0) for key in ("eps_xx", "eps_yy", "eps_zz")},
+        frequencies=[freq],
+        bounds=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        bounds_intersect=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        simulation_bounds=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
+    )
+
+    spatial_coords = np.array([[0.5, 0.0, 0.0]])
+    normals = np.array([[1.0, 0.0, 0.0]])
+    assert not info._outside_snapped_points_reach_simulation_boundary(
+        spatial_coords=spatial_coords, normals=normals
+    )
+
+
+def test_outside_snapped_points_reach_simulation_boundary_false_for_inward_normal():
+    freq = 2.0e14
+    coords = {"x": [0.0, 0.2], "y": [0.0], "z": [0.0], "f": [freq]}
+
+    def scalar_field(value):
+        return td.ScalarFieldDataArray(
+            np.full((2, 1, 1, 1), value, dtype=float),
+            coords=coords,
+            dims=("x", "y", "z", "f"),
+        )
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={key: scalar_field(2.0) for key in ("eps_xx", "eps_yy", "eps_zz")},
+        frequencies=[freq],
+        bounds=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        bounds_intersect=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        simulation_bounds=((0.0, -1.0, -1.0), (1.0, 1.0, 1.0)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
+    )
+
+    spatial_coords = np.array([[1.0, 0.0, 0.0]])
+    normals = np.array([[-1.0, 0.0, 0.0]])
+    assert not info._outside_snapped_points_reach_simulation_boundary(
+        spatial_coords=spatial_coords, normals=normals
+    )
 
 
 def test_custom_pole_residue(monkeypatch):
@@ -3343,12 +3421,6 @@ def test_custom_pole_residue(monkeypatch):
         },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_in=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
-        eps_out=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
-        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(
@@ -3404,12 +3476,6 @@ def test_custom_pole_residue_unstructured_derivatives():
         },
         frequencies=[3e8],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_out=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [3e8]}
-        ),
-        eps_in=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [3e8]}
-        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(

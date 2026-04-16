@@ -29,8 +29,7 @@ def _derivative_info(paths: list[tuple[str, ...]], freq: float):
         "Ez": _scalar_field(ez_val, coords),
     }
 
-    eps_no = _scalar_field(1.0, coords)
-    eps_inf = _scalar_field(2.0, coords)
+    eps_data = {key: _scalar_field(2.0, coords) for key in ("eps_xx", "eps_yy", "eps_zz")}
 
     return DerivativeInfo(
         paths=paths,
@@ -40,13 +39,11 @@ def _derivative_info(paths: list[tuple[str, ...]], freq: float):
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
+        eps_data=eps_data,
         frequencies=np.array([freq]),
         bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         bounds_intersect=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         simulation_bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
-        eps_out=eps_no,
-        eps_in=eps_inf,
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(
             [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
         ),
@@ -136,8 +133,7 @@ def test_anisotropic_medium_conductivity_uses_projected_d_map():
         "Ez": _scalar_field(3.3 + 0.0j, coords),
     }
 
-    eps_no = _scalar_field(1.0, coords)
-    eps_inf = _scalar_field(2.0, coords)
+    eps_data = {key: _scalar_field(2.0, coords) for key in ("eps_xx", "eps_yy", "eps_zz")}
 
     info = DerivativeInfo(
         paths=paths,
@@ -147,13 +143,11 @@ def test_anisotropic_medium_conductivity_uses_projected_d_map():
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
+        eps_data=eps_data,
         frequencies=np.array([freq]),
         bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         bounds_intersect=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         simulation_bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
-        eps_out=eps_no,
-        eps_in=eps_inf,
         updated_epsilon=lambda geom: td.ScalarFieldDataArray(
             [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
         ),

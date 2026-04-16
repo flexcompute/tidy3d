@@ -122,7 +122,7 @@ class DummyDerivativeInfo:
     ) -> None:
         self.paths = [("mesh_dataset", "surface_mesh")]
         self.frequencies = [200e12]
-        self.eps_in = 12.0
+        self.eps_data = {"eps_xx": 12.0, "eps_yy": 12.0, "eps_zz": 12.0}
         self.interpolators = {}
         default_bounds = ((-10.0, -10.0, -10.0), (10.0, 10.0, 10.0))
         self.simulation_bounds = simulation_bounds or default_bounds

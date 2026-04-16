@@ -57,8 +57,6 @@ class DummySourceDI:
         self.D_adj = {}
         self.D_fwd = {}
         self.eps_data = eps_data
-        self.eps_in = None
-        self.eps_out = None
         self.eps_background = None
         self.eps_no_structure = None
         self.eps_inf_structure = None

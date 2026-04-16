@@ -99,7 +99,18 @@ _ICOSAHEDRON_VERTS, _ICOSAHEDRON_FACES = _base_icosahedron()
 def discretization_wavelength(derivative_info: DerivativeInfo, geometry_label: str) -> float:
     """Choose reference wavelength for surface discretization."""
     wvl0_min = derivative_info.wavelength_min
-    wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
+    eps_xx = derivative_info.eps_data["eps_xx"]
+    eps_yy = derivative_info.eps_data["eps_yy"]
+    eps_zz = derivative_info.eps_data["eps_zz"]
+    max_refractive_index = np.max(
+        [
+            1.0,
+            np.max(np.sqrt(abs(eps_xx))),
+            np.max(np.sqrt(abs(eps_yy))),
+            np.max(np.sqrt(abs(eps_zz))),
+        ]
+    )
+    wvl_mat = wvl0_min / max_refractive_index
 
     grid_cfg = config.adjoint
 

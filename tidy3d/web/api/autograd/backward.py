@@ -628,74 +628,9 @@ def _process_structure_gradients(
 
     # auto permittivity detection
     sim_orig = sim_data_orig.simulation
+    # The adjoint field and permittivity monitors are already expanded by one grid
+    # cell during monitor construction, so reuse that geometry directly here.
     plane_eps = eps_data.monitor.geometry
-    sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
-
-    # permittivity without this structure
-    structs_no_struct = list(sim_orig.structures)
-    structs_no_struct.pop(structure_index)
-    sim_no_structure = sim_orig.updated_copy(
-        structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
-    )
-
-    # for the outside permittivity of the structure, resize the bounds of the permittivity region
-    # to make sure we capture data outside the structure bounds
-    low_coords = [center - 0.5 * size for center, size in zip(plane_eps.center, plane_eps.size)]
-    high_coords = [center + 0.5 * size for center, size in zip(plane_eps.center, plane_eps.size)]
-
-    low_bounds = sim_orig.grid.boundaries.get_bounding_values(low_coords, "left", buffer=1)
-    high_bounds = sim_orig.grid.boundaries.get_bounding_values(high_coords, "right", buffer=1)
-
-    resized_center = [0.5 * (low + high) for low, high in zip(low_bounds, high_bounds)]
-    resized_size = [(high - low) for low, high in zip(low_bounds, high_bounds)]
-
-    resize_plane_eps = plane_eps.updated_copy(center=resized_center, size=resized_size)
-
-    eps_no_structure_data = [
-        sim_no_structure.epsilon(box=resize_plane_eps, coord_key="centers", freq=f)
-        for f in adjoint_frequencies
-    ]
-
-    eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
-        f=adjoint_frequencies
-    )
-
-    if structure.medium.is_custom:
-        # we can't make an infinite structure from a custom medium permittivity
-        eps_inf_structure = None
-    else:
-        geometry_box = structure.geometry.bounding_box
-        background_structures_2d = []
-        sim_inf_background_medium = sim_orig.medium
-        if np.any(np.array(geometry_box.size) == 0.0):
-            zero_coordinate = tuple(geometry_box.size).index(0.0)
-            new_size = [td.inf, td.inf, td.inf]
-            new_size[zero_coordinate] = 0.0
-
-            background_structures_2d = [
-                structure.updated_copy(geometry=geometry_box.updated_copy(size=new_size))
-            ]
-        else:
-            sim_inf_background_medium = structure.medium
-
-        # permittivity with infinite structure
-        structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-        sim_inf_structure = sim_orig.updated_copy(
-            structures=background_structures_2d + structs_inf_struct,
-            medium=sim_inf_background_medium,
-            monitors=[],
-            sources=[],
-            grid_spec=sim_orig_grid_spec,
-        )
-
-        eps_inf_structure_data = [
-            sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-            for f in adjoint_frequencies
-        ]
-
-        eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
-            f=adjoint_frequencies
-        )
 
     # compute bounds intersection
     struct_bounds = structure.geometry.bounds
@@ -728,7 +663,7 @@ def _process_structure_gradients(
         updated_epsilon_full_impl,
         adjoint_frequencies=adjoint_frequencies,
         structure_index=structure_index,
-        eps_box=resize_plane_eps,
+        eps_box=plane_eps,
         sim_orig=sim_orig,
     )
 
@@ -825,14 +760,6 @@ def _process_structure_gradients(
                 if key.startswith("H")
             }
 
-        # slice epsilon arrays
-        eps_no_structure_chunk = (
-            eps_no_structure.isel(f=freq_slice) if eps_no_structure is not None else None
-        )
-        eps_inf_structure_chunk = (
-            eps_inf_structure.isel(f=freq_slice) if eps_inf_structure is not None else None
-        )
-
         def updated_epsilon_wrapper(
             replacement_geometry: GeometryType,
             select_adjoint_freqs: Optional[FreqDataArray],
@@ -859,8 +786,6 @@ def _process_structure_gradients(
             H_fwd=H_fwd_chunk,
             H_adj=H_adj_chunk,
             eps_data=eps_data_chunk,
-            eps_in=eps_inf_structure_chunk,
-            eps_out=eps_no_structure_chunk,
             frequencies=select_adjoint_freqs,  # only chunk frequencies
             updated_epsilon=updated_epsilon,
             bounds=struct_bounds,

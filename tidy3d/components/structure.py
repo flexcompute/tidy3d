@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
     from tidy3d import VisualizationSpec
     from tidy3d.compat import Self
+    from tidy3d.components.grid.grid import Grid
 
     from .autograd.derivative_utils import DerivativeInfo
     from .autograd.types import AutogradFieldMap
@@ -174,6 +175,24 @@ def polyslabs_to_structures(
             )
         )
     return tuple(structures)
+
+
+def _expand_adjoint_monitor_box(box: Box, grid: Grid) -> Box:
+    """Expand an adjoint monitor box by one grid cell, preserving collapsed dimensions."""
+    low_coords = [center - 0.5 * size for center, size in zip(box.center, box.size)]
+    high_coords = [center + 0.5 * size for center, size in zip(box.center, box.size)]
+
+    low_bounds = list(grid.boundaries.get_bounding_values(low_coords, "left", buffer=1))
+    high_bounds = list(grid.boundaries.get_bounding_values(high_coords, "right", buffer=1))
+
+    for idx, size_dim in enumerate(box.size):
+        if np.isclose(size_dim, 0.0):
+            low_bounds[idx] = box.center[idx]
+            high_bounds[idx] = box.center[idx]
+
+    resized_center = [0.5 * (low + high) for low, high in zip(low_bounds, high_bounds)]
+    resized_size = [(high - low) for low, high in zip(low_bounds, high_bounds)]
+    return box.updated_copy(center=resized_center, size=resized_size)
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -479,6 +498,7 @@ class Structure(AbstractStructure):
         freqs: list[float],
         index: int,
         field_keys: list[str],
+        grid: Grid,
         plane: Optional[Box] = None,
     ) -> tuple[FieldMonitor, PermittivityMonitor]:
         """Generate the field and permittivity monitor for this structure."""
@@ -516,6 +536,8 @@ class Structure(AbstractStructure):
             box = _box_from_plane_intersection()
         else:
             box = geom_box
+
+        box = _expand_adjoint_monitor_box(box, grid)
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
         size = [get_static(x) for x in box.size]

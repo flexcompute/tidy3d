@@ -126,19 +126,6 @@ class DerivativeInfo:
 
     # Optional fields with defaults
 
-    eps_in: Optional[EpsType] = None
-    """Permittivity inside the Structure.
-    Computed only when structure.medium.is_custom is False. Contains the simulation
-    permittivity inside the structure when the simulation background medium is set to
-    the structure medium and all structures after the current structure are kept. Should
-    be used as the inside permittivity for shape derivative computations."""
-
-    eps_out: Optional[EpsType] = None
-    """Permittivity outside the Structure.
-    Contains the simulation permittivity outside the structure when the current structure
-    is removed from the structure list. Should be used as the outside permittivity for
-    shape derivative computations."""
-
     H_der_map: Optional[FieldDataDict] = None
     """Magnetic field gradient map.
     Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
@@ -208,7 +195,7 @@ class DerivativeInfo:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
-        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_in, eps_out, eps_data).
+        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_data).
         Contains (H_fwd, H_adj) field components when relevant for certain material types.
         This caching strategy significantly improves performance by avoiding
         repeated interpolator construction in gradient evaluation loops.
@@ -224,7 +211,7 @@ class DerivativeInfo:
         dict
             Nested dictionary structure:
             - Field data: {"E_fwd": {"Ex": interpolator, ...}, ...}
-            - Permittivity: {"eps_in": interpolator, "eps_out": interpolator, "eps_data": interpolator}
+            - Permittivity: {"eps_data": {"eps_xx": interpolator, ...}}
         """
         from scipy.interpolate import RegularGridInterpolator
 
@@ -341,15 +328,6 @@ class DerivativeInfo:
                 self.eps_data, "eps_data", is_field_group=True, override_method="nearest"
             )
 
-        if self.eps_in is not None:
-            _make_lazy_interpolator_group(
-                {"eps_in": self.eps_in}, None, is_field_group=False, override_method="nearest"
-            )
-        if self.eps_out is not None:
-            _make_lazy_interpolator_group(
-                {"eps_out": self.eps_out}, None, is_field_group=False, override_method="nearest"
-            )
-
         self._interpolators_cache[cache_key] = interpolators
         return interpolators
 
@@ -365,6 +343,13 @@ class DerivativeInfo:
 
         Implements the surface integral formulation for computing gradients with respect
         to geometry perturbations.
+
+        The inside and outside permittivities used by the interface integrand are now
+        sampled directly from ``eps_data``. For each boundary point, the normal
+        direction in ``normals`` is used together with
+        ``config.adjoint.boundary_snapping_fraction`` to snap to mesh points fully
+        inside or outside of the boundary, and the permittivity is then evaluated
+        using nearest interpolation on the corresponding ``eps_data`` component grids.
 
         Parameters
         ----------
@@ -391,13 +376,20 @@ class DerivativeInfo:
                 "Please create interpolators using 'create_interpolators()' first."
             )
 
-        if self.eps_in is None or self.eps_out is None:
+        if self.eps_data is None:
             raise ValueError(
-                "Missing permittivity data for geometry gradients: both "
-                "'eps_in' and 'eps_out' must be provided."
+                "Missing permittivity data for geometry gradients: 'eps_data' must be provided."
             )
-        eps_in = self.eps_in
-        eps_out = self.eps_out
+
+        if self._outside_snapped_points_reach_simulation_boundary(
+            spatial_coords=spatial_coords, normals=normals
+        ):
+            log.warning(
+                "One or more gradient integration points lie on the simulation boundary and "
+                "their outward normal points further outside the simulation domain. "
+                "Shape-gradient integration may be one-sided or non-smooth at those locations.",
+                log_once=True,
+            )
 
         # In all paths below, we need to have computed the gradient integration for a
         # dielectric-dielectric interface.
@@ -407,8 +399,6 @@ class DerivativeInfo:
             perps1,
             perps2,
             interpolators,
-            eps_in,
-            eps_out,
         )
 
         if self.is_medium_pec:
@@ -421,7 +411,6 @@ class DerivativeInfo:
             mask_pec = self._detect_pec_gradient_points(
                 spatial_coords,
                 normals,
-                eps_in,
                 interpolators["eps_data"],
                 is_outside=False,
             )
@@ -433,7 +422,6 @@ class DerivativeInfo:
                 perps1,
                 perps2,
                 interpolators,
-                ("eps_out", eps_out),
                 is_outside=True,
             )
 
@@ -448,7 +436,6 @@ class DerivativeInfo:
             mask_pec = self._detect_pec_gradient_points(
                 spatial_coords,
                 normals,
-                eps_out,
                 interpolators["eps_data"],
                 is_outside=True,
             )
@@ -461,7 +448,6 @@ class DerivativeInfo:
                 perps1,
                 perps2,
                 interpolators,
-                ("eps_in", eps_in),
                 is_outside=False,
             )
 
@@ -476,6 +462,20 @@ class DerivativeInfo:
 
         return vjps
 
+    def _outside_snapped_points_reach_simulation_boundary(
+        self,
+        spatial_coords: ArrayFloat,
+        normals: ArrayFloat,
+    ) -> bool:
+        """Check whether boundary points lie on the simulation boundary and point further outward."""
+        sim_min = np.asarray(self.simulation_bounds[0], dtype=float)
+        sim_max = np.asarray(self.simulation_bounds[1], dtype=float)
+        probe_coords = spatial_coords + normals * AUTOGRAD_COORDINATE_TOLERANCE
+        on_min = np.isclose(spatial_coords, sim_min[None, :], atol=AUTOGRAD_COORDINATE_TOLERANCE)
+        on_max = np.isclose(spatial_coords, sim_max[None, :], atol=AUTOGRAD_COORDINATE_TOLERANCE)
+        probe_outside = (probe_coords < sim_min[None, :]) | (probe_coords > sim_max[None, :])
+        return bool(np.any((on_min | on_max) & probe_outside))
+
     def _evaluate_dielectric_gradient_at_points(
         self,
         spatial_coords: ArrayFloat,
@@ -483,24 +483,31 @@ class DerivativeInfo:
         perps1: ArrayFloat,
         perps2: ArrayFloat,
         interpolators: dict[str, dict[str, Callable[[ArrayFloat], ArrayComplex]]],
-        eps_in_data: ScalarFieldDataArray,
-        eps_out_data: ScalarFieldDataArray,
     ) -> ArrayComplex:
-        eps_out_coords = self._snap_spatial_coords_boundary(
-            spatial_coords,
-            normals,
-            is_outside=True,
-            data_array=eps_out_data,
-        )
-        eps_in_coords = self._snap_spatial_coords_boundary(
-            spatial_coords,
-            normals,
-            is_outside=False,
-            data_array=eps_in_data,
-        )
-
-        eps_out = interpolators["eps_out"](eps_out_coords)
-        eps_in = interpolators["eps_in"](eps_in_coords)
+        eps_out_at_coords = {
+            name: interp(
+                self._snap_spatial_coords_boundary(
+                    spatial_coords,
+                    normals,
+                    is_outside=True,
+                    data_array=self.eps_data[name],
+                )
+            )
+            for name, interp in interpolators["eps_data"].items()
+        }
+        eps_in_at_coords = {
+            name: interp(
+                self._snap_spatial_coords_boundary(
+                    spatial_coords,
+                    normals,
+                    is_outside=False,
+                    data_array=self.eps_data[name],
+                )
+            )
+            for name, interp in interpolators["eps_data"].items()
+        }
+        eps_out_diag = self._stack_diagonal_permittivity_components(eps_out_at_coords)
+        eps_in_diag = self._stack_diagonal_permittivity_components(eps_in_at_coords)
 
         # evaluate all field components at surface points
         E_fwd_at_coords = {
@@ -516,8 +523,13 @@ class DerivativeInfo:
             name: interp(spatial_coords) for name, interp in interpolators["D_adj_linear"].items()
         }
 
-        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
-        delta_eps = eps_in - eps_out
+        eps_out_norm = self._project_diagonal_permittivity_in_basis(
+            eps_out_at_coords, basis_vector=normals
+        )
+        eps_in_norm = self._project_diagonal_permittivity_in_basis(
+            eps_in_at_coords, basis_vector=normals
+        )
+        delta_eps_inv = 1.0 / eps_in_norm - 1.0 / eps_out_norm
 
         # project fields onto local surface basis (normal + two tangents)
         D_fwd_norm = self._project_in_basis(D_fwd_at_coords, basis_vector=normals)
@@ -529,11 +541,31 @@ class DerivativeInfo:
         E_fwd_perp2 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps2)
         E_adj_perp2 = self._project_in_basis(E_adj_at_coords, basis_vector=perps2)
 
-        D_der_norm = D_fwd_norm * D_adj_norm
-        E_der_perp1 = E_fwd_perp1 * E_adj_perp1
-        E_der_perp2 = E_fwd_perp2 * E_adj_perp2
+        eps_parallel_out = self._modified_tangential_permittivity_tensor(
+            eps_out_diag, normals, eps_out_norm
+        )
+        eps_parallel_in = self._modified_tangential_permittivity_tensor(
+            eps_in_diag, normals, eps_in_norm
+        )
+        delta_eps_parallel = eps_parallel_in - eps_parallel_out
 
-        vjps = -delta_eps_inv * D_der_norm + E_der_perp1 * delta_eps + E_der_perp2 * delta_eps
+        E_parallel_fwd = self._reconstruct_tangential_field_vector(
+            E_fwd_perp1, E_fwd_perp2, perps1, perps2
+        )
+        E_parallel_adj = self._reconstruct_tangential_field_vector(
+            E_adj_perp1, E_adj_perp2, perps1, perps2
+        )
+
+        D_der_norm = D_fwd_norm * D_adj_norm
+        g_normal = -delta_eps_inv * D_der_norm
+        g_tangential = np.einsum(
+            "nif,nijf,njf->nf",
+            E_parallel_adj,
+            delta_eps_parallel,
+            E_parallel_fwd,
+        )
+
+        vjps = g_normal + g_tangential
 
         return vjps
 
@@ -676,27 +708,24 @@ class DerivativeInfo:
         self,
         spatial_coords: np.ndarray,
         normals: np.ndarray,
-        eps_data: ScalarFieldDataArray,
-        interpolator: LazyInterpolator,
+        interpolator: dict[str, LazyInterpolator],
         is_outside: bool,
     ) -> np.ndarray:
         def _detect_pec(eps_mask: np.ndarray) -> np.ndarray:
             return 1.0 * (eps_mask < config.adjoint.pec_detection_threshold)
 
-        adjusted_coords = self._snap_spatial_coords_boundary(
-            spatial_coords=spatial_coords,
-            normals=normals,
-            is_outside=is_outside,
-            data_array=eps_data,
-        )
+        component_masks = []
+        for name, data_array in self.eps_data.items():
+            adjusted_coords = self._snap_spatial_coords_boundary(
+                spatial_coords=spatial_coords,
+                normals=normals,
+                is_outside=is_outside,
+                data_array=data_array,
+            )
+            eps_adjusted = interpolator[name](adjusted_coords)
+            component_masks.append(_detect_pec(eps_adjusted))
 
-        eps_adjusted_all = [
-            component_interpolator(adjusted_coords)
-            for _, component_interpolator in interpolator.items()
-        ]
-        eps_detect_pec = reduce(np.minimum, eps_adjusted_all)
-
-        return _detect_pec(eps_detect_pec)
+        return reduce(np.maximum, component_masks)
 
     def _evaluate_pec_gradient_at_points(
         self,
@@ -705,11 +734,8 @@ class DerivativeInfo:
         perps1: np.ndarray,
         perps2: np.ndarray,
         interpolators: dict,
-        eps_dielectric: tuple[str, ScalarFieldDataArray],
         is_outside: bool,
     ) -> np.ndarray:
-        eps_dielectric_key, eps_dielectric_data = eps_dielectric
-
         def _snap_coordinate_outside(
             field_components: FieldDataDict,
         ) -> dict[str, dict[str, ArrayFloat]]:
@@ -783,13 +809,20 @@ class DerivativeInfo:
             H_adj_coords_adjusted, field_name="H_adj_nearest"
         )
 
-        eps_coords_adjusted = self._snap_spatial_coords_boundary(
-            spatial_coords,
-            normals,
-            is_outside=is_outside,
-            data_array=eps_dielectric_data,
+        eps_dielectric_at_coords = {
+            name: interp(
+                self._snap_spatial_coords_boundary(
+                    spatial_coords,
+                    normals,
+                    is_outside=is_outside,
+                    data_array=self.eps_data[name],
+                )
+            )
+            for name, interp in interpolators["eps_data"].items()
+        }
+        eps_dielectric = self._project_diagonal_permittivity_in_basis(
+            eps_dielectric_at_coords, basis_vector=normals
         )
-        eps_dielectric = interpolators[eps_dielectric_key](eps_coords_adjusted)
 
         structure_sizes = np.array(
             [self.bounds[1][idx] - self.bounds[0][idx] for idx in range(len(self.bounds[0]))]
@@ -881,6 +914,29 @@ class DerivativeInfo:
         return vjps
 
     @staticmethod
+    def _project_component_matrix_in_basis(
+        component_matrix: np.ndarray,
+        basis_vector: np.ndarray,
+    ) -> np.ndarray:
+        """Project a prepared 3-component matrix onto a basis vector.
+
+        Parameters
+        ----------
+        component_matrix : np.ndarray
+            Array with shape (3, N, F) containing the x/y/z-aligned component values.
+        basis_vector : np.ndarray
+            (N, 3) array of basis vectors, one per evaluation point.
+
+        Returns
+        -------
+        np.ndarray
+            Projected field values with shape (N, F).
+        """
+        # always expect (3, N, F) shape, transpose to (N, 3, F)
+        component_matrix = np.transpose(component_matrix, (1, 0, 2))
+        return np.einsum("ij...,ij->i...", component_matrix, basis_vector)
+
+    @staticmethod
     def _project_in_basis(
         field_components: dict[str, np.ndarray],
         basis_vector: np.ndarray,
@@ -902,10 +958,53 @@ class DerivativeInfo:
         """
         prefix = next(iter(field_components.keys()))[0]
         field_matrix = np.stack([field_components[f"{prefix}{dim}"] for dim in "xyz"], axis=0)
+        return DerivativeInfo._project_component_matrix_in_basis(field_matrix, basis_vector)
 
-        # always expect (3, N, F) shape, transpose to (N, 3, F)
-        field_matrix = np.transpose(field_matrix, (1, 0, 2))
-        return np.einsum("ij...,ij->i...", field_matrix, basis_vector)
+    @staticmethod
+    def _project_diagonal_permittivity_in_basis(
+        permittivity_components: dict[str, np.ndarray],
+        basis_vector: np.ndarray,
+    ) -> np.ndarray:
+        """Project diagonal permittivity components onto a basis using absolute weights."""
+        eps_matrix = np.stack([permittivity_components[f"eps_{dim}{dim}"] for dim in "xyz"], axis=0)
+        return DerivativeInfo._project_component_matrix_in_basis(
+            eps_matrix, np.abs(basis_vector) ** 2
+        )
+
+    @staticmethod
+    def _stack_diagonal_permittivity_components(
+        permittivity_components: dict[str, np.ndarray],
+    ) -> np.ndarray:
+        """Stack diagonal permittivity components as an (N, 3, F) array."""
+        return np.stack([permittivity_components[f"eps_{dim}{dim}"] for dim in "xyz"], axis=1)
+
+    @staticmethod
+    def _modified_tangential_permittivity_tensor(
+        diagonal_components: np.ndarray,
+        normals: np.ndarray,
+        eps_norm: np.ndarray,
+    ) -> np.ndarray:
+        """Construct the modified tangential permittivity tensor for diagonal anisotropy."""
+        v_vec = diagonal_components * normals[:, :, None]
+        out = -(v_vec[:, :, None, :] * v_vec[:, None, :, :])
+        out /= eps_norm[:, None, None, :]
+
+        idx = np.arange(3)
+        out[:, idx, idx, :] += diagonal_components
+        return out
+
+    @staticmethod
+    def _reconstruct_tangential_field_vector(
+        field_perp1: np.ndarray,
+        field_perp2: np.ndarray,
+        perps1: np.ndarray,
+        perps2: np.ndarray,
+    ) -> np.ndarray:
+        """Reconstruct full tangential field vectors from tangent-basis projections."""
+        return (
+            perps1[:, :, None] * field_perp1[:, None, :]
+            + perps2[:, :, None] * field_perp2[:, None, :]
+        )
 
     def project_der_map_to_axis(
         self, axis: xyz, field_type: str = "E"

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import tidy3d as td
+from tidy3d.components.structure import _expand_adjoint_monitor_box
 
 SIM_FIELDS_KEYS = [("structures", 0, "geometry")]
 
@@ -72,10 +73,13 @@ def test_adjoint_monitors_use_plane_bounds_sphere(center_z, expected_size):
     sim = _make_2d_simulation(structure)
 
     monitors_field, monitors_eps = sim._make_adjoint_monitors(SIM_FIELDS_KEYS)
+    expected_box = _expand_adjoint_monitor_box(
+        td.Box(center=(0.0, 0.0, 0.0), size=expected_size), sim.grid
+    )
 
-    assert monitors_field[0].size == pytest.approx(expected_size)
+    assert monitors_field[0].size == pytest.approx(tuple(expected_box.size))
     assert monitors_field[0].center == pytest.approx((0.0, 0.0, 0.0))
-    assert monitors_eps[0].size == pytest.approx(expected_size)
+    assert monitors_eps[0].size == pytest.approx(tuple(expected_box.size))
 
 
 def test_adjoint_monitors_use_plane_bounds_mesh():
@@ -84,10 +88,13 @@ def test_adjoint_monitors_use_plane_bounds_mesh():
     sim = _make_2d_simulation(structure)
 
     monitors_field, monitors_eps = sim._make_adjoint_monitors(SIM_FIELDS_KEYS)
+    expected_box = _expand_adjoint_monitor_box(
+        td.Box(center=(0.25, 0.0, 0.0), size=(0.5, 1.0, 0.0)), sim.grid
+    )
 
-    assert monitors_field[0].size == pytest.approx((0.5, 1.0, 0.0))
-    assert monitors_field[0].center == pytest.approx((0.25, 0.0, 0.0))
-    assert monitors_eps[0].size == pytest.approx((0.5, 1.0, 0.0))
+    assert monitors_field[0].size == pytest.approx(tuple(expected_box.size))
+    assert monitors_field[0].center == pytest.approx(tuple(expected_box.center))
+    assert monitors_eps[0].size == pytest.approx(tuple(expected_box.size))
 
 
 def test_adjoint_monitors_use_plane_bounds_mesh_disjoint_components():
@@ -136,14 +143,17 @@ def test_adjoint_monitors_use_plane_bounds_mesh_disjoint_components():
     sim = _make_2d_simulation(structure)
 
     monitors_field, monitors_eps = sim._make_adjoint_monitors(SIM_FIELDS_KEYS)
+    expected_box = _expand_adjoint_monitor_box(
+        td.Box(center=(0.0, 0.0, 0.0), size=(4.0, 1.0, 0.0)), sim.grid
+    )
 
     # Union across both components:
     # x spans [-2, 2] -> size 4
     # y spans [-0.5, 0.5] -> size 1 (note we are interested in z=0 plane, mid y between +-1 and 0)
     # z size is 0 for a 2D plane monitor
-    assert monitors_field[0].size == pytest.approx((4.0, 1.0, 0.0))
-    assert monitors_field[0].center == pytest.approx((0.0, 0.0, 0.0))
-    assert monitors_eps[0].size == pytest.approx((4.0, 1.0, 0.0))
+    assert monitors_field[0].size == pytest.approx(tuple(expected_box.size))
+    assert monitors_field[0].center == pytest.approx(tuple(expected_box.center))
+    assert monitors_eps[0].size == pytest.approx(tuple(expected_box.size))
 
 
 def _make_3d_simulation(structure: td.Structure) -> td.Simulation:
@@ -177,7 +187,7 @@ def test_adjoint_monitors_3d_use_geometry_bounding_box(geometry):
 
     monitors_field, monitors_eps = sim._make_adjoint_monitors(SIM_FIELDS_KEYS)
 
-    expected_box = geometry.bounding_box
+    expected_box = _expand_adjoint_monitor_box(geometry.bounding_box, sim.grid)
 
     assert monitors_field[0].size == pytest.approx(tuple(expected_box.size))
     assert monitors_field[0].center == pytest.approx(tuple(expected_box.center))

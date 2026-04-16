@@ -5503,7 +5503,7 @@ class Simulation(AbstractYeeGridSimulation):
         for i, field_keys in structure_index_to_keys.items():
             structure = self.structures[i]
             mnt_fld, mnt_eps = structure._make_adjoint_monitors(
-                freqs=freqs, index=i, field_keys=field_keys, plane=sim_plane
+                freqs=freqs, index=i, field_keys=field_keys, grid=self.grid, plane=sim_plane
             )
             adjoint_monitors_fld.append(mnt_fld)
             adjoint_monitors_eps.append(mnt_eps)

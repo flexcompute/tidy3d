@@ -14,7 +14,7 @@ import tidy3d.web as web
 
 tmm = pytest.importorskip("tmm")
 
-PLOT_TMM_ADJ_COMPARISON = True
+PLOT_TMM_ADJ_COMPARISON = False
 LOCAL_GRADIENT = True
 SAVE_TEST_DATA = True
 NUMERICAL_RESULTS_SUBDIR = "tmm_gradients"

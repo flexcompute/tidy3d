@@ -19,8 +19,6 @@ def _make_derivative_info(freqs, paths):
         E_adj={},
         D_adj={},
         eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
         frequencies=list(freqs),
         bounds=((-1, -1, -1), (1, 1, 1)),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),

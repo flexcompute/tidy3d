@@ -105,12 +105,6 @@ class DummyDI:
         self.c = coeffs["c"]
         self.d = coeffs["d"]
         self.frequencies = [200e12]
-        self.eps_in = td.ScalarFieldDataArray(
-            [[[[12.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
-        )
-        self.eps_out = td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
-        )
         eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
         self.eps_data = {
             key: td.ScalarFieldDataArray(

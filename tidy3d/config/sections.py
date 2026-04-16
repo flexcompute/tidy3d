@@ -180,7 +180,7 @@ class AdjointConfig(ConfigSection):
     )
 
     boundary_snapping_fraction: float = Field(
-        0.65,
+        1.0,
         title="Boundary snapping fraction",
         description=(
             "Fraction of minimum local grid size to use for snapping coordinates outside of "

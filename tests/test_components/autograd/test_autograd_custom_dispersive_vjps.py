@@ -30,8 +30,7 @@ def _coords(shape):
 
 def _deriv_info(freq):
     # minimal DerivativeInfo matching pattern used in custom pole-residue test
-    eps_no = ScalarFieldDataArray([[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]})
-    eps_inf = ScalarFieldDataArray([[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]})
+    eps_val = ScalarFieldDataArray([[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]})
     return {
         "E_der_map": {},
         "D_der_map": {},
@@ -39,11 +38,9 @@ def _deriv_info(freq):
         "D_fwd": {},
         "E_adj": {},
         "D_adj": {},
-        "eps_data": {},
+        "eps_data": {"eps_xx": eps_val, "eps_yy": eps_val, "eps_zz": eps_val},
         "frequencies": [freq],
         "bounds": ((-1, -1, -1), (1, 1, 1)),
-        "eps_out": eps_no,
-        "eps_in": eps_inf,
         "bounds_intersect": ((-1, -1, -1), (1, 1, 1)),
         "simulation_bounds": ((-2, -2, -2), (2, 2, 2)),
         "updated_epsilon": None,
