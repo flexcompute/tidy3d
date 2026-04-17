@@ -411,13 +411,13 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
         For best results, the antenna assembly should be contained within the simulation bounds.
 
-        Parameters:
+        Parameters
         ----------
         simulation : Simulation
             The simulation specification describing a single antenna setup.
 
-        Returns:
-        --------
+        Returns
+        -------
         Simulation
             The simulation specification describing the antenna array.
         """

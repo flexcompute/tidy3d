@@ -71,7 +71,7 @@ Make sure you have installed ``pipx``. We provide common installation flows belo
 
    .. group-tab:: Ubuntu 22.04
 
-        This installation flow requires a ``python3`` installation. Depending how you have installed ``python3``, you may have to edit this command to run on your target installation. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-linux>`_
+        This installation flow requires a ``python3`` installation. Depending how you have installed ``python3``, you may have to edit this command to run on your target installation. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-linux>`__
 
         .. code-block:: bash
 
@@ -80,7 +80,7 @@ Make sure you have installed ``pipx``. We provide common installation flows belo
 
    .. group-tab:: macOS
 
-        This installation flow uses `homebrew <https://brew.sh/>`_. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-macos>`_
+        This installation flow uses `homebrew <https://brew.sh/>`_. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-macos>`__
 
         .. code-block:: bash
 
@@ -89,7 +89,7 @@ Make sure you have installed ``pipx``. We provide common installation flows belo
 
    .. group-tab:: Windows
 
-        This installation flow uses `scoop <https://scoop.sh/>`_. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-windows>`_
+        This installation flow uses `scoop <https://scoop.sh/>`_. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-windows>`__
 
         .. code-block:: bash
 
@@ -103,7 +103,7 @@ Then install ``uv``:
 
    .. group-tab:: Ubuntu 22.04
 
-        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_
+        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`__
 
         .. code-block:: bash
 
@@ -111,7 +111,7 @@ Then install ``uv``:
 
    .. group-tab:: macOS
 
-        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_
+        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`__
 
         .. code-block:: bash
 
@@ -119,7 +119,7 @@ Then install ``uv``:
 
    .. group-tab:: Windows
 
-        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_
+        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`__
 
         .. code-block:: bash
 
@@ -140,7 +140,7 @@ If you want to locally build documentation, then it is required to install ``pan
 
    .. group-tab:: Ubuntu 22.04
 
-        Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#linux>`_. Note you will need permissions to do this.
+        Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#linux>`__. Note you will need permissions to do this.
 
         .. code-block:: bash
 
@@ -149,7 +149,7 @@ If you want to locally build documentation, then it is required to install ``pan
 
    .. group-tab:: macOS
 
-        Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#macos>`_
+        Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#macos>`__
 
         .. code-block:: bash
 
@@ -157,7 +157,7 @@ If you want to locally build documentation, then it is required to install ``pan
 
    .. group-tab:: Windows
 
-        This installation flow uses `Chocolatey <https://chocolatey.org/>`_. Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#windows>`_
+        This installation flow uses `Chocolatey <https://chocolatey.org/>`_. Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#windows>`__
 
         .. code-block:: bash
 

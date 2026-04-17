@@ -335,11 +335,11 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     The ``s_param_def`` parameter controls which wave definition is used to compute scattering
     parameters. Three definitions are supported:
 
-    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]. Uses scaling
+    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]_. Uses scaling
       factor :math:`F = \\sqrt{\\text{Re}(Z)} / (2|Z|)`. Wave amplitudes are :math:`a = F(V + ZI)`
       and :math:`b = F(V - ZI)`.
 
-    - ``"power"``: Power waves as defined by Kurokawa [3] and described in Pozar [2]. Uses
+    - ``"power"``: Power waves as defined by Kurokawa [3]_ and described in Pozar [2]_. Uses
       scaling factor :math:`F = 1 / (2\\sqrt{\\text{Re}(Z)})`. Wave amplitudes are
       :math:`a = F(V + ZI)` and :math:`b = F(V - Z^*I)` where :math:`Z^*` is the complex
       conjugate. Ensures :math:`|a|^2 - |b|^2` represents actual power flow.

@@ -1225,12 +1225,12 @@ class TerminalWavePort(AbstractWavePort):
     Notes
     -----
     - By default, the terminals are single-ended, specified by ``terminal_specs`` parameters. They are
-    labeled by ``T0``, ``T1``, ..., ``Tn``, where the order is defined by their order in ``terminal_specs``
-    if it's a tuple/list, or their location from left to right and bottom to top if ``terminal_specs``
-    is an ``AutoImpedanceSpec``.
+      labeled by ``T0``, ``T1``, ..., ``Tn``, where the order is defined by their order in ``terminal_specs``
+      if it's a tuple/list, or their location from left to right and bottom to top if ``terminal_specs``
+      is an ``AutoImpedanceSpec``.
     - Differential pairs are defined by selecting a pair of single-ended terminals based on their labels.
-    The differential pair itself is labeled by "Diff0@comm", "Diff0@diff", "Diff1@comm", "Diff1@diff", ...,
-    where the order is defined by their order in ``differential_pairs``.
+      The differential pair itself is labeled by "Diff0@comm", "Diff0@diff", "Diff1@comm", "Diff1@diff", ...,
+      where the order is defined by their order in ``differential_pairs``.
     - The terminals are ordered so that the single-ended terminal labels come first, followed by differential pairs.
     - By default, a reference impedance of 50 Ohm is used for S-parameter calculations unless otherwise specified.
     """

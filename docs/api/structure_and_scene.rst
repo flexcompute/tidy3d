@@ -6,7 +6,7 @@ Structure and Scene
 Overview
 --------
 
-Structures in Tidy3D represent the physical objects to be included in the simulation. A structure is typically made of a `geometry <./geometry.html>`_ and an `EM medium <./mediums.html>`_ (material).
+Structures in Tidy3D represent the physical objects to be included in the simulation. A structure is typically made of a `geometry <./geometry.html>`__ and an `EM medium <./mediums.html>`__ (material).
 
 A scene in Tidy3D holds a collection of structures. It is typically used to visualize the physical layout prior to setting up the full simulation.
 

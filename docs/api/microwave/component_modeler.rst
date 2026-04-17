@@ -1,7 +1,5 @@
 .. currentmodule:: tidy3d
 
-.. _TerminalComponentModeler:
-
 TerminalComponentModeler
 ------------------------
 

@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
 Transient Heat Analysis
------------------
+-----------------------
 
 .. autosummary::
    :toctree: ../_autosummary/

@@ -145,23 +145,12 @@ class HeatPerturbation(AbstractPerturbation):
 
         Parameters
         ----------
-        temperature : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        temperature : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[
-            ArrayFloat,
-            ArrayComplex,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        Union[ArrayFloat, ArrayComplex, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation value(s).
         """
 
@@ -258,23 +247,12 @@ class LinearHeatPerturbation(HeatPerturbation):
 
         Parameters
         ----------
-        temperature : Union[
-            ArrayFloat,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        temperature : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[
-            ArrayFloat,
-            ArrayComplex,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        Union[ArrayFloat, ArrayComplex, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation value(s).
         """
 
@@ -377,23 +355,12 @@ class CustomHeatPerturbation(HeatPerturbation):
 
         Parameters
         ----------
-        temperature : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        temperature : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[
-            ArrayFloat,
-            ArrayComplex,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        Union[ArrayFloat, ArrayComplex, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation value(s).
         """
 
@@ -510,19 +477,9 @@ class ChargePerturbation(AbstractPerturbation):
 
         Parameters
         ----------
-        electron_density : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        electron_density : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Electron density sample point(s).
-        hole_density : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        hole_density : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Hole density sample point(s).
 
         Note
@@ -532,13 +489,7 @@ class ChargePerturbation(AbstractPerturbation):
 
         Returns
         -------
-        Union[
-            ArrayFloat,
-            ArrayComplex,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        Union[ArrayFloat, ArrayComplex, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation value(s).
         """
 
@@ -684,19 +635,9 @@ class LinearChargePerturbation(ChargePerturbation):
 
         Parameters
         ----------
-        electron_density : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        electron_density : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Electron density sample point(s).
-        hole_density : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        hole_density : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Hole density sample point(s).
 
         Note
@@ -707,13 +648,7 @@ class LinearChargePerturbation(ChargePerturbation):
 
         Returns
         -------
-        Union[
-            ArrayFloat,
-            ArrayComplex,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        Union[ArrayFloat, ArrayComplex, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation value(s).
         """
         inputs = [electron_density, hole_density]
@@ -873,19 +808,9 @@ class CustomChargePerturbation(ChargePerturbation):
 
         Parameters
         ----------
-        electron_density : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        electron_density : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Electron density sample point(s).
-        hole_density : Union[
-                ArrayFloat,
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        hole_density : Union[ArrayFloat, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Hole density sample point(s).
 
         Note
@@ -896,13 +821,7 @@ class CustomChargePerturbation(ChargePerturbation):
 
         Returns
         -------
-        Union[
-            ArrayFloat,
-            ArrayComplex,
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ]
+        Union[ArrayFloat, ArrayComplex, :class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation value(s).
         """
         inputs = [electron_density, hole_density]
@@ -1086,32 +1005,16 @@ class ParameterPerturbation(Tidy3dBaseModel):
 
         Parameters
         ----------
-        temperature : Optional[Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]] = None
+        temperature : Optional[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]] = None
             Temperature field data.
-        electron_density : Optional[Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]] = None
+        electron_density : Optional[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]] = None
             Electron density field data.
-        hole_density : Optional[Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]] = None
+        hole_density : Optional[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]] = None
             Hole density field data.
 
         Returns
         -------
-        Union[
-            :class:`.SpatialDataArray`,
-            :class:`.TriangularGridDataset`,
-            :class:`.TetrahedralGridDataset`,
-        ] = None
+        Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Sampled perturbation field.
         """
 
@@ -1270,14 +1173,14 @@ class AbstractDeltaModel(Tidy3dBaseModel):
 
 
 class NedeljkovicSorefMashanovich(AbstractDeltaModel):
-    """Nedeljkovic-Soref-Mashanovich model for the perturbation of the refractive index and
+    """Nedeljkovic-Soref-Mashanovich model [1]_ for the perturbation of the refractive index and
     extinction coefficient due to free carriers.
 
     References
     ----------
     .. [1] M. Nedeljkovic, R. Soref and G. Z. Mashanovich, "Free-Carrier Electrorefraction and Electroabsorption
-        Modulation Predictions for Silicon Over the 1–14- μm Infrared Wavelength Range," in IEEE Photonics
-        Journal, vol. 3, no. 6, pp. 1171-1180, Dec. 2011, doi: 10.1109/JPHOT.2011.2171930
+           Modulation Predictions for Silicon Over the 1–14- μm Infrared Wavelength Range," in IEEE Photonics
+           Journal, vol. 3, no. 6, pp. 1171-1180, Dec. 2011, doi: 10.1109/JPHOT.2011.2171930
 
     """
 

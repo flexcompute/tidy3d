@@ -1,5 +1,3 @@
-.. _RF Material Library:
-
 RF Material Library
 -------------------
 

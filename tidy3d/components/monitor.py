@@ -759,19 +759,18 @@ class GaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
 class AstigmaticGaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
     """:class:`~tidy3d.Monitor` that records amplitudes from decomposition onto an astigmatic Gaussian beam.
 
+    Notes
+    -----
     The simple astigmatic Gaussian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
     of the ellipse. When equal waist sizes and equal waist distances are specified in the two
     directions, this monitor becomes equivalent to :class:`GaussianOverlapMonitor`.
 
-    Notes
-    -----
+    This class implements the simple astigmatic Gaussian beam described in [1]_.
 
-        This class implements the simple astigmatic Gaussian beam described in _`[1]`.
+    **References**:
 
-        **References**:
-
-        .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
+    .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
 
     Example
     -------

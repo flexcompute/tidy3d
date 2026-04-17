@@ -1,6 +1,6 @@
-******************
+********************
 Tidy3D + AI |:bulb:|
-******************
+********************
 
 *Ushering in a new era of AI-assisted photonic design*
 

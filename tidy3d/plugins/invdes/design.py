@@ -405,7 +405,7 @@ class InverseDesignMulti(AbstractInverseDesign):
     def to_simulation(
         self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
     ) -> dict[str, td.Simulation]:
-        """Convert the ``InverseDesign`` to a corresponding dict of ``td.Simulation``s."""
+        r"""Convert the ``InverseDesign`` to a corresponding dict of ``td.Simulation``\s."""
         if symmetry is None:
             symmetry = self._resolve_mirror_symmetry(params.shape)
         simulation_list = [
@@ -416,7 +416,7 @@ class InverseDesignMulti(AbstractInverseDesign):
     def to_simulation_data(
         self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None, **kwargs: Any
     ) -> td.web.BatchData:
-        """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
+        r"""Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``\s and run async."""
         simulations = self.to_simulation(params, symmetry=symmetry)
         return self.run_async(simulations, **kwargs)
 

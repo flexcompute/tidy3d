@@ -40,7 +40,7 @@ Placement
    SimulationBoundary
 
 Coefficient Models
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: ../_autosummary/

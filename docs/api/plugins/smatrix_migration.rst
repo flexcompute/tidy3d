@@ -1,9 +1,7 @@
 .. currentmodule:: tidy3d
 
-.. _smatrix_migration:
-
 v2.10 Refactor Migration
-----------------------
+------------------------
 
 In version ``v2.10.0rc1``, ``smatrix`` plugin classes were refactored to improve web and GUI support for RF capabilities. This guide helps you update your scripts to the new, more robust API.
 

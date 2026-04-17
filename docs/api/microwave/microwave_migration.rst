@@ -1,7 +1,7 @@
 .. _microwave_migration:
 
 v2.10 RF Refactor Migration Guide
--------------------------------
+---------------------------------
 
 In version ``v2.10.0``, the microwave and RF simulation capabilities underwent significant refactoring to improve consistency, clarity, and functionality. This guide covers three major sets of breaking changes:
 

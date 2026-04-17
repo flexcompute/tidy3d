@@ -69,7 +69,7 @@ class ErosionDilationPenalty(AbstractPenalty):
         ge=1.0,
         title="Projection Beta",
         description="Strength of the ``tanh`` projection. "
-        "Corresponds to ``beta`` in the :class:`BinaryProjector. "
+        "Corresponds to ``beta`` in the :class:`BinaryProjector`. "
         "Higher values correspond to stronger discretization.",
     )
 

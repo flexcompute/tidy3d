@@ -81,11 +81,11 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     The ``s_param_def`` parameter controls which wave definition is used to compute scattering
     parameters. Three definitions are supported:
 
-    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]. Uses scaling
+    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]_. Uses scaling
       factor :math:`F = \\sqrt{\\text{Re}(Z)} / (2|Z|)`. Wave amplitudes are :math:`a = F(V + ZI)`
       and :math:`b = F(V - ZI)`.
 
-    - ``"power"``: Power waves as defined by Kurokawa [3] and described in Pozar [2]. Uses
+    - ``"power"``: Power waves as defined by Kurokawa [3]_ and described in Pozar [2]_. Uses
       scaling factor :math:`F = 1 / (2\\sqrt{\\text{Re}(Z)})`. Wave amplitudes are
       :math:`a = F(V + ZI)` and :math:`b = F(V - Z^*I)` where :math:`Z^*` is the complex
       conjugate. Ensures :math:`|a|^2 - |b|^2` represents actual power flow.
@@ -416,7 +416,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             If ``None``, uses only the first port without any scaling of the raw simulation data. When
             ``None`` is passed as a port amplitude, the raw simulation data is used for that port. Note
             that in this method ``a`` represents the incident wave amplitude using the power wave definition
-            in [2].
+            in [2]_.
         monitor_name : str
             Name of the :class:`.DirectivityMonitor` to use for calculating far fields.
             If None, uses the first monitor in `radiation_monitors`.
@@ -667,7 +667,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         """Compute pseudo-wave amplitude matrices for all port combinations.
 
         This method returns the incident (a) and reflected (b) pseudo-wave amplitude matrices
-        computed using the pseudo-wave definition from Marks and Williams [1]. The matrices
+        computed using the pseudo-wave definition from Marks and Williams [1]_. The matrices
         represent the forward and backward traveling wave amplitudes at each output port when
         each input port is excited individually.
 
@@ -685,7 +685,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         """Compute power-wave amplitude matrices for all port combinations.
 
         This method returns the incident (a) and reflected (b) power-wave amplitude matrices
-        computed using the power-wave definition from Pozar [2]. The matrices represent the
+        computed using the power-wave definition from Pozar [2]_. The matrices represent the
         forward and backward traveling wave amplitudes at each output port when each input
         port is excited individually.
 

@@ -600,9 +600,9 @@ def network_complex_conductivity(
     a: tuple[float, ...], b: tuple[float, ...], freqs: np.ndarray
 ) -> np.ndarray:
     """Returns the equivalent conductivity of the lumped network over the range of frequencies
-    provided in ``freqs`` using the expression in _`[1]`.
+    provided in ``freqs`` using the expression in [1]_.
 
-    This implementation follows a similar approach as _`[1]` with a couple small differences. Instead of
+    This implementation follows a similar approach as [1]_ with a couple small differences. Instead of
     scaling the complex conductivity by the size of a single grid cell, we later scale the quantities by the
     size of the lumped element in the FDTD simulation. In many cases, we will assume the time step is small,
     so that the complex conductivity can be expressed more simply as a rational expression.
@@ -650,11 +650,11 @@ def network_complex_permittivity(
     a: tuple[float, ...], b: tuple[float, ...], freqs: np.ndarray
 ) -> np.ndarray:
     """Returns an equivalent complex permittivity of the lumped network over the range of frequencies
-    provided in ``freqs`` using the expression in _`[1]`. The result needs to be combined with a
+    provided in ``freqs`` using the expression in [1]_. The result needs to be combined with a
     :math:`\\epsilon_\\infty`, e.g., 1 or the existing background medium, before being added to an
     FDTD simulation.
 
-    This implementation follows a similar approach as _`[1]` with a couple small differences. Instead of
+    This implementation follows a similar approach as [1]_ with a couple small differences. Instead of
     scaling the complex conductivity by the size of a single grid cell, we later scale the quantities by the
     size of the lumped element in the FDTD simulation. In many cases, we will assume the time step is small,
     so that the complex conductivity can be expressed more simply as a rational expression.
@@ -696,7 +696,7 @@ class RLCNetwork(MicrowaveBaseModel):
     Notes
     -----
 
-        Implementation is based on the equivalent medium introduced by _`[1]`.
+        Implementation is based on the equivalent medium introduced by [1]_.
 
         **References**
 
@@ -975,7 +975,7 @@ class AdmittanceNetwork(MicrowaveBaseModel):
 
         The admittance is scaled depending on the geometric properties of the lumped element by
         the scaling factor :math:`\\Delta`. Implementation is based on the equivalent medium introduced
-        by _`[1]`.
+        by [1]_.
 
         **References**
 
@@ -1887,7 +1887,7 @@ class LinearLumpedElement(RectangularLumpedElement):
     Notes
     -----
 
-        Implementation is based on the equivalent medium introduced by _`[1]`.
+        Implementation is based on the equivalent medium introduced by [1]_.
 
         **References**
 

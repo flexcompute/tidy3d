@@ -3180,14 +3180,13 @@ class PolySlab(base.Planar):
     def reflected(self, normal: Coordinate) -> PolySlab:
         """Return a reflected copy of this geometry.
 
-            Parameters
-            ----------
-            normal : tuple[float, float, float]
-                The 3D normal vector of the plane of reflection. The plane is assumed
-                    to pass through the origin (0,0,0).
+        Parameters
+        ----------
+        normal : tuple[float, float, float]
+            The 3D normal vector of the plane of reflection. The plane is assumed
+            to pass through the origin (0,0,0).
 
-            Returns
-            -------
+        Returns
         -------
         :class:`PolySlab`
             Reflected copy of this ``PolySlab``.

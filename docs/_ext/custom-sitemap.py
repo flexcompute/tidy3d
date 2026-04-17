@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 
 def match_exclude_url(app, url):
@@ -18,7 +19,7 @@ def process_sitemap(app, exception):
         return
 
     # Get path to sitemap.xml file
-    sitemap_path = app.outdir + "/sitemap.xml"
+    sitemap_path = Path(app.outdir) / "sitemap.xml"
 
     # Parse sitemap.xml file
     tree = ET.parse(sitemap_path)
@@ -37,3 +38,4 @@ def process_sitemap(app, exception):
 def setup(app):
     # Bind the process_sitemap function to build-finished event
     app.connect("build-finished", process_sitemap)
+    return {"parallel_read_safe": True}

@@ -132,7 +132,7 @@ class Job(WebContainer):
 
         .. code-block:: python
 
-            tidy3d.web.upload(simulation, task_name="task_name", verbose=verbose)`
+            tidy3d.web.upload(simulation, task_name="task_name", verbose=verbose)
 
         It will not run until you explicitly tell it to do so with:
 

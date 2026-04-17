@@ -1328,7 +1328,7 @@ class AstigmaticGaussianBeam(AbstractGaussianBeam):
     Notes
     -----
 
-        This class implements the simple astigmatic Gaussian beam described in _`[1]`.
+        This class implements the simple astigmatic Gaussian beam described in [1]_.
 
         **References**:
 

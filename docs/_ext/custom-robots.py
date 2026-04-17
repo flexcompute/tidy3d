@@ -54,3 +54,4 @@ def setup(app):
     # Bind the process_sitemap function to build-finished event
     # exclude_pattern= dir(app.config)
     app.connect("build-finished", process_robots_txt)
+    return {"parallel_read_safe": True}

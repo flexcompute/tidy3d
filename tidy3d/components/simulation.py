@@ -2611,7 +2611,7 @@ class Simulation(AbstractYeeGridSimulation):
     :class:`BoundarySpec`:
         Specifies boundary conditions on each side of the domain and along each dimension.
 
-    `Index <../boundary_conditions.html>`_
+    `Index <../boundary_conditions.html>`__
         All boundary condition models.
 
     **Notebooks**
@@ -2928,7 +2928,7 @@ class Simulation(AbstractYeeGridSimulation):
     `Material Library <../material_library.html>`_:
         The material library is a dictionary containing various dispersive models from real world materials.
 
-    `Index <../mediums.html>`_:
+    `Index <../mediums.html>`__:
         Dispersive and dispersionless Mediums models.
 
     **Notebooks:**
@@ -2969,7 +2969,7 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    `Index <../monitors.html>`_
+    `Index <../monitors.html>`__
         All the monitor implementations.
     """
 
@@ -3006,7 +3006,7 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    `Index <../sources.html>`_:
+    `Index <../sources.html>`__:
         Frequency and time domain source models.
     """
 
@@ -6333,23 +6333,11 @@ class Simulation(AbstractYeeGridSimulation):
 
         Parameters
         ----------
-        temperature : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        temperature : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Temperature field data.
-        electron_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        electron_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Electron density field data.
-        hole_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        hole_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied

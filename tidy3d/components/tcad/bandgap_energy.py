@@ -19,7 +19,7 @@ class ConstantEnergyBandGap(Tidy3dBaseModel):
 class VarshniEnergyBandGap(Tidy3dBaseModel):
     """
     Models the temperature dependence of the energy band gap (Eg)
-    using the Varshni formula.
+    using the Varshni formula [1]_.
 
     Notes
     -----

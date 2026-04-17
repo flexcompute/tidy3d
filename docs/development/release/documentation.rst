@@ -6,8 +6,8 @@ The `tidy3d-docs` repository automatically mirrors the `tidy3d` repository. Spec
 - main
 - latest
 - develop
-- 'pre/*'
-- 'v*'
+- ``pre/*``
+- ``v*``
 
 These branches are synced to the tidy3d-docs repo through the sync-readthedocs-repo Github action.
 You can read the latest versions synced in the action file.

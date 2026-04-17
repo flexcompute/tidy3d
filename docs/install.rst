@@ -34,9 +34,12 @@ Quick Configuration
 
         In a hosted jupyter notebook environment (eg google colab), it may be more convenient to install and configure via the following lines at the top of the notebook.
 
+        .. code-block:: bash
+
+            pip install tidy3d
+
         .. code-block:: python
 
-            !pip install tidy3d
             import tidy3d.web as web
             web.configure("XXX")
 

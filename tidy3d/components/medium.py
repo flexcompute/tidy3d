@@ -961,23 +961,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
 
@@ -1773,23 +1757,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         conductivity = self.conductivity
@@ -2305,23 +2273,7 @@ class CustomMedium(AbstractCustomMedium):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         return self._medium.eps_dataarray_freq(frequency)
@@ -2376,12 +2328,7 @@ class CustomMedium(AbstractCustomMedium):
 
         Parameters
         ----------
-        eps : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.ScalarFieldDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        eps : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Dataset containing complex-valued permittivity as a function of space.
         freq : float, optional
             Frequency at which ``eps`` are defined.
@@ -2446,19 +2393,9 @@ class CustomMedium(AbstractCustomMedium):
 
         Parameters
         ----------
-        n : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.ScalarFieldDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        n : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Real part of refractive index.
-        k : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.ScalarFieldDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ], optional
+        k : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], optional
             Imaginary part of refrative index for lossy medium.
         freq : float, optional
             Frequency at which ``n`` and ``k`` are defined.
@@ -3468,7 +3405,7 @@ class PoleResidue(DispersiveMedium):
             The relative permittivity at infinite frequency.
         pole_tol: PositiveFloat
             Tolerance for the pole finding algorithm in Hertz. Two poles are considered equal, if their
-            spacing is closer than ``pole_tol`.
+            spacing is closer than ``pole_tol``.
         Returns
         -------
         :class:`.PoleResidue`
@@ -3568,7 +3505,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     -----
 
         In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of
-        resonant material poles _`[1]`.
+        resonant material poles [1]_.
 
         .. math::
 
@@ -3716,23 +3653,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         eps = PoleResidue.eps_model(self, frequency)
@@ -4228,23 +4149,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         eps = Sellmeier.eps_model(self, frequency)
@@ -4268,17 +4173,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         Parameters
         ----------
-        n : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        n : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Real part of refractive index. Must be larger than or equal to one.
-        dn_dwvl : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ]
+        dn_dwvl : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]
             Derivative of the refractive index with wavelength (1/um). Must be negative.
         freq : float
             Frequency at which ``n`` and ``dn_dwvl`` are sampled.
@@ -4801,23 +4698,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         eps = Lorentz.eps_model(self, frequency)
@@ -5182,23 +5063,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         eps = Drude.eps_model(self, frequency)
@@ -5623,23 +5488,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         eps = Debye.eps_model(self, frequency)
@@ -6865,23 +6714,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
         Returns
         -------
-        tuple[
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-            Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ],
-        ]
+        tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
         return tuple(
@@ -7011,23 +6844,11 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
 
         Parameters
         ----------
-        temperature : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        temperature : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Temperature field data.
-        electron_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        electron_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Electron density field data.
-        hole_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        hole_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied
@@ -7051,17 +6872,11 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
 
         Parameters
         ----------
-        medium : Union[
-                :class:`.Medium`,
-                :class:`.DispersiveMedium`,
-            ]
+        medium : Union[:class:`.Medium`, :class:`.DispersiveMedium`]
             A medium with no perturbation models.
         subpixel : bool = True
             Subpixel averaging of derivative custom medium.
-        perturbation_spec : Union[
-                :class:`.PermittivityPerturbation`,
-                :class:`.IndexPerturbation`,
-            ] = None
+        perturbation_spec : Union[:class:`.PermittivityPerturbation`, :class:`.IndexPerturbation`] = None
             Perturbation model specification.
 
         Returns
@@ -7166,23 +6981,11 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
         Parameters
         ----------
-        temperature : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        temperature : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Temperature field data.
-        electron_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        electron_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Electron density field data.
-        hole_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        hole_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied
@@ -7352,23 +7155,11 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         Parameters
         ----------
-        temperature : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        temperature : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Temperature field data.
-        electron_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        electron_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Electron density field data.
-        hole_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        hole_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied

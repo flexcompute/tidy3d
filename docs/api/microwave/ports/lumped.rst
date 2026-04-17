@@ -1,7 +1,5 @@
 .. currentmodule:: tidy3d
 
-.. _lumped_port:
-
 Lumped Port & Elements
 ----------------------
 

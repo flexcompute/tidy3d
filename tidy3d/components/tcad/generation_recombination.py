@@ -248,7 +248,7 @@ class DistributedGeneration(Tidy3dBaseModel):
 class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
     """
     This class defines a direct band-to-band tunneling recombination model based on the Hurkx model
-    as described in [1].
+    as described in [1]_.
 
     Notes
     -----

@@ -60,6 +60,8 @@ For RF and microwave applications, use the **TerminalComponentModeler** (availab
       * `RF Simulation Workflow <../microwave/component_modeler.html>`_ - Main RF simulation workflow
       * `Microwave & RF Documentation <../microwave/index.html>`_ - Comprehensive RF features
 
+.. _smatrix_migration:
+
 .. include:: /api/plugins/smatrix_migration.rst
 
 Further Details

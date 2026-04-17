@@ -3134,8 +3134,9 @@ class Transformed(Geometry):
     def preserves_axis(transform: MatrixReal4x4, axis: Axis) -> bool:
         """Indicate if the transform preserves the orientation of a given axis.
 
-        Parameters:
-        transform: MatrixReal4x4
+        Parameters
+        ----------
+        transform : MatrixReal4x4
             Transform matrix to check.
         axis : int
             Axis to check. Values 0, 1, or 2, to check x, y, or z, respectively.
@@ -3724,6 +3725,8 @@ class GeometryArray(Geometry):
     """A geometry representing an array of copies of a base geometry, with optional offsets
     and/or linear transformations applied to each copy.
 
+    Notes
+    -----
     This class provides an efficient way to represent arrays of repeated geometries,
     avoiding the need to create many individual geometry objects.
 
@@ -3731,8 +3734,6 @@ class GeometryArray(Geometry):
     where ``T`` is a translation matrix and ``L`` is the linear transform. In other words,
     the transform is applied first, then the translation.
 
-    Notes
-    -----
     - ``offsets`` represent all per-instance translation.
     - ``transforms`` represent linear transforms only (rotation/reflection/scale/shear)
       and must not contain translation. Use ``offsets`` for translations.
@@ -3740,21 +3741,6 @@ class GeometryArray(Geometry):
       instance of the base geometry at the origin.
     - If both are provided, they must have the same length.
     - Adjoint/autodiff is not currently supported for ``GeometryArray``.
-
-    Parameters
-    ----------
-    geometry : GeometryType
-        Base geometry to be repeated in the array. Must have finite bounds.
-    offsets : Optional[tuple[Coordinate, ...]]
-        Optional tuple of 3D coordinate offsets. Each offset translates the base geometry
-        (after any transform is applied) to create a copy. If not provided, no additional
-        translation is applied beyond any transforms.
-    transforms : Optional[tuple[MatrixReal4x4, ...]]
-        Optional tuple of 4x4 linear-only transformation matrices. Each transform must be
-        a valid homogeneous linear transform (rotation/reflection/scale/shear) with no
-        translation component (i.e., ``transform[:3, 3] == 0`` and
-        ``transform[3, :] == [0, 0, 0, 1]``). Typical transforms can be created using
-        ``Transformed.rotation``, ``Transformed.reflection``, or ``Transformed.scaling``.
 
     Example
     -------

@@ -1,7 +1,5 @@
 .. currentmodule:: tidy3d
 
-.. _rf_material_models:
-
 RF Materials Models
 -------------------
 

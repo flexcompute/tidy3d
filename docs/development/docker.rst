@@ -1,5 +1,5 @@
 Docker Development Environment
-=============================
+==============================
 
 This guide will get you up and running with Tidy3D Python client development using Docker. The Docker workflow provides an isolated, reproducible development environment without affecting your system packages.
 

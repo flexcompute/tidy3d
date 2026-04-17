@@ -59,7 +59,7 @@ We want to improve the speed of the project ``import`` and there are a few techn
 - `For profiling the package distribution in the import <https://stackoverflow.com/questions/16373510/improving-speed-of-python-module-import>`_
 - `In terms of speeding our operations <https://wearecommunity.io/communities/tectoniques/articles/2499#:~:text=Proper%20Import,in%20slowing%20down%20code%20performance.>`_
 
-We have already begun facing these type of code-speed issues as first raised `here <https://github.com/flexcompute/tidy3d/pull/1300>`_, `here <https://github.com/flexcompute/tidy3d/pull/1300>`_
+We have already begun facing these type of code-speed issues as first raised `here <https://github.com/flexcompute/tidy3d/pull/1300>`__, `here <https://github.com/flexcompute/tidy3d/pull/1300>`__
 
 So when we import dependencies inside our code-base in particular where these are used, we will try to do the following:
 

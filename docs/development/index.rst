@@ -15,6 +15,8 @@ Welecome to the ``tidy3d`` developers guide!
     release/index
 
 .. include:: /development/introduction/index.rst
+.. _the detailed lane:
+
 .. include:: /development/installation.rst
 .. include:: /development/usage.rst
 .. include:: /development/recommendations.rst

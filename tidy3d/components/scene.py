@@ -1948,23 +1948,11 @@ class Scene(Tidy3dBaseModel):
 
         Parameters
         ----------
-        temperature : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        temperature : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Temperature field data.
-        electron_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        electron_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Electron density field data.
-        hole_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        hole_density : Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied

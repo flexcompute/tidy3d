@@ -14,7 +14,7 @@ We use it to:
 - Build distribution artifacts.
 
 Why we use it in ``tidy3d``
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. Dependency metadata lives in one place: ``pyproject.toml``.
 2. ``uv.lock`` captures exact resolved versions for reproducible installs.
@@ -28,7 +28,7 @@ See the development installation guide in this documentation, or follow the offi
 `project workflows <https://docs.astral.sh/uv/guides/projects/>`_.
 
 Project workflow in this repo
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Create/update the development environment:
 

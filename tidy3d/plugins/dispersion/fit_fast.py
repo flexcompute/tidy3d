@@ -169,7 +169,7 @@ class FastDispersionFitter(DispersionFitter):
 
         Returns
         -------
-        :class:`.PoleResidue
+        :class:`.PoleResidue`
             Best results of multiple fits.
         """
         params, _ = constant_loss_tangent_model(

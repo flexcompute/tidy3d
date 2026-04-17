@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
 
 def html_page_context(app, pagename, templatename, context, doctree):
-    notebook_path = app.env.doc2path(os.path.abspath("" + pagename), base=None)
+    notebook_path = app.env.doc2path(str(Path(pagename).resolve()), base=None)
     if "/notebooks/" in notebook_path or notebook_path.endswith("examples.rst"):
         if "metatags" in context:
             context["metatags"] += "".join(['\n\t<meta content="noindex" name="robots" />'])
@@ -12,3 +12,4 @@ def html_page_context(app, pagename, templatename, context, doctree):
 
 def setup(app):
     app.connect("html-page-context", html_page_context)
+    return {"parallel_read_safe": True}
