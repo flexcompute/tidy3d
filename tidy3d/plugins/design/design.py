@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from typing import TYPE_CHECKING, Any, Optional, get_args
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import TYPE_TAG_STR
@@ -18,6 +18,7 @@ from .method import (
     MethodGenAlg,
     MethodOptimize,
     MethodParticleSwarm,
+    MethodSample,
     MethodType,
 )
 from .parameter import ParameterAny, ParameterInt, ParameterType
@@ -117,6 +118,26 @@ class DesignSpace(Tidy3dBaseModel):
         """dimensions defined by the design parameter names."""
         return tuple(param.name for param in self.parameters)
 
+    @model_validator(mode="after")
+    def _validate_method_filter_func(self) -> DesignSpace:
+        """Validate method filter callback shape when available."""
+        if not isinstance(self.method, MethodSample) or self.method.filter_func is None:
+            return self
+
+        filter_func = self.method.filter_func
+        filter_sig = inspect.signature(filter_func)
+        sample_kwargs = {param.name: param.sample_first() for param in self.parameters}
+
+        try:
+            filter_sig.bind(**sample_kwargs)
+        except TypeError as exc:
+            raise ValueError(
+                "'filter_func' must accept keyword arguments for all design parameter names "
+                f"{tuple(sample_kwargs.keys())}. Signature validation failed: {exc}"
+            ) from exc
+
+        return self
+
     def _package_run_results(
         self,
         fn_args: list[dict[str, Any]],
@@ -129,14 +150,12 @@ class DesignSpace(Tidy3dBaseModel):
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
-        fn_args_coords = tuple(
-            [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0].keys()]
-        )
+        fn_args_coords = tuple([[arg_dict[dim] for arg_dict in fn_args] for dim in self.dims])
 
         fn_args_coords_T = list(map(list, zip(*fn_args_coords)))
 
         return Result(
-            dims=tuple(fn_args[0].keys()),
+            dims=self.dims,
             values=fn_values,
             coords=fn_args_coords_T,
             fn_source=fn_source,

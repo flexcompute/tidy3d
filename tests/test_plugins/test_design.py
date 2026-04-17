@@ -810,6 +810,73 @@ def test_sample_specific(sweep_method, monkeypatch):
     assert ts_sim_complex_df["test4"][0] == 3.14
 
 
+def test_method_grid_filter_func():
+    method = tdd.MethodGrid(
+        filter_func=lambda radius, num_spheres, tag: radius > num_spheres and tag == "tag1"
+    )
+    design_space = init_design_space(sweep_method=method)
+
+    result = design_space.run(float_non_td_combined, verbose=False)
+    result_df = result.to_dataframe()
+
+    assert len(result.coords) == 3
+    assert all(result_df["radius"] > result_df["num_spheres"])
+    assert set(result_df["tag"]) == {"tag1"}
+
+
+def test_method_monte_carlo_filter_func():
+    design_space = tdd.DesignSpace(
+        parameters=[
+            tdd.ParameterFloat(name="p1", span=(0.0, 1.0)),
+            tdd.ParameterFloat(name="p2", span=(0.0, 1.0)),
+        ],
+        method=tdd.MethodMonteCarlo(num_points=40, seed=1, filter_func=lambda p1, p2: p1 > p2),
+    )
+
+    result = design_space.run(lambda p1, p2: p1 - p2, verbose=False)
+    result_df = result.to_dataframe()
+
+    assert len(result.coords) == 40
+    assert all(result_df["p1"] > result_df["p2"])
+
+
+def test_method_filter_func_can_reject_all_samples():
+    design_space = init_design_space(
+        sweep_method=tdd.MethodGrid(filter_func=lambda **kwargs: False)
+    )
+
+    with pytest.raises(ValueError, match="No valid parameter combinations remain"):
+        design_space.run(float_non_td_combined, verbose=False)
+
+
+def test_method_monte_carlo_filter_func_attempts_per_sample():
+    design_space = tdd.DesignSpace(
+        parameters=[
+            tdd.ParameterFloat(name="p1", span=(0.0, 1.0)),
+        ],
+        method=tdd.MethodMonteCarlo(
+            num_points=5,
+            seed=1,
+            filter_attempts_per_sample=2,
+            filter_func=lambda p1: p1 > 2.0,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="increase 'filter_attempts_per_sample'"):
+        design_space.run(lambda p1: p1, verbose=False)
+
+
+def test_method_filter_func_signature_validated_on_init():
+    with pytest.raises(ValueError, match="must accept keyword arguments"):
+        tdd.DesignSpace(
+            parameters=[
+                tdd.ParameterFloat(name="p1", span=(0.0, 1.0)),
+                tdd.ParameterFloat(name="p2", span=(0.0, 1.0)),
+            ],
+            method=tdd.MethodGrid(filter_func=lambda p1: p1 > 0.5),
+        )
+
+
 method_module_convert = {
     "MethodBayOpt": "bayes_opt",
     "MethodGenAlg": "pygad",

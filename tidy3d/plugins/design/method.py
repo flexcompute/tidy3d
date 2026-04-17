@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 ArgsList = list[dict[str, Any]]
 RunFunction = Callable[[ArgsList], list[Any]]
 RunResult = tuple[ArgsList, list[Any], list[Any] | None, Any | None]
+FilterFunction = Callable[..., bool]
 
 
 class Method(Tidy3dBaseModel, ABC):
@@ -69,6 +70,10 @@ class Method(Tidy3dBaseModel, ABC):
         self, output: list[Any], sampler: bool = False
     ) -> list[Any] | tuple[list[float], list[Any]]:
         """Format the user function output for further optimization and result storage."""
+        if len(output) == 0:
+            if sampler:
+                return []
+            return [], []
 
         # Light check if all the outputs are the same type
         # If the user has supplied multiple returns this may catch it
@@ -125,9 +130,39 @@ class Method(Tidy3dBaseModel, ABC):
 class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed in one iteration."""
 
+    filter_func: Optional[FilterFunction] = Field(
+        None,
+        title="Filter Function",
+        description="Optional callback called as ``filter_func(**sample)`` for each sampled "
+        "parameter combination. Return ``True`` to keep the sample or ``False`` to skip it.",
+        exclude=True,
+    )
+
     @abstractmethod
     def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> ArgsList:
         """Defines how the design parameters are sampled."""
+
+    def _filter_args(self, fn_args: ArgsList) -> ArgsList:
+        """Filter sampled arguments with ``filter_func`` if provided."""
+        if self.filter_func is None:
+            return fn_args
+
+        filtered_fn_args = []
+        for arg_dict in fn_args:
+            try:
+                keep_sample = self.filter_func(**arg_dict)
+            except Exception as exc:
+                raise ValueError(
+                    f"Error while evaluating 'filter_func' with arguments {arg_dict}: {exc}"
+                ) from exc
+            if not isinstance(keep_sample, (bool, np.bool_)):
+                raise ValueError(
+                    "'filter_func' must return a bool for each sampled parameter combination."
+                )
+            if keep_sample:
+                filtered_fn_args.append(arg_dict)
+
+        return filtered_fn_args
 
     def _assemble_args(
         self,
@@ -138,7 +173,7 @@ class MethodSample(Method, ABC):
         fn_args = self.sample(parameters)
         for arg_dict in fn_args:
             self._force_int(arg_dict, parameters)
-        return fn_args
+        return self._filter_args(fn_args)
 
     def _run(
         self,
@@ -150,6 +185,8 @@ class MethodSample(Method, ABC):
 
         # get all function inputs
         fn_args = self._assemble_args(parameters)
+        if self.filter_func is not None and len(fn_args) == 0:
+            raise ValueError("No valid parameter combinations remain after applying 'filter_func'.")
 
         # Run user function on sampled args
         results = self._extract_output(run_fn(fn_args), sampler=True)
@@ -871,6 +908,14 @@ class AbstractMethodRandom(MethodSample, ABC):
         description="Sets the seed used by the optimizers to set constant random number generation.",
     )
 
+    filter_attempts_per_sample: PositiveInt = Field(
+        32,
+        title="Filter Attempts Per Sample",
+        description="Maximum number of random sampling attempts per requested sample when "
+        "``filter_func`` is provided. The overall attempt limit is "
+        "``num_points * filter_attempts_per_sample``.",
+    )
+
     @abstractmethod
     def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
@@ -879,12 +924,11 @@ class AbstractMethodRandom(MethodSample, ABC):
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
-    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> ArgsList:
-        """Defines how the design parameters are sampled on grid."""
-
-        sampler = self._get_sampler(parameters)
-        pts_01 = sampler.random(self.num_points)
-
+    @staticmethod
+    def _pts_01_to_args(
+        pts_01: NDArray[np.floating], parameters: tuple[ParameterType, ...]
+    ) -> ArgsList:
+        """Convert points in [0, 1] to sampled argument dictionaries."""
         # Convert value from 0-1 to fit within the parameter spans
         args_by_param = []
         for i, design_var in enumerate(parameters):
@@ -892,11 +936,57 @@ class AbstractMethodRandom(MethodSample, ABC):
             args_by_param.append(design_var.select_from_01(pts_i_01))
         args_by_sample = [[row[i] for row in args_by_param] for i in range(len(args_by_param[0]))]
 
-        # Get output list of kwargs for pre_fn
         keys = [param.name for param in parameters]
-        result: ArgsList = [{keys[j]: row[j] for j in range(len(keys))} for row in args_by_sample]
+        return [{keys[j]: row[j] for j in range(len(keys))} for row in args_by_sample]
 
-        return result
+    def _sample_candidate_args(
+        self,
+        sampler: qmc_type.QMCEngine,
+        parameters: tuple[ParameterType, ...],
+        num_points: int,
+    ) -> ArgsList:
+        """Sample raw candidates."""
+        pts_01 = sampler.random(num_points)
+        return self._pts_01_to_args(pts_01, parameters)
+
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> ArgsList:
+        """Defines how the design parameters are sampled on grid."""
+
+        sampler = self._get_sampler(parameters)
+        return self._sample_candidate_args(sampler, parameters, self.num_points)
+
+    def _assemble_args(
+        self,
+        parameters: tuple[ParameterType, ...],
+    ) -> ArgsList:
+        """Sample random points and, if needed, retry to satisfy filtered ``num_points``."""
+        if self.filter_func is None:
+            return super()._assemble_args(parameters)
+
+        sampler = self._get_sampler(parameters)
+        accepted_args: ArgsList = []
+        attempts = 0
+        total_candidates = 0
+        max_attempts = self.num_points * self.filter_attempts_per_sample
+
+        while len(accepted_args) < self.num_points and attempts < max_attempts:
+            attempts += 1
+            needed = self.num_points - len(accepted_args)
+            candidate_args = self._sample_candidate_args(sampler, parameters, needed)
+            total_candidates += len(candidate_args)
+
+            accepted_args.extend(self._filter_args(candidate_args))
+
+        accepted_count = len(accepted_args)
+        if accepted_count < self.num_points:
+            raise ValueError(
+                "Unable to satisfy filtered Monte Carlo sampling. "
+                f"Accepted {accepted_count} of {self.num_points} points after {attempts} "
+                f"attempts ({total_candidates} total candidates). "
+                "Relax 'filter_func' or increase 'filter_attempts_per_sample'."
+            )
+
+        return accepted_args[: self.num_points]
 
 
 class MethodMonteCarlo(AbstractMethodRandom):
