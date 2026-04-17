@@ -11,7 +11,7 @@ from shapely.geometry import GeometryCollection, LineString
 from shapely.geometry import Polygon as ShapelyPolygon
 
 import tidy3d as td
-import tidy3d.plugins.autograd.invdes.polyslab_set as polyslab_set_module
+import tidy3d.plugins.invdes.polyslab_set as polyslab_set_module
 from tidy3d.components.geometry.contour_conversion import (
     _dataarray_to_polyslab_data_and_permittivity_bounds,
     _geometry_to_polygons,
@@ -22,7 +22,7 @@ from tidy3d.components.geometry.contour_conversion import (
 from tidy3d.components.grid.grid import Coords
 from tidy3d.components.structure import resolve_foreground_background_media
 from tidy3d.plugins.autograd import make_curvature_penalty
-from tidy3d.plugins.autograd.invdes import PolySlabSet, curvature_penalty, smooth_polygon_vertices
+from tidy3d.plugins.invdes import PolySlabSet, curvature_penalty, smooth_polygon_vertices
 
 
 def make_custom_medium_from_eps(eps_xyz, x, y, z):

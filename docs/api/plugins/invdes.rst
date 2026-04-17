@@ -13,6 +13,9 @@ Inverse Design Plugin
 
    plugins.invdes.FilterProject
    plugins.invdes.ErosionDilationPenalty
+   plugins.invdes.PolySlabSet
+   plugins.invdes.curvature_penalty
+   plugins.invdes.smooth_polygon_vertices
    plugins.invdes.TopologyDesignRegion
    plugins.invdes.InverseDesign
    plugins.invdes.InverseDesignMulti

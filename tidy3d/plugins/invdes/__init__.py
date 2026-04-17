@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import tidy3d.plugins.expressions
+from tidy3d.components.geometry.contour_conversion import smooth_polygon_vertices
 
 from . import utils
 from .base import InvdesBaseModel
+from .contours import curvature_penalty
 from .design import AbstractInverseDesign, InverseDesign, InverseDesignMulti, InverseDesignType
 from .initialization import (
     AbstractInitializationSpec,
@@ -14,6 +16,7 @@ from .initialization import (
 )
 from .optimizer import AbstractOptimizer, AdamOptimizer
 from .penalty import AbstractPenalty, ErosionDilationPenalty, PenaltyType
+from .polyslab_set import PolySlabSet
 from .region import DesignRegion, DesignRegionType, TopologyDesignRegion
 from .result import InverseDesignResult
 from .transformation import AbstractTransformation, FilterProject, TransformationType
@@ -42,9 +45,12 @@ __all__ = (
     "InverseDesignResult",
     "InverseDesignType",
     "PenaltyType",
+    "PolySlabSet",
     "RandomInitializationSpec",
     "TopologyDesignRegion",
     "TransformationType",
     "UniformInitializationSpec",
+    "curvature_penalty",
+    "smooth_polygon_vertices",
     "utils",
 )
