@@ -2501,7 +2501,7 @@ def test_eme_periodicity():
         monitors=tuple(m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor))
     )
     sim2 = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
-    assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+    assert set(sim2.cell_index_pairs) == desired_cell_index_pairs
     # sweep can't have coeff monitor
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(sweep_spec=sweep_spec)
@@ -2513,7 +2513,7 @@ def test_eme_periodicity():
             monitors=tuple(m for m in sim.monitors if not isinstance(m, td.EMECoefficientMonitor))
         )
         sim2 = sim.updated_copy(sweep_spec=sweep_spec)
-        assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+        assert set(sim2.cell_index_pairs) == desired_cell_index_pairs
 
 
 def test_eme_grid_from_structures():
@@ -2608,3 +2608,437 @@ def test_eme_sim_2d():
         monitors=(monitor,),
         port_offsets=(0.5, 0),
     )
+
+
+# --- Local staged propagation tests ---
+
+
+def _mda(data, freqs, nm0, nm1):
+    """Helper to wrap numpy array into EMESMatrixDataArray with singleton sweep_index."""
+    from tidy3d.components.data.data_array import EMESMatrixDataArray
+
+    data = np.asarray(data)
+    if data.ndim == 3:
+        data = data[:, None, :, :]
+    return EMESMatrixDataArray(
+        data,
+        coords={
+            "f": freqs,
+            "sweep_index": [0],
+            "mode_index_out": np.arange(nm0),
+            "mode_index_in": np.arange(nm1),
+        },
+    )
+
+
+def make_local_eme_sim(num_cells=3, num_modes=4, sweep_spec=None, constraint="passive"):
+    """Create a small EMESimulation for local propagation testing."""
+    lambda0 = 1.55
+    freq0 = td.C_0 / lambda0
+    return td.EMESimulation(
+        size=(2 * lambda0, 2 * lambda0, 3 * lambda0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(lambda0 / 2, lambda0 / 2, td.inf)),
+                medium=td.Medium(permittivity=2.25),
+            )
+        ],
+        grid_spec=td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=6),
+        axis=2,
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=num_cells,
+            mode_spec=td.EMEModeSpec(num_modes=num_modes, num_pml=(6, 6)),
+        ),
+        freqs=[freq0],
+        sweep_spec=sweep_spec,
+        constraint=constraint,
+    )
+
+
+def test_eme_stage_models():
+    """Stage model creation and identity stamping."""
+    S = _mda(np.eye(2, dtype=complex).reshape(1, 2, 2), [2e14], 2, 2)
+    nc = td.ModeIndexDataArray(
+        (1.5 + 0j) * np.ones((1, 2)), coords={"f": [2e14], "mode_index": [0, 1]}
+    )
+    fl = td.FreqModeDataArray(
+        (0.5 + 0j) * np.ones((1, 2)), coords={"f": [2e14], "mode_index": [0, 1]}
+    )
+
+    # Cell overlap with identity
+    co = td.EMEStageCellOverlap(cell_index=2, n_complex=nc, complex_flux=fl, self_overlap=S)
+    assert co.cell_index == 2
+
+    # Interface overlap with identity
+    io = td.EMEStageInterfaceOverlap(cell_index=0, right_cell_index=1, O12=S, O21=S)
+    assert io.cell_index == 0
+    assert io.right_cell_index == 1
+
+    # Cell S-matrix with identity
+    csm = td.EMEStageCellSMatrix(cell_index=1, sweep_index=3, S11=S, S12=S, S21=S, S22=S)
+    assert csm.cell_index == 1
+    assert csm.sweep_index == 3
+    assert isinstance(csm, td.EMESMatrixDataset)
+
+    # Interface S-matrix with identity
+    ism = td.EMEStageInterfaceSMatrix(
+        cell_index=0, right_cell_index=1, sweep_index=0, S11=S, S12=S, S21=S, S22=S
+    )
+    assert ism.right_cell_index == 1
+    assert isinstance(ism, td.EMESMatrixDataset)
+
+
+def test_eme_stage_serialization():
+    """HDF5 round-trip for stage models."""
+    import os
+    import tempfile
+
+    S = _mda(np.eye(2, dtype=complex).reshape(1, 2, 2) * (0.7 + 0.3j), [2e14], 2, 2)
+    nc = td.ModeIndexDataArray(
+        (1.5 + 0j) * np.ones((1, 2)), coords={"f": [2e14], "mode_index": [0, 1]}
+    )
+    fl = td.FreqModeDataArray(
+        (0.5 + 0j) * np.ones((1, 2)), coords={"f": [2e14], "mode_index": [0, 1]}
+    )
+
+    def _roundtrip(obj, cls):
+        with tempfile.NamedTemporaryFile(suffix=".hdf5", delete=False) as f:
+            path = f.name
+        try:
+            obj.to_hdf5(path)
+            return cls.from_hdf5(path)
+        finally:
+            os.unlink(path)
+
+    # Cell overlap round-trip
+    co = td.EMEStageCellOverlap(cell_index=0, n_complex=nc, complex_flux=fl, self_overlap=S)
+    co2 = _roundtrip(co, td.EMEStageCellOverlap)
+    assert co2.cell_index == 0
+    np.testing.assert_allclose(co2.self_overlap.values, S.values)
+
+    # Cell S-matrix round-trip
+    csm = td.EMEStageCellSMatrix(cell_index=1, sweep_index=0, S11=S, S12=S, S21=S, S22=S)
+    csm2 = _roundtrip(csm, td.EMEStageCellSMatrix)
+    assert csm2.cell_index == 1
+    np.testing.assert_allclose(csm2.S21.values, S.values)
+
+    # Interface S-matrix round-trip
+    ism = td.EMEStageInterfaceSMatrix(
+        cell_index=0, right_cell_index=1, sweep_index=0, S11=S, S12=S, S21=S, S22=S
+    )
+    ism2 = _roundtrip(ism, td.EMEStageInterfaceSMatrix)
+    assert ism2.cell_index == 0
+    assert ism2.right_cell_index == 1
+    np.testing.assert_allclose(ism2.S12.values, S.values)
+
+
+def test_eme_mode_simulations():
+    """mode_simulations property returns correct ModeSimulation objects."""
+    from tidy3d.components.mode.simulation import ModeSimulation
+
+    sim = make_local_eme_sim(num_cells=3)
+    mode_sims = sim.mode_simulations
+    assert len(mode_sims) == 3
+    for ms in mode_sims:
+        assert isinstance(ms, ModeSimulation)
+        np.testing.assert_array_equal(ms.freqs, sim.freqs)
+        assert ms.plane.size.count(0.0) == 1
+
+    # Property works even with a sweep_spec — always returns full modes
+    sweep = td.EMEModeSweep(num_modes=[2, 4])
+    sim_sweep = make_local_eme_sim(num_modes=4, sweep_spec=sweep)
+    mode_sims = sim_sweep.mode_simulations
+    for ms in mode_sims:
+        assert ms.mode_spec.num_modes == 4
+
+    # Bent anisotropic media in the global frame is rejected by the local
+    # path: subpixel runs before the bend rotation and does not yet
+    # support fully anisotropic tensors.
+    diag_aniso_med = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2),
+        yy=td.Medium(permittivity=3),
+        zz=td.Medium(permittivity=4),
+    )
+    base_sim = make_eme_sim()
+    bent_sim = base_sim.updated_copy(
+        structures=(base_sim.structures[0].updated_copy(medium=diag_aniso_med),),
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=3,
+            mode_spec=td.EMEModeSpec(
+                num_modes=2,
+                bend_radius=10.0,
+                bend_axis=1,
+                bend_medium_frame="global",
+            ),
+        ),
+    )
+    with pytest.raises(SetupError, match="bend_medium_frame"):
+        _ = bent_sim.mode_simulations
+
+    # The co-rotating frame is fine because each cell's local frame
+    # already encodes the bend orientation, so no explicit rotation is
+    # required at the solver boundary.
+    co_rotating_sim = bent_sim.updated_copy(
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=3,
+            mode_spec=td.EMEModeSpec(
+                num_modes=2,
+                bend_radius=10.0,
+                bend_axis=1,
+                bend_medium_frame="co_rotating",
+            ),
+        ),
+    )
+    assert len(co_rotating_sim.mode_simulations) == 3
+
+
+def test_eme_cell_lengths():
+    """_get_cell_lengths resolves from grid and sweep."""
+    sim = make_local_eme_sim(num_cells=3)
+    lengths = sim._get_cell_lengths(None)
+    assert len(lengths) == 3 and all(L > 0 for L in lengths)
+    sweep = td.EMELengthSweep(scale_factors=[2.0, 0.5])
+    sim2 = make_local_eme_sim(num_cells=3, sweep_spec=sweep)
+    base = sim2._get_cell_lengths(None)
+    scaled = sim2._get_cell_lengths(0)
+    for b, s in zip(base, scaled):
+        np.testing.assert_allclose(s, b * 2.0)
+
+
+@pytest.mark.numerical
+def test_eme_local_tunneling():
+    """Tunneling with passive constraint: unitarity and reciprocity."""
+    lambda0 = 1
+    freq0 = td.C_0 / lambda0
+    n1, n2 = 2, 1
+    L = lambda0 / 4
+    sim = td.EMESimulation(
+        size=(lambda0 / 3, lambda0 / 15, L + lambda0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(td.inf, td.inf, L)),
+                medium=td.Medium(permittivity=n2**2),
+            )
+        ],
+        medium=td.Medium(permittivity=n1**2),
+        freqs=[freq0],
+        axis=2,
+        grid_spec=td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=30),
+        eme_grid_spec=td.EMEExplicitGrid(
+            boundaries=[-L / 2, L / 2],
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+        ),
+    )
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    smatrix = sim.propagate(mode_data)
+    S11 = smatrix.S11.values.squeeze()
+    S12 = smatrix.S12.values.squeeze()
+    S21 = smatrix.S21.values.squeeze()
+    S22 = smatrix.S22.values.squeeze()
+    assert abs(abs(S11) ** 2 + abs(S21) ** 2 - 1.0) < 0.02
+    assert abs(abs(S22) ** 2 + abs(S12) ** 2 - 1.0) < 0.02
+    assert abs(S21 - S12) < 0.02
+
+
+@pytest.mark.numerical
+def test_eme_local_tir():
+    """Total internal reflection: multi-mode interface with passive constraint."""
+    lambda0 = 1
+    freq0 = td.C_0 / lambda0
+    sim = td.EMESimulation(
+        size=(lambda0 / 3, lambda0 / 15, 3 * lambda0),
+        structures=[
+            td.Structure(
+                geometry=td.Box.from_bounds(rmin=(-100, -100, -100), rmax=(100, 100, 0)),
+                medium=td.Medium(permittivity=4),
+            ),
+            td.Structure(
+                geometry=td.Box.from_bounds(rmin=(-100, -100, 0), rmax=(100, 100, 100)),
+                medium=td.Medium(permittivity=1),
+            ),
+        ],
+        grid_spec=td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=50),
+        axis=2,
+        eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec(num_modes=10)),
+        freqs=[freq0],
+        normalize=False,
+        constraint="passive",
+    )
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    smatrix = sim.propagate(mode_data)
+    R = abs(smatrix.S11.values.squeeze()[0, 0])
+    assert R > 0.99
+
+
+@pytest.mark.numerical
+def test_eme_local_staged_vs_oneshot():
+    """Explicit per-element staged pipeline matches propagate."""
+    sim = make_local_eme_sim(num_cells=2, num_modes=3)
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+
+    # One-shot
+    sm_oneshot = sim.propagate(mode_data)
+
+    # Explicit per-element pipeline
+    cell_modes = [sim.stage_cell_modes(md, cell_index=i) for i, md in enumerate(mode_data)]
+    cell_overlaps = [sim.compute_cell_overlap(cm) for cm in cell_modes]
+    iface_overlaps = [
+        sim.compute_interface_overlap(cell_modes[li], cell_modes[ri])
+        for li, ri in sim.cell_index_pairs
+    ]
+    cell_sms = [sim.compute_cell_smatrix(co) for co in cell_overlaps]
+    iface_sms = [
+        sim.compute_interface_smatrix(cell_overlaps[li], cell_overlaps[ri], io)
+        for (li, ri), io in zip(sim.cell_index_pairs, iface_overlaps)
+    ]
+    sm_staged = sim.compute_smatrix(cell_overlaps, cell_sms, iface_sms)
+
+    np.testing.assert_allclose(sm_oneshot.S21.values, sm_staged.S21.values, rtol=1e-12)
+    np.testing.assert_allclose(sm_oneshot.S11.values, sm_staged.S11.values, atol=1e-14)
+
+    # Periodicity sweep: virtual cell indices repeat (e.g. [0, 1, 0, 1]),
+    # exercising dict-based lookup by cell_index rather than list position.
+    lambda0 = 1.55
+    freq0 = td.C_0 / lambda0
+    periodic_sim = td.EMESimulation(
+        size=(2 * lambda0, 2 * lambda0, 3 * lambda0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(lambda0 / 2, lambda0 / 2, td.inf)),
+                medium=td.Medium(permittivity=2.25),
+            )
+        ],
+        grid_spec=td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=6),
+        axis=2,
+        eme_grid_spec=td.EMEExplicitGrid(
+            boundaries=[0.0],
+            mode_specs=[td.EMEModeSpec(num_modes=3, num_pml=(6, 6))] * 2,
+            name="unit",
+        ),
+        freqs=[freq0],
+        sweep_spec=td.EMEPeriodicitySweep(num_reps=[{"unit": 1}, {"unit": 3}]),
+        constraint="passive",
+    )
+    pmode_data = [ms.run_local() for ms in periodic_sim.mode_simulations]
+    sm_periodic = periodic_sim.propagate(pmode_data)
+    assert sm_periodic.S21.shape[1] == 2  # two sweep points
+    for si in range(2):
+        T = abs(sm_periodic.S21.isel(sweep_index=si).values.squeeze()) ** 2
+        assert T.sum() > 0
+
+
+@pytest.mark.numerical
+def test_eme_local_length_sweep():
+    """Length sweep via propagate."""
+    lambda0 = 1
+    freq0 = td.C_0 / lambda0
+    sim = td.EMESimulation(
+        size=(lambda0 / 3, lambda0 / 15, lambda0 / 4 + lambda0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(td.inf, td.inf, lambda0 / 4)),
+                medium=td.Medium(permittivity=1),
+            )
+        ],
+        medium=td.Medium(permittivity=4),
+        freqs=[freq0],
+        axis=2,
+        grid_spec=td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=30),
+        eme_grid_spec=td.EMEExplicitGrid(
+            boundaries=[-lambda0 / 8, lambda0 / 8],
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+        ),
+        sweep_spec=td.EMELengthSweep(scale_factors=[0.5, 1.0, 2.0]),
+        constraint=None,
+    )
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    smatrix = sim.propagate(mode_data)
+    # Shorter barrier -> higher transmission
+    T = [float(abs(smatrix.S21.isel(sweep_index=si).values.squeeze()) ** 2) for si in range(3)]
+    assert T[0] > T[2]
+
+
+def test_eme_propagate_rejects_freq_sweep():
+    """The local staged path rejects EMEFreqSweep at every entry point."""
+    from tidy3d.exceptions import SetupError
+
+    sim = make_local_eme_sim(num_cells=2, sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1.0, 1.1]))
+
+    # mode_simulations fails before the caller ever pays for a mode solve.
+    with pytest.raises(SetupError, match="EMEFreqSweep"):
+        _ = sim.mode_simulations
+
+    # Drop the EMEFreqSweep to get mode data we can hand to other entry points,
+    # then reinstate it on the sim and confirm each of them also rejects.
+    sim_ms = sim.updated_copy(sweep_spec=None)
+    mode_data = [ms.run_local() for ms in sim_ms.mode_simulations]
+
+    with pytest.raises(SetupError, match="EMEFreqSweep"):
+        sim.propagate(mode_data)
+
+    with pytest.raises(SetupError, match="EMEFreqSweep"):
+        sim.compute_overlaps(mode_data)
+
+
+def test_eme_stack_sweep_points_zero_pads_ragged_modes():
+    """Stacking per-sweep-point S-matrix blocks under EMEModeSweep must zero-pad
+    missing mode entries rather than NaN-pad (which would poison .sum() etc.)."""
+    from tidy3d.components.eme.simulation import _stack_sweep_points
+
+    freqs = [2e14]
+    # Three sweep points with varying mode counts, matching EMEModeSweep(num_modes=[1,2,4]).
+    per_point_blocks = []
+    for si, n in enumerate([1, 2, 4]):
+        block = np.full((1, 1, n, n), fill_value=complex(si + 1, 0))
+        per_point_blocks.append(
+            td.EMESMatrixDataArray(
+                block,
+                coords={
+                    "f": freqs,
+                    "sweep_index": [si],
+                    "mode_index_out": np.arange(n),
+                    "mode_index_in": np.arange(n),
+                },
+            )
+        )
+
+    stacked = _stack_sweep_points(per_point_blocks)
+
+    # Shape: (f, sweep_index=3, mode_index_out=4, mode_index_in=4).
+    assert stacked.shape == (1, 3, 4, 4)
+    assert not np.isnan(stacked.values).any(), "NaN values found; zero-fill regression"
+
+    # Sweep point 0 (num_modes=1): only [0,0] is filled with 1.
+    sweep0 = stacked.isel(sweep_index=0, f=0).values
+    assert sweep0[0, 0] == complex(1, 0)
+    assert np.count_nonzero(sweep0) == 1
+
+    # Sweep point 1 (num_modes=2): top-left 2x2 filled with 2.
+    sweep1 = stacked.isel(sweep_index=1, f=0).values
+    assert np.all(sweep1[:2, :2] == complex(2, 0))
+    assert np.all(sweep1[2:, :] == 0)
+    assert np.all(sweep1[:, 2:] == 0)
+
+    # Sweep point 2 (num_modes=4): full 4x4 filled with 3.
+    sweep2 = stacked.isel(sweep_index=2, f=0).values
+    assert np.all(sweep2 == complex(3, 0))
+
+    # Downstream reductions must be finite.
+    T = (np.abs(stacked.values) ** 2).sum()
+    assert np.isfinite(T) and T > 0
+
+
+@pytest.mark.numerical
+def test_eme_local_mode_sweep():
+    """Mode sweep via propagate."""
+    sim = make_local_eme_sim(
+        num_cells=2,
+        num_modes=4,
+        sweep_spec=td.EMEModeSweep(num_modes=[1, 2, 4]),
+    )
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    smatrix = sim.propagate(mode_data)
+    assert smatrix.S21.shape[1] == 3
+    for si in range(3):
+        T = abs(smatrix.S21.isel(sweep_index=si).values.squeeze()) ** 2
+        assert T.sum() > 0

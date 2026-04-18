@@ -34,7 +34,7 @@ from tidy3d.components.validators import (
 )
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, fp_eps, inf
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGridSpecType
@@ -45,23 +45,51 @@ from .monitor import (
     EMEMonitor,
     EMEMonitorType,
 )
-from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep, EMESweepSpecType
+from .sweep import (
+    EMEFreqSweep,
+    EMELengthSweep,
+    EMEModeSweep,
+    EMEPeriodicitySweep,
+    EMESweepSpecType,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from typing import Union
 
     from pydantic import NonNegativeInt, PositiveInt
 
     from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import EMESMatrixDataArray
+    from tidy3d.components.data.monitor_data import ModeSolverData
     from tidy3d.components.grid.grid import Grid
     from tidy3d.components.material.tensor_rotation import EMEAnisotropicMedium
     from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.medium import MediumType3D
+    from tidy3d.components.mode.data.sim_data import ModeSimulationData
+    from tidy3d.components.mode.simulation import ModeSimulation
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.structure import Structure
-    from tidy3d.components.types import ArrayFloat1D, Ax, Coordinate, Size, Symmetry, TensorReal
+    from tidy3d.components.types import (
+        ArrayComplex3D,
+        ArrayFloat1D,
+        ArrayInt1D,
+        Ax,
+        Coordinate,
+        Size,
+        Symmetry,
+        TensorReal,
+    )
     from tidy3d.components.types.monitor import MonitorType
 
+    from .data.dataset import EMESMatrixDataset
+    from .data.stage import (
+        EMEStageCellModes,
+        EMEStageCellOverlap,
+        EMEStageCellSMatrix,
+        EMEStageInterfaceOverlap,
+        EMEStageInterfaceSMatrix,
+    )
     from .grid import EMEGrid, EMEGridSpec
 
 # maximum numbers of simulation parameters
@@ -84,6 +112,7 @@ MAX_NUM_SWEEP = 100
 # constraint can be slow with too many modes
 WARN_CONSTRAINT_NUM_MODES = 50
 
+
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
 RUN_TIME = 1e-30
@@ -102,6 +131,26 @@ EME_SIM_YEE_SIM_SHARED_ATTRS = [
     "simulation_type",
     "post_norm",
 ]
+
+
+def _stack_sweep_points(arrays: list[EMESMatrixDataArray]) -> EMESMatrixDataArray:
+    """Concat S-matrix blocks along sweep_index with zero-fill for ragged mode indices.
+
+    Under EMEModeSweep the per-point blocks have different mode_index_out /
+    mode_index_in sizes.  Reindex each block to the union of mode_index coords
+    with zero fill before concatenation so missing truncated-away modes appear
+    as 0 rather than NaN; a plain xr.concat would produce an outer-join NaN pad
+    that would poison downstream reductions like .sum().
+    """
+    import xarray as xr
+
+    mi_out = sorted(set().union(*(a.mode_index_out.values.tolist() for a in arrays)))
+    mi_in = sorted(set().union(*(a.mode_index_in.values.tolist() for a in arrays)))
+    reindexed = [
+        a.reindex(mode_index_out=mi_out, mode_index_in=mi_in, fill_value=complex(0, 0))
+        for a in arrays
+    ]
+    return xr.concat(reindexed, dim="sweep_index")
 
 
 class EMESimulation(AbstractYeeGridSimulation):
@@ -1872,8 +1921,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         return new_sim
 
     @property
-    def _cell_index_pairs(self) -> list[NonNegativeInt]:
-        """All the pairs of adjacent EME cells needed, taken over all sweep indices."""
+    def cell_index_pairs(self) -> list[tuple[int, int]]:
+        """Adjacent EME cell pairs needed for interface computation.
+
+        Returns a sorted list of ``(left, right)`` tuples covering all
+        sweep indices.  Use this to iterate when building the explicit
+        staged pipeline.
+        """
         pairs = set()
         if isinstance(self.sweep_spec, EMEPeriodicitySweep):
             for num_reps in self.sweep_spec.num_reps:
@@ -1881,4 +1935,724 @@ class EMESimulation(AbstractYeeGridSimulation):
                 pairs = pairs | set(eme_grid_spec._cell_index_pairs)
         else:
             pairs = set(self.eme_grid_spec._cell_index_pairs)
-        return list(pairs)
+        return [(int(left), int(right)) for left, right in sorted(pairs)]
+
+    # --- Local staged propagation methods ---
+
+    def _get_virtual_cell_indices(self, sweep_index: int | None) -> list:
+        """Get virtual cell indices, accounting for periodicity sweeps."""
+        eme_grid_spec = self.eme_grid_spec
+        if isinstance(self.sweep_spec, EMEPeriodicitySweep) and sweep_index is not None:
+            num_reps = self.sweep_spec.num_reps[sweep_index]
+            eme_grid_spec = eme_grid_spec._updated_copy_num_reps(num_reps=num_reps)
+        return eme_grid_spec.virtual_cell_indices
+
+    def _get_cell_lengths(self, sweep_index: int | None) -> list[float]:
+        """Resolve effective cell lengths from grid and sweep."""
+        lengths = np.array(self.eme_grid.lengths, dtype=float)
+        if sweep_index is not None and isinstance(self.sweep_spec, EMELengthSweep):
+            lengths = lengths * np.asarray(self.sweep_spec.scale_factors[sweep_index], dtype=float)
+        return list(lengths)
+
+    def _num_modes_override(self, sweep_index: int | None) -> int | None:
+        """Optional mode-count override for mode sweeps."""
+        if sweep_index is None or not isinstance(self.sweep_spec, EMEModeSweep):
+            return None
+        return int(self.sweep_spec.num_modes[sweep_index])
+
+    def _raise_if_stage_freqs_mismatch(self, freqs: Any, origin: str) -> None:
+        """Reject stage artifacts whose frequency grid disagrees with ``self.freqs``.
+
+        Cached overlaps / per-cell / per-interface stage objects carry the frequency
+        coord they were built at. The S-matrix stages read those freqs when they
+        construct their outputs, but ``compute_smatrix`` then relabels the final
+        dataset with ``self.freqs``. On ``sim.updated_copy(freqs=...)`` reuse — the
+        advertised alternative to ``EMEFreqSweep`` — matching array lengths would
+        otherwise let stale-frequency results through under the new coordinate
+        labels. Check here so the caller is forced to re-stage instead.
+        """
+        sim_freqs = np.array(list(self.freqs), dtype=float)
+        stage_freqs = np.asarray(freqs, dtype=float)
+        if stage_freqs.shape != sim_freqs.shape or not np.allclose(
+            stage_freqs, sim_freqs, rtol=1e-10
+        ):
+            raise ValidationError(
+                f"Frequency grid of {origin} ({stage_freqs.tolist()}) does not match "
+                f"'EMESimulation.freqs' ({sim_freqs.tolist()}). Re-stage the inputs on "
+                f"the current simulation (e.g. via 'compute_overlaps' or 'propagate')."
+            )
+
+    def _raise_if_freq_sweep_local(self) -> None:
+        """Gate for the local staged propagation path.
+
+        ``EMEFreqSweep`` requires mode data re-solved at each scaled frequency, which
+        the local staged path does not support. The S-matrix stages read
+        ``self.freqs`` (not the scaled sweep frequencies), so without this gate
+        callers of the explicit per-stage methods would silently get a "sweep" whose
+        points are all evaluated at the base frequency. Callers should either drop
+        the ``EMEFreqSweep`` and list target frequencies directly in ``freqs``
+        (typically with ``EMEModeSpec.interp_spec``), or use the remote backend.
+        """
+        if isinstance(self.sweep_spec, EMEFreqSweep):
+            raise SetupError(
+                "'EMEFreqSweep' is not supported by the local staged propagation API. "
+                "Specify target frequencies directly in 'EMESimulation.freqs' and use "
+                "'EMEModeSpec.interp_spec' for the performance/accuracy tradeoff."
+            )
+
+    @property
+    def mode_simulations(self) -> tuple[ModeSimulation, ...]:
+        """One :class:`.ModeSimulation` per EME cell, at full mode count.
+
+        Call ``.run_local()`` on each returned simulation and pass the
+        results to :meth:`propagate`::
+
+            mode_data = [ms.run_local() for ms in sim.mode_simulations]
+            smatrix = sim.propagate(mode_data)
+
+        The returned tuple is in canonical EME cell order.  Each simulation
+        shares the parent geometry and grid specification, with the mode
+        plane and mode spec set per cell.  Modes are always solved at the
+        full (untruncated) count; sweep-dependent truncation is applied
+        at the S-matrix computation stage.
+
+        All simulations use ``direction="+"`` and ``colocate=False``.
+        Direction is irrelevant for EME (modes are bidirectional);
+        colocation is handled internally by the overlap integrals.
+
+        Bent anisotropic media in ``bend_medium_frame="global"`` are not
+        supported by the local path because subpixel averaging is applied
+        before the bend rotation and does not yet handle fully
+        anisotropic tensors.  Use ``bend_medium_frame="co_rotating"`` or
+        the remote backend path instead.
+
+        Returns
+        -------
+        tuple[:class:`.ModeSimulation`, ...]
+        """
+        from tidy3d.components.mode.simulation import ModeSimulation
+
+        # Fail before the caller spawns N mode-solve jobs they can never feed into
+        # the staged propagation path.
+        self._raise_if_freq_sweep_local()
+
+        eme_grid = self.eme_grid
+        mode_planes = eme_grid.mode_planes
+        mode_specs = eme_grid.mode_specs
+        rotations = cell_center_rotations_from_lengths(
+            np.asarray(eme_grid.lengths, dtype=float),
+            mode_specs,
+            normal_axis=self.axis,
+        )
+
+        for plane, rotation in zip(mode_planes, rotations):
+            if self._rotation_is_identity(rotation):
+                continue
+            if self._plane_anisotropic_media(plane):
+                raise SetupError(
+                    "The local EME path ('mode_simulations' / 'propagate') does not "
+                    "support anisotropic media in bent cells with "
+                    "'bend_medium_frame=\"global\"'. Subpixel averaging is applied "
+                    "before the bend rotation and currently does not handle fully "
+                    "anisotropic tensors. Use 'bend_medium_frame=\"co_rotating\"', "
+                    "avoid bends on cells intersecting anisotropic media, or run "
+                    "the simulation through the remote backend instead."
+                )
+
+        shared_kwargs = {
+            "center": self.center,
+            "size": self.size,
+            "medium": self.medium,
+            "structures": self.structures,
+            "structure_priority_mode": self.structure_priority_mode,
+            "symmetry": self.symmetry,
+            "boundary_spec": self.boundary_spec,
+            "grid_spec": self.grid_spec,
+            "subpixel": self.subpixel,
+            "lumped_elements": self.lumped_elements,
+            "post_norm": self.post_norm,
+        }
+
+        sims = []
+        for i in range(len(mode_planes)):
+            sims.append(
+                ModeSimulation(
+                    **shared_kwargs,
+                    plane=Box(center=mode_planes[i].center, size=mode_planes[i].size),
+                    mode_spec=mode_specs[i]._to_mode_spec(),
+                    freqs=list(self.freqs),
+                    direction="+",
+                    colocate=False,
+                )
+            )
+
+        return tuple(sims)
+
+    def stage_cell_modes(
+        self, mode_data: Union[ModeSimulationData, ModeSolverData], cell_index: int
+    ) -> EMEStageCellModes:
+        """Validate, filter, and stamp mode data for one cell.
+
+        Checks that frequencies match, drops NaN and increasing modes,
+        and returns a stamped :class:`.EMEStageCellModes`.
+        See :meth:`propagate` for the one-shot alternative.
+
+        Parameters
+        ----------
+        mode_data : :class:`.ModeSimulationData` or :class:`.ModeSolverData`
+            Result of ``mode_simulations[cell_index].run_local()``.
+        cell_index : int
+            EME cell index (0-based).
+
+        Returns
+        -------
+        :class:`.EMEStageCellModes`
+        """
+        from tidy3d.components.data.monitor_data import ModeSolverData
+        from tidy3d.components.mode.data.sim_data import ModeSimulationData
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        from .data.stage import EMEStageCellModes
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        from tidy3d_extras.eme import filter_modes
+
+        if isinstance(mode_data, ModeSimulationData):
+            modes = mode_data.modes_raw
+        elif isinstance(mode_data, ModeSolverData):
+            modes = mode_data
+        else:
+            raise ValidationError(
+                f"Expected ModeSimulationData or ModeSolverData, got {type(mode_data).__name__}."
+            )
+
+        sim_freqs = np.array(self.freqs)
+        mode_freqs = modes.n_complex.f.values
+        if not np.allclose(mode_freqs, sim_freqs, rtol=1e-10):
+            raise ValidationError(
+                f"Mode data for cell {cell_index} has frequencies {mode_freqs} "
+                f"that do not match simulation frequencies {sim_freqs}."
+            )
+
+        # Verify the supplied mode data is for this cell's mode plane. Without this
+        # check, an out-of-order sequence (e.g. a Batch result consumed in a different
+        # order than mode_simulations produced) would be silently stamped with the
+        # wrong cell_index and produce a wrong final S-matrix.
+        expected_plane = self.eme_grid.mode_planes[cell_index]
+        mode_plane_center = tuple(float(x) for x in modes.monitor.center)
+        mode_plane_size = tuple(float(x) for x in modes.monitor.size)
+        exp_center = tuple(float(x) for x in expected_plane.center)
+        exp_size = tuple(float(x) for x in expected_plane.size)
+        if not (
+            np.allclose(mode_plane_center, exp_center, rtol=0, atol=1e-12)
+            and np.allclose(mode_plane_size, exp_size, rtol=0, atol=1e-12)
+        ):
+            raise ValidationError(
+                f"Mode data plane (center={mode_plane_center}, size={mode_plane_size}) "
+                f"does not match EME cell {cell_index} (center={exp_center}, "
+                f"size={exp_size}). Check that the mode_data sequence is in canonical "
+                f"EME cell order; see 'EMESimulation.mode_simulations'."
+            )
+
+        tol = self.eme_grid.mode_specs[cell_index].increasing_mode_tolerance
+        modes = filter_modes(modes, increasing_mode_tolerance=tol, cell_index=cell_index)
+        return EMEStageCellModes(cell_index=cell_index, modes=modes)
+
+    def compute_cell_overlap(self, cell_modes: EMEStageCellModes) -> EMEStageCellOverlap:
+        """Compute self-overlap, complex refractive index, and flux for one cell.
+
+        The result feeds into :meth:`compute_cell_smatrix` and
+        :meth:`compute_smatrix`.
+        See :meth:`propagate` for the one-shot alternative.
+
+        Parameters
+        ----------
+        cell_modes : :class:`.EMEStageCellModes`
+
+        Returns
+        -------
+        :class:`.EMEStageCellOverlap`
+        """
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        from tidy3d_extras.eme import compute_cell_overlap
+
+        return compute_cell_overlap(cell_modes)
+
+    def compute_interface_overlap(
+        self,
+        left_modes: EMEStageCellModes,
+        right_modes: EMEStageCellModes,
+    ) -> EMEStageInterfaceOverlap:
+        """Compute cross-cell overlaps for one interface.
+
+        The result feeds into :meth:`compute_interface_smatrix`.
+        See :meth:`propagate` for the one-shot alternative.
+
+        Parameters
+        ----------
+        left_modes, right_modes : :class:`.EMEStageCellModes`
+            Staged modes for the two cells forming this interface,
+            matching a pair from :attr:`cell_index_pairs`.
+
+        Returns
+        -------
+        :class:`.EMEStageInterfaceOverlap`
+        """
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        from tidy3d_extras.eme import compute_interface_overlap
+
+        return compute_interface_overlap(left_modes, right_modes)
+
+    def compute_overlaps(
+        self,
+        mode_data: Sequence[Union[ModeSimulationData, ModeSolverData]],
+    ) -> tuple[list[EMEStageCellOverlap], list[EMEStageInterfaceOverlap]]:
+        """Stage modes and compute all per-cell and per-interface overlaps.
+
+        Convenience wrapper around :meth:`stage_cell_modes`,
+        :meth:`compute_cell_overlap`, and :meth:`compute_interface_overlap`.
+        Under the supported sweep types (``EMELengthSweep``, ``EMEModeSweep``,
+        ``EMEPeriodicitySweep``) the returned overlaps are sweep-invariant, so
+        compute them once and pass the results to :meth:`propagate_from_overlaps`
+        as many times as you want — one per iterative design probe.
+
+        Parameters
+        ----------
+        mode_data : Sequence[:class:`.ModeSimulationData` | :class:`.ModeSolverData`]
+            One mode result per EME cell, in cell order.  Typically
+            ``[ms.run_local() for ms in sim.mode_simulations]``.
+
+        Returns
+        -------
+        cell_overlaps : list[:class:`.EMEStageCellOverlap`]
+            One per EME cell, in cell order.
+        interface_overlaps : list[:class:`.EMEStageInterfaceOverlap`]
+            One per interface, in the order of :attr:`cell_index_pairs`.
+        """
+        import gc
+
+        # Fail before doing the per-cell overlap integrals on a sweep type we
+        # cannot propagate through later.
+        self._raise_if_freq_sweep_local()
+
+        num_cells = self.eme_grid.num_cells
+        if len(mode_data) != num_cells:
+            raise ValidationError(f"Expected {num_cells} mode data entries, got {len(mode_data)}.")
+
+        cell_modes = [self.stage_cell_modes(mode_data[i], cell_index=i) for i in range(num_cells)]
+
+        cell_overlaps: list[EMEStageCellOverlap] = []
+        for cm in cell_modes:
+            cell_overlaps.append(self.compute_cell_overlap(cm))
+            gc.collect()
+
+        modes_by_idx = {cm.cell_index: cm for cm in cell_modes}
+        interface_overlaps: list[EMEStageInterfaceOverlap] = []
+        for li, ri in self.cell_index_pairs:
+            interface_overlaps.append(
+                self.compute_interface_overlap(modes_by_idx[li], modes_by_idx[ri])
+            )
+            gc.collect()
+
+        # Release mode field data — no longer needed after overlaps
+        del cell_modes, modes_by_idx
+        gc.collect()
+
+        return cell_overlaps, interface_overlaps
+
+    def compute_cell_smatrix(
+        self,
+        cell_overlap: EMEStageCellOverlap,
+        sweep_index: int = 0,
+    ) -> EMEStageCellSMatrix:
+        """Compute homogeneous propagation S-matrix for one cell at one sweep point.
+
+        See :meth:`propagate` for the one-shot alternative.
+
+        Parameters
+        ----------
+        cell_overlap : :class:`.EMEStageCellOverlap`
+        sweep_index : int
+            Index into the sweep (``0`` to ``sweep_spec.num_sweep - 1``).
+            Ignored when no ``sweep_spec`` is set.
+
+        Returns
+        -------
+        :class:`.EMEStageCellSMatrix`
+        """
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        self._raise_if_freq_sweep_local()
+        self._raise_if_stage_freqs_mismatch(
+            cell_overlap.n_complex.f.values,
+            f"cell overlap for cell_index={cell_overlap.cell_index}",
+        )
+        from tidy3d_extras.eme import compute_cell_smatrix
+
+        if sweep_index != 0 and not self._sweep_cells:
+            log.warning(
+                f"compute_cell_smatrix(sweep_index={sweep_index}) called under "
+                f"sweep_spec={type(self.sweep_spec).__name__ if self.sweep_spec else 'None'}, "
+                f"which leaves the cell S-matrix sweep-invariant. The result will be "
+                f"stamped with sweep_index=0 and is reusable across all sweep points — "
+                f"compute it once at sweep_index=0 to avoid redundant work."
+            )
+
+        lengths = self._get_cell_lengths(sweep_index=sweep_index)
+        # Stamp sweep-invariant stages with 0 so the same object can be reused
+        # across every sweep point (e.g. under EMEPeriodicitySweep the cell
+        # S-matrix does not depend on the sweep point). ``compute_smatrix``
+        # validates against the same formula.
+        stamped_sweep_index = sweep_index if self._sweep_cells else 0
+        return compute_cell_smatrix(
+            cell_overlap,
+            length=lengths[cell_overlap.cell_index],
+            num_modes_override=self._num_modes_override(sweep_index),
+            sweep_index=stamped_sweep_index,
+        )
+
+    def compute_interface_smatrix(
+        self,
+        left_overlap: EMEStageCellOverlap,
+        right_overlap: EMEStageCellOverlap,
+        interface_overlap: EMEStageInterfaceOverlap,
+        sweep_index: int = 0,
+    ) -> EMEStageInterfaceSMatrix:
+        """Compute interface S-matrix for one interface at one sweep point.
+
+        See :meth:`propagate` for the one-shot alternative.
+
+        Parameters
+        ----------
+        left_overlap, right_overlap : :class:`.EMEStageCellOverlap`
+            Cell overlaps for the two cells forming this interface,
+            matching a pair from :attr:`cell_index_pairs`.
+        interface_overlap : :class:`.EMEStageInterfaceOverlap`
+        sweep_index : int
+            Index into the sweep (``0`` to ``sweep_spec.num_sweep - 1``).
+            Ignored when no ``sweep_spec`` is set.
+
+        Returns
+        -------
+        :class:`.EMEStageInterfaceSMatrix`
+        """
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        self._raise_if_freq_sweep_local()
+        pair = (left_overlap.cell_index, right_overlap.cell_index)
+        self._raise_if_stage_freqs_mismatch(
+            left_overlap.n_complex.f.values, f"left cell overlap at pair {pair}"
+        )
+        self._raise_if_stage_freqs_mismatch(
+            right_overlap.n_complex.f.values, f"right cell overlap at pair {pair}"
+        )
+        self._raise_if_stage_freqs_mismatch(
+            interface_overlap.O12.f.values, f"interface overlap at pair {pair}"
+        )
+        from tidy3d_extras.eme import compute_interface_smatrix
+
+        if sweep_index != 0 and not self._sweep_interfaces:
+            log.warning(
+                f"compute_interface_smatrix(sweep_index={sweep_index}) called under "
+                f"sweep_spec={type(self.sweep_spec).__name__ if self.sweep_spec else 'None'}, "
+                f"which leaves the interface S-matrix sweep-invariant. The result will be "
+                f"stamped with sweep_index=0 and is reusable across all sweep points — "
+                f"compute it once at sweep_index=0 to avoid redundant work."
+            )
+
+        # Stamp sweep-invariant interface stages (e.g. under EMELengthSweep or
+        # EMEPeriodicitySweep) with 0 so they can be computed once and reused
+        # across sweep points.
+        stamped_sweep_index = sweep_index if self._sweep_interfaces else 0
+        return compute_interface_smatrix(
+            left_overlap,
+            right_overlap,
+            interface_overlap,
+            constraint=self.constraint,
+            num_modes_override=self._num_modes_override(sweep_index),
+            sweep_index=stamped_sweep_index,
+        )
+
+    def compute_smatrix(
+        self,
+        cell_overlaps: list[EMEStageCellOverlap] | None,
+        cell_smatrices: list[EMEStageCellSMatrix],
+        interface_smatrices: list[EMEStageInterfaceSMatrix],
+        sweep_index: int = 0,
+    ) -> EMESMatrixDataset:
+        """Stack cell and interface S-matrices into the final device S-matrix.
+
+        See :meth:`propagate` for the one-shot alternative.
+
+        Parameters
+        ----------
+        cell_overlaps : list[:class:`.EMEStageCellOverlap`] or None
+            One per cell.  Required when ``self.normalize`` is True (port
+            flux normalization); may be ``None`` otherwise.
+        cell_smatrices : list[:class:`.EMEStageCellSMatrix`]
+            One per cell.
+        interface_smatrices : list[:class:`.EMEStageInterfaceSMatrix`]
+            One per interface, ordered to match :attr:`cell_index_pairs`.
+        sweep_index : int
+            Index into the sweep (``0`` to ``sweep_spec.num_sweep - 1``).
+            Ignored when no ``sweep_spec`` is set.
+
+        Returns
+        -------
+        :class:`.EMESMatrixDataset`
+        """
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        self._raise_if_freq_sweep_local()
+
+        from tidy3d.components.data.data_array import EMESMatrixDataArray
+
+        from .data.dataset import EMESMatrixDataset
+
+        # Reject staged inputs built at a different frequency grid or at a different
+        # sweep point than this call. Sweep-invariant stages are stamped with 0
+        # so a single object can be reused across every sweep point — under
+        # ``EMELengthSweep`` the interface S-matrix is invariant, under
+        # ``EMEPeriodicitySweep`` both cell and interface stages are invariant.
+        expected_cell_stamp = sweep_index if self._sweep_cells else 0
+        expected_iface_stamp = sweep_index if self._sweep_interfaces else 0
+        for cs in cell_smatrices:
+            self._raise_if_stage_freqs_mismatch(
+                cs.S11.f.values, f"cell smatrix for cell_index={cs.cell_index}"
+            )
+            if cs.sweep_index != expected_cell_stamp:
+                raise ValidationError(
+                    f"Cell smatrix for cell_index={cs.cell_index} was built at "
+                    f"sweep_index={cs.sweep_index}, but compute_smatrix expected "
+                    f"sweep_index={expected_cell_stamp} for sweep_index={sweep_index} "
+                    f"under sweep_spec={type(self.sweep_spec).__name__}."
+                )
+        for ism in interface_smatrices:
+            pair = (ism.cell_index, ism.right_cell_index)
+            self._raise_if_stage_freqs_mismatch(
+                ism.S11.f.values, f"interface smatrix at pair {pair}"
+            )
+            if ism.sweep_index != expected_iface_stamp:
+                raise ValidationError(
+                    f"Interface smatrix at pair {pair} was built at "
+                    f"sweep_index={ism.sweep_index}, but compute_smatrix expected "
+                    f"sweep_index={expected_iface_stamp} for sweep_index={sweep_index} "
+                    f"under sweep_spec={type(self.sweep_spec).__name__}."
+                )
+        if cell_overlaps:
+            for co in cell_overlaps:
+                self._raise_if_stage_freqs_mismatch(
+                    co.n_complex.f.values, f"cell overlap for cell_index={co.cell_index}"
+                )
+
+        freqs = np.array(list(self.freqs))
+        cell_indices = self._get_virtual_cell_indices(sweep_index)
+        first_idx = cell_indices[0]
+        last_idx = cell_indices[-1]
+
+        # Build lookup dicts keyed by cell_index so list ordering
+        # doesn't matter and periodicity repeats resolve correctly.
+        co_by_idx = {co.cell_index: co for co in cell_overlaps} if cell_overlaps else {}
+        cs_by_idx = {cs.cell_index: cs for cs in cell_smatrices}
+
+        port_flux = None
+        if self.normalize:
+            if not co_by_idx:
+                raise SetupError("'cell_overlaps' is required when 'normalize' is True.")
+            flux1 = co_by_idx[first_idx].complex_flux.to_numpy()
+            flux2 = co_by_idx[last_idx].complex_flux.to_numpy()
+            port_flux = (flux1, flux2)
+
+        from tidy3d_extras.eme import prepare_and_compute_smatrix
+
+        S11, S12, S21, S22 = prepare_and_compute_smatrix(
+            cell_smatrices,
+            interface_smatrices,
+            self.cell_index_pairs,
+            cell_indices,
+            self.normalize,
+            port_flux,
+            freqs,
+        )
+
+        first_cell = cs_by_idx[first_idx]
+        last_cell = cs_by_idx[last_idx]
+        mi_out_1 = first_cell.S11.mode_index_out.values
+        mi_in_1 = first_cell.S11.mode_index_in.values
+        mi_out_2 = last_cell.S22.mode_index_out.values
+        mi_in_2 = last_cell.S22.mode_index_in.values
+        sweep_index_coord = [sweep_index]
+
+        def _make_da(
+            data: ArrayComplex3D, mi_out: ArrayInt1D, mi_in: ArrayInt1D
+        ) -> EMESMatrixDataArray:
+            return EMESMatrixDataArray(
+                data[:, np.newaxis, :, :],
+                coords={
+                    "f": freqs,
+                    "sweep_index": sweep_index_coord,
+                    "mode_index_out": mi_out,
+                    "mode_index_in": mi_in,
+                },
+            )
+
+        return EMESMatrixDataset(
+            S11=_make_da(S11, mi_out_1, mi_in_1),
+            S12=_make_da(S12, mi_out_1, mi_in_2),
+            S21=_make_da(S21, mi_out_2, mi_in_1),
+            S22=_make_da(S22, mi_out_2, mi_in_2),
+        )
+
+    def propagate_from_overlaps(
+        self,
+        cell_overlaps: list[EMEStageCellOverlap],
+        interface_overlaps: list[EMEStageInterfaceOverlap],
+    ) -> EMESMatrixDataset:
+        """Propagate to the device S-matrix using pre-computed overlaps.
+
+        Runs the S-matrix stages (cell / interface / stack) for every sweep
+        point of ``self.sweep_spec`` and concatenates the results.  Use this
+        instead of :meth:`propagate` when you want to reuse overlap integrals
+        across several sweeps on the same modal basis — the overlaps are
+        sweep-invariant under ``EMELengthSweep``, ``EMEModeSweep``, and
+        ``EMEPeriodicitySweep``, so recomputing them per sweep wastes work.
+
+        ``EMEFreqSweep`` is not supported; specify target frequencies in
+        ``EMESimulation.freqs`` instead.
+
+        Parameters
+        ----------
+        cell_overlaps : list[:class:`.EMEStageCellOverlap`]
+            One per EME cell, typically from :meth:`compute_overlaps`.
+        interface_overlaps : list[:class:`.EMEStageInterfaceOverlap`]
+            One per interface, in the order of :attr:`cell_index_pairs`,
+            typically from :meth:`compute_overlaps`.
+
+        Returns
+        -------
+        :class:`.EMESMatrixDataset`
+        """
+        import gc
+
+        from .data.dataset import EMESMatrixDataset
+
+        self._raise_if_freq_sweep_local()
+        sweep_spec = self.sweep_spec
+
+        num_cells = self.eme_grid.num_cells
+        if len(cell_overlaps) != num_cells:
+            raise ValidationError(f"Expected {num_cells} cell overlaps, got {len(cell_overlaps)}.")
+        num_interfaces = len(self.cell_index_pairs)
+        if len(interface_overlaps) != num_interfaces:
+            raise ValidationError(
+                f"Expected {num_interfaces} interface overlaps, got {len(interface_overlaps)}."
+            )
+
+        overlaps_by_idx = {co.cell_index: co for co in cell_overlaps}
+        # Key interface overlaps by their stamped (left, right) pair rather than
+        # positional zip with ``cell_index_pairs`` so the list can survive an
+        # HDF5 round-trip / cache reload in any order, and so periodicity sweeps
+        # that contain two pairs sharing a left cell stay distinguishable.
+        iface_overlaps_by_pair = {
+            (io.cell_index, io.right_cell_index): io for io in interface_overlaps
+        }
+        missing = [p for p in self.cell_index_pairs if p not in iface_overlaps_by_pair]
+        if missing:
+            raise ValidationError(
+                f"'interface_overlaps' is missing entries for cell pair(s) {missing}."
+            )
+        num_sweep = sweep_spec.num_sweep if sweep_spec is not None else 1
+
+        # Recompute cell / interface S-matrices only for sweep types that actually
+        # differentiate them. Under ``EMELengthSweep`` the interface S-matrix is
+        # invariant; under ``EMEPeriodicitySweep`` both cell and interface stages
+        # are invariant. In those cases we compute once at ``sweep_index=0`` and
+        # reuse the same list across every sweep point.
+        cell_sms: list[EMEStageCellSMatrix] | None = None
+        iface_sms: list[EMEStageInterfaceSMatrix] | None = None
+
+        per_point = []
+        for sweep_idx in range(num_sweep):
+            if cell_sms is None or self._sweep_cells:
+                cell_sms = [
+                    self.compute_cell_smatrix(co, sweep_index=sweep_idx) for co in cell_overlaps
+                ]
+            if iface_sms is None or self._sweep_interfaces:
+                iface_sms = [
+                    self.compute_interface_smatrix(
+                        overlaps_by_idx[li],
+                        overlaps_by_idx[ri],
+                        iface_overlaps_by_pair[(li, ri)],
+                        sweep_index=sweep_idx,
+                    )
+                    for (li, ri) in self.cell_index_pairs
+                ]
+            per_point.append(
+                self.compute_smatrix(cell_overlaps, cell_sms, iface_sms, sweep_index=sweep_idx)
+            )
+            gc.collect()
+
+        if len(per_point) == 1:
+            ds = per_point[0]
+            if sweep_spec is None:
+                # No sweep_spec => no sweep_index coord on the returned dataset.
+                # Per-stage objects keep sweep_index=0 (their type is
+                # NonNegativeInt, not Optional); only the final public dataset
+                # drops it so the result matches the no-sweep schema produced
+                # by ``web.run(EMESimulation) -> EMESimulationData``.
+                ds = ds.updated_copy(
+                    S11=ds.S11.drop_vars("sweep_index"),
+                    S12=ds.S12.drop_vars("sweep_index"),
+                    S21=ds.S21.drop_vars("sweep_index"),
+                    S22=ds.S22.drop_vars("sweep_index"),
+                    deep=False,
+                    validate=False,
+                )
+            return ds
+
+        return EMESMatrixDataset(
+            S11=_stack_sweep_points([ds.S11 for ds in per_point]),
+            S12=_stack_sweep_points([ds.S12 for ds in per_point]),
+            S21=_stack_sweep_points([ds.S21 for ds in per_point]),
+            S22=_stack_sweep_points([ds.S22 for ds in per_point]),
+        )
+
+    def propagate(
+        self,
+        mode_data: Sequence[Union[ModeSimulationData, ModeSolverData]],
+    ) -> EMESMatrixDataset:
+        """Propagate modes through the device to compute the full S-matrix.
+
+        One-shot helper around :meth:`compute_overlaps` and
+        :meth:`propagate_from_overlaps`.  If you plan to run several sweeps
+        against the same modal basis (e.g. coarse length scan, then zoom in),
+        call :meth:`compute_overlaps` once and :meth:`propagate_from_overlaps`
+        per sweep instead — overlaps are sweep-invariant under the supported
+        sweep types, so ``propagate`` would redo that work each time.
+
+        Supports ``EMELengthSweep``, ``EMEModeSweep``, and
+        ``EMEPeriodicitySweep``.  ``EMEFreqSweep`` is not supported;
+        specify target frequencies in ``EMESimulation.freqs`` instead.
+
+        To override constraint, normalize, or sweep_spec, use
+        ``sim.updated_copy(...)`` before calling.
+
+        Parameters
+        ----------
+        mode_data : Sequence[:class:`.ModeSimulationData` | :class:`.ModeSolverData`]
+            One mode result per EME cell, in cell order.  Typically
+            ``[ms.run_local() for ms in sim.mode_simulations]``.
+
+        Returns
+        -------
+        :class:`.EMESMatrixDataset`
+        """
+        cell_overlaps, interface_overlaps = self.compute_overlaps(mode_data)
+        return self.propagate_from_overlaps(cell_overlaps, interface_overlaps)

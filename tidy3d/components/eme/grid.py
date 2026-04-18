@@ -224,7 +224,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         """Number of real cells in this EME grid spec."""
 
     @property
-    def virtual_cell_indices(self) -> int:
+    def virtual_cell_indices(self) -> list[int]:
         """The cell indices inside this EME grid, starting at 0
         and including periodic repetition of cells with ``num_reps``."""
         return list(self.real_cell_indices) * self.num_reps
@@ -243,7 +243,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         return self
 
     @property
-    def _cell_index_pairs(self) -> list[NonNegativeInt]:
+    def _cell_index_pairs(self) -> list[tuple[int, int]]:
         """Pairs of adjacent cell indices."""
         cell_indices = self.virtual_cell_indices
         pairs = []
@@ -598,7 +598,7 @@ class EMECompositeGrid(EMEGridSpec):
         return np.sum([subgrid.num_real_cells for subgrid in self.subgrids])
 
     @property
-    def virtual_cell_indices(self) -> int:
+    def virtual_cell_indices(self) -> list[int]:
         """The cell indices inside this EME grid, starting at 0
         and including periodic repetition of cells with ``num_reps``."""
         inds = []

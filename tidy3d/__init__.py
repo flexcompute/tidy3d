@@ -264,6 +264,13 @@ from .components.eme.data.dataset import (
 )
 from .components.eme.data.monitor_data import EMECoefficientData, EMEFieldData, EMEModeSolverData
 from .components.eme.data.sim_data import EMESimulationData
+from .components.eme.data.stage import (
+    EMEStageCellModes,
+    EMEStageCellOverlap,
+    EMEStageCellSMatrix,
+    EMEStageInterfaceOverlap,
+    EMEStageInterfaceSMatrix,
+)
 from .components.eme.grid import (
     EMECompositeGrid,
     EMEExplicitGrid,
@@ -667,6 +674,11 @@ __all__ = [
     "EMEScalarModeFieldDataArray",
     "EMESimulation",
     "EMESimulationData",
+    "EMEStageCellModes",
+    "EMEStageCellOverlap",
+    "EMEStageCellSMatrix",
+    "EMEStageInterfaceOverlap",
+    "EMEStageInterfaceSMatrix",
     "EMEUniformGrid",
     "FieldData",
     "FieldDataset",

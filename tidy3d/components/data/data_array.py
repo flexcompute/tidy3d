@@ -2193,6 +2193,7 @@ DATA_ARRAY_TYPES = [
     EMEModeIndexDataArray,
     EMEFluxDataArray,
     EMEFreqModeDataArray,
+    MixedModeDataArray,
     ChargeDataArray,
     SteadyVoltageDataArray,
     PointDataArray,
