@@ -82,6 +82,43 @@ DIM_ATTRS = {
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
 
+class _SanitizedPlotProxy:
+    """Proxy xarray's plot accessor through a plotting-safe DataArray copy."""
+
+    __slots__ = ("_data_array",)
+
+    def __init__(self, data_array: xr.DataArray) -> None:
+        self._data_array = data_array
+
+    def _accessor(self) -> xr.plot.accessor.DataArrayPlotAccessor:
+        """Construct xarray's plot accessor on a static plotting-safe copy."""
+        # Local import avoids a circular dependency because ``data.utils`` also
+        # imports tidy3d DataArray subclasses for spatial data typing.
+        from .utils import static_dataarray_for_plot
+
+        return xr.DataArray.plot(static_dataarray_for_plot(self._data_array))
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Call xarray's plotting entrypoint on the sanitized accessor."""
+        return self._accessor()(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        """Forward attribute access to xarray's plotting accessor."""
+        return getattr(self._accessor(), name)
+
+
+class _StructuredSpatialPlotProxy(_SanitizedPlotProxy):
+    """Plot proxy that preserves structured spatial plot validation."""
+
+    def __call__(self, *args: Any, field: bool = True, grid: bool = False, **kwargs: Any) -> Any:
+        """Validate structured spatial-only kwargs before plotting."""
+        if grid:
+            raise DataError("The 'grid' argument is only supported for unstructured data.")
+        if not field:
+            raise DataError("The 'field' argument is only supported for unstructured data.")
+        return super().__call__(*args, **kwargs)
+
+
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
 
@@ -259,15 +296,10 @@ class DataArray(xr.DataArray):
         """Return `.data` when traced to avoid `dtype=object` NumPy conversion."""
         return self.data if isbox(self.data) else super().to_numpy()
 
-    def plot(self, *args: Any, **kwargs: Any) -> Any:
-        """Plot the data after converting traced payloads and coordinates to static values."""
-
-        # Local import avoids a circular dependency because ``data.utils`` also
-        # imports tidy3d DataArray subclasses for spatial data typing.
-        from .utils import static_dataarray_for_plot
-
-        PlotAccessor = xr.DataArray.plot
-        return PlotAccessor(static_dataarray_for_plot(self))(*args, **kwargs)
+    @property
+    def plot(self) -> _SanitizedPlotProxy:
+        """xarray-style plotting accessor on a plotting-safe DataArray copy."""
+        return _SanitizedPlotProxy(self)
 
     @property
     def abs(self) -> Self:
@@ -797,28 +829,25 @@ class AbstractSpatialDataArray(DataArray, ABC):
     _dims = ("x", "y", "z")
     _data_attrs = {"long_name": "field value"}
 
-    def plot(self, *args: Any, field: bool = True, grid: bool = False, **kwargs: Any) -> Any:
+    @property
+    def plot(self) -> _StructuredSpatialPlotProxy:
         """Plot the spatial data.
 
-        Accepts the same arguments as xarray's ``DataArray.plot()``.  The extra
+        Accepts the same arguments as xarray's ``DataArray.plot()``. The extra
         ``grid`` and ``field`` keyword arguments are accepted for API
-        compatibility with :meth:`TriangularGridDataset.plot` but grid overlay
+        compatibility with :meth:`TriangularGridDataset.plot`, but grid overlay
         is not supported on structured data.
 
         Parameters
         ----------
         field : bool = True
-            Whether to plot the data field.  Must be ``True`` for structured
+            Whether to plot the data field. Must be ``True`` for structured
             data.
         grid : bool = False
-            Not supported for structured data.  Raises ``DataError`` if
+            Not supported for structured data. Raises ``DataError`` if
             ``True``.
         """
-        if grid:
-            raise DataError("The 'grid' argument is only supported for unstructured data.")
-        if not field:
-            raise DataError("The 'field' argument is only supported for unstructured data.")
-        return super().plot(*args, **kwargs)
+        return _StructuredSpatialPlotProxy(self)
 
     @property
     def _spatially_sorted(self) -> Self:

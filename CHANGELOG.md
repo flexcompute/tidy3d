@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `ValueError` shape mismatch in `Simulation.epsilon()` when a `CustomMedium` uses `ScalarFieldDataArray` with a frequency dimension, by squeezing the leftover `f` dimension after spatial interpolation in `eps_diagonal_on_grid`.
 - Fixed wrapped `angle_theta` handling for glancing-incidence checks so values like `-pi/2` and `5*pi/2` are validated consistently in `ModeSpec` and angled field sources.
 - Added frontend validation for TCAD refinement regions and lines so unsupported degenerate shapes are rejected before submission.
+- Fixed plot function override for tidy3d data arrays.
 
 ## [2.11.0] - 2026-04-06
 

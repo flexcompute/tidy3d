@@ -354,7 +354,7 @@ def test_mode_amps_data_array():
 
 
 def test_traced_mode_amps_data_array_plot():
-    """Generic DataArray.plot() should work on traced non-spatial arrays too."""
+    """Generic DataArray plot access should work on traced non-spatial arrays too."""
 
     captured = {}
 
@@ -371,6 +371,8 @@ def test_traced_mode_amps_data_array_plot():
 
     ax = captured["arr"].plot(x="f")
     assert ax is not None
+    line = captured["arr"].plot.line(x="f")
+    assert line is not None
     plt.close("all")
 
 
