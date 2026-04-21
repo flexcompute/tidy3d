@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, Union
 
-import matplotlib.patches as mpl_patches
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
@@ -78,6 +77,13 @@ AUTO_RADIATION_MONITOR_BUFFER = 2
 AUTO_RADIATION_MONITOR_NUM_POINTS_THETA = 100
 AUTO_RADIATION_MONITOR_NUM_POINTS_PHI = 200
 TERMINAL_BOX_PADDING_FRACTION = 0.1
+
+
+def _get_mpl_patches() -> Any:
+    """Import matplotlib patches lazily for plotting-only code paths."""
+    import matplotlib.patches as mpl_patches
+
+    return mpl_patches
 
 
 def _pack_label_centers_1d(
@@ -664,6 +670,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ymin_padded = ymin - padding
         ymax_padded = ymax + padding
 
+        mpl_patches = _get_mpl_patches()
+
         # Add shaded rectangles for padding regions (top, bottom, left, right)
         # Bottom padding region
         bottom_rect = mpl_patches.Rectangle(
@@ -943,6 +951,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     diff_box_ymin.append(box_ymin)
 
                     # Create rectangle for differential pair with blue dashed border
+                    mpl_patches = _get_mpl_patches()
                     rect = mpl_patches.Rectangle(
                         (box_xmin, box_ymin),
                         box_xmax - box_xmin,
@@ -1106,6 +1115,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             _, (xmin, ymin) = Box.pop_axis(box.bounds[0], axis=injection_axis)
             _, (xmax, ymax) = Box.pop_axis(box.bounds[1], axis=injection_axis)
             padding = TERMINAL_BOX_PADDING_FRACTION * max(xmax - xmin, ymax - ymin)
+            mpl_patches = _get_mpl_patches()
             rect = mpl_patches.Rectangle(
                 (xmin - padding, ymin - padding),
                 (xmax - xmin) + 2 * padding,
