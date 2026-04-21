@@ -2980,9 +2980,11 @@ def test_eme_propagate_rejects_freq_sweep():
         sim.compute_overlaps(mode_data)
 
 
-def test_eme_stack_sweep_points_zero_pads_ragged_modes():
-    """Stacking per-sweep-point S-matrix blocks under EMEModeSweep must zero-pad
-    missing mode entries rather than NaN-pad (which would poison .sum() etc.)."""
+def test_eme_stack_sweep_points_nan_pads_ragged_modes():
+    """Stacking per-sweep-point S-matrix blocks under EMEModeSweep must NaN-pad
+    missing mode entries, matching the backend convention across every other
+    EME data array (fields, flux, n_complex, S-matrix, coeffs) and letting
+    ``smatrix_in_basis`` detect truncated-away modes via ``np.isnan``."""
     from tidy3d.components.eme.simulation import _stack_sweep_points
 
     freqs = [2e14]
@@ -3006,26 +3008,23 @@ def test_eme_stack_sweep_points_zero_pads_ragged_modes():
 
     # Shape: (f, sweep_index=3, mode_index_out=4, mode_index_in=4).
     assert stacked.shape == (1, 3, 4, 4)
-    assert not np.isnan(stacked.values).any(), "NaN values found; zero-fill regression"
 
-    # Sweep point 0 (num_modes=1): only [0,0] is filled with 1.
+    # Sweep point 0 (num_modes=1): only [0,0] is filled with 1; the other 15 slots are NaN.
     sweep0 = stacked.isel(sweep_index=0, f=0).values
     assert sweep0[0, 0] == complex(1, 0)
-    assert np.count_nonzero(sweep0) == 1
+    nan0 = np.isnan(sweep0)
+    assert nan0.sum() == 15 and not nan0[0, 0]
 
-    # Sweep point 1 (num_modes=2): top-left 2x2 filled with 2.
+    # Sweep point 1 (num_modes=2): top-left 2x2 filled with 2; rest NaN.
     sweep1 = stacked.isel(sweep_index=1, f=0).values
     assert np.all(sweep1[:2, :2] == complex(2, 0))
-    assert np.all(sweep1[2:, :] == 0)
-    assert np.all(sweep1[:, 2:] == 0)
+    assert np.all(np.isnan(sweep1[2:, :]))
+    assert np.all(np.isnan(sweep1[:, 2:]))
 
-    # Sweep point 2 (num_modes=4): full 4x4 filled with 3.
+    # Sweep point 2 (num_modes=4): full 4x4 filled with 3, no NaN.
     sweep2 = stacked.isel(sweep_index=2, f=0).values
     assert np.all(sweep2 == complex(3, 0))
-
-    # Downstream reductions must be finite.
-    T = (np.abs(stacked.values) ** 2).sum()
-    assert np.isfinite(T) and T > 0
+    assert not np.isnan(sweep2).any()
 
 
 @pytest.mark.numerical

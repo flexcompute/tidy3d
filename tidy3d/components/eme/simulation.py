@@ -134,20 +134,21 @@ EME_SIM_YEE_SIM_SHARED_ATTRS = [
 
 
 def _stack_sweep_points(arrays: list[EMESMatrixDataArray]) -> EMESMatrixDataArray:
-    """Concat S-matrix blocks along sweep_index with zero-fill for ragged mode indices.
+    """Concat S-matrix blocks along sweep_index with NaN-fill for ragged mode indices.
 
     Under EMEModeSweep the per-point blocks have different mode_index_out /
     mode_index_in sizes.  Reindex each block to the union of mode_index coords
-    with zero fill before concatenation so missing truncated-away modes appear
-    as 0 rather than NaN; a plain xr.concat would produce an outer-join NaN pad
-    that would poison downstream reductions like .sum().
+    with NaN fill before concatenation, matching the backend convention
+    elsewhere in EME (field/flux/n_complex/S-matrix/coeff arrays all use NaN
+    as the "not-applicable" sentinel) and letting ``smatrix_in_basis`` detect
+    truncated-away modes via its existing ``np.isnan`` check.
     """
     import xarray as xr
 
     mi_out = sorted(set().union(*(a.mode_index_out.values.tolist() for a in arrays)))
     mi_in = sorted(set().union(*(a.mode_index_in.values.tolist() for a in arrays)))
     reindexed = [
-        a.reindex(mode_index_out=mi_out, mode_index_in=mi_in, fill_value=complex(0, 0))
+        a.reindex(mode_index_out=mi_out, mode_index_in=mi_in, fill_value=complex(np.nan, np.nan))
         for a in arrays
     ]
     return xr.concat(reindexed, dim="sweep_index")
