@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.11.1] - 2026-04-21
+
+### Added
+
+- Added local EME propagation via `EMESimulation.propagate(mode_data)` and a per-element staged pipeline (`mode_simulations`, `stage_cell_modes`, `compute_cell_overlap`, `compute_interface_overlap`, `compute_cell_smatrix`, `compute_interface_smatrix`, `compute_smatrix`). For iterative design with many sweeps on the same modal basis, `compute_overlaps(mode_data)` + `propagate_from_overlaps(cell_overlaps, interface_overlaps)` amortizes the overlap stage. Intermediate results (`EMEStageCellOverlap`, `EMEStageInterfaceSMatrix`, etc.) are serializable and reusable across parameter sweeps. `EMEFreqSweep` is not supported; use `EMESimulation.freqs` directly. The local path does not support anisotropic media in bent cells with `bend_medium_frame="global"`; use `bend_medium_frame="co_rotating"` or the remote backend in that case.
+- Added `filter_func` support to `MethodGrid` and `MethodMonteCarlo` in the design plugin so invalid parameter combinations can now be skipped during parameter sweeps.
+- Added `plot_field_components()` to `ModeSimulationData` and `ModeSolver` for plotting multiple mode field components in one call.
+- Added `FieldProjector.from_near_field_data()` for projecting directly from custom or modified `FieldData`.
+
+### Changed
+
+- Improved near-field projection performance.
+- Strip autograd tracers from DataArray plotting functions before plotting.
+- Keep original simulation data from being zeroed out during the adjoint pipeline.
+- Updated adjoint shape integration to sample interface permittivity directly from anisotropic simulation permittivity data.
+
+### Fixed
+
+- Fixed `ValueError` shape mismatch in `Simulation.epsilon()` when a `CustomMedium` uses `ScalarFieldDataArray` with a frequency dimension, by squeezing the leftover `f` dimension after spatial interpolation in `eps_diagonal_on_grid`.
+- Fixed wrapped `angle_theta` handling for glancing-incidence checks so values like `-pi/2` and `5*pi/2` are validated consistently in `ModeSpec` and angled field sources.
+- Added frontend validation for TCAD refinement regions and lines so unsupported degenerate shapes are rejected before submission.
+
 ## [2.11.0] - 2026-04-06
 
 ### Added
@@ -2076,6 +2098,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.11.1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1
