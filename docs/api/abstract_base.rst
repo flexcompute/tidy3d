@@ -5,7 +5,6 @@ Abstract Base Classes
 
 Base classes that represent abstractions of common components. Provide inherited functionality.
 
-
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
