@@ -576,6 +576,16 @@ def test_mode_sim():
             mode_spec=td.ModeSpec(),
             freqs=[td.C_0],
         )
+    mode_solver = ModeSolver(
+        simulation=fdtd_sim.updated_copy(grid_spec=td.GridSpec.auto()),
+        plane=td.Box(size=(4, 4, 0)),
+        mode_spec=td.ModeSpec(),
+        freqs=[td.C_0 / 0.9, td.C_0 / 1.1],
+    )
+    with AssertLogLevel("INFO"):
+        mode_sim = td.ModeSimulation.from_mode_solver(mode_solver)
+    expected_wavelength = td.GridSpec.wavelength_from_sources(mode_solver.simulation.sources)
+    assert np.isclose(mode_sim.grid_spec.wavelength, expected_wavelength)
     with AssertLogLevel("WARNING"):
         _ = td.ModeSimulation.from_simulation(
             simulation=fdtd_sim.updated_copy(grid_spec=td.GridSpec.auto(wavelength=2)),

@@ -458,6 +458,10 @@ class ModeSimulation(AbstractYeeGridSimulation):
         """
 
         kwargs = {key: getattr(mode_solver, key) for key in MODE_SIM_MODE_SOLVER_SHARED_ATTRS}
+        if wavelength is None:
+            grid_spec = mode_solver.simulation.grid_spec
+            if grid_spec.auto_grid_used and grid_spec.wavelength is None:
+                wavelength = grid_spec.get_wavelength(mode_solver.simulation.sources)
         mode_sim = cls.from_simulation(
             simulation=mode_solver.simulation, wavelength=wavelength, **kwargs
         )
