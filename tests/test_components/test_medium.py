@@ -10,7 +10,7 @@ import pytest
 import tidy3d as td
 from tidy3d.exceptions import ValidationError
 
-from ..utils import AssertLogLevel
+from ..utils import SIM_FULL, AssertLogLevel
 
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
@@ -32,6 +32,25 @@ RTOL = 0.001
 def test_plot(component):
     _ = component.plot(freqs=[2e14, 3e14], ax=AX)
     plt.close()
+
+
+def test_eps_model_accepts_scalar_list_and_array_across_sim_full_media():
+    freqs_scalar = 2e14
+    freqs_list = [2e14, 3e14]
+    freqs_array = np.array(freqs_list)
+
+    media = [SIM_FULL.medium, *(structure.medium for structure in SIM_FULL.structures)]
+
+    for medium in media:
+        scalar_result = medium.eps_model(freqs_scalar)
+        assert np.asarray(scalar_result).shape == ()
+
+        expected = np.array([medium.eps_model(freq) for freq in freqs_array])
+        for freqs in (freqs_list, freqs_array):
+            result = np.asarray(medium.eps_model(freqs))
+            assert result.shape == expected.shape
+            if result.dtype != object and expected.dtype != object:
+                np.testing.assert_allclose(result, expected)
 
 
 def test_eps_sigma_freq_none():

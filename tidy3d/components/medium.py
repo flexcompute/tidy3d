@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Uni
 
 import autograd.numpy as np
 import numpy as npo
+import xarray as xr
 from autograd.differential_operators import tensor_jacobian_product
 from numpy.typing import NDArray
 from pydantic import (
@@ -91,7 +92,6 @@ from .validators import call_wrapped_validator, validate_name_str, validate_para
 from .viz import VisualizationSpec, add_ax_if_none
 
 if TYPE_CHECKING:
-    import xarray as xr
     from autograd.numpy.numpy_boxes import ArrayBox
     from numpy.typing import ArrayLike
     from pydantic import FieldValidationInfo
@@ -137,6 +137,34 @@ LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
 ALLOWED_INTERP_METHODS = get_args(InterpMethod)
 
 
+def _normalize_frequency_input(
+    frequency: float | FrequencyArray | None,
+) -> float | ArrayFloat:
+    """Normalize frequency inputs to a scalar float or float array."""
+    if frequency is None:
+        return FREQ_EVAL_INF
+
+    if np.isscalar(frequency):
+        frequency = float(frequency)
+        return FREQ_EVAL_INF if np.isinf(frequency) else frequency
+
+    frequency = np.array(frequency, dtype=float, copy=True)
+    frequency[np.isinf(frequency)] = FREQ_EVAL_INF
+    return frequency
+
+
+def _constant_over_frequency(
+    value: complex, frequency: float | FrequencyArray | None
+) -> complex | ArrayComplex:
+    """Return a scalar constant or broadcast it over the supplied frequency shape."""
+    frequency = _normalize_frequency_input(frequency)
+    if np.isscalar(frequency):
+        return complex(value)
+    # Constant media should still return one value per frequency sample when the
+    # caller passes a vectorized frequency input.
+    return np.full(np.shape(frequency), value, dtype=complex)
+
+
 def ensure_freq_in_range(
     eps_model: Callable[[AbstractMedium, float], complex],
 ) -> Callable[[AbstractMedium, float], complex]:
@@ -146,13 +174,8 @@ def ensure_freq_in_range(
     def _eps_model(self: AbstractMedium, frequency: float) -> complex:
         """New eps_model function."""
         # evaluate infs and None as FREQ_EVAL_INF
-        is_inf_scalar = isinstance(frequency, float) and np.isinf(frequency)
-        if frequency is None or is_inf_scalar:
-            frequency = FREQ_EVAL_INF
-
-        if isinstance(frequency, np.ndarray):
-            frequency = frequency.astype(float)
-            frequency[np.where(np.isinf(frequency))] = FREQ_EVAL_INF
+        is_inf_scalar = frequency is None or (np.isscalar(frequency) and np.isinf(frequency))
+        frequency = _normalize_frequency_input(frequency)
 
         # if frequency range not present just return original function
         if self.frequency_range is None:
@@ -427,8 +450,8 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Parameters
         ----------
-        frequency : float
-            Frequency to evaluate permittivity at (Hz).
+        frequency : float or ArrayLike
+            Frequency or frequencies to evaluate permittivity at (Hz).
 
         Returns
         -------
@@ -697,8 +720,17 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """
         if freq is None:
             return eps_real
+        freq = _normalize_frequency_input(freq)
         omega = 2 * np.pi * freq
+        return AbstractMedium._eps_sigma_to_eps_complex_from_omega(eps_real, sigma, omega)
 
+    @staticmethod
+    def _eps_sigma_to_eps_complex_from_omega(
+        eps_real: float | ArrayGeneric | xr.DataArray,
+        sigma: float | ArrayGeneric | xr.DataArray,
+        omega: float | ArrayGeneric | xr.DataArray,
+    ) -> complex | ArrayGeneric | xr.DataArray:
+        """Convert permittivity and conductivity to complex permittivity from angular frequency."""
         return eps_real + 1j * sigma / omega / EPSILON_0
 
     @staticmethod
@@ -1042,13 +1074,39 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             return self.eps_diagonal_on_grid(frequency, coords)[row]
         return 0j
 
+    @staticmethod
+    def _spatial_average(
+        eps_comp: CustomSpatialDataType, frequency: float | FrequencyArray
+    ) -> complex | ArrayGeneric:
+        """Average a custom permittivity field over spatial dimensions only."""
+        values = _get_numpy_array(eps_comp)
+
+        if np.isscalar(frequency):
+            return np.mean(values)
+
+        if hasattr(eps_comp, "dims") and "f" in eps_comp.dims:
+            freq_axis = eps_comp.dims.index("f")
+            values = np.moveaxis(values, freq_axis, -1)
+
+        num_freqs = np.asarray(frequency, dtype=float).size
+        return np.mean(values.reshape(-1, num_freqs), axis=0)
+
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued spatially averaged permittivity as a function of frequency."""
+        if not np.isscalar(frequency):
+            freqs = np.asarray(frequency, dtype=float)
+            eps_values = [self.eps_model(float(freq)) for freq in freqs.reshape(-1)]
+            return np.array(eps_values).reshape(freqs.shape)
+
         if self.is_isotropic:
-            return np.mean(_get_numpy_array(self.eps_dataarray_freq(frequency)[0]))
+            return self._spatial_average(self.eps_dataarray_freq(frequency)[0], frequency)
         return np.mean(
-            [np.mean(_get_numpy_array(eps_comp)) for eps_comp in self.eps_dataarray_freq(frequency)]
+            [
+                self._spatial_average(eps_comp, frequency)
+                for eps_comp in self.eps_dataarray_freq(frequency)
+            ],
+            axis=0,
         )
 
     @ensure_freq_in_range
@@ -1315,8 +1373,7 @@ class PECMedium(AbstractMedium):
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
-        # return something like frequency with value of pec_val + 0j
-        return 0j * frequency + pec_val
+        return _constant_over_frequency(pec_val + 0j, frequency)
 
     @cached_property
     def n_cfl(self) -> float:
@@ -1362,8 +1419,7 @@ class PMCMedium(AbstractMedium):
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
-        # permittivity of a PMC.
-        return 1.0 + 0j
+        return _constant_over_frequency(1.0 + 0j, frequency)
 
     @cached_property
     def n_cfl(self) -> float:
@@ -1760,9 +1816,16 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         tuple[Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`], Union[:class:`.SpatialDataArray`, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`]]
             The permittivity evaluated at ``frequency``.
         """
+        frequency = _normalize_frequency_input(frequency)
         conductivity = self.conductivity
         if conductivity is None:
             conductivity = _zeros_like(self.permittivity)
+
+        if not np.isscalar(frequency) and isinstance(self.permittivity, SpatialDataArray):
+            omega = 2 * np.pi * xr.DataArray(frequency, coords={"f": frequency}, dims=("f",))
+            eps = self._eps_sigma_to_eps_complex_from_omega(self.permittivity, conductivity, omega)
+            return (eps, eps, eps)
+
         eps = self.eps_sigma_to_eps_complex(self.permittivity, conductivity, frequency)
         return (eps, eps, eps)
 
@@ -6095,8 +6158,8 @@ class AnisotropicMedium(AbstractMedium):
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
-
-        return np.mean(self.eps_diagonal(frequency), axis=0)
+        eps_diag = self.eps_diagonal(frequency)
+        return (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
@@ -6482,7 +6545,7 @@ class FullyAnisotropicMedium(AbstractMedium):
             perm_diag = perm_diag[:, None]
             cond_diag = cond_diag[:, None]
         eps_diag = AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
-        return np.mean(eps_diag)
+        return np.mean(eps_diag, axis=0)
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
@@ -7572,7 +7635,8 @@ class Medium2D(AbstractMedium):
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
-        return np.mean(self.eps_diagonal(frequency=frequency), axis=0)
+        eps_diag = self.eps_diagonal(frequency=frequency)
+        return (eps_diag[0] + eps_diag[1]) / 2
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> tuple[complex, complex]:

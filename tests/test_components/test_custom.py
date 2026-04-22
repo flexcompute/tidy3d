@@ -505,6 +505,19 @@ def test_medium_eps_model():
         med = make_custom_medium(make_scalar_data_multifreqs())
 
 
+def test_medium_eps_model_accepts_list_and_array():
+    """Evaluate custom medium permittivity for scalar and multi-frequency inputs."""
+    med = CustomMedium(
+        permittivity=make_spatial_data(value=2),
+        conductivity=make_spatial_data(value=0.1, random_magnitude=0),
+    )
+    freq_array = np.array([2e14, 3e14])
+    expected = np.array([med.eps_model(float(freq)) for freq in freq_array])
+
+    np.testing.assert_allclose(med.eps_model(freq_array.tolist()), expected)
+    np.testing.assert_allclose(med.eps_model(freq_array), expected)
+
+
 def test_nk_diff_coords():
     """Should error if N and K have different coords."""
     n = make_scalar_data().real
