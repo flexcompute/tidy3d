@@ -3110,6 +3110,82 @@ def test_sim_volumetric_structures(tmp_path):
         )
 
 
+def test_warn_3d_structure_missing_2d_yee_sampling_plane():
+    """Warn when a 3D structure in a 2D simulation misses the tangential E-field Yee plane."""
+
+    src = td.PointDipole(
+        center=(0, 0, 0),
+        polarization="Ey",
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+    )
+    boundary_spec = td.BoundarySpec(
+        x=td.Boundary.pml(num_layers=6),
+        y=td.Boundary.pml(num_layers=6),
+        z=td.Boundary.periodic(),
+    )
+    common_kwargs = {
+        "size": (3, 3, 0),
+        "sources": (src,),
+        "boundary_spec": boundary_spec,
+        "grid_spec": td.GridSpec.auto(wavelength=td.C_0 / src.source_time.freq0),
+        "run_time": 1e-12,
+    }
+
+    thin_centered = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.2, 0.2, 0.01)),
+        medium=td.Medium(permittivity=12),
+        name="thin_centered",
+    )
+    with AssertLogLevel("WARNING", contains_str="collapsed-axis Yee sampling plane"):
+        _ = td.Simulation(structures=(thin_centered,), **common_kwargs)
+
+    thick_centered = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.2, 0.2, 0.16)),
+        medium=td.Medium(permittivity=12),
+        name="thick_centered",
+    )
+    with AssertLogStr("WARNING", excludes_str="collapsed-axis Yee sampling plane"):
+        _ = td.Simulation(structures=(thick_centered,), **common_kwargs)
+
+    thick_shifted = td.Structure(
+        geometry=td.Box(center=(0, 0, 0.08), size=(0.2, 0.2, 0.12)),
+        medium=td.Medium(permittivity=12),
+        name="thick_shifted",
+    )
+    with AssertLogLevel("WARNING", contains_str="collapsed-axis Yee sampling plane"):
+        _ = td.Simulation(structures=(thick_shifted,), **common_kwargs)
+
+
+def test_warn_medium2d_in_matching_2d_simulation_plane():
+    """Warn when a Medium2D lies in the same plane as a 2D simulation."""
+
+    src = td.PointDipole(
+        center=(0, 0, 0),
+        polarization="Ey",
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+    )
+    medium2d = td.Medium2D.from_medium(td.Medium(permittivity=12), thickness=0.01)
+    sheet = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.2, 0.2, 0)),
+        medium=medium2d,
+        name="sheet",
+    )
+
+    with AssertLogLevel("WARNING", contains_str="uses a 'Medium2D' in a 2D simulation"):
+        _ = td.Simulation(
+            size=(3, 3, 0),
+            structures=(sheet,),
+            sources=(src,),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=6),
+                y=td.Boundary.pml(num_layers=6),
+                z=td.Boundary.periodic(),
+            ),
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            run_time=1e-12,
+        )
+
+
 @pytest.mark.parametrize("normal_axis", (0, 1, 2))
 def test_pml_boxes_2D(normal_axis):
     """Ensure pml boxes have non-zero dimension for 2D sim."""

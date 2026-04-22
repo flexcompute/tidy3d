@@ -3209,6 +3209,7 @@ class Simulation(AbstractYeeGridSimulation):
         super()._run_after_validators()
         call_wrapped_validator(validate_boundaries_for_zero_dims, self)
         self._validate_auto_grid_wavelength()
+        self._warn_3d_structures_missing_2d_yee_sampling_plane()
         call_wrapped_validator(
             assert_objects_in_sim_bounds, self, "sources", strict_inequality=True
         )
@@ -3252,6 +3253,65 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_low_freq_smoothing()
         self._warn_source_monitor_normalization_grid()
         self._validate_scene()
+        return self
+
+    def _warn_3d_structures_missing_2d_yee_sampling_plane(self) -> Self:
+        """Warn if a 3D structure in a 2D simulation misses the tangential E-field Yee plane."""
+        if self.size.count(0.0) != 1:
+            return self
+
+        collapsed_axis = self.size.index(0.0)
+        collapsed_axis_name = "xyz"[collapsed_axis]
+        tangential_axes = [axis for axis in range(3) if axis != collapsed_axis]
+        tangential_components = [f"E{'xyz'[axis]}" for axis in tangential_axes]
+
+        yee_plane_positions = {
+            float(np.ravel(self.grid[component].to_list[collapsed_axis])[0])
+            for component in tangential_components
+        }
+
+        with log as consolidated_logger:
+            for i, structure in enumerate(self.structures):
+                static_geometry = structure.geometry.to_static()
+                if isinstance(structure.medium, (Medium2D, AnisotropicMediumFromMedium2D)):
+                    if any(
+                        len(geom.zero_dims) == 1 and geom.zero_dims[0] == collapsed_axis
+                        for geom in flatten_groups(static_geometry)
+                    ):
+                        obj_descr = named_obj_descr(structure, "structures", i)
+                        consolidated_logger.warning(
+                            f"Structure: {obj_descr} uses a 'Medium2D' in a 2D simulation with "
+                            f"the same collapsed axis '{collapsed_axis_name}'. This is ambiguous "
+                            "because 'Medium2D' represents an infinitely thin sheet, while a 2D "
+                            "simulation represents infinite extent along the collapsed axis. "
+                            "Consider using a 3D medium with nonzero thickness instead."
+                        )
+                    continue
+                # Exact zero-thickness geometries are already covered by the existing
+                # "geometry has zero size" warning, so keep this validator focused on
+                # thin-but-nonzero 3D structures that miss the 2D Yee sampling plane.
+                if any(len(geom.zero_dims) > 0 for geom in flatten_groups(static_geometry)):
+                    continue
+
+                if any(
+                    len(static_geometry.intersections_plane(**{collapsed_axis_name: pos})) > 0
+                    for pos in yee_plane_positions
+                ):
+                    continue
+
+                obj_descr = named_obj_descr(structure, "structures", i)
+                tangential_str = ", ".join(tangential_components)
+                positions_str = ", ".join(f"{pos:.6g}" for pos in sorted(yee_plane_positions))
+                consolidated_logger.warning(
+                    f"Structure: {obj_descr} is a 3D structure in a 2D simulation, but it does "
+                    f"not intersect the collapsed-axis Yee sampling plane used for {tangential_str} "
+                    f"along '{collapsed_axis_name}' (at {positions_str}). As a result, the "
+                    "structure may appear in plots while its in-plane permittivity is sampled as "
+                    "background. Consider increasing the structure thickness "
+                    "along the collapsed axis so that it extends at least one grid cell across "
+                    "the Yee sampling plane."
+                )
+
         return self
 
     def _validate_auto_grid_wavelength(self) -> Self:
