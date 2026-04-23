@@ -3466,6 +3466,19 @@ class Simulation(AbstractYeeGridSimulation):
 
             norm_dir, tan_dirs = self.pop_axis([0, 1, 2], axis=source.injection_axis)
             src_bounds = source.bounds
+            clipped_bounds = Box.bounds_intersection(src_bounds, sim_bounds)
+            clipped_tan_sizes = [
+                clipped_bounds[1][tan_dir] - clipped_bounds[0][tan_dir] for tan_dir in tan_dirs
+            ]
+
+            if not any(size > 0 for size in clipped_tan_sizes):
+                self._raise_validation_error_at_loc(
+                    f"The TFSF source at index '{src_idx}' must have a nonzero in-domain "
+                    "tangential extent in at least one direction after intersecting with the "
+                    "simulation domain.",
+                    "sources",
+                    src_idx,
+                )
 
             # make a dummy source that represents the injection surface to get the intersecting
             # medium, which is later used to test the Bloch vector for correctness

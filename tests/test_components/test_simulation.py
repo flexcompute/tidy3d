@@ -2527,6 +2527,44 @@ def test_tfsf_boundaries():
         )
 
 
+def test_tfsf_requires_nonzero_in_domain_tangential_extent():
+    """Test that a TFSF source must retain at least one nonzero tangential dimension in-domain."""
+    source = td.TFSF(
+        center=(0, 0, 0),
+        size=(2, 1, 1),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        injection_axis=0,
+        direction="+",
+    )
+
+    boundary_spec = td.BoundarySpec(
+        x=td.Boundary.pml(),
+        y=td.Boundary.periodic(),
+        z=td.Boundary.periodic(),
+    )
+
+    # A 2D simulation is still allowed because the clipped TFSF region retains one
+    # nonzero tangential dimension in-domain.
+    _ = td.Simulation(
+        size=(4, 2, 0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        boundary_spec=boundary_spec,
+        run_time=1e-12,
+        sources=(source,),
+    )
+
+    # A 1D simulation collapses both tangential directions after clipping the TFSF box
+    # to the simulation domain and must be rejected.
+    with pytest.raises(ValidationError, match="nonzero in-domain tangential extent"):
+        _ = td.Simulation(
+            size=(4, 0, 0),
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            boundary_spec=boundary_spec,
+            run_time=1e-12,
+            sources=(source,),
+        )
+
+
 def test_tfsf_structures_grid():
     """Test that a TFSF source is allowed to intersect structures only in particular cases."""
     src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
