@@ -495,15 +495,51 @@ jobs:
       source_ref: ${{ needs.determine-workflow-scope.outputs.release_tag }}
       target_ref: ${{ needs.determine-workflow-scope.outputs.push_to_latest == 'true' && 'latest' || '' }}
     secrets: inherit # zizmor: ignore[secrets-inherit]
-  
+
+  prepare-github-release-notes:
+    name: build-github-release-notes
+    needs: [determine-workflow-scope, compile-tests-results]
+    if: |
+      always() &&
+      (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
+      needs.determine-workflow-scope.outputs.deploy_github_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+    steps:
+      - name: checkout-repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: build-github-release-notes
+        run: |
+          set -euo pipefail
+          python3 scripts/build_github_release_notes.py \
+            --tag "${RELEASE_TAG}" \
+            --ref "${RELEASE_TAG}" \
+            --changelog CHANGELOG.md \
+            --output RELEASE_NOTES.md
+
+      - name: upload-github-release-notes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: github-release-notes-${{ env.RELEASE_TAG }}
+          path: RELEASE_NOTES.md
+          if-no-files-found: error
+
   github-release:
     name: create-github-release
-    needs: [determine-workflow-scope, compile-tests-results, deploy-packages]
+    needs: [determine-workflow-scope, compile-tests-results, prepare-github-release-notes, deploy-packages]
     if: |
       always() &&
       (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
       needs.determine-workflow-scope.outputs.deploy_github_release == 'true' &&
       needs.determine-workflow-scope.outputs.deploy_pypi == 'true' &&
+      needs.prepare-github-release-notes.result == 'success' &&
       needs.deploy-packages.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -512,17 +548,21 @@ jobs:
       RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
       IS_RC_RELEASE: ${{ needs.determine-workflow-scope.outputs.is_rc_release }}
     steps:
-      - name: checkout-tag
+      - name: checkout-repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
+
+      - name: download-github-release-notes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: github-release-notes-${{ env.RELEASE_TAG }}
       
       - name: create-github-release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
   
