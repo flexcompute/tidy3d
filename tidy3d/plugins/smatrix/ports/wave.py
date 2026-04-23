@@ -488,7 +488,9 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             direction=absorber.direction,
             shift=absorber.grid_shift,
         )
-        (box, inj_axis, direction) = simulation._pec_frame_box(shifted_absorber, expand=True)
+        # Frame positions of absorber is simply used for extrusion bounds along the
+        # injection axis
+        (box, inj_axis, direction) = simulation._pec_frame_box(shifted_absorber)
         surfaces = box.surfaces(box.size, box.center)
 
         sign = 1 if direction == "+" else -1

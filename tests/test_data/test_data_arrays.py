@@ -14,10 +14,13 @@ from autograd.test_util import check_grads
 
 import tidy3d as td
 from tidy3d.components.autograd.utils import hasbox
+from tidy3d.components.data.monitor_data import ElectromagneticFieldData
 from tidy3d.components.data.utils import static_dataarray_for_plot
 from tidy3d.exceptions import DataError
+from tidy3d.plugins.mode import ModeSolver
 
 pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
+
 
 np.random.seed(4)
 
@@ -185,6 +188,85 @@ def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
     return td.ScalarFieldTimeDataArray(values, coords={"x": XS, "y": YS, "z": ZS, "t": TS})
 
 
+def apply_mode_solver_hard_boundaries(
+    values, field_name, coords, solver_field_bounds, symmetry=(0, 0, 0)
+):
+    """Zero-pad field values outside solver bounds and enforce boundary conditions.
+
+    All fields are zero strictly outside the bounds. On each boundary:
+
+    - **PEC wall** (outer simulation edge, or symmetry = -1 at the min bound):
+      tangential E and normal H are zero on the boundary.
+    - **PMC wall** (symmetry = +1 at the min bound):
+      normal E and tangential H are zero on the boundary.
+    - The max bound is always treated as a PEC wall.
+    """
+    field_type = field_name[0]  # "E" or "H"
+    comp_axis = "xyz".index(field_name[1])
+    bmin, bmax = solver_field_bounds
+
+    for ax, dim in enumerate("xyz"):
+        lo, hi = bmin[ax], bmax[ax]
+        if lo is None and hi is None:
+            continue
+
+        c = numpy.asarray(coords[dim])
+
+        is_tangential_e = field_type == "E" and comp_axis != ax
+        is_normal_e = field_type == "E" and comp_axis == ax
+        is_tangential_h = field_type == "H" and comp_axis != ax
+        is_normal_h = field_type == "H" and comp_axis == ax
+
+        # Bounds are snapped to exact grid coordinates, so exact equality
+        # is sufficient for the on-boundary check.
+        mask = numpy.zeros(len(c), dtype=bool)
+
+        # Min bound: PEC if symmetry <= 0, PMC if symmetry > 0
+        if lo is not None:
+            mask |= c < lo
+            sym = symmetry[ax]
+            if sym <= 0:
+                # PEC: tangential E and normal H are zero
+                if is_tangential_e or is_normal_h:
+                    mask |= c == lo
+            else:
+                # PMC: normal E and tangential H are zero
+                if is_normal_e or is_tangential_h:
+                    mask |= c == lo
+
+        # Max bound: always PEC
+        if hi is not None:
+            mask |= c > hi
+            if is_tangential_e or is_normal_h:
+                mask |= c == hi
+
+        shape = [1] * values.ndim
+        shape[ax] = -1
+        values = numpy.where(mask.reshape(shape), 0, values)
+
+    return values
+
+
+def _compute_solver_field_bounds(sim: td.Simulation, monitor: td.Monitor):
+    """Compute solver field bounds for a monitor on its discretized grid.
+
+    Mirrors the logic of ``ModeData.solver_field_bounds``: snap the monitor
+    to the discretized grid, then clamp extension cells back to the
+    simulation grid edges.
+    """
+    grid = sim.discretize_monitor(monitor)
+    bounds = ModeSolver._compute_solver_field_bounds(
+        grid=grid,
+        plane=monitor,
+        normal_axis=monitor.normal_axis,
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+    )
+    return ElectromagneticFieldData._clamp_grid_expanded_bounds(
+        bounds, grid, monitor.normal_axis, monitor.colocate
+    )
+
+
 def make_scalar_mode_field_data_array(
     grid_key: str, symmetry=True, colocate: Optional[bool] = None
 ):
@@ -192,7 +274,14 @@ def make_scalar_mode_field_data_array(
     if colocate is not None:
         monitor = monitor.updated_copy(colocate=colocate)
     XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
+    sim = SIM_SYM if symmetry else SIM
+
     values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
+
+    bounds = _compute_solver_field_bounds(sim, monitor)
+    values = apply_mode_solver_hard_boundaries(
+        values, grid_key, {"x": XS, "y": [0.0], "z": ZS}, bounds, symmetry=sim.symmetry
+    )
 
     return td.ScalarModeFieldDataArray(
         values, coords={"x": XS, "y": [0.0], "z": ZS, "f": FS, "mode_index": MODE_INDICES}
@@ -201,6 +290,7 @@ def make_scalar_mode_field_data_array(
 
 def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: float = 0):
     XS, YS, ZS = get_xyz(MODE_MONITOR_WITH_FIELDS, grid_key, symmetry)
+    sim = SIM_SYM if symmetry else SIM
 
     values = np.array([1 + 0.1j])[None, :, None, None, None] * np.sin(
         0.5
@@ -211,6 +301,11 @@ def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: 
             np.cos(rot) * np.array(XS)[:, None, None, None, None]
             + np.sin(rot) * np.array(ZS)[None, None, :, None, None]
         )
+    )
+
+    bounds = _compute_solver_field_bounds(sim, MODE_MONITOR_WITH_FIELDS)
+    values = apply_mode_solver_hard_boundaries(
+        values, grid_key, {"x": XS, "y": [0.0], "z": ZS}, bounds, symmetry=sim.symmetry
     )
 
     return td.ScalarModeFieldDataArray(

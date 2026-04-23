@@ -2360,40 +2360,39 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return structure
 
     def _pec_frame_box(
-        self, obj: Union[AbstractModeSource, InternalAbsorber], expand: bool = False
+        self, obj: Union[AbstractModeSource, InternalAbsorber]
     ) -> tuple[Box, int, str]:
-        """Return pec bounding box, frame axis and object's direction"""
+        """Return pec bounding box, frame axis and object's direction."""
+        from tidy3d.components.mode.mode_solver import ModeSolver
 
-        span_inds = np.array(self.grid.discretize_inds(obj, relax_precision=True))
-        coords = self.grid.boundaries.to_list
         direction = obj.direction
         if isinstance(obj, AbstractModeSource):
             axis = obj.injection_axis
-            length = obj.frame.length
-            if direction == "+":
-                span_inds[axis][1] += length - 1
-            else:
-                span_inds[axis][0] -= length - 1
         else:
             axis = obj.size.index(0.0)
 
-        # ensure that the pec frame is at least one cell larger than wave port plane
-        if expand:
-            for dim in range(3):
-                if dim != axis:
-                    grid_size = len(coords[dim])
-                    (beg, end) = span_inds[dim]
-                    span_inds[dim] = [np.maximum(0, beg - 1), np.minimum(grid_size - 1, end + 1)]
+        # Tangential axes: snap using same logic as mode solver PEC boundaries
+        snapped = ModeSolver._snapped_mode_domain(self.grid, obj, axis)
 
-        box_bounds = [
-            [
-                c[beg],
-                c[end],
-            ]
-            for c, (beg, end) in zip(coords, span_inds)
-        ]
+        min_b, max_b = list(snapped.bounds[0]), list(snapped.bounds[1])
 
-        return (Box.from_bounds(*np.transpose(box_bounds)), axis, direction)
+        # Injection axis: index-based extension by frame.length cells
+        span_inds_axis = self.grid.discretize_inds(obj, relax_precision=True)[axis]
+        coords_axis = self.grid.boundaries.to_list[axis]
+        if isinstance(obj, AbstractModeSource):
+            length = obj.frame.length
+            ind_min, ind_max = span_inds_axis
+            if direction == "+":
+                ind_max += length - 1
+            else:
+                ind_min -= length - 1
+            min_b[axis] = coords_axis[ind_min]
+            max_b[axis] = coords_axis[ind_max]
+        else:
+            min_b[axis] = coords_axis[span_inds_axis[0]]
+            max_b[axis] = coords_axis[span_inds_axis[1]]
+
+        return (Box.from_bounds(min_b, max_b), axis, direction)
 
     @cached_property
     def _modal_plane_frames(self) -> list[Structure]:

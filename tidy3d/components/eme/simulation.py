@@ -75,6 +75,7 @@ if TYPE_CHECKING:
         ArrayFloat1D,
         ArrayInt1D,
         Ax,
+        BoundOptional,
         Coordinate,
         Size,
         Symmetry,
@@ -746,6 +747,22 @@ class EMESimulation(AbstractYeeGridSimulation):
         center[axis] = (rmax + rmin) / 2
         size[axis] = rmax - rmin
         return self.eme_grid_spec.make_grid(center=center, size=size, axis=self.axis)
+
+    @cached_property
+    def solver_field_bounds(self) -> BoundOptional:
+        """Per-axis bounds where mode solver field data is physically valid.
+
+        EME always colocates symmetry-expanded data, so symmetry is not
+        passed here; the bounds represent only the physical (PEC) domain
+        edges, not the symmetry centre.
+        """
+        from tidy3d.components.mode.mode_solver import ModeSolver
+
+        return ModeSolver._compute_solver_field_bounds(
+            grid=self.grid,
+            plane=self.geometry,
+            normal_axis=self.axis,
+        )
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs: Any) -> EMESimulation:

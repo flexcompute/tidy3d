@@ -2061,6 +2061,7 @@ def _get_eme_mode_solver_data(num_sweep=0):
         grid_dual_correction = grid_dual_correction.drop_vars("sweep_index")
     return td.EMEModeSolverData(
         monitor=monitor,
+        propagation_axis=2,
         grid_primal_correction=grid_primal_correction,
         grid_dual_correction=grid_dual_correction,
         **kwargs,
@@ -2072,7 +2073,7 @@ def _get_eme_field_data(num_sweep=0):
     dataset = _get_eme_field_dataset(num_sweep=num_sweep)
     kwargs = dataset.field_components
     monitor = td.EMEFieldMonitor(size=(0, td.inf, td.inf), name="field", colocate=True)
-    return td.EMEFieldData(monitor=monitor, **kwargs)
+    return td.EMEFieldData(monitor=monitor, propagation_axis=0, **kwargs)
 
 
 def _get_eme_coeff_data(num_sweep=0):
@@ -2108,7 +2109,11 @@ def _get_mode_solver_data(modes_out=False, num_modes=3):
     kwargs.update({"n_complex": n_complex})
     sim = make_eme_sim()
     grid_expanded = sim.discretize_monitor(monitor)
-    return td.ModeSolverData(monitor=monitor, grid_expanded=grid_expanded, **kwargs)
+    return td.ModeSolverData(
+        monitor=monitor,
+        grid_expanded=grid_expanded,
+        **kwargs,
+    )
 
 
 def test_eme_monitor_data():

@@ -39,7 +39,8 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
     from tidy3d.compat import Self
-    from tidy3d.components.types import Axis, FreqArray
+    from tidy3d.components.types import Axis, BoundOptional, FreqArray
+
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
@@ -205,6 +206,16 @@ class AbstractFieldDataset(Dataset, ABC):
     def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
 
+    @property
+    def solver_field_bounds(self) -> Optional[BoundOptional]:
+        """Per-axis bounds where solver field data is physically valid.
+
+        Returns ``None`` by default.  Subclasses that produce zero-padded
+        output grids (e.g. mode-solver data) override this to return actual
+        bounds so that colocation clips to the valid region.
+        """
+        return None
+
     def apply_phase(self, phase: float) -> AbstractFieldDataset:
         """Create a copy where all elements are phase-shifted by a value (in radians)."""
         if phase == 0.0:
@@ -289,9 +300,14 @@ class AbstractFieldDataset(Dataset, ABC):
                         f"supply {coord_name}=None to skip it."
                     )
 
-            centered_fields[field_name] = field_data.interp(
-                **supplied_coord_map, kwargs={"bounds_error": True}
-            )
+            if self.solver_field_bounds is not None:
+                centered_fields[field_name] = field_data.interp_within_domain(
+                    supplied_coord_map, self.solver_field_bounds, assume_sorted=True
+                )
+            else:
+                centered_fields[field_name] = field_data.interp(
+                    **supplied_coord_map, kwargs={"bounds_error": True}
+                )
 
         # combine all centered fields in a dataset
         return self.package_colocate_results(centered_fields)

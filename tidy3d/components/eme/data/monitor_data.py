@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from pydantic import Field
 
@@ -18,11 +18,50 @@ from tidy3d.components.eme.monitor import (
     EMEFieldMonitor,
     EMEModeSolverMonitor,
 )
+from tidy3d.components.types import Axis
 
 from .dataset import EMECoefficientDataset, EMEFieldDataset, EMEModeSolverDataset
 
+if TYPE_CHECKING:
+    from tidy3d.components.types import BoundOptional
 
-class EMEModeSolverData(ElectromagneticFieldData, EMEModeSolverDataset):
+
+class EMEFieldDataBase(ElectromagneticFieldData):
+    """Base class for EME field data that adds propagation axis and solver_field_bounds."""
+
+    propagation_axis: Axis = Field(
+        title="Propagation Axis",
+        description="EME propagation axis. Used to compute solver field bounds.",
+    )
+
+    @property
+    def solver_field_bounds(self) -> BoundOptional:
+        """Per-axis bounds where solver field data is physically valid.
+
+        Bounds that land on the outermost ``grid_expanded`` boundary are
+        clamped inward to reverse the cell extension added by
+        ``_discretize_inds_monitor`` when monitors extend past simulation
+        boundaries.
+        """
+        from tidy3d.components.mode.mode_solver import ModeSolver
+
+        if self.grid_expanded is None:
+            return None
+
+        normal_axis = self.propagation_axis
+        bounds = ModeSolver._compute_solver_field_bounds(
+            grid=self.grid_expanded,
+            plane=self.monitor,
+            normal_axis=normal_axis,
+            symmetry=self.symmetry,
+            symmetry_center=self.symmetry_center or (0.0, 0.0, 0.0),
+        )
+        return self._clamp_grid_expanded_bounds(
+            bounds, self.grid_expanded, normal_axis, self.monitor.colocate
+        )
+
+
+class EMEModeSolverData(EMEFieldDataBase, EMEModeSolverDataset):
     """Data associated with an :class:`.EMEModeSolverMonitor`.
 
     Notes
@@ -59,7 +98,7 @@ class EMEModeSolverData(ElectromagneticFieldData, EMEModeSolverDataset):
     >>> n_complex = EMEModeIndexDataArray((1+0.01j) * np.ones((1,1,2,2)), coords=index_coords)
     >>> grid = Grid(boundaries=Coords(x=[-0.5, 0.5, 1.5], y=[-0.5, 0.5, 1.5], z=[-0.5, 0.5]))
     >>> data = EMEModeSolverData(
-    ...     monitor=monitor, n_complex=n_complex,
+    ...     monitor=monitor, n_complex=n_complex, propagation_axis=2,
     ...     Ex=field, Ey=field, Ez=field, Hx=field, Hy=field, Hz=field,
     ...     grid_expanded=grid,
     ... )
@@ -71,7 +110,7 @@ class EMEModeSolverData(ElectromagneticFieldData, EMEModeSolverDataset):
     )
 
 
-class EMEFieldData(ElectromagneticFieldData, EMEFieldDataset):
+class EMEFieldData(EMEFieldDataBase, EMEFieldDataset):
     """Data associated with an :class:`.EMEFieldMonitor`.
 
     Notes
@@ -102,7 +141,7 @@ class EMEFieldData(ElectromagneticFieldData, EMEFieldDataset):
     >>> field = EMEScalarFieldDataArray((1+1j) * np.random.random((2,2,1,1,1,2,2)), coords=coords)
     >>> grid = Grid(boundaries=Coords(x=[-0.5, 0.5, 1.5], y=[-0.5, 0.5, 1.5], z=[-0.5, 0.5]))
     >>> data = EMEFieldData(
-    ...     monitor=monitor,
+    ...     monitor=monitor, propagation_axis=2,
     ...     Ex=field, Ey=field, Ez=field, Hx=field, Hy=field, Hz=field,
     ...     grid_expanded=grid,
     ... )

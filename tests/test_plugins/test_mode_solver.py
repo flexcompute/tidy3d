@@ -17,6 +17,7 @@ from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.derivatives import create_d_matrices, create_sfactor_b, create_sfactor_f
 from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
+from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
@@ -299,7 +300,7 @@ def compare_colocation(ms):
                 assert coords1.size == coords2.size - 1
 
             # Check that colocated coords are the same
-            assert np.allclose(coords1, data_at_boundaries[key].coords[dim])
+            assert np.allclose(coords1, field_at_boundaries.coords[dim])
 
 
 def verify_pol_fraction(ms):
@@ -1387,14 +1388,15 @@ def test_high_order_mode_normalization():
     overlap = ms1.data.outer_dot(ms2.data).isel(mode_index_0=2, mode_index_1=2).values.item()
     assert abs(1 - overlap) < 1e-3
 
-    # 2D simulation
+    # 2D simulation — first third of Ez should be non-negative.
+    # Values at the PEC boundary are exactly zero (tangential E vanishes at PEC).
     ms1 = make_high_order_mode_solver(1, 2)
     values = ms1.data.Ez.isel(mode_index=2).values.squeeze().real
-    assert (values[: values.size // 3] > 0).all()
+    assert (values[: values.size // 3] >= 0).all()
 
     ms2 = make_high_order_mode_solver(-1, 2)
     values = ms2.data.Ez.isel(mode_index=2).values.squeeze().real
-    assert (values[: values.size // 3] > 0).all()
+    assert (values[: values.size // 3] >= 0).all()
 
 
 def test_gauge_robustness():
@@ -1897,3 +1899,449 @@ def test_mode_data_fill_fraction_box_requires_intersection():
     data, _ = make_fill_fraction_mode_data()
     with pytest.raises(ValidationError):
         data.fill_fraction(td.Box(center=(0.0, 2.0, 0.0), size=(1.0, 1.0, 1.0)))
+
+
+def test_mode_solver_pec_boundary_truncation():
+    """Test that fields are correctly zero outside simulation bounds and satisfy PEC boundary conditions.
+
+    This test creates a rectangular waveguide where the waveguide walls are modeled using the
+    PEC boundary conditions of the simulation domain. The mode solver grid may extend beyond
+    the simulation bounds due to _discretize_inds_monitor adding extra cells for interpolation.
+    This test verifies that:
+    1. Fields outside the simulation boundaries are exactly 0
+    2. Electric fields tangential to the boundary are 0 at the boundary
+    3. Magnetic fields normal to the boundary are 0 at the boundary
+    """
+    # Create a simulation with PEC boundaries (default)
+    # The simulation size defines the waveguide cross-section
+    sim_size = (2.0, 0.0, 1.5)  # Waveguide in y-direction, cross-section in x-z plane
+    freq0 = td.C_0 / 1.55
+
+    # Simple simulation with just air - the waveguide walls are the PEC boundaries
+    simulation = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),  # Propagation direction
+            z=td.Boundary.pec(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    # Mode plane perpendicular to propagation direction
+    plane = td.Box(center=(0, 0, 0), size=(sim_size[0], 0, sim_size[2]))
+
+    mode_spec = td.ModeSpec(
+        num_modes=2,
+        precision="double",
+    )
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=mode_spec,
+        freqs=[freq0],
+        direction="+",
+        colocate=False,
+    )
+
+    # Get the mode solver data
+    data = ms.data
+
+    # Get simulation boundaries
+    sim_bounds = simulation.bounds
+    sim_x_min, sim_x_max = sim_bounds[0][0], sim_bounds[1][0]
+    sim_z_min, sim_z_max = sim_bounds[0][2], sim_bounds[1][2]
+
+    def assert_zero_outside(field, field_name, axis, lo, hi):
+        coords = field.coords[axis].values
+        for bound, side, mask in (
+            (lo, "min", coords < lo),
+            (hi, "max", coords > hi),
+        ):
+            outside = coords[mask & ~np.isclose(coords, bound, rtol=fp_eps, atol=fp_eps)]
+            values = field.sel({axis: outside}).values
+            assert np.all(values == 0.0), (
+                f"{field_name} should be exactly 0 outside {axis}_{side} boundary, "
+                f"got {np.max(np.abs(values))}"
+            )
+
+    def assert_zero_at_boundary(field, field_name, axis, lo, hi, label):
+        coords = field.coords[axis].values
+        for bound, side in ((lo, "min"), (hi, "max")):
+            at = coords[np.isclose(coords, bound, rtol=fp_eps, atol=fp_eps)]
+            values = field.sel({axis: at[0]}).values
+            assert np.all(values == 0.0), (
+                f"{field_name} ({label}) should be exactly 0 at {axis}_{side} PEC boundary, "
+                f"got {np.max(np.abs(values))}"
+            )
+
+    # Test 1: Fields outside simulation boundaries should be exactly 0 (zero-padded)
+    for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+        field = data.field_components[field_name]
+        assert_zero_outside(field, field_name, "x", sim_x_min, sim_x_max)
+        assert_zero_outside(field, field_name, "z", sim_z_min, sim_z_max)
+
+    # Test 2: Tangential E-fields at PEC boundaries should be exactly 0
+    # At x boundaries: Ey and Ez are tangential
+    # At z boundaries: Ex and Ey are tangential
+    for field_name in ("Ey", "Ez"):
+        field = data.field_components[field_name]
+        assert_zero_at_boundary(field, field_name, "x", sim_x_min, sim_x_max, "tangential")
+
+    for field_name in ("Ex", "Ey"):
+        field = data.field_components[field_name]
+        assert_zero_at_boundary(field, field_name, "z", sim_z_min, sim_z_max, "tangential")
+
+    # Test 3: Normal H-fields at PEC boundaries should be exactly 0
+    # At x boundaries: Hx is normal
+    # At z boundaries: Hz is normal
+    assert_zero_at_boundary(data.field_components["Hx"], "Hx", "x", sim_x_min, sim_x_max, "normal")
+    assert_zero_at_boundary(data.field_components["Hz"], "Hz", "z", sim_z_min, sim_z_max, "normal")
+
+
+def _build_mode_solver_case(sim_size, plane_size, symmetry, dl=0.05):
+    freq0 = td.C_0 / 1.55
+    simulation = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.uniform(dl=dl),
+        run_time=1e-14,
+        symmetry=symmetry,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pec(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+    plane = td.Box(center=(0, 0, 0), size=plane_size)
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=td.ModeSpec(num_modes=1, precision="double"),
+        freqs=[freq0],
+        direction="+",
+        colocate=False,
+    )
+    return simulation, plane, ms
+
+
+@pytest.mark.parametrize(
+    "case,plane_size,symmetry",
+    [
+        ("interior", (2.0, 0.0, 1.5), (0, 0, 0)),
+        ("at_sim_edge", (4.0, 0.0, 3.0), (0, 0, 0)),
+        ("overrun", (5.0, 0.0, 4.0), (0, 0, 0)),
+        ("with_symmetry", (1.6, 0.0, 1.4), (1, 0, 0)),
+    ],
+)
+def test_mode_solver_pec_boundary_grid(case, plane_size, symmetry):
+    """Solver-grid bounds + field truncation under various (plane, symmetry) setups."""
+    dl = 0.05
+    simulation, plane, ms = _build_mode_solver_case((4.0, 0.0, 3.0), plane_size, symmetry, dl=dl)
+    solver_bounds = ms._solver_grid.boundaries.to_list
+    sim_bounds = simulation.bounds
+    sim_grid = simulation.grid.boundaries.to_list
+
+    if case == "interior":
+        # Solver grid snaps to plane edges, strictly inside sim edges.
+        for ax in (0, 2):
+            assert solver_bounds[ax][0] <= plane.bounds[0][ax]
+            assert solver_bounds[ax][-1] >= plane.bounds[1][ax]
+            assert solver_bounds[ax][0] > sim_bounds[0][ax]
+            assert solver_bounds[ax][-1] < sim_bounds[1][ax]
+            assert abs(solver_bounds[ax][0] - plane.bounds[0][ax]) <= dl
+            assert abs(solver_bounds[ax][-1] - plane.bounds[1][ax]) <= dl
+        return
+
+    if case in ("at_sim_edge", "overrun"):
+        # Plane spans or overruns sim → solver grid matches sim grid exactly.
+        for ax in (0, 2):
+            assert np.isclose(solver_bounds[ax][0], sim_grid[ax][0], rtol=fp_eps)
+            assert np.isclose(solver_bounds[ax][-1], sim_grid[ax][-1], rtol=fp_eps)
+
+    if case == "overrun":
+        # Plane overruns sim on all four tangential sides → trim active everywhere.
+        x_trim, z_trim = ms._solver_grid_trim_inds_tangential
+        assert all(trim > 0 for trim in (*x_trim, *z_trim))
+
+    if case == "with_symmetry":
+        # x is symmetry axis → no truncation on the symmetry (min) side, but the
+        # non-symmetry sides (x_max, z_min, z_max) should still be trimmed.
+        x_trim, z_trim = ms._solver_grid_trim_inds_tangential
+        assert x_trim[0] == 0
+        assert all(trim > 0 for trim in (x_trim[1], *z_trim))
+        output_x = ms._output_grid.boundaries.to_list[0]
+        assert np.isclose(solver_bounds[0][0], output_x[0], rtol=fp_eps, atol=fp_eps)
+
+
+def test_mode_solver_pec_boundary_1d_mode_solve():
+    """Test that degenerate tangential axes (2D simulation) use Off behavior and mode solve completes.
+
+    In a 2D simulation (zero size along z), the z-axis has num_cells <= 1. When z is tangential
+    to the mode plane (propagation along y), the PEC snapping should use SnapBehavior.Off for that
+    degenerate axis to avoid issues with snap_box_to_grid's force-expansion logic.
+    """
+    freq0 = td.C_0 / 1.55
+
+    # 2D simulation: zero size in z → num_cells <= 1 along z
+    # Normal axis is y (propagation), tangential axes are x and z.
+    # z is degenerate (1 cell).
+    simulation = td.Simulation(
+        size=(2.0, 3.0, 0.0),
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.pec(),
+            z=td.Boundary.periodic(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    # Mode plane normal to y, tangential to x (non-degenerate) and z (degenerate).
+    # Plane z-size is nonzero (required for a valid planar Box), but the sim has 0 z-size
+    # so num_cells[z] <= 1 and SnapBehavior.Off will be used for z.
+    plane = td.Box(center=(0, 0, 0), size=(2.0, 0, 1.0))
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=td.ModeSpec(num_modes=1),
+        freqs=[freq0],
+        direction="+",
+    )
+
+    # Should not raise — degenerate z-axis uses SnapBehavior.Off
+    solver_grid = ms._solver_grid
+    assert solver_grid is not None
+
+    # The mode solve should complete without error
+    data = ms.data
+    assert data is not None
+
+
+def test_mode_solver_pec_boundary_colocated_normal_e():
+    """Colocated E component normal to PEC wall must not be blended toward zero.
+
+    When colocate=True, fields are interpolated from Yee cell positions to grid
+    boundaries. The solver grid is smaller than the output grid, and fields
+    outside the solver grid are zero-padded. Without clipping to the solver grid
+    before interpolation, the outermost colocation point would blend a real field
+    value with a zero-padded value, producing an incorrect result for the E
+    component normal to the PEC wall (which is physically nonzero at PEC).
+    """
+    sim_size = (2.0, 0.0, 1.5)
+    freq0 = td.C_0 / 1.55
+
+    simulation = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pec(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    plane = td.Box(center=(0, 0, 0), size=(sim_size[0], 0, sim_size[2]))
+
+    ms_coloc = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=td.ModeSpec(num_modes=2, precision="double"),
+        freqs=[freq0],
+        direction="+",
+        colocate=True,
+    )
+
+    # Verify PEC truncation is active (solver grid smaller than output grid)
+    assert any(pw != (0, 0) for pw in ms_coloc._solver_grid_pad_widths), (
+        "PEC truncation should be active for this test setup"
+    )
+
+    data_coloc = ms_coloc.data
+
+    # E normal to a PEC wall satisfies ∂E_normal/∂n = 0 at the wall, so the
+    # coloc value at the solver-grid edge should match the adjacent interior
+    # value. If clipping to the solver grid is missing, the edge value gets
+    # averaged with the zero-padded region outside and drops to ~half.
+    def assert_boundary_matches_interior(field, axis, solver_edges):
+        coords = field.coords[axis].values
+        # Locate the coloc indices sitting on the solver-grid min/max edges.
+        idx_lo = int(np.argmin(np.abs(coords - solver_edges[0])))
+        idx_hi = int(np.argmin(np.abs(coords - solver_edges[-1])))
+        for bnd_idx, inside_idx, side in (
+            (idx_lo, idx_lo + 1, "min"),
+            (idx_hi, idx_hi - 1, "max"),
+        ):
+            bnd = field.isel({axis: bnd_idx}).values
+            inside = field.isel({axis: inside_idx}).values
+            np.testing.assert_allclose(
+                bnd,
+                inside,
+                rtol=0.1,
+                atol=1e-12,
+                err_msg=(
+                    f"Colocated {field.name} at {axis}_{side} diverges from "
+                    "adjacent-interior value — interpolation likely blended with "
+                    "zero-padded region outside the solver grid."
+                ),
+            )
+
+    solver_bounds = ms_coloc._solver_grid.boundaries.to_list
+    assert_boundary_matches_interior(data_coloc.field_components["Ex"], "x", solver_bounds[0])
+    assert_boundary_matches_interior(data_coloc.field_components["Ez"], "z", solver_bounds[2])
+
+
+@pytest.mark.parametrize("colocate", [True, False])
+def test_field_decay_warning_with_solver_field_bounds(colocate):
+    """Field decay warning should fire even when solver_field_bounds zero-pads edges.
+
+    Uses a slab waveguide filling the full simulation cross-section so the
+    fundamental mode has significant field at the solver-grid boundaries.
+    The warning must check at the solver-grid edges (from solver_field_bounds),
+    not at the absolute outer indices which are zero-padded.
+    """
+    wvl = 1.0
+    freq0 = td.C_0 / wvl
+
+    # Slab fills the entire x extent — mode won't decay at x boundaries.
+    sim = td.Simulation(
+        size=(2, 0.01, 2),
+        grid_spec=td.GridSpec.auto(wavelength=wvl, min_steps_per_wvl=15),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PECBoundary()),
+    )
+
+    ms = ModeSolver(
+        simulation=sim,
+        plane=td.Box(center=(0, 0, 0), size=(1.5, 0, 1.5)),
+        mode_spec=td.ModeSpec(num_modes=1, precision="double"),
+        freqs=[freq0],
+        direction="+",
+        colocate=colocate,
+    )
+
+    with AssertLogLevel("WARNING", contains_str="does not decay"):
+        ms.solve()
+
+
+def _make_mode_data(sim, monitor):
+    """Build a minimal ModeSolverData for testing solver_field_bounds."""
+    n_complex = td.ModeIndexDataArray(
+        np.array([[1.0 + 0j]]),
+        coords={"f": [monitor.freqs[0]], "mode_index": [0]},
+    )
+    return ModeSolverData(
+        monitor=monitor,
+        n_complex=n_complex,
+        grid_expanded=sim.discretize_monitor(monitor),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+    )
+
+
+@pytest.mark.parametrize("colocate", [True, False])
+@pytest.mark.parametrize("symmetry", [(0, 0, 0), (1, 0, -1)])
+def test_mode_data_solver_field_bounds(colocate, symmetry):
+    """ModeData.solver_field_bounds must match the sim-grid reference.
+
+    ``_compute_solver_field_bounds(grid=sim.grid, ...)`` is the ground truth
+    (used by ``ModeSolver._solver_field_bounds``).  ``ModeData.solver_field_bounds``
+    computes the same thing from ``grid_expanded`` (which may have extra padding
+    cells) and clamps the result.  The two must agree exactly — both read
+    coordinates from the same underlying grid arrays.
+    """
+    sim_size = (2.0, 0.0, 1.5)
+    freq0 = td.C_0 / 1.55
+
+    sim = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.auto(wavelength=1.55, min_steps_per_wvl=10),
+        run_time=1e-14,
+        symmetry=symmetry,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pec(),
+        ),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.3, 0, 0.2), size=(0.5, td.inf, 0.4)),
+                medium=td.Medium(permittivity=4.0),
+            )
+        ],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    eps = 1e-10
+    monitor_sizes = {
+        "interior": (sim_size[0] * 0.5, 0, sim_size[2] * 0.5),
+        "just_inside": (sim_size[0] * (1 - eps), 0, sim_size[2] * (1 - eps)),
+        "full": (sim_size[0], 0, sim_size[2]),
+        "just_outside": (sim_size[0] * (1 + eps), 0, sim_size[2] * (1 + eps)),
+        "oversized": (td.inf, 0, td.inf),
+    }
+
+    for label, msize in monitor_sizes.items():
+        monitor = td.ModeSolverMonitor(
+            size=msize,
+            center=(0, 0, 0),
+            mode_spec=td.ModeSpec(num_modes=1),
+            freqs=[freq0],
+            direction="+",
+            colocate=colocate,
+            name="test_bounds",
+        )
+
+        ref = ModeSolver._compute_solver_field_bounds(
+            grid=sim.grid,
+            plane=monitor,
+            normal_axis=monitor.normal_axis,
+            symmetry=sim.symmetry,
+            symmetry_center=sim.center,
+        )
+        mode_data = _make_mode_data(sim, monitor)
+        got = mode_data.solver_field_bounds
+
+        for side in range(2):
+            for ax in range(3):
+                assert ref[side][ax] == got[side][ax], (
+                    f"{label}: side={side} ax={ax}: ref={ref[side][ax]}, "
+                    f"got={got[side][ax]} (colocate={colocate}, sym={symmetry})"
+                )

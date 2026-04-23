@@ -34,6 +34,7 @@ from tidy3d.components.data.utils import (
     _outer_dot_numpy,
 )
 from tidy3d.components.diffraction import diffraction_amplitude_norm
+from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
@@ -114,7 +115,6 @@ if TYPE_CHECKING:
     from pandas import DataFrame
 
     from tidy3d.compat import Self
-    from tidy3d.components.geometry.base import Box
     from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
     from tidy3d.components.source.base import Source
     from tidy3d.components.source.current import PointDipole
@@ -122,6 +122,7 @@ if TYPE_CHECKING:
     from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.types import (
         ArrayFloat2D,
+        BoundOptional,
         Direction,
         EMField,
         FreqArray,
@@ -142,6 +143,7 @@ AXIAL_RATIO_CAP = 1e5
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
 MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
+
 
 GRID_CORRECTION_TYPE = Union[
     float,
@@ -658,6 +660,40 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         return Coords(**colocate_centers)
 
+    @staticmethod
+    def _clamp_grid_expanded_bounds(
+        bounds: BoundOptional,
+        grid_expanded: Grid,
+        normal_axis: int,
+        colocate: bool,
+    ) -> BoundOptional:
+        """Clamp solver field bounds so they match the underlying simulation grid.
+
+        ``grid_expanded`` is produced by ``discretize_monitor``, which extends
+        the simulation grid by one or more cells for interpolation
+        (``_discretize_inds_monitor``).  When a monitor is larger than the
+        simulation domain, those extra cells extend past the simulation
+        boundaries.
+
+        This method detects bounds that landed on those outermost padding
+        boundaries and pulls them inward to the next grid boundary, recovering
+        the simulation-grid edges.  The right side is always extended by +1
+        cell; the left side is extended by -1 only when ``colocate`` is False.
+        """
+        rmin, rmax = list(bounds[0]), list(bounds[1])
+        _, tangential_axes = Box.pop_axis([0, 1, 2], normal_axis)
+        grid_bounds = grid_expanded.boundaries.to_list
+        for ax in tangential_axes:
+            if rmax[ax] is not None and isclose(rmax[ax], grid_bounds[ax][-1], rel_tol=fp_eps):
+                rmax[ax] = grid_bounds[ax][-2]
+            if (
+                not colocate
+                and rmin[ax] is not None
+                and isclose(rmin[ax], grid_bounds[ax][0], rel_tol=fp_eps)
+            ):
+                rmin[ax] = grid_bounds[ax][1]
+        return (tuple(rmin), tuple(rmax))
+
     @property
     def _plane_grid_boundaries(self) -> tuple[Coords1D, Coords1D]:
         """For a 2D monitor data, return the boundaries of the in-plane grid to be used to compute
@@ -775,20 +811,36 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def _colocated_fields(self) -> dict[str, DataArray]:
         """For a 2D monitor data, get all E and H fields colocated to the cell boundaries in the 2D
         plane grid, with symmetries expanded.
+
+        When ``solver_field_bounds`` is set and the monitor was not already colocated,
+        clips fields to the valid solver-grid region before interpolation so that
+        zero-padded values outside the solver grid do not contaminate the result.
         """
 
-        field_components = self.symmetry_expanded.field_components
+        sym_expanded = self.symmetry_expanded
+        field_components = sym_expanded.field_components
 
         if self.monitor.colocate:
             return field_components
 
         # Interpolate field components to cell boundaries
-        interp_dict = {"assume_sorted": True}
+        interp_dict = {}
         for dim, bounds in zip(self._tangential_dims, self._plane_grid_boundaries):
             if bounds.size > 1:
                 interp_dict[dim] = bounds
 
-        colocated_fields = {key: val.interp(**interp_dict) for key, val in field_components.items()}
+        clip_bounds = sym_expanded.solver_field_bounds
+        if clip_bounds is not None:
+            colocated_fields = {}
+            for key, val in field_components.items():
+                colocated_fields[key] = val.interp_within_domain(
+                    interp_dict, clip_bounds, assume_sorted=True
+                )
+        else:
+            interp_dict["assume_sorted"] = True
+            colocated_fields = {
+                key: val.interp(**interp_dict) for key, val in field_components.items()
+            }
         return colocated_fields
 
     @property
@@ -1246,6 +1298,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> dict[str, DataArray]:
         """For 2D monitors, interpolate this fields to given coords in the tangential plane.
 
+        When ``solver_field_bounds`` is set, uses clip-aware interpolation so that
+        zero-padded values outside the solver grid do not contaminate boundary
+        values, consistent with ``_colocated_fields``.
+
         Parameters
         ----------
         coords : ArrayFloat2D
@@ -1262,7 +1318,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             return fields
 
         # Interpolate if data has more than one coordinate along a dimension
-        interp_dict = {"assume_sorted": True}
+        interp_dict = {}
         # If single coordinate, just sel "nearest", i.e. just propagate the same data everywhere
         sel_dict = {"method": "nearest"}
         for dim, cents in zip(self._tangential_dims, coords):
@@ -1272,9 +1328,19 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 else:
                     sel_dict[dim] = cents
 
-        kwargs = {"bounds_error": False, "fill_value": 0.0}
-        for component, field in fields.items():
-            fields[component] = field.interp(kwargs=kwargs, **interp_dict).sel(**sel_dict)
+        # Use symmetry-expanded bounds since _tangential_fields returns
+        # symmetry-expanded data.
+        clip_bounds = self.symmetry_expanded.solver_field_bounds
+        if clip_bounds is not None:
+            for component, field in fields.items():
+                fields[component] = field.interp_within_domain(
+                    interp_dict, clip_bounds, assume_sorted=True
+                ).sel(**sel_dict)
+        else:
+            interp_dict["assume_sorted"] = True
+            kwargs = {"bounds_error": False, "fill_value": 0.0}
+            for component, field in fields.items():
+                fields[component] = field.interp(kwargs=kwargs, **interp_dict).sel(**sel_dict)
 
         return fields
 
@@ -2433,6 +2499,32 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         description="Characterization of the permittivity profile on the plane where modes are "
         "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
     )
+
+    @property
+    def solver_field_bounds(self) -> BoundOptional:
+        """Per-axis bounds where solver field data is physically valid.
+
+        Bounds that land on the outermost ``grid_expanded`` boundary are
+        clamped inward to reverse the cell extension added by
+        ``_discretize_inds_monitor`` when monitors extend past simulation
+        boundaries.
+        """
+        from tidy3d.components.mode.mode_solver import ModeSolver
+
+        if self.grid_expanded is None:
+            return None
+
+        normal_axis = self.monitor.normal_axis
+        bounds = ModeSolver._compute_solver_field_bounds(
+            grid=self.grid_expanded,
+            plane=self.monitor,
+            normal_axis=normal_axis,
+            symmetry=self.symmetry,
+            symmetry_center=self.symmetry_center or (0.0, 0.0, 0.0),
+        )
+        return self._clamp_grid_expanded_bounds(
+            bounds, self.grid_expanded, normal_axis, self.monitor.colocate
+        )
 
     @model_validator(mode="after")
     def eps_spec_match_mode_spec(self) -> Self:

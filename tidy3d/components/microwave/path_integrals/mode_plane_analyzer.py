@@ -23,6 +23,7 @@ from tidy3d.components.geometry.utils import (
 from tidy3d.components.grid.corner_finder import N_SHAPELY_QUAD_SEGS, SHAPELY_CLEANUP
 from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.validators import assert_plane
+from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
@@ -69,26 +70,25 @@ class ModePlaneAnalyzer(Box):
                 mode_symmetry[dim] = 0
         return mode_symmetry
 
-    def _get_mode_limits(
+    def _get_mode_domain_bounds(
         self, sim_grid: Grid, mode_symmetry: tuple[Symmetry, Symmetry, Symmetry]
     ) -> Bound:
-        """Restrict mode plane bounds to the final grid positions taking into account symmetry conditions.
+        """Mode solver domain bounds snapped to grid, with symmetry half-domain restriction.
 
-        Mode profiles are calculated on a grid which is expanded from the monitor size to the closest grid boundaries.
+        Returns the physical extent of the mode solver domain. For symmetry axes,
+        the min bound is moved to the symmetry center (half-domain boundary).
+        These bounds serve as both the conductor search region and the PEC
+        boundary positions for filtering conductors shorted to PEC.
         """
-        behavior = [SnapBehavior.StrictExpand] * 3
-        location = [SnapLocation.Boundary] * 3
-        behavior[self._normal_axis] = SnapBehavior.Off
-        margin = (1, 1, 1)
-        snap_spec = SnappingSpec(location=location, behavior=behavior, margin=margin)
-        mode_box = snap_box_to_grid(sim_grid, self.geometry, snap_spec=snap_spec)
-        min_b, max_b = mode_box.bounds
-        min_b_2d_list = list(min_b)
+        from tidy3d.components.mode.mode_solver import ModeSolver
+
+        pec_box = ModeSolver._snapped_mode_domain(sim_grid, self.geometry, self._normal_axis)
+        min_b, max_b = pec_box.bounds
+        min_b_list = list(min_b)
         for dim in range(3):
             if mode_symmetry[dim] != 0:
-                min_b_2d_list[dim] = self.center[dim]
-
-        return (tuple(min_b_2d_list), max_b)
+                min_b_list[dim] = self.center[dim]
+        return (tuple(min_b_list), max_b)
 
     @staticmethod
     def _is_conductor(med: Medium) -> bool:
@@ -160,7 +160,7 @@ class ModePlaneAnalyzer(Box):
 
     def _filter_conductors_touching_sim_bounds(
         self,
-        mode_limits: Bound,
+        pec_bounds: Bound,
         mode_symmetry_3d: tuple[Symmetry, Symmetry, Symmetry],
         conductor_polygons: list[Shapely],
     ) -> list[Shapely]:
@@ -170,8 +170,8 @@ class ModePlaneAnalyzer(Box):
 
         Parameters
         ----------
-        mode_limits : Bound
-            The locations of the boundary conditions.
+        pec_bounds : Bound
+            PEC boundary positions snapped to the grid.
         mode_symmetry_3d : tuple[Symmetry, Symmetry, Symmetry]
             Symmetry settings for the mode solver plane.
         conductor_polygons : list[Shapely]
@@ -183,7 +183,7 @@ class ModePlaneAnalyzer(Box):
         list[Shapely]
             The filtered list of shapely geometries, where structures "shorted" to PEC boundaries have been removed.
         """
-        min_b_3d, max_b_3d = mode_limits[0], mode_limits[1]
+        min_b_3d, max_b_3d = pec_bounds[0], pec_bounds[1]
         _, mode_symmetry = Geometry.pop_axis(mode_symmetry_3d, self._normal_axis)
         _, min_b = Geometry.pop_axis(min_b_3d, self._normal_axis)
         _, max_b = Geometry.pop_axis(max_b_3d, self._normal_axis)
@@ -205,7 +205,7 @@ class ModePlaneAnalyzer(Box):
             shapely_pec_bounds.pop(2)
 
         ml_pec_bounds = shapely.MultiLineString(shapely_pec_bounds)
-        return [shape for shape in conductor_polygons if not ml_pec_bounds.intersects(shape)]
+        return [shape for shape in conductor_polygons if not ml_pec_bounds.dwithin(shape, fp_eps)]
 
     def get_conductor_bounding_boxes(
         self,
@@ -251,9 +251,9 @@ class ModePlaneAnalyzer(Box):
             return Box.from_bounds(rmin, rmax)
 
         mode_symmetry_3d = self._get_mode_symmetry(sim_box, symmetry)
-        min_b_3d, max_b_3d = self._get_mode_limits(grid, mode_symmetry_3d)
+        mode_bounds = self._get_mode_domain_bounds(grid, mode_symmetry_3d)
 
-        intersection_plane = Box.from_bounds(min_b_3d, max_b_3d)
+        intersection_plane = Box.from_bounds(*mode_bounds)
         isolated_conductor_shapely = self._get_isolated_conductors_as_shapely(
             intersection_plane,
             structures,
@@ -261,7 +261,7 @@ class ModePlaneAnalyzer(Box):
         )
 
         filtered_conductor_shapely = self._filter_conductors_touching_sim_bounds(
-            (min_b_3d, max_b_3d), mode_symmetry_3d, isolated_conductor_shapely
+            mode_bounds, mode_symmetry_3d, isolated_conductor_shapely
         )
 
         if len(filtered_conductor_shapely) < 1:
@@ -284,7 +284,6 @@ class ModePlaneAnalyzer(Box):
                 box_snapped = snap_box_to_grid(grid, box, snap_spec)
                 bounding_boxes.append(box_snapped)
 
-        # TODO Improve these checks once FXC-4112-PEC-boundary-position-not-respected-by-ModeSolver is merged
         for bounding_box in bounding_boxes:
             if self._check_box_intersects_with_conductors(isolated_conductor_shapely, bounding_box):
                 raise SetupError(
@@ -295,12 +294,14 @@ class ModePlaneAnalyzer(Box):
                     "smaller grid around the conductors in the mode plane, which may resolve the issue."
                 )
 
-        # Check that bounding boxes don't extend outside the original mode plane bounds
-        mode_plane_min, mode_plane_max = self.bounds
+        # Check against full-domain grid-snapped bounds (not self.bounds) because
+        # _apply_symmetries generates boxes in the full domain, and snapping aligns
+        # boxes to the sim grid which may extend slightly beyond self.bounds.
+        full_min, full_max = self._get_mode_domain_bounds(grid, (0, 0, 0))
         for bounding_box in bounding_boxes:
             box_min, box_max = bounding_box.bounds
-            if any(box_min[i] < mode_plane_min[i] for i in range(3)) or any(
-                box_max[i] > mode_plane_max[i] for i in range(3)
+            if any(box_min[i] < full_min[i] for i in range(3)) or any(
+                box_max[i] > full_max[i] for i in range(3)
             ):
                 raise SetupError(
                     "Failed to automatically generate path specification because a generated path "

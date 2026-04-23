@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import InterpolationType
     from tidy3d.components.grid.grid import Coords
-    from tidy3d.components.types import Axis, Bound
+    from tidy3d.components.types import Axis, Bound, BoundOptional
     from tidy3d.components.types.base import Coordinate
 
 # maps the dimension names to their attributes
@@ -888,6 +888,98 @@ class AbstractSpatialDataArray(DataArray, ABC):
         if target_dims is not None and tuple(interpolated.dims) != tuple(target_dims):
             interpolated = interpolated.transpose(*target_dims)
         return interpolated
+
+    def interp_within_domain(
+        self,
+        interp_coords: dict,
+        clip_bounds: BoundOptional,
+        assume_sorted: bool = False,
+    ) -> Self:
+        """Interpolate to ``interp_coords``, clipping source data to ``clip_bounds``.
+
+        This is a bounds-aware variant of :meth:`interp` that:
+
+        1. **Clips** the source data to ``clip_bounds``, keeping only data
+           points whose coordinates lie on or within the bounds.
+        2. **Clamps** all target coordinates to the clipped data range,
+           so any target outside that range receives the nearest edge value.
+        3. **Interpolates** on the clipped data using the clamped
+           coordinates.
+        4. **Zeros** the result at target coordinates that are strictly
+           outside ``clip_bounds``.
+
+        These steps allow for regular interpolation for strictly interior points,
+        while points on the ``clip_bounds`` effectively choose the nearest value from the
+        source data, and points strictly outside the bounds are set to 0.
+
+        Each of the six bounds (min/max for x/y/z) is independently
+        optional.  A ``None`` value leaves that side unclipped.
+
+        Parameters
+        ----------
+        interp_coords : dict
+            Target interpolation coordinates, keyed by dimension name
+            (``"x"``, ``"y"``, ``"z"``).
+        clip_bounds : BoundOptional
+            ``(min_tuple, max_tuple)`` where each element is a 3-tuple of
+            ``Optional[float]``.  Axes set to ``None`` are not clipped.
+        assume_sorted : bool = False
+            If True, skip sorting of coordinates.
+
+        Returns
+        -------
+        Self
+            Interpolated data with coordinates matching ``interp_coords``.
+            Values outside ``clip_bounds`` are zero.
+        """
+        bound_min, bound_max = clip_bounds
+
+        # Build clip selector from bounds
+        clip_sel = {}
+        for dim in interp_coords:
+            ax = "xyz".index(dim)
+            lo = bound_min[ax]
+            hi = bound_max[ax]
+            if lo is not None or hi is not None:
+                clip_sel[dim] = slice(lo, hi)
+
+        clipped = self.sel(clip_sel) if clip_sel else self
+
+        # Clamp target coordinates to clipped data range
+        # Emulates picking nearest source data for edge values
+        clamped = {
+            dim: np.clip(
+                vals,
+                float(clipped.coords[dim][0]),
+                float(clipped.coords[dim][-1]),
+            )
+            for dim, vals in interp_coords.items()
+        }
+
+        result = clipped.interp(**clamped, assume_sorted=assume_sorted)
+        # Assign the result coordinates back to the original interpolation points.
+        result = result.assign_coords(interp_coords)
+
+        # Zero out values at coordinates strictly outside the clip bounds.
+        # Clamping mapped these to edge values, but they should be zero.
+        for dim, vals in interp_coords.items():
+            ax = "xyz".index(dim)
+            lo = bound_min[ax]
+            hi = bound_max[ax]
+            if lo is None and hi is None:
+                continue
+            mask = np.zeros(len(vals), dtype=bool)
+            if lo is not None:
+                mask |= np.asarray(vals) < lo
+            if hi is not None:
+                mask |= np.asarray(vals) > hi
+            if np.any(mask):
+                axis_num = result.get_axis_num(dim)
+                shape = [1] * result.ndim
+                shape[axis_num] = -1
+                result.values = np.where(mask.reshape(shape), 0, result.values)
+
+        return result
 
     def sel_inside(self, bounds: Bound, *, include_interp_padding: bool = True) -> Self:
         """Return a new SpatialDataArray that contains the minimal amount data necessary to cover

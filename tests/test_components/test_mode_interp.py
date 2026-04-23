@@ -554,13 +554,14 @@ def test_mode_solver_data_interp_poly_needs_3_source():
     from ..test_data.test_data_arrays import make_scalar_mode_field_data_array
     from ..test_data.test_monitor_data import N_COMPLEX
 
+    grid = td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1]))
     mode_data = td.ModeSolverData(
         monitor=monitor,
         Ex=make_scalar_mode_field_data_array("Ex"),
         n_complex=N_COMPLEX.copy(),
         symmetry=(0, 0, 0),
         symmetry_center=(0, 0, 0),
-        grid_expanded=td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1])),
+        grid_expanded=grid,
     )
 
     freqs_dense = np.linspace(1e14, 2e14, 10)
@@ -657,13 +658,14 @@ def test_mode_solver_data_interp_cubic_needs_4_source():
     from ..test_data.test_data_arrays import make_scalar_mode_field_data_array
     from ..test_data.test_monitor_data import N_COMPLEX
 
+    grid = td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1]))
     mode_data = td.ModeSolverData(
         monitor=monitor,
         Ex=make_scalar_mode_field_data_array("Ex"),
         n_complex=N_COMPLEX.copy(),
         symmetry=(0, 0, 0),
         symmetry_center=(0, 0, 0),
-        grid_expanded=td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1])),
+        grid_expanded=grid,
     )
 
     freqs_dense = np.linspace(1e14, 2e14, 10)

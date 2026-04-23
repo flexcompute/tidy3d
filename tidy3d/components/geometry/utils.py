@@ -709,6 +709,49 @@ class SnappingSpec(Tidy3dBaseModel):
     )
 
 
+def find_snap_location(
+    coords: np.ndarray,
+    value: float,
+    side: str,
+    rel_tol: float = fp_eps,
+    abs_tol: float = fp_eps,
+) -> int:
+    """Find the index of the nearest coordinate that bounds ``value``.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Non-empty, strictly increasing 1-D array of coordinate values.
+    value : float
+        The value to locate in ``coords``.
+    side : str
+        ``"lower"`` selects the coordinate at or below ``value``.
+        ``"upper"`` selects the coordinate at or above ``value``.
+        If ``value`` is within tolerance of a coordinate, that coordinate is chosen.
+        Values outside the coordinate range snap to the nearest endpoint.
+    rel_tol, abs_tol : float
+        Tolerances passed to ``math.isclose``.
+
+    Returns
+    -------
+    int
+        Index clamped to ``[0, len(coords) - 1]``.
+    """
+    ins = int(np.searchsorted(coords, value, side="left"))
+    n = len(coords)
+    if side == "upper":
+        idx = ins
+        if ins >= 1 and isclose(coords[ins - 1], value, rel_tol=rel_tol, abs_tol=abs_tol):
+            idx = ins - 1
+    elif side == "lower":
+        idx = ins - 1
+        if ins < n and isclose(coords[ins], value, rel_tol=rel_tol, abs_tol=abs_tol):
+            idx = ins
+    else:
+        raise ValueError(f"side must be 'lower' or 'upper', got '{side}'")
+    return max(0, min(idx, n - 1))
+
+
 def get_closest_value(test: float, coords: ArrayLike, upper_bound_idx: int) -> float:
     """Helper to choose the closest value in an array to a given test value,
     using the index of the upper bound. The ``upper_bound_idx`` corresponds to the first value in

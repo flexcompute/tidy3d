@@ -16,7 +16,14 @@ from tidy3d.components.base import (
     Tidy3dBaseModel,
     cached_property,
 )
-from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
+from tidy3d.components.boundary import (
+    PML,
+    Absorber,
+    Boundary,
+    BoundarySpec,
+    PECBoundary,
+    StablePML,
+)
 from tidy3d.components.data.data_array import (
     CurrentFreqTerminalModeDataArray,
     ImpedanceFreqTerminalTerminalDataArray,
@@ -33,6 +40,13 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.utils import (
+    SnapBehavior,
+    SnapLocation,
+    SnappingSpec,
+    find_snap_location,
+    snap_box_to_grid,
+)
 from tidy3d.components.material.tensor_rotation import (
     bend_axis_global_axis,
     medium_is_rotation_invariant,
@@ -101,6 +115,7 @@ if TYPE_CHECKING:
         Ax,
         Axis,
         Axis2D,
+        BoundOptional,
         EpsSpecType,
         PlotScale,
         Symmetry,
@@ -546,15 +561,17 @@ class ModeSolver(Tidy3dBaseModel):
         return self._solver_symmetry(simulation=self.simulation, plane=self.plane)
 
     @classmethod
-    def _get_solver_grid(
+    def _get_output_grid(
         cls,
         simulation: Simulation,
         plane: Box,
         keep_additional_layers: bool = False,
         truncate_symmetry: bool = True,
     ) -> Grid:
-        """Grid for the mode solver, not snapped to plane or simulation zero dims, and optionally
-        corrected for symmetries.
+        """Full mode-solver output grid, not snapped to plane or simulation zero dims.
+
+        This is the extended grid used for output field coordinates and colocation.
+        It may extend beyond the final PEC-bounded eigensolve domain.
 
         Parameters
         ----------
@@ -594,18 +611,155 @@ class ModeSolver(Tidy3dBaseModel):
         return simulation._subgrid(span_inds=span_inds)
 
     @cached_property
-    def _solver_grid(self) -> Grid:
-        """Grid for the mode solver, not snapped to plane or simulation zero dims, and also with
+    def _output_grid(self) -> Grid:
+        """Full output grid, not snapped to plane or simulation zero dims, and with
         a small correction for symmetries. We don't do the snapping yet because 0-sized cells are
         currently confusing to the subpixel averaging. The final data coordinates along the
         plane normal dimension and dimensions where the simulation domain is 2D will be correctly
         set after the solve."""
 
-        return self._get_solver_grid(
+        return self._get_output_grid(
             simulation=self.simulation,
             plane=self.plane,
             keep_additional_layers=False,
             truncate_symmetry=True,
+        )
+
+    @staticmethod
+    def _snapped_mode_domain(grid: Grid, box: Box, normal_axis: int) -> Box:
+        """Snap a mode plane to grid boundary positions on tangential axes.
+
+        Returns a zero-thickness Box at the original normal-axis center with
+        tangential bounds expanded outward to the nearest grid boundary.
+        Snapping is disabled on the normal axis and degenerate axes
+        (``num_cells <= 1``, arising from 2D simulations).
+        """
+        behavior = [SnapBehavior.Off] * 3
+        location = [SnapLocation.Boundary] * 3
+        for ax in range(3):
+            if ax != normal_axis and grid.num_cells[ax] > 1:
+                behavior[ax] = SnapBehavior.Expand
+        snap_spec = SnappingSpec(location=tuple(location), behavior=tuple(behavior))
+        return snap_box_to_grid(grid, box, snap_spec)
+
+    @cached_property
+    def _solver_grid_span_inds(self) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+        """Cell index ranges ``[beg, end]`` inside ``_output_grid`` for the solver grid.
+
+        The mode plane is snapped outward to ``simulation.grid`` boundaries
+        via ``_snapped_mode_domain``, then the snapped bounds are mapped to
+        cell indices in ``_output_grid``.  On symmetry axes the start index
+        is pinned to 0 (the symmetry plane edge).
+        """
+        output_bounds = self._output_grid.boundaries.to_list
+        num_cells = self._output_grid.num_cells
+        span_inds: list[tuple[int, int]] = [(0, num_cells[ax]) for ax in range(3)]
+
+        snapped = self._snapped_mode_domain(self.simulation.grid, self.plane, self.normal_axis)
+        _, tangential_axes = Box.pop_axis([0, 1, 2], self.normal_axis)
+
+        for tangential_idx, axis in enumerate(tangential_axes):
+            # No truncation on degenerate axes (1D mode solves in 2D simulations)
+            if num_cells[axis] <= 1:
+                continue
+
+            axis_bounds = output_bounds[axis]
+
+            # Keep the symmetry edge (index 0) unchanged.
+            ind_beg = 0
+            if self.solver_symmetry[tangential_idx] == 0:
+                bound_min = snapped.bounds[0][axis]
+                ind_beg = find_snap_location(
+                    axis_bounds, bound_min, "lower", rel_tol=fp_eps, abs_tol=fp_eps
+                )
+
+            bound_max = snapped.bounds[1][axis]
+            ind_end = find_snap_location(
+                axis_bounds, bound_max, "upper", rel_tol=fp_eps, abs_tol=fp_eps
+            )
+
+            span_inds[axis] = (ind_beg, ind_end)
+
+        return tuple(span_inds)
+
+    @classmethod
+    def _get_solver_grid(
+        cls,
+        output_grid: Grid,
+        span_inds: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
+    ) -> Grid:
+        """Build truncated eigensolve grid as a subgrid of ``output_grid``."""
+        boundary_dict = {}
+        for axis, dim in enumerate("xyz"):
+            ind_beg, ind_end = span_inds[axis]
+            boundary_dict[dim] = output_grid.extended_subspace(
+                axis=axis,
+                ind_beg=ind_beg,
+                ind_end=ind_end + 1,
+            )
+
+        boundaries = output_grid.boundaries.updated_copy(**boundary_dict)
+        return output_grid.updated_copy(boundaries=boundaries)
+
+    @cached_property
+    def _solver_grid(self) -> Grid:
+        """Truncated eigensolve grid built from ``_output_grid``."""
+        return self._get_solver_grid(
+            output_grid=self._output_grid,
+            span_inds=self._solver_grid_span_inds,
+        )
+
+    @cached_property
+    def _solver_grid_pad_widths(self) -> tuple[tuple[int, int], ...]:
+        """Pad widths to expand solver-grid arrays back to ``_output_grid`` extents."""
+        return tuple(
+            (ind_beg, num_cells - ind_end)
+            for (ind_beg, ind_end), num_cells in zip(
+                self._solver_grid_span_inds, self._output_grid.num_cells
+            )
+        )
+
+    @cached_property
+    def _solver_grid_trim_inds_tangential(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Tangential-axis pad/trim widths (used by backend mode solver)."""
+        _, tangential_axes = Box.pop_axis([0, 1, 2], self.normal_axis)
+        return tuple(self._solver_grid_pad_widths[axis] for axis in tangential_axes)
+
+    @staticmethod
+    def _compute_solver_field_bounds(
+        grid: Grid,
+        plane: Box,
+        normal_axis: Axis,
+        symmetry: tuple = (0, 0, 0),
+        symmetry_center: tuple = (0.0, 0.0, 0.0),
+    ) -> BoundOptional:
+        """Compute solver_field_bounds from a grid and a box.
+
+        ``normal_axis`` bounds are set to ``None``.
+        Tangential axes use the snapped plane bounds on the grid.
+        When symmetry is active on a tangential axis, the min bound is
+        set to the symmetry center.
+        """
+        snapped = ModeSolver._snapped_mode_domain(grid, plane, normal_axis)
+        rmin = [None if ax == normal_axis else snapped.bounds[0][ax] for ax in range(3)]
+        rmax = [None if ax == normal_axis else snapped.bounds[1][ax] for ax in range(3)]
+
+        _, tangential_axes = Box.pop_axis([0, 1, 2], normal_axis)
+        for _tang_idx, axis in enumerate(tangential_axes):
+            if symmetry[axis] != 0:
+                rmin[axis] = symmetry_center[axis]
+
+        return (tuple(rmin), tuple(rmax))
+
+    @cached_property
+    def _solver_field_bounds(self) -> BoundOptional:
+        """Per-axis bounds where solver field data is physically valid."""
+        return self._compute_solver_field_bounds(
+            grid=self.simulation.grid,
+            plane=self.plane,
+            normal_axis=self.normal_axis,
+            symmetry=self.simulation.symmetry,
+            symmetry_center=self.simulation.center,
         )
 
     @cached_property
@@ -670,20 +824,24 @@ class ModeSolver(Tidy3dBaseModel):
 
     @cached_property
     def grid_snapped(self) -> Grid:
-        """The solver grid snapped to the plane normal and to simulation 0-sized dims if any."""
-        return self._grid_snapped(simulation=self.simulation, plane=self.plane)
+        """The output grid snapped to the plane normal and to simulation 0-sized dims if any."""
+        return self._grid_snapped(
+            simulation=self.simulation,
+            plane=self.plane,
+        )
 
     @classmethod
     def _grid_snapped(cls, simulation: Simulation, plane: Box) -> Grid:
-        """The solver grid snapped to the plane normal and to simulation 0-sized dims if any."""
-        solver_grid = cls._get_solver_grid(
+        """Grid snapped to the plane normal and to simulation 0-sized dims if any."""
+        mode_grid = cls._get_output_grid(
             simulation=simulation,
             plane=plane,
             keep_additional_layers=False,
             truncate_symmetry=True,
         )
+
         # snap to plane center along normal direction
-        grid_snapped = solver_grid.snap_to_box_zero_dim(plane)
+        grid_snapped = mode_grid.snap_to_box_zero_dim(plane)
         # snap to simulation center if simulation is 0D along a tangential dimension
         normal_axis = plane.size.index(0.0)
         return simulation._snap_zero_dim(grid_snapped, skip_axis=normal_axis)
@@ -1365,6 +1523,57 @@ class ModeSolver(Tidy3dBaseModel):
             )
             return self
 
+    @staticmethod
+    def _slice_material_to_solver_grid(
+        mat_data: np.ndarray | None, trim_inds: tuple[tuple[int, int], ...]
+    ) -> np.ndarray | None:
+        """Slice modal-plane material arrays from output-grid extents to solver-grid extents.
+
+        Parameters
+        ----------
+        trim_inds : tuple of (trim_before, trim_after) per spatial axis
+            Number of cells to remove from each end. ``trim_after=0`` keeps to the end.
+        """
+        if mat_data is None:
+            return None
+        if all(trim == (0, 0) for trim in trim_inds):
+            return mat_data
+        slices = tuple(slice(before, -after if after else None) for before, after in trim_inds)
+        return mat_data[(..., *slices)]
+
+    def _trim_output_field_to_solver_grid(self, field: ArrayComplex4D) -> ArrayComplex4D:
+        """Trim an output-grid field array down to ``_solver_grid`` extents."""
+        (x0, x1), (y0, y1), (z0, z1) = self._solver_grid_span_inds
+        return field[x0:x1, y0:y1, z0:z1, :]
+
+    def _pad_solver_field_to_output_grid(self, field: ArrayComplex4D) -> ArrayComplex4D:
+        """Zero-pad a solver-grid field array to ``_output_grid`` extents."""
+        pad_widths = self._solver_grid_pad_widths
+        if all(before == 0 and after == 0 for before, after in pad_widths):
+            return field
+        return np.pad(
+            field,
+            pad_width=(*pad_widths, (0, 0)),
+            mode="constant",
+            constant_values=0.0,
+        )
+
+    def _pad_solver_fields_to_output_grid(
+        self, fields: list[dict[str, ArrayComplex4D]]
+    ) -> list[dict[str, ArrayComplex4D]]:
+        """Zero-pad field dictionaries from solver-grid extents to output-grid extents."""
+        pad_widths = self._solver_grid_pad_widths
+        if all(before == 0 and after == 0 for before, after in pad_widths):
+            return fields
+
+        return [
+            {
+                field_name: self._pad_solver_field_to_output_grid(field)
+                for field_name, field in fields_freq.items()
+            }
+            for fields_freq in fields
+        ]
+
     def _data_on_yee_grid(self) -> ModeSolverData:
         """Solve for all modes, and construct data with fields on the Yee grid."""
         solver = self._reduced_simulation_copy_with_fallback
@@ -1383,8 +1592,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute and store the modes at all frequencies
         n_complex, fields, eps_spec = solver._solve_all_freqs(
-            coords=_solver_coords, symmetry=solver.solver_symmetry
+            coords=_solver_coords,
+            symmetry=solver.solver_symmetry,
         )
+        fields = solver._pad_solver_fields_to_output_grid(fields)
 
         # start a dictionary storing the data arrays for the ModeSolverData
         index_data = ModeIndexDataArray(
@@ -1450,15 +1661,18 @@ class ModeSolver(Tidy3dBaseModel):
         for freq_ind in range(len(basis.n_complex.f)):
             basis_fields_freq = {}
             for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-                basis_fields_freq[field_name] = (
+                basis_fields_freq[field_name] = self._trim_output_field_to_solver_grid(
                     basis.field_components[field_name].isel(f=freq_ind).to_numpy()
                 )
             basis_fields.append(basis_fields_freq)
 
         # Compute and store the modes at all frequencies
         n_complex, fields, eps_spec = self._solve_all_freqs_relative(
-            coords=_solver_coords, symmetry=self.solver_symmetry, basis_fields=basis_fields
+            coords=_solver_coords,
+            symmetry=self.solver_symmetry,
+            basis_fields=basis_fields,
         )
+        fields = self._pad_solver_fields_to_output_grid(fields)
 
         # start a dictionary storing the data arrays for the ModeSolverData
         index_data = ModeIndexDataArray(
@@ -1537,10 +1751,15 @@ class ModeSolver(Tidy3dBaseModel):
 
         colocate_coords = self._get_colocation_coordinates()
 
-        # Colocate input data to new coordinates
+        expanded = mode_solver_data.symmetry_expanded
         data_dict_colocated = {}
-        for key, field in mode_solver_data.symmetry_expanded.field_components.items():
-            data_dict_colocated[key] = field.interp(**colocate_coords).astype(field.dtype)
+        for key, field in expanded.field_components.items():
+            result = field.interp_within_domain(
+                colocate_coords,
+                expanded.solver_field_bounds,
+                assume_sorted=True,
+            )
+            data_dict_colocated[key] = result.astype(field.dtype)
 
         # Update data
         mode_solver_monitor = self.to_mode_solver_monitor(
@@ -2068,14 +2287,19 @@ class ModeSolver(Tidy3dBaseModel):
         """Call the mode solver at all requested frequencies."""
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_ms = tidy3d_extras["mod"].SubpixelModeSolver.from_mode_solver(self)
-            return subpixel_ms._solve_all_freqs(coords=coords, symmetry=symmetry)
+            return subpixel_ms._solve_all_freqs(
+                coords=coords,
+                symmetry=symmetry,
+            )
 
         fields = []
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
-                freq=freq, coords=coords, symmetry=symmetry
+                freq=freq,
+                coords=coords,
+                symmetry=symmetry,
             )
             fields.append(fields_freq)
             n_complex.append(n_freq)
@@ -2093,7 +2317,9 @@ class ModeSolver(Tidy3dBaseModel):
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_ms = tidy3d_extras["mod"].SubpixelModeSolver.from_mode_solver(self)
             return subpixel_ms._solve_all_freqs_relative(
-                coords=coords, symmetry=symmetry, basis_fields=basis_fields
+                coords=coords,
+                symmetry=symmetry,
+                basis_fields=basis_fields,
             )
 
         fields = []
@@ -2101,7 +2327,10 @@ class ModeSolver(Tidy3dBaseModel):
         eps_spec = []
         for freq, basis_fields_freq in zip(self.freqs, basis_fields):
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq_relative(
-                freq=freq, coords=coords, symmetry=symmetry, basis_fields=basis_fields_freq
+                freq=freq,
+                coords=coords,
+                symmetry=symmetry,
+                basis_fields=basis_fields_freq,
             )
             fields.append(fields_freq)
             n_complex.append(n_freq)
@@ -2331,26 +2560,54 @@ class ModeSolver(Tidy3dBaseModel):
 
         return ((Ex, Ey, Ez), (Hx, Hy, Hz))
 
+    @staticmethod
+    def _edge_indices_for_component(
+        field: xr.DataArray, dim: str, bounds: BoundOptional
+    ) -> Optional[list[int]]:
+        """Return the two edge indices along *dim* for a single field component.
+
+        Each E-field component sits at a different Yee-grid position, so the
+        coordinates that fall on or just inside the solver bounds differ per
+        component.
+        """
+        coords = np.array(field.coords[dim])
+        if len(coords) <= 1:
+            return None
+
+        ax = "xyz".index(dim)
+        lo, hi = bounds[0][ax], bounds[1][ax]
+        idx_lo = (
+            find_snap_location(coords, lo, "upper", rel_tol=fp_eps, abs_tol=fp_eps)
+            if lo is not None
+            else 0
+        )
+        idx_hi = (
+            find_snap_location(coords, hi, "lower", rel_tol=fp_eps, abs_tol=fp_eps)
+            if hi is not None
+            else len(coords) - 1
+        )
+        return [idx_lo, idx_hi]
+
     def _field_decay_warning(self, field_data: ModeSolverData) -> None:
-        """Warn if any of the modes do not decay at the edges."""
+        """Warn if any of the modes do not decay at the edges of the solver domain."""
         _, plane_dims = self.plane.pop_axis(["x", "y", "z"], axis=self.normal_axis)
+        bounds = field_data.solver_field_bounds
+        e_fields = (field_data.Ex, field_data.Ey, field_data.Ez)
         field_sizes = field_data.Ex.sizes
+
         for freq_index in range(field_sizes["f"]):
             for mode_index in range(field_sizes["mode_index"]):
                 e_edge, e_norm = 0, 0
-                # Sum up the total field intensity
-                for E in (field_data.Ex, field_data.Ey, field_data.Ez):
-                    e_norm += np.sum(np.abs(E[{"f": freq_index, "mode_index": mode_index}]) ** 2)
-                # Sum up the field intensity at the edges
-                if field_sizes[plane_dims[0]] > 1:
-                    for E in (field_data.Ex, field_data.Ey, field_data.Ez):
-                        isel = {plane_dims[0]: [0, -1], "f": freq_index, "mode_index": mode_index}
+                fm_sel = {"f": freq_index, "mode_index": mode_index}
+                for E in e_fields:
+                    e_norm += np.sum(np.abs(E[fm_sel]) ** 2)
+                for dim in plane_dims:
+                    for E in e_fields:
+                        edge_idx = self._edge_indices_for_component(E, dim, bounds)
+                        if edge_idx is None:
+                            continue
+                        isel = {dim: edge_idx, **fm_sel}
                         e_edge += np.sum(np.abs(E[isel]) ** 2)
-                if field_sizes[plane_dims[1]] > 1:
-                    for E in (field_data.Ex, field_data.Ey, field_data.Ez):
-                        isel = {plane_dims[1]: [0, -1], "f": freq_index, "mode_index": mode_index}
-                        e_edge += np.sum(np.abs(E[isel]) ** 2)
-                # Warn if needed
                 if e_edge / e_norm > FIELD_DECAY_CUTOFF:
                     log.warning(
                         f"Mode field at frequency index {freq_index}, mode index {mode_index} does "
@@ -3320,7 +3577,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         # we preserve extra cells along the normal direction to ensure there is enough data for
         # subpixel
-        extended_grid = self._get_solver_grid(
+        extended_grid = self._get_output_grid(
             simulation=self.simulation,
             plane=self.plane,
             keep_additional_layers=True,
