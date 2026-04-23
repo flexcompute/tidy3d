@@ -57,6 +57,7 @@ from .validators import (
     validate_colocated_integration,
     validate_freqs_min,
     validate_freqs_not_empty,
+    validate_freqs_num_not_too_many,
 )
 from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
 
@@ -233,22 +234,7 @@ class FreqMonitor(Monitor, ABC):
 
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
-
-    @field_validator("freqs")
-    @classmethod
-    def _warn_num_freqs(
-        cls: type[FreqMonitor], val: FreqArray, info: FieldValidationInfo
-    ) -> FreqArray:
-        """Warn if number of frequencies is too large."""
-        if len(val) > WARN_NUM_FREQS:
-            log.warning(
-                f"A large number ({len(val)}) of frequencies detected in monitor "
-                f"'{info.field_name}'. This can lead to solver slow-down and increased cost. "
-                "Consider decreasing the number of frequencies in the monitor. This may become a "
-                "hard limit in future Tidy3D versions.",
-                custom_loc=["freqs"],
-            )
-        return val
+    _warn_num_freqs = validate_freqs_num_not_too_many(WARN_NUM_FREQS)
 
     @cached_property
     def frequency_range(self) -> FreqBound:

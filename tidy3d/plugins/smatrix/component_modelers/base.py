@@ -9,6 +9,7 @@ from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
+from tidy3d.components.monitor import WARN_NUM_FREQS
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import Complex, FreqArray
 from tidy3d.components.types.time import SourceTimeType
@@ -16,6 +17,7 @@ from tidy3d.components.validators import (
     assert_unique_names,
     validate_freqs_min,
     validate_freqs_not_empty,
+    validate_freqs_num_not_too_many,
     validate_freqs_unique,
 )
 from tidy3d.config import config
@@ -154,6 +156,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
     _freqs_unique = validate_freqs_unique()
+    _warn_num_freqs = validate_freqs_num_not_too_many(WARN_NUM_FREQS)
 
     @model_validator(mode="after")
     def _freqs_in_custom_source_time(self) -> Self:

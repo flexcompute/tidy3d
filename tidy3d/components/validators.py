@@ -634,6 +634,37 @@ def validate_freqs_unique() -> Callable[[AbstractComponentModeler, FreqArray], F
     return freqs_unique
 
 
+def validate_freqs_num_not_too_many(
+    warn_num_freqs: int,
+) -> Callable[[type, FreqArray, FieldValidationInfo], FreqArray]:
+    """Warn if the number of ``freqs`` exceeds ``warn_num_freqs``.
+
+    When the instance has a non-empty ``name`` available on ``info.data``, it
+    is used in the warning message; otherwise the class name is used.
+    """
+
+    @field_validator("freqs")
+    @classmethod
+    def _warn_num_freqs(cls: type, val: FreqArray, info: FieldValidationInfo) -> FreqArray:
+        """Warn if number of frequencies is too large."""
+        if len(val) > warn_num_freqs:
+            # Prefer the instance's ``name`` so the warning identifies the specific
+            # offending instance; fall back to the class name when ``name`` is
+            # absent or empty.
+            name = info.data.get("name")
+            identifier = f"'{name}'" if name else f"'{cls.__name__}'"
+            log.warning(
+                f"A large number ({len(val)}) of frequencies detected in {identifier}. "
+                "This can lead to solver slow-down and increased cost. "
+                "Consider decreasing the number of frequencies. This may become a "
+                "hard limit in future Tidy3D versions.",
+                custom_loc=["freqs"],
+            )
+        return val
+
+    return _warn_num_freqs
+
+
 def _warn_unsupported_traced_argument(
     *names: str,
 ) -> Callable[[type, Any, FieldValidationInfo], Any]:

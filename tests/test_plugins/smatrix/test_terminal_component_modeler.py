@@ -25,6 +25,7 @@ from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.components.microwave.data.monitor_data import MicrowaveModeData
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.monitor import WARN_NUM_FREQS
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -342,6 +343,47 @@ def test_validate_freqs():
     freqs = np.sort(np.append(np.linspace(f_min, f_max, 21), f_target))
     with pytest.raises(ValidationError):
         _ = modeler.updated_copy(freqs=freqs)
+
+
+def test_warn_too_many_freqs():
+    """Warn when the modeler's 'freqs' exceeds the FreqMonitor soft limit."""
+    modeler = make_component_modeler(planar_pec=False)
+    many_freqs = np.linspace(1e9, 2e9, WARN_NUM_FREQS + 1)
+    with AssertLogStr("WARNING", contains_str="TerminalComponentModeler"):
+        _ = modeler.updated_copy(freqs=many_freqs)
+
+    # No "large number of frequencies" warning when under the threshold.
+    few_freqs = np.linspace(1e9, 2e9, WARN_NUM_FREQS)
+    with AssertLogStr("WARNING", excludes_str="large number"):
+        _ = modeler.updated_copy(freqs=few_freqs)
+
+
+def test_port_name_in_monitor_name():
+    """Port-generated monitors embed the port name in the monitor's ``name``
+    so the freq warning surfaces the port context.
+    """
+    modeler = make_component_modeler(planar_pec=False)
+    port = modeler.ports[0]
+    freqs = np.array([1e9])
+    many_freqs = np.linspace(1e9, 2e9, WARN_NUM_FREQS + 1)
+
+    voltage_mon = port.to_voltage_monitor(freqs=freqs)
+    assert port.name in voltage_mon.name
+    with AssertLogStr("WARNING", contains_str=voltage_mon.name):
+        _ = port.to_voltage_monitor(freqs=many_freqs)
+
+    current_mon = port.to_current_monitor(freqs=freqs)
+    assert port.name in current_mon.name
+    with AssertLogStr("WARNING", contains_str=current_mon.name):
+        _ = port.to_current_monitor(freqs=many_freqs)
+
+    # Also verify for AbstractWavePort (WavePort subclass).
+    wave_modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
+    wave_port = wave_modeler.ports[0]
+    (mode_mon,) = wave_port.to_monitors(freqs=freqs)
+    assert wave_port.name in mode_mon.name
+    with AssertLogStr("WARNING", contains_str=mode_mon.name):
+        _ = wave_port.to_monitors(freqs=many_freqs)
 
 
 def test_validate_3D_sim(tmp_path):
