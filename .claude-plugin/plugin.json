@@ -1,9 +1,0 @@
-{
-  "name": "tidy3d",
-  "description": "Tidy3D simulation tools for Claude Code via tidy3d-mcp.",
-  "version": "0.1.0",
-  "author": {
-    "name": "Flexcompute",
-    "email": "support@flexcompute.com"
-  }
-}
