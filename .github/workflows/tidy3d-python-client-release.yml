@@ -112,10 +112,51 @@ jobs:
       - name: build-release-notes
         run: |
           set -euo pipefail
-          python3 scripts/build_github_release_notes.py \
-            --tag "$RELEASE_TAG" \
-            --ref "$RELEASE_TAG" \
-            --output RELEASE_NOTES.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          release_tag = os.environ["RELEASE_TAG"]
+          version = release_tag[1:] if release_tag.startswith("v") else release_tag
+          release_header_re = re.compile(r"^## \[(?P<version>[^\]]+)\] - \d{4}-\d{2}-\d{2}\s*$")
+          compare_link_re = re.compile(r"^\[(?P<version>[^\]]+)\]:\s+(?P<url>\S+)\s*$")
+
+          changelog_lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+
+          start_index = None
+          for index, line in enumerate(changelog_lines):
+              match = release_header_re.match(line)
+              if match and match.group("version") == version:
+                  start_index = index + 1
+                  break
+
+          if start_index is None:
+              raise ValueError(f"Could not find CHANGELOG.md section for version {version!r}.")
+
+          end_index = len(changelog_lines)
+          for index in range(start_index, len(changelog_lines)):
+              if changelog_lines[index].startswith("## ["):
+                  end_index = index
+                  break
+
+          body = "\n".join(changelog_lines[start_index:end_index]).strip()
+          if not body:
+              raise ValueError(f"CHANGELOG.md section for version {version!r} is empty.")
+
+          compare_link = ""
+          for line in changelog_lines:
+              match = compare_link_re.match(line)
+              if match and match.group("version") == version:
+                  compare_link = match.group("url")
+                  break
+
+          sections = ["## What's Changed", "", body]
+          if compare_link:
+              sections.extend(["", f"**Full Changelog**: {compare_link}"])
+          sections.append("")
+          Path("RELEASE_NOTES.md").write_text("\n".join(sections), encoding="utf-8")
+          PY
 
       - name: create-github-release
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
