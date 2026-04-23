@@ -1252,9 +1252,12 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         eps_shape = [len(param_coords[axis]) for axis in "xyz"]
         dtype_out = complex if component == "complex" else float
 
-        E_der_dim = E_der_map.get(f"E{dim}")
-        if E_der_dim is None or np.all(E_der_dim.values == 0):
-            return np.zeros(eps_shape, dtype=dtype_out)
+        E_der_dim = E_der_map[f"E{dim}"]
+        if np.all(E_der_dim.values == 0):
+            zero_shape = eps_shape
+            if not sum_over_freqs:
+                zero_shape = [*eps_shape, len(np.asarray(E_der_dim.coords["f"], float))]
+            return np.zeros(zero_shape, dtype=dtype_out)
 
         field_values_da = E_der_dim
 

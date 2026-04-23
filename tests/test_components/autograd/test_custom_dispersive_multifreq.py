@@ -98,3 +98,40 @@ def test_custom_pole_residue_multifrequency_weights(monkeypatch):
 
     for path in paths:
         np.testing.assert_allclose(grads[path], expected[path])
+
+
+def test_custom_pole_residue_zero_gradient_chunk_preserves_frequency_axis():
+    freqs = np.array([1.2e14])
+    coords = {"x": np.linspace(-1.0, 1.0, 4), "y": np.linspace(-0.5, 0.5, 3), "z": [0.0]}
+    field_coords = {**coords, "f": freqs}
+
+    eps_inf = td.SpatialDataArray(np.full((4, 3, 1), 2.0), coords=coords)
+    a1 = td.SpatialDataArray(np.full((4, 3, 1), -1.0 + 0.1j), coords=coords)
+    c1 = td.SpatialDataArray(np.full((4, 3, 1), 0.5 + 0.2j), coords=coords)
+    med = td.CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1)])
+
+    zero_field = td.ScalarFieldDataArray(
+        np.zeros((4, 3, 1, 1), dtype=complex),
+        coords=field_coords,
+    )
+    derivative_info = DerivativeInfo(
+        paths=[("eps_inf",), ("poles", 0, 0), ("poles", 0, 1)],
+        E_der_map={"Ex": zero_field, "Ey": zero_field, "Ez": zero_field},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        frequencies=list(freqs),
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: zero_field,
+    )
+
+    grads = med._compute_derivatives(derivative_info)
+
+    for path in derivative_info.paths:
+        np.testing.assert_allclose(grads[path], 0.0)
+        assert grads[path].shape == (4, 3, 1)
