@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal, Optional
 
 import numpy as np
@@ -10,7 +11,11 @@ from pydantic import Field, PrivateAttr, ValidationError
 from pydantic_core import PydanticSerializationError
 
 import tidy3d as td
-from tidy3d.components.base import Tidy3dBaseModel, keyed_cache
+from tidy3d.components.base import (
+    Tidy3dBaseModel,
+    _strip_json_exponent_plus_signs,
+    keyed_cache,
+)
 from tidy3d.components.types import Undefined
 
 M = td.Medium()
@@ -59,6 +64,45 @@ def test_negative_infinity():
 
     T = TestModel(z="-Infinity")
     assert np.isneginf(T.z)
+
+
+def test_strip_json_exponent_plus_signs():
+    json_string = (
+        '{"lower":2.86e+19,"upper":2.86E+19,"negative":1.2e-5,'
+        '"string":"keep 2.86e+19 and \\"3.0E+8\\" inside strings"}'
+    )
+
+    assert _strip_json_exponent_plus_signs(json_string) == (
+        '{"lower":2.86e19,"upper":2.86E19,"negative":1.2e-5,'
+        '"string":"keep 2.86e+19 and \\"3.0E+8\\" inside strings"}'
+    )
+
+
+def test_float_json_format_is_stable():
+    class FloatModel(Tidy3dBaseModel):
+        large_positive: float
+        large_negative: float
+        negative_zero: float
+        positive_infinity: float
+        negative_infinity: float
+
+    model = FloatModel(
+        attrs={"note": "keep e+ inside strings"},
+        large_positive=2.86e19,
+        large_negative=-2.86e19,
+        negative_zero=-0.0,
+        positive_infinity=math.inf,
+        negative_infinity=-math.inf,
+    )
+
+    model_json = model.model_dump_json()
+    assert '"large_positive":2.86e19' in model_json
+    assert '"large_positive":2.86e+19' not in model_json
+    assert '"large_negative":-2.86e19' in model_json
+    assert '"negative_zero":-0.0' in model_json
+    assert '"positive_infinity":"Infinity"' in model_json
+    assert '"negative_infinity":"-Infinity"' in model_json
+    assert '"note":"keep e+ inside strings"' in model_json
 
 
 def test_comparisons():

@@ -196,6 +196,43 @@ def make_json_compatible(json_string: str) -> str:
     return json_string.replace(tmp_string, '"-Infinity"')
 
 
+def _strip_json_exponent_plus_signs(json_string: str) -> str:
+    """Strip `+` from JSON number exponents while preserving JSON strings.
+
+    Assumes valid pydantic_core JSON. Its versions disagree on exponent spelling; Tidy3D keeps
+    the no-plus form so serialized model bytes stay stable across versions.
+    """
+
+    normalized = []
+    in_string = False
+    escaped = False
+
+    for index, character in enumerate(json_string):
+        if in_string:
+            normalized.append(character)
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+
+        if character == '"':
+            in_string = True
+        elif (
+            character == "+"
+            and normalized
+            and normalized[-1] in {"e", "E"}
+            and index + 1 < len(json_string)
+            and json_string[index + 1].isdigit()
+        ):
+            continue
+        normalized.append(character)
+
+    return "".join(normalized)
+
+
 def _get_valid_extension(fname: PathLike) -> str:
     """Return the file extension from fname, validated to accepted ones."""
     valid_extensions = [".json", ".yaml", ".hdf5", ".h5", ".hdf5.gz"]
@@ -270,6 +307,10 @@ class Tidy3dBaseModel(BaseModel):
 
     _cached_properties: dict = PrivateAttr(default_factory=dict)
     _has_tracers: Optional[bool] = PrivateAttr(default=None)
+
+    def model_dump_json(self, *args: Any, **kwargs: Any) -> str:
+        """Serialize with stable float exponent formatting across pydantic_core versions."""
+        return _strip_json_exponent_plus_signs(super().model_dump_json(*args, **kwargs))
 
     def _get_keyed_cache_store(self, cache_name: str) -> dict[Any, Any]:
         """Return a keyed cache dict stored under ``cache_name``."""
