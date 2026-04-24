@@ -277,9 +277,11 @@ def test_eme_grid():
         _ = uniform_grid.updated_copy(boundaries=[-2, -1, 0, 1])
 
     # test max num cells
-    large_grid = td.EMEUniformGrid(num_cells=1000, mode_spec=td.EMEModeSpec())
+    max_grid = td.EMEUniformGrid(num_cells=500, mode_spec=td.EMEModeSpec())
+    _ = max_grid.make_grid(center=sim_geom.center, size=sim_geom.size, axis=axis)
+    too_large_grid = td.EMEUniformGrid(num_cells=501, mode_spec=td.EMEModeSpec())
     with pytest.raises(pd.ValidationError):
-        _ = large_grid.make_grid(center=sim_geom.center, size=sim_geom.size, axis=axis)
+        _ = too_large_grid.make_grid(center=sim_geom.center, size=sim_geom.size, axis=axis)
     too_many_modes = td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=1000))
     with pytest.raises(pd.ValidationError):
         _ = too_many_modes.make_grid(center=sim_geom.center, size=sim_geom.size, axis=axis)
