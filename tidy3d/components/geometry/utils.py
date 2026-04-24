@@ -102,6 +102,7 @@ def merging_geometries_on_plane(
     interior_disjoint_geometries: bool = False,
     cleanup: bool = True,
     quad_segs: Optional[int] = None,
+    section_tolerance_2d: bool = False,
 ) -> list[tuple[Any, Shapely]]:
     """Compute list of shapes on plane. Overlaps are removed or merged depending on
     provided property_list.
@@ -136,7 +137,12 @@ def merging_geometries_on_plane(
     shapes = []
     for geo, prop in zip(geometries, property_list):
         # get list of Shapely shapes that intersect at the plane
-        shapes_plane = plane.intersections_with(geo, cleanup=cleanup, quad_segs=quad_segs)
+        shapes_plane = plane.intersections_with(
+            geo,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
+        )
 
         # Append each of them and their property information to the list of shapes
         for shape in shapes_plane:

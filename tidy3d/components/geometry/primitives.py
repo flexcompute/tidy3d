@@ -202,6 +202,7 @@ class Sphere(base.Centered, base.Circular):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -218,6 +219,8 @@ class Sphere(base.Centered, base.Circular):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             ``_N_SHAPELY_QUAD_SEGS_VISUALIZATION`` for high-quality visualization.
+        section_tolerance_2d : bool = False
+            See :meth:`tidy3d.components.geometry.base.Geometry.intersections_tilted_plane`.
 
         Returns
         -------
@@ -256,6 +259,7 @@ class Sphere(base.Centered, base.Circular):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[BaseGeometry]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -272,6 +276,8 @@ class Sphere(base.Centered, base.Circular):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             ``_N_SHAPELY_QUAD_SEGS_VISUALIZATION`` for high-quality visualization.
+        section_tolerance_2d : bool = False
+            See :meth:`tidy3d.components.geometry.base.Geometry.intersections_plane`.
 
         Returns
         -------

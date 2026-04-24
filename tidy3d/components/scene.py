@@ -764,7 +764,7 @@ class Scene(Tidy3dBaseModel):
 
         medium_shapes = []
         for structure in structures:
-            intersections = plane.intersections_with(structure.geometry)
+            intersections = plane.intersections_with(structure.geometry, section_tolerance_2d=True)
             for shape in intersections:
                 if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
@@ -773,7 +773,7 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def _filter_structures_plane_medium(
-        structures: list[Structure], plane: Box
+        structures: list[Structure], plane: Box, section_tolerance_2d: bool = False
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         medium.
@@ -784,6 +784,9 @@ class Scene(Tidy3dBaseModel):
             List of structures to filter on the plane.
         plane : Box
             Plane specification.
+        section_tolerance_2d : bool = False
+            If ``True``, pass the 2D section tolerance through to the underlying geometry
+            section queries.
 
         Returns
         -------
@@ -793,7 +796,10 @@ class Scene(Tidy3dBaseModel):
 
         medium_list = [structure.medium for structure in structures]
         return Scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=medium_list
+            structures=structures,
+            plane=plane,
+            property_list=medium_list,
+            section_tolerance_2d=section_tolerance_2d,
         )
 
     @staticmethod
@@ -801,6 +807,7 @@ class Scene(Tidy3dBaseModel):
         structures: list[Structure],
         plane: Box,
         property_list: list[Any],
+        section_tolerance_2d: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         provided property_list.
@@ -813,6 +820,9 @@ class Scene(Tidy3dBaseModel):
             Plane specification.
         property_list : List = None
             Property value for each structure.
+        section_tolerance_2d : bool = False
+            If ``True``, pass the 2D section tolerance through to the underlying geometry
+            section queries.
 
         Returns
         -------
@@ -820,7 +830,10 @@ class Scene(Tidy3dBaseModel):
             List of shapes and their property value on the plane after merging.
         """
         return merging_geometries_on_plane(
-            [structure.geometry for structure in structures], plane, property_list
+            [structure.geometry for structure in structures],
+            plane,
+            property_list,
+            section_tolerance_2d=section_tolerance_2d,
         )
 
     """ Plotting Optical """
@@ -1064,7 +1077,9 @@ class Scene(Tidy3dBaseModel):
             # that needs to be rendered
             if property in ["N_d", "N_a", "doping"]:
                 structures = [self.background_structure, *list(structures)]
-            medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures, plane=plane, section_tolerance_2d=True
+            )
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
@@ -1706,7 +1721,9 @@ class Scene(Tidy3dBaseModel):
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
-            medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures, plane=plane, section_tolerance_2d=True
+            )
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(

@@ -280,6 +280,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -296,6 +297,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            If ``True``, allow effectively zero-thickness geometries to contribute a section
+            when the requested plane is within ``fp_eps`` of the geometry bounds along that
+            axis. Intended for plotting paths where small transform or snap offsets should not
+            hide 2D structures; does not affect strictly 3D geometries.
 
         Returns
         -------
@@ -312,6 +318,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -328,6 +335,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            If ``True``, allow effectively zero-thickness geometries to contribute a section
+            when the requested plane is within ``fp_eps`` of the geometry bounds along that
+            axis. Intended for plotting paths where small transform or snap offsets should not
+            hide 2D structures; does not affect strictly 3D geometries.
 
         Returns
         -------
@@ -344,7 +356,12 @@ class Geometry(Tidy3dBaseModel, ABC):
             last, indices = self.pop_axis((0, 1, 2), axis)
             to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(
-            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+            normal,
+            origin,
+            to_2D,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
         )
 
     def intersections_2dbox(self, plane: Box) -> list[Shapely]:
@@ -463,7 +480,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         return self.intersects_axis_position(axis, position)
 
-    def intersects_axis_position(self, axis: int, position: float) -> bool:
+    def intersects_axis_position(
+        self, axis: int, position: float, section_tolerance_2d: bool = False
+    ) -> bool:
         """Whether self intersects plane specified by a given position along a normal axis.
 
         Parameters
@@ -472,13 +491,25 @@ class Geometry(Tidy3dBaseModel, ABC):
             Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
+        section_tolerance_2d : bool = False
+            If ``True``, allow effectively zero-thickness geometries to intersect a plane when
+            the plane is within ``fp_eps`` of the geometry bounds along that axis.
 
         Returns
         -------
         bool
             Whether this geometry intersects the plane.
         """
-        return self.bounds[0][axis] <= position <= self.bounds[1][axis]
+        min_bound = self.bounds[0][axis]
+        max_bound = self.bounds[1][axis]
+        if min_bound <= position <= max_bound:
+            return True
+        if section_tolerance_2d and np.isclose(min_bound, max_bound, rtol=fp_eps, atol=fp_eps):
+            return bool(
+                np.isclose(position, min_bound, rtol=fp_eps, atol=fp_eps)
+                or np.isclose(position, max_bound, rtol=fp_eps, atol=fp_eps)
+            )
+        return False
 
     @cached_property
     @abstractmethod
@@ -609,7 +640,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
+        shapes_intersect = self.intersections_plane(x=x, y=y, z=z, section_tolerance_2d=True)
 
         plot_params = self.plot_params
         if viz_spec is not None:
@@ -1697,6 +1728,7 @@ class SimplePlaneIntersection(Geometry, ABC):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
         Checks special cases before relying on the complete computation.
@@ -1714,6 +1746,8 @@ class SimplePlaneIntersection(Geometry, ABC):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_tilted_plane`.
 
         Returns
         -------
@@ -1728,7 +1762,12 @@ class SimplePlaneIntersection(Geometry, ABC):
             axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
-            section = self.intersections_plane(cleanup=cleanup, quad_segs=quad_segs, **kwargs)
+            section = self.intersections_plane(
+                cleanup=cleanup,
+                quad_segs=quad_segs,
+                section_tolerance_2d=section_tolerance_2d,
+                **kwargs,
+            )
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
@@ -1857,6 +1896,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1873,6 +1913,8 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_plane`.
 
         Returns
         -------
@@ -1882,8 +1924,18 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>``.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        if not self.intersects_axis_position(axis, position):
+        use_2d_tolerance = (
+            section_tolerance_2d
+            and axis == self.axis
+            and np.isclose(self.length_axis, 0.0, rtol=fp_eps, atol=fp_eps)
+        )
+        if not self.intersects_axis_position(axis, position, section_tolerance_2d=use_2d_tolerance):
             return []
+        if use_2d_tolerance and np.isclose(
+            position, self.reference_axis_pos, rtol=fp_eps, atol=fp_eps
+        ):
+            position = self.reference_axis_pos
+
         if axis == self.axis:
             return self._intersections_normal(position, quad_segs=quad_segs)
         return self._intersections_side(position, axis)
@@ -2245,6 +2297,7 @@ class Box(SimplePlaneIntersection, Centered):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -2260,6 +2313,8 @@ class Box(SimplePlaneIntersection, Centered):
             If True, removes extremely small features from each polygon's boundary.
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. Not used for Box geometry.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_plane`.
 
         Returns
         -------
@@ -2269,10 +2324,15 @@ class Box(SimplePlaneIntersection, Centered):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        if not self.intersects_axis_position(axis, position):
+        use_2d_tolerance = section_tolerance_2d and np.isclose(
+            self.size[axis], 0.0, rtol=fp_eps, atol=fp_eps
+        )
+        if not self.intersects_axis_position(axis, position, section_tolerance_2d=use_2d_tolerance):
             return []
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
         Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis)
+        if use_2d_tolerance and np.isclose(position, z0, rtol=fp_eps, atol=fp_eps):
+            position = z0
         dz = np.abs(z0 - position)
         if dz > Lz / 2 + fp_eps:
             return []
@@ -2316,7 +2376,11 @@ class Box(SimplePlaneIntersection, Centered):
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
     def intersections_with(
-        self, other: Geometry, cleanup: bool = True, quad_segs: Optional[int] = None
+        self,
+        other: Geometry,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         this 2D box.
@@ -2330,6 +2394,8 @@ class Box(SimplePlaneIntersection, Centered):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_plane`.
 
         Returns
         -------
@@ -2345,16 +2411,30 @@ class Box(SimplePlaneIntersection, Centered):
                 "Intersections with other geometry are only calculated from a 2D box."
             )
 
-        # dont bother if the geometry doesn't intersect the self at all
-        if not other.intersects(self):
+        # Don't bother if the geometry doesn't intersect the self at all.
+        # Plotting opts into the section-aware precheck so zero-thickness 2D shapes
+        # that are only off by ``fp_eps`` still reach ``intersections_plane()`` below.
+        normal_ind = self.size.index(0.0)
+        if section_tolerance_2d:
+            if not other.intersects_axis_position(
+                normal_ind,
+                self.center[normal_ind],
+                section_tolerance_2d=True,
+            ):
+                return []
+        elif not other.intersects(self):
             return []
 
         # get list of Shapely shapes that intersect at the self
-        normal_ind = self.size.index(0.0)
         dim = "xyz"[normal_ind]
         pos = self.center[normal_ind]
         xyz_kwargs = {dim: pos}
-        shapes_plane = other.intersections_plane(cleanup=cleanup, quad_segs=quad_segs, **xyz_kwargs)
+        shapes_plane = other.intersections_plane(
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
+            **xyz_kwargs,
+        )
 
         # intersect all shapes with the input self
         bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind)[1] for bounds in self.bounds)
@@ -2517,7 +2597,9 @@ class Box(SimplePlaneIntersection, Centered):
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
-        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z)) > 0
+        arrow_intersecting_plane = (
+            len(self.intersections_plane(x=x, y=y, z=z, section_tolerance_2d=True)) > 0
+        )
         center = self.center
         if arrow_base:
             arrow_intersecting_plane = arrow_intersecting_plane and any(
@@ -2950,6 +3032,7 @@ class Transformed(Geometry):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2966,6 +3049,8 @@ class Transformed(Geometry):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_tilted_plane`.
 
         Returns
         -------
@@ -2980,6 +3065,7 @@ class Transformed(Geometry):
             np.dot(to_2D, self.transform),
             cleanup=cleanup,
             quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
         )
 
     def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
@@ -3281,6 +3367,7 @@ class ClipOperation(Geometry):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3306,10 +3393,20 @@ class ClipOperation(Geometry):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         a = self.geometry_a.intersections_tilted_plane(
-            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+            normal,
+            origin,
+            to_2D,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
         )
         b = self.geometry_b.intersections_tilted_plane(
-            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+            normal,
+            origin,
+            to_2D,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
         )
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
@@ -3325,6 +3422,7 @@ class ClipOperation(Geometry):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3341,6 +3439,8 @@ class ClipOperation(Geometry):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_plane`.
 
         Returns
         -------
@@ -3349,8 +3449,22 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        a = self.geometry_a.intersections_plane(x, y, z, cleanup=cleanup, quad_segs=quad_segs)
-        b = self.geometry_b.intersections_plane(x, y, z, cleanup=cleanup, quad_segs=quad_segs)
+        a = self.geometry_a.intersections_plane(
+            x,
+            y,
+            z,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
+        )
+        b = self.geometry_b.intersections_plane(
+            x,
+            y,
+            z,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
+        )
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(
@@ -3517,6 +3631,7 @@ class GeometryGroup(Geometry):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3545,7 +3660,12 @@ class GeometryGroup(Geometry):
             intersection
             for geometry in self.geometries
             for intersection in geometry.intersections_tilted_plane(
-                normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+                normal,
+                origin,
+                to_2D,
+                cleanup=cleanup,
+                quad_segs=quad_segs,
+                section_tolerance_2d=section_tolerance_2d,
             )
         ]
 
@@ -3556,6 +3676,7 @@ class GeometryGroup(Geometry):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3580,17 +3701,26 @@ class GeometryGroup(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        if not self.intersects_plane(x, y, z):
-            return []
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         return [
             intersection
             for geometry in self.geometries
+            if geometry.intersects_axis_position(
+                axis, position, section_tolerance_2d=section_tolerance_2d
+            )
             for intersection in geometry.intersections_plane(
-                x=x, y=y, z=z, cleanup=cleanup, quad_segs=quad_segs
+                x=x,
+                y=y,
+                z=z,
+                cleanup=cleanup,
+                quad_segs=quad_segs,
+                section_tolerance_2d=section_tolerance_2d,
             )
         ]
 
-    def intersects_axis_position(self, axis: float, position: float) -> bool:
+    def intersects_axis_position(
+        self, axis: float, position: float, section_tolerance_2d: bool = False
+    ) -> bool:
         """Whether self intersects plane specified by a given position along a normal axis.
 
         Parameters
@@ -3599,13 +3729,18 @@ class GeometryGroup(Geometry):
             Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersects_axis_position`.
 
         Returns
         -------
         bool
             Whether this geometry intersects the plane.
         """
-        return any(geom.intersects_axis_position(axis, position) for geom in self.geometries)
+        return any(
+            geom.intersects_axis_position(axis, position, section_tolerance_2d=section_tolerance_2d)
+            for geom in self.geometries
+        )
 
     def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
@@ -3927,6 +4062,7 @@ class GeometryArray(Geometry):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3943,6 +4079,8 @@ class GeometryArray(Geometry):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_tilted_plane`.
 
         Returns
         -------
@@ -3952,7 +4090,12 @@ class GeometryArray(Geometry):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return self._geometry_group.intersections_tilted_plane(
-            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+            normal,
+            origin,
+            to_2D,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
         )
 
     def intersections_plane(
@@ -3962,6 +4105,7 @@ class GeometryArray(Geometry):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3978,6 +4122,8 @@ class GeometryArray(Geometry):
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. If ``None``, uses
             high-quality visualization settings.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersections_plane`.
 
         Returns
         -------
@@ -3987,10 +4133,17 @@ class GeometryArray(Geometry):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return self._geometry_group.intersections_plane(
-            x=x, y=y, z=z, cleanup=cleanup, quad_segs=quad_segs
+            x=x,
+            y=y,
+            z=z,
+            cleanup=cleanup,
+            quad_segs=quad_segs,
+            section_tolerance_2d=section_tolerance_2d,
         )
 
-    def intersects_axis_position(self, axis: int, position: float) -> bool:
+    def intersects_axis_position(
+        self, axis: int, position: float, section_tolerance_2d: bool = False
+    ) -> bool:
         """Whether self intersects plane specified by a given position along a normal axis.
 
         Parameters
@@ -3999,13 +4152,17 @@ class GeometryArray(Geometry):
             Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
+        section_tolerance_2d : bool = False
+            See :meth:`Geometry.intersects_axis_position`.
 
         Returns
         -------
         bool
             Whether this geometry intersects the plane.
         """
-        return self._geometry_group.intersects_axis_position(axis, position)
+        return self._geometry_group.intersects_axis_position(
+            axis, position, section_tolerance_2d=section_tolerance_2d
+        )
 
     def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array

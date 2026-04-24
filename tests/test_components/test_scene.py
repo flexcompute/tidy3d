@@ -11,6 +11,7 @@ from pydantic import ValidationError
 import tidy3d as td
 import tidy3d.components.scene as scene_mod
 from tidy3d.components import scene
+from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.viz import STRUCTURE_EPS_CMAP, STRUCTURE_EPS_CMAP_R
 from tidy3d.exceptions import SetupError
 
@@ -105,6 +106,49 @@ def test_plot_bounds():
     plt.close()
     _ = SCENE_FULL.plot(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
     plt.close()
+
+
+def test_plot_structures_relaxed_for_small_2d_plane_offset():
+    z_expected = 0.3
+    z_offset = float(increment_float(z_expected, 1.0))
+    structure = td.Structure(
+        geometry=td.Box(center=(0, 0, z_expected), size=(2, 1, 0)),
+        medium=td.Medium2D(ss=td.Medium(permittivity=4.0), tt=td.Medium(permittivity=4.0)),
+    )
+    test_scene = td.Scene(structures=[structure])
+
+    fig, ax = plt.subplots()
+    test_scene.plot_structures(z=z_offset, ax=ax)
+    structure_patches = [patch for patch in ax.patches if isinstance(patch, mpl.patches.PathPatch)]
+
+    assert len(structure.geometry.intersections_plane(z=z_offset)) == 0
+    assert len(structure_patches) > 0, "2D structure should still plot within float precision."
+    plt.close(fig)
+
+
+def test_plot_transformed_2d_structure_relaxed_for_small_plane_offset():
+    z_expected = 0.3
+    z_offset = float(increment_float(z_expected, 1.0))
+    geometry = td.Transformed(
+        geometry=td.Transformed(
+            geometry=td.Box(center=(0, 0, z_expected), size=(2, 1, 0)),
+            transform=td.Transformed.rotation(0.37, 2),
+        ),
+        transform=td.Transformed.translation(0.0, 0.0, z_offset - z_expected),
+    )
+    structure = td.Structure(
+        geometry=geometry,
+        medium=td.Medium2D(ss=td.Medium(permittivity=4.0), tt=td.Medium(permittivity=4.0)),
+    )
+    test_scene = td.Scene(structures=[structure])
+
+    fig, ax = plt.subplots()
+    test_scene.plot_structures(z=z_expected, ax=ax)
+    structure_patches = [patch for patch in ax.patches if isinstance(patch, mpl.patches.PathPatch)]
+
+    assert len(geometry.intersections_plane(z=z_expected)) == 0
+    assert len(structure_patches) > 0, "Transformed 2D structure should still plot within fp_eps."
+    plt.close(fig)
 
 
 def test_structure_alpha():

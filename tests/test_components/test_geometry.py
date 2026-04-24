@@ -25,6 +25,7 @@ from shapely.geometry import (
 import tidy3d as td
 from tidy3d.compat import _package_is_older_than
 from tidy3d.components.geometry.base import cleanup_shapely_object
+from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.polyslab import _PolyBulgeUtil
 from tidy3d.components.geometry.utils import (
@@ -1330,6 +1331,43 @@ def test_2b_box_intersections():
 
     with pytest.raises(ValidationError):
         _ = box2.intersections_2dbox(box1)
+
+
+def test_2d_box_intersections_relaxed_for_small_transformed_2d_offset():
+    z_expected = 0.3
+    z_offset = float(increment_float(z_expected, 1.0))
+    plane = td.Box(center=(0, 0, z_expected), size=(4, 4, 0))
+    geometry = td.Transformed(
+        geometry=td.Transformed(
+            geometry=td.Box(center=(0, 0, z_expected), size=(2, 1, 0)),
+            transform=td.Transformed.rotation(0.37, 2),
+        ),
+        transform=td.Transformed.translation(0.0, 0.0, z_offset - z_expected),
+    )
+
+    assert len(plane.intersections_with(geometry)) == 0
+    assert len(plane.intersections_with(geometry, section_tolerance_2d=True)) == 1
+
+
+def test_geometry_group_intersections_plane_relaxed_for_small_transformed_2d_offset():
+    z_expected = 0.3
+    z_offset = float(increment_float(z_expected, 1.0))
+    geometry = td.Transformed(
+        geometry=td.Transformed(
+            geometry=td.Box(center=(0, 0, z_expected), size=(2, 1, 0)),
+            transform=td.Transformed.rotation(0.37, 2),
+        ),
+        transform=td.Transformed.translation(0.0, 0.0, z_offset - z_expected),
+    )
+    group = td.GeometryGroup(
+        geometries=(
+            geometry,
+            td.Box(center=(0, 0, 20), size=(1, 1, 1)),
+        )
+    )
+
+    assert len(group.intersections_plane(z=z_expected)) == 0
+    assert len(group.intersections_plane(z=z_expected, section_tolerance_2d=True)) == 1
 
 
 def test_polyslab_merge():

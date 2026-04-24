@@ -3411,6 +3411,7 @@ class ComplexPolySlabBase(PolySlab):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3426,6 +3427,8 @@ class ComplexPolySlabBase(PolySlab):
             If True, removes extremely small features from each polygon's boundary.
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. Not used for PolySlab.
+        section_tolerance_2d : bool = False
+            See :meth:`tidy3d.components.geometry.base.Geometry.intersections_tilted_plane`.
 
         Returns
         -------
@@ -3440,7 +3443,12 @@ class ComplexPolySlabBase(PolySlab):
                     base.Geometry.evaluate_inf_shape(shape)
                     for polyslab in self.sub_polyslabs
                     for shape in polyslab.intersections_tilted_plane(
-                        normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+                        normal,
+                        origin,
+                        to_2D,
+                        cleanup=cleanup,
+                        quad_segs=quad_segs,
+                        section_tolerance_2d=section_tolerance_2d,
                     )
                 ]
             )

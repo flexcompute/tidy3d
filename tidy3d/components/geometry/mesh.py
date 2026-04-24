@@ -576,6 +576,7 @@ class TriangleMesh(base.Geometry, ABC):
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -591,6 +592,8 @@ class TriangleMesh(base.Geometry, ABC):
             If True, removes extremely small features from each polygon's boundary.
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. Not used for TriangleMesh.
+        section_tolerance_2d : bool = False
+            See :meth:`tidy3d.components.geometry.base.Geometry.intersections_tilted_plane`.
 
         Returns
         -------
@@ -612,6 +615,7 @@ class TriangleMesh(base.Geometry, ABC):
         z: Optional[float] = None,
         cleanup: bool = True,
         quad_segs: Optional[int] = None,
+        section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -627,6 +631,8 @@ class TriangleMesh(base.Geometry, ABC):
             If True, removes extremely small features from each polygon's boundary.
         quad_segs : Optional[int] = None
             Number of segments used to discretize circular shapes. Not used for TriangleMesh.
+        section_tolerance_2d : bool = False
+            See :meth:`tidy3d.components.geometry.base.Geometry.intersections_plane`.
 
         Returns
         -------
@@ -681,7 +687,13 @@ class TriangleMesh(base.Geometry, ABC):
                     "Using bounding box instead."
                 )
             log.warning(f"Error encountered: {e}")
-            return self.bounding_box.intersections_plane(x=x, y=y, z=z, cleanup=cleanup)
+            return self.bounding_box.intersections_plane(
+                x=x,
+                y=y,
+                z=z,
+                cleanup=cleanup,
+                section_tolerance_2d=section_tolerance_2d,
+            )
 
     def inside(self, x: NDArray, y: NDArray, z: NDArray) -> np.ndarray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
