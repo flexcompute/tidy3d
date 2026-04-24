@@ -171,7 +171,7 @@ def emulated_batch_run(simulations, path_dir: Optional[str] = None, **kwargs):
     data_dict = {
         task_name: run_emulated_workflow(sim) for task_name, sim in simulations.simulations.items()
     }
-    task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
+    task_ids = {task_name: f"task_id_{task_name}" for task_name in simulations.simulations.keys()}
     task_paths = {key: f"/path/to/{key}" for key in simulations.simulations.keys()}
 
     class BatchDataEmulated(web.BatchData):
@@ -560,6 +560,7 @@ def test_sweep(sweep_method, monkeypatch):
         expected_task_names[sweep_method.type][0] in td_sweep2.task_names
         and expected_task_names[sweep_method.type][0] in td_sweep2.task_names
     )
+    assert f"task_id_{expected_task_names[sweep_method.type][0]}" in td_sweep2.task_ids
 
     # Try with batch output from pre
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
@@ -655,6 +656,40 @@ def test_mode_simulation_sweep(monkeypatch):
 
     assert np.allclose(pre_post.values, combined.values)
     assert all("ModeGrid" in name for name in pre_post.task_names)
+    assert all(task_id.startswith("task_id_ModeGrid") for task_id in pre_post.task_ids)
+
+
+def test_result_real_cost(monkeypatch):
+    task_costs = {
+        "task_id_direct": 1.25,
+        "task_id_nested_a": 0.5,
+        "task_id_nested_b": None,
+        "task_id_batch_low": 2.0,
+        "task_id_batch_high": 3.0,
+    }
+
+    monkeypatch.setattr(web, "real_cost", lambda task_id, verbose=True: task_costs.get(task_id))
+
+    result = tdd.Result(
+        dims=("x",),
+        values=(1.0, 2.0),
+        coords=((0.0,), (1.0,)),
+        task_ids=[
+            "task_id_direct",
+            {
+                "nested": ["task_id_nested_a", "task_id_nested_b"],
+                "batch": {"low": "task_id_batch_low", "high": "task_id_batch_high"},
+            },
+        ],
+    )
+
+    assert result.real_cost == 6.75
+
+
+def test_result_real_cost_none_without_task_ids():
+    result = tdd.Result(dims=("x",), values=(1.0,), coords=((0.0,),))
+
+    assert result.real_cost is None
 
 
 def emulated_estimate_cost_return(self, verbose=True):

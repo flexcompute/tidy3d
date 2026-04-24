@@ -9,6 +9,7 @@ import pandas
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.web.core.constants import TaskId
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
 
 # NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
+
+TaskIdMetadata = TaskId | list[TaskId] | dict[str, Any]
 
 
 class Result(Tidy3dBaseModel):
@@ -71,6 +74,14 @@ class Result(Tidy3dBaseModel):
         None,
         title="Task Names",
         description="Task name of every simulation run during ``DesignSpace.run``. Only available if "
+        "the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
+        "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
+    )
+
+    task_ids: Optional[list[TaskIdMetadata]] = Field(
+        None,
+        title="Task IDs",
+        description="Task ID of every simulation run during ``DesignSpace.run``. Only available if "
         "the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
         "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
@@ -185,6 +196,45 @@ class Result(Tidy3dBaseModel):
         coords_tuple = tuple(kwargs[dim] for dim in self.dims)
         return self.get_value(coords_tuple)
 
+    @staticmethod
+    def _iter_task_ids(task_info: Any) -> Iterator[TaskId]:
+        """Yield task ids from a nested result metadata container."""
+
+        if isinstance(task_info, str):
+            yield task_info
+            return
+
+        if isinstance(task_info, dict):
+            for value in task_info.values():
+                yield from Result._iter_task_ids(value)
+            return
+
+        if isinstance(task_info, (list, tuple)):
+            for value in task_info:
+                yield from Result._iter_task_ids(value)
+
+    @property
+    def real_cost(self) -> float | None:
+        """Sum the billed FlexCredit cost for all tasks referenced by this result."""
+
+        if self.task_ids is None:
+            return None
+
+        from tidy3d import web
+
+        real_cost_sum = 0.0
+        found_cost = False
+
+        for task_id in self._iter_task_ids(self.task_ids):
+            cost = web.real_cost(task_id, verbose=False)
+            if cost is not None:
+                real_cost_sum += cost
+                found_cost = True
+
+        if not found_cost:
+            return None
+        return real_cost_sum
+
     def to_dataframe(self, include_aux: bool = False) -> pandas.DataFrame:
         """Data as a ``pandas.DataFrame``.
 
@@ -240,6 +290,8 @@ class Result(Tidy3dBaseModel):
 
         attrs = {
             "task_names": self.task_names,
+            "task_ids": self.task_ids,
+            "task_paths": self.task_paths,
             "output_names": self.output_names,
             "fn_source": self.fn_source,
             "dims": self.dims,
@@ -298,6 +350,8 @@ class Result(Tidy3dBaseModel):
             values=values,
             output_names=attrs.get("output_names"),
             task_names=attrs.get("task_names"),
+            task_ids=attrs.get("task_ids"),
+            task_paths=attrs.get("task_paths"),
             fn_source=attrs.get("fn_source"),
         )
 
@@ -333,6 +387,8 @@ class Result(Tidy3dBaseModel):
             return list(tuple1) + list(tuple2)
 
         task_names = combine_tuples(self.task_names, other.task_names)
+        task_ids = combine_tuples(self.task_ids, other.task_ids)
+        task_paths = combine_tuples(self.task_paths, other.task_paths)
         coords = combine_tuples(self.coords, other.coords)
         values = combine_tuples(self.values, other.values)
 
@@ -343,6 +399,8 @@ class Result(Tidy3dBaseModel):
             output_names=self.output_names,
             fn_source=self.fn_source,
             task_names=task_names,
+            task_ids=task_ids,
+            task_paths=task_paths,
         )
 
     def __add__(self, other: Result) -> Result:
@@ -388,6 +446,8 @@ class Result(Tidy3dBaseModel):
                 output_names=self.output_names,
                 fn_source=self.fn_source,
                 task_names=self.task_names,
+                task_ids=self.task_ids,
+                task_paths=self.task_paths,
                 aux_values=self.aux_values,
                 optimizer=self.optimizer,
             )
@@ -424,6 +484,8 @@ class Result(Tidy3dBaseModel):
                 output_names=self.output_names,
                 fn_source=self.fn_source,
                 task_names=self.task_names,
+                task_ids=self.task_ids,
+                task_paths=self.task_paths,
                 aux_values=self.aux_values,
                 optimizer=self.optimizer,
             )
