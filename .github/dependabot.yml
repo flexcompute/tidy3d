@@ -1,9 +1,21 @@
 version: 2
 
+registries:
+  flexcompute-codeartifact:
+    type: python-index
+    url: https://flexcompute-625554095313.d.codeartifact.us-east-1.amazonaws.com/pypi/pypi-releases/simple/
+    aws-region: us-east-1
+    account-id: '625554095313'
+    role-name: github-dependabot-tidy3d-codeartifact-prod-aws
+    domain: flexcompute
+    domain-owner: '625554095313'
+
 updates:
 
   - package-ecosystem: "pip"
     directory: "/"   # folder containing pyproject.toml + poetry.lock
+    registries:
+      - flexcompute-codeartifact
     schedule:
       interval: "weekly"
     cooldown:
