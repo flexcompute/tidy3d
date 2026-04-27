@@ -2812,6 +2812,75 @@ def test_eme_cell_lengths():
         np.testing.assert_allclose(s, b * 2.0)
 
 
+def test_eme_local_monitor_warning_dedup_key():
+    """Helper covers three requirements: fire when monitors are present, dedupe
+    via log_once for identical monitor sets, and use a key that distinguishes
+    sets differing in type or placement (so different sims in the same process
+    don't silently collide)."""
+    sim = make_local_eme_sim(num_cells=3)
+
+    mnt_field_a = td.EMEFieldMonitor(size=(0, td.inf, td.inf), name="field", colocate=True)
+    mnt_field_b = td.EMEFieldMonitor(size=(td.inf, 0, td.inf), name="field", colocate=True)
+    mnt_mode = td.EMEModeSolverMonitor(size=(0, td.inf, td.inf), name="field")
+
+    sim_a = sim.updated_copy(monitors=[mnt_field_a])
+
+    # First call for a given monitor set warns.
+    with AssertLogLevel("WARNING", contains_str="field"):
+        sim_a._warn_if_local_ignores_monitors()
+
+    # Identical monitor set → deduped by log_once.
+    with AssertLogLevel(None):
+        sim.updated_copy(monitors=[mnt_field_a])._warn_if_local_ignores_monitors()
+
+    # Different placement (same name + type) → distinct key, warns again.
+    with AssertLogLevel("WARNING", contains_str="field"):
+        sim.updated_copy(monitors=[mnt_field_b])._warn_if_local_ignores_monitors()
+
+    # Different type (same name + placement) → distinct key, warns again.
+    with AssertLogLevel("WARNING", contains_str="field"):
+        sim.updated_copy(monitors=[mnt_mode])._warn_if_local_ignores_monitors()
+
+
+@pytest.mark.numerical
+def test_eme_local_warns_when_monitors_dropped():
+    """Explicit per-element staged propagation wires the monitor-drop warning
+    — not just the convenience helpers. Covers the regression where
+    compute_cell_smatrix / compute_interface_smatrix / compute_smatrix bypassed
+    the three originally-hooked entry points."""
+    sim = make_local_eme_sim(num_cells=2, num_modes=3)
+    mnt = td.EMEFieldMonitor(size=(0, td.inf, td.inf), name="staged_monitor", colocate=True)
+    sim_with_mnt = sim.updated_copy(monitors=[mnt])
+
+    mode_data = [ms.run_local() for ms in sim_with_mnt.mode_simulations]
+
+    # mode_simulations fired the log-once warning above; clear the cache so the
+    # staged-flow call sites below get a fair check on their own.
+    td.log._static_cache.clear()
+
+    with AssertLogLevel("WARNING", contains_str="staged_monitor") as ctx:
+        cell_modes = [
+            sim_with_mnt.stage_cell_modes(md, cell_index=i) for i, md in enumerate(mode_data)
+        ]
+        cell_overlaps = [sim_with_mnt.compute_cell_overlap(cm) for cm in cell_modes]
+        iface_overlaps = [
+            sim_with_mnt.compute_interface_overlap(cell_modes[li], cell_modes[ri])
+            for li, ri in sim_with_mnt.cell_index_pairs
+        ]
+        cell_sms = [sim_with_mnt.compute_cell_smatrix(co) for co in cell_overlaps]
+        iface_sms = [
+            sim_with_mnt.compute_interface_smatrix(cell_overlaps[li], cell_overlaps[ri], io)
+            for (li, ri), io in zip(sim_with_mnt.cell_index_pairs, iface_overlaps)
+        ]
+        sim_with_mnt.compute_smatrix(cell_overlaps, cell_sms, iface_sms)
+
+    monitor_warns = [msg for _, msg in ctx.records if "staged_monitor" in msg]
+    assert len(monitor_warns) == 1, (
+        f"Expected the monitor-drop warning exactly once across the explicit "
+        f"staged pipeline; got {len(monitor_warns)}."
+    )
+
+
 @pytest.mark.numerical
 def test_eme_local_tunneling():
     """Tunneling with passive constraint: unitarity and reciprocity."""
@@ -3047,4 +3116,5 @@ def test_eme_local_mode_sweep():
     assert smatrix.S21.shape[1] == 3
     for si in range(3):
         T = abs(smatrix.S21.isel(sweep_index=si).values.squeeze()) ** 2
-        assert T.sum() > 0
+        # Truncated-away modes are NaN-padded (see test_eme_stack_sweep_points_nan_pads_ragged_modes).
+        assert np.nansum(T) > 0

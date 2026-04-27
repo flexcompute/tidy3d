@@ -3,13 +3,12 @@
 Propagation Sweeps
 --------------------
 
-Sweeps reuse previously computed EME mode data, so bent cells remain subject to the same
-mode-consistency checks as the base simulation. In particular, bent anisotropic media with
-``bend_medium_frame="global"`` are rejected when repetition or length changes would make a
-reused mode see a different local tensor orientation, and bent custom media are only
-supported when no global-frame remapping of custom data is required. If you instead resolve
-global-frame anisotropic bends with multiple cells, check convergence with respect to the
-number of EME cells.
+An EME sweep reuses previously computed mode data to evaluate the device at
+multiple parameter points without re-solving the modes.  The sweep axis is
+exposed as a ``sweep_index`` coordinate on the resulting S-matrix.  Broadband
+frequency studies do not use a sweep type — list the desired frequencies in
+:class:`.EMESimulation` ``freqs`` directly and control interpolation with
+:class:`.EMEModeSpec` ``interp_spec``.
 
 .. warning::
 

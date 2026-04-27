@@ -2018,6 +2018,43 @@ class EMESimulation(AbstractYeeGridSimulation):
                 "'EMEModeSpec.interp_spec' for the performance/accuracy tradeoff."
             )
 
+    def _warn_if_local_ignores_monitors(self) -> None:
+        """Warn when the local propagation path will drop user-configured monitors.
+
+        ``propagate`` and the per-element stage methods return only the device
+        S-matrix (an :class:`EMESMatrixDataset`), so ``self.monitors`` — including
+        :class:`EMEFieldMonitor`, :class:`EMEModeSolverMonitor`,
+        :class:`EMECoefficientMonitor`, etc. — are silently dropped. Only the
+        remote backend populates EME monitor data.
+
+        The message is f-composed before being handed to ``log.warning`` so that
+        ``log_once``'s cache key is the fully interpolated string (monitor names
+        included). Every public local entry point
+        (``mode_simulations``, ``stage_cell_modes``, ``compute_cell_overlap``,
+        ``compute_interface_overlap``, ``compute_overlaps``,
+        ``compute_cell_smatrix``, ``compute_interface_smatrix``,
+        ``compute_smatrix``, ``propagate_from_overlaps``) calls this so that any
+        flow — convenience, explicit staged, or cached-replay — surfaces the
+        warning exactly once for its monitor set, while a later simulation with
+        a *different* monitor set still warns independently.
+        """
+        if not self.monitors:
+            return
+        # Include type and placement alongside the name so two monitor sets
+        # that share names (common in multi-sim notebooks / batch jobs) but
+        # differ in type or placement hash to distinct ``log_once`` keys.
+        descs = ", ".join(
+            f"{type(m).__name__}(name='{m.name}', center={tuple(m.center)}, size={tuple(m.size)})"
+            for m in self.monitors
+        )
+        message = (
+            f"Local EME propagation returns only the device S-matrix. The "
+            f"{len(self.monitors)} monitor(s) configured on this simulation "
+            f"({descs}) will be dropped; run the simulation through the remote "
+            f"backend instead if you need monitor data."
+        )
+        log.warning(message, log_once=True)
+
     @property
     def mode_simulations(self) -> tuple[ModeSimulation, ...]:
         """One :class:`.ModeSimulation` per EME cell, at full mode count.
@@ -2053,6 +2090,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         # Fail before the caller spawns N mode-solve jobs they can never feed into
         # the staged propagation path.
         self._raise_if_freq_sweep_local()
+        self._warn_if_local_ignores_monitors()
 
         eme_grid = self.eme_grid
         mode_planes = eme_grid.mode_planes
@@ -2133,6 +2171,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         from .data.stage import EMEStageCellModes
 
         check_tidy3d_extras_licensed_feature("local_eme")
+        self._warn_if_local_ignores_monitors()
         from tidy3d_extras.eme import filter_modes
 
         if isinstance(mode_data, ModeSimulationData):
@@ -2194,6 +2233,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
         check_tidy3d_extras_licensed_feature("local_eme")
+        self._warn_if_local_ignores_monitors()
         from tidy3d_extras.eme import compute_cell_overlap
 
         return compute_cell_overlap(cell_modes)
@@ -2221,6 +2261,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
         check_tidy3d_extras_licensed_feature("local_eme")
+        self._warn_if_local_ignores_monitors()
         from tidy3d_extras.eme import compute_interface_overlap
 
         return compute_interface_overlap(left_modes, right_modes)
@@ -2256,6 +2297,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         # Fail before doing the per-cell overlap integrals on a sweep type we
         # cannot propagate through later.
         self._raise_if_freq_sweep_local()
+        self._warn_if_local_ignores_monitors()
 
         num_cells = self.eme_grid.num_cells
         if len(mode_data) != num_cells:
@@ -2306,6 +2348,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         check_tidy3d_extras_licensed_feature("local_eme")
         self._raise_if_freq_sweep_local()
+        self._warn_if_local_ignores_monitors()
         self._raise_if_stage_freqs_mismatch(
             cell_overlap.n_complex.f.values,
             f"cell overlap for cell_index={cell_overlap.cell_index}",
@@ -2363,6 +2406,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         check_tidy3d_extras_licensed_feature("local_eme")
         self._raise_if_freq_sweep_local()
+        self._warn_if_local_ignores_monitors()
         pair = (left_overlap.cell_index, right_overlap.cell_index)
         self._raise_if_stage_freqs_mismatch(
             left_overlap.n_complex.f.values, f"left cell overlap at pair {pair}"
@@ -2429,6 +2473,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         check_tidy3d_extras_licensed_feature("local_eme")
         self._raise_if_freq_sweep_local()
+        self._warn_if_local_ignores_monitors()
 
         from tidy3d.components.data.data_array import EMESMatrixDataArray
 
@@ -2562,6 +2607,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         from .data.dataset import EMESMatrixDataset
 
         self._raise_if_freq_sweep_local()
+        self._warn_if_local_ignores_monitors()
         sweep_spec = self.sweep_spec
 
         num_cells = self.eme_grid.num_cells
