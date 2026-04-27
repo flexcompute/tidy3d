@@ -12,7 +12,7 @@ registries:
 
 updates:
 
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"   # folder containing pyproject.toml + uv.lock
     registries:
       - flexcompute-codeartifact
