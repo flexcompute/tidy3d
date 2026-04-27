@@ -13,7 +13,7 @@ registries:
 updates:
 
   - package-ecosystem: "pip"
-    directory: "/"   # folder containing pyproject.toml + poetry.lock
+    directory: "/"   # folder containing pyproject.toml + uv.lock
     registries:
       - flexcompute-codeartifact
     schedule:
