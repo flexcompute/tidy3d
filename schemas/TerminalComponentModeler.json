@@ -16613,7 +16613,7 @@
           "type": "string"
         },
         "version": {
-          "default": "2.11.1",
+          "default": "2.11.2",
           "type": "string"
         }
       },
