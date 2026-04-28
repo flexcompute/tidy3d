@@ -19,6 +19,7 @@ from .penalty import AbstractPenalty, ErosionDilationPenalty, PenaltyType
 from .polyslab_set import PolySlabSet
 from .region import DesignRegion, DesignRegionType, TopologyDesignRegion
 from .result import InverseDesignResult
+from .self_intersection import SelfIntersectionStatus
 from .transformation import AbstractTransformation, FilterProject, TransformationType
 
 rebuild_context_namespace = tidy3d.plugins.expressions._local_vars.copy()
@@ -47,6 +48,7 @@ __all__ = (
     "PenaltyType",
     "PolySlabSet",
     "RandomInitializationSpec",
+    "SelfIntersectionStatus",
     "TopologyDesignRegion",
     "TransformationType",
     "UniformInitializationSpec",

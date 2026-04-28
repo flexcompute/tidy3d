@@ -12,6 +12,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 import tidy3d as td
 import tidy3d.plugins.invdes.polyslab_set as polyslab_set_module
+import tidy3d.plugins.invdes.self_intersection as self_intersection_module
 from tidy3d.components.geometry.contour_conversion import (
     _dataarray_to_polyslab_data_and_permittivity_bounds,
     _geometry_to_polygons,
@@ -22,7 +23,16 @@ from tidy3d.components.geometry.contour_conversion import (
 from tidy3d.components.grid.grid import Coords
 from tidy3d.components.structure import resolve_foreground_background_media
 from tidy3d.plugins.autograd import make_curvature_penalty
-from tidy3d.plugins.invdes import PolySlabSet, curvature_penalty, smooth_polygon_vertices
+from tidy3d.plugins.invdes import (
+    PolySlabSet,
+    SelfIntersectionStatus,
+    curvature_penalty,
+    smooth_polygon_vertices,
+)
+from tidy3d.plugins.invdes.self_intersection import (
+    maximize_global_scale,
+    repair_self_intersecting_ring,
+)
 
 
 def make_custom_medium_from_eps(eps_xyz, x, y, z):
@@ -1067,6 +1077,221 @@ def test_polyslab_set_update_keeps_frozen_boundary_vertices_after_smoothing():
     )
 
     np.testing.assert_allclose(updated.ring_vertices[0][0], polyslab_set.ring_vertices[0][0])
+
+
+def test_polyslab_set_update_is_strict_for_self_intersections():
+    solid = td.PolySlab(
+        vertices=np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    polyslab_set = PolySlabSet.from_polyslab(solid)
+
+    broken_ring = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0]], dtype=float)
+
+    with pytest.raises(Exception, match="self-intersecting|holes/islands|valid polygon"):
+        _ = polyslab_set.update(broken_ring.reshape(-1))
+
+
+def test_polyslab_set_update_stays_strict_before_frozen_boundary_restore():
+    solid = td.PolySlab(
+        vertices=np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    polyslab_set = PolySlabSet(
+        solid_polyslabs=(solid,),
+        hole_polyslabs=(),
+        solid_frame_boundary_vertex_mask=(np.array([True, True, True, True]),),
+        hole_frame_boundary_vertex_mask=(),
+        frame_bounds=((0.0, 0.0), (2.0, 2.0)),
+        in_plane_step=float("inf"),
+    )
+
+    broken_ring = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0]], dtype=float)
+
+    with pytest.raises(Exception, match="self-intersecting|holes/islands|valid polygon"):
+        _ = polyslab_set.update(
+            broken_ring.reshape(-1),
+            freeze_boundary=True,
+            respect_bounds=True,
+        )
+
+
+def test_polyslab_set_safe_update_returns_full_update_applied_status():
+    solid = td.PolySlab(
+        vertices=np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    polyslab_set = PolySlabSet.from_polyslab(solid)
+
+    valid_ring = np.asarray(solid.vertices, dtype=float).copy()
+    valid_ring[1] = np.array([1.8, 0.2], dtype=float)
+
+    updated, status = polyslab_set.safe_update(
+        valid_ring.reshape(-1),
+    )
+
+    assert status == SelfIntersectionStatus.FULL_UPDATE_APPLIED
+    np.testing.assert_allclose(np.asarray(updated.ring_vertices[0], dtype=float), valid_ring)
+
+
+def test_polyslab_set_safe_update_repairs_self_intersections():
+    solid = td.PolySlab(
+        vertices=np.array(
+            [
+                [0.0, 0.0],
+                [3.0, 0.0],
+                [3.0, 1.5],
+                [2.0, 1.5],
+                [2.0, 0.5],
+                [1.0, 0.5],
+                [1.0, 1.5],
+                [0.0, 1.5],
+            ],
+            dtype=float,
+        ),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    polyslab_set = PolySlabSet.from_polyslab(solid)
+
+    broken_ring = np.asarray(solid.vertices, dtype=float).copy()
+    broken_ring[3] = np.array([0.75, -0.2], dtype=float)
+    broken_ring[4] = np.array([2.25, 1.7], dtype=float)
+
+    with pytest.raises(Exception, match="self-intersecting|holes/islands|valid polygon"):
+        _ = polyslab_set.update(broken_ring.reshape(-1))
+
+    repaired, status = polyslab_set.safe_update(
+        broken_ring.reshape(-1),
+    )
+    repaired_ring = np.asarray(repaired.ring_vertices[0], dtype=float)
+
+    assert status == SelfIntersectionStatus.CORRECTED_UPDATE_FOUND
+    assert not ShapelyPolygon(broken_ring).is_valid
+    assert ShapelyPolygon(repaired_ring).is_valid
+    assert repaired_ring.shape == broken_ring.shape
+    assert not np.allclose(repaired_ring, np.asarray(solid.vertices, dtype=float))
+    assert not np.allclose(repaired_ring, broken_ring)
+
+
+def test_repair_self_intersecting_ring_repairs_invalid_ring():
+    current_ring = np.array(
+        [
+            [0.0, 0.0],
+            [3.0, 0.0],
+            [3.0, 1.5],
+            [2.0, 1.5],
+            [2.0, 0.5],
+            [1.0, 0.5],
+            [1.0, 1.5],
+            [0.0, 1.5],
+        ],
+        dtype=float,
+    )
+    broken_ring = current_ring.copy()
+    broken_ring[3] = np.array([0.75, -0.2], dtype=float)
+    broken_ring[4] = np.array([2.25, 1.7], dtype=float)
+
+    repaired_ring, status = repair_self_intersecting_ring(
+        current_vertices=current_ring,
+        proposed_vertices=broken_ring,
+        return_status=True,
+    )
+
+    assert status == SelfIntersectionStatus.CORRECTED_UPDATE_FOUND
+    assert ShapelyPolygon(repaired_ring).is_valid
+    assert not np.allclose(repaired_ring, broken_ring)
+
+
+def test_repair_self_intersecting_ring_returns_full_update_status_for_valid_proposal():
+    current_ring = np.array(
+        [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+        dtype=float,
+    )
+    proposed_ring = current_ring.copy()
+    proposed_ring[1] += np.array([0.2, 0.0], dtype=float)
+
+    repaired_ring, status = repair_self_intersecting_ring(
+        current_vertices=current_ring,
+        proposed_vertices=proposed_ring,
+        return_status=True,
+    )
+
+    assert status == SelfIntersectionStatus.FULL_UPDATE_APPLIED
+    np.testing.assert_allclose(repaired_ring, proposed_ring)
+
+
+def test_repair_self_intersecting_ring_returns_no_valid_update_found_status(monkeypatch):
+    current_ring = np.array(
+        [
+            [0.0, 0.0],
+            [3.0, 0.0],
+            [3.0, 1.5],
+            [2.0, 1.5],
+            [2.0, 0.5],
+            [1.0, 0.5],
+            [1.0, 1.5],
+            [0.0, 1.5],
+        ],
+        dtype=float,
+    )
+    broken_ring = current_ring.copy()
+    broken_ring[3] = np.array([0.75, -0.2], dtype=float)
+    broken_ring[4] = np.array([2.25, 1.7], dtype=float)
+
+    monkeypatch.setattr(self_intersection_module, "maximize_subset_scale", lambda **kwargs: None)
+    monkeypatch.setattr(
+        self_intersection_module,
+        "maximize_global_scale",
+        lambda **kwargs: np.asarray(kwargs["base_vertices"], dtype=float),
+    )
+
+    repaired_ring, status = repair_self_intersecting_ring(
+        current_vertices=current_ring,
+        proposed_vertices=broken_ring,
+        return_status=True,
+    )
+
+    assert status == SelfIntersectionStatus.NO_VALID_UPDATE_FOUND
+    np.testing.assert_allclose(repaired_ring, current_ring)
+
+
+def test_maximize_global_scale_handles_nonmonotone_validity():
+    base = np.array(
+        [
+            [1.2824815043874251, 0.20860295040159232],
+            [0.36198170837604166, 1.3222054731367847],
+            [0.27922792626880566, 1.1897762068308817],
+            [-0.036388224889985804, 1.4689768574560198],
+            [-1.5052471223549289, 0.7707125502843278],
+            [-1.086879523266641, -0.12483854865022832],
+            [-0.1696636655822948, -1.4036868389923367],
+            [1.045751968843738, -0.35899116984738183],
+        ],
+        dtype=float,
+    )
+    delta = np.array(
+        [
+            [-1.331213393504364, 2.7774262717321245],
+            [-2.3271424375022076, 0.48069156482852926],
+            [-0.07070907280949208, -2.1025682959341556],
+            [0.9418979889571567, -0.3087833962000466],
+            [1.3892229921846013, 1.4823074771347167],
+            [3.893824708705242, 2.4057503089855055],
+            [-0.6645273082963985, -0.4308825196366675],
+            [1.9793872725968038, 1.1794747153006762],
+        ],
+        dtype=float,
+    )
+
+    repaired = maximize_global_scale(base_vertices=base, delta_vertices=delta, max_trials=10)
+    repaired_scale = (repaired[0, 0] - base[0, 0]) / delta[0, 0]
+
+    assert ShapelyPolygon(repaired).is_valid
+    assert repaired_scale > 0.5
 
 
 def test_polyslab_set_caches_ring_refs(monkeypatch):

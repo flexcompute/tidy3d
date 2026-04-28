@@ -10,10 +10,15 @@ import numpy as npo
 from tidy3d.components.geometry.contour_conversion import (
     dataarray_to_polyslab_data,
     ordered_ring_refs_by_area,
+    smooth_polygon_vertices,
     smooth_polyslabs,
 )
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.structure import polyslabs_to_structures
+from tidy3d.plugins.invdes.self_intersection import (
+    aggregate_self_intersection_statuses,
+    repair_self_intersecting_ring,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -24,6 +29,7 @@ if TYPE_CHECKING:
     from tidy3d.components.medium import AbstractCustomMedium
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Bound2D
+    from tidy3d.plugins.invdes.self_intersection import SelfIntersectionStatus
 
 
 @dataclass(frozen=True)
@@ -243,6 +249,11 @@ class PolySlabSet:
 
     def with_flat_ring_vertices(self, flat_vertices: ArrayFloat1D) -> PolySlabSet:
         """Return a copy from flattened ring-vertex vector."""
+        rings = self._split_flat_ring_vertices(flat_vertices)
+        return self.with_ring_vertices(rings)
+
+    def _split_flat_ring_vertices(self, flat_vertices: ArrayFloat1D) -> list[ArrayFloat2D]:
+        """Split a flat vertex vector into per-ring ``(N_i, 2)`` arrays."""
         flat = np.array(flat_vertices)
         counts = self.ring_vertex_counts
         expected = int(2 * sum(counts))
@@ -257,7 +268,7 @@ class PolySlabSet:
             stop = start + 2 * count
             rings.append(np.reshape(flat[start:stop], (count, 2)))
             start = stop
-        return self.with_ring_vertices(rings)
+        return rings
 
     def clip_to_bounds(self, bounds_xy: Bound2D | None = None) -> PolySlabSet:
         """Hard clip ring vertices to ``((x_min, y_min), (x_max, y_max))``."""
@@ -284,6 +295,49 @@ class PolySlabSet:
             in_plane_step=self.in_plane_step,
         )
 
+    def _prepare_updated_rings(
+        self,
+        new_flat_vertices: ArrayFloat1D,
+        *,
+        freeze_boundary: bool,
+        respect_bounds: bool,
+        smooth_sigma: float | None,
+    ) -> list[ArrayFloat2D]:
+        """Split and preprocess updated rings before validation or repair."""
+        updated_rings = self._split_flat_ring_vertices(new_flat_vertices)
+
+        if smooth_sigma is not None:
+            updated_rings = [
+                smooth_polygon_vertices(np.array(ring_vertices), smooth_sigma)
+                for ring_vertices in updated_rings
+            ]
+
+        if freeze_boundary:
+            updated_rings = [
+                np.where(mask.reshape((-1, 1)), current_ring, updated_ring)
+                for updated_ring, current_ring, mask in zip(
+                    updated_rings,
+                    self.ring_vertices,
+                    self.frame_boundary_vertex_mask,
+                    strict=True,
+                )
+            ]
+
+        if respect_bounds:
+            (x_min, y_min), (x_max, y_max) = self.frame_bounds
+            updated_rings = [
+                np.stack(
+                    [
+                        np.clip(np.array(ring)[:, 0], x_min, x_max),
+                        np.clip(np.array(ring)[:, 1], y_min, y_max),
+                    ],
+                    axis=1,
+                )
+                for ring in updated_rings
+            ]
+
+        return updated_rings
+
     def update(
         self,
         new_flat_vertices: ArrayFloat1D,
@@ -309,6 +363,12 @@ class PolySlabSet:
             Optional cyclic Gaussian smoothing applied to each updated ring before frozen
             boundary coordinates are restored and bounds clipping is applied. ``None`` skips
             smoothing; ``0.0`` is a no-op.
+
+        Notes
+        -----
+        This is the raw update path and preserves the current strict behavior for invalid
+        polygon proposals. Use :meth:`safe_update` for best-effort self-intersection repair
+        plus an explicit repair status.
         """
         flat_vertices = np.array(new_flat_vertices)
         updated = self.with_flat_ring_vertices(flat_vertices)
@@ -324,6 +384,61 @@ class PolySlabSet:
         if respect_bounds:
             updated = updated.clip_to_bounds()
         return updated
+
+    def safe_update(
+        self,
+        new_flat_vertices: ArrayFloat1D,
+        *,
+        freeze_boundary: bool = True,
+        respect_bounds: bool = True,
+        smooth_sigma: float | None = None,
+    ) -> tuple[PolySlabSet, SelfIntersectionStatus]:
+        """Apply flattened vertex updates with best-effort self-intersection repair.
+
+        Parameters
+        ----------
+        new_flat_vertices : ArrayFloat1D
+            Replacement flattened vertex coordinates in the order returned by
+            :meth:`flatten_ring_vertices`.
+        freeze_boundary : bool = True
+            If ``True``, coordinates marked by the frame-boundary mask stay fixed at their
+            current values instead of taking the proposed update.
+        respect_bounds : bool = True
+            If ``True``, clip every updated vertex back into ``frame_bounds`` after applying
+            the update.
+        smooth_sigma : float | None = None
+            Optional cyclic Gaussian smoothing applied to each updated ring before frozen
+            boundary coordinates are restored and bounds clipping is applied. ``None`` skips
+            smoothing; ``0.0`` is a no-op.
+
+        Returns
+        -------
+        tuple[PolySlabSet, SelfIntersectionStatus]
+            The updated polyslab set and a status describing whether the full proposal was
+            applied, a corrected update was found, or no valid corrected update could be found.
+        """
+        updated_rings = self._prepare_updated_rings(
+            new_flat_vertices,
+            freeze_boundary=freeze_boundary,
+            respect_bounds=respect_bounds,
+            smooth_sigma=smooth_sigma,
+        )
+
+        repaired_ring_results = [
+            repair_self_intersecting_ring(
+                current_vertices=current_ring,
+                proposed_vertices=updated_ring,
+                return_status=True,
+            )
+            for current_ring, updated_ring in zip(self.ring_vertices, updated_rings, strict=True)
+        ]
+        repaired_rings = [ring for ring, _ in repaired_ring_results]
+        status = aggregate_self_intersection_statuses(
+            ring_status for _, ring_status in repaired_ring_results
+        )
+
+        updated = self.with_ring_vertices(repaired_rings)
+        return updated, status
 
     def max_edge_length(self) -> float:
         """Maximum edge length over all rings."""
