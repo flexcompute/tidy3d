@@ -2448,8 +2448,42 @@ def test_load_invalid_task_raises(mock_webapi):
         json={"error": "Task not found"},
         status=404,
     )
-    with pytest.raises(WebNotFoundError, match="Resource not found"):
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/health",
+        status=200,
+    )
+    with pytest.raises(WebNotFoundError, match="Resource not found \\(HTTP 404\\)") as exc_info:
         load(INVALID_TASK_ID, replace_existing=True)
+    assert str(exc_info.value) == "Resource not found (HTTP 404)."
+
+
+@responses.activate
+def test_load_invalid_task_404_includes_endpoint_troubleshooting(mock_webapi):
+    """A failed follow-up health check should steer users toward endpoint troubleshooting."""
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{INVALID_TASK_ID}/detail",
+        json={"error": "Task not found"},
+        status=404,
+    )
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/health",
+        status=404,
+    )
+    with pytest.raises(
+        WebNotFoundError,
+        match="Additionally, the API endpoint appears unavailable",
+    ) as exc_info:
+        load(INVALID_TASK_ID, replace_existing=True)
+    assert f"The configured API endpoint is '{Env.current.web_api_endpoint}'." in str(
+        exc_info.value
+    )
+    assert "verify `config.web.api_endpoint` points to the expected Tidy3D API endpoint" in str(
+        exc_info.value
+    )
 
 
 def _fake_load_factory(tmp_root, taskid_to_sim: dict):
