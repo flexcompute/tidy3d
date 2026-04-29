@@ -27,6 +27,7 @@ for recipes and prerequisites.
 
    EMESimulation.mode_simulations
    EMESimulation.propagate
+   EMESimulation.smatrix_in_basis
    EMESimulation.compute_overlaps
    EMESimulation.propagate_from_overlaps
    EMESimulation.stage_cell_modes

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -9,6 +10,7 @@ from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec, PECBoundary
+from tidy3d.components.data.monitor_data import ElectromagneticFieldData, ModeSolverData
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.material.tensor_rotation import (
@@ -60,7 +62,6 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.data.data_array import EMESMatrixDataArray
-    from tidy3d.components.data.monitor_data import ModeSolverData
     from tidy3d.components.grid.grid import Grid
     from tidy3d.components.material.tensor_rotation import EMEAnisotropicMedium
     from tidy3d.components.material.types import StructureMediumType
@@ -2163,7 +2164,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         -------
         :class:`.EMEStageCellModes`
         """
-        from tidy3d.components.data.monitor_data import ModeSolverData
+        # Keep local to avoid ModeSimulationData -> ModeSimulation -> ModeSolver -> EMESimulation cycle.
         from tidy3d.components.mode.data.sim_data import ModeSimulationData
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
@@ -2291,8 +2292,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         interface_overlaps : list[:class:`.EMEStageInterfaceOverlap`]
             One per interface, in the order of :attr:`cell_index_pairs`.
         """
-        import gc
-
         # Fail before doing the per-cell overlap integrals on a sweep type we
         # cannot propagate through later.
         self._raise_if_freq_sweep_local()
@@ -2601,8 +2600,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         -------
         :class:`.EMESMatrixDataset`
         """
-        import gc
-
         from .data.dataset import EMESMatrixDataset
 
         self._raise_if_freq_sweep_local()
@@ -2719,3 +2716,121 @@ class EMESimulation(AbstractYeeGridSimulation):
         """
         cell_overlaps, interface_overlaps = self.compute_overlaps(mode_data)
         return self.propagate_from_overlaps(cell_overlaps, interface_overlaps)
+
+    def smatrix_in_basis(
+        self,
+        smatrix: EMESMatrixDataset,
+        port_modes: tuple[
+            ModeSimulationData | ModeSolverData,
+            ModeSimulationData | ModeSolverData,
+        ],
+        modes1: ElectromagneticFieldData | ModeSolverData | ModeSimulationData | None = None,
+        modes2: ElectromagneticFieldData | ModeSolverData | ModeSimulationData | None = None,
+    ) -> EMESMatrixDataset:
+        """Express a locally propagated S-matrix in another modal basis.
+
+        Pass the mode data for the left and right EME ports, typically
+        ``(mode_data[0], mode_data[-1])`` from the sequence used by
+        :meth:`propagate`. If ``modes1`` or ``modes2`` is ``None``, that port
+        is left unchanged.
+
+        Parameters
+        ----------
+        smatrix : :class:`.EMESMatrixDataset`
+            Device S-matrix in the port-mode basis, as returned by
+            :meth:`propagate`, :meth:`propagate_from_overlaps`, or
+            :meth:`compute_smatrix`.
+        port_modes : tuple[:class:`.ModeSimulationData` | :class:`.ModeSolverData`, ...]
+            Mode results at the two EME ports.
+        modes1, modes2 : :class:`.ElectromagneticFieldData`, :class:`.ModeSolverData`, or
+            :class:`.ModeSimulationData`, optional
+            New modal bases at port 1 and port 2.
+
+        Returns
+        -------
+        :class:`.EMESMatrixDataset`
+            S-matrix in the new basis.
+        """
+        # Keep local to avoid ModeSimulationData -> ModeSimulation -> ModeSolver -> EMESimulation cycle.
+        from tidy3d.components.mode.data.sim_data import ModeSimulationData
+        from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        self._raise_if_freq_sweep_local()
+        self._raise_if_stage_freqs_mismatch(smatrix.S11.f.values, "S-matrix")
+
+        if modes1 is None and modes2 is None:
+            return smatrix
+
+        if len(port_modes) != 2:
+            raise ValidationError(f"Expected two port mode data entries, got {len(port_modes)}.")
+
+        check_tidy3d_extras_licensed_feature("local_eme")
+        from tidy3d_extras.eme import smatrix_in_basis as _extras_smatrix_in_basis
+
+        virtual_indices = self.eme_grid_spec.virtual_cell_indices
+        port_cell_1 = virtual_indices[0]
+        port_cell_2 = virtual_indices[-1]
+        port_modes1, port_modes2 = port_modes
+
+        def _filter_port(
+            modes: ModeSolverData | ModeSimulationData, cell_index: int, name: str
+        ) -> ModeSolverData:
+            filtered = self.stage_cell_modes(modes, cell_index=cell_index).modes
+            sm_axis = (smatrix.S11 if name == "port 1" else smatrix.S22).mode_index_in
+            sm_inds = [int(i) for i in sm_axis.values]
+            fm_inds = [int(i) for i in filtered.n_complex.mode_index.values]
+            missing_inds = [i for i in sm_inds if i not in fm_inds]
+            if missing_inds:
+                raise ValidationError(
+                    f"Filtered mode indices for {name} ({fm_inds}) do not match the "
+                    f"S-matrix port axis ({sm_inds}); ensure 'smatrix' and "
+                    "'port_modes' came from the same propagation."
+                )
+            if fm_inds != sm_inds:
+                update_dict = {
+                    key: field.sel(mode_index=sm_inds)
+                    for key, field in filtered.field_components.items()
+                }
+                update_dict["n_complex"] = filtered.n_complex.sel(mode_index=sm_inds)
+                for attr, value in filtered._grid_correction_dict.items():
+                    if np.isscalar(value):
+                        update_dict[attr] = value
+                    else:
+                        update_dict[attr] = value.sel(mode_index=sm_inds)
+                filtered = filtered.updated_copy(
+                    **update_dict,
+                    deep=False,
+                    validate=False,
+                )
+            return filtered
+
+        port_modes1_for_kernel = (
+            _filter_port(port_modes1, port_cell_1, "port 1") if modes1 is not None else port_modes1
+        )
+        port_modes2_for_kernel = (
+            _filter_port(port_modes2, port_cell_2, "port 2") if modes2 is not None else port_modes2
+        )
+
+        def _unwrap_new(
+            modes: ElectromagneticFieldData | ModeSolverData | ModeSimulationData | None,
+            name: str,
+        ) -> ElectromagneticFieldData | ModeSolverData | None:
+            if modes is None:
+                return None
+            if isinstance(modes, ModeSimulationData):
+                return modes.modes_raw
+            if isinstance(modes, (ElectromagneticFieldData, ModeSolverData)):
+                return modes
+            raise ValidationError(
+                f"'{name}' must be ElectromagneticFieldData, ModeSolverData, "
+                f"or ModeSimulationData, "
+                f"got {type(modes).__name__}."
+            )
+
+        return _extras_smatrix_in_basis(
+            smatrix=smatrix,
+            port_modes1=port_modes1_for_kernel,
+            port_modes2=port_modes2_for_kernel,
+            new_modes1=_unwrap_new(modes1, "modes1"),
+            new_modes2=_unwrap_new(modes2, "modes2"),
+        )

@@ -6,7 +6,7 @@ import pytest
 from matplotlib import pyplot as plt
 
 import tidy3d as td
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
@@ -2638,6 +2638,101 @@ def _mda(data, freqs, nm0, nm1):
     )
 
 
+def _local_eme_basis_modes(sim, cell_index, name, num_modes=4):
+    """Build real ModeSolverData on an EME cell plane for smatrix_in_basis tests."""
+    plane = sim.eme_grid.mode_planes[cell_index]
+    mode_index = np.arange(num_modes)
+    freqs = list(sim.freqs)
+    normal_dim = "xyz"[sim.axis]
+    plane_coord = plane.center[sim.axis]
+    monitor = td.ModeSolverMonitor(
+        size=plane.size,
+        center=plane.center,
+        freqs=freqs,
+        mode_spec=td.ModeSpec(num_modes=num_modes),
+        name=name,
+        colocate=True,
+        use_colocated_integration=True,
+    )
+    grid_boundaries = {"x": [-0.5, 0.5], "y": [-0.5, 0.5], "z": [-0.5, 0.5]}
+    grid_boundaries[normal_dim] = [plane_coord]
+    field_coords = {"x": [0.0], "y": [0.0], "z": [0.0]}
+    field_coords[normal_dim] = [plane_coord]
+    grid = td.Grid(
+        boundaries=td.Coords(
+            **grid_boundaries,
+        )
+    )
+    coords = {
+        **field_coords,
+        "f": freqs,
+        "mode_index": mode_index,
+    }
+
+    def field(values):
+        values = np.asarray(values, dtype=np.complex128)
+        data = np.broadcast_to(
+            values.reshape(1, 1, 1, 1, num_modes),
+            (1, 1, 1, len(freqs), num_modes),
+        ).copy()
+        return td.ScalarModeFieldDataArray(data, coords=coords)
+
+    values = np.arange(1, num_modes + 1, dtype=np.complex128)
+    zeros = np.zeros(num_modes, dtype=np.complex128)
+    n_complex = td.ModeIndexDataArray(
+        np.ones((len(freqs), num_modes), dtype=np.complex128),
+        coords={"f": freqs, "mode_index": mode_index},
+    )
+    return td.ModeSolverData(
+        monitor=monitor,
+        Ex=field(values),
+        Ey=field(values + 1),
+        Ez=field(zeros),
+        Hx=field(values + 2),
+        Hy=field(values + 3),
+        Hz=field(zeros),
+        n_complex=n_complex,
+        grid_expanded=grid,
+    )
+
+
+def test_smatrix_in_basis_allows_truncated_mode_sweep_port_axes():
+    """Mode-sweep S-matrix axes may be a valid prefix of solved port modes."""
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    sim = make_local_eme_sim(
+        num_cells=2,
+        num_modes=4,
+        sweep_spec=td.EMEModeSweep(num_modes=[2, 3]),
+    )
+    port_modes1 = _local_eme_basis_modes(sim, 0, "modes_in")
+    port_modes2 = _local_eme_basis_modes(sim, 1, "modes_out")
+    freqs = list(sim.freqs)
+    smatrix = td.EMESMatrixDataset(
+        S11=_mda(np.zeros((len(freqs), 3, 3), dtype=complex), sim.freqs, 3, 3),
+        S12=_mda(np.zeros((len(freqs), 3, 3), dtype=complex), sim.freqs, 3, 3),
+        S21=_mda(np.zeros((len(freqs), 3, 3), dtype=complex), sim.freqs, 3, 3),
+        S22=_mda(np.zeros((len(freqs), 3, 3), dtype=complex), sim.freqs, 3, 3),
+    )
+
+    result = sim.smatrix_in_basis(
+        smatrix,
+        (port_modes1, port_modes2),
+        modes1=port_modes1,
+        modes2=port_modes2,
+    )
+
+    assert result.S11.shape == (len(freqs), 1, 4, 4)
+    assert result.S12.shape == (len(freqs), 1, 4, 4)
+    np.testing.assert_array_equal(result.S11.mode_index_in.values, [0, 1, 2, 3])
+    np.testing.assert_array_equal(result.S22.mode_index_in.values, [0, 1, 2, 3])
+
+
 def make_local_eme_sim(num_cells=3, num_modes=4, sweep_spec=None, constraint="passive"):
     """Create a small EMESimulation for local propagation testing."""
     lambda0 = 1.55
@@ -2659,6 +2754,113 @@ def make_local_eme_sim(num_cells=3, num_modes=4, sweep_spec=None, constraint="pa
         freqs=[freq0],
         sweep_spec=sweep_spec,
         constraint=constraint,
+    )
+
+
+def _mixed_mode_basis(modes, mixing, mode_index_start=0):
+    """Return a ModeSolverData copy whose fields are linear combinations of modes."""
+    mixing = np.asarray(mixing, dtype=complex)
+    new_mode_index = np.arange(mode_index_start, mode_index_start + mixing.shape[0])
+
+    mixed_fields = {}
+    for field_name, field_data in modes.field_components.items():
+        data = np.einsum("...p,ap->...a", field_data.to_numpy(), mixing)
+        coords = {dim: field_data.coords[dim].to_numpy() for dim in field_data.dims}
+        coords["mode_index"] = new_mode_index
+        mixed_fields[field_name] = type(field_data)(data, coords=coords)
+
+    n_complex = modes.n_complex
+    n_data = np.tile(n_complex.to_numpy()[:, :1], (1, mixing.shape[0]))
+    n_coords = {"f": n_complex.f.to_numpy(), "mode_index": new_mode_index}
+    mixed_n_complex = type(n_complex)(n_data, coords=n_coords)
+
+    return modes.updated_copy(
+        **mixed_fields,
+        n_complex=mixed_n_complex,
+        grid_primal_correction=1,
+        grid_dual_correction=1,
+        deep=False,
+        validate=False,
+    )
+
+
+def _single_field_basis(modes, mode_index=0, name="field_basis"):
+    """Return a single-vector field basis without a mode_index coordinate."""
+    fields = {
+        key: field.isel(mode_index=mode_index, drop=True)
+        for key, field in modes.field_components.items()
+    }
+    monitor = td.FieldMonitor(
+        center=modes.monitor.center,
+        size=(td.inf, td.inf, 0),
+        freqs=list(modes.monitor.freqs),
+        name=name,
+    )
+    return td.components.data.monitor_data.ElectromagneticFieldData(
+        **fields,
+        monitor=monitor,
+        grid_expanded=modes.grid_expanded,
+    )
+
+
+def _smatrix_block_with_sweep(block):
+    """Return an S-matrix block as (f, sweep_index, mode_index_out, mode_index_in)."""
+    if "sweep_index" in block.dims:
+        return block.transpose("f", "sweep_index", "mode_index_out", "mode_index_in").to_numpy()
+    return block.transpose("f", "mode_index_out", "mode_index_in").to_numpy()[:, None, :, :]
+
+
+def _overlap_block(modes, port_modes, freqs, port_mode_index):
+    overlaps = modes.outer_dot(port_modes, conjugate=False, bidirectional=True).sel(
+        f=freqs,
+        mode_index_1=port_mode_index,
+    )
+    if "mode_index_0" not in overlaps.dims:
+        overlaps = overlaps.expand_dims(dim={"mode_index_0": [0]}, axis=1)
+    return overlaps.transpose("f", "mode_index_0", "mode_index_1").to_numpy()
+
+
+def _assert_smatrix_in_basis_matches_outer_dot_oracle(
+    sim,
+    smatrix,
+    actual,
+    port_modes,
+    modes1,
+    modes2,
+):
+    """Check local smatrix_in_basis against the public overlap contraction formula."""
+    port_cell_1 = sim.eme_grid_spec.virtual_cell_indices[0]
+    port_cell_2 = sim.eme_grid_spec.virtual_cell_indices[-1]
+    port_modes1 = sim.stage_cell_modes(port_modes[0], cell_index=port_cell_1).modes
+    port_modes2 = sim.stage_cell_modes(port_modes[1], cell_index=port_cell_2).modes
+
+    freqs = smatrix.S11.f.to_numpy()
+    mi1 = smatrix.S11.mode_index_in.to_numpy()
+    mi2 = smatrix.S22.mode_index_in.to_numpy()
+    O1 = _overlap_block(modes1, port_modes1, freqs, mi1)
+    O2 = _overlap_block(modes2, port_modes2, freqs, mi2)
+
+    S11 = _smatrix_block_with_sweep(smatrix.S11)
+    S12 = _smatrix_block_with_sweep(smatrix.S12)
+    S21 = _smatrix_block_with_sweep(smatrix.S21)
+    S22 = _smatrix_block_with_sweep(smatrix.S22)
+
+    expected11 = np.einsum("fap,fspq,fbq->fsab", O1, S11, O1)
+    expected12 = np.einsum("fap,fspq,fbq->fsab", O1, S12, O2)
+    expected21 = np.einsum("fap,fspq,fbq->fsab", O2, S21, O1)
+    expected22 = np.einsum("fap,fspq,fbq->fsab", O2, S22, O2)
+
+    np.testing.assert_allclose(
+        _smatrix_block_with_sweep(actual.S11), expected11, rtol=1e-10, atol=1e-12
+    )
+    np.testing.assert_allclose(
+        _smatrix_block_with_sweep(actual.S12), expected12, rtol=1e-10, atol=1e-12
+    )
+    np.testing.assert_allclose(
+        _smatrix_block_with_sweep(actual.S21), expected21, rtol=1e-10, atol=1e-12
+    )
+    np.testing.assert_allclose(
+        _smatrix_block_with_sweep(actual.S22), expected22, rtol=1e-10, atol=1e-12
     )
 
 
@@ -2972,6 +3174,50 @@ def test_eme_local_staged_vs_oneshot():
     np.testing.assert_allclose(sm_oneshot.S21.values, sm_staged.S21.values, rtol=1e-12)
     np.testing.assert_allclose(sm_oneshot.S11.values, sm_staged.S11.values, atol=1e-14)
 
+    port_modes = (mode_data[0], mode_data[-1])
+    mixed1 = _mixed_mode_basis(
+        mode_data[0].modes_raw,
+        [[1.0, 0.25, -0.1], [0.2j, 0.8, 0.3]],
+        mode_index_start=10,
+    )
+    mixed2 = _mixed_mode_basis(
+        mode_data[-1].modes_raw,
+        [[0.7, -0.2j, 0.15], [-0.1, 1.1, 0.25j]],
+        mode_index_start=20,
+    )
+    rebased_mixed = sim.smatrix_in_basis(sm_oneshot, port_modes, modes1=mixed1, modes2=mixed2)
+    _assert_smatrix_in_basis_matches_outer_dot_oracle(
+        sim, sm_oneshot, rebased_mixed, port_modes, mixed1, mixed2
+    )
+    np.testing.assert_array_equal(rebased_mixed.S11.mode_index_in.values, [10, 11])
+    np.testing.assert_array_equal(rebased_mixed.S22.mode_index_in.values, [20, 21])
+
+    field1 = _single_field_basis(mode_data[0].modes_raw, mode_index=0, name="field_basis_1")
+    rebased_field = sim.smatrix_in_basis(sm_oneshot, port_modes, modes1=field1, modes2=mixed2)
+    _assert_smatrix_in_basis_matches_outer_dot_oracle(
+        sim, sm_oneshot, rebased_field, port_modes, field1, mixed2
+    )
+    assert "mode_index_in" not in rebased_field.S11.coords
+    assert "mode_index_out" not in rebased_field.S11.coords
+    assert "mode_index_in" not in rebased_field.S21.coords
+
+    raw0 = mode_data[0].modes_raw
+    nc_vals = raw0.n_complex.values.copy()
+    nc_vals[..., 1] = complex(np.nan, np.nan)
+    new_nc = type(raw0.n_complex)(nc_vals, coords=dict(raw0.n_complex.coords))
+    mode_data_nan = [
+        mode_data[0].updated_copy(modes_raw=raw0.updated_copy(n_complex=new_nc)),
+        *mode_data[1:],
+    ]
+    smatrix_nan = sim.propagate(mode_data_nan)
+    assert smatrix_nan.S11.sizes["mode_index_in"] == 2
+    filtered0 = sim.stage_cell_modes(mode_data_nan[0], cell_index=0).modes
+    rebased_nan = sim.smatrix_in_basis(
+        smatrix_nan, (mode_data_nan[0], mode_data_nan[-1]), modes1=filtered0
+    )
+    assert rebased_nan.S11.sizes["mode_index_in"] == 2
+    assert np.isfinite(rebased_nan.S21.values).any()
+
     # Periodicity sweep: virtual cell indices repeat (e.g. [0, 1, 0, 1]),
     # exercising dict-based lookup by cell_index rather than list position.
     lambda0 = 1.55
@@ -3057,14 +3303,10 @@ def test_eme_propagate_rejects_freq_sweep():
 
 
 def test_eme_stack_sweep_points_nan_pads_ragged_modes():
-    """Stacking per-sweep-point S-matrix blocks under EMEModeSweep must NaN-pad
-    missing mode entries, matching the backend convention across every other
-    EME data array (fields, flux, n_complex, S-matrix, coeffs) and letting
-    ``smatrix_in_basis`` detect truncated-away modes via ``np.isnan``."""
+    """Stacked mode-sweep blocks preserve NaN padding for missing mode entries."""
     from tidy3d.components.eme.simulation import _stack_sweep_points
 
     freqs = [2e14]
-    # Three sweep points with varying mode counts, matching EMEModeSweep(num_modes=[1,2,4]).
     per_point_blocks = []
     for si, n in enumerate([1, 2, 4]):
         block = np.full((1, 1, n, n), fill_value=complex(si + 1, 0))
@@ -3082,25 +3324,204 @@ def test_eme_stack_sweep_points_nan_pads_ragged_modes():
 
     stacked = _stack_sweep_points(per_point_blocks)
 
-    # Shape: (f, sweep_index=3, mode_index_out=4, mode_index_in=4).
     assert stacked.shape == (1, 3, 4, 4)
 
-    # Sweep point 0 (num_modes=1): only [0,0] is filled with 1; the other 15 slots are NaN.
     sweep0 = stacked.isel(sweep_index=0, f=0).values
     assert sweep0[0, 0] == complex(1, 0)
     nan0 = np.isnan(sweep0)
     assert nan0.sum() == 15 and not nan0[0, 0]
 
-    # Sweep point 1 (num_modes=2): top-left 2x2 filled with 2; rest NaN.
     sweep1 = stacked.isel(sweep_index=1, f=0).values
     assert np.all(sweep1[:2, :2] == complex(2, 0))
     assert np.all(np.isnan(sweep1[2:, :]))
     assert np.all(np.isnan(sweep1[:, 2:]))
 
-    # Sweep point 2 (num_modes=4): full 4x4 filled with 3, no NaN.
     sweep2 = stacked.isel(sweep_index=2, f=0).values
     assert np.all(sweep2 == complex(3, 0))
     assert not np.isnan(sweep2).any()
+
+
+def test_eme_sim_data_smatrix_in_basis_preserves_pass_through_ragged_axis():
+    """Partial rebasing under EMEModeSweep keeps NaN-padded pass-through port axes."""
+    sim = make_eme_sim().updated_copy(
+        sweep_spec=td.EMEModeSweep(num_modes=[2, 5]),
+        monitors=[],
+    )
+    smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=2)
+    nan = complex(np.nan, np.nan)
+
+    def _updated_smatrix_array(data_array, values):
+        return data_array.copy(data=values)
+
+    S12_values = smatrix.S12.values.copy()
+    S21_values = smatrix.S21.values.copy()
+    S22_values = smatrix.S22.values.copy()
+    S12_values[:, 0, :, 2:] = nan
+    S21_values[:, 0, 2:, :] = nan
+    S22_values[:, 0, 2:, :] = nan
+    S22_values[:, 0, :, 2:] = nan
+    S12_values[:, 1, :, 4:] = nan
+    S21_values[:, 1, 4:, :] = nan
+    S22_values[:, 1, 4:, :] = nan
+    S22_values[:, 1, :, 4:] = nan
+    smatrix = td.EMESMatrixDataset(
+        S11=smatrix.S11,
+        S12=_updated_smatrix_array(smatrix.S12, S12_values),
+        S21=_updated_smatrix_array(smatrix.S21, S21_values),
+        S22=_updated_smatrix_array(smatrix.S22, S22_values),
+    )
+    sim_data = td.EMESimulationData(
+        simulation=sim,
+        data=[],
+        smatrix=smatrix,
+        port_modes_raw=_get_eme_port_modes(num_sweep=2),
+    )
+
+    rebased = sim_data.smatrix_in_basis(modes1=_get_mode_solver_data(num_modes=1))
+
+    assert rebased.S12.shape == (1, 2, 1, 5)
+    assert rebased.S21.shape == (1, 2, 5, 1)
+    assert rebased.S22.shape == (1, 2, 5, 5)
+    np.testing.assert_array_equal(rebased.S12.mode_index_in.values, np.arange(5))
+    assert np.isnan(rebased.S22.isel(f=0, sweep_index=0, mode_index_in=4, mode_index_out=4).item())
+    assert np.isfinite(
+        rebased.S22.isel(f=0, sweep_index=1, mode_index_in=0, mode_index_out=0).item()
+    )
+
+
+def test_eme_sim_data_smatrix_in_basis_partial_ragged_matches_oracle():
+    """Partial rebasing under EMEModeSweep matches an explicit per-sweep oracle."""
+    sim = make_eme_sim().updated_copy(
+        sweep_spec=td.EMEModeSweep(num_modes=[2, 5]),
+        monitors=[],
+    )
+    smatrix_template = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=2)
+
+    def _deterministic_block(block, offset):
+        values = offset + np.arange(block.size, dtype=float).reshape(block.shape)
+        return block.copy(data=values + 1j * (values + 0.25))
+
+    smatrix = td.EMESMatrixDataset(
+        S11=_deterministic_block(smatrix_template.S11, 100),
+        S12=_deterministic_block(smatrix_template.S12, 200),
+        S21=_deterministic_block(smatrix_template.S21, 300),
+        S22=_deterministic_block(smatrix_template.S22, 400),
+    )
+
+    nan = complex(np.nan, np.nan)
+    S11_values = smatrix.S11.values.copy()
+    S12_values = smatrix.S12.values.copy()
+    S21_values = smatrix.S21.values.copy()
+    S22_values = smatrix.S22.values.copy()
+    # Sweep point 0 keeps only modes 0 and 1 on both ports. Sweep point 1
+    # keeps all five modes, giving a ragged mode sweep after stacking.
+    S11_values[:, 0, 2:, :] = nan
+    S11_values[:, 0, :, 2:] = nan
+    S12_values[:, 0, 2:, :] = nan
+    S12_values[:, 0, :, 2:] = nan
+    S21_values[:, 0, 2:, :] = nan
+    S21_values[:, 0, :, 2:] = nan
+    S22_values[:, 0, 2:, :] = nan
+    S22_values[:, 0, :, 2:] = nan
+    smatrix = td.EMESMatrixDataset(
+        S11=smatrix.S11.copy(data=S11_values),
+        S12=smatrix.S12.copy(data=S12_values),
+        S21=smatrix.S21.copy(data=S21_values),
+        S22=smatrix.S22.copy(data=S22_values),
+    )
+    sim_data = td.EMESimulationData(
+        simulation=sim,
+        data=[],
+        smatrix=smatrix,
+        port_modes_raw=_get_eme_port_modes(num_sweep=2),
+    )
+    modes1 = _get_mode_solver_data(num_modes=1)
+
+    rebased = sim_data.smatrix_in_basis(modes1=modes1)
+    mode_spec1 = modes1.monitor.mode_spec
+    interp_spec1 = mode_spec1.interp_spec if mode_spec1 is not None else None
+    freqs = rebased.S11.f.values
+    port_modes1 = sim_data.port_modes_list_sweep[0][0]
+
+    for sweep_index in rebased.S11.sweep_index.values:
+        S11 = smatrix.S11.sel(f=freqs, sweep_index=sweep_index)
+        S12 = smatrix.S12.sel(f=freqs, sweep_index=sweep_index)
+        S21 = smatrix.S21.sel(f=freqs, sweep_index=sweep_index)
+        S22 = smatrix.S22.sel(f=freqs, sweep_index=sweep_index)
+
+        diag1_nan = np.isnan(np.diagonal(S11.to_numpy(), axis1=-2, axis2=-1)).any(axis=0)
+        keep_inds1 = np.where(~diag1_nan)[0]
+        keep_mode_inds1 = [S11.mode_index_in[i] for i in keep_inds1]
+
+        S11 = S11.sel(mode_index_in=keep_mode_inds1, mode_index_out=keep_mode_inds1)
+        S12 = S12.sel(mode_index_out=keep_mode_inds1)
+        S21 = S21.sel(mode_index_in=keep_mode_inds1)
+
+        O1 = modes1.outer_dot(port_modes1, conjugate=False)
+        if interp_spec1 is not None:
+            O1 = modes1._interp_dataarray_in_freq(O1, freqs=freqs, method=interp_spec1.method)
+        O1 = O1.sel(f=freqs, mode_index_1=keep_mode_inds1)
+
+        O1out = O1.rename(mode_index_0="mode_index_out", mode_index_1="mode_index_out_old")
+        O1in = O1.rename(mode_index_0="mode_index_in", mode_index_1="mode_index_in_old")
+        expected11 = (
+            O1out.dot(
+                S11.rename(
+                    mode_index_in="mode_index_in_old",
+                    mode_index_out="mode_index_out_old",
+                ),
+                dim="mode_index_out_old",
+            )
+            .dot(O1in, dim="mode_index_in_old")
+            .transpose("f", "mode_index_out", "mode_index_in")
+        )
+        expected12 = O1out.dot(
+            S12.rename(mode_index_out="mode_index_out_old"),
+            dim="mode_index_out_old",
+        ).transpose("f", "mode_index_out", "mode_index_in")
+        expected21 = (
+            S21.rename(mode_index_in="mode_index_in_old")
+            .dot(O1in, dim="mode_index_in_old")
+            .transpose("f", "mode_index_out", "mode_index_in")
+        )
+        expected22 = S22.transpose("f", "mode_index_out", "mode_index_in")
+
+        np.testing.assert_allclose(
+            rebased.S11.sel(sweep_index=sweep_index)
+            .transpose("f", "mode_index_out", "mode_index_in")
+            .values,
+            expected11.values,
+            rtol=1e-12,
+            atol=1e-12,
+            equal_nan=True,
+        )
+        np.testing.assert_allclose(
+            rebased.S12.sel(sweep_index=sweep_index)
+            .transpose("f", "mode_index_out", "mode_index_in")
+            .values,
+            expected12.values,
+            rtol=1e-12,
+            atol=1e-12,
+            equal_nan=True,
+        )
+        np.testing.assert_allclose(
+            rebased.S21.sel(sweep_index=sweep_index)
+            .transpose("f", "mode_index_out", "mode_index_in")
+            .values,
+            expected21.values,
+            rtol=1e-12,
+            atol=1e-12,
+            equal_nan=True,
+        )
+        np.testing.assert_allclose(
+            rebased.S22.sel(sweep_index=sweep_index)
+            .transpose("f", "mode_index_out", "mode_index_in")
+            .values,
+            expected22.values,
+            rtol=1e-12,
+            atol=1e-12,
+            equal_nan=True,
+        )
 
 
 @pytest.mark.numerical
@@ -3116,5 +3537,6 @@ def test_eme_local_mode_sweep():
     assert smatrix.S21.shape[1] == 3
     for si in range(3):
         T = abs(smatrix.S21.isel(sweep_index=si).values.squeeze()) ** 2
-        # Truncated-away modes are NaN-padded (see test_eme_stack_sweep_points_nan_pads_ragged_modes).
+        # Truncated-away modes are NaN-padded
+        # (see test_eme_stack_sweep_points_nan_pads_ragged_modes).
         assert np.nansum(T) > 0
