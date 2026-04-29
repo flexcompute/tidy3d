@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from pydantic import Field, PositiveFloat
@@ -25,7 +25,8 @@ from .types import TYPE_TAG_STR, Direction, FreqArray
 from .validators import assert_plane, warn_backward_waist_distance
 
 if TYPE_CHECKING:
-    from typing import Callable, Literal
+    from collections.abc import Callable
+    from typing import Literal
 
     from numpy.typing import NDArray
 
@@ -161,7 +162,7 @@ class BeamProfile(Box):
         grid: Grid,
         background_n: NDArray,
         colocate: bool = True,
-        field_components: Optional[tuple[str, ...]] = None,
+        field_components: tuple[str, ...] | None = None,
     ) -> dict[str, ScalarFieldDataArray]:
         """Compute the field data for each field component on a grid for the beam.
         A dictionary of the scalar field data arrays is returned, not yet packaged as ``FieldData``.
@@ -574,7 +575,7 @@ class PlaneWaveBeamProfile(BeamProfile):
     :class:`.PlaneWave`
     """
 
-    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = Field(
+    angular_spec: FixedInPlaneKSpec | FixedAngleSpec = Field(
         FixedAngleSpec(),
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
@@ -589,7 +590,7 @@ class PlaneWaveBeamProfile(BeamProfile):
         "switch between waves with fixed angle and fixed in-plane k.",
     )
 
-    angle_theta_frequency: Optional[float] = Field(
+    angle_theta_frequency: float | None = Field(
         None,
         title="Frequency at Which Angle Theta is Defined",
         description="Frequency for which ``angle_theta`` is set. This only has an effect for "

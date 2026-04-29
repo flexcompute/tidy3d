@@ -55,7 +55,7 @@ def test_time_inds():
 def test_downsampled():
     M = td.FieldMonitor(size=(1, 1, 1), name="f", freqs=[1e12], interval_space=(1, 2, 3))
     num_cells = (10, 10, 10)
-    downsampled_num_cells = a, b, c = M.downsampled_num_cells(num_cells=(10, 10, 10))
+    downsampled_num_cells = _a, _b, _c = M.downsampled_num_cells(num_cells=(10, 10, 10))
     assert downsampled_num_cells != num_cells
 
 
@@ -508,7 +508,7 @@ def test_surface_monitors():
     # monitor doesn't overlap any pec structure
     with pytest.raises(
         pd.ValidationError,
-        match="Surface monitor surface does not cross any PEC or LossyMetalMedium structures.",
+        match=r"Surface monitor surface does not cross any PEC or LossyMetalMedium structures.",
     ):
         surf_mnt = td.SurfaceFieldMonitor(
             size=(0.2, 1, 1), center=(0.8, 0, 0), freqs=[td.C_0], name="surface"
@@ -523,13 +523,13 @@ def test_surface_monitors():
         )
 
     # monitor must be volumetric
-    with pytest.raises(pd.ValidationError, match="must be volumetric"):
+    with pytest.raises(pd.ValidationError, match=r"must be volumetric"):
         surf_mnt = td.SurfaceFieldMonitor(size=(1, 0, 1), freqs=[td.C_0], name="surface")
 
     # surface monitors are not allowed in 2D simulations
     with pytest.raises(
         pd.ValidationError,
-        match="Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case.",
+        match=r"Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case.",
     ):
         surf_mnt = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
         _ = td.Simulation(

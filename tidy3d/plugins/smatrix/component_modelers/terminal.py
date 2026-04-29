@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
@@ -179,7 +179,7 @@ def _pack_label_centers_1d(
 
 
 def _inject_fit_freqs_into_lumped_elements(
-    lumped_elements: list, freqs: Union[tuple[float, ...], np.ndarray, list[float]]
+    lumped_elements: list, freqs: tuple[float, ...] | np.ndarray | list[float]
 ) -> list:
     """Inject frequency range into lumped elements that need it for structure conversion.
 
@@ -265,14 +265,14 @@ class DirectivityMonitorSpec(MicrowaveBaseModel):
     ... )
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Monitor Name",
         description=f"Optional name for the auto-generated monitor. "
         f"If not provided, defaults to '{AUTO_RADIATION_MONITOR_NAME}_' + index of the monitor in the list of radiation monitors.",
     )
 
-    freqs: Optional[tuple[NonNegativeInt, ...]] = Field(
+    freqs: tuple[NonNegativeInt, ...] | None = Field(
         None,
         title="Frequencies",
         description="Frequencies to obtain fields at. If not provided, uses all frequencies "
@@ -300,7 +300,7 @@ class DirectivityMonitorSpec(MicrowaveBaseModel):
         f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_PHI}.",
     )
 
-    custom_origin: Optional[Coordinate] = Field(
+    custom_origin: Coordinate | None = Field(
         (0, 0, 0),
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -374,7 +374,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "For each port, one simulation will be run with a source that is associated with the port.",
     )
 
-    run_only: Optional[tuple[NetworkIndex, ...]] = Field(
+    run_only: tuple[NetworkIndex, ...] | None = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -393,7 +393,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     radiation_monitors: tuple[
-        discriminated_union(Union[DirectivityMonitor, DirectivityMonitorSpec]), ...
+        discriminated_union(DirectivityMonitor | DirectivityMonitorSpec), ...
     ] = Field(
         (),
         title="Radiation Monitors",
@@ -420,13 +420,13 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'. Default is 'pseudo'.",
     )
 
-    low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = Field(
+    low_freq_smoothing: ModelerLowFrequencySmoothingSpec | None = Field(
         None,
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the terminal component simulation.",
     )
 
-    structure_priority_mode: Optional[PriorityMode] = Field(
+    structure_priority_mode: PriorityMode | None = Field(
         "conductor",
         title="Structure Priority Setting",
         description="If not `None`, override the structure priority mode in the simulation. "
@@ -454,9 +454,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @add_ax_if_none
     def plot_sim(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs: Any,
     ) -> Ax:
@@ -489,9 +489,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @add_ax_if_none
     def plot_sim_grid(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs: Any,
     ) -> Ax:
@@ -524,9 +524,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @add_ax_if_none
     def plot_sim_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs: Any,
     ) -> Ax:
@@ -560,9 +560,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @add_ax_if_none
     def plot_port(
         self,
-        port: Union[str, TerminalPortType],
+        port: str | TerminalPortType,
         ax: Ax = None,
-        label_font_size: Optional[float] = None,
+        label_font_size: float | None = None,
         **kwargs: Any,
     ) -> Ax:
         """Plot a :class:`.Simulation` on the port plane.
@@ -1024,7 +1024,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         )
 
     def _plot_terminal_wave_port(
-        self, ax: Ax, port: TerminalWavePort, label_font_size: Optional[float] = None
+        self, ax: Ax, port: TerminalWavePort, label_font_size: float | None = None
     ) -> Ax:
         """Plot bounding boxes and labels for TerminalWavePort terminals and differential pairs.
 
@@ -1175,7 +1175,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
             if path_spec is not None:
                 bounds_3d = path_spec.bounds
-                _, (xmin, ymin) = Box.pop_axis(bounds_3d[0], axis=injection_axis)
+                _, (xmin, _ymin) = Box.pop_axis(bounds_3d[0], axis=injection_axis)
                 _, (xmax, ymax) = Box.pop_axis(bounds_3d[1], axis=injection_axis)
                 mode_box_ymax.append(ymax)
                 mode_items.append(
@@ -1190,9 +1190,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
         return mode_items, mode_box_ymax
 
-    def _plot_wave_port(
-        self, ax: Ax, port: WavePort, label_font_size: Optional[float] = None
-    ) -> Ax:
+    def _plot_wave_port(self, ax: Ax, port: WavePort, label_font_size: float | None = None) -> Ax:
         """Plot impedance spec overlays for a WavePort.
 
         For ``AutoImpedanceSpec``, draws orange dashed rectangles around detected conductors.
@@ -1290,8 +1288,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @staticmethod
     def network_index(
         port: TerminalPortType,
-        mode_index: Optional[int] = None,
-        terminal_label: Optional[str] = None,
+        mode_index: int | None = None,
+        terminal_label: str | None = None,
     ) -> NetworkIndex:
         """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort`,
         or a ``terminal_label`` when the port is a :class:`.TerminalWavePort`, to a unique string specifier.
@@ -1980,7 +1978,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @staticmethod
     def _check_grid_size_at_ports(
-        simulation: Simulation, ports: list[Union[LumpedPort, CoaxialLumpedPort]]
+        simulation: Simulation, ports: list[LumpedPort | CoaxialLumpedPort]
     ) -> None:
         """Raises :class:`.SetupError` if the grid is too coarse at port locations"""
         yee_grid = simulation.grid.yee

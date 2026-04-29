@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from enum import Enum
 from math import isclose
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import shapely
@@ -43,22 +43,22 @@ if TYPE_CHECKING:
         PlanePosition,
     )
 
-GeometryType = Union[
-    base.Box,
-    base.Transformed,
-    base.ClipOperation,
-    base.GeometryGroup,
-    base.GeometryArray,
-    primitives.Sphere,
-    primitives.Cylinder,
-    polyslab.PolySlab,
-    polyslab.ComplexPolySlabBase,
-    mesh.TriangleMesh,
-]
+GeometryType = (
+    base.Box
+    | base.Transformed
+    | base.ClipOperation
+    | base.GeometryGroup
+    | base.GeometryArray
+    | primitives.Sphere
+    | primitives.Cylinder
+    | polyslab.PolySlab
+    | polyslab.ComplexPolySlabBase
+    | mesh.TriangleMesh
+)
 
 
 def flatten_shapely_geometries(
-    geoms: Union[Shapely, Iterable[Shapely]], keep_types: tuple[type, ...] = (Polygon,)
+    geoms: Shapely | Iterable[Shapely], keep_types: tuple[type, ...] = (Polygon,)
 ) -> list[Shapely]:
     """
     Flatten nested geometries into a flat list, while only keeping the specified types.
@@ -101,7 +101,7 @@ def merging_geometries_on_plane(
     property_list: list[Any],
     interior_disjoint_geometries: bool = False,
     cleanup: bool = True,
-    quad_segs: Optional[int] = None,
+    quad_segs: int | None = None,
     section_tolerance_2d: bool = False,
 ) -> list[tuple[Any, Shapely]]:
     """Compute list of shapes on plane. Overlaps are removed or merged depending on
@@ -226,7 +226,7 @@ def flatten_groups(
     flatten_nonunion_type: bool = False,
     flatten_transformed: bool = False,
     flatten_array: bool = False,
-    transform: Optional[MatrixReal4x4] = None,
+    transform: MatrixReal4x4 | None = None,
 ) -> GeometryType:
     """Iterates over all geometries, flattening groups and unions.
 
@@ -342,7 +342,7 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
 def filter_intersecting_geometries(
     geometries: list[GeometryType],
     bounds: Box,
-) -> list[Optional[GeometryType]]:
+) -> list[GeometryType | None]:
     """Filter a list of geometries using recursive bounds checks.
 
     Returns a list of the same length as *geometries*, with ``None`` for
@@ -354,7 +354,7 @@ def filter_intersecting_geometries(
 
 
 def _compose_transforms(
-    parent_transform: Optional[MatrixReal4x4], child_transform: MatrixReal4x4
+    parent_transform: MatrixReal4x4 | None, child_transform: MatrixReal4x4
 ) -> MatrixReal4x4:
     """Compose a child transform with its parent transform."""
 
@@ -364,7 +364,7 @@ def _compose_transforms(
 
 
 def _geometry_with_transform(
-    geometry: GeometryType, transform: Optional[MatrixReal4x4]
+    geometry: GeometryType, transform: MatrixReal4x4 | None
 ) -> GeometryType:
     """Return ``geometry`` with ``transform`` applied when it is not trivial."""
 
@@ -389,7 +389,7 @@ def _split_full_transform(
 def _rebuild_filtered_geometry_array(
     geometry: base.GeometryArray,
     filtered_groups: dict[GeometryType, list[MatrixReal4x4]],
-) -> Optional[GeometryType]:
+) -> GeometryType | None:
     """Rebuild a filtered ``GeometryArray`` or grouped geometries from surviving instances."""
 
     survivors = []
@@ -439,8 +439,8 @@ def _rebuild_filtered_geometry_array(
 def _filter_intersecting_geometry(
     geometry: GeometryType,
     bounds: Box,
-    transform: Optional[MatrixReal4x4] = None,
-) -> Optional[GeometryType]:
+    transform: MatrixReal4x4 | None = None,
+) -> GeometryType | None:
     """Recursively prune non-intersecting geometry children while preserving type.
 
     ``transform`` accumulates parent transforms as we descend into
@@ -707,7 +707,7 @@ class SnappingSpec(Tidy3dBaseModel):
         description="Describes how snapping positions will be chosen.",
     )
 
-    margin: Optional[tuple[NonNegativeInt, NonNegativeInt, NonNegativeInt]] = Field(
+    margin: tuple[NonNegativeInt, NonNegativeInt, NonNegativeInt] | None = Field(
         (0, 0, 0),
         title="Margin",
         description="Number of additional grid points to consider when expanding or contracting "
@@ -1026,7 +1026,7 @@ def _shift_value_signed(
     bounds: Bound,
     direction: Direction,
     shift: int,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> float:
     """Calculate the signed distance corresponding to moving the object by ``shift`` number
     of cells in the positive or negative ``direction`` along the dimension given by

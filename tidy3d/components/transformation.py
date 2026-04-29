@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from pydantic import Field, field_validator
@@ -95,7 +95,7 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
 class RotationAroundAxis(AbstractRotation):
     """Rotation of vectors and tensors around a given vector."""
 
-    axis: Union[Axis, Coordinate] = Field(
+    axis: Axis | Coordinate = Field(
         0,
         title="Axis of Rotation",
         description="A vector that specifies the axis of rotation, or a single int: 0, 1, or 2, "
@@ -111,7 +111,7 @@ class RotationAroundAxis(AbstractRotation):
 
     @field_validator("axis")
     @classmethod
-    def _validate_axis_vector(cls, val: Union[Axis, Coordinate]) -> Coordinate:
+    def _validate_axis_vector(cls, val: Axis | Coordinate) -> Coordinate:
         if not isinstance(val, tuple):
             axis = [0.0, 0.0, 0.0]
             axis[val] = 1.0
@@ -217,5 +217,5 @@ class ReflectionFromPlane(AbstractReflection):
         return R
 
 
-RotationType = Union[RotationAroundAxis]
-ReflectionType = Union[ReflectionFromPlane]
+RotationType = RotationAroundAxis
+ReflectionType = ReflectionFromPlane

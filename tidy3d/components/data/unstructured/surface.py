@@ -25,7 +25,7 @@ from .base import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any, Literal, Optional, Union
+    from typing import Any, Literal
 
     from pydantic import PositiveInt
     from xarray import DataArray as XrDataArray
@@ -158,10 +158,10 @@ class TriangularSurfaceDataset(UnstructuredDataset):
 
     def _spatial_interp(
         self,
-        x: Union[float, ArrayLike],
-        y: Union[float, ArrayLike],
-        z: Union[float, ArrayLike],
-        fill_value: Optional[Union[float, Literal["extrapolate"]]] = None,
+        x: float | ArrayLike,
+        y: float | ArrayLike,
+        z: float | ArrayLike,
+        fill_value: float | Literal["extrapolate"] | None = None,
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         ignore_normal_pos: bool = True,
@@ -178,12 +178,12 @@ class TriangularSurfaceDataset(UnstructuredDataset):
 
     def sel(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] | None = None,
         **sel_kwargs: Any,
-    ) -> Union[TriangularSurfaceDataset, XrDataArray]:
+    ) -> TriangularSurfaceDataset | XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions.
         Currently works only for non-spatial dimensions through additional arguments.
         Selection along non-spatial dimensions is forwarded to
@@ -234,13 +234,13 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         grid: bool = False,
         cbar: bool = True,
         cmap: str = "viridis",
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         grid_color: str = "black",
         grid_width: float = 1.0,
         opacity: float = 1.0,
         show: bool = True,
-        windowed: Optional[bool] = None,
+        windowed: bool | None = None,
         window_size: tuple = (800, 600),
         **mesh_kwargs: Any,
     ) -> Any:
@@ -374,7 +374,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         cbar: bool = True,
         cmap: str = "Spectral",
         show: bool = True,
-        windowed: Optional[bool] = None,
+        windowed: bool | None = None,
         window_size: tuple = (800, 600),
         **arrow_kwargs: Any,
     ) -> Any:

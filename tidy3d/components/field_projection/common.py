@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar
 
 import autograd.numpy as anp
 import numpy as np
@@ -44,7 +44,7 @@ AXIS_WEIGHT_SHAPES = ((-1, 1, 1), (1, -1, 1), (1, 1, -1))
 
 # Numpy float array and related array types
 
-ArrayLikeN2F = Union[float, tuple[float, ...], ArrayComplex4D]
+ArrayLikeN2F = float | tuple[float, ...] | ArrayComplex4D
 _TrackedItem = TypeVar("_TrackedItem")
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import numpy as np
 from pydantic import Field, NonNegativeInt
@@ -100,7 +99,7 @@ class Graphene(ParametricVariantItem2D):
         "Otherwise, the intraband terms only give a simpler Drude-type model relevant "
         "only at low frequency (THz).",
     )
-    interband_fit_freq_nodes: Optional[list[tuple[float, float]]] = Field(
+    interband_fit_freq_nodes: list[tuple[float, float]] | None = Field(
         None,
         title="Interband fitting frequency nodes",
         description="Frequency nodes for fitting interband term. "

@@ -21,7 +21,6 @@ from typing import (
     Any,
     ClassVar,
     Literal,
-    Optional,
     TypeVar,
     Union,
     get_args,
@@ -64,8 +63,8 @@ from .file_util import compress_file_to_gzip, extract_gzip_file
 from .types import TYPE_TAG_STR, Undefined
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from typing import Callable, NoReturn
+    from collections.abc import Callable, Iterator
+    from typing import NoReturn
 
     from pydantic.fields import FieldInfo
     from pydantic.functional_validators import ModelWrapValidatorHandler
@@ -127,7 +126,7 @@ def _default_keyed_cache_key(
 
 
 def keyed_cache(
-    key_func: Optional[Callable[..., Any]] = None,
+    key_func: Callable[..., Any] | None = None,
 ) -> Callable[[Callable[..., _CacheReturn]], Callable[..., _CacheReturn]]:
     """Decorate a method so it caches multiple values keyed by call arguments.
 
@@ -306,7 +305,7 @@ class Tidy3dBaseModel(BaseModel):
     )
 
     _cached_properties: dict = PrivateAttr(default_factory=dict)
-    _has_tracers: Optional[bool] = PrivateAttr(default=None)
+    _has_tracers: bool | None = PrivateAttr(default=None)
 
     def model_dump_json(self, *args: Any, **kwargs: Any) -> str:
         """Serialize with stable float exponent formatting across pydantic_core versions."""
@@ -341,7 +340,7 @@ class Tidy3dBaseModel(BaseModel):
 
     @field_validator("name", check_fields=False)
     @classmethod
-    def _validate_name_no_special_characters(cls: type[T], name: Optional[str]) -> Optional[str]:
+    def _validate_name_no_special_characters(cls: type[T], name: str | None) -> str | None:
         if name is None:
             return name
         for character in FORBID_SPECIAL_CHARACTERS:
@@ -576,7 +575,7 @@ class Tidy3dBaseModel(BaseModel):
 
     @classmethod
     def _target_cls_from_file(
-        cls, fname: PathLike, group_path: Optional[str] = None
+        cls, fname: PathLike, group_path: str | None = None
     ) -> type[Tidy3dBaseModel]:
         """Peek the file metadata to determine the subclass to instantiate."""
         model_dict = cls.dict_from_file(
@@ -612,7 +611,7 @@ class Tidy3dBaseModel(BaseModel):
         if not update:
             return {}
 
-        def get_tuple_element_type(annotation: Any) -> Optional[type]:
+        def get_tuple_element_type(annotation: Any) -> type | None:
             """Get the element type of a tuple annotation if it has one consistent type."""
             origin = get_origin(annotation)
             if origin is tuple:
@@ -626,7 +625,7 @@ class Tidy3dBaseModel(BaseModel):
                         return args[0]
             return None
 
-        def should_convert_to_tuple(annotation: Any) -> tuple[bool, Optional[type[Any]]]:
+        def should_convert_to_tuple(annotation: Any) -> tuple[bool, type[Any] | None]:
             """Check if the given annotation represents a tuple type and return element type if any."""
             origin = get_origin(annotation)
 
@@ -733,7 +732,7 @@ class Tidy3dBaseModel(BaseModel):
         deep: bool = True,
         *,
         validate: bool = True,
-        update: Optional[Mapping[str, Any]] = None,
+        update: Mapping[str, Any] | None = None,
     ) -> Self:
         """Return a copy of the model.
 
@@ -788,7 +787,7 @@ class Tidy3dBaseModel(BaseModel):
 
     def updated_copy(
         self,
-        path: Optional[str] = None,
+        path: str | None = None,
         *,
         deep: bool = True,
         validate: bool = True,
@@ -1037,9 +1036,9 @@ class Tidy3dBaseModel(BaseModel):
     def from_file(
         cls,
         fname: PathLike,
-        group_path: Optional[str] = None,
+        group_path: str | None = None,
         lazy: bool = False,
-        on_load: Optional[Callable[[Any], None]] = None,
+        on_load: Callable[[Any], None] | None = None,
         **parse_obj_kwargs: Any,
     ) -> Self:
         """Loads a :class:`~tidy3d.Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
@@ -1085,7 +1084,7 @@ class Tidy3dBaseModel(BaseModel):
     def dict_from_file(
         cls: type[T],
         fname: PathLike,
-        group_path: Optional[str] = None,
+        group_path: str | None = None,
         *,
         load_data_arrays: bool = True,
     ) -> dict:
@@ -1325,7 +1324,7 @@ class Tidy3dBaseModel(BaseModel):
 
     @classmethod
     def get_sub_model(
-        cls: type[T], group_path: str, model_dict: Union[dict[str, Any], list[Any]]
+        cls: type[T], group_path: str, model_dict: dict[str, Any] | list[Any]
     ) -> dict:
         """Get the sub model for a given group path."""
 
@@ -1346,7 +1345,7 @@ class Tidy3dBaseModel(BaseModel):
         return JSON_TAG
 
     @classmethod
-    def _json_string_from_hdf5(cls: type[T], fname: Union[PathLike, h5py.File]) -> str:
+    def _json_string_from_hdf5(cls: type[T], fname: PathLike | h5py.File) -> str:
         """Load the model json string from an hdf5 file path or open file handle."""
         if isinstance(fname, h5py.File):
             f_handle = fname
@@ -1362,11 +1361,11 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def _load_data_from_file(
         cls: type[T],
-        fname: Union[PathLike, h5py.File],
+        fname: PathLike | h5py.File,
         model_dict: dict,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
-        should_load_path: Optional[Callable[[str], bool]] = None,
+        custom_decoders: list[Callable] | None = None,
+        should_load_path: Callable[[str], bool] | None = None,
     ) -> None:
         """Materialize DataArray payloads referenced by an HDF5-backed model dict in place."""
 
@@ -1437,9 +1436,9 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def dict_from_hdf5(
         cls: type[T],
-        fname: Union[PathLike, h5py.File],
+        fname: PathLike | h5py.File,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
+        custom_decoders: list[Callable] | None = None,
         load_data_arrays: bool = True,
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
@@ -1490,9 +1489,9 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def from_hdf5(
         cls: type[T],
-        fname: Union[PathLike, h5py.File],
+        fname: PathLike | h5py.File,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
+        custom_decoders: list[Callable] | None = None,
         **model_validate_kwargs: Any,
     ) -> Self:
         """Loads :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5 file.
@@ -1527,8 +1526,8 @@ class Tidy3dBaseModel(BaseModel):
 
     def to_hdf5(
         self,
-        fname: Union[PathLike, io.BytesIO],
-        custom_encoders: Optional[list[Callable]] = None,
+        fname: PathLike | io.BytesIO,
+        custom_encoders: list[Callable] | None = None,
     ) -> None:
         """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5 file.
 
@@ -1593,7 +1592,7 @@ class Tidy3dBaseModel(BaseModel):
         cls: type[T],
         fname: PathLike,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
+        custom_decoders: list[Callable] | None = None,
         load_data_arrays: bool = True,
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5.gz file.
@@ -1639,7 +1638,7 @@ class Tidy3dBaseModel(BaseModel):
         cls: type[T],
         fname: PathLike,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
+        custom_decoders: list[Callable] | None = None,
         **model_validate_kwargs: Any,
     ) -> Self:
         """Loads :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5.gz file.
@@ -1673,8 +1672,8 @@ class Tidy3dBaseModel(BaseModel):
 
     def to_hdf5_gz(
         self,
-        fname: Union[PathLike, io.BytesIO],
-        custom_encoders: Optional[list[Callable]] = None,
+        fname: PathLike | io.BytesIO,
+        custom_encoders: list[Callable] | None = None,
     ) -> None:
         """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5.gz file.
 
@@ -1893,8 +1892,8 @@ class Tidy3dBaseModel(BaseModel):
         return self.__class__.model_validate(self_dict)
 
     def _serialized_traced_field_keys(
-        self, field_mapping: Optional[AutogradFieldMap] = None
-    ) -> Optional[str]:
+        self, field_mapping: AutogradFieldMap | None = None
+    ) -> str | None:
         """Return a serialized, order-independent representation of traced field paths."""
 
         if field_mapping is None:
@@ -1933,8 +1932,8 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def generate_docstring(
         cls,
-        show_default_args: Optional[bool] = None,
-        include_attrs: Optional[bool] = None,
+        show_default_args: bool | None = None,
+        include_attrs: bool | None = None,
     ) -> str:
         """Generates a docstring for a Tidy3D model."""
         if show_default_args is None:
@@ -2022,7 +2021,7 @@ class Tidy3dBaseModel(BaseModel):
 
         return doc
 
-    def get_submodels_by_hash(self) -> dict[int, list[Union[str, tuple[str, int]]]]:
+    def get_submodels_by_hash(self) -> dict[int, list[str | tuple[str, int]]]:
         """
         Return a mapping ``{hash(submodel): [field_path, ...]}`` for every
         nested ``Tidy3dBaseModel`` inside this model.
@@ -2127,7 +2126,7 @@ class Tidy3dBaseModel(BaseModel):
 
 def _make_lazy_proxy(
     target_cls: type[Tidy3dBaseModel],
-    on_load: Optional[Callable[[Any], None]] = None,
+    on_load: Callable[[Any], None] | None = None,
 ) -> type[Tidy3dBaseModel]:
     """
     Return a lazy-loading proxy subclass of ``target_cls``.
@@ -2173,7 +2172,7 @@ def _make_lazy_proxy(
         def __init__(
             self,
             fname: PathLike,
-            group_path: Optional[str],
+            group_path: str | None,
             parse_obj_kwargs: Any,
             **lazy_state: Any,
         ) -> None:

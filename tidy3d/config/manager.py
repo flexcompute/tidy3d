@@ -33,7 +33,6 @@ from .schema_utils import _resolve_model_type
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
-    from typing import Optional
 
 
 def normalize_profile_name(name: str) -> str:
@@ -119,8 +118,8 @@ class ConfigManager:
 
     def __init__(
         self,
-        profile: Optional[str] = None,
-        config_dir: Optional[os.PathLike[str]] = None,
+        profile: str | None = None,
+        config_dir: os.PathLike[str] | None = None,
     ):
         loader_path = None if config_dir is None else Path(config_dir)
         self._loader = ConfigLoader(loader_path)
@@ -134,7 +133,7 @@ class ConfigManager:
         self._raw_tree: dict[str, Any] = {}
         self._effective_tree: dict[str, Any] = {}
         self._env_overrides: dict[str, Any] = load_environment_overrides()
-        self._web_env_previous: dict[str, Optional[str]] = {}
+        self._web_env_previous: dict[str, str | None] = {}
         self._context_stack: list[tuple[str, dict[str, Any]]] = []
 
         self._reload()
@@ -197,7 +196,7 @@ class ConfigManager:
 
         self._apply_handlers()
 
-    def set_default_profile(self, profile: Optional[str]) -> None:
+    def set_default_profile(self, profile: str | None) -> None:
         """Set the default profile to be used on startup.
 
         Parameters
@@ -221,7 +220,7 @@ class ConfigManager:
         else:
             self._loader.set_default_profile(None)
 
-    def get_default_profile(self) -> Optional[str]:
+    def get_default_profile(self) -> str | None:
         """Get the currently configured default profile.
 
         Returns
@@ -357,7 +356,7 @@ class ConfigManager:
     def on_handler_registered(self, section: str) -> None:
         self._apply_handlers(section=section)
 
-    def _resolve_initial_profile(self, profile: Optional[str]) -> str:
+    def _resolve_initial_profile(self, profile: str | None) -> str:
         if profile:
             return normalize_profile_name(str(profile))
 
@@ -406,13 +405,13 @@ class ConfigManager:
         self._section_models = models.sections
         self._plugin_models = models.plugins
 
-    def _get_model(self, name: str) -> Optional[BaseModel]:
+    def _get_model(self, name: str) -> BaseModel | None:
         if name.startswith("plugins."):
             plugin = name.split(".", 1)[1]
             return self._plugin_models.get(plugin)
         return self._section_models.get(name)
 
-    def _apply_handlers(self, section: Optional[str] = None) -> None:
+    def _apply_handlers(self, section: str | None = None) -> None:
         handlers = get_handlers()
         targets = [section] if section else handlers.keys()
         for target in targets:

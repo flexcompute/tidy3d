@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, PositiveInt
 
@@ -37,7 +37,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
         json_schema_extra={"units": OHM},
     )
 
-    num_grid_cells: Optional[PositiveInt] = Field(
+    num_grid_cells: PositiveInt | None = Field(
         DEFAULT_PORT_NUM_CELLS,
         title="Port grid cells",
         description="Number of mesh grid cells associated with the port along each direction, "
@@ -73,26 +73,26 @@ class AbstractLumpedPort(AbstractTerminalPort):
 
     @cached_property
     @abstractmethod
-    def to_load(self, snap_center: Optional[float] = None) -> LumpedElementType:
+    def to_load(self, snap_center: float | None = None) -> LumpedElementType:
         """Create a load from the lumped port."""
 
     @abstractmethod
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
 
     @abstractmethod
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
 
     def to_monitors(
         self,
         freqs: FreqArray,
-        snap_center: Optional[float] = None,
-        grid: Optional[Grid] = None,
+        snap_center: float | None = None,
+        grid: Grid | None = None,
         **kwargs: Any,
     ) -> list[FieldMonitor]:
         """Field monitors to compute port voltage and current."""

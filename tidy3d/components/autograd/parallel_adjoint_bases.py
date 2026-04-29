@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Union, cast, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 import numpy as np
 
@@ -20,7 +20,7 @@ from tidy3d.components.types.base import DiffractionPolarization, EMField
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional
+    from collections.abc import Callable
 
     from tidy3d.components.autograd.types import AutogradFieldMap
     from tidy3d.components.data.data_array import DataArray
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 POINT_FIELD_COMPONENTS = cast(tuple[EMField, ...], get_args(EMField))
 # Shared across basis types: float (freq/spatial), int (mode/order indices), str (direction).
-CoordTarget = Union[float, int, str]
+CoordTarget = float | int | str
 
 
 def _coord_index(coord_values: np.ndarray, target: CoordTarget) -> int:
@@ -69,10 +69,10 @@ class AbstractParallelAdjointBasis(ABC):
         simulation: Simulation,
         coefficient: complex,
         fwidth: float,
-    ) -> Optional[SourceType]:
+    ) -> SourceType | None:
         """Construct the canonical adjoint source for this basis."""
 
-    def _data_index_or_none(self, sim_data_orig: SimulationData) -> Optional[tuple[int, ...]]:
+    def _data_index_or_none(self, sim_data_orig: SimulationData) -> tuple[int, ...] | None:
         try:
             return self._data_index_from_sim_data(sim_data_orig)
         except ValueError as exc:
@@ -88,7 +88,7 @@ class AbstractParallelAdjointBasis(ABC):
         data_fields_vjp: AutogradFieldMap,
         data_path: tuple,
         data_index: tuple[int, ...],
-        norm: Optional[np.ndarray] = None,
+        norm: np.ndarray | None = None,
     ) -> complex:
         vjp = data_fields_vjp.get(data_path)
         if vjp is None:
@@ -128,7 +128,7 @@ class AbstractParallelAdjointBasis(ABC):
     def _vjp_norm(
         self,
         sim_data_orig: SimulationData,
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         return None
 
     def zero_vjp_entry(
@@ -161,7 +161,7 @@ class ModeAdjointBasis(AbstractParallelAdjointBasis):
         simulation: Simulation,
         coefficient: complex,
         fwidth: float,
-    ) -> Optional[SourceType]:
+    ) -> SourceType | None:
         monitor = cast("ModeMonitor", simulation.monitors[self.monitor_index])
         return mode_source_from_monitor(
             monitor=monitor,
@@ -195,7 +195,7 @@ class DiffractionAdjointBasis(AbstractParallelAdjointBasis):
         simulation: Simulation,
         coefficient: complex,
         fwidth: float,
-    ) -> Optional[SourceType]:
+    ) -> SourceType | None:
         monitor = cast("DiffractionMonitor", simulation.monitors[self.monitor_index])
         return diffraction_source_from_simulation(
             simulation=simulation,
@@ -211,7 +211,7 @@ class DiffractionAdjointBasis(AbstractParallelAdjointBasis):
     def _vjp_norm(
         self,
         sim_data_orig: SimulationData,
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         diff_data = sim_data_orig.data[self.monitor_index]
         return diffraction_norm(diff_data)
 
@@ -235,7 +235,7 @@ class PointFieldAdjointBasis(AbstractParallelAdjointBasis):
         simulation: Simulation,
         coefficient: complex,
         fwidth: float,
-    ) -> Optional[SourceType]:
+    ) -> SourceType | None:
         monitor = cast("FieldMonitor", simulation.monitors[self.monitor_index])
         return point_current_source_from_simulation(
             simulation=simulation,
@@ -247,13 +247,13 @@ class PointFieldAdjointBasis(AbstractParallelAdjointBasis):
         )
 
 
-ParallelAdjointBasis = Union[ModeAdjointBasis, DiffractionAdjointBasis, PointFieldAdjointBasis]
+ParallelAdjointBasis = ModeAdjointBasis | DiffractionAdjointBasis | PointFieldAdjointBasis
 
 
 def _build_mode_bases(
-    freqs: Union[list[float], np.ndarray],
-    directions: Union[tuple[str, ...], np.ndarray],
-    mode_indices: Union[range, np.ndarray],
+    freqs: list[float] | np.ndarray,
+    directions: tuple[str, ...] | np.ndarray,
+    mode_indices: range | np.ndarray,
     monitor_name: str,
     monitor_index: int,
     data_path: tuple,
@@ -276,7 +276,7 @@ def _build_mode_bases(
 
 
 def _build_point_field_bases(
-    component_freqs: dict[str, Union[list[float], np.ndarray]],
+    component_freqs: dict[str, list[float] | np.ndarray],
     monitor_name: str,
     monitor_index: int,
     data_path_prefix: tuple,
@@ -308,7 +308,7 @@ def _build_diffraction_bases_for_freq(
     freq: float,
     orders_x: np.ndarray,
     orders_y: np.ndarray,
-    pols: Union[tuple[str, ...], np.ndarray],
+    pols: tuple[str, ...] | np.ndarray,
     theta_for: Callable[[int, int], float],
 ) -> list[DiffractionAdjointBasis]:
     bases: list[DiffractionAdjointBasis] = []

@@ -22,8 +22,6 @@ from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from shapely.geometry.base import BaseGeometry
 
     from tidy3d.compat import Self
@@ -144,8 +142,8 @@ class Sphere(base.Centered, base.Circular):
     def to_triangle_mesh(
         self,
         *,
-        max_edge_length: Optional[float] = None,
-        subdivisions: Optional[int] = None,
+        max_edge_length: float | None = None,
+        subdivisions: int | None = None,
     ) -> TriangleMesh:
         """Approximate the sphere surface with a ``TriangleMesh``.
 
@@ -201,7 +199,7 @@ class Sphere(base.Centered, base.Circular):
         origin: Coordinate,
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
         section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
@@ -254,11 +252,11 @@ class Sphere(base.Centered, base.Circular):
 
     def intersections_plane(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         cleanup: bool = True,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
         section_tolerance_2d: bool = False,
     ) -> list[BaseGeometry]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -339,8 +337,8 @@ class Sphere(base.Centered, base.Circular):
     def unit_sphere_triangles(
         cls,
         *,
-        target_edge_length: Optional[float] = None,
-        subdivisions: Optional[int] = None,
+        target_edge_length: float | None = None,
+        subdivisions: int | None = None,
     ) -> np.ndarray:
         """Return unit sphere triangles discretized via an icosphere."""
 
@@ -538,8 +536,8 @@ class Sphere(base.Centered, base.Circular):
         return result
 
     def _edge_length_on_unit_sphere(
-        self, max_edge_length: Optional[float] = _DEFAULT_EDGE_FRACTION
-    ) -> Optional[float]:
+        self, max_edge_length: float | None = _DEFAULT_EDGE_FRACTION
+    ) -> float | None:
         """Convert ``max_edge_length`` in μm to unit-sphere coordinates."""
         max_edge_length = _DEFAULT_EDGE_FRACTION if max_edge_length is None else max_edge_length
         radius = float(self.radius)
@@ -550,8 +548,8 @@ class Sphere(base.Centered, base.Circular):
     def _triangulated_surface(
         self,
         *,
-        max_edge_length: Optional[float] = None,
-        subdivisions: Optional[int] = None,
+        max_edge_length: float | None = None,
+        subdivisions: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Return physical and unit triangles for the surface discretization. Pass either max_edge_length or subdivisions."""
         max_edge_length_unit = None
@@ -574,8 +572,8 @@ class Sphere(base.Centered, base.Circular):
     def _unit_sphere_triangles(
         self,
         *,
-        target_edge_length: Optional[float] = None,
-        subdivisions: Optional[int] = None,
+        target_edge_length: float | None = None,
+        subdivisions: int | None = None,
         copy_result: bool = True,
     ) -> np.ndarray:
         """Return cached unit-sphere triangles with optional copying. Pass either target_edge_length or subdivisions."""
@@ -588,7 +586,7 @@ class Sphere(base.Centered, base.Circular):
         triangles, _ = self._icosphere_data(subdivisions)
         return np.array(triangles, copy=copy_result)
 
-    def _subdivisions_for_edge(self, target_edge_length: Optional[float]) -> int:
+    def _subdivisions_for_edge(self, target_edge_length: float | None) -> int:
         if target_edge_length is None or target_edge_length <= 0.0:
             return 0
 
@@ -899,7 +897,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         normal: Coordinate,
         origin: Coordinate,
         to_2D: MatrixReal4x4,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -1000,9 +998,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(
-        self, z: float, quad_segs: Optional[int] = None
-    ) -> list[BaseGeometry]:
+    def _intersections_normal(self, z: float, quad_segs: int | None = None) -> list[BaseGeometry]:
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
 
         Parameters

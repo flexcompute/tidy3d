@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -167,7 +166,7 @@ def test_bayopt_new_api_supports_acquisition_constructors_without_random_state(
     assert suggest() == {"x": 0.5}
 
 
-def emulated_batch_run(simulations, path_dir: Optional[str] = None, **kwargs):
+def emulated_batch_run(simulations, path_dir: str | None = None, **kwargs):
     data_dict = {
         task_name: run_emulated_workflow(sim) for task_name, sim in simulations.simulations.items()
     }
@@ -632,7 +631,7 @@ def test_sweep(sweep_method, monkeypatch):
 def test_priority_forwarded_to_batch(monkeypatch):
     captured_priority = {}
 
-    def run_with_priority(batch, path_dir: Optional[str] = None, priority: Optional[int] = None):
+    def run_with_priority(batch, path_dir: str | None = None, priority: int | None = None):
         captured_priority["value"] = priority
         return emulated_batch_run(batch, path_dir=path_dir)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from pydantic import Field, PositiveFloat, model_validator
@@ -84,7 +84,7 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
     )
 
 
-CarrierLifetimeType = Union[FossumCarrierLifetime]
+CarrierLifetimeType = FossumCarrierLifetime
 
 
 class AugerRecombination(Tidy3dBaseModel):
@@ -185,13 +185,13 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     """
 
-    tau_n: Union[PositiveFloat, CarrierLifetimeType] = Field(
+    tau_n: PositiveFloat | CarrierLifetimeType = Field(
         title="Electron lifetime",
         description="Electron lifetime",
         json_schema_extra={"units": SECOND},
     )
 
-    tau_p: Union[PositiveFloat, CarrierLifetimeType] = Field(
+    tau_p: PositiveFloat | CarrierLifetimeType = Field(
         title="Hole lifetime",
         description="Hole lifetime",
         json_schema_extra={"units": SECOND},

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
@@ -49,7 +49,7 @@ class RandomInitializationSpec(AbstractInitializationSpec):
         title="Maximum Value",
         description="Maximum value for the random parameters (exclusive).",
     )
-    seed: Optional[NonNegativeInt] = Field(
+    seed: NonNegativeInt | None = Field(
         None,
         description="Seed for the random number generator.",
     )
@@ -134,8 +134,6 @@ class CustomInitializationSpec(AbstractInitializationSpec):
         return params
 
 
-InitializationSpecType = Union[
-    RandomInitializationSpec,
-    UniformInitializationSpec,
-    CustomInitializationSpec,
-]
+InitializationSpecType = (
+    RandomInitializationSpec | UniformInitializationSpec | CustomInitializationSpec
+)

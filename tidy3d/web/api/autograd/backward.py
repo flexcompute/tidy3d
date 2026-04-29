@@ -26,7 +26,7 @@ from tidy3d.packaging import disable_local_subpixel
 from .utils import E_to_D, filter_vjp_map, get_derivative_maps, scale_field_data
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional, Union
+    from collections.abc import Callable
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -154,13 +154,13 @@ def _get_freq_coords(field_data: td.FieldData) -> np.ndarray:
     return np.array(first_field_component.coords["f"].values)
 
 
-def _estimate_dataset_bytes(dataset: Union[td.PermittivityData, td.FieldData]) -> int:
+def _estimate_dataset_bytes(dataset: td.PermittivityData | td.FieldData) -> int:
     """Estimate total byte size of field components in a dataset."""
     return int(sum(np.asarray(comp.values).nbytes for comp in dataset.field_components.values()))
 
 
 def _require_freq_ascending(
-    dataset: Union[td.PermittivityData, td.FieldData],
+    dataset: td.PermittivityData | td.FieldData,
     *,
     component_type: str,
     component_index: int,
@@ -198,13 +198,13 @@ def _validate_adjoint_frequencies(
 
 
 def _filter_frequency_data(
-    dataset: Union[td.PermittivityData, td.FieldData],
+    dataset: td.PermittivityData | td.FieldData,
     filter_freqs: np.ndarray,
     *,
     component_type: str,
     component_index: int,
     dataset_name: str,
-) -> Union[td.PermittivityData, td.FieldData]:
+) -> td.PermittivityData | td.FieldData:
     """Filter a dataset to target frequencies and keep its monitor frequencies aligned."""
     dataset_filter_freq = {}
     for key, val in dataset.field_components.items():
@@ -243,8 +243,8 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    numerical_structure_map: Optional[dict[int, NumericalStructureConfig]] = None,
-    custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
+    numerical_structure_map: dict[int, NumericalStructureConfig] | None = None,
+    custom_vjp: tuple[CustomVJPConfig, ...] | None = None,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
@@ -547,9 +547,9 @@ def _process_structure_gradients(
     sim_data_fwd: td.SimulationData,
     structure_index: int,
     structure_paths: list[tuple],
-    custom_vjp: Optional[dict[tuple[str, str], Callable[..., Any]]] = None,
-    numerical_structure: Optional[NumericalStructureConfig] = None,
-    numerical_paths: Optional[list[tuple]] = None,
+    custom_vjp: dict[tuple[str, str], Callable[..., Any]] | None = None,
+    numerical_structure: NumericalStructureConfig | None = None,
+    numerical_paths: list[tuple] | None = None,
 ) -> AutogradFieldMap:
     """Process gradients for a specific structure."""
 
@@ -638,9 +638,9 @@ def _process_structure_gradients(
 
     def updated_epsilon_full_impl(
         replacement_geometry: GeometryType,
-        adjoint_frequencies: Optional[FreqDataArray],
-        structure_index: Optional[int],
-        eps_box: Optional[Box],
+        adjoint_frequencies: FreqDataArray | None,
+        structure_index: int | None,
+        eps_box: Box | None,
         sim_orig: td.Simulation,
     ) -> ScalarFieldDataArray:
         """Permittivity in ``eps_box`` after replacing this structure geometry."""
@@ -762,8 +762,8 @@ def _process_structure_gradients(
 
         def updated_epsilon_wrapper(
             replacement_geometry: GeometryType,
-            select_adjoint_freqs: Optional[FreqDataArray],
-            updated_epsilon_full: Optional[Callable],
+            select_adjoint_freqs: FreqDataArray | None,
+            updated_epsilon_full: Callable | None,
         ) -> ScalarFieldDataArray:
             return updated_epsilon_full(replacement_geometry).sel(f=select_adjoint_freqs)
 

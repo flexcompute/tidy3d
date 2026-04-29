@@ -12,7 +12,7 @@ from .data_array import DataArray
 from .dataset import AbstractFieldDataset, ScalarFieldDataArray
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional
+    from collections.abc import Callable
 
     from pydantic_core.core_schema import ValidationInfo
 
@@ -28,7 +28,7 @@ def validate_no_nans(*field_names: str) -> Callable[[Any, ValidationInfo], Any]:
         if val is None:
             return val
 
-        def error_if_has_nans(value: Any, identifier: Optional[str] = None) -> None:
+        def error_if_has_nans(value: Any, identifier: str | None = None) -> None:
             """Recursively check if value (or iterable) has nans and error if so."""
 
             def has_nans(values: Any) -> bool:

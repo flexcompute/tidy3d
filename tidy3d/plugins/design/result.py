@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas
@@ -57,20 +57,20 @@ class Result(Tidy3dBaseModel):
         "Note: shaped (D, N) where D is the ``len(dims)`` and N is the ``len(values)``",
     )
 
-    output_names: Optional[tuple[str, ...]] = Field(
+    output_names: tuple[str, ...] | None = Field(
         None,
         title="Output Names",
         description="Names for each of the outputs stored in ``values``. If not specified, default "
         "values are assigned.",
     )
 
-    fn_source: Optional[str] = Field(
+    fn_source: str | None = Field(
         None,
         title="Function Source Code",
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
-    task_names: Optional[list] = Field(
+    task_names: list | None = Field(
         None,
         title="Task Names",
         description="Task name of every simulation run during ``DesignSpace.run``. Only available if "
@@ -78,7 +78,7 @@ class Result(Tidy3dBaseModel):
         "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
-    task_ids: Optional[list[TaskIdMetadata]] = Field(
+    task_ids: list[TaskIdMetadata] | None = Field(
         None,
         title="Task IDs",
         description="Task ID of every simulation run during ``DesignSpace.run``. Only available if "
@@ -86,7 +86,7 @@ class Result(Tidy3dBaseModel):
         "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
-    task_paths: Optional[list] = Field(
+    task_paths: list | None = Field(
         None,
         title="Task Paths",
         description="Task paths of every simulation run during ``DesignSpace.run``. Useful for loading download ``SimulationData`` hdf5 files."
@@ -94,7 +94,7 @@ class Result(Tidy3dBaseModel):
         "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
-    aux_values: Optional[tuple[Any, ...]] = Field(
+    aux_values: tuple[Any, ...] | None = Field(
         None,
         title="Auxiliary values output from the user function",
         description="The auxiliary return values from the design problem function. This is the collection of objects returned "
@@ -301,7 +301,7 @@ class Result(Tidy3dBaseModel):
         return df
 
     @classmethod
-    def from_dataframe(cls, df: pandas.DataFrame, dims: Optional[list[str]] = None) -> Result:
+    def from_dataframe(cls, df: pandas.DataFrame, dims: list[str] | None = None) -> Result:
         """Load a result directly from a `pandas.DataFrame` object.
 
         Parameters

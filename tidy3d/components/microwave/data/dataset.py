@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
@@ -27,8 +27,6 @@ from tidy3d.components.data.dataset import (
 )
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from tidy3d.components.data.data_array import VoltageFreqModeTerminalDataArray
 
 
@@ -39,7 +37,7 @@ class AbstractTransmissionLineDataset(ModeFreqDataset):
     @abstractmethod
     def Z0_matrix(
         self,
-    ) -> Union[ImpedanceFreqModeModeDataArray, ImpedanceFreqTerminalTerminalDataArray]:
+    ) -> ImpedanceFreqModeModeDataArray | ImpedanceFreqTerminalTerminalDataArray:
         """The characteristic impedance matrix."""
 
 
@@ -170,32 +168,32 @@ class TerminalFieldDataset(ElectromagneticFieldDataset, FreqDataset):
     ... )
     """
 
-    Ex: Optional[ScalarTerminalFieldDataArray] = Field(
+    Ex: ScalarTerminalFieldDataArray | None = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field for each terminal.",
     )
-    Ey: Optional[ScalarTerminalFieldDataArray] = Field(
+    Ey: ScalarTerminalFieldDataArray | None = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field for each terminal.",
     )
-    Ez: Optional[ScalarTerminalFieldDataArray] = Field(
+    Ez: ScalarTerminalFieldDataArray | None = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field for each terminal.",
     )
-    Hx: Optional[ScalarTerminalFieldDataArray] = Field(
+    Hx: ScalarTerminalFieldDataArray | None = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field for each terminal.",
     )
-    Hy: Optional[ScalarTerminalFieldDataArray] = Field(
+    Hy: ScalarTerminalFieldDataArray | None = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field for each terminal.",
     )
-    Hz: Optional[ScalarTerminalFieldDataArray] = Field(
+    Hz: ScalarTerminalFieldDataArray | None = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field for each terminal.",

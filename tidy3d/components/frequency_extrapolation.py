@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
@@ -37,7 +37,7 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
         le=3,
     )
 
-    max_deviation: Optional[float] = Field(
+    max_deviation: float | None = Field(
         0.5,
         title="Maximum Deviation",
         description="The maximum deviation (in fraction of the trusted values) to allow for the low frequency smoothing.",

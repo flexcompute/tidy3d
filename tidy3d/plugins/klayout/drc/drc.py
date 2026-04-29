@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 from subprocess import run
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import Field, FilePath, field_validator
 
@@ -23,9 +23,6 @@ from tidy3d.plugins.klayout.drc.defaults import (
 )
 from tidy3d.plugins.klayout.drc.results import DRCResults
 from tidy3d.plugins.klayout.util import check_installation
-
-if TYPE_CHECKING:
-    from typing import Optional, Union
 
 SUPPORTED_DRC_SUFFIXES: frozenset[str] = frozenset({".drc", ".lydrc"})
 
@@ -167,11 +164,11 @@ class DRCRunner(Tidy3dBaseModel):
 
     def run(
         self,
-        source: Union[Geometry, Structure, Simulation, Path],
+        source: Geometry | Structure | Simulation | Path,
         td_object_gds_savefile: Path = DEFAULT_GDSFILE,
         resultsfile: Path = DEFAULT_RESULTSFILE,
-        drc_args: Optional[dict[str, str]] = None,
-        max_results: Optional[int] = None,
+        drc_args: dict[str, str] | None = None,
+        max_results: int | None = None,
         **to_gds_file_kwargs: Any,
     ) -> DRCResults:
         """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a
@@ -239,7 +236,7 @@ class DRCRunner(Tidy3dBaseModel):
         )
 
 
-def run_drc_on_gds(config: DRCConfig, max_results: Optional[int] = None) -> DRCResults:
+def run_drc_on_gds(config: DRCConfig, max_results: int | None = None) -> DRCResults:
     """Runs KLayout's DRC on a GDS file.
 
     Parameters

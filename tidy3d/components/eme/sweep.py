@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
 
 from pydantic import Field, PositiveInt, field_validator
 
@@ -227,4 +226,4 @@ class EMEPeriodicitySweep(EMESweepSpec):
         return len(self.num_reps)
 
 
-EMESweepSpecType = Union[EMELengthSweep, EMEModeSweep, EMEFreqSweep, EMEPeriodicitySweep]
+EMESweepSpecType = EMELengthSweep | EMEModeSweep | EMEFreqSweep | EMEPeriodicitySweep

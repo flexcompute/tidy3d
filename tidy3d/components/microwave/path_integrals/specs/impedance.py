@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -80,13 +80,13 @@ class CustomImpedanceSpec(AbstractImpedanceSpec):
     ... )
     """
 
-    voltage_spec: Optional[VoltagePathSpecType] = Field(
+    voltage_spec: VoltagePathSpecType | None = Field(
         None,
         title="Voltage Integration Path",
         description="Path specification for computing the voltage associated with a mode profile.",
     )
 
-    current_spec: Optional[CurrentPathSpecType] = Field(
+    current_spec: CurrentPathSpecType | None = Field(
         None,
         title="Current Integration Path",
         description="Path specification for computing the current associated with a mode profile.",
@@ -177,4 +177,4 @@ class CustomImpedanceSpec(AbstractImpedanceSpec):
         )
 
 
-ImpedanceSpecType = discriminated_union(Union[AutoImpedanceSpec, CustomImpedanceSpec])
+ImpedanceSpecType = discriminated_union(AutoImpedanceSpec | CustomImpedanceSpec)

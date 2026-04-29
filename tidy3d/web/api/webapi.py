@@ -53,8 +53,9 @@ from .run_options import (
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from os import PathLike
-    from typing import Callable, Literal, Optional, Union
+    from typing import Literal
 
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
     from tidy3d.web.cache import CacheEntry
@@ -101,7 +102,7 @@ DEFAULT_DATA_FILENAME = {
 }
 
 
-def default_data_filename(task_type: Optional[str]) -> str:
+def default_data_filename(task_type: str | None) -> str:
     """Return the default results filename for the given task type."""
 
     if isinstance(task_type, TaskType):
@@ -109,13 +110,13 @@ def default_data_filename(task_type: Optional[str]) -> str:
     return DEFAULT_DATA_FILENAME.get(task_type or "", "simulation_data.hdf5")
 
 
-def _resolve_output_path(path: Optional[PathLike], task_type: Optional[str]) -> Path:
+def _resolve_output_path(path: PathLike | None, task_type: str | None) -> Path:
     """Resolve an explicit output path or a task-type-specific default filename."""
 
     return Path(path) if path is not None else Path(default_data_filename(task_type))
 
 
-def _task_type_from_task(task: WebTask, task_type: Optional[str] = None) -> Optional[str]:
+def _task_type_from_task(task: WebTask, task_type: str | None = None) -> str | None:
     """Normalize the task type for default-path and artifact resolution."""
 
     task_type = task_type or getattr(task, "task_type", None)
@@ -128,10 +129,10 @@ def _task_type_from_task(task: WebTask, task_type: Optional[str] = None) -> Opti
 
 def _resolve_download_target(
     task_id: str,
-    path: Optional[PathLike],
-    task: Optional[WebTask] = None,
-    task_type: Optional[str] = None,
-) -> tuple[Path, WebTask, Optional[str]]:
+    path: PathLike | None,
+    task: WebTask | None = None,
+    task_type: str | None = None,
+) -> tuple[Path, WebTask, str | None]:
     """Resolve the output path and task metadata needed to download results."""
 
     if task is None:
@@ -142,7 +143,7 @@ def _resolve_download_target(
     return _resolve_output_path(path, task_type), task, task_type
 
 
-def _remote_data_file(task: WebTask, task_type: Optional[str]) -> str:
+def _remote_data_file(task: WebTask, task_type: str | None) -> str:
     """Return the remote results artifact name for a task."""
 
     if isinstance(task, BatchTask):
@@ -172,7 +173,7 @@ def _build_website_url(path: str) -> str:
     return "/".join([base.rstrip("/"), str(path).lstrip("/")])
 
 
-def _batch_detail_error(resource_id: str) -> Optional[WebError]:
+def _batch_detail_error(resource_id: str) -> WebError | None:
     """Processes a failed batch job to generate a detailed error.
 
     This function inspects the status of a batch detail object. If the status
@@ -259,7 +260,7 @@ def _copy_simulation_data_from_cache_entry(entry: CacheEntry, path: PathLike) ->
     return False
 
 
-def _load_simulation_via_tempfile(task_id: TaskId) -> Optional[WorkflowType]:
+def _load_simulation_via_tempfile(task_id: TaskId) -> WorkflowType | None:
     """Load a simulation into a temp file for cache bookkeeping (Windows-safe)."""
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)
@@ -274,10 +275,10 @@ def _load_simulation_via_tempfile(task_id: TaskId) -> Optional[WorkflowType]:
 
 def restore_simulation_if_cached(
     simulation: WorkflowType,
-    path: Optional[PathLike] = None,
+    path: PathLike | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose: bool = True,
-) -> tuple[Optional[PathLike], Optional[TaskId]]:
+) -> tuple[PathLike | None, TaskId | None]:
     """
     Attempt to restore simulation data from a local cache entry, if available.
 
@@ -329,10 +330,10 @@ def restore_simulation_if_cached(
 
 def load_simulation_if_cached(
     simulation: WorkflowType,
-    path: Optional[PathLike] = None,
+    path: PathLike | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose: bool = True,
-) -> Optional[WorkflowDataType]:
+) -> WorkflowDataType | None:
     """
     Load simulation results directly from the local cache, if available.
 
@@ -372,23 +373,23 @@ def load_simulation_if_cached(
 @wait_for_connection
 def run(
     simulation: WorkflowType,
-    task_name: Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
-    path: Optional[PathLike] = None,
-    callback_url: Optional[str] = None,
+    path: PathLike | None = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback_upload: Optional[Callable[[float], None]] = None,
-    progress_callback_download: Optional[Callable[[float], None]] = None,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
-    simulation_type: Optional[str] = None,
-    parent_tasks: Optional[list[str]] = None,
+    progress_callback_upload: Callable[[float], None] | None = None,
+    progress_callback_download: Callable[[float], None] | None = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
+    simulation_type: str | None = None,
+    parent_tasks: list[str] | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
     lazy: bool = False,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -554,9 +555,9 @@ def run(
 def _get_task_urls(
     task_type: str,
     resource_id: str,
-    folder_id: Optional[str] = None,
-    group_id: Optional[str] = None,
-) -> tuple[str, Optional[str]]:
+    folder_id: str | None = None,
+    group_id: str | None = None,
+) -> tuple[str, str | None]:
     """Log task and folder links to the web UI."""
     if task_type in ["RF", "TERMINAL_CM", "MODAL_CM"]:
         url = _get_url_rf(group_id or resource_id)
@@ -573,17 +574,17 @@ def _get_task_urls(
 @wait_for_connection
 def upload(
     simulation: WorkflowType,
-    task_name: Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
-    callback_url: Optional[str] = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
-    simulation_type: Optional[str] = None,
-    parent_tasks: Optional[list[str]] = None,
+    progress_callback: Callable[[float], None] | None = None,
+    simulation_type: str | None = None,
+    parent_tasks: list[str] | None = None,
     source_required: bool = True,
-    solver_version: Optional[str] = None,
+    solver_version: str | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    verbose_estimate_cost: Optional[bool] = None,
+    verbose_estimate_cost: bool | None = None,
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -799,12 +800,12 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
 @wait_for_connection
 def start(
     task_id: TaskId,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -886,7 +887,7 @@ def start(
 
 
 @wait_for_connection
-def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
+def get_run_info(task_id: TaskId) -> tuple[float | None, float | None]:
     """Gets the % done and field_decay for a running task.
 
     Parameters
@@ -951,7 +952,7 @@ def get_status(task_id: TaskId) -> str:
     return status
 
 
-def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] = None) -> None:
+def monitor(task_id: TaskId, verbose: bool = True, worker_group: str | None = None) -> None:
     """
     Print the real time task progress until completion.
 
@@ -1124,7 +1125,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
 
 
 @wait_for_connection
-def abort(task_id: TaskId) -> Optional[TaskInfo]:
+def abort(task_id: TaskId) -> TaskInfo | None:
     """Abort server-side data associated with task.
 
     Parameters
@@ -1155,12 +1156,12 @@ def abort(task_id: TaskId) -> Optional[TaskInfo]:
 @wait_for_connection
 def download(
     task_id: TaskId,
-    path: Optional[PathLike] = None,
+    path: PathLike | None = None,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
     *,
-    task: Optional[WebTask] = None,
-    task_type: Optional[str] = None,
+    task: WebTask | None = None,
+    task_type: str | None = None,
 ) -> None:
     """Download results of task to file.
 
@@ -1253,7 +1254,7 @@ def download_log(
     task_id: TaskId,
     path: PathLike = "tidy3d.log",
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> None:
     """Download the tidy3d log file associated with a task.
 
@@ -1280,11 +1281,11 @@ def download_log(
 
 @wait_for_connection
 def load(
-    task_id: Optional[TaskId],
-    path: Optional[PathLike] = None,
+    task_id: TaskId | None,
+    path: PathLike | None = None,
     replace_existing: bool = True,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
     lazy: bool = False,
 ) -> WorkflowDataType:
     """
@@ -1587,7 +1588,7 @@ def download_simulation(
     task_id: TaskId,
     path: PathLike = SIM_FILE_HDF5,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> None:
     """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
@@ -1620,7 +1621,7 @@ def download_simulation(
 
 @wait_for_connection
 def get_tasks(
-    num_tasks: Optional[int] = None, order: Literal["new", "old"] = "new", folder: str = "default"
+    num_tasks: int | None = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> list[dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
@@ -1655,7 +1656,7 @@ def get_tasks(
 def estimate_cost(
     task_id: str,
     verbose: bool = True,
-    solver_version: Optional[str] = None,
+    solver_version: str | None = None,
 ) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 

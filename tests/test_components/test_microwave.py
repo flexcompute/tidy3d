@@ -806,7 +806,7 @@ def test_mode_plane_analyzer_canonical_shapes(colocate, tline_type):
         size=modal_plane.size,
         field_data_colocated=mode_monitor.colocate,
     )
-    bounding_boxes, geos = mode_plane_analyzer.get_conductor_bounding_boxes(
+    bounding_boxes, _geos = mode_plane_analyzer.get_conductor_bounding_boxes(
         sim.structures,
         sim.grid,
         sim.symmetry,
@@ -855,7 +855,7 @@ def test_mode_plane_analyzer_advanced(use_2D, symmetry):
         size=modal_plane.size,
         field_data_colocated=mode_monitor.colocate,
     )
-    bounding_boxes, geos = mode_plane_analyzer.get_conductor_bounding_boxes(
+    bounding_boxes, _geos = mode_plane_analyzer.get_conductor_bounding_boxes(
         sim.structures,
         sim.grid,
         sim.symmetry,
@@ -970,7 +970,7 @@ def test_mode_plane_analyzer_ground_plane_filtered():
     analyzer = ModePlaneAnalyzer(
         center=mode_plane.center, size=mode_plane.size, field_data_colocated=False
     )
-    bounding_boxes, conductors = analyzer.get_conductor_bounding_boxes(
+    _bounding_boxes, conductors = analyzer.get_conductor_bounding_boxes(
         sim.structures, sim.grid, sim.symmetry, sim.bounding_box
     )
     # Only the signal trace should remain; ground plane is shorted to PEC

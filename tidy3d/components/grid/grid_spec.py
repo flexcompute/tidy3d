@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import (
@@ -597,7 +597,7 @@ class CustomGrid(GridSpec1d):
         json_schema_extra={"units": MICROMETER},
     )
 
-    custom_offset: Optional[float] = Field(
+    custom_offset: float | None = Field(
         None,
         title="Customized grid offset.",
         description="The starting coordinate of the grid which defines the simulation center. "
@@ -686,7 +686,7 @@ class AbstractAutoGrid(GridSpec1d):
         description="The type of mesher to use to generate the grid automatically.",
     )
 
-    dl_min: Optional[NonNegativeFloat] = Field(
+    dl_min: NonNegativeFloat | None = Field(
         None,
         title="Lower Bound of Grid Size",
         description="Lower bound of the grid size along this dimension regardless of "
@@ -800,7 +800,7 @@ class AbstractAutoGrid(GridSpec1d):
             Maximum grid spacing list for each interval.
         """
 
-        symmetry_domain, sim_cent, sim_size, dl_max = self._compute_symmetry_domain(
+        symmetry_domain, _sim_cent, _sim_size, dl_max = self._compute_symmetry_domain(
             structures, symmetry
         )
 
@@ -868,7 +868,7 @@ class AbstractAutoGrid(GridSpec1d):
         :class:`.Coords1D`:
             1D coords to be used as grid boundaries.
         """
-        symmetry_domain, sim_cent, sim_size, dl_max = self._compute_symmetry_domain(
+        symmetry_domain, sim_cent, sim_size, _dl_max = self._compute_symmetry_domain(
             structures, symmetry
         )
 
@@ -1120,7 +1120,7 @@ class AutoGrid(AbstractAutoGrid):
         return self._filtered_dl(min_dl, sim_size)
 
 
-GridType = Union[UniformGrid, CustomGrid, AutoGrid, CustomGridBoundaries, QuasiUniformGrid]
+GridType = UniformGrid | CustomGrid | AutoGrid | CustomGridBoundaries | QuasiUniformGrid
 
 
 class GridRefinement(Tidy3dBaseModel):
@@ -1140,13 +1140,13 @@ class GridRefinement(Tidy3dBaseModel):
 
     """
 
-    refinement_factor: Optional[PositiveFloat] = Field(
+    refinement_factor: PositiveFloat | None = Field(
         None,
         title="Mesh Refinement Factor",
         description="Refine grid step size in vacuum by this factor.",
     )
 
-    dl: Optional[PositiveFloat] = Field(
+    dl: PositiveFloat | None = Field(
         None,
         title="Grid Size",
         description="Grid step size in the refined region.",
@@ -1252,14 +1252,14 @@ class LayerRefinementSpec(Box):
         description="Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z).",
     )
 
-    min_steps_along_axis: Optional[PositiveFloat] = Field(
+    min_steps_along_axis: PositiveFloat | None = Field(
         None,
         title="Minimal Number Of Steps Along Axis",
         description="If not ``None`` and the thickness of the layer is nonzero, set minimal "
         "number of steps discretizing the layer thickness.",
     )
 
-    bounds_refinement: Optional[GridRefinement] = Field(
+    bounds_refinement: GridRefinement | None = Field(
         None,
         title="Mesh Refinement Factor Around Layer Bounds",
         description="If not ``None``, refine mesh around minimum and maximum positions "
@@ -1267,14 +1267,14 @@ class LayerRefinementSpec(Box):
         "refinement here is only applied if it sets a smaller grid size.",
     )
 
-    bounds_snapping: Optional[Literal["bounds", "lower", "upper", "center"]] = Field(
+    bounds_snapping: Literal["bounds", "lower", "upper", "center"] | None = Field(
         "lower",
         title="Placing Grid Snapping Point Along Axis",
         description="If not ``None``, enforcing grid boundaries to pass through ``lower``, "
         "``center``, or ``upper`` position of the layer; or both ``lower`` and ``upper`` with ``bounds``.",
     )
 
-    corner_finder: Optional[CornerFinderSpec] = Field(
+    corner_finder: CornerFinderSpec | None = Field(
         default_factory=CornerFinderSpec,
         title="Inplane Corner Detection Specification",
         description="Specification for inplane corner detection. Inplane mesh refinement "
@@ -1288,7 +1288,7 @@ class LayerRefinementSpec(Box):
         "grid boundaries to pass through corners of geometries specified by ``corner_finder``.",
     )
 
-    corner_refinement: Optional[GridRefinement] = Field(
+    corner_refinement: GridRefinement | None = Field(
         default_factory=GridRefinement,
         title="Inplane Mesh Refinement Factor Around Corners",
         description="If not ``None`` and ``corner_finder`` is not ``None``, refine mesh around "
@@ -1345,9 +1345,9 @@ class LayerRefinementSpec(Box):
         min_steps_along_axis: PositiveFloat = None,
         bounds_refinement: GridRefinement = None,
         bounds_snapping: Literal["bounds", "lower", "upper", "center"] = "lower",
-        corner_finder: Union[CornerFinderSpec, None, object] = Undefined,
+        corner_finder: CornerFinderSpec | None | object = Undefined,
         corner_snapping: bool = True,
-        corner_refinement: Union[GridRefinement, None, object] = Undefined,
+        corner_refinement: GridRefinement | None | object = Undefined,
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
@@ -1603,8 +1603,8 @@ class LayerRefinementSpec(Box):
         structures: list[Structure],
         sim_bounds: tuple,
         boundary_type: tuple,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
-        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
+        cached_corners_and_convexity: CornersAndConvexity | None = None,
     ) -> float:
         """Suggested lower bound of grid step size for this layer.
 
@@ -1666,8 +1666,8 @@ class LayerRefinementSpec(Box):
         structure_list: list[Structure],
         sim_bounds: tuple,
         boundary_type: tuple,
-        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
+        cached_corners_and_convexity: CornersAndConvexity | None = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
     ) -> list[CoordinateOptional]:
         """generate snapping points for mesh refinement."""
         snapping_points = self._snapping_points_along_axis
@@ -1687,8 +1687,8 @@ class LayerRefinementSpec(Box):
         structure_list: list[Structure],
         sim_bounds: tuple,
         boundary_type: tuple,
-        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
+        cached_corners_and_convexity: CornersAndConvexity | None = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
     ) -> list[MeshOverrideStructure]:
         """Generate mesh override structures for mesh refinement."""
         return self._override_structures_along_axis(
@@ -1863,8 +1863,8 @@ class LayerRefinementSpec(Box):
         structure_list: list[Structure],
         sim_bounds: tuple,
         boundary_type: tuple,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
-        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
+        cached_corners_and_convexity: CornersAndConvexity | None = None,
     ) -> float:
         """Calculate `dl_min` suggestion based on smallest feature size."""
 
@@ -1919,8 +1919,8 @@ class LayerRefinementSpec(Box):
         structure_list: list[Structure],
         sim_bounds: tuple,
         boundary_type: tuple,
-        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
+        cached_corners_and_convexity: CornersAndConvexity | None = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
     ) -> list[CoordinateOptional]:
         """Inplane corners in 3D coordinate."""
         if self.corner_finder is None:
@@ -1980,8 +1980,8 @@ class LayerRefinementSpec(Box):
         grid_size_in_vacuum: float,
         sim_bounds: tuple,
         boundary_type: tuple,
-        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
+        cached_corners_and_convexity: CornersAndConvexity | None = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
     ) -> list[MeshOverrideStructure]:
         """Inplane mesh override structures for refining mesh around corners."""
         if self.corner_refinement is None:
@@ -2061,7 +2061,7 @@ class LayerRefinementSpec(Box):
         grid_x_coords: ArrayFloat1D,
         grid_y_coords: ArrayFloat1D,
         poly_vertices: ArrayFloat2D,
-        boundary: tuple[Optional[str], Optional[str]],
+        boundary: tuple[str | None, str | None],
     ) -> tuple[np.typing.NDArray[np.int_], np.typing.NDArray[np.float64]]:
         """Detect intersection points of single polygon and vertical grid lines."""
 
@@ -2238,7 +2238,7 @@ class LayerRefinementSpec(Box):
         grid_x_coords: ArrayFloat1D,
         grid_y_coords: ArrayFloat1D,
         poly_vertices: ArrayFloat2D,
-        boundaries: tuple[tuple[Optional[str], Optional[str]], tuple[Optional[str], Optional[str]]],
+        boundaries: tuple[tuple[str | None, str | None], tuple[str | None, str | None]],
     ) -> tuple[
         np.typing.NDArray[np.int_],
         np.typing.NDArray[np.float64],
@@ -2270,7 +2270,7 @@ class LayerRefinementSpec(Box):
         x: ArrayFloat1D,
         y: ArrayFloat1D,
         merged_geos: list[tuple[Any, Shapely]],
-        boundaries: list[list[Optional[str]]],
+        boundaries: list[list[str | None]],
     ) -> tuple[
         np.typing.NDArray[np.int_],
         np.typing.NDArray[np.float64],
@@ -2449,9 +2449,9 @@ class LayerRefinementSpec(Box):
         grid: Grid,
         merged_geos: list[tuple[Any, Shapely]],
         boundary_type: tuple[
-            tuple[Optional[str], Optional[str]],
-            tuple[Optional[str], Optional[str]],
-            tuple[Optional[str], Optional[str]],
+            tuple[str | None, str | None],
+            tuple[str | None, str | None],
+            tuple[str | None, str | None],
         ],
     ) -> tuple[tuple[CoordinateOptional], float]:
         """
@@ -2612,7 +2612,7 @@ class GridSpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    wavelength: Optional[PositiveFloat] = Field(
+    wavelength: PositiveFloat | None = Field(
         None,
         title="Free-space wavelength",
         description="Free-space wavelength for automatic nonuniform grid. It can be ``None`` "
@@ -2783,8 +2783,8 @@ class GridSpec(Tidy3dBaseModel):
         lumped_elements: list[LumpedElementType],
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
         sim_bounds: tuple,
-        cached_corners_and_convexity: Optional[list[CornersAndConvexity]] = None,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
+        cached_corners_and_convexity: list[CornersAndConvexity] | None = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
     ) -> list[CoordinateOptional]:
         """Internal snapping points. So far, internal snapping points are generated by
         `layer_refinement_specs` and lumped element.
@@ -2844,7 +2844,7 @@ class GridSpec(Tidy3dBaseModel):
         lumped_elements: list[LumpedElementType],
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
         sim_bounds: tuple,
-        internal_snapping_points: Optional[list[CoordinateOptional]] = None,
+        internal_snapping_points: list[CoordinateOptional] | None = None,
     ) -> list[CoordinateOptional]:
         """Internal and external snapping points. External snapping points take higher priority.
         So far, internal snapping points are generated by `layer_refinement_specs`.
@@ -2887,8 +2887,8 @@ class GridSpec(Tidy3dBaseModel):
         sim_bounds: tuple,
         lumped_elements: list[LumpedElementType],
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
-        cached_corners_and_convexity: Optional[list[CornersAndConvexity]] = None,
-        cached_merged_geos: Optional[list[tuple[Any, Shapely]]] = None,
+        cached_corners_and_convexity: list[CornersAndConvexity] | None = None,
+        cached_merged_geos: list[tuple[Any, Shapely]] | None = None,
     ) -> list[StructureType]:
         """Internal mesh override structures. So far, internal override structures are generated by
         `layer_refinement_specs` and lumped element.
@@ -2955,7 +2955,7 @@ class GridSpec(Tidy3dBaseModel):
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
         sim_bounds: tuple,
         structure_priority_mode: PriorityMode = "equal",
-        internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
+        internal_override_structures: list[MeshOverrideStructure] | None = None,
     ) -> list[StructureType]:
         """Internal and external mesh override structures sorted based on their priority. By default,
         the priority of internal override structures is -1, and 0 for external ones.
@@ -3001,7 +3001,7 @@ class GridSpec(Tidy3dBaseModel):
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
         sim_bounds: tuple,
         structure_priority_mode: PriorityMode = "equal",
-        internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
+        internal_override_structures: list[MeshOverrideStructure] | None = None,
     ) -> list[StructureType]:
         """Get all structures including original structures and all override structures.
 
@@ -3054,7 +3054,7 @@ class GridSpec(Tidy3dBaseModel):
         sim_bounds: tuple,
         lumped_elements: list[LumpedElementType],
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
-        cached_merged_geos: Optional[list[list[tuple[Any, Shapely]]]] = None,
+        cached_merged_geos: list[list[tuple[Any, Shapely]]] | None = None,
     ) -> float:
         """Lower bound of grid size to be applied to dimensions where AutoGrid with unset
         `dl_min` (0 or None) is applied.
@@ -3118,8 +3118,8 @@ class GridSpec(Tidy3dBaseModel):
         sources: list[SourceType],
         num_pml_layers: list[tuple[NonNegativeInt, NonNegativeInt]],
         lumped_elements: list[LumpedElementType] = (),
-        internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
-        internal_snapping_points: Optional[list[CoordinateOptional]] = None,
+        internal_override_structures: list[MeshOverrideStructure] | None = None,
+        internal_snapping_points: list[CoordinateOptional] | None = None,
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]] = [
             [None, None],
             [None, None],
@@ -3184,15 +3184,15 @@ class GridSpec(Tidy3dBaseModel):
         sources: list[SourceType],
         num_pml_layers: list[tuple[NonNegativeInt, NonNegativeInt]],
         lumped_elements: list[LumpedElementType] = (),
-        internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
-        internal_snapping_points: Optional[list[CoordinateOptional]] = None,
+        internal_override_structures: list[MeshOverrideStructure] | None = None,
+        internal_snapping_points: list[CoordinateOptional] | None = None,
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]] = [
             [None, None],
             [None, None],
             [None, None],
         ],
         structure_priority_mode: PriorityMode = "equal",
-        cached_merged_geos: Optional[list[list[tuple[Any, Shapely]]]] = None,
+        cached_merged_geos: list[list[tuple[Any, Shapely]]] | None = None,
     ) -> tuple[Grid, list[CoordinateOptional]]:
         """Make the entire simulation grid based on some simulation parameters.
         Also return snapping point resulted from iterative gap meshing.
@@ -3403,12 +3403,12 @@ class GridSpec(Tidy3dBaseModel):
         num_pml_layers: list[tuple[NonNegativeInt, NonNegativeInt]],
         boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
         lumped_elements: list[LumpedElementType] = (),
-        internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
-        internal_snapping_points: Optional[list[CoordinateOptional]] = None,
+        internal_override_structures: list[MeshOverrideStructure] | None = None,
+        internal_snapping_points: list[CoordinateOptional] | None = None,
         dl_min_from_gaps: PositiveFloat = inf,
         structure_priority_mode: PriorityMode = "equal",
-        parse_structures_interval_coords: Optional[list[np.ndarray]] = None,
-        parse_structures_max_dl_list: Optional[list[np.ndarray]] = None,
+        parse_structures_interval_coords: list[np.ndarray] | None = None,
+        parse_structures_max_dl_list: list[np.ndarray] | None = None,
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 

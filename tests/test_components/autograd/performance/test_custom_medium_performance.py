@@ -4,10 +4,10 @@ import cProfile
 import os
 import pstats
 from collections import Counter
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import pytest

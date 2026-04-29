@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, field_validator, model_validator
@@ -23,7 +23,6 @@ from tidy3d.exceptions import (
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Union
 
     import xarray as xr
 
@@ -49,7 +48,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         "associated with the monitors of the original :class:`~tidy3d.components.base_sim.simulation.AbstractSimulation`.",
     )
 
-    log: Optional[str] = Field(
+    log: str | None = Field(
         None,
         title="Solver Log",
         description="A string containing the log information from the simulation run.",
@@ -103,7 +102,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
     @staticmethod
     def _field_component_value(
-        field_component: Union[xr.DataArray, UnstructuredGridDatasetType], val: FieldVal
+        field_component: xr.DataArray | UnstructuredGridDatasetType, val: FieldVal
     ) -> xr.DataArray:
         """return the desired value of a field component.
 
@@ -149,7 +148,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
     @staticmethod
     def _apply_log_scale(
         field_data: xr.DataArray,
-        vmin: Optional[float] = None,
+        vmin: float | None = None,
         db_factor: float = 1.0,
     ) -> xr.DataArray:
         """Prepare field data for log-scale plotting by handling zeros.

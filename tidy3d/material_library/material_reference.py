@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -12,23 +10,23 @@ from tidy3d.components.base import Tidy3dBaseModel
 class ReferenceData(Tidy3dBaseModel):
     """Reference data."""
 
-    doi: Optional[str] = Field(None, title="DOI", description="DOI of the reference.")
-    journal: Optional[str] = Field(
+    doi: str | None = Field(None, title="DOI", description="DOI of the reference.")
+    journal: str | None = Field(
         None,
         title="Journal publication info",
         description="Publication info in the order of author, title, journal volume, and year.",
     )
-    url: Optional[str] = Field(
+    url: str | None = Field(
         None,
         title="URL link",
         description="Some reference can be accessed through a url link to its pdf etc.",
     )
-    manufacturer: Optional[str] = Field(
+    manufacturer: str | None = Field(
         None,
         title="Manufacturer",
         description="Name of the manufacturer, e.g., Rogers, Arlon.",
     )
-    datasheet_title: Optional[str] = Field(
+    datasheet_title: str | None = Field(
         None,
         title="Datasheet Title",
         description="Title of the datasheet.",

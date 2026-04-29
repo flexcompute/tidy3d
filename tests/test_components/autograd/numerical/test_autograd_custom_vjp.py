@@ -63,7 +63,7 @@ def make_base_sim(
     sim_size_um = sim_geometry.size
     sim_center_um = sim_geometry.center
 
-    src_size = sim_size_um[0:2] + (0,)
+    src_size = (*sim_size_um[0:2], 0)
 
     wl_min_src_um = 0.9 * adj_wvl_um
     wl_max_src_um = 1.1 * adj_wvl_um
@@ -370,7 +370,7 @@ def test_finite_difference_custom_vjp(
 
     test_results = np.zeros((2, len(sphere_init)))
 
-    obj, adj_grad = obj_val_and_grad([sphere_init])
+    _obj, adj_grad = obj_val_and_grad([sphere_init])
     adj_grad = np.squeeze(np.array(adj_grad))
 
     # empirical step size from running other finite difference tests for field

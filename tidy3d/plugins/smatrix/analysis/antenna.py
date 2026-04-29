@@ -8,16 +8,14 @@ from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
     from tidy3d.plugins.smatrix.types import NetworkIndex
 
 
 def get_antenna_metrics_data(
     terminal_component_modeler_data: TerminalComponentModelerData,
-    port_amplitudes: Optional[dict[NetworkIndex, complex]] = None,
-    monitor_name: Optional[str] = None,
+    port_amplitudes: dict[NetworkIndex, complex] | None = None,
+    monitor_name: str | None = None,
 ) -> AntennaMetricsData:
     """Calculate antenna parameters using superposition of fields from multiple port excitations.
 

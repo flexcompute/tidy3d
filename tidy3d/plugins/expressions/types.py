@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     )
     from .variables import Constant, Variable
 
-NumberType = Union[int, float, Complex, ArrayLikeStrict]
+NumberType = int | float | Complex | ArrayLikeStrict
 
 OperatorType = discriminated_union(
     Union[
@@ -60,10 +60,6 @@ MetricType = discriminated_union(
     ]
 )
 
-ExpressionType = Union[
-    OperatorType,
-    FunctionType,
-    MetricType,
-]
+ExpressionType = OperatorType | FunctionType | MetricType
 
-NumberOrExpression = Union[ExpressionType, NumberType]
+NumberOrExpression = ExpressionType | NumberType

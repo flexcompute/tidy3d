@@ -13,8 +13,6 @@ from tidy3d.constants import HBAR
 from .fit import DispersionFitter
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from pydantic import NonNegativeFloat, PositiveInt
 
     from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam
@@ -66,7 +64,7 @@ class FastDispersionFitter(DispersionFitter):
         self,
         min_num_poles: PositiveInt = 1,
         max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
-        eps_inf: Optional[float] = None,
+        eps_inf: float | None = None,
         tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
         advanced_param: AdvancedFastFitterParam = None,
     ) -> tuple[PoleResidue, float]:

@@ -6,7 +6,7 @@ import autograd.numpy as np
 import numpy as npo
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D
 

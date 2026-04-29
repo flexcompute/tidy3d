@@ -13,8 +13,7 @@ from tidy3d.components.grid.grid import Coords
 from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-    from typing import Callable, Optional
+    from collections.abc import Callable, Sequence
 
     from tidy3d.components.autograd.types import PathType
     from tidy3d.components.data.monitor_data import ElectromagneticFieldData
@@ -38,7 +37,7 @@ def collapse_source_adjoint_to_dataset_frequency(
 def split_source_paths(
     paths: Sequence[PathType],
     *,
-    primary_roots: Optional[set[str]] = None,
+    primary_roots: set[str] | None = None,
 ) -> tuple[list[PathType], list[PathType]]:
     """Split source paths into primary and center groups.
 
@@ -164,7 +163,7 @@ def validate_no_collapsed_bounds_for_requested_center_axes(
 
 def _axis_bounds_or_none(
     arr: SpatialDataArray, bounds: Bound, axis: int
-) -> Optional[tuple[np.ndarray, float, float]]:
+) -> tuple[np.ndarray, float, float] | None:
     """Return axis coords and bounds if valid, otherwise ``None``."""
     dim = "xyz"[axis]
     if dim not in arr.coords:

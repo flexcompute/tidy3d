@@ -21,7 +21,7 @@ Examples:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from pydantic import Field, FiniteFloat, field_validator
@@ -52,7 +52,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     >>> voltage_source = td.DCVoltageSource(voltage=voltages)
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Name",
         description="Unique name for the DC voltage source",
@@ -148,7 +148,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     >>> current_source = td.DCCurrentSource(current=0.4)
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Name",
         description="Unique name for the DC current source",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import numpy as np
 import pytest
@@ -22,28 +22,28 @@ M = td.Medium()
 
 
 class LeafModel(Tidy3dBaseModel):
-    leaf_attr: Optional[str] = None
+    leaf_attr: str | None = None
     common_attr: int = 0
-    value_attr: Optional[float] = None
+    value_attr: float | None = None
 
 
 class NodeModel(Tidy3dBaseModel):
-    node_attr: Optional[str] = None
-    leaf_child: Optional[LeafModel] = None
+    node_attr: str | None = None
+    leaf_child: LeafModel | None = None
     leaf_list: list[LeafModel] = Field(default_factory=list)
     leaf_tuple: tuple[LeafModel, ...] = Field(default_factory=tuple)
     common_attr: float = 0.0
-    value_attr: Optional[int] = None
+    value_attr: int | None = None
 
 
 class RootModel(Tidy3dBaseModel):
-    root_attr: Optional[str] = None
-    node_child: Optional[NodeModel] = None
+    root_attr: str | None = None
+    node_child: NodeModel | None = None
     node_list: list[NodeModel] = Field(default_factory=list)
     node_tuple: tuple[NodeModel, ...] = Field(default_factory=tuple)
     mixed_list: list[Any] = Field(default_factory=list)
     common_attr: bool = False
-    value_attr: Optional[str] = None
+    value_attr: str | None = None
 
 
 class SpecialNodeModel(NodeModel):

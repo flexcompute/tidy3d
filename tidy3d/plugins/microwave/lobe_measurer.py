@@ -18,8 +18,6 @@ from tidy3d.exceptions import ValidationError
 from .viz import plot_params_lobe_FNBW, plot_params_lobe_peak, plot_params_lobe_width
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.compat import Self
     from tidy3d.components.types import ArrayLike, Ax
 
@@ -302,7 +300,7 @@ class LobeMeasurer(MicrowaveBaseModel):
         return side_lobes
 
     @property
-    def sidelobe_level(self) -> Optional[float]:
+    def sidelobe_level(self) -> float | None:
         """The sidelobe level returned on a linear scale."""
         if self.side_lobes.empty:
             return None

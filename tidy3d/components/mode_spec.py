@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import (
@@ -99,7 +99,7 @@ class ModeSortSpec(Tidy3dBaseModel):
     """
 
     # Filtering stage
-    filter_key: Optional[MODE_DATA_KEYS] = Field(
+    filter_key: MODE_DATA_KEYS | None = Field(
         None,
         title="Filtering key",
         description="Quantity used to filter modes into two groups before sorting.",
@@ -114,7 +114,7 @@ class ModeSortSpec(Tidy3dBaseModel):
         title="Filtering order",
         description="Select whether the first group contains values over or under the reference.",
     )
-    bounding_box: Optional[Box] = Field(
+    bounding_box: Box | None = Field(
         None,
         title="Bounding box",
         description=(
@@ -123,7 +123,7 @@ class ModeSortSpec(Tidy3dBaseModel):
             "still intersect the monitor plane. Required when filtering or sorting with that key."
         ),
     )
-    keep_modes: Union[Literal["all"], Literal["filtered"], PositiveInt] = Field(
+    keep_modes: Literal["all"] | Literal["filtered"] | PositiveInt = Field(
         "all",
         title="Keep Modes",
         description=(
@@ -140,14 +140,14 @@ class ModeSortSpec(Tidy3dBaseModel):
         title="Sorting key",
         description="Quantity used to sort modes within each filtered group.",
     )
-    sort_reference: Optional[float] = Field(
+    sort_reference: float | None = Field(
         None,
         title="Sorting reference",
         description=(
             "If provided, sorting is based on the absolute difference to this reference value."
         ),
     )
-    sort_order: Optional[Literal["ascending", "descending"]] = Field(
+    sort_order: Literal["ascending", "descending"] | None = Field(
         None,
         title="Sorting direction",
         description=_build_sort_order_description(),
@@ -171,7 +171,7 @@ class ModeSortSpec(Tidy3dBaseModel):
         return data
 
     # Frequency tracking - applied after sorting and filtering
-    track_freq: Optional[TrackFreq] = Field(
+    track_freq: TrackFreq | None = Field(
         "central",
         title="Tracking base frequency",
         description="If provided, enables cross-frequency mode tracking. Can be 'lowest', "
@@ -399,7 +399,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
         Monitor that can use this specification to reduce mode computation cost.
     """
 
-    sampling_spec: Union[UniformSampling, ChebSampling, CustomSampling] = Field(
+    sampling_spec: UniformSampling | ChebSampling | CustomSampling = Field(
         title="Sampling Specification",
         description="Specification for frequency sampling points.",
         discriminator="type",
@@ -592,7 +592,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         description="Number of modes returned by mode solver.",
     )
 
-    target_neff: Optional[PositiveFloat] = Field(
+    target_neff: PositiveFloat | None = Field(
         None,
         title="Target effective index",
         description="Guess for effective index of the mode.",
@@ -604,7 +604,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         description="Number of standard pml layers to add in the two tangential axes.",
     )
 
-    filter_pol: Optional[Literal["te", "tm"]] = Field(
+    filter_pol: Literal["te", "tm"] | None = Field(
         None,
         title="Polarization filtering",
         description="The solver always computes the ``num_modes`` modes closest to the given "
@@ -644,7 +644,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "conductor, single precision otherwise.",
     )
 
-    bend_radius: Optional[FiniteFloat] = Field(
+    bend_radius: FiniteFloat | None = Field(
         None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
@@ -653,7 +653,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         json_schema_extra={"units": MICROMETER},
     )
 
-    bend_axis: Optional[Axis2D] = Field(
+    bend_axis: Axis2D | None = Field(
         None,
         title="Bend axis",
         description="Index into the two tangential axes defining the normal to the "
@@ -675,13 +675,13 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "Note: currently only supported when ``angle_phi`` is a multiple of ``np.pi``.",
     )
 
-    track_freq: Optional[TrackFreq] = Field(
+    track_freq: TrackFreq | None = Field(
         None,
         title="Mode Tracking Frequency (deprecated)",
         description="Deprecated. Use 'sort_spec.track_freq' instead.",
     )
 
-    group_index_step: Union[PositiveFloat, bool] = Field(
+    group_index_step: PositiveFloat | bool = Field(
         False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "
@@ -698,7 +698,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "frequencies it can change depending on the mode tracking.",
     )
 
-    interp_spec: Optional[ModeInterpSpec] = Field(
+    interp_spec: ModeInterpSpec | None = Field(
         None,
         title="Mode frequency interpolation specification",
         description="Specification for computing modes at a reduced set of frequencies and "
@@ -755,9 +755,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("group_index_step", mode="before")
     @classmethod
-    def _validate_group_index_step_default(
-        cls, val: Union[bool, PositiveFloat]
-    ) -> Union[bool, PositiveFloat]:
+    def _validate_group_index_step_default(cls, val: bool | PositiveFloat) -> bool | PositiveFloat:
         """If ``True``, replace with default fractional step."""
         if val is True:
             return GROUP_INDEX_STEP
@@ -765,9 +763,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("group_index_step")
     @classmethod
-    def _validate_group_index_step_size(
-        cls, val: Union[bool, PositiveFloat]
-    ) -> Union[bool, PositiveFloat]:
+    def _validate_group_index_step_size(cls, val: bool | PositiveFloat) -> bool | PositiveFloat:
         """Ensure group-index step is < 1."""
         if val is not False and val >= 1:
             raise ValidationError(
@@ -777,7 +773,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("bend_radius")
     @classmethod
-    def _validate_bend_radius_not_zero(cls, v: Optional[float]) -> Optional[float]:
+    def _validate_bend_radius_not_zero(cls, v: float | None) -> float | None:
         """`bend_radius` magnitude must be non-zero."""
         if v is not None and isclose(v, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
@@ -845,7 +841,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("filter_pol")
     @classmethod
-    def _filter_pol_deprecated(cls, val: Optional[str]) -> Optional[str]:
+    def _filter_pol_deprecated(cls, val: str | None) -> str | None:
         """Warn that 'filter_pol' is deprecated in favor of 'sort_spec'."""
         if val is not None:
             log.warning(
@@ -856,7 +852,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("track_freq")
     @classmethod
-    def _track_freq_deprecated(cls, val: Optional[TrackFreq]) -> Optional[TrackFreq]:
+    def _track_freq_deprecated(cls, val: TrackFreq | None) -> TrackFreq | None:
         """Warn that 'track_freq' on ModeSpec is deprecated in favor of 'sort_spec.track_freq'."""
         if val is not None:
             log.warning(
@@ -867,8 +863,8 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @classmethod
     def _track_freq_from_specs(
-        cls, track_freq: Optional[TrackFreq], sort_spec: Optional[ModeSortSpec]
-    ) -> Optional[TrackFreq]:
+        cls, track_freq: TrackFreq | None, sort_spec: ModeSortSpec | None
+    ) -> TrackFreq | None:
         """Resolver for tracking frequency: prefers track_freq if set,
         otherwise falls back to sort_spec.track_freq."""
         if track_freq is not None:
@@ -896,7 +892,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return self
 
     @property
-    def _track_freq(self) -> Optional[TrackFreq]:
+    def _track_freq(self) -> TrackFreq | None:
         """Private resolver for tracking frequency: prefers ModeSpec.track_freq if set,
         otherwise falls back to ModeSortSpec.track_freq."""
         return self._track_freq_from_specs(self.track_freq, self.sort_spec)

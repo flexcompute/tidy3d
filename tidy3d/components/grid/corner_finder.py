@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, PositiveFloat, PositiveInt
@@ -47,28 +47,28 @@ class CornerFinderSpec(Tidy3dBaseModel):
         lt=np.pi,
     )
 
-    distance_threshold: Optional[PositiveFloat] = Field(
+    distance_threshold: PositiveFloat | None = Field(
         None,
         title="Distance Threshold In Corner Identification",
         description="If not ``None`` and the distance of the vertex to its neighboring vertices "
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
     )
 
-    concave_resolution: Optional[PositiveInt] = Field(
+    concave_resolution: PositiveInt | None = Field(
         None,
         title="Concave Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on concave featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
-    convex_resolution: Optional[PositiveInt] = Field(
+    convex_resolution: PositiveInt | None = Field(
         None,
         title="Convex Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on convex featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
-    mixed_resolution: Optional[PositiveInt] = Field(
+    mixed_resolution: PositiveInt | None = Field(
         None,
         title="Mixed Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on mixed featues."

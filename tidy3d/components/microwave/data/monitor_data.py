@@ -4,7 +4,7 @@ reflection efficiency, gain, and realized gain.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
@@ -151,7 +151,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
         return reflection_efficiency
 
     def partial_gain(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float | None = None
     ) -> xr.Dataset:
         """The partial gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
@@ -193,7 +193,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
         return partial_G.Gtheta + partial_G.Gphi
 
     def partial_realized_gain(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float | None = None
     ) -> xr.Dataset:
         """The partial realized gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
@@ -251,7 +251,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     are used.
     """
 
-    transmission_line_data: Optional[TransmissionLineDataset] = Field(
+    transmission_line_data: TransmissionLineDataset | None = Field(
         None,
         title="Transmission Line Data",
         description="Additional data relevant to transmission lines in RF and microwave applications, "
@@ -259,7 +259,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         "been used to set up the monitor or mode solver.",
     )
 
-    transmission_line_terminal_data: Optional[TransmissionLineTerminalDataset] = Field(
+    transmission_line_terminal_data: TransmissionLineTerminalDataset | None = Field(
         None,
         title="Transmission Line Terminal Data",
         description="Additional data relevant to transmission line terminals in RF and microwave applications, "
@@ -269,7 +269,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     )
 
     @cached_property
-    def terminal_fields(self) -> Optional[TerminalFieldDataset]:
+    def terminal_fields(self) -> TerminalFieldDataset | None:
         """Field data for each terminal.
 
         Returns
@@ -395,7 +395,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         return PhaseVelocityArray(v_p.values, coords=self.n_eff.coords)
 
     @property
-    def group_velocity(self) -> Optional[GroupVelocityArray]:
+    def group_velocity(self) -> GroupVelocityArray | None:
         """Group velocity (v_g = c/n_group) in m/s."""
         if self.n_group_raw is None:
             log.warning(

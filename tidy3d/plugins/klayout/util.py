@@ -4,12 +4,8 @@ import os
 import platform
 from pathlib import Path
 from shutil import which
-from typing import TYPE_CHECKING
 
 import tidy3d as td
-
-if TYPE_CHECKING:
-    from typing import Union
 
 _MACOS_BREW_CASK_KLAYOUT_ROOTS: tuple[Path, ...] = (
     Path("/opt/homebrew/Caskroom/klayout"),
@@ -17,7 +13,7 @@ _MACOS_BREW_CASK_KLAYOUT_ROOTS: tuple[Path, ...] = (
 )
 
 
-def check_installation(raise_error: bool = False) -> Union[str, None]:
+def check_installation(raise_error: bool = False) -> str | None:
     """Return the path to the KLayout executable if it is installed.
     The executable is located by checking the system PATH and common platform-specific installation locations.
 
@@ -41,7 +37,7 @@ def check_installation(raise_error: bool = False) -> Union[str, None]:
     return path
 
 
-def _resolve_klayout_executable() -> Union[str, None]:
+def _resolve_klayout_executable() -> str | None:
     """Return the path to the first platform-relevant KLayout executable we can find."""
 
     system = platform.system().lower()

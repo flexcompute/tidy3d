@@ -314,7 +314,7 @@ def test_simulation_data_from_file_monitor_names_requires_hdf5(tmp_path):
     path = str(tmp_path / "many_flux.hdf5.gz")
     sim_data.to_file(path)
 
-    with pytest.raises(ValueError, match="only works with '.hdf5' or '.h5' files"):
+    with pytest.raises(ValueError, match=r"only works with '.hdf5' or '.h5' files"):
         td.SimulationData.from_file(path, monitor_names="flux_000")
 
 

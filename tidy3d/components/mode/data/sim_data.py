@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
@@ -17,11 +17,11 @@ from tidy3d.components.viz.layout import estimate_field_components_figsize
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
-ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
+ModeSimulationMonitorDataType = PermittivityData | MediumData
 FIELD_COMPONENT_TITLE_PAD = 14
 
 if TYPE_CHECKING:
-    from typing import Literal, Optional
+    from typing import Literal
 
     from matplotlib.colors import Colormap
     from matplotlib.figure import Figure
@@ -63,10 +63,10 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
-        cmap: Optional[Union[str, Colormap]] = None,
+        cmap: str | Colormap | None = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -124,17 +124,17 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
 
     def plot_field_components(
         self,
-        field_names: Union[str, tuple[str, ...]],
-        mode_indices: Optional[Union[int, tuple[int, ...]]] = None,
+        field_names: str | tuple[str, ...],
+        mode_indices: int | tuple[int, ...] | None = None,
         val: Literal["real", "imag", "abs"] = "real",
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Any = None,
-        cmap: Optional[Union[str, Colormap]] = None,
-        figsize: Optional[tuple[float, float]] = None,
+        cmap: str | Colormap | None = None,
+        figsize: tuple[float, float] | None = None,
         titles: bool = True,
         show_n_eff: bool = False,
         **sel_kwargs: Any,

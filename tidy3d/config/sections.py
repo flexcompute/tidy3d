@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
 import numpy as np
@@ -105,7 +105,7 @@ def apply_logging(config: LoggingConfig) -> None:
 class SimulationConfig(ConfigSection):
     """Simulation-related configuration."""
 
-    use_local_subpixel: Optional[bool] = Field(
+    use_local_subpixel: bool | None = Field(
         None,
         title="Use local subpixel",
         description=(
@@ -291,7 +291,7 @@ class AdjointConfig(ConfigSection):
         ge=0.0,
     )
 
-    solver_freq_chunk_size: Optional[PositiveInt] = Field(
+    solver_freq_chunk_size: PositiveInt | None = Field(
         None,
         title="Adjoint frequency chunk size",
         description=(
@@ -371,13 +371,13 @@ def apply_adjoint(config: AdjointConfig) -> None:
 class RunConfig(ConfigSection):
     """Default run configuration for web submissions."""
 
-    solver_version: Optional[str] = Field(
+    solver_version: str | None = Field(
         None,
         title="Solver version",
         description="Default solver version to use for web runs.",
     )
 
-    worker_group: Optional[str] = Field(
+    worker_group: str | None = Field(
         None,
         title="Worker group",
         description="Default worker group to use for web runs.",
@@ -389,7 +389,7 @@ class RunConfig(ConfigSection):
         description="Default simulation type label for uploaded tasks.",
     )
 
-    additional_payload: Optional[dict[str, Any]] = Field(
+    additional_payload: dict[str, Any] | None = Field(
         None,
         title="Additional payload",
         description="Additional submit payload serialized to JSON and sent under 'additionalPayload'.",
@@ -414,19 +414,19 @@ class RunConfig(ConfigSection):
 class VgpuConfig(ConfigSection):
     """Default vGPU configuration for web runs."""
 
-    priority: Optional[int] = Field(
+    priority: int | None = Field(
         None,
         title="Priority",
         description="Default queue priority for vGPU runs (1 = lowest, 10 = highest).",
     )
 
-    vgpu_allocation: Optional[int] = Field(
+    vgpu_allocation: int | None = Field(
         None,
         title="vGPU allocation",
         description="Default virtual GPU allocation for vGPU runs.",
     )
 
-    ignore_memory_limit: Optional[bool] = Field(
+    ignore_memory_limit: bool | None = Field(
         None,
         title="Ignore memory limit",
         description="Default flag to allow vGPU runs above the estimated memory limit.",
@@ -434,7 +434,7 @@ class VgpuConfig(ConfigSection):
 
     @field_validator("priority")
     @classmethod
-    def _validate_priority(cls, value: Optional[int]) -> Optional[int]:
+    def _validate_priority(cls, value: int | None) -> int | None:
         if value is None:
             return value
         if value < 1 or value > 10:
@@ -443,7 +443,7 @@ class VgpuConfig(ConfigSection):
 
     @field_validator("vgpu_allocation")
     @classmethod
-    def _validate_vgpu_allocation(cls, value: Optional[int]) -> Optional[int]:
+    def _validate_vgpu_allocation(cls, value: int | None) -> int | None:
         if value is None:
             return value
         if value not in VALID_VGPU_ALLOCATIONS:
@@ -456,7 +456,7 @@ class VgpuConfig(ConfigSection):
 class WebConfig(ConfigSection):
     """Web/HTTP configuration."""
 
-    apikey: Optional[SecretStr] = Field(
+    apikey: SecretStr | None = Field(
         None,
         title="API key",
         description="Tidy3D API key.",
@@ -511,7 +511,7 @@ class WebConfig(ConfigSection):
         ),
     )
 
-    ssl_version: Optional[str] = Field(
+    ssl_version: str | None = Field(
         None,
         title="SSL/TLS version",
         description=(
@@ -542,7 +542,7 @@ class WebConfig(ConfigSection):
 
     @field_validator("ssl_version", mode="before")
     @classmethod
-    def _convert_and_check_ssl_version_name(cls, value: Any) -> Optional[str]:
+    def _convert_and_check_ssl_version_name(cls, value: Any) -> str | None:
         """Convert SSL enum to string and check if valid.
 
         Accepted examples:

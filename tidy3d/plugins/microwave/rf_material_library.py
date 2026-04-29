@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, PositiveFloat, model_validator
@@ -46,13 +46,13 @@ class AbstractVariantItemFreqRange(AbstractVariantItem, ABC):
 
     @property
     @abstractmethod
-    def medium(self) -> Union[PoleResidue, LossyMetalMedium]:
+    def medium(self) -> PoleResidue | LossyMetalMedium:
         """The default medium for this variant."""
 
     @abstractmethod
     def medium_in_range(
-        self, frequency_range: Optional[FreqBound] = None
-    ) -> Union[PoleResidue, LossyMetalMedium]:
+        self, frequency_range: FreqBound | None = None
+    ) -> PoleResidue | LossyMetalMedium:
         """
         Generate medium with specified ``frequency_range``.
 
@@ -71,7 +71,7 @@ class AbstractVariantItemFreqRange(AbstractVariantItem, ABC):
 
     @property
     @abstractmethod
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, LossyMetalMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | LossyMetalMedium]:
         """Summarize the mediums in this variant."""
 
 
@@ -84,7 +84,7 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
     a medium for a specific frequency range.
     """
 
-    loss_tangent: Union[float, list[float]] = Field(
+    loss_tangent: float | list[float] = Field(
         ...,
         title="Loss Tangent",
         description="Loss tangent for lossy dielectric materials. "
@@ -92,7 +92,7 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
         "averaged loss tangent data is used to fit a new pole residue medium model.",
     )
 
-    eps_real: Union[float, list[float]] = Field(
+    eps_real: float | list[float] = Field(
         ...,
         title="Real Permittivity",
         description="Real permittivity for lossy dielectric materials. "
@@ -100,7 +100,7 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
         "averaged real permittivity data is used to fit a new pole residue medium model.",
     )
 
-    measurement_frequencies: Union[float, list[float]] = Field(
+    measurement_frequencies: float | list[float] = Field(
         ...,
         title="Measurement Frequencies",
         description="Frequencies at which the material properties were measured.",
@@ -154,7 +154,7 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
         """The default medium for this variant (returns the prefitted medium)."""
         return self.prefitted_medium
 
-    def medium_in_range(self, frequency_range: Optional[FreqBound] = None) -> PoleResidue:
+    def medium_in_range(self, frequency_range: FreqBound | None = None) -> PoleResidue:
         """
         Generate ``PoleResidue`` medium with specified ``frequency_range``.
         If ``frequency_range`` is not provided, returns the original prefitted material model.
@@ -268,7 +268,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         json_schema_extra={"units": CONDUCTIVITY},
     )
 
-    roughness: Optional[SurfaceRoughnessType] = Field(
+    roughness: SurfaceRoughnessType | None = Field(
         None,
         title="Surface Roughness Model",
         description="Surface roughness model that applies a frequency-dependent scaling "
@@ -276,7 +276,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         "due to surface roughness effects.",
     )
 
-    thickness: Optional[PositiveFloat] = Field(
+    thickness: PositiveFloat | None = Field(
         None,
         title="Conductor Thickness",
         description="When the thickness is not much greater than the skin depth, "
@@ -285,7 +285,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         json_schema_extra={"units": MICROMETER},
     )
 
-    fit_param: Optional[SurfaceImpedanceFitterParam] = Field(
+    fit_param: SurfaceImpedanceFitterParam | None = Field(
         None,
         title="Fitting Parameters For Surface Impedance",
         description="Parameters controlling the pole-residue fitting process for the scaled "
@@ -320,7 +320,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
 
         return LossyMetalMedium(**kwargs)
 
-    def medium_in_range(self, frequency_range: Optional[FreqBound] = None) -> LossyMetalMedium:
+    def medium_in_range(self, frequency_range: FreqBound | None = None) -> LossyMetalMedium:
         """
         Generate ``LossyMetalMedium`` with specified ``frequency_range``.
 
@@ -383,12 +383,12 @@ class MaterialItemFreqRange(MaterialItem):
         "that maps from a key to the variant model.",
     )
 
-    def __getitem__(self, variant_name: str) -> Union[PoleResidue, LossyMetalMedium]:
+    def __getitem__(self, variant_name: str) -> PoleResidue | LossyMetalMedium:
         """Helper function to easily access the medium of a variant."""
         return self.variants[variant_name].medium
 
     @property
-    def medium(self) -> Union[PoleResidue, LossyMetalMedium]:
+    def medium(self) -> PoleResidue | LossyMetalMedium:
         """The default medium for the default variant.
 
         Returns the default medium for the default variant. This is a property to maintain
@@ -417,8 +417,8 @@ class MaterialItemFreqRange(MaterialItem):
         )
 
     def medium_in_range(
-        self, frequency_range: Optional[FreqBound] = None
-    ) -> Union[PoleResidue, LossyMetalMedium]:
+        self, frequency_range: FreqBound | None = None
+    ) -> PoleResidue | LossyMetalMedium:
         """Get medium for the default variant at a specific frequency range.
 
         Returns the medium for the default variant at the specified frequency range.

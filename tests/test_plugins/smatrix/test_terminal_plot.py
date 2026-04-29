@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -194,7 +196,7 @@ def _assert_non_overlapping_centers(
     centers_px: np.ndarray, widths_px: np.ndarray, pad_px: float
 ) -> None:
     order = np.argsort(centers_px)
-    for left_idx, right_idx in zip(order[:-1], order[1:]):
+    for left_idx, right_idx in itertools.pairwise(order):
         left_right_edge = centers_px[left_idx] + widths_px[left_idx] / 2
         right_left_edge = centers_px[right_idx] - widths_px[right_idx] / 2
         assert right_left_edge >= left_right_edge + pad_px - 1e-9

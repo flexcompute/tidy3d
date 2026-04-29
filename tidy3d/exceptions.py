@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from .log import log
-
-if TYPE_CHECKING:
-    from typing import Optional
 
 
 def _format_exception_detail(exc: BaseException) -> str:
@@ -38,7 +33,7 @@ def format_chained_exception_message(message: str, exc: BaseException) -> str:
 class Tidy3dError(ValueError):
     """Any error in tidy3d"""
 
-    def __init__(self, message: Optional[str] = None, log_error: bool = True) -> None:
+    def __init__(self, message: str | None = None, log_error: bool = True) -> None:
         """Log just the error message and then raise the Exception."""
         super().__init__(message)
         if log_error:

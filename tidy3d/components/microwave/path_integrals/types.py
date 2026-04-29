@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from tidy3d.components.microwave.path_integrals.specs.current import (
     AxisAlignedCurrentIntegralSpec,
     CompositeCurrentIntegralSpec,
@@ -14,7 +12,7 @@ from tidy3d.components.microwave.path_integrals.specs.voltage import (
     Custom2DVoltageIntegralSpec,
 )
 
-VoltagePathSpecType = Union[AxisAlignedVoltageIntegralSpec, Custom2DVoltageIntegralSpec]
-CurrentPathSpecType = Union[
-    AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec, CompositeCurrentIntegralSpec
-]
+VoltagePathSpecType = AxisAlignedVoltageIntegralSpec | Custom2DVoltageIntegralSpec
+CurrentPathSpecType = (
+    AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec | CompositeCurrentIntegralSpec
+)

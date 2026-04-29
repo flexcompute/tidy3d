@@ -9,7 +9,7 @@ from .run_options import log_deprecated_run_args
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Literal, Optional, Union
+    from typing import Literal
 
     from tidy3d.components.types.workflow import WorkflowType
     from tidy3d.web.core.types import PayType
@@ -18,21 +18,21 @@ if TYPE_CHECKING:
 
 
 def run_async(
-    simulations: Union[dict[str, WorkflowType], tuple[WorkflowType], list[WorkflowType]],
+    simulations: dict[str, WorkflowType] | tuple[WorkflowType] | list[WorkflowType],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
-    callback_url: Optional[str] = None,
-    num_workers: Optional[int] = None,
+    callback_url: str | None = None,
+    num_workers: int | None = None,
     verbose: bool = True,
-    simulation_type: Optional[str] = None,
-    solver_version: Optional[str] = None,
-    parent_tasks: Optional[dict[str, list[str]]] = None,
+    simulation_type: str | None = None,
+    solver_version: str | None = None,
+    parent_tasks: dict[str, list[str]] | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
     lazy: bool = False,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.

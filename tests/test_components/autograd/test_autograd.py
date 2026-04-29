@@ -706,7 +706,7 @@ def plot_sim(sim: td.Simulation, plot_eps: bool = True) -> None:
 
     plot_fn = sim.plot_eps if plot_eps else sim.plot
 
-    f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
+    _f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
     plot_fn(x=0, ax=ax1)
     plot_fn(y=0, ax=ax2)
     plot_fn(z=0, ax=ax3)
@@ -860,7 +860,7 @@ def test_run_custom_rejects_numerical_structures_for_unsupported_workflow_type()
 
     with pytest.raises(
         td.exceptions.AdjointError,
-        match="numerical_structures is only supported for 'Simulation' and ComponentModeler workflows",
+        match=r"numerical_structures is only supported for 'Simulation' and ComponentModeler workflows",
     ):
         run_custom(
             simulation=object(),
@@ -965,12 +965,12 @@ def test_autograd_custom_vjp(
     if not local_gradient:
         with pytest.raises(
             td.exceptions.AdjointError,
-            match="custom_vjp specified for a remote gradient not supported.",
+            match=r"custom_vjp specified for a remote gradient not supported.",
         ):
-            val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+            _val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
     else:
-        val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
-        val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
+        _val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+        _val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
 
         assert np.isclose(
             np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
@@ -1087,8 +1087,8 @@ def test_autograd_numerical_structures(
     numerical_val = 1.0
     numerical_val_scale = 10.0 * numerical_val
 
-    val, grad = ag.value_and_grad(make_objective(numerical_val))(params0)
-    val_scale, grad_scale = ag.value_and_grad(make_objective(numerical_val_scale))(params0)
+    _val, grad = ag.value_and_grad(make_objective(numerical_val))(params0)
+    _val_scale, grad_scale = ag.value_and_grad(make_objective(numerical_val_scale))(params0)
 
     assert np.isclose(
         np.sum(np.abs(grad * (numerical_val_scale / numerical_val) - grad_scale)), 0.0
@@ -1141,7 +1141,7 @@ def test_autograd_numerical_structures_remote_gradient_unsupported(
 
     with pytest.raises(
         td.exceptions.AdjointError,
-        match="numerical_structures specified for a remote gradient not supported.",
+        match=r"numerical_structures specified for a remote gradient not supported.",
     ):
         ag.value_and_grad(objective)(params0)
 
@@ -1246,8 +1246,8 @@ def test_autograd_custom_vjp_selective(
     custom_vjp_val = 1.0
     custom_vjp_val_scale = 10.0 * custom_vjp_val
 
-    val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
-    val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
+    _val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+    _val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
 
     if polyslab_axis == POLYSLAB_SELECT_VERTICES:
         assert np.isclose(
@@ -1378,12 +1378,12 @@ def test_autograd_error_custom_vjp_indices_and_paths(
     # The async branch intentionally exercises only failing custom_vjp configs, so the
     # objective returns a constant 0.0 and autograd is expected to warn here.
     warn_context = (
-        pytest.warns(UserWarning, match="Output seems independent of input.")
+        pytest.warns(UserWarning, match=r"Output seems independent of input.")
         if use_run_async
         else nullcontext()
     )
     with warn_context:
-        val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+        _val, _grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
 
 
 def test_custom_vjp_rejects_numerical_namespace_structure_indices():
@@ -1406,7 +1406,7 @@ def test_custom_vjp_rejects_numerical_namespace_structure_indices():
 
     with pytest.raises(
         td.exceptions.AdjointError,
-        match="CustomVJPConfig structure index 1 not in traced structure indices.",
+        match=r"CustomVJPConfig structure index 1 not in traced structure indices.",
     ):
         autograd_module.verify_custom_vjp(custom_vjp, traced_fields)
 
@@ -1422,10 +1422,7 @@ def test_autograd_error_custom_vjp_function():
 
     with pytest.raises(
         td.exceptions.AdjointError,
-        match=(
-            "CustomVJPConfig compute_derivatives function should accept two arguments "
-            r"\(target, derivative_info\), and it currently accepts 3 arguments\."
-        ),
+        match=r"CustomVJPConfig compute_derivatives function should accept two arguments \(target, derivative_info\), and it currently accepts 3 arguments\.",
     ):
         CustomVJPConfig(
             structure=td.PolySlab,
@@ -1434,10 +1431,7 @@ def test_autograd_error_custom_vjp_function():
 
     with pytest.raises(
         td.exceptions.AdjointError,
-        match=(
-            "CustomVJPConfig compute_derivatives function second argument name is d_info "
-            "but it should be derivative_info."
-        ),
+        match=r"CustomVJPConfig compute_derivatives function second argument name is d_info but it should be derivative_info.",
     ):
         CustomVJPConfig(
             structure=td.PolySlab,
@@ -1531,12 +1525,12 @@ def test_autograd_cm_custom_vjp(
     if not local_gradient:
         with pytest.raises(
             td.exceptions.AdjointError,
-            match="custom_vjp specified for a remote gradient not supported.",
+            match=r"custom_vjp specified for a remote gradient not supported.",
         ):
-            val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+            _val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
     else:
-        val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
-        val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
+        _val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+        _val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
 
         assert np.isclose(
             np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
@@ -1560,7 +1554,7 @@ def test_verify_custom_vjp_ignores_source_traces():
 
     with pytest.raises(
         AdjointError,
-        match="CustomVJPConfig structure index 0 not in traced structure indices.",
+        match=r"CustomVJPConfig structure index 0 not in traced structure indices.",
     ):
         verify_custom_vjp(custom_vjp, traced_fields)
 
@@ -1787,7 +1781,7 @@ class TestTupleGrads:
             return objval
 
         d_power = ag.value_and_grad(obj, argnum=(0, 1))
-        val, (dp_dcenter, dp_dsize) = d_power(self.center0, self.size0)
+        _val, (dp_dcenter, dp_dsize) = d_power(self.center0, self.size0)
 
         assert len(dp_dcenter) == 3
         assert len(dp_dsize) == 3
@@ -1818,7 +1812,7 @@ def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_
             values.append(postprocess(sim_data))
         return min(values)
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0"
 
@@ -2007,7 +2001,7 @@ def test_autograd_speed_num_structures(use_emulated_run):
     # if speed test, get the profile
     with cProfile.Profile() as pr:
         t = time.time()
-        val, grad = ag.value_and_grad(objective)(params0)
+        _val, _grad = ag.value_and_grad(objective)(params0)
         t2 = time.time() - t
         pr.print_stats(sort="cumtime")
         pr.dump_stats("results.prof")
@@ -2023,7 +2017,7 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
 
     num_pts = 819
 
-    monitor, postprocess = make_monitors()[monitor_key]
+    monitor, _postprocess = make_monitors()[monitor_key]
 
     def make_cylinder(radius, x0, y0, t):
         return td.Cylinder(
@@ -2095,7 +2089,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
         value = postprocess(data)
         return value
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
     assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
@@ -2117,7 +2111,7 @@ def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
             value = value + postprocess(sim_data)
         return value
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
     assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
@@ -2401,7 +2395,7 @@ def test_no_freq_adjoint(monkeypatch, use_emulated_run):
         # doesn't need to be a valid objective since this should error when calling web.run
         return web.run(sim, task_name="autograd_test", verbose=False)
 
-    with pytest.raises(AdjointError, match="No frequency-domain data"):
+    with pytest.raises(AdjointError, match=r"No frequency-domain data"):
         ag.grad(objective)(params0)
 
 
@@ -2814,7 +2808,7 @@ def test_make_post_norm_amps_rejects_conflicting_same_frequency_values():
         source_time=td.GaussianPulse(freq0=freq0, fwidth=0.1 * freq0, amplitude=2.0, phase=0.0),
     )
 
-    with pytest.raises(AdjointError, match="conflicting post-normalization values"):
+    with pytest.raises(AdjointError, match=r"conflicting post-normalization values"):
         td.SimulationData._make_post_norm_amps([source0, source1])
 
 
@@ -3483,7 +3477,7 @@ def test_custom_pole_residue_unstructured_derivatives():
         ),
     )
 
-    with pytest.raises(NotImplementedError, match="unstructured"):
+    with pytest.raises(NotImplementedError, match=r"unstructured"):
         pr._compute_derivatives(derivative_info=info)
 
 
@@ -3984,7 +3978,7 @@ def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn,
         return postprocess_fn(data)
 
     if label == "src_2_freq_2_mon_2":
-        with pytest.raises(AdjointError, match="conflicting post-normalization values"):
+        with pytest.raises(AdjointError, match=r"conflicting post-normalization values"):
             ag.grad(objective)(params0)
     else:
         g = ag.grad(objective)(params0)
@@ -4178,7 +4172,7 @@ def test_error_flux(use_emulated_run):
         return anp.sum(data["flux"].flux.values)
 
     with pytest.raises(
-        NotImplementedError, match="Could not formulate adjoint source for 'FluxMonitor' output"
+        NotImplementedError, match=r"Could not formulate adjoint source for 'FluxMonitor' output"
     ):
         g = ag.grad(objective)(params0)
 
@@ -4199,7 +4193,7 @@ def test_error_gaussian_overlap_unsupported_dataset_name_raises_not_implemented(
     )
     overlap_data = td.FieldOverlapData(monitor=monitor, amps=amps)
 
-    with pytest.raises(NotImplementedError, match="Unsupported adjoint field 'Ex'"):
+    with pytest.raises(NotImplementedError, match=r"Unsupported adjoint field 'Ex'"):
         overlap_data._make_adjoint_sources(dataset_names=["Ex"], fwidth=FWIDTH)
 
 
@@ -4456,7 +4450,7 @@ def test_polyslab_rotated_grad(polyslab: td.PolySlab, theta: float, axis: int) -
 
     if expect_exception:
         with pytest.raises(
-            AttributeError, match=".*'Transformed' object has no attribute 'vertices'.*"
+            AttributeError, match=r".*'Transformed' object has no attribute 'vertices'.*"
         ):
             rotated_grad(theta, axis)
     else:
@@ -4531,13 +4525,13 @@ def test_sim_traced_center_size(use_emulated_run):
 
     with (
         AssertLogLevel("WARNING", contains_str="autograd tracer"),
-        pytest.warns(UserWarning, match="Output seems independent of input."),
+        pytest.warns(UserWarning, match=r"Output seems independent of input."),
     ):
         grad = ag.grad(objective, argnum=0)(base_sim.center, base_sim.size)
 
     with (
         AssertLogLevel("WARNING", contains_str="autograd tracer"),
-        pytest.warns(UserWarning, match="Output seems independent of input."),
+        pytest.warns(UserWarning, match=r"Output seems independent of input."),
     ):
         grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
 
@@ -4607,7 +4601,7 @@ def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_pat
         )
         return postprocess(data, data[monitor.name])
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"
 
@@ -4668,10 +4662,10 @@ def test_error_custom_medium_and_geometry_traced(rng, use_run_async, use_emulate
 
     with pytest.raises(
         AdjointError,
-        match="Detected structure at index 0 containing a CustomMedium "
-        "type and traced geometry attributes.",
+        match=r"Detected structure at index 0 containing a CustomMedium "
+        r"type and traced geometry attributes.",
     ):
-        val, grad = ag.value_and_grad(objective)(all_params)
+        _val, _grad = ag.value_and_grad(objective)(all_params)
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
@@ -4691,7 +4685,7 @@ def test_vjp_nan(use_emulated_run, structure_key, monitor_key):
         value = (postprocess(data) + float("nan")) ** 2
         return value
 
-    with pytest.raises(AdjointError, match="aN values detected for data field"):
+    with pytest.raises(AdjointError, match=r"aN values detected for data field"):
         grad = ag.grad(objective)(params0)
 
 
@@ -4794,7 +4788,7 @@ def test_require_freq_ascending_rejects_descending_coordinates():
         def __init__(self, field_components):
             self.field_components = field_components
 
-    with pytest.raises(ValueError, match="expects ascending frequency coordinates"):
+    with pytest.raises(ValueError, match=r"expects ascending frequency coordinates"):
         _require_freq_ascending(
             DummyDataset(field_data),
             component_type="structure",
@@ -4839,7 +4833,7 @@ def test_validate_adjoint_frequencies_rejects_monitor_order_mismatch():
 
     from tidy3d.web.api.autograd.backward import _validate_adjoint_frequencies
 
-    with pytest.raises(ValueError, match="Frequency mismatch in adjoint postprocessing"):
+    with pytest.raises(ValueError, match=r"Frequency mismatch in adjoint postprocessing"):
         _validate_adjoint_frequencies(
             adjoint_frequencies=np.array([1e14, 2e14, 3e14]),
             monitor_freqs=np.array([3e14, 2e14, 1e14]),
@@ -4902,7 +4896,7 @@ def test_filter_frequency_data_rejects_descending_filtered_order():
 
     fld_fwd = _make_field_data_for_frequency_invariant_test([1e14, 2e14])
 
-    with pytest.raises(ValueError, match="expects ascending frequency coordinates"):
+    with pytest.raises(ValueError, match=r"expects ascending frequency coordinates"):
         _filter_frequency_data(
             fld_fwd,
             np.array([2e14, 1e14]),
@@ -4930,7 +4924,7 @@ def test_validate_adjoint_frequencies_rejects_filtered_forward_data_mismatch():
         dataset_name="filtered forward field data",
     )
 
-    with pytest.raises(ValueError, match="Frequency mismatch in adjoint postprocessing"):
+    with pytest.raises(ValueError, match=r"Frequency mismatch in adjoint postprocessing"):
         _validate_adjoint_frequencies(
             adjoint_frequencies=_get_freq_coords(filtered),
             monitor_freqs=np.array([1e14, 2e14]),
@@ -5136,7 +5130,7 @@ def test_geometry_group_passes_intersected_bounds_to_children():
 def test_autograd_sphere_0_radius(use_emulated_run, monitor_key):
     """Integration test that Sphere gradients are non-zero (mirrors cylinder check)."""
 
-    monitor, postprocess = make_monitors()[monitor_key]
+    monitor, _postprocess = make_monitors()[monitor_key]
 
     def make_sphere(radius, x0, y0, z0):
         return td.Sphere(center=(x0, y0, z0), radius=radius)
@@ -5156,7 +5150,7 @@ def test_autograd_sphere_0_radius(use_emulated_run, monitor_key):
         return anp.sum(anp.abs(data[monitor.name].amps)).item()
 
     with AssertLogLevel("WARNING", contains_str="cannot be computed"):
-        val_sphere, grad_sphere = ag.value_and_grad(objective)(p0)
+        _val_sphere, grad_sphere = ag.value_and_grad(objective)(p0)
     # first 4 parameters are related to the geometry
     geom_grad = np.asarray(get_static(grad_sphere[:4]), dtype=float)
     assert np.allclose(geom_grad, 0.0)

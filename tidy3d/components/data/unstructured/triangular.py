@@ -33,7 +33,7 @@ from .base import (
 )
 
 if TYPE_CHECKING:
-    from typing import Literal, Optional, Union
+    from typing import Literal
 
     from pydantic import PositiveInt
     from vtkmodules.vtkCommonDataModel import vtkPointSet
@@ -131,11 +131,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
     def _from_vtk_obj(
         cls,
         vtk_obj: vtkPointSet,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         values_type: type = IndexedDataArray,
-        expect_complex: Optional[bool] = None,
+        expect_complex: bool | None = None,
         ignore_invalid_cells: bool = False,
     ) -> Self:
         """Initialize from a vtkUnstructuredGrid instance."""
@@ -335,10 +335,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     def _spatial_interp(
         self,
-        x: Union[float, ArrayLike],
-        y: Union[float, ArrayLike],
-        z: Union[float, ArrayLike],
-        fill_value: Optional[Union[float, Literal["extrapolate"]]] = None,
+        x: float | ArrayLike,
+        y: float | ArrayLike,
+        z: float | ArrayLike,
+        fill_value: float | Literal["extrapolate"] | None = None,
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         ignore_normal_pos: bool = True,
@@ -475,10 +475,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
     @requires_vtk
     def sel(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] | None = None,
         **sel_kwargs: Any,
     ) -> XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
@@ -679,12 +679,12 @@ class TriangularGridDataset(UnstructuredGridDataset):
         grid: bool = True,
         cbar: bool = True,
         cmap: str = "viridis",
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         shading: Literal["gourand", "flat"] = "gouraud",
-        cbar_kwargs: Optional[dict] = None,
-        pcolor_kwargs: Optional[dict] = None,
-        max_cells: Optional[int] = None,
+        cbar_kwargs: dict | None = None,
+        pcolor_kwargs: dict | None = None,
+        max_cells: int | None = None,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 

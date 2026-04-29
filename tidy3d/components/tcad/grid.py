@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
@@ -243,12 +243,12 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         "``dl_bulk`` is used instead.",
     )
 
-    mesh_refinements: tuple[
-        discriminated_union(Union[GridRefinementRegion, GridRefinementLine]), ...
-    ] = Field(
-        (),
-        title="Mesh refinement structures",
-        description="List of regions/lines for which the mesh refinement will be applied",
+    mesh_refinements: tuple[discriminated_union(GridRefinementRegion | GridRefinementLine), ...] = (
+        Field(
+            (),
+            title="Mesh refinement structures",
+            description="List of regions/lines for which the mesh refinement will be applied",
+        )
     )
 
     @model_validator(mode="after")
@@ -274,4 +274,4 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         return min(dl_array)
 
 
-UnstructuredGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]
+UnstructuredGridType = UniformUnstructuredGrid | DistanceUnstructuredGrid

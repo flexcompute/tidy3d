@@ -6,7 +6,7 @@ import os
 import tempfile
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from botocore.exceptions import ClientError
 from joblib import Parallel, delayed
@@ -31,8 +31,9 @@ from tidy3d.web.core.types import ResourceLifecycle, Submittable
 
 if TYPE_CHECKING:
     import pathlib
+    from collections.abc import Callable
     from os import PathLike
-    from typing import Callable, Literal, Union
+    from typing import Literal
 
     import requests
     from rich.progress import TaskID
@@ -62,10 +63,10 @@ def run(
     folder_name: str = "Mode Solver",
     results_file: PathLike = "mode_solver.hdf5",
     verbose: bool = True,
-    progress_callback_upload: Optional[Callable[[float], None]] = None,
-    progress_callback_download: Optional[Callable[[float], None]] = None,
+    progress_callback_upload: Callable[[float], None] | None = None,
+    progress_callback_download: Callable[[float], None] | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
+    pay_type: PayType | str | None = None,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -161,13 +162,13 @@ def run_batch(
     mode_solvers: list[ModeSolver],
     task_name: str = "BatchModeSolver",
     folder_name: str = "BatchModeSolvers",
-    results_files: Optional[list[str]] = None,
+    results_files: list[str] | None = None,
     verbose: bool = True,
     max_workers: int = DEFAULT_NUM_WORKERS,
     max_retries: int = DEFAULT_MAX_RETRIES,
     retry_delay: float = DEFAULT_RETRY_DELAY,
-    progress_callback_upload: Optional[Callable[[float], None]] = None,
-    progress_callback_download: Optional[Callable[[float], None]] = None,
+    progress_callback_upload: Callable[[float], None] | None = None,
+    progress_callback_download: Callable[[float], None] | None = None,
 ) -> list[ModeSolverData]:
     """
     Submits a batch of ModeSolver to the server concurrently, manages progress, and retrieves results.
@@ -214,9 +215,7 @@ def run_batch(
     if results_files is None:
         results_files = [f"mode_solver_batch_results_{i}.hdf5" for i in range(num_mode_solvers)]
 
-    def handle_mode_solver(
-        index: int, progress: Progress, pbar: Optional[TaskID]
-    ) -> Optional[Parallel]:
+    def handle_mode_solver(index: int, progress: Progress, pbar: TaskID | None) -> Parallel | None:
         retries = 0
         while retries <= max_retries:
             try:
@@ -270,42 +269,42 @@ def run_batch(
 class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running of a :class:`.ModeSolver` task on server."""
 
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         None,
         title="task_id",
         description="Task ID number, set when the task is created, leave as None.",
         alias="refId",
     )
 
-    solver_id: Optional[str] = Field(
+    solver_id: str | None = Field(
         None,
         title="solver",
         description="Solver ID number, set when the task is created, leave as None.",
         alias="id",
     )
 
-    real_flex_unit: Optional[float] = Field(
+    real_flex_unit: float | None = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="charge"
     )
 
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    status: Optional[str] = Field(
+    status: str | None = Field(
         None,
         title="status",
         description="Mode solver task status.",
     )
 
-    file_type: Optional[str] = Field(
+    file_type: str | None = Field(
         None,
         title="file_type",
         description="File type used to upload the mode solver.",
         alias="fileType",
     )
 
-    mode_solver: Optional[ModeSolver] = Field(
+    mode_solver: ModeSolver | None = Field(
         None,
         title="mode_solver",
         description="Mode solver being run by this task.",
@@ -390,7 +389,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         to_file: PathLike = "mode_solver.hdf5",
         sim_file: PathLike = "simulation.hdf5",
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ModeSolverTask:
         """Get mode solver task from the server by id.
 
@@ -432,7 +431,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         return ModeSolverTask(**resp, mode_solver=self.mode_solver)
 
     def upload(
-        self, verbose: bool = True, progress_callback: Optional[Callable[[float], None]] = None
+        self, verbose: bool = True, progress_callback: Callable[[float], None] | None = None
     ) -> None:
         """Upload this task's 'mode_solver' to the server.
 
@@ -479,7 +478,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
 
     def submit(
         self,
-        pay_type: Optional[Union[PayType, str]] = None,
+        pay_type: PayType | str | None = None,
     ) -> None:
         """Start the execution of this task.
 
@@ -512,7 +511,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         to_file: PathLike = "mode_solver.hdf5",
         sim_file: PathLike = "simulation.hdf5",
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ModeSolver:
         """Get mode solver associated with this task from the server.
 
@@ -596,7 +595,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         self,
         to_file: PathLike = "mode_solver_data.hdf5",
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ModeSolverData:
         """Get mode solver results for this task from the server.
 
@@ -662,7 +661,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         self,
         to_file: PathLike = "mode_solver.log",
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> pathlib.Path:
         """Get execution log for this task from the server.
 

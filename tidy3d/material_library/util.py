@@ -12,8 +12,6 @@ from rich.tree import Tree
 from tidy3d.components.viz import FLEXCOMPUTE_COLORS
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from IPython.lib.pretty import RepresentationPrinter
 
     from tidy3d import Medium2D, MultiPhysicsMedium, PoleResidue
@@ -69,7 +67,7 @@ def variant_name(v: AbstractVariantItem) -> str:
     return name
 
 
-def summarize_medium(med: Union[PoleResidue, Medium2D, MultiPhysicsMedium]) -> list[str]:
+def summarize_medium(med: PoleResidue | Medium2D | MultiPhysicsMedium) -> list[str]:
     """Returns relevant medium information for display."""
     lines = []
 
@@ -123,7 +121,7 @@ def summarize_variant_item(v: AbstractVariantItem) -> str:
 
 
 def repr_pretty_with_rich(
-    obj: Union[AbstractVariantItem, MaterialItem, MaterialLibrary],
+    obj: AbstractVariantItem | MaterialItem | MaterialLibrary,
     p: RepresentationPrinter,
     cycle: bool,
 ) -> None:
@@ -139,7 +137,7 @@ def repr_pretty_with_rich(
 
 
 def add_medium_details_to_tree(
-    medium: Union[PoleResidue, Medium2D, MultiPhysicsMedium], medium_node: Tree
+    medium: PoleResidue | Medium2D | MultiPhysicsMedium, medium_node: Tree
 ) -> None:
     """Adds details of a medium dictionary to a Rich Tree node."""
 

@@ -10,8 +10,6 @@ from tidy3d.components.autograd import get_static
 from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
-
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.data.data_array import DataArray
 
@@ -20,7 +18,7 @@ if TYPE_CHECKING:
 
 def scale_field_data(
     fld_data: td.FieldData,
-    scale: Union[float, complex, DataArray],
+    scale: float | complex | DataArray,
 ) -> td.FieldData:
     """Scale all field components in a ``FieldData`` object."""
 
@@ -35,7 +33,7 @@ def get_derivative_maps(
     eps_fwd: td.PermittivityData,
     fld_adj: td.FieldData,
     eps_adj: td.PermittivityData,
-) -> dict[str, Optional[td.FieldData]]:
+) -> dict[str, td.FieldData | None]:
     """Get electric and displacement field derivative maps."""
     der_map_E = derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
     der_map_D = derivative_map_D(fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj)
@@ -78,11 +76,11 @@ def E_to_D(fld_data: td.FieldData, eps_data: td.PermittivityData) -> td.FieldDat
 
 
 def multiply_field_data(
-    fld_1: td.FieldData, fld_2: Union[td.FieldData, td.PermittivityData], fld_key: str
+    fld_1: td.FieldData, fld_2: td.FieldData | td.PermittivityData, fld_key: str
 ) -> td.FieldData:
     """Elementwise multiply two field data objects, writes data into ``fld_1`` copy."""
 
-    def get_field_key(dim: str, fld_data: Union[td.FieldData, td.PermittivityData]) -> str:
+    def get_field_key(dim: str, fld_data: td.FieldData | td.PermittivityData) -> str:
         """Get the key corresponding to the scalar field along this dimension."""
         return f"{fld_key}{dim}" if isinstance(fld_data, td.FieldData) else f"eps_{dim}{dim}"
 

@@ -5,15 +5,12 @@ from __future__ import annotations
 import re
 import types as _types
 from types import UnionType
-from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 import numpy as np
 from pydantic import BaseModel, TypeAdapter
 
 from tidy3d.log import log
-
-if TYPE_CHECKING:
-    from typing import Optional
 
 _TYPING_PREFIXES = ("typing_extensions.", "typing.")
 _AUTOGRAD_BOX_TYPE = "autograd.tracer.Box"
@@ -149,7 +146,7 @@ def _format_model_default(model: BaseModel, *, show_default_args: bool) -> str:
     return _clean_default_repr(f"{model_cls.__name__}({', '.join(parts)})")
 
 
-def _array_schema_from_metadata(metadata: list[Any]) -> Optional[dict[str, Any]]:
+def _array_schema_from_metadata(metadata: list[Any]) -> dict[str, Any] | None:
     """Extract an ArrayLike schema dict from annotation metadata if present."""
     for meta in metadata:
         schema = getattr(meta, "json_schema", None)

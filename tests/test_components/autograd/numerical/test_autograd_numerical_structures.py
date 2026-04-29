@@ -350,7 +350,7 @@ def test_finite_difference_numerical_structures(
 
     test_results = np.zeros((2, len(ring_init)))
 
-    obj, adj_grad = obj_val_and_grad([ring_init])
+    _obj, adj_grad = obj_val_and_grad([ring_init])
 
     adj_grad = np.squeeze(np.array(adj_grad))
 

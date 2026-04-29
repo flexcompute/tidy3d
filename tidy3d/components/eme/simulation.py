@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, field_validator, model_validator
@@ -55,7 +55,6 @@ from .sweep import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from typing import Union
 
     from pydantic import NonNegativeInt, PositiveInt
 
@@ -363,7 +362,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         "along the propagation axis.",
     )
 
-    sweep_spec: Optional[EMESweepSpecType] = Field(
+    sweep_spec: EMESweepSpecType | None = Field(
         None,
         title="EME Sweep Specification",
         description="Specification for a parameter sweep to be performed during the EME "
@@ -371,7 +370,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         "in 'sim_data.smatrix'. Other simulation monitor data is not included in the sweep.",
     )
 
-    constraint: Optional[Literal["passive", "unitary"]] = Field(
+    constraint: Literal["passive", "unitary"] | None = Field(
         "passive",
         title="EME Constraint",
         description="Constraint for EME propagation, imposed at cell interfaces. "
@@ -460,12 +459,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     @add_ax_if_none
     def plot_eme_ports(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **kwargs: Any,
     ) -> Ax:
         """Plot the EME port locations on a cross-sectional plane.
@@ -527,12 +526,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     def plot_eme_subgrid_boundaries(
         self,
         eme_grid_spec: EMEGridSpec,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **kwargs: Any,
     ) -> Ax:
         """Plot the EME subgrid boundaries on a cross-sectional plane.
@@ -604,12 +603,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     @add_ax_if_none
     def plot_eme_grid(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **kwargs: Any,
     ) -> Ax:
         """Plot the EME cell boundaries on a cross-sectional plane.
@@ -668,14 +667,14 @@ class EMESimulation(AbstractYeeGridSimulation):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        source_alpha: Optional[float] = None,
-        monitor_alpha: Optional[float] = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        source_alpha: float | None = None,
+        monitor_alpha: float | None = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1120,7 +1119,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         eme_grid_spec: EMEGridSpecType,
         center: Coordinate,
         size: Size,
-        lengths: Optional[ArrayFloat1D] = None,
+        lengths: ArrayFloat1D | None = None,
     ) -> tuple[
         EMEGrid, ArrayFloat1D, tuple[TensorReal, ...], tuple[int, ...], tuple[TensorReal, ...]
     ]:
@@ -1152,7 +1151,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         eme_grid_spec: EMEGridSpecType,
         center: Coordinate,
         size: Size,
-        lengths: Optional[ArrayFloat1D] = None,
+        lengths: ArrayFloat1D | None = None,
     ) -> bool:
         """Whether bent cells would require unsupported global-frame custom-medium remapping."""
         eme_grid, _, real_rotations, virtual_cell_indices, virtual_rotations = (
@@ -1266,7 +1265,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         center: Coordinate,
         size: Size,
         reference_rotations: tuple[TensorReal, ...],
-        lengths: Optional[ArrayFloat1D] = None,
+        lengths: ArrayFloat1D | None = None,
     ) -> bool:
         """Whether reused modes would require different anisotropic tensors."""
         eme_grid, _, _, virtual_cell_indices, virtual_rotations = (
@@ -1858,11 +1857,11 @@ class EMESimulation(AbstractYeeGridSimulation):
     def subsection(
         self,
         region: Box,
-        grid_spec: Union[GridSpec, Literal["identical"]] = None,
-        eme_grid_spec: Union[EMEGridSpec, Literal["identical"]] = None,
-        symmetry: Optional[tuple[Symmetry, Symmetry, Symmetry]] = None,
+        grid_spec: GridSpec | Literal["identical"] = None,
+        eme_grid_spec: EMEGridSpec | Literal["identical"] = None,
+        symmetry: tuple[Symmetry, Symmetry, Symmetry] | None = None,
         warn_symmetry_expansion: bool = True,
-        monitors: Optional[tuple[MonitorType, ...]] = None,
+        monitors: tuple[MonitorType, ...] | None = None,
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
         **kwargs: Any,
@@ -2145,7 +2144,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         return tuple(sims)
 
     def stage_cell_modes(
-        self, mode_data: Union[ModeSimulationData, ModeSolverData], cell_index: int
+        self, mode_data: ModeSimulationData | ModeSolverData, cell_index: int
     ) -> EMEStageCellModes:
         """Validate, filter, and stamp mode data for one cell.
 
@@ -2268,7 +2267,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def compute_overlaps(
         self,
-        mode_data: Sequence[Union[ModeSimulationData, ModeSolverData]],
+        mode_data: Sequence[ModeSimulationData | ModeSolverData],
     ) -> tuple[list[EMEStageCellOverlap], list[EMEStageInterfaceOverlap]]:
         """Stage modes and compute all per-cell and per-interface overlaps.
 
@@ -2690,7 +2689,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def propagate(
         self,
-        mode_data: Sequence[Union[ModeSimulationData, ModeSolverData]],
+        mode_data: Sequence[ModeSimulationData | ModeSolverData],
     ) -> EMESMatrixDataset:
         """Propagate modes through the device to compute the full S-matrix.
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator
@@ -17,8 +17,6 @@ from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.exceptions import SetupError, ValidationError
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from tidy3d.components.types import ArrayFloat1D, FreqBound
 
 # Factor converting 10%-to-90% rise time to Gaussian sigma (standard deviation).
@@ -85,7 +83,7 @@ class BasebandStep(BasebandSourceTime):
         to ``exp(-1/2)`` of its peak value."""
         return 1.0 / (2 * np.pi * self._sigma)
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayFloat1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayFloat1D:
         """Real-valued source amplitude as a function of time."""
         from scipy.special import erf
 
@@ -98,7 +96,7 @@ class BasebandStep(BasebandSourceTime):
         """Frequency range based on equivalent bandwidth."""
         return (0.0, num_fwidth * self.fwidth_equiv)
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Step never decays, so no end time."""
         return None
 
@@ -136,7 +134,7 @@ class BasebandGaussianPulse(BasebandSourceTime):
         """Standard deviation of the frequency content of the Gaussian pulse."""
         return 1.0 / (2 * np.pi * self.twidth)
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayFloat1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayFloat1D:
         """Real-valued source amplitude as a function of time."""
         time = np.atleast_1d(np.asarray(time, dtype=float))
         return self.amplitude * np.exp(-((time - self.t_center) ** 2) / (2 * self.twidth**2))
@@ -145,7 +143,7 @@ class BasebandGaussianPulse(BasebandSourceTime):
         """Frequency range based on equivalent bandwidth."""
         return (0.0, num_fwidth * self.fwidth)
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively zero."""
         return self.t_center + END_TIME_FACTOR_GAUSSIAN * self.twidth
 
@@ -203,7 +201,7 @@ class BasebandRectangularPulse(BasebandSourceTime):
         to ``exp(-1/2)`` of its peak value."""
         return 1.0 / (2 * np.pi * self._sigma)
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayFloat1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayFloat1D:
         """Real-valued source amplitude as a function of time."""
         from scipy.special import erf
 
@@ -216,7 +214,7 @@ class BasebandRectangularPulse(BasebandSourceTime):
         """Frequency range based on equivalent bandwidth (determined by rise time)."""
         return (0.0, num_fwidth * self.fwidth_equiv)
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively zero."""
         return self.t_stop + END_TIME_FACTOR_GAUSSIAN * self._sigma
 
@@ -232,7 +230,7 @@ class BasebandCustomSourceTime(BasebandSourceTime):
     >>> cst = BasebandCustomSourceTime.from_values(values=np.linspace(0, 1, 100), dt=1e-10)
     """
 
-    source_time_dataset: Optional[TimeDataset] = Field(
+    source_time_dataset: TimeDataset | None = Field(
         None,
         title="Source time dataset",
         description="Dataset for storing the baseband source time envelope. "
@@ -244,7 +242,7 @@ class BasebandCustomSourceTime(BasebandSourceTime):
 
     @field_validator("source_time_dataset")
     @classmethod
-    def _validate_time_coords(cls, val: Optional[TimeDataset]) -> Optional[TimeDataset]:
+    def _validate_time_coords(cls, val: TimeDataset | None) -> TimeDataset | None:
         """Time coordinates must have more than one point and be strictly increasing."""
         if val is None:
             return val
@@ -294,7 +292,7 @@ class BasebandCustomSourceTime(BasebandSourceTime):
             return np.array([], dtype=float)
         return self.source_time_dataset.values.coords["t"].values.squeeze()
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayFloat1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayFloat1D:
         """Real-valued source amplitude as a function of time."""
         if self.source_time_dataset is None:
             raise SetupError("'source_time_dataset' must be provided to use this method.")
@@ -334,7 +332,7 @@ class BasebandCustomSourceTime(BasebandSourceTime):
 
         return self._frequency_range_from_fft(dt, values, num_fwidth)
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time of the last non-zero value in the dataset."""
         if self.source_time_dataset is None:
             raise SetupError("'source_time_dataset' must be provided to use this method.")

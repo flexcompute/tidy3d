@@ -29,8 +29,6 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.constants import C_0, EPSILON_0, ETA_0
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
-
     from tidy3d import Source
     from tidy3d.components.data.monitor_data import DiffractionData
     from tidy3d.components.data.sim_data import AdjointSourceInfo
@@ -46,7 +44,7 @@ if TYPE_CHECKING:
     from tidy3d.components.types.base import DiffractionPolarization
 
 
-def flip_direction(direction: Union[str, DataArray]) -> str:
+def flip_direction(direction: str | DataArray) -> str:
     """Flip the direction of a string ``('+', '-') -> ('-', '+')``."""
     if isinstance(direction, DataArray):
         direction = str(direction.values)
@@ -75,7 +73,7 @@ def adjoint_source_info_single(source: Source, *, adjust_fwidth: bool = True) ->
 def mode_source_from_monitor(
     monitor: ModeMonitor,
     freq: float,
-    direction: Union[str, DataArray],
+    direction: str | DataArray,
     mode_index: int,
     coefficient: complex,
     fwidth: float,
@@ -94,9 +92,9 @@ def mode_source_from_monitor(
 
 
 def gaussian_source_from_monitor(
-    monitor: Union[GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor],
+    monitor: GaussianOverlapMonitor | AstigmaticGaussianOverlapMonitor,
     freq: float,
-    direction: Union[str, DataArray],
+    direction: str | DataArray,
     coefficient: complex,
     fwidth: float,
 ) -> GaussianBeamType:
@@ -152,7 +150,7 @@ def current_component_data_array(
     source_center: tuple[float, float, float],
     freq: float,
     symmetry_factor: float = 1.0,
-) -> Optional[ScalarFieldDataArray]:
+) -> ScalarFieldDataArray | None:
     """Convert one field component to a scaled adjoint current data array."""
     values = 2 * -1j * np.asarray(base_values)
     if "H" in component:
@@ -184,7 +182,7 @@ def point_current_source_from_simulation(
     freq: float,
     coefficient: complex,
     fwidth: float,
-) -> Optional[CustomCurrentSource]:
+) -> CustomCurrentSource | None:
     grid = simulation.discretize_monitor(monitor)
     coords = {}
     spatial_coords = grid.boundaries
@@ -291,7 +289,7 @@ def diffraction_source_from_data(
     polarization: DiffractionPolarization,
     coefficient: complex,
     fwidth: float,
-) -> Optional[PlaneWave]:
+) -> PlaneWave | None:
     monitor = diff_data.monitor
     theta_data, phi_data = diff_data.angles
     angle_sel_kwargs = {"orders_x": int(order_x), "orders_y": int(order_y), "f": float(freq)}

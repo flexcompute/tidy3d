@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field, model_validator
 
@@ -78,13 +78,13 @@ def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
 class AbstractVariantItem(Tidy3dBaseModel):
     """Reference, and data_source for a variant of a material."""
 
-    reference: Optional[list[ReferenceData]] = Field(
+    reference: list[ReferenceData] | None = Field(
         None,
         title="Reference information",
         description="A list of references related to this variant model.",
     )
 
-    data_url: Optional[str] = Field(
+    data_url: str | None = Field(
         None,
         title="Dispersion data URL",
         description="The URL to access the dispersion data upon which the material "
@@ -92,7 +92,7 @@ class AbstractVariantItem(Tidy3dBaseModel):
     )
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {}
 
     def __str__(self) -> str:
@@ -108,13 +108,13 @@ class AbstractVariantItem(Tidy3dBaseModel):
 class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
 
-    medium: Union[PoleResidue, MultiPhysicsMedium] = Field(
+    medium: PoleResidue | MultiPhysicsMedium = Field(
         title="Material dispersion model",
         description="A dispersive medium described by the pole-residue pair model.",
     )
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {"medium": self.medium}
 
 
@@ -139,12 +139,12 @@ class MaterialItem(Tidy3dBaseModel):
             )
         return self
 
-    def __getitem__(self, variant_name: str) -> Union[PoleResidue, MultiPhysicsMedium]:
+    def __getitem__(self, variant_name: str) -> PoleResidue | MultiPhysicsMedium:
         """Helper function to easily access the medium of a variant"""
         return self.variants[variant_name].medium
 
     @property
-    def medium(self) -> Union[PoleResidue, MultiPhysicsMedium]:
+    def medium(self) -> PoleResidue | MultiPhysicsMedium:
         """The default medium."""
         if self.name == "Silicon Dioxide":
             log.warning(
@@ -174,7 +174,7 @@ class VariantItem2D(AbstractVariantItem):
     )
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {"medium": self.medium}
 
 
@@ -222,7 +222,7 @@ class VariantItemUniaxial(AbstractVariantItem):
         return AnisotropicMedium.model_validate(mat_dict)
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {"ordinary": self.ordinary, "extraordinary": self.extraordinary}
 
 

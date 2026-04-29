@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Optional
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,16 +35,16 @@ class TaskBlockInfo(TaskBase):
         such as user limits and insufficient balance.
     """
 
-    chargeType: Optional[ChargeType] = None
+    chargeType: ChargeType | None = None
     """The type of charge applicable to the task (free or paid)."""
 
-    maxFreeCount: Optional[int] = None
+    maxFreeCount: int | None = None
     """The maximum number of free tasks allowed."""
 
-    maxGridPoints: Optional[int] = None
+    maxGridPoints: int | None = None
     """The maximum number of grid points permitted."""
 
-    maxTimeSteps: Optional[int] = None
+    maxTimeSteps: int | None = None
     """The maximum number of time steps allowed."""
 
 
@@ -54,79 +54,79 @@ class TaskInfo(TaskBase):
     taskId: str
     """Unique identifier for the task."""
 
-    taskName: Optional[str] = None
+    taskName: str | None = None
     """Name of the task."""
 
-    nodeSize: Optional[int] = None
+    nodeSize: int | None = None
     """Size of the node allocated for the task."""
 
-    completedAt: Optional[datetime] = None
+    completedAt: datetime | None = None
     """Timestamp when the task was completed."""
 
-    status: Optional[str] = None
+    status: str | None = None
     """Current status of the task."""
 
-    realCost: Optional[float] = None
+    realCost: float | None = None
     """Actual cost incurred by the task."""
 
-    timeSteps: Optional[int] = None
+    timeSteps: int | None = None
     """Number of time steps involved in the task."""
 
-    solverVersion: Optional[str] = None
+    solverVersion: str | None = None
     """Version of the solver used for the task."""
 
-    createAt: Optional[datetime] = None
+    createAt: datetime | None = None
     """Timestamp when the task was created."""
 
-    estCostMin: Optional[float] = None
+    estCostMin: float | None = None
     """Estimated minimum cost for the task."""
 
-    estCostMax: Optional[float] = None
+    estCostMax: float | None = None
     """Estimated maximum cost for the task."""
 
-    realFlexUnit: Optional[float] = None
+    realFlexUnit: float | None = None
     """Actual flexible units used by the task."""
 
-    oriRealFlexUnit: Optional[float] = None
+    oriRealFlexUnit: float | None = None
     """Original real flexible units."""
 
-    estFlexUnit: Optional[float] = None
+    estFlexUnit: float | None = None
     """Estimated flexible units for the task."""
 
-    estFlexCreditTimeStepping: Optional[float] = None
+    estFlexCreditTimeStepping: float | None = None
     """Estimated flexible credits for time stepping."""
 
-    estFlexCreditPostProcess: Optional[float] = None
+    estFlexCreditPostProcess: float | None = None
     """Estimated flexible credits for post-processing."""
 
-    estFlexCreditMode: Optional[float] = None
+    estFlexCreditMode: float | None = None
     """Estimated flexible credits based on the mode."""
 
-    s3Storage: Optional[float] = None
+    s3Storage: float | None = None
     """Amount of S3 storage used by the task."""
 
-    startSolverTime: Optional[datetime] = None
+    startSolverTime: datetime | None = None
     """Timestamp when the solver started."""
 
-    finishSolverTime: Optional[datetime] = None
+    finishSolverTime: datetime | None = None
     """Timestamp when the solver finished."""
 
-    totalSolverTime: Optional[int] = None
+    totalSolverTime: int | None = None
     """Total time taken by the solver."""
 
-    callbackUrl: Optional[str] = None
+    callbackUrl: str | None = None
     """Callback URL for task notifications."""
 
-    taskType: Optional[str] = None
+    taskType: str | None = None
     """Type of the task."""
 
-    metadataStatus: Optional[str] = None
+    metadataStatus: str | None = None
     """Status of the metadata for the task."""
 
-    taskBlockInfo: Optional[TaskBlockInfo] = None
+    taskBlockInfo: TaskBlockInfo | None = None
     """Blocking information for the task."""
 
-    version: Optional[str] = None
+    version: str | None = None
     """Version of the task."""
 
 
@@ -160,11 +160,11 @@ class BatchTaskBlockInfo(TaskBlockInfo):
         taskStatus: The status of the task when it was blocked.
     """
 
-    accountLimit: Optional[float] = None
-    taskBlockMsg: Optional[str] = None
-    taskBlockType: Optional[str] = None
-    blockStatus: Optional[str] = None
-    taskStatus: Optional[str] = None
+    accountLimit: float | None = None
+    taskBlockMsg: str | None = None
+    taskBlockType: str | None = None
+    blockStatus: str | None = None
+    taskStatus: str | None = None
 
 
 class BatchMember(TaskBase):
@@ -191,23 +191,23 @@ class BatchMember(TaskBase):
         summary: A dictionary containing summary information for the task.
     """
 
-    refId: Optional[str] = None
-    folderId: Optional[str] = None
-    sweepId: Optional[str] = None
-    taskId: Optional[str] = None
-    linkedTaskId: Optional[str] = None
-    groupId: Optional[str] = None
-    taskName: Optional[str] = None
-    status: Optional[str] = None
-    sweepData: Optional[str] = None
-    validateInfo: Optional[str] = None
-    replaceData: Optional[str] = None
-    protocolVersion: Optional[str] = None
-    variable: Optional[str] = None
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
-    denormalizeStatus: Optional[str] = None
-    summary: Optional[dict] = None
+    refId: str | None = None
+    folderId: str | None = None
+    sweepId: str | None = None
+    taskId: str | None = None
+    linkedTaskId: str | None = None
+    groupId: str | None = None
+    taskName: str | None = None
+    status: str | None = None
+    sweepData: str | None = None
+    validateInfo: str | None = None
+    replaceData: str | None = None
+    protocolVersion: str | None = None
+    variable: str | None = None
+    createdAt: datetime | None = None
+    updatedAt: datetime | None = None
+    denormalizeStatus: str | None = None
+    summary: dict | None = None
 
 
 class BatchDetail(TaskBase):
@@ -258,27 +258,27 @@ class BatchDetail(TaskBase):
         The type of tasks contained in the batch.
     """
 
-    refId: Optional[str] = None
-    optimizationId: Optional[str] = None
-    groupId: Optional[str] = None
-    name: Optional[str] = None
-    status: Optional[str] = None
+    refId: str | None = None
+    optimizationId: str | None = None
+    groupId: str | None = None
+    name: str | None = None
+    status: str | None = None
     totalTask: int = 0
     preprocessSuccess: int = 0
-    postprocessStatus: Optional[str] = None
+    postprocessStatus: str | None = None
     validateSuccess: int = 0
     runSuccess: int = 0
     postprocessSuccess: int = 0
-    taskBlockInfo: Optional[BatchTaskBlockInfo] = None
-    estFlexUnit: Optional[float] = None
-    realFlexUnit: Optional[float] = None
-    totalSeconds: Optional[int] = None
-    totalCheckMillis: Optional[int] = None
-    message: Optional[str] = None
+    taskBlockInfo: BatchTaskBlockInfo | None = None
+    estFlexUnit: float | None = None
+    realFlexUnit: float | None = None
+    totalSeconds: int | None = None
+    totalCheckMillis: int | None = None
+    message: str | None = None
     tasks: list[BatchMember] = []
-    validateErrors: Optional[dict] = None
+    validateErrors: dict | None = None
     taskType: str = None
-    version: Optional[str] = None
+    version: str | None = None
 
 
 class AsyncJobDetail(TaskBase):
@@ -316,13 +316,13 @@ class AsyncJobDetail(TaskBase):
 
     asyncId: str
     status: str
-    progress: Optional[float] = None
-    createdAt: Optional[datetime] = None
-    completedAt: Optional[datetime] = None
-    tasks: Optional[dict[str, str]] = None
-    result: Optional[str] = None
-    taskBlockInfo: Optional[TaskBlockInfo] = None
-    message: Optional[str] = None
+    progress: float | None = None
+    createdAt: datetime | None = None
+    completedAt: datetime | None = None
+    tasks: dict[str, str] | None = None
+    result: str | None = None
+    taskBlockInfo: TaskBlockInfo | None = None
+    message: str | None = None
 
 
 AsyncJobDetail.model_rebuild()

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Callable
 
 import autograd as ag
 import numpy as np

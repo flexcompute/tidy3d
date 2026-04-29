@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 from functools import lru_cache, partial
-from typing import TYPE_CHECKING, Annotated, Any, Union
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 from pydantic import Field, PositiveInt
@@ -16,8 +16,7 @@ from tidy3d.plugins.autograd.types import PaddingType
 from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Callable, Optional
+    from collections.abc import Callable, Iterable
 
     from numpy.typing import NDArray
 
@@ -36,7 +35,7 @@ _GAUSSIAN_PADDING_MAP = {
 class AbstractFilter(Tidy3dBaseModel, abc.ABC):
     """An abstract class for creating and applying convolution filters."""
 
-    kernel_size: Union[PositiveInt, tuple[PositiveInt, ...]] = Field(
+    kernel_size: PositiveInt | tuple[PositiveInt, ...] = Field(
         title="Kernel Size",
         description="Size of the kernel in pixels for each dimension.",
     )
@@ -54,8 +53,8 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
     @classmethod
     def from_radius_dl(
         cls,
-        radius: Union[float, tuple[float, ...]],
-        dl: Union[float, tuple[float, ...]],
+        radius: float | tuple[float, ...],
+        dl: float | tuple[float, ...],
         **kwargs: Any,
     ) -> AbstractFilter:
         """Create a filter from radius and grid spacing.
@@ -207,9 +206,9 @@ class GaussianFilter(AbstractFilter):
 
 
 def _get_kernel_size(
-    radius: Union[float, tuple[float, ...]],
-    dl: Union[float, tuple[float, ...]],
-    size_px: Union[int, tuple[int, ...]],
+    radius: float | tuple[float, ...],
+    dl: float | tuple[float, ...],
+    size_px: int | tuple[int, ...],
 ) -> tuple[int, ...]:
     """Determine the kernel size based on the provided radius, grid spacing, or size in pixels.
 
@@ -245,10 +244,10 @@ def _get_kernel_size(
 
 
 def make_filter(
-    radius: Optional[Union[float, tuple[float, ...]]] = None,
-    dl: Optional[Union[float, tuple[float, ...]]] = None,
+    radius: float | tuple[float, ...] | None = None,
+    dl: float | tuple[float, ...] | None = None,
     *,
-    size_px: Optional[Union[int, tuple[int, ...]]] = None,
+    size_px: int | tuple[int, ...] | None = None,
     normalize: bool = True,
     padding: PaddingType = "reflect",
     filter_type: KernelType,
@@ -318,5 +317,5 @@ See Also
 """
 
 FilterType = Annotated[
-    Union[ConicFilter, CircularFilter, GaussianFilter], Field(discriminator=TYPE_TAG_STR)
+    ConicFilter | CircularFilter | GaussianFilter, Field(discriminator=TYPE_TAG_STR)
 ]

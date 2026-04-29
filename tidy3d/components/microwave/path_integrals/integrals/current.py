@@ -23,8 +23,6 @@ from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
-
     from tidy3d.components.data.data_array import (
         CurrentIntegralResultType,
         DataArray,
@@ -79,8 +77,8 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
 
     def _to_path_integrals(
         self,
-        h_horizontal: Optional[DataArray] = None,
-        h_vertical: Optional[DataArray] = None,
+        h_horizontal: DataArray | None = None,
+        h_vertical: DataArray | None = None,
     ) -> tuple[AxisAlignedPathIntegral, ...]:
         """Returns four ``AxisAlignedPathIntegral`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""
@@ -140,7 +138,7 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
     @cached_property
     def current_integrals(
         self,
-    ) -> tuple[Union[AxisAlignedCurrentIntegral, Custom2DCurrentIntegral], ...]:
+    ) -> tuple[AxisAlignedCurrentIntegral | Custom2DCurrentIntegral, ...]:
         """ "Collection of closed current path integrals."""
         from tidy3d.components.microwave.path_integrals.factory import (
             make_current_integral,
@@ -230,7 +228,7 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
 
     def _check_phase_sign_consistency(
         self,
-        phase_difference: Union[FreqDataArray, FreqModeDataArray],
+        phase_difference: FreqDataArray | FreqModeDataArray,
     ) -> bool:
         """
         Check that the provided current data has a consistent phase with respect to the reference
@@ -272,8 +270,8 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
 
     def _check_phase_amplitude_consistency(
         self,
-        current_in_phase: Union[FreqDataArray, FreqModeDataArray],
-        current_out_phase: Union[FreqDataArray, FreqModeDataArray],
+        current_in_phase: FreqDataArray | FreqModeDataArray,
+        current_out_phase: FreqDataArray | FreqModeDataArray,
     ) -> bool:
         """
         Check that the summed in phase and out of phase components of current have a consistent relative amplitude.

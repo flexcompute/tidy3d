@@ -11,7 +11,7 @@ import xarray as xr
 from tidy3d.exceptions import Tidy3dError, format_chained_exception_message
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional, Union
+    from collections.abc import Callable
 
     from numpy.typing import NDArray
 
@@ -93,9 +93,9 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
 
 
 def get_kernel_size_px(
-    radius: Optional[Union[float, Iterable[float]]] = None,
-    dl: Optional[Union[float, Iterable[float]]] = None,
-) -> Union[int, list[int]]:
+    radius: float | Iterable[float] | None = None,
+    dl: float | Iterable[float] | None = None,
+) -> int | list[int]:
     """Calculate the kernel size in pixels based on the provided radius and grid spacing.
 
     Parameters
@@ -131,7 +131,7 @@ def get_kernel_size_px(
     )
 
 
-def chain(*funcs: Union[Callable, Iterable[Callable]]) -> Callable[[NDArray], NDArray]:
+def chain(*funcs: Callable | Iterable[Callable]) -> Callable[[NDArray], NDArray]:
     """Chain multiple functions together to apply them sequentially to an array.
 
     Parameters
@@ -186,7 +186,7 @@ def scalar_objective(func: Callable[P, Any], *, has_aux: bool = False) -> Callab
 
 
 def scalar_objective(
-    func: Optional[Callable[P, Any]] = None, *, has_aux: bool = False
+    func: Callable[P, Any] | None = None, *, has_aux: bool = False
 ) -> Callable[..., Any]:
     """Decorator to ensure the objective function returns a real scalar value.
 

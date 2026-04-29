@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import h5py
@@ -37,7 +37,6 @@ from tidy3d.exceptions import DataError, FileError, format_chained_exception_mes
 if TYPE_CHECKING:
     from collections.abc import Hashable, Mapping
     from os import PathLike
-    from typing import Optional
 
     from numpy.typing import NDArray
     from pydantic.annotated_handlers import GetCoreSchemaHandler
@@ -244,7 +243,7 @@ class DataArray(xr.DataArray):
             coord_attrs.update(missing)
         return val
 
-    def _interp_validator(self, field_name: Optional[str] = None) -> None:
+    def _interp_validator(self, field_name: str | None = None) -> None:
         """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 
         NOTE
@@ -318,7 +317,7 @@ class DataArray(xr.DataArray):
         raw_data = self.data.ravel()
         return np.allclose(raw_data, raw_data[0])
 
-    def to_hdf5(self, fname: Union[PathLike, h5py.File], group_path: str) -> None:
+    def to_hdf5(self, fname: PathLike | h5py.File, group_path: str) -> None:
         """Save an ``xr.DataArray`` to the hdf5 file or file handle with a given path to the group."""
         if isinstance(fname, (str, pathlib.Path)):
             path = pathlib.Path(fname)
@@ -351,7 +350,7 @@ class DataArray(xr.DataArray):
         return cls(values, coords=coords, dims=cls._dims)
 
     @classmethod
-    def from_hdf5(cls, fname: Union[PathLike, h5py.File], group_path: str) -> Self:
+    def from_hdf5(cls, fname: PathLike | h5py.File, group_path: str) -> Self:
         """Load a DataArray from an hdf5 file or open file handle with a given group path."""
         if isinstance(fname, h5py.File):
             return cls._from_hdf5_handle(f_handle=fname, group_path=group_path)
@@ -435,10 +434,10 @@ class DataArray(xr.DataArray):
 
     def _ag_interp(
         self,
-        coords: Union[Mapping[Any, Any], None] = None,
+        coords: Mapping[Any, Any] | None = None,
         method: InterpOptions = "linear",
         assume_sorted: bool = False,
-        kwargs: Union[Mapping[str, Any], None] = None,
+        kwargs: Mapping[str, Any] | None = None,
         **coords_kwargs: Any,
     ) -> Self:
         """Autograd interp override when tracing over self.data.
@@ -876,9 +875,9 @@ class AbstractSpatialDataArray(DataArray, ABC):
         self,
         grid: Coords,
         *,
-        offset: Optional[Coordinate] = None,
+        offset: Coordinate | None = None,
         method: InterpOptions = "linear",
-        target_dims: Optional[tuple[str, ...]] = None,
+        target_dims: tuple[str, ...] | None = None,
     ) -> Self:
         """Interpolate onto a target grid, with optional spatial offset and output ordering."""
         if offset is None:
@@ -2355,48 +2354,48 @@ DATA_ARRAY_TYPES = [
 
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
-IndexedDataArrayTypes = Union[
-    IndexedDataArray,
-    IndexedVoltageDataArray,
-    IndexedSurfaceFieldDataArray,
-    IndexedSurfaceFieldTimeDataArray,
-    IndexedFieldDataArray,
-    IndexedFieldTimeDataArray,
-    IndexedFreqDataArray,
-    IndexedTimeDataArray,
-    IndexedFieldVoltageDataArray,
-    IndexedSurfaceFreqDataArray,
-    IndexedSurfaceTimeDataArray,
-    PointDataArray,
-]
+IndexedDataArrayTypes = (
+    IndexedDataArray
+    | IndexedVoltageDataArray
+    | IndexedSurfaceFieldDataArray
+    | IndexedSurfaceFieldTimeDataArray
+    | IndexedFieldDataArray
+    | IndexedFieldTimeDataArray
+    | IndexedFreqDataArray
+    | IndexedTimeDataArray
+    | IndexedFieldVoltageDataArray
+    | IndexedSurfaceFreqDataArray
+    | IndexedSurfaceTimeDataArray
+    | PointDataArray
+)
 
-IntegralResultType = Union[
-    FreqDataArray,
-    FreqModeDataArray,
-    FreqTerminalDataArray,
-    FreqTerminalModeDataArray,
-    TimeDataArray,
-]
-VoltageIntegralResultType = Union[
-    VoltageFreqDataArray,
-    VoltageFreqModeDataArray,
-    VoltageFreqTerminalDataArray,
-    VoltageTimeDataArray,
-    VoltageFreqTerminalModeDataArray,
-]
-CurrentIntegralResultType = Union[
-    CurrentFreqDataArray,
-    CurrentFreqModeDataArray,
-    CurrentFreqTerminalDataArray,
-    CurrentTimeDataArray,
-    CurrentFreqTerminalModeDataArray,
-]
-ImpedanceResultType = Union[
-    ImpedanceFreqDataArray,
-    ImpedanceFreqModeDataArray,
-    ImpedanceTimeDataArray,
-    ImpedanceFreqTerminalTerminalDataArray,
-]
+IntegralResultType = (
+    FreqDataArray
+    | FreqModeDataArray
+    | FreqTerminalDataArray
+    | FreqTerminalModeDataArray
+    | TimeDataArray
+)
+VoltageIntegralResultType = (
+    VoltageFreqDataArray
+    | VoltageFreqModeDataArray
+    | VoltageFreqTerminalDataArray
+    | VoltageTimeDataArray
+    | VoltageFreqTerminalModeDataArray
+)
+CurrentIntegralResultType = (
+    CurrentFreqDataArray
+    | CurrentFreqModeDataArray
+    | CurrentFreqTerminalDataArray
+    | CurrentTimeDataArray
+    | CurrentFreqTerminalModeDataArray
+)
+ImpedanceResultType = (
+    ImpedanceFreqDataArray
+    | ImpedanceFreqModeDataArray
+    | ImpedanceTimeDataArray
+    | ImpedanceFreqTerminalTerminalDataArray
+)
 
 
 class _TracedDataset(xr.Dataset):

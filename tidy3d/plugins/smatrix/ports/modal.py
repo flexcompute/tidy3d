@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, PositiveFloat
 
@@ -22,8 +22,6 @@ from tidy3d.constants import MICROMETER, RADIAN
 from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.components.types.time import SourceTimeType
 
 
@@ -98,7 +96,7 @@ class Port(AbstractPort):
         fwidth: float,
         mode_index: int,
         num_freqs: int = 1,
-        source_time: Optional[SourceTimeType] = None,
+        source_time: SourceTimeType | None = None,
         **kwargs: Any,
     ) -> ModeSource:
         """Create a ModeSource matching this modal port."""
@@ -185,7 +183,7 @@ class GaussianPort(AbstractGaussianPort):
         fwidth: float,
         mode_index: int = 0,
         num_freqs: int = 1,
-        source_time: Optional[SourceTimeType] = None,
+        source_time: SourceTimeType | None = None,
         **kwargs: Any,
     ) -> GaussianBeam:
         """Create a GaussianBeam matching this gaussian port. Ignores mode_index."""
@@ -247,7 +245,7 @@ class AstigmaticGaussianPort(AbstractGaussianPort):
         fwidth: float,
         mode_index: int = 0,
         num_freqs: int = 1,
-        source_time: Optional[SourceTimeType] = None,
+        source_time: SourceTimeType | None = None,
         **kwargs: Any,
     ) -> AstigmaticGaussianBeam:
         """Create an AstigmaticGaussianBeam matching this port. Ignores mode_index."""
@@ -269,4 +267,4 @@ class AstigmaticGaussianPort(AbstractGaussianPort):
         )
 
 
-ModalPortType = Union[Port, GaussianPort, AstigmaticGaussianPort]
+ModalPortType = Port | GaussianPort | AstigmaticGaussianPort

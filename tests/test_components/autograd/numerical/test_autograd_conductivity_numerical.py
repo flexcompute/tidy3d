@@ -108,7 +108,7 @@ def make_base_sim(
         ]
     )
 
-    src_size = sim_size_um[0:2] + (0,)
+    src_size = (*sim_size_um[0:2], 0)
 
     wl_min_src_um = 0.9 * adj_wvl_um
     wl_max_src_um = 1.1 * adj_wvl_um
@@ -392,10 +392,10 @@ def test_finite_difference_conductivity_data(
     sim_geometry = get_sim_geometry(mesh_wvl_um)
 
     box_for_override = td.Box(
-        center=(0, 0, 0), size=sim_geometry.size[0:2] + (thickness_um + mesh_wvl_um,)
+        center=(0, 0, 0), size=(*sim_geometry.size[0:2], thickness_um + mesh_wvl_um)
     )
 
-    eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
+    eval_fns, _eval_fn_names = make_eval_fns(monitor_size_wvl)
 
     sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
     sim_path_dir.mkdir(parents=True, exist_ok=True)
@@ -426,7 +426,7 @@ def test_finite_difference_conductivity_data(
     )
     conductivity_init = overall_conductivity_scaling * np.ones((dim, dim, Nz))
 
-    obj, adj_grad = obj_val_and_grad([conductivity_init])
+    _obj, adj_grad = obj_val_and_grad([conductivity_init])
 
     # empirical step size for finite difference set as 1/10 the size of the conductivity seed value
     fd_step = 0.1 * overall_conductivity_scaling

@@ -11,8 +11,6 @@ from tidy3d.web.cache import clear as clear_cache
 from tidy3d.web.cache import resolve_local_cache
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.web.cache import LocalCache
 
 
@@ -25,7 +23,7 @@ def _fmt_size(num_bytes: int) -> str:
     return f"{num_bytes:.2f} B"  # fallback, though unreachable
 
 
-def _get_cache(ensure: bool = True) -> Optional[LocalCache]:
+def _get_cache(ensure: bool = True) -> LocalCache | None:
     """Resolve the local cache object, surfacing errors as ClickExceptions."""
     try:
         cache = resolve_local_cache(use_cache=True)

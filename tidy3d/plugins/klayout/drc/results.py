@@ -15,7 +15,6 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Optional, Union
 
 # Types for DRC markers
 DRCEdge = tuple[Coordinate2D, Coordinate2D]
@@ -373,8 +372,8 @@ class DRCResults(Tidy3dBaseModel):
     @classmethod
     def load(
         cls,
-        resultsfile: Union[str, Path],
-        max_results: Optional[int] = None,
+        resultsfile: str | Path,
+        max_results: int | None = None,
     ) -> DRCResults:
         """Create a :class:`.DRCResults` instance from a results file.
 
@@ -412,8 +411,8 @@ class DRCResults(Tidy3dBaseModel):
 
 
 def violations_from_file(
-    resultsfile: Union[str, Path],
-    max_results: Optional[int] = None,
+    resultsfile: str | Path,
+    max_results: int | None = None,
 ) -> dict[str, DRCViolation]:
     """Loads a KLayout DRC results file and returns the results as a dictionary of :class:`.DRCViolation` objects.
 

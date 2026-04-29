@@ -37,8 +37,8 @@ from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from os import PathLike
-    from typing import Callable, Optional
 
 TYPE_MAP: dict[type, TaskType] = {
     Simulation: TaskType.FDTD,
@@ -150,7 +150,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
     @classmethod
     def from_file(
-        cls, file_path: PathLike, lazy: bool = False, on_load: Optional[Callable] = None
+        cls, file_path: PathLike, lazy: bool = False, on_load: Callable | None = None
     ) -> WorkflowDataType:
         """Loads a ``WorkflowDataType`` instance from .yaml, .json, or .hdf5 file.
 

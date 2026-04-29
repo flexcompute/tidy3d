@@ -7,7 +7,6 @@ from tidy3d.components.base import Tidy3dBaseModel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from typing import Optional
 
     from .operators import (
         Abs,
@@ -45,7 +44,7 @@ class Expression(Tidy3dBaseModel, ABC):
         return super()._model_validate(obj)
 
     def filter(
-        self, target_type: type[Expression], target_field: Optional[str] = None
+        self, target_type: type[Expression], target_field: str | None = None
     ) -> Generator[Expression, None, None]:
         """
         Find all instances of a given type or field in the expression.

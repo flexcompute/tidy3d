@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from pydantic import Field
 
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
 
 class VolumeMeshData(HeatChargeMonitorData):

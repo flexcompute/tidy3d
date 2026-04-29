@@ -13,8 +13,6 @@ from tidy3d.web import Batch
 from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
-
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
     from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
     from tidy3d.web import BatchData
@@ -121,10 +119,10 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
-    numerical_structures: Optional[
-        Union[NumericalStructureConfig, tuple[NumericalStructureConfig, ...]]
-    ] = None,
-    custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None,
+    numerical_structures: NumericalStructureConfig
+    | tuple[NumericalStructureConfig, ...]
+    | None = None,
+    custom_vjp: CustomVJPConfig | tuple[CustomVJPConfig, ...] | None = None,
     **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.

@@ -19,8 +19,6 @@ from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     import xarray as xr
     from numpy.typing import NDArray
     from typing_extensions import Self
@@ -93,7 +91,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
     )
 
     @cached_property
-    def main_axis(self) -> Optional[Axis]:
+    def main_axis(self) -> Axis | None:
         """Axis for performing integration."""
         for index, value in enumerate(self.size):
             if value != 0:

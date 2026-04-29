@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
@@ -206,9 +206,9 @@ class AbstractStructure(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    name: Optional[str] = Field(None, title="Name", description="Optional name for the structure.")
+    name: str | None = Field(None, title="Name", description="Optional name for the structure.")
 
-    background_permittivity: Optional[float] = Field(
+    background_permittivity: float | None = Field(
         None,
         ge=1.0,
         title="Background Permittivity",
@@ -217,7 +217,7 @@ class AbstractStructure(Tidy3dBaseModel):
         "when performing shape optimization with autograd.",
     )
 
-    background_medium: Optional[StructureMediumType] = Field(
+    background_medium: StructureMediumType | None = Field(
         None,
         title="Background Medium",
         description="Medium used for the background of this structure "
@@ -226,7 +226,7 @@ class AbstractStructure(Tidy3dBaseModel):
         "``Simulation`` by default to compute the shape derivatives.",
     )
 
-    priority: Optional[int] = Field(
+    priority: int | None = Field(
         None,
         title="Priority",
         description="Priority of the structure applied in structure overlapping region. "
@@ -303,9 +303,9 @@ class AbstractStructure(Tidy3dBaseModel):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs: Any,
     ) -> Ax:
@@ -415,7 +415,7 @@ class Structure(AbstractStructure):
         return 0
 
     @property
-    def viz_spec(self) -> Optional[VisualizationSpec]:
+    def viz_spec(self) -> VisualizationSpec | None:
         return self.medium.viz_spec
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
@@ -436,7 +436,7 @@ class Structure(AbstractStructure):
         return self.medium.eps_diagonal(frequency=frequency)
 
     @staticmethod
-    def _get_optical_medium(medium: MultiPhysicsMedium) -> Optional[StructureMediumType]:
+    def _get_optical_medium(medium: MultiPhysicsMedium) -> StructureMediumType | None:
         """Get optical medium."""
         return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
 
@@ -499,7 +499,7 @@ class Structure(AbstractStructure):
         index: int,
         field_keys: list[str],
         grid: Grid,
-        plane: Optional[Box] = None,
+        plane: Box | None = None,
     ) -> tuple[FieldMonitor, PermittivityMonitor]:
         """Generate the field and permittivity monitor for this structure."""
 
@@ -583,7 +583,7 @@ class Structure(AbstractStructure):
     def _compute_derivatives(
         self,
         derivative_info: DerivativeInfo,
-        vjp_fns: Optional[dict[tuple[str, ...], Callable[..., Any]]] = None,
+        vjp_fns: dict[tuple[str, ...], Callable[..., Any]] | None = None,
     ) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields provided in derivative_info.
         vjp_fns provide alternate derivative computation paths for the geometry or medium derivatives.
@@ -669,9 +669,9 @@ class Structure(AbstractStructure):
 
     def to_gdstk(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         permittivity_threshold: NonNegativeFloat = 1,
         frequency: PositiveFloat = 0,
         gds_layer: NonNegativeInt = 0,
@@ -727,9 +727,9 @@ class Structure(AbstractStructure):
     def to_gds(
         self,
         cell: gdstk.Cell,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         permittivity_threshold: NonNegativeFloat = 1,
         frequency: PositiveFloat = 0,
         gds_layer: NonNegativeInt = 0,
@@ -783,9 +783,9 @@ class Structure(AbstractStructure):
     def to_gds_file(
         self,
         fname: PathLike,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         permittivity_threshold: NonNegativeFloat = 1,
         frequency: PositiveFloat = 0,
         gds_layer: NonNegativeInt = 0,
@@ -1047,9 +1047,9 @@ class MeshOverrideStructure(AbstractStructure):
     """
 
     dl: tuple[
-        Optional[PositiveFloat],
-        Optional[PositiveFloat],
-        Optional[PositiveFloat],
+        PositiveFloat | None,
+        PositiveFloat | None,
+        PositiveFloat | None,
     ] = Field(
         title="Grid Size",
         description="Grid size along x, y, z directions.",
@@ -1113,4 +1113,4 @@ class MeshOverrideStructure(AbstractStructure):
         return self
 
 
-StructureType = Union[Structure, MeshOverrideStructure]
+StructureType = Structure | MeshOverrideStructure

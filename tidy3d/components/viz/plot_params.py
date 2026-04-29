@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from numpy import inf
 from pydantic import Field, NonNegativeFloat
@@ -17,7 +17,7 @@ class AbstractPlotParams(Tidy3dBaseModel):
     """
 
     alpha: Any = Field(1.0, title="Opacity")
-    zorder: Optional[float] = Field(None, title="Display Order")
+    zorder: float | None = Field(None, title="Display Order")
 
     def include_kwargs(self, **kwargs: Any) -> AbstractPlotParams:
         """Update the plot params with supplied kwargs."""
@@ -45,12 +45,12 @@ class PathPlotParams(AbstractPlotParams):
     Corresponds with select properties of ``matplotlib.lines.Line2D``.
     """
 
-    color: Optional[Any] = Field(None, title="Color", alias="c")
+    color: Any | None = Field(None, title="Color", alias="c")
     linewidth: NonNegativeFloat = Field(2, title="Line Width", alias="lw")
     linestyle: str = Field("--", title="Line Style", alias="ls")
     marker: Any = Field("o", title="Marker Style")
-    markeredgecolor: Optional[Any] = Field(None, title="Marker Edge Color", alias="mec")
-    markerfacecolor: Optional[Any] = Field(None, title="Marker Face Color", alias="mfc")
+    markeredgecolor: Any | None = Field(None, title="Marker Edge Color", alias="mec")
+    markerfacecolor: Any | None = Field(None, title="Marker Face Color", alias="mfc")
     markersize: NonNegativeFloat = Field(10, title="Marker Size", alias="ms")
 
 
@@ -59,10 +59,10 @@ class PlotParams(AbstractPlotParams):
     Corresponds with select properties of ``matplotlib.patches.Patch``.
     """
 
-    edgecolor: Optional[Any] = Field(None, title="Edge Color", alias="ec")
-    facecolor: Optional[Any] = Field(None, title="Face Color", alias="fc")
+    edgecolor: Any | None = Field(None, title="Edge Color", alias="ec")
+    facecolor: Any | None = Field(None, title="Face Color", alias="fc")
     fill: bool = Field(True, title="Is Filled")
-    hatch: Optional[str] = Field(None, title="Hatch Style")
+    hatch: str | None = Field(None, title="Hatch Style")
     linewidth: NonNegativeFloat = Field(1, title="Line Width", alias="lw")
 
 

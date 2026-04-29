@@ -23,8 +23,6 @@ from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import MICROMETER, fp_eps
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from typing_extensions import Self
 
     from tidy3d.components.types import Ax
@@ -43,9 +41,9 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
         cls,
         plus_terminal: float,
         minus_terminal: float,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         extrapolate_to_endpoints: bool = True,
         snap_path_to_grid: bool = True,
     ) -> Self:
@@ -99,9 +97,9 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         plot_markers: bool = True,
         **path_kwargs: Any,
@@ -182,9 +180,9 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         plot_markers: bool = True,
         **path_kwargs: Any,

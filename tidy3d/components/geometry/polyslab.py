@@ -28,8 +28,6 @@ from tidy3d.packaging import verify_packages_import
 from . import base, triangulation
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
-
     from gdstk import Cell
     from numpy.typing import NDArray
     from pydantic import PositiveFloat
@@ -740,7 +738,7 @@ class PolySlab(base.Planar):
             poly_ref = PolySlab._heal_polygon(poly_ref)
 
         slab_bounds = get_static(self.slab_bounds)
-        slab_min, slab_max = slab_bounds
+        _slab_min, _slab_max = slab_bounds
 
         # first, check vertex-vertex crossing at any point during extrusion
         length = slab_bounds[1] - slab_bounds[0]
@@ -794,7 +792,7 @@ class PolySlab(base.Planar):
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
@@ -856,7 +854,7 @@ class PolySlab(base.Planar):
     def _load_gds_vertices(
         gds_cell: Cell,
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: PositiveFloat = 1.0,
     ) -> list[ArrayFloat2D]:
         """Import :class:`PolySlab` from a ``gdstk.Cell``.
@@ -1199,7 +1197,7 @@ class PolySlab(base.Planar):
         normal: Coordinate,
         origin: Coordinate,
         to_2D: MatrixReal4x4,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -1262,7 +1260,7 @@ class PolySlab(base.Planar):
         path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float, quad_segs: Optional[int] = None) -> list[Shapely]:
+    def _intersections_normal(self, z: float, quad_segs: int | None = None) -> list[Shapely]:
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
@@ -2241,8 +2239,8 @@ class PolySlab(base.Planar):
         sim_min: NDArray,
         sim_max: NDArray,
         *,
-        _edge_clip_tol: Optional[float] = None,
-        _dtype: Optional[type] = None,
+        _edge_clip_tol: float | None = None,
+        _dtype: type | None = None,
     ) -> tuple[NDArray, NDArray, NDArray]:
         """
         Compute parametric bounds for multiple segments clipped to simulation bounds.
@@ -2323,9 +2321,9 @@ class PolySlab(base.Planar):
         t_start: float = 0.0,
         t_end: float = 1.0,
         *,
-        _sample_fraction: Optional[float] = None,
-        _gauss_order: Optional[int] = None,
-        _dtype: Optional[type] = None,
+        _sample_fraction: float | None = None,
+        _gauss_order: int | None = None,
+        _dtype: type | None = None,
     ) -> tuple[NDArray, NDArray]:
         """
         Compute Gauss samples and weights along [t_start, t_end] with adaptive count.
@@ -2446,7 +2444,7 @@ class PolySlab(base.Planar):
         axis_vec[self.axis] = 1.0
 
         # densify along axis as |theta| grows, dz scales with cos(theta)
-        z_centers, dz, z0, z1 = self._z_slices(sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th)
+        z_centers, dz, _z0, _z1 = self._z_slices(sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th)
 
         # early exit: no slices
         if (not is_2d) and len(z_centers) == 0:
@@ -2670,7 +2668,7 @@ class PolySlab(base.Planar):
         sim_min: NDArray,
         sim_max: NDArray,
         is_2d: bool = False,
-        interpolators: Optional[dict] = None,
+        interpolators: dict | None = None,
     ) -> float:
         """VJP for dJ/dtheta where theta = sidewall_angle.
 
@@ -2950,7 +2948,7 @@ class PolySlab(base.Planar):
         sim_min: NDArray,
         sim_max: NDArray,
         is_2d: bool = False,
-        interpolators: Optional[dict] = None,
+        interpolators: dict | None = None,
     ) -> NDArray:
         """VJP for the vertices of a ``PolySlab``.
 
@@ -3148,7 +3146,7 @@ class PolySlab(base.Planar):
         scaled_slab_bounds = tuple(scale_normal * bound for bound in self.slab_bounds)
         return self.updated_copy(vertices=scaled_vertices, slab_bounds=scaled_slab_bounds)
 
-    def rotated(self, angle: float, axis: Union[Axis, Coordinate]) -> PolySlab:
+    def rotated(self, angle: float, axis: Axis | Coordinate) -> PolySlab:
         """Return a rotated copy of this geometry.
 
         Parameters
@@ -3221,7 +3219,7 @@ class ComplexPolySlabBase(PolySlab):
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
@@ -3410,7 +3408,7 @@ class ComplexPolySlabBase(PolySlab):
         origin: Coordinate,
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
         section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.

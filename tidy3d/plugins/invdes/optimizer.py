@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 from copy import deepcopy
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import autograd as ag
 import autograd.numpy as anp
@@ -20,7 +20,7 @@ from .design import InverseDesignType
 from .result import InverseDesignResult
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
@@ -48,7 +48,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         description="Number of steps in the gradient descent optimizer.",
     )
 
-    results_cache_fname: Optional[str] = Field(
+    results_cache_fname: str | None = Field(
         None,
         title="History Storage File",
         description="If specified, will save the optimization state to a local ``.pkl`` file "
@@ -86,7 +86,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(self, params0: Optional[anp.ndarray] = None) -> InverseDesignResult:
+    def initialize_result(self, params0: anp.ndarray | None = None) -> InverseDesignResult:
         """
         Create an initially empty `InverseDesignResult` from the starting parameters.
 
@@ -111,8 +111,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def run(
         self,
-        post_process_fn: Optional[Callable] = None,
-        callback: Optional[Callable] = None,
+        post_process_fn: Callable | None = None,
+        callback: Callable | None = None,
         params0: anp.ndarray = None,
     ) -> InverseDesignResult:
         """Run this inverse design problem from an optional initial set of parameters.
@@ -140,9 +140,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run(
         self,
         result: InverseDesignResult,
-        num_steps: Optional[int] = None,
-        post_process_fn: Optional[Callable] = None,
-        callback: Optional[Callable] = None,
+        num_steps: int | None = None,
+        post_process_fn: Callable | None = None,
+        callback: Callable | None = None,
     ) -> InverseDesignResult:
         """Run optimizer for a series of steps with an initialized state.
 
@@ -178,7 +178,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         # main optimization loop
         for step_index in range(done_steps, done_steps + num_steps):
             aux_data = {}
-            val, grad = val_and_grad_fn(params, aux_data=aux_data)
+            _val, grad = val_and_grad_fn(params, aux_data=aux_data)
 
             if np.count_nonzero(grad) == 0:
                 raise SetupError(
@@ -230,9 +230,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run_from_file(
         self,
         fname: str,
-        num_steps: Optional[int] = None,
-        post_process_fn: Optional[Callable] = None,
-        callback: Optional[Callable] = None,
+        num_steps: int | None = None,
+        post_process_fn: Callable | None = None,
+        callback: Callable | None = None,
     ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         result = InverseDesignResult.from_file(fname)
@@ -245,9 +245,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def continue_run_from_history(
         self,
-        num_steps: Optional[int] = None,
-        post_process_fn: Optional[Callable] = None,
-        callback: Optional[Callable] = None,
+        num_steps: int | None = None,
+        post_process_fn: Callable | None = None,
+        callback: Callable | None = None,
     ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         return self.continue_run_from_file(
@@ -297,7 +297,7 @@ class AdamOptimizer(AbstractOptimizer):
         return self._make_adam().init(parameters)
 
     def update(
-        self, parameters: np.ndarray, gradient: np.ndarray, state: Optional[dict] = None
+        self, parameters: np.ndarray, gradient: np.ndarray, state: dict | None = None
     ) -> tuple[np.ndarray, dict]:
         if state is None:
             state = self.initial_state(parameters)

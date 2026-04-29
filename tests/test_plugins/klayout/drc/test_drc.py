@@ -208,7 +208,7 @@ def test_drc_config_args_unstringifiable_value(tmp_path):
     kwargs = _basic_drc_config_kwargs(tmp_path)
 
     with pytest.raises(
-        ValidationError, match="Could not coerce keys and values of drc_args to strings."
+        ValidationError, match=r"Could not coerce keys and values of drc_args to strings."
     ):
         DRCConfig(**kwargs, drc_args={"bad": Unstringifiable()})
 

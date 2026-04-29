@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import functools
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from pydantic import BaseModel
@@ -28,7 +29,7 @@ class Version(BaseModel):
     minor: int
 
     @classmethod
-    def from_string(cls, string: Optional[str] = None) -> Version:
+    def from_string(cls, string: str | None = None) -> Version:
         """Return Version from a version string."""
         if string is None:
             return cls.from_string(string=__version__)
@@ -164,7 +165,7 @@ class Updater(BaseModel):
 
 # versions will be dynamically mapped in this table when the update functions are initialized.
 UpdateFn = Callable[[dict[str, Any]], dict[str, Any]]
-TransformFn = Callable[[dict[str, Any]], Optional[dict[str, Any]]]
+TransformFn = Callable[[dict[str, Any]], dict[str, Any] | None]
 
 UPDATE_MAP: dict[Version, UpdateFn] = {}
 

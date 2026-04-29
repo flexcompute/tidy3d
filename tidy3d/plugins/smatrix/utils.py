@@ -17,8 +17,6 @@ from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from numpy.typing import NDArray
 
     from tidy3d.components.data.data_array import DataArray, FreqDataArray
@@ -368,7 +366,7 @@ def compute_power_delivered_by_port(
 
 def s_to_z(
     s_matrix: TerminalPortDataArray,
-    reference: Union[complex, TerminalPortDataArray],
+    reference: complex | TerminalPortDataArray,
     s_param_def: SParamDef = "pseudo",
 ) -> DataArray:
     """Get the impedance matrix given the scattering matrix and a reference impedance.

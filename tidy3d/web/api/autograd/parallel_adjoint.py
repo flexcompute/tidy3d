@@ -30,7 +30,6 @@ from tidy3d.web.api.autograd.context import ParallelAdjointState
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Optional, Union
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.data.data_array import FreqDataArray
@@ -76,7 +75,7 @@ def collect_parallel_adjoint_bases_from_simulation(
 
 def _warn_parallel_adjoint_fallback(
     *,
-    parallel_info: Optional[ParallelAdjointState],
+    parallel_info: ParallelAdjointState | None,
     sims_adj: list[td.Simulation],
     task_name: str,
 ) -> None:
@@ -108,7 +107,7 @@ def _scale_adjoint_field_data(sim_data_adj: td.SimulationData, scale: complex) -
 def _adjoint_post_norm_for_basis(
     sim_data_adj: td.SimulationData,
     basis_spec: ParallelAdjointBasis,
-) -> Union[float, FreqDataArray]:
+) -> float | FreqDataArray:
     post_norm = sim_data_adj.simulation.post_norm
     if not hasattr(post_norm, "coords"):
         return post_norm
@@ -123,7 +122,7 @@ def _adjoint_post_norm_for_basis(
 
 def _with_post_norm(
     sim_data_adj: td.SimulationData,
-    post_norm: Union[float, FreqDataArray],
+    post_norm: float | FreqDataArray,
 ) -> td.SimulationData:
     sim_updated = sim_data_adj.simulation.updated_copy(post_norm=post_norm)
     return sim_data_adj.updated_copy(simulation=sim_updated)
@@ -184,8 +183,8 @@ def _populate_parallel_adjoint_bases(
     payload: ParallelAdjointPayload,
     sim_fields_keys: list[tuple],
     context: AutogradContext,
-    numerical_structure_map: Optional[dict[int, Any]] = None,
-    custom_vjp: Optional[tuple[Any, ...]] = None,
+    numerical_structure_map: dict[int, Any] | None = None,
+    custom_vjp: tuple[Any, ...] | None = None,
 ) -> None:
     sim_data_orig = context.simulation_data_original
     sim_data_fwd = context.simulation_data_forward
@@ -273,7 +272,7 @@ def make_source_info_from_simulation(
     simulation: td.Simulation,
     basis: ParallelAdjointBasis,
     coefficient: complex,
-) -> Optional[AdjointSourceInfo]:
+) -> AdjointSourceInfo | None:
     fwidth = adjoint_fwidth_from_simulation(simulation)
     source = basis.source_from_simulation(
         simulation=simulation, coefficient=coefficient, fwidth=fwidth
@@ -296,7 +295,7 @@ def prepare_parallel_adjoint(
     sim_fields_keys: list[tuple],
     task_name: str,
     max_num_adjoint_per_fwd: int,
-) -> Optional[ParallelAdjointPayload]:
+) -> ParallelAdjointPayload | None:
     if not config.adjoint.parallel_run:
         return None
 

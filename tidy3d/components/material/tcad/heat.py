@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class AbstractHeatMedium(ABC, Tidy3dBaseModel):
     """Abstract heat material specification."""
 
-    name: Optional[str] = Field(None, title="Name", description="Optional unique name for medium.")
+    name: str | None = Field(None, title="Name", description="Optional unique name for medium.")
 
     @property
     def heat(self) -> Self:
@@ -89,31 +89,31 @@ class FluidMedium(AbstractHeatMedium):
     ... )
     """
 
-    thermal_conductivity: Optional[NonNegativeFloat] = Field(
+    thermal_conductivity: NonNegativeFloat | None = Field(
         default=None,
         title="Fluid Thermal Conductivity",
         description="Thermal conductivity (k) of the fluid.",
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
-    viscosity: Optional[NonNegativeFloat] = Field(
+    viscosity: NonNegativeFloat | None = Field(
         default=None,
         title="Fluid Dynamic Viscosity",
         description="Dynamic viscosity (μ) of the fluid.",
         json_schema_extra={"units": DYNAMIC_VISCOSITY},
     )
-    specific_heat: Optional[NonNegativeFloat] = Field(
+    specific_heat: NonNegativeFloat | None = Field(
         default=None,
         title="Fluid Specific Heat",
         description="Specific heat of the fluid at constant pressure.",
         json_schema_extra={"units": SPECIFIC_HEAT},
     )
-    density: Optional[NonNegativeFloat] = Field(
+    density: NonNegativeFloat | None = Field(
         default=None,
         title="Fluid Density",
         description="Density (ρ) of the fluid.",
         json_schema_extra={"units": DENSITY},
     )
-    expansivity: Optional[NonNegativeFloat] = Field(
+    expansivity: NonNegativeFloat | None = Field(
         default=None,
         title="Fluid Thermal Expansivity",
         description="Thermal expansion coefficient (β) of the fluid.",
@@ -159,7 +159,7 @@ class SolidMedium(AbstractHeatMedium):
     ... )
     """
 
-    capacity: Optional[PositiveFloat] = Field(
+    capacity: PositiveFloat | None = Field(
         None,
         title="Heat capacity",
         description=f"Specific heat capacity in unit of {SPECIFIC_HEAT_CAPACITY}.",
@@ -172,7 +172,7 @@ class SolidMedium(AbstractHeatMedium):
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
 
-    density: Optional[PositiveFloat] = Field(
+    density: PositiveFloat | None = Field(
         None,
         title="Density",
         description=f"Mass density of material in units of {DENSITY}.",
@@ -183,8 +183,8 @@ class SolidMedium(AbstractHeatMedium):
     def from_si_units(
         cls,
         conductivity: PositiveFloat,
-        capacity: Optional[PositiveFloat] = None,
-        density: Optional[PositiveFloat] = None,
+        capacity: PositiveFloat | None = None,
+        density: PositiveFloat | None = None,
     ) -> Self:
         """Create a SolidMedium using SI units"""
         new_conductivity = conductivity * 1e-6  # Convert from W/(m*K) to W/(um*K)
@@ -205,5 +205,5 @@ class SolidSpec(SolidMedium):
     """Solid medium class for backwards compatibility"""
 
 
-ThermalSpecType = Union[FluidSpec, SolidSpec, SolidMedium, FluidMedium]
+ThermalSpecType = FluidSpec | SolidSpec | SolidMedium | FluidMedium
 # Note this needs to remain here to avoid circular imports in the new medium structure.

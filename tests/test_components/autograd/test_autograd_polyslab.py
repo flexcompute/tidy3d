@@ -13,8 +13,6 @@ Test coverage:
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -95,8 +93,8 @@ class DummyDI:
         paths,
         axis: int,
         coeffs: dict[str, float],
-        bounds_intersect: Optional[tuple[tuple[float, ...], tuple[float, ...]]] = None,
-        simulation_bounds: Optional[tuple[tuple[float, ...], tuple[float, ...]]] = None,
+        bounds_intersect: tuple[tuple[float, ...], tuple[float, ...]] | None = None,
+        simulation_bounds: tuple[tuple[float, ...], tuple[float, ...]] | None = None,
     ) -> None:
         self.paths = paths
         self.axis = axis

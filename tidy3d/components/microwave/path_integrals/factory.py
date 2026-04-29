@@ -26,8 +26,6 @@ from tidy3d.components.microwave.path_integrals.specs.voltage import (
 from tidy3d.exceptions import SetupError, ValidationError, format_chained_exception_message
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.components.microwave.impedance_calculator import (
         CurrentIntegralType,
         VoltageIntegralType,
@@ -91,8 +89,8 @@ def make_current_integral(path_spec: CurrentPathSpecType) -> CurrentIntegralType
 
 
 def make_path_integrals(
-    microwave_mode_spec: MicrowaveModeSpec, auto_spec: Optional[CustomImpedanceSpec] = None
-) -> tuple[tuple[Optional[VoltageIntegralType]], tuple[Optional[CurrentIntegralType]]]:
+    microwave_mode_spec: MicrowaveModeSpec, auto_spec: CustomImpedanceSpec | None = None
+) -> tuple[tuple[VoltageIntegralType | None], tuple[CurrentIntegralType | None]]:
     """
     Given a microwave mode specification and monitor, create the voltage and
     current path integrals used for the impedance computation.
@@ -160,7 +158,7 @@ def make_path_integrals(
 
 def make_path_integrals_for_terminal(
     microwave_terminal_mode_spec: MicrowaveTerminalModeSpec,
-) -> dict[str, tuple[Optional[VoltageIntegralType], Optional[CurrentIntegralType]]]:
+) -> dict[str, tuple[VoltageIntegralType | None, CurrentIntegralType | None]]:
     """
     Given a microwave terminal mode specification, create the voltage and
     current path integrals for each terminal.

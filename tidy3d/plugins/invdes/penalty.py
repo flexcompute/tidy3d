@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
@@ -12,8 +12,6 @@ from tidy3d.plugins.autograd.invdes import make_erosion_dilation_penalty
 from .base import InvdesBaseModel
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     import autograd.numpy as anp
 
     from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
@@ -95,7 +93,7 @@ class ErosionDilationPenalty(AbstractPenalty):
     )
 
     def evaluate(
-        self, x: anp.ndarray, pixel_size: float, symmetry: Optional[MirrorSymmetry] = None
+        self, x: anp.ndarray, pixel_size: float, symmetry: MirrorSymmetry | None = None
     ) -> float:
         """Evaluate this penalty."""
         penalty_fn = make_erosion_dilation_penalty(
@@ -110,4 +108,4 @@ class ErosionDilationPenalty(AbstractPenalty):
         return self.weight * penalty_unweighted
 
 
-PenaltyType = Union[ErosionDilationPenalty]
+PenaltyType = ErosionDilationPenalty

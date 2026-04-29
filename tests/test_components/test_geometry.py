@@ -542,7 +542,7 @@ def test_arc_geometry_helpers():
     assert max_c[0, 1] >= 0  # arc bulges upward for negative bulge
 
     # --- _arcs_from_bulges: zero bulge must raise ValueError ---
-    with pytest.raises(ValueError, match="non-zero"):
+    with pytest.raises(ValueError, match=r"non-zero"):
         _PolyBulgeUtil._arcs_from_bulges(edge_start, edge_end, np.array([0.0]))
 
     # --- _polygon_discretize: no-arc early return ---
@@ -865,7 +865,7 @@ def test_adjoint_error_with_bulges():
         axis=2,
         slab_bounds=(-0.5, 0.5),
     )
-    with pytest.raises(NotImplementedError, match="Adjoint derivatives are not supported"):
+    with pytest.raises(NotImplementedError, match=r"Adjoint derivatives are not supported"):
         polyslab._compute_derivatives(derivative_info=None)
 
 
@@ -2126,7 +2126,7 @@ def test_triangle_mesh_from_height():
 
     with pytest.raises(
         ValueError,
-        match="All height values must be non-negative.",
+        match=r"All height values must be non-negative.",
     ):
         td.TriangleMesh.from_height_function(
             axis=axis,

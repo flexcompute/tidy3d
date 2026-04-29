@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
 
 from pydantic import Field, field_validator
 
@@ -114,11 +113,9 @@ class StructureSimulationBoundary(AbstractBCPlacement):
 
 
 BCPlacementType = discriminated_union(
-    Union[
-        StructureBoundary,
-        StructureStructureInterface,
-        MediumMediumInterface,
-        SimulationBoundary,
-        StructureSimulationBoundary,
-    ]
+    StructureBoundary
+    | StructureStructureInterface
+    | MediumMediumInterface
+    | SimulationBoundary
+    | StructureSimulationBoundary
 )

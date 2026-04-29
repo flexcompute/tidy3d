@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
@@ -76,7 +76,7 @@ class ContinuousWaveTimeModulation(AbstractTimeDependence):
         json_schema_extra={"units": HERTZ},
     )
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> Union[complex, ArrayComplex1D]:
+    def amp_time(self, time: float | ArrayFloat1D) -> complex | ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
         omega = 2 * np.pi * self.freq0
@@ -88,7 +88,7 @@ class ContinuousWaveTimeModulation(AbstractTimeDependence):
         return abs(self.amplitude)
 
 
-TimeModulationType = Union[ContinuousWaveTimeModulation]
+TimeModulationType = ContinuousWaveTimeModulation
 
 
 class AbstractSpaceModulation(ABC, Tidy3dBaseModel):
@@ -137,14 +137,14 @@ class SpaceModulation(AbstractSpaceModulation):
     >>> space = SpaceModulation(amplitude=amp, phase=phase)
     """
 
-    amplitude: Union[float, SpatialDataArray] = Field(
+    amplitude: float | SpatialDataArray = Field(
         1,
         title="Amplitude of modulation in space",
         description="Amplitude of modulation that can vary spatially. "
         "It takes the unit of whatever is being modulated.",
     )
 
-    phase: Union[float, SpatialDataArray] = Field(
+    phase: float | SpatialDataArray = Field(
         0,
         title="Phase of modulation in space",
         description="Phase of modulation that can vary spatially.",
@@ -162,8 +162,8 @@ class SpaceModulation(AbstractSpaceModulation):
     @field_validator("amplitude", "phase")
     @classmethod
     def _validate_fields_real(
-        cls, val: Union[float, SpatialDataArray], info: FieldValidationInfo
-    ) -> Union[float, SpatialDataArray]:
+        cls, val: float | SpatialDataArray, info: FieldValidationInfo
+    ) -> float | SpatialDataArray:
         """Assert that the amplitude is real."""
         if np.iscomplexobj(val):
             raise ValidationError(f"'{info.field_name}' must be real.")
@@ -203,7 +203,7 @@ class SpaceModulation(AbstractSpaceModulation):
         return self.updated_copy(amplitude=amp_reduced, phase=phase_reduced)
 
 
-SpaceModulationType = Union[SpaceModulation]
+SpaceModulationType = SpaceModulation
 
 
 class SpaceTimeModulation(Tidy3dBaseModel):
@@ -269,14 +269,14 @@ class ModulationSpec(Tidy3dBaseModel):
     including relative permittivity at infinite frequency and electric conductivity.
     """
 
-    permittivity: Optional[SpaceTimeModulation] = Field(
+    permittivity: SpaceTimeModulation | None = Field(
         None,
         title="Space-time modulation of relative permittivity",
         description="Space-time modulation of relative permittivity at infinite frequency "
         "applied on top of the base permittivity at infinite frequency.",
     )
 
-    conductivity: Optional[SpaceTimeModulation] = Field(
+    conductivity: SpaceTimeModulation | None = Field(
         None,
         title="Space-time modulation of conductivity",
         description="Space-time modulation of electric conductivity "

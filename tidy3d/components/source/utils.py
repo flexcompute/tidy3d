@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from tidy3d.components.microwave.source import MicrowaveTerminalSource
 
 from .current import CustomCurrentSource, PointDipole, UniformCurrentSource
@@ -17,18 +15,18 @@ from .field import (
 )
 
 # Gaussian-like beam sources.
-GaussianBeamType = Union[GaussianBeam, AstigmaticGaussianBeam]
+GaussianBeamType = GaussianBeam | AstigmaticGaussianBeam
 
 # sources allowed in Simulation.sources
-SourceType = Union[
-    UniformCurrentSource,
-    PointDipole,
-    GaussianBeam,
-    AstigmaticGaussianBeam,
-    ModeSource,
-    PlaneWave,
-    CustomFieldSource,
-    CustomCurrentSource,
-    TFSF,
-    MicrowaveTerminalSource,
-]
+SourceType = (
+    UniformCurrentSource
+    | PointDipole
+    | GaussianBeam
+    | AstigmaticGaussianBeam
+    | ModeSource
+    | PlaneWave
+    | CustomFieldSource
+    | CustomCurrentSource
+    | TFSF
+    | MicrowaveTerminalSource
+)

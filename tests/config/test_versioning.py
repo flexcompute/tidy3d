@@ -146,7 +146,7 @@ def test_loader_profile_metadata_validation_failure_does_not_trigger_write_back(
     )
 
     loader = ConfigLoader(mock_config_dir)
-    with pytest.raises(ValueError, match="only allowed in 'config.toml'"):
+    with pytest.raises(ValueError, match=r"only allowed in 'config.toml'"):
         loader.load_user_profile("dev")
 
     loader.load_base()
@@ -278,7 +278,7 @@ def test_current_version_unknown_top_level_section_raises(mock_config_dir):
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="Unknown configuration section 'loging'"):
+    with pytest.raises(ValueError, match=r"Unknown configuration section 'loging'"):
         ConfigManager(config_dir=mock_config_dir)
 
 
@@ -296,7 +296,7 @@ def test_current_version_plugins_must_be_table(mock_config_dir):
         encoding="utf-8",
     )
 
-    with pytest.raises(TypeError, match="Configuration section 'plugins' should be a table"):
+    with pytest.raises(TypeError, match=r"Configuration section 'plugins' should be a table"):
         ConfigManager(config_dir=mock_config_dir)
 
 
@@ -327,7 +327,7 @@ def test_current_version_registered_plugin_payload_must_be_table(mock_config_dir
             log_level_expected="ERROR",
             contains_str="plugin 'strict_demo'",
         ):
-            with pytest.raises(TypeError, match="must be a mapping"):
+            with pytest.raises(TypeError, match=r"must be a mapping"):
                 ConfigManager(config_dir=mock_config_dir)
     finally:
         config_registry._SECTIONS.pop("plugins.strict_demo", None)
@@ -414,7 +414,7 @@ def test_default_profile_metadata_key_is_rejected_in_profile_file(mock_config_di
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     profile_path.write_text('default_profile = "prod"\n', encoding="utf-8")
 
-    with pytest.raises(ValueError, match="only allowed in 'config.toml'"):
+    with pytest.raises(ValueError, match=r"only allowed in 'config.toml'"):
         ConfigManager(profile="dev", config_dir=mock_config_dir)
 
 
@@ -428,7 +428,7 @@ def test_forward_compat_strict_raises(mock_config_dir, monkeypatch):
 
     monkeypatch.setenv("TIDY3D_CONFIG_FORWARD_COMPAT", "strict")
 
-    with pytest.raises(ValueError, match="config_version"):
+    with pytest.raises(ValueError, match=r"config_version"):
         ConfigManager(config_dir=mock_config_dir)
 
 
@@ -811,7 +811,7 @@ def test_preview_schema_upgrade_rejects_non_table_section(mock_config_dir):
     )
 
     loader = ConfigLoader(mock_config_dir)
-    with pytest.raises(TypeError, match="must be a mapping"):
+    with pytest.raises(TypeError, match=r"must be a mapping"):
         loader.preview_schema_upgrade(config_path)
 
 
@@ -823,7 +823,7 @@ def test_config_upgrade_check_fails_for_invalid_non_table_section(mock_config_di
         encoding="utf-8",
     )
 
-    with pytest.raises(TypeError, match="must be a mapping"):
+    with pytest.raises(TypeError, match=r"must be a mapping"):
         ConfigManager(config_dir=mock_config_dir)
 
     runner = CliRunner()
@@ -972,7 +972,7 @@ def test_backward_auto_migration_failure_raises_and_logs(mock_config_dir, monkey
     monkeypatch.setattr(config_loader, "apply_migrations", fail_migration)
 
     with AssertLogStr(log_level_expected="ERROR", contains_str="tidy3d config upgrade"):
-        with pytest.raises(ValueError, match="Automatic configuration migration failed"):
+        with pytest.raises(ValueError, match=r"Automatic configuration migration failed"):
             ConfigManager(config_dir=mock_config_dir)
     content = config_path.read_text(encoding="utf-8")
     assert "config_version" not in content
@@ -1008,7 +1008,7 @@ def test_backward_auto_migration_failure_does_not_use_best_effort_fallback(
         monkeypatch.setattr(config_loader, "apply_migrations", fail_migration)
 
         with AssertLogStr(log_level_expected="ERROR", contains_str="tidy3d config upgrade"):
-            with pytest.raises(ValueError, match="Automatic configuration migration failed"):
+            with pytest.raises(ValueError, match=r"Automatic configuration migration failed"):
                 ConfigManager(config_dir=mock_config_dir)
         content = config_path.read_text(encoding="utf-8")
         assert "config_version" not in content
@@ -1031,7 +1031,7 @@ def test_backward_auto_migration_failure_restores_cached_document(mock_config_di
 
     loader = ConfigLoader(mock_config_dir)
     with AssertLogStr(log_level_expected="ERROR", contains_str="tidy3d config upgrade"):
-        with pytest.raises(ValueError, match="Automatic configuration migration failed"):
+        with pytest.raises(ValueError, match=r"Automatic configuration migration failed"):
             loader.load_base()
     cached_text = tomlkit.dumps(loader._docs[config_path])
     assert "partially_migrated" not in cached_text
@@ -1099,7 +1099,7 @@ def test_migration_chain_gap_raises(monkeypatch):
     monkeypatch.setattr(config_migrations, "_MIGRATION_CHAIN_VALIDATED_UP_TO", 0)
 
     document = tomlkit.parse("")
-    with pytest.raises(RuntimeError, match="v1 -> v2"):
+    with pytest.raises(RuntimeError, match=r"v1 -> v2"):
         config_migrations.apply_migrations(document, 0, 2)
 
 
@@ -1186,7 +1186,7 @@ def test_invalid_deprecation_window_raises(monkeypatch):
             )
 
         monkeypatch.setattr(config_migrations, "CURRENT_CONFIG_VERSION", 2)
-        with pytest.raises(ValueError, match="violates the minimum window"):
+        with pytest.raises(ValueError, match=r"violates the minimum window"):
             build_validated_models({"bad_window": {"old": "value"}}, error_context="validate")
     finally:
         config_registry._SECTIONS.pop("bad_window", None)
@@ -1218,7 +1218,7 @@ def test_removed_field_raises(tmp_path, monkeypatch):
             log_level_expected="ERROR",
             contains_str="Failed to load configuration for section 'removed_example'",
         ):
-            with pytest.raises(ValueError, match="removed in config schema v1"):
+            with pytest.raises(ValueError, match=r"removed in config schema v1"):
                 ConfigManager(config_dir=config_dir)
     finally:
         config_registry._SECTIONS.pop("removed_example", None)

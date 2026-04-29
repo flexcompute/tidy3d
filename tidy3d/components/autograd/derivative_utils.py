@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -22,8 +22,7 @@ from .types import PathType
 from .utils import get_static
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from typing import Callable, Union
+    from collections.abc import Callable, Iterator
 
     import xarray as xr
 
@@ -44,7 +43,7 @@ class LazyInterpolator:
     def __init__(self, creator_func: Callable[[], Callable[[ArrayFloat], ArrayComplex]]) -> None:
         """Initialize with a function that creates the interpolator when called."""
         self.creator_func = creator_func
-        self._interpolator: Optional[Callable[[ArrayFloat], ArrayComplex]] = None
+        self._interpolator: Callable[[ArrayFloat], ArrayComplex] | None = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> ArrayComplex:
         """Create interpolator on first call and delegate to it."""
@@ -126,24 +125,37 @@ class DerivativeInfo:
 
     # Optional fields with defaults
 
-    H_der_map: Optional[FieldDataDict] = None
+    eps_in: EpsType | None = None
+    """Permittivity inside the Structure.
+    Computed only when structure.medium.is_custom is False. Contains the simulation
+    permittivity inside the structure when the simulation background medium is set to
+    the structure medium and all structures after the current structure are kept. Should
+    be used as the inside permittivity for shape derivative computations."""
+
+    eps_out: EpsType | None = None
+    """Permittivity outside the Structure.
+    Contains the simulation permittivity outside the structure when the current structure
+    is removed from the structure list. Should be used as the outside permittivity for
+    shape derivative computations."""
+
+    H_der_map: FieldDataDict | None = None
     """Magnetic field gradient map.
     Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
     of the forward and adjoint magnetic fields. The tangential component of this
     dataset is used when computing adjoint gradients for shifting boundaries of
     structures composed of PEC mediums."""
 
-    H_fwd: Optional[FieldDataDict] = None
+    H_fwd: FieldDataDict | None = None
     """Forward magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the forward
     magnetic fields used for computing gradients for a given structure."""
 
-    H_adj: Optional[FieldDataDict] = None
+    H_adj: FieldDataDict | None = None
     """Adjoint magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the adjoint
     magnetic fields used for computing gradients for a given structure."""
 
-    source_background_index: Optional[FreqDataArray] = None
+    source_background_index: FreqDataArray | None = None
     """Background refractive index sampled at one point vs frequency.
     Optional frequency-indexed refractive index (n) evaluated at the source-gradient
     reference point (typically the geometric center of ``bounds_intersect``), across adjoint
@@ -158,14 +170,14 @@ class DerivativeInfo:
     """Indicates if structure material is PEC.
     If True, the structure is partially surrounded by a PEC material."""
 
-    interpolators: Optional[dict] = None
+    interpolators: dict | None = None
     """Pre-computed interpolators.
     Optional pre-computed interpolators for field components and permittivity data.
     When provided, avoids redundant interpolator creation for multiple geometries
     sharing the same field data. This significantly improves performance for
     GeometryGroup processing."""
 
-    cached_min_spacing_from_permittivity: Optional[float] = None
+    cached_min_spacing_from_permittivity: float | None = None
     """Cached `min_spacing_from_permittivity` to be used for objects like GeometryGroup
     to avoid recomputing this value multiple times in `adaptive_vjp_spacing`."""
 
@@ -180,8 +192,8 @@ class DerivativeInfo:
 
     @staticmethod
     def _nan_to_num_if_needed(
-        coords: Union[ArrayFloat, ArrayComplex],
-    ) -> Union[ArrayFloat, ArrayComplex]:
+        coords: ArrayFloat | ArrayComplex,
+    ) -> ArrayFloat | ArrayComplex:
         """Convert NaN and infinite values to finite numbers, optimized for finite inputs."""
         # skip check for small arrays
         if coords.size < 1000:
@@ -191,7 +203,7 @@ class DerivativeInfo:
             return coords
         return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
 
-    def create_interpolators(self, dtype: Optional[np.dtype[Any]] = None) -> dict[str, Any]:
+    def create_interpolators(self, dtype: np.dtype[Any] | None = None) -> dict[str, Any]:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
@@ -228,10 +240,10 @@ class DerivativeInfo:
         coord_cache = {}
 
         def _make_lazy_interpolator_group(
-            field_data_dict: Optional[FieldDataDict],
-            group_key: Optional[str],
+            field_data_dict: FieldDataDict | None,
+            group_key: str | None,
             is_field_group: bool = True,
-            override_method: Optional[str] = None,
+            override_method: str | None = None,
         ) -> None:
             """Helper to create a group of lazy interpolators."""
             if not field_data_dict:
@@ -337,7 +349,7 @@ class DerivativeInfo:
         normals: np.ndarray,
         perps1: np.ndarray,
         perps2: np.ndarray,
-        interpolators: Optional[dict] = None,
+        interpolators: dict | None = None,
     ) -> np.ndarray:
         """Compute adjoint gradients at surface points for shape optimization.
 
@@ -1092,8 +1104,8 @@ class DerivativeInfo:
 
     def adaptive_vjp_spacing(
         self,
-        wl_fraction: Optional[float] = None,
-        min_allowed_spacing_fraction: Optional[float] = None,
+        wl_fraction: float | None = None,
+        min_allowed_spacing_fraction: float | None = None,
     ) -> float:
         """Compute adaptive spacing for finite-difference gradient evaluation.
 
@@ -1265,7 +1277,7 @@ def transpose_interp_axis(
         param_index_nearest = np.searchsorted(param_midpoints, field_coords)
         param_values_2d = np.zeros((n_param, field_values_2d.shape[1]), dtype=field_values.dtype)
         np.add.at(param_values_2d, param_index_nearest, field_values_2d)
-        return param_values_2d.reshape((n_param,) + field_values.shape[1:])
+        return param_values_2d.reshape((n_param, *field_values.shape[1:]))
 
     param_index_upper = np.searchsorted(param_coords_1d, field_coords, side="right")
     param_index_upper = np.clip(param_index_upper, 1, n_param - 1)
@@ -1283,7 +1295,7 @@ def transpose_interp_axis(
     np.add.at(param_values_2d, param_index_lower, field_values_2d * w_lower)
     np.add.at(param_values_2d, param_index_upper, field_values_2d * w_upper)
 
-    return param_values_2d.reshape((n_param,) + field_values.shape[1:])
+    return param_values_2d.reshape((n_param, *field_values.shape[1:]))
 
 
 def bounds_slice(

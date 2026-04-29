@@ -9,8 +9,6 @@ import autograd.numpy as anp
 from autograd.tracer import getval, isbox
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from autograd.numpy.numpy_boxes import ArrayBox
     from numpy.typing import ArrayLike, NDArray
 
@@ -100,12 +98,12 @@ def hasbox(obj: Any) -> bool:
     return False
 
 
-def pack_complex_vec(z: Union[NDArray, ArrayBox]) -> Union[NDArray, ArrayBox]:
+def pack_complex_vec(z: NDArray | ArrayBox) -> NDArray | ArrayBox:
     """Ravel [Re(z); Im(z)] into one real vector (autograd-safe)."""
     return anp.concatenate([anp.ravel(anp.real(z)), anp.ravel(anp.imag(z))])
 
 
-def asarray1d(x: Union[ArrayLike, ArrayBox]) -> Union[NDArray, ArrayBox]:
+def asarray1d(x: ArrayLike | ArrayBox) -> NDArray | ArrayBox:
     """Autograd-friendly 1D flatten: returns ndarray of shape (-1,)."""
     x = anp.array(x)
     return x if x.ndim == 1 else anp.ravel(x)

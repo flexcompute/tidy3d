@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import cos, isclose, sin
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -271,7 +271,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
-    current_dataset: Optional[FieldDataset] = Field(
+    current_dataset: FieldDataset | None = Field(
         title="Current Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
         "electric and magnetic current patterns to inject.",

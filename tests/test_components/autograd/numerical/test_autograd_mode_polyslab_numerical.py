@@ -67,7 +67,7 @@ def make_base_sim(
         ]
     )
 
-    src_size = sim_size_um[0:2] + (0,)
+    src_size = (*sim_size_um[0:2], 0)
 
     wl_min_src_um = 0.9 * adj_wvl_um
     wl_max_src_um = 1.1 * adj_wvl_um
@@ -410,7 +410,7 @@ def test_finite_difference_mode_data_polyslab(
     vertex_centers_x = 1.1 * mesh_wvl_um * np.cos(angles)
     vertex_centers_y = 0.8 * mesh_wvl_um * np.sin(angles)
 
-    obj, adj_grad = obj_val_and_grad([list(vertex_centers_x) + list(vertex_centers_y)])
+    _obj, adj_grad = obj_val_and_grad([list(vertex_centers_x) + list(vertex_centers_y)])
 
     for fd_idx in range(NUM_FINITE_DIFFERENCE):
         # Create random perturbation of vertices to check against the computed adjoint gradient.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
@@ -139,7 +139,7 @@ class DirectionalSource(FieldSource, ABC):
     )
 
     @cached_property
-    def _dir_vector(self) -> Optional[tuple[float, float, float]]:
+    def _dir_vector(self) -> tuple[float, float, float] | None:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         if self._injection_axis is None:
             return None
@@ -313,7 +313,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
         * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
-    field_dataset: Optional[FieldDataset] = Field(
+    field_dataset: FieldDataset | None = Field(
         None,
         title="Field Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
@@ -599,7 +599,7 @@ class AbstractModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         discriminator=TYPE_TAG_STR,
     )
 
-    frame: Optional[PECFrame] = Field(
+    frame: PECFrame | None = Field(
         None,
         title="Source Frame",
         description="Add a thin frame around the source during the FDTD run to improve "
@@ -627,7 +627,7 @@ class AbstractModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
-    def _bend_axis(self) -> Optional[Axis]:
+    def _bend_axis(self) -> Axis | None:
         """Bend axis for curved sources."""
         if self.mode_spec.bend_radius is None:
             return None
@@ -752,7 +752,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
-    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = Field(
+    angular_spec: FixedInPlaneKSpec | FixedAngleSpec = Field(
         default_factory=FixedInPlaneKSpec,
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
@@ -800,7 +800,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         the source frequency range is entirely below ``f_crit * CRITICAL_FREQUENCY_FACTOR."""
         if self._is_fixed_angle or self.num_freqs == 1:
             return self
-        freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
+        _freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
         f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
         if f_crit * CRITICAL_FREQUENCY_FACTOR > freq_max:
             self._raise_validation_error_at_loc(
@@ -824,7 +824,7 @@ def _source_remap_background_index(derivative_info: DerivativeInfo, freqs: np.nd
 
 
 def _slice_field_map_at_frequency(
-    field_map: Optional[dict[str, ScalarFieldDataArray]], freq: float
+    field_map: dict[str, ScalarFieldDataArray] | None, freq: float
 ) -> dict[str, ScalarFieldDataArray]:
     """Slice a field-component map to a single frequency."""
     if not field_map:
@@ -992,7 +992,7 @@ def _make_beam_pose(
     source: AbstractGaussianBeam,
     *,
     center: tuple[float, float, float],
-    params: Optional[dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
 ) -> BeamPose:
     """Construct a ``BeamPose`` from source defaults with optional traced overrides."""
     from tidy3d.components import beam as beam_module
@@ -1016,7 +1016,7 @@ def _compute_component_field_on_coords(
     background_n: np.ndarray,
     center: tuple[float, float, float],
     normalize: bool,
-    params: Optional[dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
 ) -> np.ndarray:
     """Compute one beam field component on explicit coordinate arrays."""
     from tidy3d.components import beam as beam_module
@@ -1176,7 +1176,7 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
         pose: BeamPose,
         grid: BeamGrid,
         normalize: bool,
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, np.ndarray]:
         """Compute Gaussian-like fields on a component grid."""
 
@@ -1304,7 +1304,7 @@ class GaussianBeam(AbstractGaussianBeam):
         pose: BeamPose,
         grid: BeamGrid,
         normalize: bool,
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, np.ndarray]:
         """Compute Gaussian beam fields from compact pose/grid context."""
         from tidy3d.components import beam as beam_module
@@ -1387,7 +1387,7 @@ class AstigmaticGaussianBeam(AbstractGaussianBeam):
         pose: BeamPose,
         grid: BeamGrid,
         normalize: bool,
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, np.ndarray]:
         """Compute astigmatic Gaussian beam fields from compact pose/grid context."""
         from tidy3d.components import beam as beam_module
@@ -1485,9 +1485,9 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs: Any,
     ) -> Ax:

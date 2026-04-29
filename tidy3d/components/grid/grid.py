@@ -14,7 +14,7 @@ from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from typing import Literal, Union
+    from typing import Literal
 
     from numpy.typing import NDArray
 
@@ -117,10 +117,10 @@ class Coords(Tidy3dBaseModel):
 
     def _interp_from_xarray(
         self,
-        array: Union[SpatialDataArray, ScalarFieldDataArray],
+        array: SpatialDataArray | ScalarFieldDataArray,
         interp_method: InterpMethod,
-        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
-    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        fill_value: Literal["extrapolate"] | float = "extrapolate",
+    ) -> SpatialDataArray | ScalarFieldDataArray:
         """
         Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
 
@@ -198,7 +198,7 @@ class Coords(Tidy3dBaseModel):
         self,
         array: UnstructuredGridDatasetType,
         interp_method: InterpMethod,
-        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
+        fill_value: Literal["extrapolate"] | float = "extrapolate",
     ) -> SpatialDataArray:
         """
         Interpolate from untructured grid onto a Cartesian one.
@@ -270,10 +270,10 @@ class Coords(Tidy3dBaseModel):
 
     def spatial_interp(
         self,
-        array: Union[SpatialDataArray, ScalarFieldDataArray, UnstructuredGridDatasetType],
+        array: SpatialDataArray | ScalarFieldDataArray | UnstructuredGridDatasetType,
         interp_method: InterpMethod,
-        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
-    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        fill_value: Literal["extrapolate"] | float = "extrapolate",
+    ) -> SpatialDataArray | ScalarFieldDataArray:
         """
         Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
 

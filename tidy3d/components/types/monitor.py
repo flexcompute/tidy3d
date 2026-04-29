@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.monitor import (
     AstigmaticGaussianOverlapMonitor,
@@ -27,31 +25,28 @@ from tidy3d.components.monitor import (
 )
 
 # types of monitors that are accepted by simulation
-MonitorType = Union[
-    FieldMonitor,
-    FieldTimeMonitor,
-    AuxFieldTimeMonitor,
-    MediumMonitor,
-    PermittivityMonitor,
-    FluxMonitor,
-    FluxTimeMonitor,
-    ModeMonitor,
-    ModeSolverMonitor,
-    FieldProjectionAngleMonitor,
-    FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
-    DiffractionMonitor,
-    DirectivityMonitor,
-    MicrowaveModeMonitor,
-    MicrowaveModeSolverMonitor,
-    GaussianOverlapMonitor,
-    AstigmaticGaussianOverlapMonitor,
-    SurfaceFieldMonitor,
-    SurfaceFieldTimeMonitor,
-]
+MonitorType = (
+    FieldMonitor
+    | FieldTimeMonitor
+    | AuxFieldTimeMonitor
+    | MediumMonitor
+    | PermittivityMonitor
+    | FluxMonitor
+    | FluxTimeMonitor
+    | ModeMonitor
+    | ModeSolverMonitor
+    | FieldProjectionAngleMonitor
+    | FieldProjectionCartesianMonitor
+    | FieldProjectionKSpaceMonitor
+    | DiffractionMonitor
+    | DirectivityMonitor
+    | MicrowaveModeMonitor
+    | MicrowaveModeSolverMonitor
+    | GaussianOverlapMonitor
+    | AstigmaticGaussianOverlapMonitor
+    | SurfaceFieldMonitor
+    | SurfaceFieldTimeMonitor
+)
 
 
-SurfaceMonitorType = Union[
-    SurfaceFieldMonitor,
-    SurfaceFieldTimeMonitor,
-]
+SurfaceMonitorType = SurfaceFieldMonitor | SurfaceFieldTimeMonitor

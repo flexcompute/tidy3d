@@ -7,8 +7,9 @@ This section should only depend on the standard core installation in the pyproje
 from __future__ import annotations
 
 import functools
+from collections.abc import Callable
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 

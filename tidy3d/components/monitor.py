@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import (
@@ -258,7 +258,7 @@ class TimeMonitor(Monitor, ABC):
         json_schema_extra={"units": SECOND},
     )
 
-    stop: Optional[NonNegativeFloat] = Field(
+    stop: NonNegativeFloat | None = Field(
         None,
         title="Stop Time",
         description="Time at which to stop monitor recording.  "
@@ -266,7 +266,7 @@ class TimeMonitor(Monitor, ABC):
         json_schema_extra={"units": SECOND},
     )
 
-    interval: Optional[PositiveInt] = Field(
+    interval: PositiveInt | None = Field(
         None,
         title="Time Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
@@ -464,7 +464,7 @@ class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
     This base is shared by ModeMonitor and Gaussian-overlap monitors.
     """
 
-    store_fields_direction: Optional[Direction] = Field(
+    store_fields_direction: Direction | None = Field(
         None,
         title="Store Fields",
         description="Propagation direction for the field profiles stored from overlap calculation.",
@@ -499,9 +499,9 @@ class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs: dict[str, Any],
     ) -> Ax:
@@ -559,7 +559,7 @@ class AbstractModeMonitor(AbstractOverlapMonitor):
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
-    store_fields_direction: Optional[Direction] = Field(
+    store_fields_direction: Direction | None = Field(
         None,
         title="Store Fields",
         description="Propagation direction for the mode field profiles stored from mode solving.",
@@ -580,9 +580,9 @@ class AbstractModeMonitor(AbstractOverlapMonitor):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs: Any,
     ) -> Ax:
@@ -1009,7 +1009,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     """Abstract class for monitors that perform surface integrals during the solver run, as in
     flux and near to far transformations."""
 
-    normal_dir: Optional[Direction] = Field(
+    normal_dir: Direction | None = Field(
         None,
         title="Normal Vector Orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
@@ -1017,7 +1017,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
     )
 
-    exclude_surfaces: Optional[tuple[BoxSurface, ...]] = Field(
+    exclude_surfaces: tuple[BoxSurface, ...] | None = Field(
         None,
         title="Excluded Surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
@@ -1357,7 +1357,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     and projects them to a given set of observation points.
     """
 
-    custom_origin: Optional[Coordinate] = Field(
+    custom_origin: Coordinate | None = Field(
         None,
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -1405,7 +1405,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "and otherwise must remain (0, 0).",
     )
 
-    medium: Optional[MediumType] = Field(
+    medium: MediumType | None = Field(
         None,
         title="Projection medium",
         description="Medium through which to project fields. Generally, the fields should be "

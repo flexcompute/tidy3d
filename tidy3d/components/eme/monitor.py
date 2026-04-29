@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, NonNegativeInt, PositiveInt
 
@@ -33,7 +33,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         fields reconstructed from the EME basis.
     """
 
-    freqs: Optional[FreqArray] = Field(
+    freqs: FreqArray | None = Field(
         None,
         title="Monitor Frequencies",
         description="Frequencies at which the monitor will record. "
@@ -41,7 +41,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "A value of 'None' will record at all simulation 'freqs'.",
     )
 
-    num_modes: Optional[NonNegativeInt] = Field(
+    num_modes: NonNegativeInt | None = Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
@@ -49,7 +49,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "A value of 'None' will record all modes.",
     )
 
-    num_sweep: Optional[NonNegativeInt] = Field(
+    num_sweep: NonNegativeInt | None = Field(
         1,
         title="Number of Sweep Indices",
         description="Number of sweep indices for the monitor to record. "
@@ -93,7 +93,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        sweep_spec: Optional[EMESweepSpecType],
+        sweep_spec: EMESweepSpecType | None,
     ) -> int:
         """Size of monitor storage given the number of points after discretization.
 
@@ -197,7 +197,7 @@ class EMEModeSolverMonitor(EMEMonitor):
         num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        sweep_spec: Optional[EMESweepSpecType],
+        sweep_spec: EMESweepSpecType | None,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # EMEModeSolverMonitor only varies with sweep for EMEFreqSweep (sweep_modes)
@@ -262,7 +262,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
-    num_modes: Optional[NonNegativeInt] = Field(
+    num_modes: NonNegativeInt | None = Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
@@ -279,7 +279,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        sweep_spec: Optional[EMESweepSpecType],
+        sweep_spec: EMESweepSpecType | None,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # EMEFieldMonitor uses full sweep count
@@ -351,7 +351,7 @@ class EMECoefficientMonitor(EMEMonitor):
         num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        sweep_spec: Optional[EMESweepSpecType],
+        sweep_spec: EMESweepSpecType | None,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
         bytes_total = 0
@@ -429,11 +429,11 @@ class EMECoefficientMonitor(EMEMonitor):
         return bytes_total
 
 
-EMEMonitorType = Union[
-    EMEModeSolverMonitor,
-    EMEFieldMonitor,
-    EMECoefficientMonitor,
-    ModeSolverMonitor,
-    PermittivityMonitor,
-    MediumMonitor,
-]
+EMEMonitorType = (
+    EMEModeSolverMonitor
+    | EMEFieldMonitor
+    | EMECoefficientMonitor
+    | ModeSolverMonitor
+    | PermittivityMonitor
+    | MediumMonitor
+)

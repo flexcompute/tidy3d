@@ -1,7 +1,7 @@
 # Defines specifications for subpixel averaging
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
@@ -69,7 +69,7 @@ class ContourPathAveraging(AbstractSubpixelAveragingMethod):
 
 
 DielectricSubpixelType = discriminated_union(
-    Union[Staircasing, PolarizedAveraging, ContourPathAveraging]
+    Staircasing | PolarizedAveraging | ContourPathAveraging
 )
 
 
@@ -88,7 +88,7 @@ class VolumetricAveraging(AbstractSubpixelAveragingMethod):
     )
 
 
-MetalSubpixelType = discriminated_union(Union[Staircasing, VolumetricAveraging])
+MetalSubpixelType = discriminated_union(Staircasing | VolumetricAveraging)
 
 
 class HeuristicPECStaircasing(AbstractSubpixelAveragingMethod):
@@ -141,8 +141,8 @@ class PECConformal(AbstractSubpixelAveragingMethod):
         return 1 - self.timestep_reduction
 
 
-PECSubpixelType = discriminated_union(Union[Staircasing, HeuristicPECStaircasing, PECConformal])
-PMCSubpixelType = discriminated_union(Union[Staircasing, HeuristicPECStaircasing])
+PECSubpixelType = discriminated_union(Staircasing | HeuristicPECStaircasing | PECConformal)
+PMCSubpixelType = discriminated_union(Staircasing | HeuristicPECStaircasing)
 
 
 class SurfaceImpedance(PECConformal):
@@ -161,9 +161,7 @@ class SurfaceImpedance(PECConformal):
     )
 
 
-LossyMetalSubpixelType = discriminated_union(
-    Union[Staircasing, VolumetricAveraging, SurfaceImpedance]
-)
+LossyMetalSubpixelType = discriminated_union(Staircasing | VolumetricAveraging | SurfaceImpedance)
 
 
 class SubpixelSpec(Tidy3dBaseModel):

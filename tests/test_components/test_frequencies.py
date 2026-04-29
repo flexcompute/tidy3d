@@ -305,12 +305,12 @@ def test_sweep_decade_edge_cases():
 
     # Negative points per decade
     with pytest.raises(
-        ValueError, match="'num_points_per_decade' must be strictly positive, got -1."
+        ValueError, match=r"'num_points_per_decade' must be strictly positive, got -1."
     ):
         freq_range.sweep_decade(-1)
 
     # Zero points per decade
     with pytest.raises(
-        ValueError, match="'num_points_per_decade' must be strictly positive, got 0."
+        ValueError, match=r"'num_points_per_decade' must be strictly positive, got 0."
     ):
         freq_range.sweep_decade(0)

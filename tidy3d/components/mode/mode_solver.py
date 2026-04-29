@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, Union, get_args
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, get_args
 
 import numpy as np
 import xarray as xr
@@ -90,7 +90,8 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from typing import Callable, Literal, Optional
+    from collections.abc import Callable
+    from typing import Literal
 
     from matplotlib.colors import Colormap
     from pydantic import NonNegativeFloat, NonNegativeInt, PositiveInt
@@ -150,9 +151,9 @@ FIELD_DECAY_CUTOFF = 1e-2
 MAX_MODES_DATA_SIZE_GB = 20
 
 
-MODE_SIMULATION_TYPE = discriminated_union(Union[Simulation, EMESimulation])
-MODE_SIMULATION_DATA_TYPE = discriminated_union(Union[SimulationData, EMESimulationData])
-MODE_PLANE_TYPE = discriminated_union(Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor])
+MODE_SIMULATION_TYPE = discriminated_union(Simulation | EMESimulation)
+MODE_SIMULATION_DATA_TYPE = discriminated_union(SimulationData | EMESimulationData)
+MODE_PLANE_TYPE = discriminated_union(Box | ModeSource | ModeMonitor | ModeSolverMonitor)
 
 # When using ``angle_rotation`` without a bend, use a very large effective radius
 EFFECTIVE_RADIUS_FACTOR = 10_000
@@ -1114,7 +1115,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _car_2_cyn(
         self, mode_solver_data: ModeSolverData
-    ) -> dict[str, Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]]:
+    ) -> dict[str, ScalarModeFieldCylindricalDataArray | ModeIndexDataArray]:
         """Convert cartesian fields to cylindrical fields centered at the
         rotated bend center."""
 
@@ -1315,7 +1316,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _mode_rotation(
         self,
         solver_ref_data_cylindrical: dict[
-            str, Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]
+            str, ScalarModeFieldCylindricalDataArray | ModeIndexDataArray
         ],
         solver: ModeSolver,
     ) -> ModeSolverData:
@@ -1824,7 +1825,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _make_path_integrals(
         self,
-    ) -> tuple[tuple[Optional[VoltageIntegralType]], tuple[Optional[CurrentIntegralType]]]:
+    ) -> tuple[tuple[VoltageIntegralType | None], tuple[CurrentIntegralType | None]]:
         """Wrapper for making path integrals from the MicrowaveModeSpec. Note: overriden in the backend to support
         auto creation of path integrals."""
         if not self._has_microwave_mode_spec:
@@ -1835,7 +1836,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _make_path_integrals_for_terminal(
         self,
-    ) -> dict[str, tuple[Optional[VoltageIntegralType], Optional[CurrentIntegralType]]]:
+    ) -> dict[str, tuple[VoltageIntegralType | None, CurrentIntegralType | None]]:
         """Wrapper for making path integrals for each terminal from the MicrowaveTerminalModeSpec."""
         if not self._has_microwave_terminal_mode_spec:
             raise ValueError(
@@ -1895,7 +1896,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @staticmethod
     def _assemble_transform_matrices(
-        input_list: Optional[dict[str, list]],
+        input_list: dict[str, list] | None,
         terminal_labels: list[str],
     ) -> xr.DataArray:
         """Assemble voltage/current transform matrices from per-terminal, per-mode data.
@@ -1935,7 +1936,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @staticmethod
     def _construct_differential_pair_transform(
-        terminals_mapping: Optional[dict[str, Union[str, tuple[str, str]]]],
+        terminals_mapping: dict[str, str | tuple[str, str]] | None,
         terminal_labels: list[str],
         voltage_transform: bool = True,
     ) -> np.ndarray:
@@ -2563,7 +2564,7 @@ class ModeSolver(Tidy3dBaseModel):
     @staticmethod
     def _edge_indices_for_component(
         field: xr.DataArray, dim: str, bounds: BoundOptional
-    ) -> Optional[list[int]]:
+    ) -> list[int] | None:
         """Return the two edge indices along *dim* for a single field component.
 
         Each E-field component sits at a different Yee-grid position, so the
@@ -2834,9 +2835,7 @@ class ModeSolver(Tidy3dBaseModel):
             **kwargs,
         )
 
-    def to_monitor(
-        self, freqs: Optional[list[float]] = None, name: Optional[str] = None
-    ) -> ModeMonitor:
+    def to_monitor(self, freqs: list[float] | None = None, name: str | None = None) -> ModeMonitor:
         """Creates :class:`ModeMonitor` from a :class:`.ModeSolver` instance plus additional
         specifications.
 
@@ -2881,9 +2880,9 @@ class ModeSolver(Tidy3dBaseModel):
     def to_mode_solver_monitor(
         self,
         name: str,
-        colocate: Optional[bool] = None,
-        mode_spec: Optional[ModeSpec] = None,
-        freqs: Optional[list[float]] = None,
+        colocate: bool | None = None,
+        mode_spec: ModeSpec | None = None,
+        freqs: list[float] | None = None,
     ) -> ModeSolverMonitor:
         """Creates :class:`ModeSolverMonitor` from a :class:`.ModeSolver` instance.
 
@@ -2969,8 +2968,8 @@ class ModeSolver(Tidy3dBaseModel):
     @require_fdtd_simulation
     def sim_with_monitor(
         self,
-        freqs: Optional[list[float]] = None,
-        name: Optional[str] = None,
+        freqs: list[float] | None = None,
+        name: str | None = None,
     ) -> Simulation:
         """Creates :class:`.Simulation` from a :class:`.ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a mode monitor added corresponding to
@@ -3027,10 +3026,10 @@ class ModeSolver(Tidy3dBaseModel):
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
-        cmap: Optional[Union[str, Colormap]] = None,
+        cmap: str | Colormap | None = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -3090,17 +3089,17 @@ class ModeSolver(Tidy3dBaseModel):
 
     def plot_field_components(
         self,
-        field_names: Union[str, tuple[str, ...]],
-        mode_indices: Optional[Union[int, tuple[int, ...]]] = None,
+        field_names: str | tuple[str, ...],
+        mode_indices: int | tuple[int, ...] | None = None,
         val: Literal["real", "imag", "abs"] = "real",
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Any = None,
-        cmap: Optional[Union[str, Colormap]] = None,
-        figsize: Optional[tuple[float, float]] = None,
+        cmap: str | Colormap | None = None,
+        figsize: tuple[float, float] | None = None,
         titles: bool = True,
         show_n_eff: bool = False,
         **sel_kwargs: Any,
@@ -3131,8 +3130,8 @@ class ModeSolver(Tidy3dBaseModel):
     def plot(
         self,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         fill_structures: bool = True,
         **patch_kwargs: Any,
     ) -> Ax:
@@ -3189,8 +3188,8 @@ class ModeSolver(Tidy3dBaseModel):
 
     def plot_eps(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -3243,8 +3242,8 @@ class ModeSolver(Tidy3dBaseModel):
 
     def plot_structures_eps(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,

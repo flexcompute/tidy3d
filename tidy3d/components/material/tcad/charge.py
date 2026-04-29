@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
@@ -263,19 +263,19 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: Union[EffectiveDOSModelType, PositiveFloat] = Field(
+    N_c: EffectiveDOSModelType | PositiveFloat = Field(
         title="Effective density of electron states",
         description=":math:`N_c` Effective density of states in the conduction band.",
         json_schema_extra={"units": PERCMCUBE},
     )
 
-    N_v: Union[EffectiveDOSModelType, PositiveFloat] = Field(
+    N_v: EffectiveDOSModelType | PositiveFloat = Field(
         title="Effective density of hole states",
         description=":math:`N_v` Effective density of states in the valence band.",
         json_schema_extra={"units": PERCMCUBE},
     )
 
-    E_g: Union[EnergyBandGapModelType, PositiveFloat] = Field(
+    E_g: EnergyBandGapModelType | PositiveFloat = Field(
         title="Band-gap energy",
         description=":math:`E_g` Band-gap energy",
         json_schema_extra={"units": ELECTRON_VOLT},
@@ -297,45 +297,39 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Array containing the R models to be applied to the material.",
     )
 
-    delta_E_g: Optional[BandGapNarrowingModelType] = Field(
+    delta_E_g: BandGapNarrowingModelType | None = Field(
         None,
         title="Bandgap narrowing model.",
         description=":math:`\\Delta E_g` Bandgap narrowing model.",
         json_schema_extra={"units": ELECTRON_VOLT},
     )
 
-    N_a: Union[
-        tuple[DopingBoxType, ...],
-        list[DopingBoxType],
-        SpatialDataArray,
-        NonNegativeFloat,
-    ] = Field(
-        (),
-        title="Doping: Acceptor concentration",
-        description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
-        "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
-        "or a tuple/list of geometric shapes to define specific doped regions.",
-        json_schema_extra={"units": PERCMCUBE},
+    N_a: tuple[DopingBoxType, ...] | list[DopingBoxType] | SpatialDataArray | NonNegativeFloat = (
+        Field(
+            (),
+            title="Doping: Acceptor concentration",
+            description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
+            "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
+            "or a tuple/list of geometric shapes to define specific doped regions.",
+            json_schema_extra={"units": PERCMCUBE},
+        )
     )
 
-    N_d: Union[
-        tuple[DopingBoxType, ...],
-        list[DopingBoxType],
-        SpatialDataArray,
-        NonNegativeFloat,
-    ] = Field(
-        (),
-        title="Doping: Donor concentration",
-        description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
-        "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
-        "or a tuple/list of geometric shapes to define specific doped regions.",
-        json_schema_extra={"units": PERCMCUBE},
+    N_d: tuple[DopingBoxType, ...] | list[DopingBoxType] | SpatialDataArray | NonNegativeFloat = (
+        Field(
+            (),
+            title="Doping: Donor concentration",
+            description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
+            "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
+            "or a tuple/list of geometric shapes to define specific doped regions.",
+            json_schema_extra={"units": PERCMCUBE},
+        )
     )
 
     # DEPRECATION VALIDATORS
     @field_validator("N_c")
     @classmethod
-    def check_nc_uses_model(cls, val: Union[EffectiveDOSModelType, float]) -> EffectiveDOSModelType:
+    def check_nc_uses_model(cls, val: EffectiveDOSModelType | float) -> EffectiveDOSModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -347,7 +341,7 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     @field_validator("N_v")
     @classmethod
-    def check_nv_uses_model(cls, val: Union[EffectiveDOSModelType, float]) -> EffectiveDOSModelType:
+    def check_nv_uses_model(cls, val: EffectiveDOSModelType | float) -> EffectiveDOSModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -359,9 +353,7 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     @field_validator("E_g")
     @classmethod
-    def check_eg_uses_model(
-        cls, val: Union[EnergyBandGapModelType, float]
-    ) -> EnergyBandGapModelType:
+    def check_eg_uses_model(cls, val: EnergyBandGapModelType | float) -> EnergyBandGapModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -375,10 +367,8 @@ class SemiconductorMedium(AbstractChargeMedium):
     @classmethod
     def check_nd_uses_model(
         cls,
-        val: Union[
-            NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...], list[DopingBoxType]
-        ],
-    ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
+        val: NonNegativeFloat | SpatialDataArray | tuple[DopingBoxType, ...] | list[DopingBoxType],
+    ) -> SpatialDataArray | tuple[DopingBoxType, ...]:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, list):
             return tuple(val)
@@ -394,10 +384,8 @@ class SemiconductorMedium(AbstractChargeMedium):
     @classmethod
     def check_na_uses_model(
         cls,
-        val: Union[
-            NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...], list[DopingBoxType]
-        ],
-    ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
+        val: NonNegativeFloat | SpatialDataArray | tuple[DopingBoxType, ...] | list[DopingBoxType],
+    ) -> SpatialDataArray | tuple[DopingBoxType, ...]:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, list):
             return tuple(val)

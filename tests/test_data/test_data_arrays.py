@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import autograd as ag
 import autograd.numpy as np
 import matplotlib.pyplot as plt
@@ -173,7 +171,7 @@ def get_xyz(
     return x, y, z
 
 
-def make_scalar_field_data_array(grid_key: str, symmetry=True, colocate: Optional[bool] = None):
+def make_scalar_field_data_array(grid_key: str, symmetry=True, colocate: bool | None = None):
     monitor = FIELD_MONITOR
     if colocate is not None:
         monitor = monitor.updated_copy(colocate=colocate)
@@ -267,15 +265,12 @@ def _compute_solver_field_bounds(sim: td.Simulation, monitor: td.Monitor):
     )
 
 
-def make_scalar_mode_field_data_array(
-    grid_key: str, symmetry=True, colocate: Optional[bool] = None
-):
+def make_scalar_mode_field_data_array(grid_key: str, symmetry=True, colocate: bool | None = None):
     monitor = MODE_MONITOR_WITH_FIELDS
     if colocate is not None:
         monitor = monitor.updated_copy(colocate=colocate)
-    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
+    XS, _YS, ZS = get_xyz(monitor, grid_key, symmetry)
     sim = SIM_SYM if symmetry else SIM
-
     values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     bounds = _compute_solver_field_bounds(sim, monitor)
@@ -289,7 +284,7 @@ def make_scalar_mode_field_data_array(
 
 
 def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: float = 0):
-    XS, YS, ZS = get_xyz(MODE_MONITOR_WITH_FIELDS, grid_key, symmetry)
+    XS, _YS, ZS = get_xyz(MODE_MONITOR_WITH_FIELDS, grid_key, symmetry)
     sim = SIM_SYM if symmetry else SIM
 
     values = np.array([1 + 0.1j])[None, :, None, None, None] * np.sin(
@@ -314,12 +309,12 @@ def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: 
 
 
 def make_scalar_mode_field_solver_data_array(
-    grid_key: str, symmetry=True, colocate: Optional[bool] = None
+    grid_key: str, symmetry=True, colocate: bool | None = None
 ):
     monitor = MODE_SOLVER_MONITOR
     if colocate is not None:
         monitor = monitor.updated_copy(colocate=colocate)
-    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
+    XS, _YS, ZS = get_xyz(monitor, grid_key, symmetry)
     values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     return td.ScalarModeFieldDataArray(

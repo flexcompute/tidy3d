@@ -15,8 +15,8 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
-    from typing import Callable
 
     from tidy3d.components.types.monitor_data import MonitorDataTypes
 

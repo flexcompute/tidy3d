@@ -7,7 +7,7 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from botocore.exceptions import ClientError
 from pydantic import Field, TypeAdapter
@@ -35,8 +35,8 @@ from .task_info import BatchDetail, TaskInfo
 from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from os import PathLike
-    from typing import Callable, Union
 
     import requests
 
@@ -44,8 +44,8 @@ if TYPE_CHECKING:
 
 
 def _serialize_additional_payload(
-    additional_payload: Optional[Union[dict[str, Any], str]],
-) -> Optional[str]:
+    additional_payload: dict[str, Any] | str | None,
+) -> str | None:
     """Serialize additional submit payloads to JSON strings."""
 
     if additional_payload is None or isinstance(additional_payload, str):
@@ -155,7 +155,7 @@ class Folder(Tidy3DResource, Queryable, extra="allow"):
 class WebTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running a task on the server."""
 
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         None,
         title="task_id",
         description="Task ID number, set when the task is uploaded, leave as None.",
@@ -168,9 +168,9 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
         task_type: str,
         task_name: str,
         folder_name: str = "default",
-        callback_url: Optional[str] = None,
+        callback_url: str | None = None,
         simulation_type: str = "tidy3d",
-        parent_tasks: Optional[list[str]] = None,
+        parent_tasks: list[str] | None = None,
         file_type: str = "Gz",
         projects_endpoint: str = "tidy3d/projects",
     ) -> SimulationTask:
@@ -232,7 +232,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             return "/".join([base.rstrip("/"), f"rf?taskId={self.task_id}"])
         return "/".join([base.rstrip("/"), f"workbench?taskId={self.task_id}"])
 
-    def get_folder_url(self) -> Optional[str]:
+    def get_folder_url(self) -> str | None:
         folder_id = getattr(self, "folder_id", None)
         if not folder_id:
             return None
@@ -243,7 +243,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
         self,
         to_file: PathLike,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> pathlib.Path:
         """Get log file from Server.
 
@@ -280,7 +280,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
         to_file: PathLike,
         remote_data_file_gz: PathLike = SIMULATION_DATA_HDF5_GZ,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> pathlib.Path:
         """Download data artifact (simulation or batch) with gz fallback handling.
 
@@ -395,37 +395,37 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
 class SimulationTask(WebTask):
     """Interface for managing the running of solver tasks on the server."""
 
-    folder_id: Optional[str] = Field(
+    folder_id: str | None = Field(
         None,
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
         alias="folderId",
     )
-    status: Optional[str] = Field(None, title="status", description="Simulation task status.")
+    status: str | None = Field(None, title="status", description="Simulation task status.")
 
-    real_flex_unit: Optional[float] = Field(
+    real_flex_unit: float | None = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
     )
 
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         None,
         title="created_at",
         description="Time at which this task was created.",
         alias="createdAt",
     )
 
-    task_type: Optional[str] = Field(
+    task_type: str | None = Field(
         None, title="task_type", description="The type of task.", alias="taskType"
     )
 
-    folder_name: Optional[str] = Field(
+    folder_name: str | None = Field(
         "default",
         title="Folder Name",
         description="Name of the folder associated with this task.",
         alias="folderName",
     )
 
-    callback_url: Optional[str] = Field(
+    callback_url: str | None = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -534,7 +534,7 @@ class SimulationTask(WebTask):
         self,
         stub: TaskStub,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
         remote_sim_file: PathLike = SIM_FILE_HDF5_GZ,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
@@ -574,7 +574,7 @@ class SimulationTask(WebTask):
         local_file: PathLike,
         remote_filename: str,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> None:
         """
         Upload file to platform. Using this method when the json file is too large to parse
@@ -603,13 +603,13 @@ class SimulationTask(WebTask):
 
     def submit(
         self,
-        solver_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
-        pay_type: Union[PayType, str] = PayType.AUTO,
-        priority: Optional[int] = None,
-        vgpu_allocation: Optional[int] = None,
-        ignore_memory_limit: Optional[bool] = None,
-        additional_payload: Optional[Union[dict[str, Any], str]] = None,
+        solver_version: str | None = None,
+        worker_group: str | None = None,
+        pay_type: PayType | str = PayType.AUTO,
+        priority: int | None = None,
+        vgpu_allocation: int | None = None,
+        ignore_memory_limit: bool | None = None,
+        additional_payload: dict[str, Any] | str | None = None,
     ) -> None:
         """Kick off this task.
 
@@ -666,7 +666,7 @@ class SimulationTask(WebTask):
             payload,
         )
 
-    def estimate_cost(self, solver_version: Optional[str] = None) -> float:
+    def estimate_cost(self, solver_version: str | None = None) -> float:
         """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
@@ -701,7 +701,7 @@ class SimulationTask(WebTask):
         self,
         to_file: PathLike,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
         remote_sim_file: PathLike = SIM_FILE_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation.hdf5 file from Server.
@@ -757,7 +757,7 @@ class SimulationTask(WebTask):
         self,
         to_file: PathLike,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> pathlib.Path:
         """Get log file from Server.
 
@@ -829,7 +829,7 @@ class SimulationTask(WebTask):
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
         )
 
-    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None) -> None:
+    def validate_post_upload(self, parent_tasks: list[str] | None = None) -> None:
         """Perform checks after task is uploaded and metadata is processed."""
         if self.task_type == "HEAT_CHARGE" and parent_tasks:
             try:
@@ -869,7 +869,7 @@ class SimulationTask(WebTask):
 class BatchTask(WebTask):
     """Interface for managing a batch task on the server."""
 
-    task_type: Optional[str] = Field(
+    task_type: str | None = Field(
         None, title="task_type", description="The type of task.", alias="taskType"
     )
 
@@ -920,8 +920,8 @@ class BatchTask(WebTask):
     def check(
         self,
         check_task_type: str,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
+        solver_version: str | None = None,
+        protocol_version: str | None = None,
     ) -> requests.Response:
         """Submits a request to validate the batch configuration on the server.
 
@@ -950,14 +950,14 @@ class BatchTask(WebTask):
 
     def submit(
         self,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
-        pay_type: Union[PayType, str] = PayType.AUTO,
-        priority: Optional[int] = None,
-        vgpu_allocation: Optional[int] = None,
-        ignore_memory_limit: Optional[bool] = None,
-        additional_payload: Optional[Union[dict[str, Any], str]] = None,
+        solver_version: str | None = None,
+        protocol_version: str | None = None,
+        worker_group: str | None = None,
+        pay_type: PayType | str = PayType.AUTO,
+        priority: int | None = None,
+        vgpu_allocation: int | None = None,
+        ignore_memory_limit: bool | None = None,
+        additional_payload: dict[str, Any] | str | None = None,
     ) -> requests.Response:
         """Submits the batch for execution on the server.
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import xarray as xr
@@ -96,7 +96,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         description="'+' or '-', defining which direction is considered 'input'.",
     )
 
-    num_grid_cells: Optional[int] = Field(
+    num_grid_cells: int | None = Field(
         DEFAULT_WAVE_PORT_NUM_CELLS,
         ge=MIN_WAVE_PORT_NUM_CELLS,
         title="Number of Grid Cells",
@@ -111,13 +111,13 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
-    frame: Optional[PECFrame] = Field(
+    frame: PECFrame | None = Field(
         DEFAULT_WAVE_PORT_FRAME,
         title="Source Frame",
         description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
-    absorber: Union[bool, ABCBoundary, ModeABCBoundary] = Field(
+    absorber: bool | ABCBoundary | ModeABCBoundary = Field(
         True,
         title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
@@ -130,9 +130,9 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
     )
 
-    reference_impedance: Union[
-        Literal["Z0"], Complex, ImpedanceModeDataArray, ImpedanceTerminalDataArray
-    ] = Field(
+    reference_impedance: (
+        Literal["Z0"] | Complex | ImpedanceModeDataArray | ImpedanceTerminalDataArray
+    ) = Field(
         "Z0",
         title="Reference Impedance",
         description="User-specified reference impedance for S-parameter computation. "
@@ -146,8 +146,8 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     @field_validator("reference_impedance")
     @classmethod
     def _validate_reference_impedance_positive(
-        cls, val: Union[Literal["Z0"], Complex, ImpedanceModeDataArray, ImpedanceTerminalDataArray]
-    ) -> Union[Literal["Z0"], Complex, ImpedanceModeDataArray, ImpedanceTerminalDataArray]:
+        cls, val: Literal["Z0"] | Complex | ImpedanceModeDataArray | ImpedanceTerminalDataArray
+    ) -> Literal["Z0"] | Complex | ImpedanceModeDataArray | ImpedanceTerminalDataArray:
         """Validate that reference impedance has positive real part."""
         # Skip validation for "Z0"
         if val == "Z0":
@@ -178,8 +178,8 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         return val
 
     def get_reference_impedance_matrix(
-        self, sim_mode_data: Union[SimulationData, MicrowaveModeData]
-    ) -> Union[ImpedanceFreqModeModeDataArray, ImpedanceFreqTerminalTerminalDataArray]:
+        self, sim_mode_data: SimulationData | MicrowaveModeData
+    ) -> ImpedanceFreqModeModeDataArray | ImpedanceFreqTerminalTerminalDataArray:
         """Retrieve the reference impedance of the port. In general, it's a diagonal matrix; but
         it can be a full matrix when the terminals in the port are coupled.
         """
@@ -233,13 +233,13 @@ class AbstractWavePort(AbstractTerminalPort, Box):
 
     @abstractmethod
     def get_characteristic_impedance_matrix(
-        self, sim_mode_data: Union[SimulationData, MicrowaveModeData]
-    ) -> Union[ImpedanceFreqModeModeDataArray, ImpedanceFreqTerminalTerminalDataArray]:
+        self, sim_mode_data: SimulationData | MicrowaveModeData
+    ) -> ImpedanceFreqModeModeDataArray | ImpedanceFreqTerminalTerminalDataArray:
         """Retrieve the characteristic impedance matrix of the port."""
 
     @cached_property
     @abstractmethod
-    def _mode_spec(self) -> Optional[MicrowaveModeSpecType]:
+    def _mode_spec(self) -> MicrowaveModeSpecType | None:
         """Internal mode specification for the port. Return ``None`` if
         it cannot be resolved in WavePort alone.
         """
@@ -251,7 +251,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         """Generate a mode specification from isolated floating conductors."""
 
     @abstractmethod
-    def _mode_indices(self, mode_spec: Optional[MicrowaveModeSpecType] = None) -> tuple[int, ...]:
+    def _mode_indices(self, mode_spec: MicrowaveModeSpecType | None = None) -> tuple[int, ...]:
         """Return the tuple of mode indices that will be excited and monitored by this port.
 
         Parameters
@@ -370,8 +370,8 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     def _resolve_mode_spec_from_simulation(
         self,
         simulation: Simulation,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
-        conductors: Optional[dict[str, tuple[Shapely, Box]]] = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
+        conductors: dict[str, tuple[Shapely, Box]] | None = None,
     ) -> MicrowaveModeSpecType:
         """Resolve the mode specification from a prepared simulation when needed."""
         if mode_spec is not None:
@@ -385,7 +385,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         return self._mode_spec_from_isolated_floating_conductors(conductors)
 
     def _validate_resolved_mode_spec(
-        self, mode_spec: Optional[MicrowaveModeSpecType] = None
+        self, mode_spec: MicrowaveModeSpecType | None = None
     ) -> MicrowaveModeSpecType:
         """If the resolved mode_spec is not provided, validate that self._mode_spec not None."""
         if mode_spec is not None:
@@ -423,9 +423,9 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     def to_monitors(
         self,
         freqs: FreqArray,
-        snap_center: Optional[float] = None,
-        grid: Optional[Grid] = None,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        snap_center: float | None = None,
+        grid: Grid | None = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
     ) -> list[MicrowaveModeMonitor]:
         """Create monitors from the wave port.
 
@@ -568,8 +568,8 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     def _prepare_simulation_for_mode(
         self,
         simulation: Simulation,
-        structures: Optional[tuple[Structure, ...] | list[Structure]] = None,
-        grid_spec: Optional[GridSpec] = None,
+        structures: tuple[Structure, ...] | list[Structure] | None = None,
+        grid_spec: GridSpec | None = None,
         reduce_simulation: bool = False,
     ) -> Simulation:
         """Return the local simulation prepared for this port's mode solve.
@@ -658,11 +658,11 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         self,
         simulation: Simulation,
         freqs: FreqArray,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
         reduce_simulation: bool = False,
-        structures: Optional[tuple[Structure, ...] | list[Structure]] = None,
-        grid_spec: Optional[GridSpec] = None,
-        structure_priority_mode: Optional[PriorityMode] = "conductor",
+        structures: tuple[Structure, ...] | list[Structure] | None = None,
+        grid_spec: GridSpec | None = None,
+        structure_priority_mode: PriorityMode | None = "conductor",
     ) -> ModeSolver:
         """Helper to create a :class:`.ModeSolver` instance.
 
@@ -718,11 +718,11 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         self,
         simulation: Simulation,
         freqs: FreqArray,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
         reduce_simulation: bool = False,
-        structures: Optional[tuple[Structure, ...] | list[Structure]] = None,
-        grid_spec: Optional[GridSpec] = None,
-        structure_priority_mode: Optional[PriorityMode] = "conductor",
+        structures: tuple[Structure, ...] | list[Structure] | None = None,
+        grid_spec: GridSpec | None = None,
+        structure_priority_mode: PriorityMode | None = "conductor",
     ) -> ModeSimulation:
         """Create a :class:`.ModeSimulation` with port mesh refinement applied.
 
@@ -796,9 +796,9 @@ class AbstractWavePort(AbstractTerminalPort, Box):
 
     def to_absorber(
         self,
-        snap_center: Optional[float] = None,
-        freq_spec: Optional[NonNegativeFloat] = None,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        snap_center: float | None = None,
+        freq_spec: NonNegativeFloat | None = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
     ) -> InternalAbsorber:
         """Create an internal absorber from the wave port.
 
@@ -828,7 +828,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         )
         return absorber.updated_copy(boundary_spec=boundary_spec)
 
-    def _to_absorber_geometry(self, snap_center: Optional[float] = None) -> InternalAbsorber:
+    def _to_absorber_geometry(self, snap_center: float | None = None) -> InternalAbsorber:
         """Create an internal absorber with the correct geometry for geometry-only calculations.
 
         A dummy ABC boundary is used so geometry can be created before the real
@@ -868,7 +868,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         ]
 
     def _get_mode_data(
-        self, sim_mode_data: Union[SimulationData, MicrowaveModeData]
+        self, sim_mode_data: SimulationData | MicrowaveModeData
     ) -> MicrowaveModeData:
         """Get the mode data from the simulation data or mode data directly."""
         if isinstance(sim_mode_data, SimulationData):
@@ -912,7 +912,7 @@ class WavePort(AbstractWavePort):
         "quantities, e.g., characteristic impedance, are computed.",
     )
 
-    mode_index: Optional[NonNegativeInt] = Field(
+    mode_index: NonNegativeInt | None = Field(
         None,
         title="Mode Index (deprecated)",
         description="Index into the collection of modes returned by mode solver. "
@@ -920,7 +920,7 @@ class WavePort(AbstractWavePort):
         "Deprecated. Use the 'mode_selection' field instead.",
     )
 
-    mode_selection: Optional[tuple[int, ...]] = Field(
+    mode_selection: tuple[int, ...] | None = Field(
         None,
         title="Mode Selection",
         description="Selects specific mode(s) to use from the mode solver. "
@@ -929,7 +929,7 @@ class WavePort(AbstractWavePort):
         "Indices must be non-negative and less than ``mode_spec.num_modes``.",
     )
 
-    def _mode_indices(self, mode_spec: Optional[MicrowaveModeSpecType] = None) -> tuple[int, ...]:
+    def _mode_indices(self, mode_spec: MicrowaveModeSpecType | None = None) -> tuple[int, ...]:
         """Return the tuple of mode indices that will be excited and monitored by this port.
 
         Resolution order:
@@ -959,7 +959,7 @@ class WavePort(AbstractWavePort):
         return tuple(range(mode_spec.num_modes))
 
     @cached_property
-    def _mode_spec(self) -> Optional[MicrowaveModeSpec]:
+    def _mode_spec(self) -> MicrowaveModeSpec | None:
         """Mode specification for the port. Return None if it cannot be resolved in WavePort alone."""
         num_modes = self.mode_spec.num_modes
         # 1) num_modes already specified
@@ -1041,7 +1041,7 @@ class WavePort(AbstractWavePort):
 
     @field_validator("mode_index", mode="after")
     @classmethod
-    def _mode_index_deprecated(cls, val: Optional[NonNegativeInt]) -> Optional[NonNegativeInt]:
+    def _mode_index_deprecated(cls, val: NonNegativeInt | None) -> NonNegativeInt | None:
         """Warn that 'mode_index' is deprecated in favor of 'mode_selection'."""
         if val is not None:
             log.warning(
@@ -1121,9 +1121,9 @@ class WavePort(AbstractWavePort):
     def to_source(
         self,
         source_time: SourceTimeType,
-        snap_center: Optional[float] = None,
+        snap_center: float | None = None,
         mode_index: int = 0,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
     ) -> ModeSource:
         """Create a mode source from the wave port.
 
@@ -1157,7 +1157,7 @@ class WavePort(AbstractWavePort):
         )
 
     def get_characteristic_impedance_matrix(
-        self, sim_mode_data: Union[SimulationData, MicrowaveModeData]
+        self, sim_mode_data: SimulationData | MicrowaveModeData
     ) -> ImpedanceFreqModeModeDataArray:
         """Retrieve the characteristic impedance matrix of the port."""
         mode_data = self._get_mode_data(sim_mode_data)
@@ -1187,7 +1187,7 @@ class WavePort(AbstractWavePort):
         return sign * current_coeffs * (fwd_amps - bwd_amps)
 
     def get_port_impedance(
-        self, sim_mode_data: Union[SimulationData, MicrowaveModeData], mode_index: int
+        self, sim_mode_data: SimulationData | MicrowaveModeData, mode_index: int
     ) -> FreqModeDataArray:
         """Retrieve the reference impedance of the port for a specific mode.
 
@@ -1237,7 +1237,7 @@ class TerminalWavePort(AbstractWavePort):
     - By default, a reference impedance of 50 Ohm is used for S-parameter calculations unless otherwise specified.
     """
 
-    reference_impedance: Union[Literal["Z0"], Complex, ImpedanceTerminalDataArray] = Field(
+    reference_impedance: Literal["Z0"] | Complex | ImpedanceTerminalDataArray = Field(
         "Z0",
         title="Reference Impedance",
         description="User-specified reference impedance for S-parameter computation. "
@@ -1248,17 +1248,14 @@ class TerminalWavePort(AbstractWavePort):
         json_schema_extra={"units": OHM},
     )
 
-    absorber: Union[bool, ABCBoundary, ModeABCBoundary] = Field(
+    absorber: bool | ABCBoundary | ModeABCBoundary = Field(
         False,
         title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
-    terminal_specs: Union[
-        AutoImpedanceSpec,
-        tuple[CustomImpedanceSpec, ...],
-    ] = Field(
+    terminal_specs: AutoImpedanceSpec | tuple[CustomImpedanceSpec, ...] = Field(
         default_factory=AutoImpedanceSpec._default_without_license_warning,
         title="Terminal Specification",
         description="Parameters to feed to terminal solver which determine single-ended terminals "
@@ -1349,7 +1346,7 @@ class TerminalWavePort(AbstractWavePort):
         return self
 
     @cached_property
-    def _mode_spec(self) -> Optional[MicrowaveTerminalModeSpec]:
+    def _mode_spec(self) -> MicrowaveTerminalModeSpec | None:
         """Mode specification for the port if it can be resolved in this module;
         otherwise, return None.
         """
@@ -1386,7 +1383,7 @@ class TerminalWavePort(AbstractWavePort):
             terminals_mapping=terminals_mapping,
         )
 
-    def _mode_indices(self, mode_spec: Optional[MicrowaveModeSpecType] = None) -> tuple[int, ...]:
+    def _mode_indices(self, mode_spec: MicrowaveModeSpecType | None = None) -> tuple[int, ...]:
         """Return the tuple of mode indices that will be excited and monitored by this port.
 
         All terminal modes are always included, so this returns
@@ -1457,7 +1454,7 @@ class TerminalWavePort(AbstractWavePort):
 
     def _get_terminals_mapping(
         self, single_ended_labels: list[str]
-    ) -> dict[str, Union[str, tuple[str, str]]]:
+    ) -> dict[str, str | tuple[str, str]]:
         """Get a mapping from terminals (single-ended terminals or differential pairs) to single-ended terminals.
 
         The terminals are ordered such that single-ended terminal labels come first, followed by
@@ -1485,9 +1482,9 @@ class TerminalWavePort(AbstractWavePort):
     def to_source(
         self,
         source_time: SourceTimeType,
-        snap_center: Optional[float] = None,
-        terminal_label: Optional[str] = None,
-        mode_spec: Optional[MicrowaveModeSpecType] = None,
+        snap_center: float | None = None,
+        terminal_label: str | None = None,
+        mode_spec: MicrowaveModeSpecType | None = None,
     ) -> MicrowaveTerminalSource:
         """Create a microwave terminal source from the wave port.
 
@@ -1523,7 +1520,7 @@ class TerminalWavePort(AbstractWavePort):
         )
 
     def get_characteristic_impedance_matrix(
-        self, sim_mode_data: Union[SimulationData, MicrowaveModeData]
+        self, sim_mode_data: SimulationData | MicrowaveModeData
     ) -> ImpedanceFreqTerminalTerminalDataArray:
         """Retrieve the characteristic impedance matrix of the port."""
         mode_data = self._get_mode_data(sim_mode_data)

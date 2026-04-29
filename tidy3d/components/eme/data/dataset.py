@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from pydantic import Field
 
@@ -160,37 +158,37 @@ class EMECoefficientDataset(Dataset):
     >>> data = EMECoefficientDataset(A=A, B=A)
     """
 
-    A: Optional[EMECoefficientDataArray] = Field(
+    A: EMECoefficientDataArray | None = Field(
         None,
         title="A coefficient",
         description="Coefficient for forward mode in this cell.",
     )
 
-    B: Optional[EMECoefficientDataArray] = Field(
+    B: EMECoefficientDataArray | None = Field(
         None,
         title="B coefficient",
         description="Coefficient for backward mode in this cell.",
     )
 
-    n_complex: Optional[EMEModeIndexDataArray] = Field(
+    n_complex: EMEModeIndexDataArray | None = Field(
         None,
         title="Propagation Index",
         description="Complex-valued effective propagation indices associated with the EME modes.",
     )
 
-    flux: Optional[EMEFluxDataArray] = Field(
+    flux: EMEFluxDataArray | None = Field(
         None,
         title="Flux",
         description="Power flux of the EME modes.",
     )
 
-    interface_smatrices: Optional[EMEInterfaceSMatrixDataset] = Field(
+    interface_smatrices: EMEInterfaceSMatrixDataset | None = Field(
         None,
         title="Interface S Matrices",
         description="S matrices associated with the interfaces between EME cells.",
     )
 
-    overlaps: Optional[EMEOverlapDataset] = Field(
+    overlaps: EMEOverlapDataset | None = Field(
         None, title="Overlaps", description="Overlaps between EME modes."
     )
 
@@ -270,32 +268,32 @@ class EMEFieldDataset(ElectromagneticFieldDataset):
     >>> data = EMEFieldDataset(Ex=field, Hy=field)
     """
 
-    Ex: Optional[EMEScalarFieldDataArray] = Field(
+    Ex: EMEScalarFieldDataArray | None = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: Optional[EMEScalarFieldDataArray] = Field(
+    Ey: EMEScalarFieldDataArray | None = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: Optional[EMEScalarFieldDataArray] = Field(
+    Ez: EMEScalarFieldDataArray | None = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: Optional[EMEScalarFieldDataArray] = Field(
+    Hx: EMEScalarFieldDataArray | None = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: Optional[EMEScalarFieldDataArray] = Field(
+    Hy: EMEScalarFieldDataArray | None = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: Optional[EMEScalarFieldDataArray] = Field(
+    Hz: EMEScalarFieldDataArray | None = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from filelock import FileLock
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
@@ -38,7 +38,7 @@ CACHE_STATS_NAME = "stats.json"
 TMP_PREFIX = "tidy3d-cache-"
 TMP_BATCH_PREFIX = "tmp_batch"
 
-_CACHE: Optional[LocalCache] = None
+_CACHE: LocalCache | None = None
 
 
 def _remove_cache_dir(path: os.PathLike, *, recreate: bool) -> None:
@@ -72,7 +72,7 @@ class CacheStats(BaseModel):
         default=0,
         description="Aggregate size in bytes across cached artifacts captured in the stats file.",
     )
-    updated_at: Optional[datetime] = Field(
+    updated_at: datetime | None = Field(
         default=None,
         description="UTC timestamp indicating when the statistics were last refreshed.",
     )
@@ -271,7 +271,7 @@ class LocalCache:
         self._write_stats(updated)
 
     def _record_touch_stats(
-        self, key: str, last_used: str, *, file_size: Optional[int] = None
+        self, key: str, last_used: str, *, file_size: int | None = None
     ) -> None:
         stats = self._load_stats()
         entries = dict(stats.last_used)
@@ -350,7 +350,7 @@ class LocalCache:
             if not hard:
                 self._write_stats(CacheStats())
 
-    def _fetch(self, key: str) -> Optional[CacheEntry]:
+    def _fetch(self, key: str) -> CacheEntry | None:
         """Retrieve an entry by key, verifying checksum."""
         with self._with_cache_state_lock():
             entry = self._load_entry(key)
@@ -375,7 +375,7 @@ class LocalCache:
 
     def _store(
         self, key: str, source_path: Path, metadata: CacheEntryMetadata
-    ) -> Optional[CacheEntry]:
+    ) -> CacheEntry | None:
         """Store a new cache entry from ``source_path``.
 
         Parameters
@@ -409,7 +409,7 @@ class LocalCache:
         metadata.file_size = file_size
 
         _write_metadata(tmp_meta, metadata)
-        entry: Optional[CacheEntry] = None
+        entry: CacheEntry | None = None
         try:
             with self._with_cache_state_lock():
                 self._root.mkdir(parents=True, exist_ok=True)
@@ -454,7 +454,7 @@ class LocalCache:
         self,
         incoming_size: int,
         *,
-        incoming_key: Optional[str] = None,
+        incoming_key: str | None = None,
         replacing_size: int = 0,
     ) -> None:
         max_entries = self.max_entries
@@ -570,7 +570,7 @@ class LocalCache:
 
                 yield CacheEntry(key=child.name, root=self._root, metadata=metadata)
 
-    def _load_entry(self, key: str) -> Optional[CacheEntry]:
+    def _load_entry(self, key: str) -> CacheEntry | None:
         entry = CacheEntry(key=key, root=self._root, metadata={})
         if not entry.metadata_path.exists() or not entry.artifact_path.exists():
             return None
@@ -611,7 +611,7 @@ class LocalCache:
         self,
         simulation: WorkflowType,
         verbose: bool = False,
-    ) -> Optional[CacheEntry]:
+    ) -> CacheEntry | None:
         """
         Attempt to resolve and fetch a cached result entry for the given simulation context.
         On miss or any cache error, returns None (the caller should proceed with upload/run).
@@ -648,7 +648,7 @@ class LocalCache:
         task_id: TaskId,
         path: str,
         workflow_type: str,
-        simulation: Optional[WorkflowType] = None,
+        simulation: WorkflowType | None = None,
     ) -> bool:
         """
         Stores completed workflow results in the local cache using a canonical cache key.
@@ -732,7 +732,7 @@ class LocalCache:
         return True
 
 
-def _copy_and_hash(source: Path, dest: Optional[Path]) -> tuple[str, int]:
+def _copy_and_hash(source: Path, dest: Path | None) -> tuple[str, int]:
     """Copy ``source`` to ``dest`` while computing SHA256 checksum.
 
     Parameters
@@ -887,7 +887,7 @@ def build_entry_metadata(
     )
 
 
-def resolve_local_cache(use_cache: Optional[bool] = None) -> Optional[LocalCache]:
+def resolve_local_cache(use_cache: bool | None = None) -> LocalCache | None:
     """
     Returns LocalCache instance if enabled.
     Returns None if use_cached=False or config-fetched 'enabled' is False.

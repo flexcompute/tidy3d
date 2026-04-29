@@ -15,7 +15,7 @@ from .base import UnstructuredGridDataset
 from .triangular import TriangularGridDataset
 
 if TYPE_CHECKING:
-    from typing import Literal, Optional, Union
+    from typing import Literal
 
     from pydantic import PositiveInt
     from vtkmodules.vtkCommonDataModel import vtkUnstructuredGrid
@@ -111,7 +111,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     def _from_vtk_obj(
         cls,
         vtk_obj: vtkUnstructuredGrid,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         values_type: type = IndexedDataArray,
@@ -322,12 +322,12 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     def sel(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method: Optional[Literal["nearest", "pad", "ffill", "backfill", "bfill"]] = None,
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        method: Literal["nearest", "pad", "ffill", "backfill", "bfill"] | None = None,
         **sel_kwargs: Any,
-    ) -> Union[TriangularGridDataset, XrDataArray]:
+    ) -> TriangularGridDataset | XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions.
 
         Must provide at least one argument among 'x', 'y', 'z' or non-spatial dimensions
@@ -389,10 +389,10 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        max_cells: Optional[int] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        max_cells: int | None = None,
         **kwargs: Any,
     ) -> Ax:
         """Plot a 2D slice of the tetrahedral grid data.

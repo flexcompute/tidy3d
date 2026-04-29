@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from tidy3d.components.tcad.data.monitor_data.charge import (
     SteadyCapacitanceData,
     SteadyCurrentDensityData,
@@ -14,12 +12,12 @@ from tidy3d.components.tcad.data.monitor_data.charge import (
 )
 from tidy3d.components.tcad.data.monitor_data.heat import TemperatureData
 
-TCADMonitorDataType = Union[
-    TemperatureData,
-    SteadyPotentialData,
-    SteadyFreeCarrierData,
-    SteadyElectricFieldData,
-    SteadyEnergyBandData,
-    SteadyCapacitanceData,
-    SteadyCurrentDensityData,
-]
+TCADMonitorDataType = (
+    TemperatureData
+    | SteadyPotentialData
+    | SteadyFreeCarrierData
+    | SteadyElectricFieldData
+    | SteadyEnergyBandData
+    | SteadyCapacitanceData
+    | SteadyCurrentDensityData
+)

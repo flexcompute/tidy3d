@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import autograd.numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, field_validator
@@ -110,7 +110,7 @@ class NonlinearSusceptibility(NonlinearModel):
         json_schema_extra={"units": f"{MICROMETER}^2 / {VOLT}^2"},
     )
 
-    numiters: Optional[PositiveInt] = Field(
+    numiters: PositiveInt | None = Field(
         None,
         title="Number of iterations",
         description="Deprecated. The old usage ``nonlinear_spec=model`` with ``model.numiters`` "
@@ -121,7 +121,7 @@ class NonlinearSusceptibility(NonlinearModel):
 
     @field_validator("numiters")
     @classmethod
-    def _validate_numiters(cls, val: Optional[PositiveInt]) -> Optional[PositiveInt]:
+    def _validate_numiters(cls, val: PositiveInt | None) -> PositiveInt | None:
         """Check that numiters is not too large."""
         if val is None:
             return val
@@ -228,7 +228,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         json_schema_extra={"units": f"{MICROMETER}^(3 e_h)"},
     )
 
-    n0: Optional[float] = Field(
+    n0: float | None = Field(
         None,
         title="Linear refractive index",
         description="Real linear refractive index of the medium, computed for instance using "
@@ -236,7 +236,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         "frequencies of the simulation sources (as long as these are all equal).",
     )
 
-    freq0: Optional[PositiveFloat] = Field(
+    freq0: PositiveFloat | None = Field(
         None,
         title="Central frequency",
         description="Central frequency, used to calculate the energy of the free-carriers "
@@ -319,7 +319,7 @@ class KerrNonlinearity(NonlinearModel):
         json_schema_extra={"units": f"{MICROMETER}^2 / {WATT}"},
     )
 
-    n0: Optional[float] = Field(
+    n0: float | None = Field(
         None,
         title="Complex linear refractive index",
         description="Complex linear refractive index of the medium, computed for instance using "
@@ -328,7 +328,7 @@ class KerrNonlinearity(NonlinearModel):
     )
 
 
-NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
+NonlinearModelType = NonlinearSusceptibility | TwoPhotonAbsorption | KerrNonlinearity
 
 
 class NonlinearSpec(ABC, Tidy3dBaseModel):
@@ -364,8 +364,8 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     @field_validator("models")
     @classmethod
     def _no_duplicate_models(
-        cls, val: Optional[tuple[NonlinearModelType, ...]]
-    ) -> Optional[tuple[NonlinearModelType, ...]]:
+        cls, val: tuple[NonlinearModelType, ...] | None
+    ) -> tuple[NonlinearModelType, ...] | None:
         """Ensure each type of model appears at most once."""
         if val is None:
             return val
@@ -401,8 +401,8 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     @field_validator("models")
     @classmethod
     def _consistent_models(
-        cls, val: Optional[tuple[NonlinearModelType, ...]]
-    ) -> Optional[tuple[NonlinearModelType, ...]]:
+        cls, val: tuple[NonlinearModelType, ...] | None
+    ) -> tuple[NonlinearModelType, ...] | None:
         """Ensure that parameters shared between models are consistent."""
         if val is None:
             return val

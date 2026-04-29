@@ -15,7 +15,7 @@ from tidy3d.components.data.dataset import Dataset
 from tidy3d.components.types import Coordinate, Symmetry
 
 if TYPE_CHECKING:
-    from typing import Literal, Optional, Union
+    from typing import Literal
 
     from xarray import DataArray as XrDataArray
 
@@ -55,9 +55,9 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
 
     def _symmetry_expanded_copy_base(
         self,
-        data: Union[UnstructuredGridDatasetType, SpatialDataArray],
-        custom_symmetry: Optional[tuple[Union[Literal[-1, 1], XrDataArray], ...]] = None,
-    ) -> Union[UnstructuredGridDatasetType, SpatialDataArray]:
+        data: UnstructuredGridDatasetType | SpatialDataArray,
+        custom_symmetry: tuple[Literal[-1, 1] | XrDataArray, ...] | None = None,
+    ) -> UnstructuredGridDatasetType | SpatialDataArray:
         """Return the data with symmetry applied."""
 
         # no symmetry

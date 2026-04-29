@@ -6,10 +6,10 @@ import re
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
 import numpy as np
 from pydantic import (
@@ -177,7 +177,7 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         min_length=1,
     )
 
-    num_grid_cells: Optional[PositiveInt] = Field(
+    num_grid_cells: PositiveInt | None = Field(
         DEFAULT_LUMPED_ELEMENT_NUM_CELLS,
         title="Lumped element grid cells",
         description="Number of mesh grid cells associated with the lumped element along each direction. "
@@ -215,16 +215,16 @@ class LumpedElement(MicrowaveBaseModel, ABC):
     @abstractmethod
     def to_structure(
         self,
-        grid: Optional[Grid] = None,
-        frequency_range: Optional[FreqBound] = None,
+        grid: Grid | None = None,
+        frequency_range: FreqBound | None = None,
     ) -> Structure:
         """Converts the network portion of the :class:`.LumpedElement` object to a
         :class:`.Structure`."""
 
     def to_structures(
         self,
-        grid: Optional[Grid] = None,
-        frequency_range: Optional[FreqBound] = None,
+        grid: Grid | None = None,
+        frequency_range: FreqBound | None = None,
     ) -> list[Structure]:
         """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`"""
@@ -344,14 +344,14 @@ class RectangularLumpedElement(LumpedElement, Box):
             )
         return snapping_points
 
-    def to_geometry(self, grid: Optional[Grid] = None) -> Box:
+    def to_geometry(self, grid: Grid | None = None) -> Box:
         """Converts the :class:`RectangularLumpedElement` object to a :class:`.Box`."""
         box = Box(size=self.size, center=self.center)
         if grid and self.snap_perimeter_to_grid:
             return snap_box_to_grid(grid, box, self._snapping_spec)
         return box
 
-    def _admittance_transfer_function_scaling(self, box: Optional[Box] = None) -> float:
+    def _admittance_transfer_function_scaling(self, box: Box | None = None) -> float:
         """The admittance transfer function of the network needs to be scaled depending on the dimensions
         of the lumped element. The scaling emulates adding networks with equal admittances in series and
         parallel, and is needed when distributing the network over a finite volume.
@@ -431,14 +431,14 @@ class LumpedResistor(RectangularLumpedElement):
         json_schema_extra={"units": OHM},
     )
 
-    def _sheet_conductance(self, box: Optional[Box] = None) -> float:
+    def _sheet_conductance(self, box: Box | None = None) -> float:
         """Effective sheet conductance."""
         return self._admittance_transfer_function_scaling(box) / self.resistance
 
     def to_structure(
         self,
-        grid: Optional[Grid] = None,
-        frequency_range: Optional[FreqBound] = None,
+        grid: Grid | None = None,
+        frequency_range: FreqBound | None = None,
     ) -> Structure:
         """Converts the :class:`LumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
@@ -558,8 +558,8 @@ class CoaxialLumpedResistor(LumpedElement):
 
     def to_structure(
         self,
-        grid: Optional[Grid] = None,
-        frequency_range: Optional[FreqBound] = None,
+        grid: Grid | None = None,
+        frequency_range: FreqBound | None = None,
     ) -> Structure:
         """Converts the :class:`CoaxialLumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
@@ -573,7 +573,7 @@ class CoaxialLumpedResistor(LumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_geometry(self, grid: Optional[Grid] = None) -> ClipOperation:
+    def to_geometry(self, grid: Grid | None = None) -> ClipOperation:
         """Converts the :class:`CoaxialLumpedResistor` object to a
         :class:`~tidy3d.Geometry`."""
         rout = self.outer_diameter / 2
@@ -713,21 +713,21 @@ class RLCNetwork(MicrowaveBaseModel):
 
     """
 
-    resistance: Optional[PositiveFloat] = Field(
+    resistance: PositiveFloat | None = Field(
         None,
         title="Resistance",
         description="Resistance value in ohms.",
         json_schema_extra={"units": OHM},
     )
 
-    capacitance: Optional[PositiveFloat] = Field(
+    capacitance: PositiveFloat | None = Field(
         None,
         title="Capacitance",
         description="Capacitance value in farads.",
         json_schema_extra={"units": FARAD},
     )
 
-    inductance: Optional[PositiveFloat] = Field(
+    inductance: PositiveFloat | None = Field(
         None,
         title="Inductance",
         description="Inductance value in henrys.",
@@ -824,7 +824,7 @@ class RLCNetwork(MicrowaveBaseModel):
     def _to_medium(
         self,
         scaling_factor: float,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> PoleResidue:
         """Converts the :class:`RLCNetwork` model directly into a :class:`PoleResidue` model
         with proper scaling depending on the lumped element's dimensions."""
@@ -1027,7 +1027,7 @@ class AdmittanceNetwork(MicrowaveBaseModel):
     def _to_medium(
         self,
         scaling_factor: float,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> PoleResidue:
         """Convert to a :class:`PoleResidue` medium with geometric scaling applied.
 
@@ -1109,7 +1109,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
         title="Port Node Minus",
         description="Name of the port reference node (negative/reference terminal).",
     )
-    freq_range: Optional[FreqBound] = Field(
+    freq_range: FreqBound | None = Field(
         None,
         title="Frequency Range",
         description="Frequency range in Hz for fitting the admittance. When set, must satisfy "
@@ -1158,7 +1158,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
 
     @field_validator("freq_range", mode="after")
     @classmethod
-    def _validate_freq_range(cls, v: Optional[FreqBound]) -> Optional[FreqBound]:
+    def _validate_freq_range(cls, v: FreqBound | None) -> FreqBound | None:
         """Require freq_range to have 0 < f_min < f_max when set (inductor admittance singular at DC)."""
         if v is None:
             return v
@@ -1176,7 +1176,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
 
     def _resolve_freq_range(
         self,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> FreqBound:
         """Return (f_min, f_max) for fitting. Use frequency_range if provided, else
         self.freq_range; raise if none set."""
@@ -1192,15 +1192,13 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
 
     def _get_fit_frequencies(
         self,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> np.ndarray:
         """Return n_freqs sampling frequencies from the resolved frequency range."""
         f_min, f_max = self._resolve_freq_range(frequency_range=frequency_range)
         return np.linspace(f_min, f_max, self.n_freqs)
 
-    def _resolve_fit_freqs(
-        self, freqs: Optional[Union[np.ndarray, list[float]]] = None
-    ) -> np.ndarray:
+    def _resolve_fit_freqs(self, freqs: np.ndarray | list[float] | None = None) -> np.ndarray:
         """Return the frequency array to use for admittance evaluation.
 
         If ``freqs`` is provided, return it as a float array. Otherwise return
@@ -1222,7 +1220,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
     def _to_medium(
         self,
         scaling_factor: float,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> PoleResidue:
         """Convert the stored circuit to a :class:`PoleResidue` medium with geometric scaling.
 
@@ -1287,7 +1285,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
 
     @staticmethod
     def _parse_spice_file(
-        spice_file: Union[str, Path],
+        spice_file: str | Path,
     ) -> tuple[list[LumpedCircuitComponent], str, str]:
         """Parse a SPICE netlist and return components plus port nodes.
 
@@ -1375,8 +1373,8 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
             lines.append(line)
 
         component_list: list[LumpedCircuitComponent] = []
-        port_node_plus: Optional[str] = None
-        port_node_minus: Optional[str] = None
+        port_node_plus: str | None = None
+        port_node_minus: str | None = None
 
         for line in lines:
             toks = line.split()
@@ -1575,7 +1573,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
 
     def _get_effective_admittance(
         self,
-        frequencies: Optional[Union[np.ndarray, list[float]]] = None,
+        frequencies: np.ndarray | list[float] | None = None,
     ) -> np.ndarray:
         """Compute driving-point admittance at each frequency for this circuit.
 
@@ -1688,7 +1686,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
 
     def _fit_admittance_to_pole_residue(
         self,
-        frequencies: Union[np.ndarray, list[float]],
+        frequencies: np.ndarray | list[float],
         Y_complex: np.ndarray,
     ) -> tuple[PoleResidue, float]:
         """Fit admittance Y(f) at given frequencies to pole-residue via the dispersion fitter.
@@ -1775,11 +1773,11 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
     @classmethod
     def from_spice(
         cls,
-        spice_file: Union[str, Path],
+        spice_file: str | Path,
         frequency_range: FreqBound,
-        port_node_plus: Optional[str] = None,
-        port_node_minus: Optional[str] = None,
-        n_freqs: Optional[int] = None,
+        port_node_plus: str | None = None,
+        port_node_minus: str | None = None,
+        n_freqs: int | None = None,
         min_num_poles: int = 1,
         max_num_poles: int = 5,
         tolerance_rms: float = 1e-5,
@@ -1876,7 +1874,7 @@ class CircuitImpedanceModel(MicrowaveBaseModel):
         )
 
 
-NetworkType = discriminated_union(Union[RLCNetwork, AdmittanceNetwork, CircuitImpedanceModel])
+NetworkType = discriminated_union(RLCNetwork | AdmittanceNetwork | CircuitImpedanceModel)
 
 
 class LinearLumpedElement(RectangularLumpedElement):
@@ -1980,9 +1978,7 @@ class LinearLumpedElement(RectangularLumpedElement):
 
         return snap_box_to_grid(grid, cell_box, snap_spec=snap_spec)
 
-    def _create_connection_boxes(
-        self, cell_box: Box, grid: Grid
-    ) -> tuple[Optional[Box], Optional[Box]]:
+    def _create_connection_boxes(self, cell_box: Box, grid: Grid) -> tuple[Box | None, Box | None]:
         """Creates PEC structures that connect the network portion of the lumped element to the
         boundaries of the lumped element.
         """
@@ -2007,7 +2003,7 @@ class LinearLumpedElement(RectangularLumpedElement):
     def to_structure(
         self,
         grid: Grid,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> Structure:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         which enforces the desired voltage-current relationship across one or more grid cells.
@@ -2032,7 +2028,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_PEC_connection(self, grid: Grid) -> Optional[Structure]:
+    def to_PEC_connection(self, grid: Grid) -> Structure | None:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         representing any PEC connections.
         """
@@ -2057,7 +2053,7 @@ class LinearLumpedElement(RectangularLumpedElement):
     def to_structures(
         self,
         grid: Grid,
-        frequency_range: Optional[FreqBound] = None,
+        frequency_range: FreqBound | None = None,
     ) -> list[Structure]:
         """Converts the :class:`LinearLumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`. Passes ``frequency_range``
@@ -2072,7 +2068,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         structures.append(self.to_structure(grid, frequency_range=frequency_range))
         return structures
 
-    def estimate_parasitic_elements(self, grid: Grid) -> Optional[tuple[float, float]]:
+    def estimate_parasitic_elements(self, grid: Grid) -> tuple[float, float] | None:
         """Provides an estimate for the parasitic inductance and capacitance associated with the
         connections. These wire or sheet connections are used when the lumped element is not
         distributed over the voltage axis.
@@ -2192,9 +2188,5 @@ class LinearLumpedElement(RectangularLumpedElement):
 
 # lumped elements allowed in Simulation.lumped_elements
 LumpedElementType = discriminated_union(
-    Union[
-        LumpedResistor,
-        CoaxialLumpedResistor,
-        LinearLumpedElement,
-    ]
+    LumpedResistor | CoaxialLumpedResistor | LinearLumpedElement
 )

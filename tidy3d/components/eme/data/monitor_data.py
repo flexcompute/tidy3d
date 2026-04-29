@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
@@ -191,11 +191,11 @@ class EMECoefficientData(AbstractMonitorData, EMECoefficientDataset):
     )
 
 
-EMEMonitorDataType = Union[
-    EMEModeSolverData,
-    EMEFieldData,
-    EMECoefficientData,
-    ModeSolverData,
-    PermittivityData,
-    MediumData,
-]
+EMEMonitorDataType = (
+    EMEModeSolverData
+    | EMEFieldData
+    | EMECoefficientData
+    | ModeSolverData
+    | PermittivityData
+    | MediumData
+)

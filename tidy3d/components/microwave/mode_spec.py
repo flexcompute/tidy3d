@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, PositiveInt, model_validator
 
@@ -68,7 +68,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     ... )
     """
 
-    num_modes: Union[PositiveInt, Literal["auto"]] = Field(
+    num_modes: PositiveInt | Literal["auto"] = Field(
         1,
         title="Number of modes",
         description="Number of modes returned by mode solver. "
@@ -77,10 +77,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         "assuming quasi-TEM modes (if AutoImpedanceSpec).",
     )
 
-    impedance_specs: Union[
-        ImpedanceSpecType,
-        tuple[Optional[ImpedanceSpecType], ...],
-    ] = Field(
+    impedance_specs: ImpedanceSpecType | tuple[ImpedanceSpecType | None, ...] = Field(
         default_factory=AutoImpedanceSpec._default_without_license_warning,
         title="Impedance Specifications",
         description="Field controls how the impedance is calculated for each mode calculated by the mode solver. "
@@ -112,7 +109,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     @cached_property
-    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType], ...]:
+    def _impedance_specs_as_tuple(self) -> tuple[ImpedanceSpecType | None, ...]:
         """Gets the impedance_specs field converted to a tuple."""
         if isinstance(self.impedance_specs, (tuple, list)):
             return tuple(self.impedance_specs)
@@ -281,7 +278,7 @@ class MicrowaveTerminalModeSpec(MicrowaveModeSpec):
         "The size of the dictionary should match the number of modes field. ",
     )
 
-    terminals_mapping: Optional[dict[str, Union[str, tuple[str, str]]]] = Field(
+    terminals_mapping: dict[str, str | tuple[str, str]] | None = Field(
         None,
         title="Terminals Mapping",
         description="Mapping from terminal (including differential pairs) labels to single-ended terminal labels.",
@@ -355,9 +352,9 @@ class MicrowaveTerminalModeSpec(MicrowaveModeSpec):
         return list(self.terminals_mapping.keys())
 
     @cached_property
-    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType], ...]:
+    def _impedance_specs_as_tuple(self) -> tuple[ImpedanceSpecType | None, ...]:
         """Gets the impedance_specs field converted to a tuple."""
         return tuple(self.impedance_specs.values())
 
 
-MicrowaveModeSpecType = Union[MicrowaveModeSpec, MicrowaveTerminalModeSpec]
+MicrowaveModeSpecType = MicrowaveModeSpec | MicrowaveTerminalModeSpec

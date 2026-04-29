@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 import trimesh
@@ -59,9 +59,9 @@ def cartesian_to_unstructured(
     array: td.SpatialDataArray,
     pert: float = 0.1,
     method: str = "linear",
-    seed: Optional[int] = None,
+    seed: int | None = None,
     same_bounds: bool = True,
-) -> Union[td.TriangularGridDataset, td.TetrahedralGridDataset]:
+) -> td.TriangularGridDataset | td.TetrahedralGridDataset:
     """Convert a SpatialDataArray into TriangularGridDataset/TetrahedralGridDataset with
     an optional perturbation of point coordinates.
 
@@ -1212,7 +1212,7 @@ def run_async_emulated(simulations: dict[str, td.Simulation], **kwargs) -> Batch
 
 
 def assert_log_level(
-    records: list[tuple[int, str]], log_level_expected: str, contains_str: Optional[str] = None
+    records: list[tuple[int, str]], log_level_expected: str, contains_str: str | None = None
 ) -> None:
     """Testing tool: Raises error if a log was not recorded as expected.
 
@@ -1280,8 +1280,8 @@ def assert_log_level(
 def assert_str_in_log(
     records: list[tuple[int, str]],
     log_level_test: str,
-    excludes_str: Optional[str] = None,
-    contains_str: Optional[str] = None,
+    excludes_str: str | None = None,
+    contains_str: str | None = None,
 ) -> None:
     """Testing tool: Raises error if `excludes_str` appears , or `contains_str` doesn't appear at the test log level.
     Unlike ``assert_log_level``, we don't raise error if the ``log_level_test`` is not present in the records.
@@ -1344,7 +1344,7 @@ class AssertLogLevelHandler:
 class AbstractAssertLog:
     """Context manager to check logs."""
 
-    log_level_expected: Union[str, None]
+    log_level_expected: str | None
     contains_str: str = None
 
     @property

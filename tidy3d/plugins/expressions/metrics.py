@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 import xarray as xr
@@ -73,7 +73,7 @@ class ModeAmp(Metric):
         title="Monitor Name",
         description="The name of the mode monitor. This needs to match the name of the monitor in the simulation.",
     )
-    f: Optional[Union[float, FreqArray]] = Field(
+    f: float | FreqArray | None = Field(
         None,
         title="Frequency Array",
         description="The frequency array. If None, all frequencies in the monitor will be used.",

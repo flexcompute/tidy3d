@@ -44,7 +44,7 @@ def old_minimal_config(tmp_path):
 
 def test_load_legacy_nexus_config(old_nexus_config):
     """Test that load_legacy_flat_config parses all Nexus fields correctly."""
-    config_dir, old_config = old_nexus_config
+    config_dir, _old_config = old_nexus_config
 
     legacy_data = load_legacy_flat_config(config_dir)
 
@@ -66,7 +66,7 @@ def test_load_legacy_nexus_config(old_nexus_config):
 
 def test_load_legacy_minimal_config(old_minimal_config):
     """Test that minimal old config (just API key) still works."""
-    config_dir, old_config = old_minimal_config
+    config_dir, _old_config = old_minimal_config
 
     legacy_data = load_legacy_flat_config(config_dir)
 
@@ -102,7 +102,7 @@ def test_auto_migration_on_load(old_nexus_config):
 
 def test_migrated_config_format(old_nexus_config):
     """Test that migrated config is in correct nested TOML format."""
-    config_dir, old_config = old_nexus_config
+    config_dir, _old_config = old_nexus_config
 
     # Trigger migration
     loader = ConfigLoader(config_dir)
@@ -230,7 +230,7 @@ def test_save_after_migration(old_nexus_config):
     only persisted fields are written to base config. Non-persisted
     fields like api_endpoint are filtered out.
     """
-    config_dir, old_config = old_nexus_config
+    config_dir, _old_config = old_nexus_config
 
     manager = ConfigManager(config_dir=config_dir)
 
@@ -302,7 +302,7 @@ def test_legacy_payload_migration_failure_falls_back_without_legacy_file(tmp_pat
 
 def test_migration_preserves_comments_when_possible(old_nexus_config):
     """Test that migration creates a clean, well-formatted config."""
-    config_dir, old_config = old_nexus_config
+    config_dir, _old_config = old_nexus_config
 
     # Trigger migration
     loader = ConfigLoader(config_dir)

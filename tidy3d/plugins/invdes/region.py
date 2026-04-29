@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import warnings
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 import autograd.numpy as anp
 import numpy as np
@@ -93,7 +93,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         return td.Box(center=self.center, size=self.size)
 
     def material_density(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None
     ) -> anp.ndarray:
         """Evaluate transformations on parameters to give the material density (0, 1)."""
         for transformation in self.transformations:
@@ -105,7 +105,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         return params
 
     def penalty_value(
-        self, data: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+        self, data: anp.ndarray, symmetry: MirrorSymmetry | None = None
     ) -> anp.ndarray:
         """Evaluate the transformations on a dataset."""
 
@@ -129,7 +129,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         self,
         transformation: None,
         params: anp.ndarray,
-        symmetry: Optional[MirrorSymmetry] = None,
+        symmetry: MirrorSymmetry | None = None,
     ) -> anp.ndarray:
         """How this design region evaluates a transformation given some passed information."""
 
@@ -138,7 +138,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         self,
         penalty: None,
         material_density: anp.ndarray,
-        symmetry: Optional[MirrorSymmetry] = None,
+        symmetry: MirrorSymmetry | None = None,
     ) -> float:
         """How this design region evaluates a penalty given some passed information."""
 
@@ -191,7 +191,7 @@ class TopologyDesignRegion(DesignRegion):
         "inside of the penalties directly through the ``.weight`` field.",
     )
 
-    override_structure_dl: Optional[Union[PositiveFloat, Literal[False]]] = Field(
+    override_structure_dl: PositiveFloat | Literal[False] | None = Field(
         None,
         title="Design Region Override Structure",
         description="Defines grid size when adding an ``override_structure`` to the "
@@ -202,7 +202,7 @@ class TopologyDesignRegion(DesignRegion):
         "Supplying ``False`` will completely leave out the override structure.",
     )
 
-    priority: Optional[int] = Field(
+    priority: int | None = Field(
         None,
         title="Priority",
         description="Priority of the structure applied in structure overlapping region. "
@@ -353,7 +353,7 @@ class TopologyDesignRegion(DesignRegion):
         return coords
 
     def eps_values(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None
     ) -> anp.ndarray:
         """Values for the custom medium permittivity."""
 
@@ -365,7 +365,7 @@ class TopologyDesignRegion(DesignRegion):
         return eps_arr.reshape(params.shape)
 
     def to_structure(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None
     ) -> td.Structure:
         """Convert this ``DesignRegion`` into a custom ``Structure``."""
         self._check_params(params)
@@ -404,7 +404,7 @@ class TopologyDesignRegion(DesignRegion):
         self,
         transformation: TransformationType,
         params: anp.ndarray,
-        symmetry: Optional[MirrorSymmetry] = None,
+        symmetry: MirrorSymmetry | None = None,
     ) -> anp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
         self._check_params(params)
@@ -417,7 +417,7 @@ class TopologyDesignRegion(DesignRegion):
         self,
         penalty: PenaltyType,
         material_density: anp.ndarray,
-        symmetry: Optional[MirrorSymmetry] = None,
+        symmetry: MirrorSymmetry | None = None,
     ) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
         kwargs = {"x": material_density, "pixel_size": self.pixel_size}
@@ -426,4 +426,4 @@ class TopologyDesignRegion(DesignRegion):
         return penalty.evaluate(**kwargs)
 
 
-DesignRegionType = Union[TopologyDesignRegion]
+DesignRegionType = TopologyDesignRegion

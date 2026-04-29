@@ -14,7 +14,7 @@ from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field, PositiveInt, PrivateAttr, field_validator, model_validator
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
@@ -48,9 +48,8 @@ from tidy3d.web.core.task_info import BatchDetail
 from tidy3d.web.core.types import PayType
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from os import PathLike
-    from typing import Callable
 
     from rich.progress import TaskID
 
@@ -191,7 +190,7 @@ class Job(WebContainer):
         discriminator="type",
     )
 
-    task_name: Optional[TaskName] = Field(
+    task_name: TaskName | None = Field(
         None,
         title="Task Name",
         description="Unique name of the task. Will be auto-generated if not provided.",
@@ -203,7 +202,7 @@ class Job(WebContainer):
         description="Name of folder to store task on web UI.",
     )
 
-    callback_url: Optional[str] = Field(
+    callback_url: str | None = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -211,7 +210,7 @@ class Job(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    solver_version: Optional[str] = Field(
+    solver_version: str | None = Field(
         None,
         title="Solver Version",
         description="Custom solver version to use, "
@@ -224,19 +223,19 @@ class Job(WebContainer):
         description="Whether to print info messages and progressbars.",
     )
 
-    simulation_type: Optional[BatchCategoryType] = Field(
+    simulation_type: BatchCategoryType | None = Field(
         None,
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
 
-    parent_tasks: Optional[tuple[TaskId, ...]] = Field(
+    parent_tasks: tuple[TaskId, ...] | None = Field(
         None,
         title="Parent Tasks",
         description="Tuple of parent task ids, used internally only.",
     )
 
-    task_id_cached: Optional[TaskId] = Field(
+    task_id_cached: TaskId | None = Field(
         None,
         title="Task ID (Cached)",
         description="Optional field to specify ``task_id``. Only used as a workaround internally "
@@ -251,7 +250,7 @@ class Job(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    pay_type: Optional[PayType] = Field(
+    pay_type: PayType | None = Field(
         None,
         title="Payment Type",
         description="Specify the payment method.",
@@ -277,8 +276,8 @@ class Job(WebContainer):
         )
     )
 
-    _stash_path: Optional[str] = PrivateAttr(default=None)
-    _cached_task_id: Optional[TaskId] = PrivateAttr(default=None)
+    _stash_path: str | None = PrivateAttr(default=None)
+    _cached_task_id: TaskId | None = PrivateAttr(default=None)
 
     @cached_property
     def _stash_path_for_job(self) -> str:
@@ -287,7 +286,7 @@ class Job(WebContainer):
         stash_dir.mkdir(parents=True, exist_ok=True)
         return str(Path(stash_dir / f"{uuid.uuid4()}.hdf5"))
 
-    def _task_type_hint(self) -> Optional[str]:
+    def _task_type_hint(self) -> str | None:
         """Best-effort task type derived from the simulation for default filename selection."""
 
         try:
@@ -328,10 +327,10 @@ class Job(WebContainer):
 
     def run(
         self,
-        path: Optional[PathLike] = None,
-        priority: Optional[int] = None,
-        vgpu_allocation: Optional[int] = None,
-        ignore_memory_limit: Optional[bool] = None,
+        path: PathLike | None = None,
+        priority: int | None = None,
+        vgpu_allocation: int | None = None,
+        ignore_memory_limit: bool | None = None,
     ) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
@@ -409,7 +408,7 @@ class Job(WebContainer):
 
     def _upload(
         self,
-        verbose_estimate_cost: Optional[bool] = None,
+        verbose_estimate_cost: bool | None = None,
     ) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
@@ -452,9 +451,9 @@ class Job(WebContainer):
 
     def start(
         self,
-        priority: Optional[int] = None,
-        vgpu_allocation: Optional[int] = None,
-        ignore_memory_limit: Optional[bool] = None,
+        priority: int | None = None,
+        vgpu_allocation: int | None = None,
+        ignore_memory_limit: bool | None = None,
     ) -> None:
         """Start running a :class:`Job`.
 
@@ -511,7 +510,7 @@ class Job(WebContainer):
             return
         web.monitor(self.task_id, verbose=self.verbose)
 
-    def download(self, path: Optional[PathLike] = None) -> None:
+    def download(self, path: PathLike | None = None) -> None:
         """Download results of simulation.
 
         Parameters
@@ -533,7 +532,7 @@ class Job(WebContainer):
             self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: Optional[PathLike] = None) -> WorkflowDataType:
+    def load(self, path: PathLike | None = None) -> WorkflowDataType:
         """Download job results and load them into a data object.
 
         Parameters
@@ -691,7 +690,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         title="Verbose",
         description="Whether to print info messages and progressbars.",
     )
-    cached_tasks: Optional[dict[TaskName, bool]] = Field(
+    cached_tasks: dict[TaskName, bool] | None = Field(
         None,
         title="Cached Tasks",
         description="Whether the data of a task came from the cache.",
@@ -703,13 +702,14 @@ class BatchData(Tidy3dBaseModel, Mapping):
         description="Whether to load the actual data (lazy=False) or return a proxy that loads the data when accessed (lazy=True).",
     )
 
-    is_downloaded: Optional[bool] = Field(
+    is_downloaded: bool | None = Field(
         False,
         title="Is Downloaded",
         description="Whether the simulation data was downloaded before.",
     )
 
-    _cache_enabled: Optional[bool] = PrivateAttr(default=None)
+    _data_cache: dict[TaskName, WorkflowDataType] = PrivateAttr(default_factory=dict)
+    _cache_enabled: bool | None = PrivateAttr(default=None)
 
     def _should_cache_data(self) -> bool:
         """Return True when in-memory caching should be enabled for batch data."""
@@ -849,10 +849,10 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: Union[
-        dict[TaskName, discriminated_union(WorkflowType)],
-        tuple[discriminated_union(WorkflowType), ...],
-    ] = Field(
+    simulations: (
+        dict[TaskName, discriminated_union(WorkflowType)]
+        | tuple[discriminated_union(WorkflowType), ...]
+    ) = Field(
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
     )
@@ -869,14 +869,14 @@ class Batch(WebContainer):
         description="Whether to print info messages and progressbars.",
     )
 
-    solver_version: Optional[str] = Field(
+    solver_version: str | None = Field(
         None,
         title="Solver Version",
         description="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
     )
 
-    callback_url: Optional[str] = Field(
+    callback_url: str | None = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -884,19 +884,19 @@ class Batch(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    simulation_type: Optional[BatchCategoryType] = Field(
+    simulation_type: BatchCategoryType | None = Field(
         None,
         title="Simulation Type",
         description="Type of each simulation in the batch, used internally only.",
     )
 
-    parent_tasks: Optional[dict[str, tuple[TaskId, ...]]] = Field(
+    parent_tasks: dict[str, tuple[TaskId, ...]] | None = Field(
         None,
         title="Parent Tasks",
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    num_workers: Optional[PositiveInt] = Field(
+    num_workers: PositiveInt | None = Field(
         default_factory=_default_batch_num_workers,
         title="Number of Workers",
         description="Number of workers for batch multi-threading where configurable. "
@@ -912,13 +912,13 @@ class Batch(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    pay_type: Optional[PayType] = Field(
+    pay_type: PayType | None = Field(
         None,
         title="Payment Type",
         description="Specify the payment method.",
     )
 
-    jobs_cached: Optional[dict[TaskName, Job]] = Field(
+    jobs_cached: dict[TaskName, Job] | None = Field(
         None,
         title="Jobs (Cached)",
         description="Optional field to specify ``jobs``. Only used as a workaround internally "
@@ -957,10 +957,10 @@ class Batch(WebContainer):
     def run(
         self,
         path_dir: PathLike = DEFAULT_DATA_DIR,
-        priority: Optional[int] = None,
+        priority: int | None = None,
         replace_existing: bool = False,
-        vgpu_allocation: Optional[int] = None,
-        ignore_memory_limit: Optional[bool] = None,
+        vgpu_allocation: int | None = None,
+        ignore_memory_limit: bool | None = None,
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -1098,9 +1098,9 @@ class Batch(WebContainer):
     def from_file(
         cls,
         fname: PathLike,
-        group_path: Optional[str] = None,
+        group_path: str | None = None,
         lazy: bool = False,
-        on_load: Optional[Callable[[Any], None]] = None,
+        on_load: Callable[[Any], None] | None = None,
         **parse_obj_kwargs: Any,
     ) -> Batch:
         """Load a :class:`Batch` from file.
@@ -1258,9 +1258,9 @@ class Batch(WebContainer):
 
     def start(
         self,
-        priority: Optional[int] = None,
-        vgpu_allocation: Optional[int] = None,
-        ignore_memory_limit: Optional[bool] = None,
+        priority: int | None = None,
+        vgpu_allocation: int | None = None,
+        ignore_memory_limit: bool | None = None,
     ) -> None:
         """Start running all tasks in the :class:`Batch`.
 
@@ -1367,7 +1367,7 @@ class Batch(WebContainer):
         # ----- download scheduling ---------------------------------------------------
         downloads_started: set[str] = set()
         download_futures: dict[TaskId, concurrent.futures.Future] = {}
-        download_executor: Optional[ThreadPoolExecutor] = None
+        download_executor: ThreadPoolExecutor | None = None
 
         if download_on_success:
             self._check_path_dir(path_dir=path_dir)
@@ -1404,7 +1404,7 @@ class Batch(WebContainer):
         def schedule_download(
             task_name: TaskName,
             job: Job,
-            status: Optional[str] = None,
+            status: str | None = None,
         ) -> None:
             if download_executor is None:
                 return
@@ -1813,7 +1813,7 @@ class Batch(WebContainer):
             if task_name in self.jobs and task_id is not None
         }
 
-        def _known_task_id(task_name: TaskName, job: Job) -> Optional[TaskId]:
+        def _known_task_id(task_name: TaskName, job: Job) -> TaskId | None:
             """Return a known task id without triggering uploads."""
             task_id = terminal_task_id_by_task.get(task_name)
             if task_id is not None:

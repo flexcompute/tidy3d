@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 import requests
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
@@ -42,7 +42,7 @@ class ExceptionCodes(Enum):
 class AdvancedFitterParam(Tidy3dBaseModel):
     """Advanced fitter parameters"""
 
-    bound_amp: Optional[NonNegativeFloat] = Field(
+    bound_amp: NonNegativeFloat | None = Field(
         None,
         title="Upper bound of oscillator strength",
         description="Upper bound of real and imagniary part of oscillator "
@@ -50,7 +50,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         "automatic setup based on the frequency range of interest).",
         json_schema_extra={"units": HERTZ},
     )
-    bound_f: Optional[NonNegativeFloat] = Field(
+    bound_f: NonNegativeFloat | None = Field(
         None,
         title="Upper bound of pole frequency",
         description="Upper bound of real and imaginary part of ``a`` that corresponds to pole "
@@ -85,7 +85,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         title="Number of inner iterations",
         description="Number of iterations in each inner optimization.",
     )
-    random_seed: Optional[int] = Field(
+    random_seed: int | None = Field(
         0,
         title="Random seed for starting coefficients",
         description="The fitting tool performs global optimizations with random "
@@ -120,7 +120,7 @@ class FitterData(AdvancedFitterParam):
         title="Index of refraction",
         description="Real part of the complex index of refraction at each wavelength.",
     )
-    k_data: Optional[tuple[float, ...]] = Field(
+    k_data: tuple[float, ...] | None = Field(
         None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction at each wavelength.",

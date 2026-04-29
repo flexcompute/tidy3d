@@ -61,7 +61,7 @@ def _patch_terminal_smatrix(monkeypatch, modeler) -> None:
     )
 
     def _mock_compute_F(Z_numpy, s_param_def, compute_Finv=False):
-        num_freqs, num_ports, _ = Z_numpy.shape
+        _num_freqs, num_ports, _ = Z_numpy.shape
         Z_diag = np.diagonal(Z_numpy, axis1=1, axis2=2)
         f_diag = 1.0 / (2.0 * np.sqrt(np.abs(Z_diag) + 1e-4))
         F = np.zeros_like(Z_numpy)

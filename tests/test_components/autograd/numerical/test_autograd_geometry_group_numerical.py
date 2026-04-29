@@ -82,7 +82,7 @@ def make_base_sim(
         ]
     )
 
-    src_size = sim_size_um[0:2] + (0,)
+    src_size = (*sim_size_um[0:2], 0)
 
     wl_min_src_um = 0.9 * adj_wvl_um
     wl_max_src_um = 1.1 * adj_wvl_um
@@ -430,10 +430,10 @@ def test_finite_difference_mode_data_polyslab(
     vertex_centers_x = 1.1 * mesh_wvl_um * np.cos(angles)
     vertex_centers_y = 0.8 * mesh_wvl_um * np.sin(angles)
 
-    obj_no_geom_group, adj_grad_no_geom_group = obj_val_and_grad_no_geom_group(
+    _obj_no_geom_group, adj_grad_no_geom_group = obj_val_and_grad_no_geom_group(
         [list(vertex_centers_x) + list(vertex_centers_y)]
     )
-    obj_geom_group, adj_grad_geom_group = obj_val_and_grad_geom_group(
+    _obj_geom_group, adj_grad_geom_group = obj_val_and_grad_geom_group(
         [list(vertex_centers_x) + list(vertex_centers_y)]
     )
 

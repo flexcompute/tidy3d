@@ -114,7 +114,7 @@ def make_heat_bcs():
 
 
 def test_heat_bcs():
-    bc_temp, bc_flux, bc_conv = make_heat_bcs()
+    _bc_temp, _bc_flux, _bc_conv = make_heat_bcs()
 
     with pytest.raises(ValidationError):
         _ = TemperatureBC(temperature=-10)
@@ -314,7 +314,7 @@ def test_heat_source():
 
 
 def make_heat_sim(include_custom_source: bool = True):
-    fluid_medium, solid_medium = make_heat_mediums()
+    fluid_medium, _solid_medium = make_heat_mediums()
     fluid_structure, solid_structure = make_heat_structures()
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
     sources = [make_heat_source()]

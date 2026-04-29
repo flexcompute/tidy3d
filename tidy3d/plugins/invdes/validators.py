@@ -8,7 +8,7 @@ from pydantic import field_validator, model_validator
 import tidy3d as td
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional
+    from collections.abc import Callable
 
     from pydantic._internal._decorators import ModelValidatorDecoratorInfo, PydanticDescriptorProxy
 
@@ -37,7 +37,7 @@ def check_pixel_size(sim_field_name: str) -> PydanticDescriptorProxy[ModelValida
     """make validator to check the pixel size of sim or list of sims in an ``InverseDesign``."""
 
     def check_pixel_size_sim(
-        sim: td.Simulation, pixel_size: float, index: Optional[int] = None
+        sim: td.Simulation, pixel_size: float, index: int | None = None
     ) -> None:
         """Check a pixel size compared to the simulation min wvl in material."""
         if not sim.sources:

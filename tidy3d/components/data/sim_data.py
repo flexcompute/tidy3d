@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import types
 from abc import ABC
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Union, get_args
+from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -41,9 +42,8 @@ from .monitor_data import AbstractFieldData, FieldTimeData
 from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from os import PathLike
-    from typing import Callable, Optional
 
     from matplotlib.colors import Colormap
     from numpy.typing import NDArray
@@ -54,12 +54,27 @@ if TYPE_CHECKING:
 
     from .data_array import DataArray
 
-DATA_TYPE_MAP = {data.model_fields["monitor"].annotation: data for data in MonitorDataTypes}
+
+def _flatten_monitor_annotation(annotation: Any) -> tuple[type, ...]:
+    """Flatten monitor-field annotations into concrete monitor classes."""
+    origin = get_origin(annotation)
+    if origin in (Union, types.UnionType):
+        return tuple(
+            child for arg in get_args(annotation) for child in _flatten_monitor_annotation(arg)
+        )
+    if origin is Annotated:
+        return _flatten_monitor_annotation(get_args(annotation)[0])
+    return (annotation,)
+
+
+DATA_TYPE_MAP = {}
 
 # maps monitor type (string) to the class of the corresponding data
-DATA_TYPE_NAME_MAP = {
-    val.model_fields["monitor"].annotation.__name__: val for val in MonitorDataTypes
-}
+DATA_TYPE_NAME_MAP = {}
+for data_type in MonitorDataTypes:
+    for monitor_type in _flatten_monitor_annotation(data_type.model_fields["monitor"].annotation):
+        DATA_TYPE_MAP[monitor_type] = data_type
+        DATA_TYPE_NAME_MAP[monitor_type.__name__] = data_type
 
 # residuals below this are considered good fits for broadband adjoint source creation
 RESIDUAL_CUTOFF_ADJOINT = 1e-6
@@ -106,7 +121,7 @@ class AdjointSourceInfo(Tidy3dBaseModel):
         description="Set of processed sources to include in the adjoint simulation.",
     )
 
-    post_norm: Union[float, FreqDataArray] = Field(
+    post_norm: float | FreqDataArray = Field(
         title="Post Normalization Values",
         description="Factor to multiply the adjoint fields by after running "
         "given the adjoint source pipeline used.",
@@ -124,7 +139,7 @@ class AdjointSourceGroup:
     """Grouped adjoint sources that share a spatial port, with optional metadata."""
 
     sources: tuple[SourceType, ...]
-    metadata: Optional[tuple[Any, ...]] = None
+    metadata: tuple[Any, ...] | None = None
 
 
 class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
@@ -667,7 +682,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         return obj
 
     @staticmethod
-    def apply_phase(data: Union[xr.DataArray, xr.Dataset], phase: float = 0.0) -> xr.DataArray:
+    def apply_phase(data: xr.DataArray | xr.Dataset, phase: float = 0.0) -> xr.DataArray:
         """Apply a phase to xarray data."""
         if phase != 0.0:
             if np.any(np.iscomplex(data.values)):
@@ -688,11 +703,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         shading: str = "flat",
-        cmap: Optional[Union[str, Colormap]] = None,
+        cmap: str | Colormap | None = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -908,11 +923,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         shading: str = "flat",
-        cmap: Optional[Union[str, Colormap]] = None,
+        cmap: str | Colormap | None = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -991,13 +1006,13 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_data: xr.DataArray,
         axis: Axis,
         position: float,
-        freq: Optional[float] = None,
+        freq: float | None = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         cmap_type: ColormapType = "divergent",
-        cmap: Optional[Union[str, Colormap]] = None,
+        cmap: str | Colormap | None = None,
         ax: Ax = None,
         **kwargs: Any,
     ) -> Ax:
@@ -1476,7 +1491,7 @@ class SimulationData(AbstractYeeGridSimulationData):
     @staticmethod
     def _group_adjoint_sources_by_port(
         adj_srcs: list[SourceType],
-        metadata: Optional[list[Any]] = None,
+        metadata: list[Any] | None = None,
         *,
         adjust_fwidth: bool = True,
     ) -> list[AdjointSourceGroup]:

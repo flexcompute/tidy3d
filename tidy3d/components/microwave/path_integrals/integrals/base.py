@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import xarray as xr
@@ -24,8 +24,8 @@ from tidy3d.exceptions import DataError
 if TYPE_CHECKING:
     from tidy3d.components.data.data_array import IntegralResultType
 
-IntegrableMonitorDataType = Union[FieldData, FieldTimeData, ModeData, ModeSolverData]
-EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+IntegrableMonitorDataType = FieldData | FieldTimeData | ModeData | ModeSolverData
+EMScalarFieldType = ScalarFieldDataArray | ScalarFieldTimeDataArray | ScalarModeFieldDataArray
 FieldParameter = Literal["E", "H"]
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class AbstractSource(Tidy3dBaseModel, ABC):
     """Abstract base class for all sources."""
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Name",
         description="Optional name for the source.",

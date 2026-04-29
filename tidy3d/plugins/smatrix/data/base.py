@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import Field, model_validator
 
@@ -38,7 +38,7 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
         "containing the results of each simulation run.",
     )
 
-    log: Optional[str] = Field(
+    log: str | None = Field(
         None,
         title="Modeler Post-process Log",
         description="A string containing the log information from the modeler post-processing run.",

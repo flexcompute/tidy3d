@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator
@@ -24,8 +24,6 @@ from tidy3d.log import log
 from tidy3d.packaging import check_tidy3d_extras_licensed_feature, tidy3d_extras
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, PlotVal
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
@@ -135,7 +133,7 @@ class SourceTime(AbstractTimeDependence):
         return self.frequency_range_sigma(sigma=DEFAULT_SIGMA)
 
     @abstractmethod
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
     @cached_property
@@ -245,7 +243,7 @@ class GaussianPulse(Pulse):
         """Offset time in seconds. Note that in the case of DC removal, the maximal value of pulse can be shifted."""
         return self.peak_time + self._peak_time_shift
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
         omega0 = 2 * np.pi * self.freq0
@@ -268,7 +266,7 @@ class GaussianPulse(Pulse):
 
         return np.atleast_1d(pulse_amp)
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         # TODO: decide if we should continue to return an end_time if the DC component remains
@@ -393,7 +391,7 @@ class GaussianPulse(Pulse):
         cls,
         fmin: PositiveFloat,
         fmax: PositiveFloat,
-        minimum_source_bandwidth: Optional[PositiveFloat] = None,
+        minimum_source_bandwidth: PositiveFloat | None = None,
         **kwargs: Any,
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
@@ -458,7 +456,7 @@ class ContinuousWave(Pulse):
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
     """
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
         twidth = 1.0 / (2 * np.pi * self.fwidth)
@@ -472,7 +470,7 @@ class ContinuousWave(Pulse):
 
         return np.atleast_1d(const * offset * oscillation * amp)
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
         return None
 
@@ -517,7 +515,7 @@ class CustomSourceTime(Pulse):
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
-    source_time_dataset: Optional[TimeDataset] = Field(
+    source_time_dataset: TimeDataset | None = Field(
         None,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
@@ -529,7 +527,7 @@ class CustomSourceTime(Pulse):
 
     @field_validator("source_time_dataset")
     @classmethod
-    def _validate_time_coords(cls, val: Optional[TimeDataset]) -> Optional[TimeDataset]:
+    def _validate_time_coords(cls, val: TimeDataset | None) -> TimeDataset | None:
         """Time coordinates must have more than one point and be strictly increasing."""
         if val is None:
             return val
@@ -605,7 +603,7 @@ class CustomSourceTime(Pulse):
 
         return (max_time_shifted < min(data_times)) | (min_time_shifted > max(data_times))
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time.
 
         Parameters
@@ -648,7 +646,7 @@ class CustomSourceTime(Pulse):
 
         return offset * oscillation * amp * envelope
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         if self.source_time_dataset is None:
@@ -718,7 +716,7 @@ class BroadbandPulse(SourceTime):
         """Time after which the source is effectively turned off / close to zero amplitude."""
         return self._source.end_time(END_TIME_FACTOR_GAUSSIAN)
 
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
         return self._source.amp_time(time)
 

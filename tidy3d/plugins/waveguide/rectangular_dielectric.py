@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy
 from matplotlib import pyplot
@@ -56,13 +56,13 @@ class RectangularDielectric(Tidy3dBaseModel):
         - Coupled waveguides
     """
 
-    wavelength: Union[float, ArrayFloat1D] = Field(
+    wavelength: float | ArrayFloat1D = Field(
         title="Wavelength",
         description="Wavelength(s) at which to calculate modes (in μm).",
         json_schema_extra={"units": MICROMETER},
     )
 
-    core_width: Union[Size1D, ArrayFloat1D] = Field(
+    core_width: Size1D | ArrayFloat1D = Field(
         title="Core width",
         description="Core width at the top of the waveguide. If set to an array, defines "
         "the widths of adjacent waveguides.",
@@ -81,13 +81,13 @@ class RectangularDielectric(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    clad_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = Field(
+    clad_medium: AnnotatedMedium | tuple[AnnotatedMedium, ...] = Field(
         title="Clad Medium",
         description="Medium associated with the upper cladding layer. A sequence of mediums can "
         "be used to create a layered clad.",
     )
 
-    box_medium: Optional[Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]]] = Field(
+    box_medium: AnnotatedMedium | tuple[AnnotatedMedium, ...] | None = Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer. A sequence of mediums can "
@@ -101,7 +101,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         json_schema_extra={"units": MICROMETER},
     )
 
-    clad_thickness: Optional[Union[Size1D, ArrayFloat1D]] = Field(
+    clad_thickness: Size1D | ArrayFloat1D | None = Field(
         None,
         title="Clad Thickness",
         description="Domain size above the core layer. An array can be used to define a layered "
@@ -109,7 +109,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         json_schema_extra={"units": MICROMETER},
     )
 
-    box_thickness: Optional[Union[Size1D, ArrayFloat1D]] = Field(
+    box_thickness: Size1D | ArrayFloat1D | None = Field(
         None,
         title="Box Thickness",
         description="Domain size below the core layer. An array can be used to define a layered "
@@ -117,7 +117,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         json_schema_extra={"units": MICROMETER},
     )
 
-    side_margin: Optional[Size1D] = Field(
+    side_margin: Size1D | None = Field(
         None,
         title="Side Margin",
         description="Domain size to the sides of the waveguide core.",
@@ -133,7 +133,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         json_schema_extra={"units": RADIAN},
     )
 
-    gap: Union[float, ArrayFloat1D] = Field(
+    gap: float | ArrayFloat1D = Field(
         0.0,
         title="Gap",
         description="Distance between adjacent waveguides, measured at the top core edges.  "
@@ -148,7 +148,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         json_schema_extra={"units": MICROMETER},
     )
 
-    sidewall_medium: Optional[MediumType] = Field(
+    sidewall_medium: MediumType | None = Field(
         None,
         title="Sidewall medium",
         description="Medium associated with the sidewall layer to model sidewall losses.",
@@ -163,7 +163,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         json_schema_extra={"units": MICROMETER},
     )
 
-    surface_medium: Optional[MediumType] = Field(
+    surface_medium: MediumType | None = Field(
         None,
         title="Surface Medium",
         description="Medium associated with the surface layer to model surface losses.",
@@ -218,7 +218,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @field_validator("wavelength", "core_width", "gap")
     @classmethod
-    def _set_non_negative_array(cls, val: Union[float, ArrayFloat1D]) -> Union[float, ArrayFloat1D]:
+    def _set_non_negative_array(cls, val: float | ArrayFloat1D) -> float | ArrayFloat1D:
         """Ensure values are not negative and convert to numpy arrays."""
         val = numpy.array(val, ndmin=1)
         if any(val < 0):
@@ -228,8 +228,8 @@ class RectangularDielectric(Tidy3dBaseModel):
     @field_validator("core_medium", "clad_medium", "box_medium")
     @classmethod
     def _check_non_metallic(
-        cls, val: Union[MediumType, tuple[MediumType, ...]], info: ValidationInfo
-    ) -> Union[MediumType, tuple[MediumType, ...]]:
+        cls, val: MediumType | tuple[MediumType, ...], info: ValidationInfo
+    ) -> MediumType | tuple[MediumType, ...]:
         if val is None:
             return val
         media = val if isinstance(val, tuple) else (val,)
@@ -827,12 +827,12 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        source_alpha: Optional[float] = None,
-        monitor_alpha: Optional[float] = None,
+        source_alpha: float | None = None,
+        monitor_alpha: float | None = None,
         **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -869,13 +869,13 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
-        source_alpha: Optional[float] = None,
-        monitor_alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
+        source_alpha: float | None = None,
+        monitor_alpha: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -920,9 +920,9 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_structures(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -952,11 +952,11 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_structures_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
@@ -1004,9 +1004,9 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_grid(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs: Any,
     ) -> Ax:
@@ -1106,11 +1106,11 @@ class RectangularDielectric(Tidy3dBaseModel):
         val: Literal["real", "imag", abs] = "real",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
-        geometry_edges: Optional[str] = None,
-        cmap: Optional[Union[str, Colormap]] = None,
+        geometry_edges: str | None = None,
+        cmap: str | Colormap | None = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Union
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import xarray as xr
@@ -355,7 +355,7 @@ class CustomDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
+        indices_in_box, X, _Y, _Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
 
         contrib = np.zeros(X.shape)
         # interpolate
@@ -380,4 +380,4 @@ class CustomDoping(AbstractDopingBox):
         return contrib.squeeze()
 
 
-DopingBoxType = Union[ConstantDoping, GaussianDoping, CustomDoping]
+DopingBoxType = ConstantDoping | GaussianDoping | CustomDoping

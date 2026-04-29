@@ -59,9 +59,9 @@ from .types import CustomVJPConfig, NumericalStructureConfig, SetupRunResult
 from .utils import filter_vjp_map as _filter_vjp_map
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from os import PathLike
-    from typing import Callable, Literal, Optional, Union
+    from typing import Literal
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from .types import CustomVJPSpec
 
 
-def _resolve_local_gradient(value: Optional[bool]) -> bool:
+def _resolve_local_gradient(value: bool | None) -> bool:
     if value is not None:
         return bool(value)
 
@@ -117,11 +117,9 @@ def insert_numerical_structures_static(
 
 
 def has_traced_numerical_structures(
-    numerical_structures: Union[
-        tuple[NumericalStructureConfig, ...],
-        list[NumericalStructureConfig],
-        dict[str, NumericalStructureConfig],
-    ],
+    numerical_structures: tuple[NumericalStructureConfig, ...]
+    | list[NumericalStructureConfig]
+    | dict[str, NumericalStructureConfig],
 ) -> bool:
     from tidy3d.components.autograd.utils import hasbox
 
@@ -293,29 +291,29 @@ def verify_custom_vjp(
 
 def run_custom(
     simulation: WorkflowType,
-    task_name: Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
-    path: Optional[PathLike] = None,
-    callback_url: Optional[str] = None,
+    path: PathLike | None = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback_upload: Optional[Callable[[float], None]] = None,
-    progress_callback_download: Optional[Callable[[float], None]] = None,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
-    simulation_type: Optional[str] = None,
-    parent_tasks: Optional[list[str]] = None,
-    local_gradient: Optional[bool] = None,
-    max_num_adjoint_per_fwd: Optional[int] = None,
+    progress_callback_upload: Callable[[float], None] | None = None,
+    progress_callback_download: Callable[[float], None] | None = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
+    simulation_type: str | None = None,
+    parent_tasks: list[str] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
-    lazy: Optional[bool] = None,
-    numerical_structures: Optional[
-        Union[NumericalStructureConfig, tuple[NumericalStructureConfig, ...]]
-    ] = None,
-    custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
+    lazy: bool | None = None,
+    numerical_structures: NumericalStructureConfig
+    | tuple[NumericalStructureConfig, ...]
+    | None = None,
+    custom_vjp: CustomVJPConfig | tuple[CustomVJPConfig, ...] | None = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -583,33 +581,30 @@ def run_custom(
 
 
 def run_async_custom(
-    simulations: Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    simulations: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
-    callback_url: Optional[str] = None,
-    num_workers: Optional[int] = None,
+    callback_url: str | None = None,
+    num_workers: int | None = None,
     verbose: bool = True,
-    simulation_type: Optional[str] = None,
-    solver_version: Optional[str] = None,
-    parent_tasks: Optional[dict[str, list[str]]] = None,
-    local_gradient: Optional[bool] = None,
-    max_num_adjoint_per_fwd: Optional[int] = None,
+    simulation_type: str | None = None,
+    solver_version: str | None = None,
+    parent_tasks: dict[str, list[str]] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
-    lazy: Optional[bool] = None,
-    numerical_structures: Optional[
-        Union[
-            NumericalStructureConfig,
-            dict[str, NumericalStructureConfig],
-            Sequence[NumericalStructureConfig],
-            dict[str, Sequence[NumericalStructureConfig]],
-            Sequence[Sequence[NumericalStructureConfig]],
-        ]
-    ] = None,
-    custom_vjp: Optional[CustomVJPSpec] = None,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
+    lazy: bool | None = None,
+    numerical_structures: NumericalStructureConfig
+    | dict[str, NumericalStructureConfig]
+    | Sequence[NumericalStructureConfig]
+    | dict[str, Sequence[NumericalStructureConfig]]
+    | Sequence[Sequence[NumericalStructureConfig]]
+    | None = None,
+    custom_vjp: CustomVJPSpec | None = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -729,12 +724,12 @@ def run_async_custom(
                 )
 
     def _expand_spec(
-        fn_arg: Optional[Any],
-        orig_sim_arg: Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+        fn_arg: Any | None,
+        orig_sim_arg: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
         sim_dict: dict[str, td.Simulation],
         item_type: type,
         arg_name: str,
-    ) -> Optional[dict[str, tuple[Any, ...]]]:
+    ) -> dict[str, tuple[Any, ...]] | None:
         if fn_arg is None:
             return None
 
@@ -907,25 +902,25 @@ def run_async_custom(
 
 def run(
     simulation: WorkflowType,
-    task_name: Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
-    path: Optional[PathLike] = None,
-    callback_url: Optional[str] = None,
+    path: PathLike | None = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback_upload: Optional[Callable[[float], None]] = None,
-    progress_callback_download: Optional[Callable[[float], None]] = None,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
-    simulation_type: Optional[str] = None,
-    parent_tasks: Optional[list[str]] = None,
-    local_gradient: Optional[bool] = None,
-    max_num_adjoint_per_fwd: Optional[int] = None,
+    progress_callback_upload: Callable[[float], None] | None = None,
+    progress_callback_download: Callable[[float], None] | None = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
+    simulation_type: str | None = None,
+    parent_tasks: list[str] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
-    lazy: Optional[bool] = None,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
+    lazy: bool | None = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> WorkflowDataType:
     """Wrapper for run_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_custom(
@@ -955,23 +950,23 @@ def run(
 
 
 def run_async(
-    simulations: Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    simulations: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
-    callback_url: Optional[str] = None,
-    num_workers: Optional[int] = None,
+    callback_url: str | None = None,
+    num_workers: int | None = None,
     verbose: bool = True,
-    simulation_type: Optional[str] = None,
-    solver_version: Optional[str] = None,
-    parent_tasks: Optional[dict[str, list[str]]] = None,
-    local_gradient: Optional[bool] = None,
-    max_num_adjoint_per_fwd: Optional[int] = None,
+    simulation_type: str | None = None,
+    solver_version: str | None = None,
+    parent_tasks: dict[str, list[str]] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
-    lazy: Optional[bool] = None,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
+    lazy: bool | None = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> BatchData:
     """Wrapper for run_async_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_async_custom(
@@ -1001,9 +996,9 @@ def _run(
     simulation: td.Simulation,
     task_name: str,
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: Optional[int] = None,
-    numerical_structures: Optional[tuple[NumericalStructureConfig, ...]] = None,
-    custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
+    max_num_adjoint_per_fwd: int | None = None,
+    numerical_structures: tuple[NumericalStructureConfig, ...] | None = None,
+    custom_vjp: tuple[CustomVJPConfig, ...] | None = None,
     **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
@@ -1055,9 +1050,9 @@ def _run(
 def _run_async(
     simulations: dict[str, td.Simulation],
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: Optional[int] = None,
-    numerical_structures: Optional[dict[str, Sequence[NumericalStructureConfig]]] = None,
-    custom_vjp: Optional[dict[str, Sequence[CustomVJPConfig]]] = None,
+    max_num_adjoint_per_fwd: int | None = None,
+    numerical_structures: dict[str, Sequence[NumericalStructureConfig]] | None = None,
+    custom_vjp: dict[str, Sequence[CustomVJPConfig]] | None = None,
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
@@ -1122,7 +1117,7 @@ def _run_async(
 
 def setup_run(
     simulation: td.Simulation,
-    numerical_structures: Optional[tuple[NumericalStructureConfig, ...]] = None,
+    numerical_structures: tuple[NumericalStructureConfig, ...] | None = None,
 ) -> SetupRunResult:
     """Prepare simulation and traced fields, including numerical structure insertions."""
 
@@ -1340,7 +1335,7 @@ def _run_primitive(
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[int, NumericalStructureConfig],
-    custom_vjp: Optional[tuple[CustomVJPConfig, ...]],
+    custom_vjp: tuple[CustomVJPConfig, ...] | None,
     **run_kwargs: Any,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
@@ -1587,7 +1582,7 @@ def _run_bwd(
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     numerical_structures: dict[int, NumericalStructureConfig],
-    custom_vjp: Optional[tuple[CustomVJPConfig, ...]],
+    custom_vjp: tuple[CustomVJPConfig, ...] | None,
     **run_kwargs: Any,
 ) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
@@ -1903,8 +1898,8 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    numerical_structure_map: Optional[dict[int, NumericalStructureConfig]] = None,
-    custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
+    numerical_structure_map: dict[int, NumericalStructureConfig] | None = None,
+    custom_vjp: tuple[CustomVJPConfig, ...] | None = None,
 ) -> AutogradFieldMap:
     """Postprocess adjoint results into VJPs (delegated)."""
     return _postprocess_adj_impl(

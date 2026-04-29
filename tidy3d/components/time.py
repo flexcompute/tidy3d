@@ -15,8 +15,6 @@ from .base import Tidy3dBaseModel
 from .viz import add_ax_if_none
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from .types import ArrayComplex1D, ArrayFloat1D, Ax, PlotVal
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
@@ -38,7 +36,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
     )
 
     @abstractmethod
-    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued amplitude as a function of time.
 
         Parameters

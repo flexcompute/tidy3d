@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -33,12 +33,11 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.types import Ax
 
-FieldDataset = Union[
-    discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),
-    SpatialDataArray,
-]
+FieldDataset = (
+    discriminated_union(TriangularGridDataset | TetrahedralGridDataset) | SpatialDataArray
+)
 
-UnstructuredFieldType = discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
+UnstructuredFieldType = discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
@@ -49,7 +48,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
         description="Electric potential monitor associated with a `charge` simulation.",
     )
 
-    potential: Optional[FieldDataset] = Field(
+    potential: FieldDataset | None = Field(
         None,
         title="Electric potential series",
         description="Contains the electric potential series.",
@@ -57,7 +56,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, Optional[FieldDataset]]:
+    def field_components(self) -> dict[str, FieldDataset | None]:
         """Maps the field components to their associated data."""
         return {"potential": self.potential}
 
@@ -78,7 +77,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: Optional[UnstructuredFieldType] = Field(
+    electrons: UnstructuredFieldType | None = Field(
         None,
         title="Electrons series",
         description=r"Contains the computed electrons concentration :math:`n`.",
@@ -86,7 +85,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     )
     # n = electrons
 
-    holes: Optional[UnstructuredFieldType] = Field(
+    holes: UnstructuredFieldType | None = Field(
         None,
         title="Holes series",
         description=r"Contains the computed holes concentration :math:`p`.",
@@ -95,7 +94,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     # p = holes
 
     @property
-    def field_components(self) -> dict[str, Optional[UnstructuredFieldType]]:
+    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
         """Maps the field components to their associated data."""
         return {"electrons": self.electrons, "holes": self.holes}
 
@@ -153,35 +152,35 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         description="Energy bands data associated with a Charge simulation.",
     )
 
-    Ec: Optional[UnstructuredFieldType] = Field(
+    Ec: UnstructuredFieldType | None = Field(
         None,
         title="Conduction band series",
         description="Contains the computed energy of the bottom of the conduction band :math:`E_c`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Ev: Optional[UnstructuredFieldType] = Field(
+    Ev: UnstructuredFieldType | None = Field(
         None,
         title="Valence band series",
         description="Contains the computed energy of the top of the valence band :math:`E_v`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Ei: Optional[UnstructuredFieldType] = Field(
+    Ei: UnstructuredFieldType | None = Field(
         None,
         title="Intrinsic Fermi level series",
         description="Contains the computed intrinsic Fermi level for the material :math:`E_i`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Efn: Optional[UnstructuredFieldType] = Field(
+    Efn: UnstructuredFieldType | None = Field(
         None,
         title="Electron's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for electrons :math:`E_{fn}`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Efp: Optional[UnstructuredFieldType] = Field(
+    Efp: UnstructuredFieldType | None = Field(
         None,
         title="Hole's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for holes :math:`E_{fp}`.",
@@ -189,7 +188,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, Optional[UnstructuredFieldType]]:
+    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
         """Maps the field components to their associated data."""
         return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 
@@ -310,7 +309,7 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
         description="Capacitance data associated with a Charge simulation.",
     )
 
-    hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
+    hole_capacitance: SteadyVoltageDataArray | None = Field(
         None,
         title="Hole capacitance",
         description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor. "
@@ -319,7 +318,7 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     )
     # C_p = hole_capacitance
 
-    electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
+    electron_capacitance: SteadyVoltageDataArray | None = Field(
         None,
         title="Electron capacitance",
         description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor. "
@@ -379,7 +378,7 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         description="Electric field data associated with a Charge/Conduction simulation.",
     )
 
-    E: Optional[UnstructuredFieldType] = Field(
+    E: UnstructuredFieldType | None = Field(
         None,
         title="Electric field",
         description="Contains the computed electric field.",
@@ -416,7 +415,7 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
         description="Current density data associated with a Charge/Conduction simulation.",
     )
 
-    J: Optional[UnstructuredFieldType] = Field(
+    J: UnstructuredFieldType | None = Field(
         None,
         title="Current density",
         description="Contains the computed current density.",

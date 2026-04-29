@@ -5,16 +5,15 @@ from __future__ import annotations
 import inspect
 from contextlib import contextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 from rich.console import Console
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from os import PathLike
     from types import TracebackType
-    from typing import Callable, Optional
 
     from pydantic import BaseModel
     from rich.progress import Progress as RichProgress
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.
 LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]
-LogValue = Union[int, LogLevel]
+LogValue = int | LogLevel
 
 # Logging levels compatible with logging module
 _level_value = {
@@ -160,9 +159,9 @@ class Logger:
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> Literal[False]:
         """Exist a consolidation context (report the number of messages discarded)."""
         if self._counts is not None:
@@ -290,7 +289,7 @@ class Logger:
         message: str,
         *args: Any,
         log_once: bool = False,
-        custom_loc: Optional[list] = None,
+        custom_loc: list | None = None,
         capture: bool = True,
     ) -> None:
         """Distribute log messages to all handlers"""
@@ -365,7 +364,7 @@ class Logger:
         message: str,
         *args: Any,
         log_once: bool = False,
-        custom_loc: Optional[list] = None,
+        custom_loc: list | None = None,
         capture: bool = True,
     ) -> None:
         """Log (message) % (args) at warning level"""
@@ -526,7 +525,7 @@ class NoOpProgress:
 
 
 @contextmanager
-def Progress(console: Console, show_progress: bool) -> Iterator[Union[RichProgress, NoOpProgress]]:
+def Progress(console: Console, show_progress: bool) -> Iterator[RichProgress | NoOpProgress]:
     """Progress manager that wraps ``rich.Progress`` if ``show_progress`` is ``True``,
     and ``NoOpProgress`` otherwise."""
     if show_progress:

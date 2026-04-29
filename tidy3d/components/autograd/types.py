@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Union, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, Literal, get_origin
 
 import autograd.numpy as anp
 from autograd.builtins import dict as TracedDict
@@ -18,8 +18,6 @@ from tidy3d.components.types.utils import _add_schema
 from .utils import get_static, hasbox
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from pydantic import SerializationInfo
 
     from tidy3d.compat import TypeAlias
@@ -41,7 +39,7 @@ Box.__str__ = lambda self: f"{self._value} <{type(self).__name__}>"
 Box.__repr__ = Box.__str__
 
 
-def traced_alias(base_alias: Any, *, name: Optional[str] = None) -> TypeAlias:
+def traced_alias(base_alias: Any, *, name: str | None = None) -> TypeAlias:
     base_adapter = TypeAdapter(base_alias, config={"arbitrary_types_allowed": True})
 
     def _validate_box_or_container(v: Any) -> Any:
@@ -114,7 +112,7 @@ TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
 TracedPolesAndResidues = tuple[TracedPoleAndResidue, ...]
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
-PathType = tuple[Union[int, str], ...]
+PathType = tuple[int | str, ...]
 AutogradFieldMap = TracedDict[PathType, Box]
 
 InterpolationType = Literal["nearest", "linear"]

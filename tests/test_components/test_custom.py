@@ -693,7 +693,7 @@ def test_custom_medium_validator_order():
     permittivity = make_spatial_data(value=0)
     conductivity = make_spatial_data(value=-0.5)
 
-    with pytest.raises(ValidationError, match="'permittivity' must be no less than one."):
+    with pytest.raises(ValidationError, match=r"'permittivity' must be no less than one."):
         _ = CustomMedium(permittivity=permittivity, conductivity=conductivity)
 
 
@@ -1265,7 +1265,7 @@ def test_custom_medium_duplicate_coords(custom_class, data_key):
     spatial_data = td.SpatialDataArray(data, coords=coords)
 
     if custom_class == CustomMedium:
-        with pytest.raises(ValidationError, match="duplicate coordinates"):
+        with pytest.raises(ValidationError, match=r"duplicate coordinates"):
             _ = custom_class(permittivity=spatial_data)
     else:
         field_components = {
@@ -1273,5 +1273,5 @@ def test_custom_medium_duplicate_coords(custom_class, data_key):
         }
         field_dataset = td.FieldDataset(**field_components)
 
-        with pytest.raises(ValidationError, match="duplicate coordinates"):
+        with pytest.raises(ValidationError, match=r"duplicate coordinates"):
             _ = custom_class(size=SIZE, source_time=ST, **{data_key: field_dataset})

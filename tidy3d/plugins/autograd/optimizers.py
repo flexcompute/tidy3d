@@ -13,7 +13,7 @@ string keys to ``np.ndarray`` / scalar values (pytree-style).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Literal, get_args
 
 import numpy as np
 from pydantic import Field, PositiveFloat
@@ -25,16 +25,14 @@ from .differential_operators import value_and_grad
 if TYPE_CHECKING:
     from typing import TypeAlias
 
-ParamLeaf: TypeAlias = Union[np.ndarray, float]
-Params = Union[ParamLeaf, dict[str, ParamLeaf]]
-Bounds = Union[
-    tuple[Optional[float], Optional[float]], dict[str, tuple[Optional[float], Optional[float]]]
-]
-ObjectiveValue: TypeAlias = Union[float, np.ndarray]
+ParamLeaf: TypeAlias = np.ndarray | float
+Params = ParamLeaf | dict[str, ParamLeaf]
+Bounds = tuple[float | None, float | None] | dict[str, tuple[float | None, float | None]]
+ObjectiveValue: TypeAlias = float | np.ndarray
 ObjectiveFn: TypeAlias = Callable[[Params], ObjectiveValue]
 OptimizeDirection: TypeAlias = Literal["min", "max"]
 OPTIMIZE_DIRECTIONS = list(get_args(OptimizeDirection))
-AdamState: TypeAlias = dict[str, Union[Params, int]]
+AdamState: TypeAlias = dict[str, Params | int]
 OptimizeHistory: TypeAlias = dict[str, list[float]]
 OptimizeCallback: TypeAlias = Callable[[Params, Params, AdamState, int, ObjectiveValue], None]
 
@@ -129,7 +127,7 @@ class Adam(Tidy3dBaseModel):
         }
 
     def update(
-        self, grads: Params, state: AdamState, params: Optional[Params] = None
+        self, grads: Params, state: AdamState, params: Params | None = None
     ) -> tuple[Params, AdamState]:
         """Compute parameter updates from gradients (optax-compatible).
 
@@ -247,8 +245,8 @@ def optimize(
     optimizer: Adam,
     num_steps: int,
     *,
-    bounds: Optional[Bounds] = None,
-    callback: Optional[OptimizeCallback] = None,
+    bounds: Bounds | None = None,
+    callback: OptimizeCallback | None = None,
     direction: OptimizeDirection = "min",
 ) -> tuple[Params, AdamState, OptimizeHistory]:
     """Run a full gradient-descent optimization loop (convenience wrapper).

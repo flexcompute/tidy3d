@@ -22,8 +22,6 @@ from tidy3d.components.viz import (
 )
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import Ax
@@ -151,9 +149,9 @@ class Source(Box, AbstractSource, ABC):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs: Any,
     ) -> Ax:

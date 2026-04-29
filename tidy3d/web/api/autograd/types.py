@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
 
@@ -136,7 +136,7 @@ class CustomVJPConfig:
         )
     """
 
-    structure: Union[int, type[GeometryType], type[MediumType]]
+    structure: int | type[GeometryType] | type[MediumType]
     """Target existing traced structure(s) in ``("structures", ...)`` namespace.
     Can be an index or a geometry/medium type (expanded to matching indices).
     """
@@ -148,7 +148,7 @@ class CustomVJPConfig:
     should return a dict object that maps the path to the computed gradient value.
     """
 
-    path_key: Optional[tuple[str, ...]] = None
+    path_key: tuple[str, ...] | None = None
     """Path key corresponding to the vjp. For example, this could be ('geometry', 'radius') if you are targeting
     the radius parameter in the given structure geometry. It can also target the medium by specifying medium first
     (i.e. - ('medium', 'permittivity') will target the permittivity variable in the structure's medium). If not
@@ -181,13 +181,13 @@ class CustomVJPConfig:
             )
 
 
-CustomVJPSpec = Union[
-    CustomVJPConfig,
-    dict[str, CustomVJPConfig],
-    Sequence[CustomVJPConfig],
-    dict[str, Sequence[CustomVJPConfig]],
-    Sequence[Sequence[CustomVJPConfig]],
-]
+CustomVJPSpec = (
+    CustomVJPConfig
+    | dict[str, CustomVJPConfig]
+    | Sequence[CustomVJPConfig]
+    | dict[str, Sequence[CustomVJPConfig]]
+    | Sequence[Sequence[CustomVJPConfig]]
+)
 
 
 class SetupRunResult(NamedTuple):

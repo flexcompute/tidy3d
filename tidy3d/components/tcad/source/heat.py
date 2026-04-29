@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
 from pydantic import Field, model_validator
 
@@ -21,7 +21,7 @@ class HeatSource(StructureBasedHeatChargeSource):
     >>> heat_source = HeatSource(rate=1, structures=["box"])
     """
 
-    rate: Union[float, SpatialDataArray] = Field(
+    rate: float | SpatialDataArray = Field(
         title="Volumetric Heat Rate",
         description="Volumetric rate of heating or cooling (if negative).",
         json_schema_extra={"units": VOLUMETRIC_HEAT_RATE},

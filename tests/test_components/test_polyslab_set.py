@@ -654,7 +654,7 @@ def test_polyslab_set_to_structures_rejects_custom_medium(kwarg_name):
 def test_custom_medium_to_polyslabs_threshold_validation():
     medium = make_2d_custom_medium_from_mask(mask=np.ones((3, 3), dtype=bool))
 
-    with pytest.raises(ValueError, match="threshold.*finite"):
+    with pytest.raises(ValueError, match=r"threshold.*finite"):
         _ = PolySlabSet.from_custom_medium(
             medium,
             slab_bounds=(-0.1, 0.1),
@@ -1089,7 +1089,7 @@ def test_polyslab_set_update_is_strict_for_self_intersections():
 
     broken_ring = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0]], dtype=float)
 
-    with pytest.raises(Exception, match="self-intersecting|holes/islands|valid polygon"):
+    with pytest.raises(Exception, match=r"self-intersecting|holes/islands|valid polygon"):
         _ = polyslab_set.update(broken_ring.reshape(-1))
 
 
@@ -1110,7 +1110,7 @@ def test_polyslab_set_update_stays_strict_before_frozen_boundary_restore():
 
     broken_ring = np.array([[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0]], dtype=float)
 
-    with pytest.raises(Exception, match="self-intersecting|holes/islands|valid polygon"):
+    with pytest.raises(Exception, match=r"self-intersecting|holes/islands|valid polygon"):
         _ = polyslab_set.update(
             broken_ring.reshape(-1),
             freeze_boundary=True,
@@ -1161,7 +1161,7 @@ def test_polyslab_set_safe_update_repairs_self_intersections():
     broken_ring[3] = np.array([0.75, -0.2], dtype=float)
     broken_ring[4] = np.array([2.25, 1.7], dtype=float)
 
-    with pytest.raises(Exception, match="self-intersecting|holes/islands|valid polygon"):
+    with pytest.raises(Exception, match=r"self-intersecting|holes/islands|valid polygon"):
         _ = polyslab_set.update(broken_ring.reshape(-1))
 
     repaired, status = polyslab_set.safe_update(

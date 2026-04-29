@@ -65,7 +65,7 @@ def make_base_sim(
         ]
     )
 
-    src_size = sim_size_um[0:2] + (0,)
+    src_size = (*sim_size_um[0:2], 0)
 
     wl_min_src_um = 0.9 * adj_wvl_um
     wl_max_src_um = 1.1 * adj_wvl_um
@@ -310,10 +310,10 @@ def test_finite_difference_diffraction_data(
 
     box_for_override = td.Box(
         center=(sim_geometry.center[0], sim_geometry.center[1], 0),
-        size=sim_geometry.size[0:2] + (thickness_um + mesh_wvl_um,),
+        size=(*sim_geometry.size[0:2], thickness_um + mesh_wvl_um),
     )
 
-    eval_fns, eval_fn_names = make_eval_fns(
+    _eval_fns, _eval_fn_names = make_eval_fns(
         orders_x=order_x, orders_y=order_y, polarization=polarization
     )
 
@@ -343,7 +343,7 @@ def test_finite_difference_diffraction_data(
 
     perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, Nz))
 
-    obj, adj_grad = obj_val_and_grad([perm_init])
+    _obj, adj_grad = obj_val_and_grad([perm_init])
 
     # empirical step size from running other finite difference tests for field
     # cases with permittivity

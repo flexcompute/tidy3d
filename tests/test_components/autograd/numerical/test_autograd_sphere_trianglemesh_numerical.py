@@ -2,9 +2,8 @@
 # geometries, comparing to finite differences for validation.
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Callable
 
 import autograd.numpy as anp
 import numpy as np

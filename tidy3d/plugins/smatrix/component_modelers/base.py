@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -41,8 +41,8 @@ if TYPE_CHECKING:
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
 
-IndexType = Union[MatrixIndex, NetworkIndex]
-ElementType = Union[Element, NetworkElement]
+IndexType = MatrixIndex | NetworkIndex
+ElementType = Element | NetworkElement
 TaskNameFormat = Literal["RF", "PF"]
 
 
@@ -59,7 +59,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: tuple[Union[Port, TerminalPortType], ...] = Field(
+    ports: tuple[Port | TerminalPortType, ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
@@ -83,7 +83,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "pulse spectrum which can have a nonzero DC component.",
     )
 
-    run_only: Optional[tuple[IndexType, ...]] = Field(
+    run_only: tuple[IndexType, ...] | None = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -100,7 +100,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "matrix element. If all elements of a given column of the scattering matrix are defined "
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
-    custom_source_time: Optional[SourceTimeType] = Field(
+    custom_source_time: SourceTimeType | None = Field(
         None,
         title="Custom Source Time",
         description="If provided, this will be used as specification of the source time-dependence in simulations. "
@@ -204,7 +204,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @staticmethod
     def get_task_name(
-        port: PortType, mode_index: Optional[int] = None, terminal_label: Optional[str] = None
+        port: PortType, mode_index: int | None = None, terminal_label: str | None = None
     ) -> str:
         """Generates a standardized task name from a port object.
 
@@ -321,7 +321,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
         return source_indices_needed
 
-    def _shift_value_signed(self, port: Union[Port, WavePort]) -> float:
+    def _shift_value_signed(self, port: Port | WavePort) -> float:
         """How far (signed) to shift the source from the monitor."""
 
         return _shift_value_signed(
@@ -340,14 +340,14 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         path_dir: str = DEFAULT_DATA_DIR,
         *,
         folder_name: str = "default",
-        callback_url: Optional[str] = None,
+        callback_url: str | None = None,
         verbose: bool = True,
-        solver_version: Optional[str] = None,
-        pay_type: Union[PayType, str] = "AUTO",
-        priority: Optional[int] = None,
+        solver_version: str | None = None,
+        pay_type: PayType | str = "AUTO",
+        priority: int | None = None,
         local_gradient: bool = False,
-        max_num_adjoint_per_fwd: Optional[int] = None,
-    ) -> Union[ModalPortDataArray, MicrowaveSMatrixData]:
+        max_num_adjoint_per_fwd: int | None = None,
+    ) -> ModalPortDataArray | MicrowaveSMatrixData:
         log.warning(
             "'ComponentModeler.run()' is deprecated and will be removed in a future release. "
             "Use web.run(modeler) instead. 'web.run' returns a 'ComponentModelerData' object; "

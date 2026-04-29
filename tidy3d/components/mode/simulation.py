@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, field_validator, model_validator
@@ -42,13 +42,13 @@ if TYPE_CHECKING:
     from tidy3d.components.mode.data.sim_data import ModeSimulationData
     from tidy3d.components.types import Ax
 
-ModeSimulationMonitorType = Union[PermittivityMonitor, MediumMonitor]
+ModeSimulationMonitorType = PermittivityMonitor | MediumMonitor
 
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
 RUN_TIME = 1e-30
 
-MODE_PLANE_TYPE = discriminated_union(Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor])
+MODE_PLANE_TYPE = discriminated_union(Box | ModeSource | ModeMonitor | ModeSolverMonitor)
 
 
 # attributes shared between ModeSimulation class and ModeSolver class
@@ -217,7 +217,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         description="Specifications for the simulation grid along each of the three directions.",
     )
 
-    plane: Optional[MODE_PLANE_TYPE] = Field(
+    plane: MODE_PLANE_TYPE | None = Field(
         None,
         title="Plane",
         description="Cross-sectional plane in which the mode will be computed. "
@@ -235,7 +235,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @field_validator("plane")
     @classmethod
-    def _validate_planar(cls, val: Optional[MODE_PLANE_TYPE]) -> Optional[MODE_PLANE_TYPE]:
+    def _validate_planar(cls, val: MODE_PLANE_TYPE | None) -> MODE_PLANE_TYPE | None:
         if val.size.count(0.0) != 1:
             raise ValidationError(f"'ModeSimulation.plane' must be planar, given 'size={val.size}'")
         return val
@@ -381,7 +381,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def from_simulation(
         cls,
         simulation: AbstractYeeGridSimulation,
-        wavelength: Optional[PositiveFloat] = None,
+        wavelength: PositiveFloat | None = None,
         **kwargs: Any,
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.AbstractYeeGridSimulation`.
@@ -438,7 +438,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @classmethod
     def from_mode_solver(
-        cls, mode_solver: ModeSolver, wavelength: Optional[PositiveFloat] = None
+        cls, mode_solver: ModeSolver, wavelength: PositiveFloat | None = None
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.ModeSolver`.
 
@@ -469,15 +469,15 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        source_alpha: Optional[float] = 0,
-        monitor_alpha: Optional[float] = 0,
-        lumped_element_alpha: Optional[float] = 0,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        source_alpha: float | None = 0,
+        monitor_alpha: float | None = 0,
+        lumped_element_alpha: float | None = 0,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         fill_structures: bool = True,
         **patch_kwargs: Any,
     ) -> Ax:
@@ -564,8 +564,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_eps_mode_plane(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -597,8 +597,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_structures_eps_mode_plane(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,

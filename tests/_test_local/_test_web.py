@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 from unittest import TestCase, mock
 
-import tidy3d.web as web
 from tidy3d.web.auth import encode_password, get_credentials
+
+import tidy3d.web as web
 
 from ..utils import SIM_FULL as sim_original
 

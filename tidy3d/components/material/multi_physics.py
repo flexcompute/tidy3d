@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import Field
 
@@ -81,9 +81,9 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         ... )
     """
 
-    name: Optional[str] = Field(None, title="Name", description="Medium name")
+    name: str | None = Field(None, title="Name", description="Medium name")
 
-    optical: Optional[OpticalMediumType] = Field(
+    optical: OpticalMediumType | None = Field(
         None,
         title="Optical properties",
         description="Specifies optical properties.",
@@ -96,14 +96,14 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     #     description="Specifies electrical properties for RF simulations. This is currently not in use.",
     # )
 
-    heat: Optional[HeatMediumType] = Field(
+    heat: HeatMediumType | None = Field(
         None,
         title="Heat properties",
         description="Specifies properties for Heat simulations.",
         discriminator=TYPE_TAG_STR,
     )
 
-    charge: Optional[ChargeMediumType] = Field(
+    charge: ChargeMediumType | None = Field(
         None,
         title="Charge properties",
         description="Specifies properties for Charge simulations.",
@@ -192,7 +192,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         )
 
     @property
-    def heat_spec(self) -> Optional[HeatMediumType]:
+    def heat_spec(self) -> HeatMediumType | None:
         if self.heat is not None:
             return self.heat
 

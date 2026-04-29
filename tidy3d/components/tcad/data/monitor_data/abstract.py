@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field, model_validator
 
@@ -18,10 +18,10 @@ from tidy3d.log import log
 if TYPE_CHECKING:
     from tidy3d.compat import Self
 
-FieldDataset = Union[
-    SpatialDataArray, discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
-]
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+FieldDataset = SpatialDataArray | discriminated_union(
+    TriangularGridDataset | TetrahedralGridDataset
+)
+UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
 
 class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 from pydantic import Field
 
 from tidy3d.components.data.data_array import (
@@ -16,13 +14,13 @@ from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import KELVIN
 
-FieldDataset = Union[
-    discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),
-    SpatialDataArray,
-    ScalarFieldTimeDataArray,
-    SpatialDataArray,
-]
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+FieldDataset = (
+    discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
+    | SpatialDataArray
+    | ScalarFieldTimeDataArray
+    | SpatialDataArray
+)
+UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
 
 class TemperatureData(HeatChargeMonitorData):
@@ -47,7 +45,7 @@ class TemperatureData(HeatChargeMonitorData):
         description="Temperature monitor associated with the data.",
     )
 
-    temperature: Optional[FieldDataset] = Field(
+    temperature: FieldDataset | None = Field(
         None,
         title="Temperature",
         description="Spatial temperature field.",
@@ -55,6 +53,6 @@ class TemperatureData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, Optional[FieldDataset]]:
+    def field_components(self) -> dict[str, FieldDataset | None]:
         """Maps the field components to their associated data."""
         return {"temperature": self.temperature}

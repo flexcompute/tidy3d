@@ -32,7 +32,6 @@ from .base_lumped import AbstractLumpedPort
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from typing import Optional
 
     from tidy3d.compat import Self
     from tidy3d.components.data.data_array import FreqDataArray
@@ -120,8 +119,8 @@ class LumpedPort(AbstractLumpedPort, Box):
     def to_source(
         self,
         source_time: SourceTimeType,
-        snap_center: Optional[float] = None,
-        grid: Optional[Grid] = None,
+        snap_center: float | None = None,
+        grid: Grid | None = None,
         **kwargs: Any,
     ) -> UniformCurrentSource:
         """Create a current source from the lumped port."""
@@ -150,7 +149,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             current_amplitude_definition="total",
         )
 
-    def to_load(self, snap_center: Optional[float] = None) -> LumpedResistor:
+    def to_load(self, snap_center: float | None = None) -> LumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # It is done here so plots of the simulation will more accurately portray the setup
@@ -172,7 +171,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         if grid:
@@ -200,7 +199,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         if grid:
@@ -337,14 +336,14 @@ class LumpedPort(AbstractLumpedPort, Box):
     @classmethod
     def from_structures(
         cls,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ground_terminal: Structure | None = None,
         signal_terminal: Structure | None = None,
         voltage_axis: Axis = None,
-        lateral_coord: Optional[float] = None,
-        port_width: Optional[float] = None,
+        lateral_coord: float | None = None,
+        port_width: float | None = None,
         **kwargs: Any,
     ) -> LumpedPort:
         """

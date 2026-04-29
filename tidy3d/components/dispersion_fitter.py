@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import (
@@ -22,8 +22,6 @@ from .base import Tidy3dBaseModel, cached_property
 from .types import ArrayComplex1D
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
@@ -141,7 +139,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         "A finite upper bound may be helpful when fitting lossless materials. "
         "In this case, consider also increasing the weight for fitting the imaginary part.",
     )
-    weights: Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = Field(
+    weights: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(
         None,
         title="Weights",
         description="Weights (real, imag) in objective function for fitting. The weights "
@@ -165,20 +163,20 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         description="Whether to show unweighted RMS error in addition to the default weighted "
         'RMS error. Requires ``td.config.logging_level = "INFO"``.',
     )
-    relaxed: Optional[bool] = Field(
+    relaxed: bool | None = Field(
         None,
         title="Relaxed",
         description="Whether to use relaxed fitting algorithm, which "
         "has better pole relocation properties. If ``None``, will try both original and relaxed "
         "algorithms.",
     )
-    smooth: Optional[bool] = Field(
+    smooth: bool | None = Field(
         None,
         title="Smooth",
         description="Whether to use real starting poles, which can help when fitting smooth data. "
         "If ``None``, will try both real and complex starting poles.",
     )
-    logspacing: Optional[bool] = Field(
+    logspacing: bool | None = Field(
         None,
         title="Log spacing",
         description="Whether to space the poles logarithmically. "
@@ -220,8 +218,8 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
     @field_validator("weights")
     @classmethod
     def _weights_average_to_one(
-        cls, val: Optional[tuple[NonNegativeFloat, NonNegativeFloat]]
-    ) -> Optional[tuple[NonNegativeFloat, NonNegativeFloat]]:
+        cls, val: tuple[NonNegativeFloat, NonNegativeFloat] | None
+    ) -> tuple[NonNegativeFloat, NonNegativeFloat] | None:
         """Weights must average to one."""
         if val is None:
             return None
@@ -242,34 +240,34 @@ class FastFitterData(AdvancedFastFitterParam):
         description="Permittivity to fit",
     )
 
-    optimize_eps_inf: Optional[bool] = Field(
+    optimize_eps_inf: bool | None = Field(
         None,
         title="Optimize eps_inf",
         description="Whether to optimize ``eps_inf``.",
     )
 
-    num_poles: Optional[PositiveInt] = Field(
+    num_poles: PositiveInt | None = Field(
         None,
         title="Number of poles",
         description="Number of poles",
     )
-    eps_inf: Optional[float] = Field(
+    eps_inf: float | None = Field(
         None,
         title="eps_inf",
         description="Value of ``eps_inf``.",
     )
-    poles: Optional[ArrayComplex1D] = Field(
+    poles: ArrayComplex1D | None = Field(
         None,
         title="Pole frequencies in eV",
         description="Pole frequencies in eV",
     )
-    residues: Optional[ArrayComplex1D] = Field(
+    residues: ArrayComplex1D | None = Field(
         None,
         title="Residues in eV",
         description="Residues in eV",
     )
 
-    passivity_optimized: Optional[bool] = Field(
+    passivity_optimized: bool | None = Field(
         False,
         title="Passivity optimized",
         description="Whether the fit was optimized to enforce passivity. If None, "
@@ -791,7 +789,7 @@ def fit(
     resp_data: ArrayComplex1D,
     min_num_poles: PositiveInt = 1,
     max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
-    resp_inf: Optional[float] = None,
+    resp_inf: float | None = None,
     tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
     advanced_param: AdvancedFastFitterParam = None,
     scale_factor: PositiveFloat = 1,
@@ -877,7 +875,7 @@ def fit(
     )
     log.info(f"Fitting weights=({init_model.weights[0]:.3g}, {init_model.weights[1]:.3g}).")
 
-    def make_configs() -> list[list[Union[int, bool]]]:
+    def make_configs() -> list[list[int | bool]]:
         configs = [[p] for p in range(max(min_num_poles // 2, 1), max_num_poles + 1)]
         for setting in [
             init_model.relaxed,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from autograd import value_and_grad
@@ -20,7 +20,8 @@ from .projections import tanh_projection
 from .symmetries import MirrorSymmetry, expand_mirror_symmetry
 
 if TYPE_CHECKING:
-    from typing import Callable, Literal
+    from collections.abc import Callable
+    from typing import Literal
 
     from numpy.typing import NDArray
 
@@ -30,15 +31,15 @@ if TYPE_CHECKING:
 class FilterAndProject(Tidy3dBaseModel):
     """A class that combines filtering and projection operations."""
 
-    radius: Union[float, tuple[float, ...]] = Field(
+    radius: float | tuple[float, ...] = Field(
         title="Radius",
         description="The radius of the kernel.",
     )
-    dl: Union[float, tuple[float, ...]] = Field(
+    dl: float | tuple[float, ...] = Field(
         title="Grid Spacing",
         description="The grid spacing.",
     )
-    size_px: Optional[Union[int, tuple[int, ...]]] = Field(
+    size_px: int | tuple[int, ...] | None = Field(
         None,
         title="Size in Pixels",
         description="The size of the kernel in pixels.",
@@ -63,7 +64,7 @@ class FilterAndProject(Tidy3dBaseModel):
         title="Padding",
         description="The padding mode to use.",
     )
-    symmetry: Optional[MirrorSymmetry] = Field(
+    symmetry: MirrorSymmetry | None = Field(
         None,
         title="Mirror Symmetry",
         description="Optional per-axis mirror symmetry applied by expanding the array across "
@@ -71,7 +72,7 @@ class FilterAndProject(Tidy3dBaseModel):
     )
 
     def __call__(
-        self, array: NDArray, beta: Optional[float] = None, eta: Optional[float] = None
+        self, array: NDArray, beta: float | None = None, eta: float | None = None
     ) -> NDArray:
         """Apply the filter and projection to an input array.
 
@@ -111,15 +112,15 @@ class FilterAndProject(Tidy3dBaseModel):
 
 
 def make_filter_and_project(
-    radius: Optional[Union[float, tuple[float, ...]]] = None,
-    dl: Optional[Union[float, tuple[float, ...]]] = None,
+    radius: float | tuple[float, ...] | None = None,
+    dl: float | tuple[float, ...] | None = None,
     *,
-    size_px: Optional[Union[int, tuple[int, ...]]] = None,
+    size_px: int | tuple[int, ...] | None = None,
     beta: float = BETA_DEFAULT,
     eta: float = ETA_DEFAULT,
     filter_type: KernelType = "conic",
     padding: PaddingType = "reflect",
-    symmetry: Optional[MirrorSymmetry] = None,
+    symmetry: MirrorSymmetry | None = None,
 ) -> Callable:
     """Create a function that filters and projects an array.
 
@@ -144,10 +145,10 @@ def initialize_params_from_simulation(
     param_to_structure: Callable[..., td.Structure],
     params0: np.ndarray,
     *,
-    freq: Optional[float] = None,
+    freq: float | None = None,
     outside_handling: Literal["extrapolate", "mask", "nan"] = "mask",
     maxiter: int = 100,
-    bounds: tuple[Optional[float], Optional[float]] = (0.0, 1.0),
+    bounds: tuple[float | None, float | None] = (0.0, 1.0),
     rel_improve_tol: float = 1e-3,
     verbose: bool = False,
     **param_kwargs: Any,

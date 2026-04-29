@@ -9,12 +9,10 @@ from tidy3d.log import log
 from .schema_utils import _resolve_model_type
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from pydantic import BaseModel
 
 
-def _normalize_version(value: Any, path: str, label: str) -> Optional[int]:
+def _normalize_version(value: Any, path: str, label: str) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
@@ -31,7 +29,7 @@ def check_deprecations(
     data: dict[str, Any],
     prefix: tuple[str, ...],
     *,
-    current_version: Optional[int] = None,
+    current_version: int | None = None,
 ) -> None:
     """Warn or error when deprecated/removed fields are present."""
 

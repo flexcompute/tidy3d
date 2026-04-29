@@ -14,8 +14,6 @@ from .boundary import BlochBoundary
 from .geometry.base import Geometry
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from .medium import MediumType
     from .monitor import DiffractionMonitor
     from .simulation import Simulation
@@ -30,7 +28,7 @@ DIFFRACTION_POLARIZATIONS = cast(
 )
 
 
-def shifted_orders(orders: tuple[int, ...], bloch_vec: Union[float, np.ndarray]) -> np.ndarray:
+def shifted_orders(orders: tuple[int, ...], bloch_vec: float | np.ndarray) -> np.ndarray:
     """Diffraction orders shifted by the Bloch vector."""
 
     return bloch_vec + np.atleast_2d(orders).T
@@ -39,7 +37,7 @@ def shifted_orders(orders: tuple[int, ...], bloch_vec: Union[float, np.ndarray])
 def reciprocal_coords(
     orders: np.ndarray,
     size: float,
-    bloch_vec: Union[float, np.ndarray],
+    bloch_vec: float | np.ndarray,
     f: float,
     medium: MediumType,
 ) -> np.ndarray:
@@ -66,9 +64,7 @@ def compute_angles(
     return (thetas, phis)
 
 
-def diffraction_amplitude_norm(
-    theta_data: np.ndarray, eta: Union[np.ndarray, complex]
-) -> np.ndarray:
+def diffraction_amplitude_norm(theta_data: np.ndarray, eta: np.ndarray | complex) -> np.ndarray:
     """Amplitude normalization used by diffraction monitor power amplitudes."""
 
     cos_theta = np.cos(np.nan_to_num(theta_data))
@@ -82,7 +78,7 @@ def diffraction_angle_is_propagating(angle_theta: float) -> bool:
     return bool(np.isfinite(angle_theta) and np.cos(angle_theta) > COS_THETA_THRESH)
 
 
-def bloch_vec_at_freq(bloch_vec: Union[float, np.ndarray], freq_index: int) -> float:
+def bloch_vec_at_freq(bloch_vec: float | np.ndarray, freq_index: int) -> float:
     """Return scalar Bloch vector for a specific monitor frequency index."""
 
     if np.ndim(bloch_vec) == 0:
@@ -98,7 +94,7 @@ def diffraction_monitor_medium(sim: Simulation, monitor: DiffractionMonitor) -> 
 
 def sim_bloch_vecs(
     sim: Simulation, monitor: DiffractionMonitor
-) -> tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
+) -> tuple[float | np.ndarray, float | np.ndarray]:
     """Get Bloch vectors for the diffraction monitor transverse axes."""
 
     fixed_angle_sources = sim._fixed_angle_sources
@@ -156,7 +152,7 @@ def handle_zero_division(numerator: Any, denominator: float) -> Any:
 
 
 def _generate_orders(
-    wave_numbers: np.ndarray, bloch: Union[float, np.ndarray], domain_size: float
+    wave_numbers: np.ndarray, bloch: float | np.ndarray, domain_size: float
 ) -> np.ndarray:
     """Generate the 1D diffraction orders allowed along one transverse axis."""
 

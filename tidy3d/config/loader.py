@@ -34,7 +34,6 @@ from .serializer import build_document, collect_descriptions
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from typing import Optional
 
 _BASE_ONLY_METADATA_KEYS = TOP_LEVEL_METADATA_KEYS
 _OPTIONAL_CORE_SECTION_NAMES = {"web", "local_cache", "batch_data_cache"}
@@ -43,7 +42,7 @@ _OPTIONAL_CORE_SECTION_NAMES = {"web", "local_cache", "batch_data_cache"}
 class ConfigLoader:
     """Handle reading and writing configuration files."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         self.config_dir = config_dir or resolve_config_directory()
         self.config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._docs: dict[Path, tomlkit.TOMLDocument] = {}
@@ -54,8 +53,8 @@ class ConfigLoader:
         self,
         *,
         commit_writes: bool = True,
-        queue_migration_write: Optional[bool] = None,
-        validation_profile: Optional[str] = None,
+        queue_migration_write: bool | None = None,
+        validation_profile: str | None = None,
     ) -> dict[str, Any]:
         """Load base configuration from config.toml.
 
@@ -136,7 +135,7 @@ class ConfigLoader:
         profile: str,
         *,
         commit_writes: bool = True,
-        queue_migration_write: Optional[bool] = None,
+        queue_migration_write: bool | None = None,
     ) -> dict[str, Any]:
         """Load user profile overrides (if any)."""
 
@@ -186,7 +185,7 @@ class ConfigLoader:
 
         return self.config_dir / "profiles" / f"{profile}.toml"
 
-    def get_default_profile(self) -> Optional[str]:
+    def get_default_profile(self) -> str | None:
         """Read the default_profile from config.toml.
 
         Returns
@@ -207,7 +206,7 @@ class ConfigLoader:
             log.warning(f"Failed to read default_profile from '{config_path}': {exc}")
         return None
 
-    def set_default_profile(self, profile: Optional[str]) -> None:
+    def set_default_profile(self, profile: str | None) -> None:
         """Set the default_profile in config.toml.
 
         Parameters
@@ -367,7 +366,7 @@ class ConfigLoader:
         path: Path,
         *,
         queue_migration_write: bool = True,
-        validation_profile: Optional[str] = None,
+        validation_profile: str | None = None,
         raise_on_parse_error: bool = False,
     ) -> dict[str, Any]:
         if not path.exists():
@@ -428,7 +427,7 @@ class ConfigLoader:
         config_path: Path,
         legacy_path: Path,
         migrated: dict[str, Any],
-        validation_profile: Optional[str] = None,
+        validation_profile: str | None = None,
     ) -> bool:
         if not self._should_queue_migration_write(
             config_path, migrated, validation_profile=validation_profile
@@ -473,9 +472,7 @@ class ConfigLoader:
         self._validate_base_only_metadata(path=profile_path, data=data)
         return data
 
-    def _base_validation_profile(
-        self, data: dict[str, Any], validation_profile: Optional[str]
-    ) -> str:
+    def _base_validation_profile(self, data: dict[str, Any], validation_profile: str | None) -> str:
         if validation_profile:
             candidate = validation_profile.strip()
             if candidate:
@@ -488,7 +485,7 @@ class ConfigLoader:
         return "default"
 
     def _validation_tree_for_path(
-        self, path: Path, data: dict[str, Any], validation_profile: Optional[str]
+        self, path: Path, data: dict[str, Any], validation_profile: str | None
     ) -> dict[str, Any]:
         """Build the runtime-equivalent validation tree for a config file payload."""
 
@@ -507,7 +504,7 @@ class ConfigLoader:
         return deep_merge(builtin_data, data, profile_data)
 
     def _validate_data_for_path(
-        self, path: Path, data: dict[str, Any], *, validation_profile: Optional[str] = None
+        self, path: Path, data: dict[str, Any], *, validation_profile: str | None = None
     ) -> None:
         validation_tree = self._validation_tree_for_path(path, data, validation_profile)
         build_validated_models(validation_tree, error_context="validate", log_errors=False)
@@ -528,7 +525,7 @@ class ConfigLoader:
         document: tomlkit.TOMLDocument,
         *,
         queue_migration_write: bool = True,
-        validation_profile: Optional[str] = None,
+        validation_profile: str | None = None,
     ) -> dict[str, Any]:
         version = get_config_version(document or data)
 
@@ -582,7 +579,7 @@ class ConfigLoader:
         return strip_config_version(data)
 
     def _should_queue_migration_write(
-        self, path: Path, data: dict[str, Any], *, validation_profile: Optional[str] = None
+        self, path: Path, data: dict[str, Any], *, validation_profile: str | None = None
     ) -> bool:
         try:
             self._validate_data_for_path(path, data, validation_profile=validation_profile)
@@ -683,7 +680,7 @@ def load_environment_overrides() -> dict[str, Any]:
         if not segments:
             continue
         if segments[0] == "auth":
-            segments = ("web",) + segments[1:]
+            segments = ("web", *segments[1:])
         if segments[0] not in known_roots:
             continue
         _assign_path(overrides, segments, value)

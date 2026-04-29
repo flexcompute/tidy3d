@@ -10,7 +10,7 @@ from autograd.wrap_util import unary_to_nary
 from .utilities import scalar_objective
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from numpy.typing import ArrayLike
 

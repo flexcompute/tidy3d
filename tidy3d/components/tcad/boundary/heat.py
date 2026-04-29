@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
@@ -71,7 +71,7 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
 
     """
 
-    medium: Optional[FluidMedium] = Field(
+    medium: FluidMedium | None = Field(
         default=None,
         title="Interface medium",
         description=(
@@ -167,7 +167,7 @@ class ConvectionBC(HeatChargeBC):
         json_schema_extra={"units": KELVIN},
     )
 
-    transfer_coeff: Union[NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = Field(
+    transfer_coeff: NonNegativeFloat | VerticalNaturalConvectionCoeffModel = Field(
         title="Heat Transfer Coefficient",
         description="Heat transfer coefficient value.",
         json_schema_extra={"units": HEAT_TRANSFER_COEFF},

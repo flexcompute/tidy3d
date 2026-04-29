@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import numpy as np
 from pydantic import Field, PositiveInt, field_validator, model_validator
@@ -59,7 +59,7 @@ class EMEModeSpec(ModeSpec):
           numerical noise.
     """
 
-    interp_spec: Optional[ModeInterpSpec] = Field(
+    interp_spec: ModeInterpSpec | None = Field(
         ModeInterpSpec.cheb(num_points=5, reduce_data=True),
         title="Mode frequency interpolation specification",
         description="Specification for computing modes at a reduced set of frequencies and "
@@ -175,7 +175,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         "custom-medium data into bent physical space.",
     )
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Name",
         description="Name of this 'EMEGridSpec'. Used in 'EMEPeriodicitySweep'.",
@@ -621,8 +621,8 @@ class EMECompositeGrid(EMEGridSpec):
         structure_groups: list[list[Structure]],
         axis: Axis,
         mode_specs: list[EMEModeSpec],
-        names: Optional[list[str]] = None,
-        num_reps: Optional[list[PositiveInt]] = None,
+        names: list[str] | None = None,
+        num_reps: list[PositiveInt] | None = None,
     ) -> EMECompositeGrid:
         """Create a composite EME grid with boundaries aligned with
         structure bounding boxes.
@@ -905,4 +905,4 @@ class EMEGrid(Box):
         return indices
 
 
-EMEGridSpecType = Union[EMEUniformGrid, EMECompositeGrid, EMEExplicitGrid]
+EMEGridSpecType = EMEUniformGrid | EMECompositeGrid | EMEExplicitGrid

@@ -175,7 +175,7 @@ def test_gds_import(tmp_path):
     wg_height = 0.3
     dilation = 0.02
 
-    [substrate_geo] = ComplexPolySlab.from_gds(
+    [_substrate_geo] = ComplexPolySlab.from_gds(
         coup_cell_loaded,
         gds_layer=0,
         gds_dtype=0,

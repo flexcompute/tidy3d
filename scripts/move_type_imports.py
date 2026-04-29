@@ -446,7 +446,7 @@ def ensure_type_checking_import(body: list[cst.CSTNode], module: cst.Module) -> 
         ]
     )
     insert_at = find_insert_index(body, module)
-    return body[:insert_at] + [stmt] + body[insert_at:]
+    return [*body[:insert_at], stmt, *body[insert_at:]]
 
 
 def rewrite_code(source: str, type_only: set[str], has_type_checking_import: bool) -> str | None:

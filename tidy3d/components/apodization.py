@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
@@ -32,21 +32,21 @@ class ApodizationSpec(Tidy3dBaseModel):
 
     """
 
-    start: Optional[NonNegativeFloat] = Field(
+    start: NonNegativeFloat | None = Field(
         None,
         title="Start Interval",
         description="Defines the time at which the start apodization ends.",
         json_schema_extra={"units": SECOND},
     )
 
-    end: Optional[NonNegativeFloat] = Field(
+    end: NonNegativeFloat | None = Field(
         None,
         title="End Interval",
         description="Defines the time at which the end apodization begins.",
         json_schema_extra={"units": SECOND},
     )
 
-    width: Optional[PositiveFloat] = Field(
+    width: PositiveFloat | None = Field(
         None,
         title="Apodization Width",
         description="Characteristic decay length of the apodization function, i.e., the width of the ramping up of the scaling function from 0 to 1.",

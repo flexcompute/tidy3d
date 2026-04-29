@@ -28,7 +28,7 @@ from tidy3d.packaging import requires_vtk, vtk
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Literal, Optional, Union
+    from typing import Literal
 
     from numpy.typing import DTypeLike, NDArray
     from pydantic import PositiveInt
@@ -420,8 +420,8 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     """ Arithmetic operations """
 
     def __array_ufunc__(
-        self, ufunc: np.ufunc, method: str, *inputs: Union[Self, numbers.Number], **kwargs: Any
-    ) -> Optional[Union[Self, tuple[Self, ...]]]:
+        self, ufunc: np.ufunc, method: str, *inputs: Self | numbers.Number, **kwargs: Any
+    ) -> Self | tuple[Self, ...] | None:
         """Override of numpy functions."""
 
         out = kwargs.get("out", ())
@@ -576,11 +576,11 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     def _from_vtk_obj(
         cls,
         vtk_obj: vtkUnstructuredGrid,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         values_type: type = IndexedDataArray,
-        expect_complex: Optional[bool] = None,
+        expect_complex: bool | None = None,
         ignore_invalid_cells: bool = False,
     ) -> UnstructuredDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
@@ -661,7 +661,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     def from_vtu(
         cls,
         file: PathLike,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         ignore_invalid_cells: bool = False,
@@ -700,7 +700,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     def from_vtk(
         cls,
         file: PathLike,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         ignore_invalid_cells: bool = False,
@@ -769,9 +769,9 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         cls,
         vtk_obj: vtkDataSet,
         num_points: PositiveInt,
-        field: Optional[str] = None,
+        field: str | None = None,
         values_type: type = IndexedDataArray,
-        expect_complex: Optional[bool] = None,
+        expect_complex: bool | None = None,
     ) -> IndexedDataArray:
         """Get point data values from a VTK object."""
 
@@ -905,7 +905,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     @abstractmethod
     @requires_vtk
-    def plane_slice(self, axis: Axis, pos: float) -> Union[XrDataArray, UnstructuredDataset]:
+    def plane_slice(self, axis: Axis, pos: float) -> XrDataArray | UnstructuredDataset:
         """Slice dataset with a plane and return the Tidy3D representation of the result
         (``UnstructuredDataset``).
 
@@ -1006,7 +1006,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         axis: Axis,
         center: float,
         reflection_only: bool = False,
-        symmetry: Union[Literal[-1, 1], XrDataArray] = 1,
+        symmetry: Literal[-1, 1] | XrDataArray = 1,
     ) -> UnstructuredDataset:
         """Reflect unstructured dataset across the plane define by parameters ``axis`` and ``center``.
         By default the original dataset is preserved, setting ``reflection_only`` to ``True`` will
@@ -1107,12 +1107,12 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     @abstractmethod
     def sel(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] | None = None,
         **sel_kwargs: Any,
-    ) -> Union[UnstructuredDataset, XrDataArray]:
+    ) -> UnstructuredDataset | XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
         among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
         grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
@@ -1214,12 +1214,12 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     def interp(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        fill_value: Union[
-            float, Literal["extrapolate"], None
-        ] = "extrapolate",  # TODO: an array if multiple fields?
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        fill_value: float
+        | Literal["extrapolate"]
+        | None = "extrapolate",  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -1304,7 +1304,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     def _non_spatial_interp(
         self,
         method: Literal["linear", "nearest"] = "linear",
-        fill_value: Union[float, Literal["extrapolate"]] = np.nan,
+        fill_value: float | Literal["extrapolate"] = np.nan,
         **coords_kwargs: Any,
     ) -> Self:
         """Interpolate data at non-spatial dimensions using xarray's interp() function.
@@ -1343,12 +1343,12 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     @abstractmethod
     def _spatial_interp(
         self,
-        x: Union[float, ArrayLike],
-        y: Union[float, ArrayLike],
-        z: Union[float, ArrayLike],
-        fill_value: Optional[
-            Union[float, Literal["extrapolate"]]
-        ] = None,  # TODO: an array if multiple fields?
+        x: float | ArrayLike,
+        y: float | ArrayLike,
+        z: float | ArrayLike,
+        fill_value: float
+        | Literal["extrapolate"]
+        | None = None,  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -1399,12 +1399,11 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
 
     def _spatial_interp(
         self,
-        x: Union[float, ArrayLike],
-        y: Union[float, ArrayLike],
-        z: Union[float, ArrayLike],
-        fill_value: Union[
-            float, Literal["extrapolate"]
-        ] = "extrapolate",  # TODO: an array if multiple fields?
+        x: float | ArrayLike,
+        y: float | ArrayLike,
+        z: float | ArrayLike,
+        fill_value: float
+        | Literal["extrapolate"] = "extrapolate",  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -1680,7 +1679,7 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
         max_samples_per_step: int,
         max_cells_per_step: int,
         rel_tol: float,
-        axis_ignore: Union[Axis, None],
+        axis_ignore: Axis | None,
     ) -> ArrayLike:
         """A general function (2D and 3D) to interpolate data at provided x, y, and z using
         vectorized python implementation.

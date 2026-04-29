@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, PositiveInt, field_validator
@@ -22,7 +22,7 @@ class Parameter(Tidy3dBaseModel, ABC):
         description="Unique name for the variable. Used as a key into the parameter sweep results.",
     )
 
-    values: Optional[tuple[Any, ...]] = Field(
+    values: tuple[Any, ...] | None = Field(
         None,
         title="Custom Values",
         description="If specified, the parameter scan uses these values for grid search methods.",
@@ -30,7 +30,7 @@ class Parameter(Tidy3dBaseModel, ABC):
 
     @field_validator("values")
     @classmethod
-    def _values_unique(cls, val: Optional[tuple[Any, ...]]) -> Optional[tuple[Any, ...]]:
+    def _values_unique(cls, val: tuple[Any, ...] | None) -> tuple[Any, ...] | None:
         """Supplied unique values."""
         if (val is not None) and (len(set(val)) != len(val)):
             raise ValueError("Supplied 'values' were not unique.")
@@ -62,16 +62,14 @@ class Parameter(Tidy3dBaseModel, ABC):
 class ParameterNumeric(Parameter, ABC):
     """A variable with numeric values."""
 
-    span: tuple[Union[float, int], Union[float, int]] = Field(
+    span: tuple[float | int, float | int] = Field(
         title="Span",
         description="(min, max) range within which are allowed values for the variable. Is inclusive of max value.",
     )
 
     @field_validator("span")
     @classmethod
-    def _span_valid(
-        cls, val: tuple[Union[float, int], Union[float, int]]
-    ) -> tuple[Union[float, int], Union[float, int]]:
+    def _span_valid(cls, val: tuple[float | int, float | int]) -> tuple[float | int, float | int]:
         """Span min <= span max."""
         span_min, span_max = val
         if span_min > span_max:
@@ -87,7 +85,7 @@ class ParameterNumeric(Parameter, ABC):
         span_max = max(self.span)
         return span_max - span_min
 
-    def sample_first(self) -> Union[float, int]:
+    def sample_first(self) -> float | int:
         """Output the first allowed sample."""
         return self.span[0]
 
@@ -101,7 +99,7 @@ class ParameterFloat(ParameterNumeric):
     >>> var = tdd.ParameterFloat(name="x", num_points=10, span=(1, 2.5))
     """
 
-    num_points: Optional[PositiveInt] = Field(
+    num_points: PositiveInt | None = Field(
         None,
         title="Number of Points",
         description="Number of uniform sampling points for this variable. "
@@ -110,9 +108,7 @@ class ParameterFloat(ParameterNumeric):
 
     @field_validator("span")
     @classmethod
-    def _span_is_float(
-        cls, val: tuple[Union[float, int], Union[float, int]]
-    ) -> tuple[float, float]:
+    def _span_is_float(cls, val: tuple[float | int, float | int]) -> tuple[float, float]:
         """Make sure the span contains floats."""
         low, high = val
         return float(low), float(high)
@@ -153,7 +149,7 @@ class ParameterInt(ParameterNumeric):
 
     @field_validator("span")
     @classmethod
-    def _span_is_int(cls, val: tuple[Union[float, int], Union[float, int]]) -> tuple[int, int]:
+    def _span_is_int(cls, val: tuple[float | int, float | int]) -> tuple[int, int]:
         """Make sure the span contains ints."""
         low, high = val
         return int(low), int(high)
@@ -223,4 +219,4 @@ class ParameterAny(Parameter):
         return self.allowed_values[0]
 
 
-ParameterType = Union[ParameterInt, ParameterFloat, ParameterAny]
+ParameterType = ParameterInt | ParameterFloat | ParameterAny

@@ -55,6 +55,6 @@ def test_plot():
     a.plot(times)
     plt.close()
 
-    fig, ax = plt.subplots(1, 1)
+    _fig, ax = plt.subplots(1, 1)
     a.plot(times, ax=ax)
     plt.close()

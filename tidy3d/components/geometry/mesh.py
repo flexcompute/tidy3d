@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from autograd import numpy as anp
@@ -24,8 +24,9 @@ from tidy3d.packaging import verify_packages_import
 from . import base
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from os import PathLike
-    from typing import Callable, Literal, Union
+    from typing import Literal
 
     from numpy.typing import NDArray
     from trimesh import Trimesh
@@ -47,7 +48,7 @@ class TriangleMesh(base.Geometry, ABC):
     >>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)
     """
 
-    mesh_dataset: Optional[TriangleMeshDataset] = Field(
+    mesh_dataset: TriangleMeshDataset | None = Field(
         None,
         title="Surface mesh data",
         description="Surface mesh data.",
@@ -169,9 +170,9 @@ class TriangleMesh(base.Geometry, ABC):
         filename: str,
         scale: float = 1.0,
         origin: tuple[float, float, float] = (0, 0, 0),
-        solid_index: Optional[int] = None,
+        solid_index: int | None = None,
         **kwargs: Any,
-    ) -> Union[TriangleMesh, base.GeometryGroup]:
+    ) -> TriangleMesh | base.GeometryGroup:
         """Load a :class:`.TriangleMesh` directly from an STL file.
         The ``solid_index`` parameter can be used to select a single solid from the file.
         Otherwise, if the file contains a single solid, it will be loaded as a
@@ -575,7 +576,7 @@ class TriangleMesh(base.Geometry, ABC):
         origin: Coordinate,
         to_2D: MatrixReal4x4,
         cleanup: bool = True,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
         section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
@@ -610,11 +611,11 @@ class TriangleMesh(base.Geometry, ABC):
 
     def intersections_plane(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         cleanup: bool = True,
-        quad_segs: Optional[int] = None,
+        quad_segs: int | None = None,
         section_tolerance_2d: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
@@ -726,9 +727,9 @@ class TriangleMesh(base.Geometry, ABC):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs: Any,
     ) -> Ax:
@@ -865,8 +866,8 @@ class TriangleMesh(base.Geometry, ABC):
         sim_extents = sim_max - sim_min
         valid_axes = np.abs(sim_extents) > tol
         collapsed_indices = np.flatnonzero(np.isclose(sim_extents, 0.0, atol=tol))
-        collapsed_axis: Optional[int] = None
-        plane_value: Optional[float] = None
+        collapsed_axis: int | None = None
+        plane_value: float | None = None
         if collapsed_indices.size == 1:
             collapsed_axis = int(collapsed_indices[0])
             plane_value = float(sim_min[collapsed_axis])
@@ -966,7 +967,7 @@ class TriangleMesh(base.Geometry, ABC):
         valid_axes: np.ndarray,
         tol: float,
         dtype: np.dtype,
-    ) -> tuple[Optional[dict[str, np.ndarray]], bool]:
+    ) -> tuple[dict[str, np.ndarray] | None, bool]:
         """Collect samples when the simulation bounds collapse onto a 2D plane."""
 
         segments = self._triangle_plane_segments(
@@ -1052,7 +1053,7 @@ class TriangleMesh(base.Geometry, ABC):
         valid_axes: np.ndarray,
         tol: float,
         dtype: np.dtype,
-    ) -> tuple[Optional[dict[str, np.ndarray]], bool]:
+    ) -> tuple[dict[str, np.ndarray] | None, bool]:
         """Collect samples when the simulation bounds represent a full 3D region."""
 
         edge_lengths = (
@@ -1200,7 +1201,7 @@ class TriangleMesh(base.Geometry, ABC):
         cls,
         area: float,
         spacing: float,
-        edge_lengths: Optional[tuple[float, float, float]] = None,
+        edge_lengths: tuple[float, float, float] | None = None,
     ) -> int:
         """Determine the number of subdivisions needed for the given area and spacing."""
 
@@ -1274,7 +1275,7 @@ class TriangleMesh(base.Geometry, ABC):
     @staticmethod
     def _triangle_tangent_basis(
         triangle: NDArray, normal: NDArray
-    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         """Compute orthonormal tangential vectors for a triangle."""
 
         tol = np.finfo(triangle.dtype).eps

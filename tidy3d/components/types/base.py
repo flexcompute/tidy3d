@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numbers
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
 from pydantic import (
@@ -89,9 +89,9 @@ class ArrayConstraints(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    dtype: Optional[DTypeLike] = None
-    ndim: Optional[int] = None
-    shape: Optional[tuple[int, ...]] = None
+    dtype: DTypeLike | None = None
+    ndim: int | None = None
+    shape: tuple[int, ...] | None = None
     forbid_nan: bool = True
     scalar_to_1d: bool = False
     strict: bool = False
@@ -147,9 +147,9 @@ def _coerce(v: Any, *, constraints: ArrayConstraints) -> NDArray:
 
 def array_alias(
     *,
-    dtype: Optional[Any] = None,
-    ndim: Optional[int] = None,
-    shape: Optional[tuple[int, ...]] = None,
+    dtype: Any | None = None,
+    ndim: int | None = None,
+    shape: tuple[int, ...] | None = None,
     forbid_nan: bool = True,
     scalar_to_1d: bool = False,
     strict: bool = False,
@@ -271,12 +271,12 @@ ScalarSymmetry = Annotated[Literal[0, 1], BeforeValidator(_dtype2python)]
 Size1D = NonNegativeFloat
 Size = tuple[Size1D, Size1D, Size1D]
 Coordinate = tuple[float, float, float]
-CoordinateOptional = tuple[Optional[float], Optional[float], Optional[float]]
+CoordinateOptional = tuple[float | None, float | None, float | None]
 Coordinate2D = tuple[float, float]
 Bound2D = tuple[Coordinate2D, Coordinate2D]
 Bound = tuple[Coordinate, Coordinate]
 BoundOptional = tuple[CoordinateOptional, CoordinateOptional]
-GridSize = Union[PositiveFloat, tuple[PositiveFloat, ...]]
+GridSize = PositiveFloat | tuple[PositiveFloat, ...]
 Axis = Annotated[Literal[0, 1, 2], BeforeValidator(_dtype2python)]
 Axis2D = Annotated[Literal[0, 1], BeforeValidator(_dtype2python)]
 Shapely = BaseGeometry

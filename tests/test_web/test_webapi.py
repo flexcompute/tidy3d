@@ -466,7 +466,7 @@ def test_upload_logs_deprecated_run_args(monkeypatch):
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
     )
 
-    with pytest.raises(RuntimeError, match="stop_after_warning"):
+    with pytest.raises(RuntimeError, match=r"stop_after_warning"):
         upload(
             make_sim(),
             TASK_NAME,
@@ -508,7 +508,7 @@ def test_start_logs_deprecated_run_args(monkeypatch):
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
     )
 
-    with pytest.raises(RuntimeError, match="stop_after_warning"):
+    with pytest.raises(RuntimeError, match=r"stop_after_warning"):
         start(
             TASK_ID,
             solver_version="solver_x",
@@ -542,7 +542,7 @@ def test_start_with_valid_priority(mock_start, priority):
 @pytest.mark.parametrize("priority", [0, -1, 11, 15])
 def test_start_with_invalid_priority(mock_start, priority):
     """Test start with invalid priority values."""
-    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+    with pytest.raises(ValueError, match=r"Priority must be between '1' and '10' if specified."):
         start(TASK_ID, priority=priority)
 
 
@@ -566,7 +566,7 @@ def test_start_with_valid_vgpu_allocation(mock_start, vgpu_allocation):
 @pytest.mark.parametrize("vgpu_allocation", [0, -1, 3, 5, 9])
 def test_start_with_invalid_vgpu_allocation(mock_start, vgpu_allocation):
     """Test start with invalid vgpu_allocation values."""
-    with pytest.raises(ValueError, match="vgpu_allocation must be one of"):
+    with pytest.raises(ValueError, match=r"vgpu_allocation must be one of"):
         start(TASK_ID, vgpu_allocation=vgpu_allocation)
 
 
@@ -584,7 +584,7 @@ def test_run_with_valid_vgpu_allocation(mock_webapi, monkeypatch, vgpu_allocatio
 def test_run_with_invalid_vgpu_allocation(mock_webapi, vgpu_allocation):
     """Test run with invalid vgpu_allocation values."""
     sim = make_sim()
-    with pytest.raises(ValueError, match="vgpu_allocation must be one of"):
+    with pytest.raises(ValueError, match=r"vgpu_allocation must be one of"):
         run(sim, TASK_NAME, folder_name=PROJECT_NAME, vgpu_allocation=vgpu_allocation)
 
 
@@ -855,7 +855,7 @@ def test_start_batch_explicit_priority_preserves_legacy_error(
 
     with pytest.raises(
         NotImplementedError,
-        match="The 'priority' argument is not yet supported and will be ignored.",
+        match=r"The 'priority' argument is not yet supported and will be ignored.",
     ):
         start(batch_task_id, priority=5)
 
@@ -873,7 +873,7 @@ def test_start_batch_invalid_priority_preserves_legacy_error(
 
     with pytest.raises(
         NotImplementedError,
-        match="The 'priority' argument is not yet supported and will be ignored.",
+        match=r"The 'priority' argument is not yet supported and will be ignored.",
     ):
         start(batch_task_id, priority=0)
 
@@ -891,7 +891,7 @@ def test_start_batch_invalid_vgpu_allocation_preserves_legacy_error(
 
     with pytest.raises(
         NotImplementedError,
-        match="The 'vgpu_allocation' argument is not yet supported and will be ignored.",
+        match=r"The 'vgpu_allocation' argument is not yet supported and will be ignored.",
     ):
         start(batch_task_id, vgpu_allocation=3)
 
@@ -965,7 +965,7 @@ def test_public_run_interfaces_log_deprecated_simulation_type(
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stop_after_warning")),
     )
 
-    with pytest.raises(RuntimeError, match="stop_after_warning"):
+    with pytest.raises(RuntimeError, match=r"stop_after_warning"):
         if call_kind == "run":
             td.web.run(make_sim(), simulation_type="special_type")
         else:
@@ -1013,7 +1013,7 @@ def test_regular_autograd_internal_simulation_type_does_not_warn(monkeypatch, ca
         )[1],
     )
 
-    with pytest.raises(RuntimeError, match="stop_after_warning_check"):
+    with pytest.raises(RuntimeError, match=r"stop_after_warning_check"):
         if call_kind == "run":
             td.web.run(make_sim(), verbose=False)
         else:
@@ -1050,7 +1050,7 @@ def test_log_deprecated_run_args_uses_stable_message(monkeypatch):
 def test_run_with_invalid_priority(mock_webapi, priority):
     """Test run with invalid priority values."""
     sim = make_sim()
-    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+    with pytest.raises(ValueError, match=r"Priority must be between '1' and '10' if specified."):
         run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
 
 
@@ -1579,7 +1579,7 @@ def test_batch_rejects_numeric_simulation_keys_with_clear_message():
 
     with pytest.raises(
         ValidationError,
-        match="Batch simulations keys must be strings \\(task names\\)",
+        match=r"Batch simulations keys must be strings \(task names\)",
     ):
         Batch(simulations=sims, folder_name=PROJECT_NAME)
 
@@ -1587,7 +1587,7 @@ def test_batch_rejects_numeric_simulation_keys_with_clear_message():
 def test_batch_rejects_non_string_non_numeric_simulation_keys():
     sims = {("task",): make_sim()}
 
-    with pytest.raises(ValidationError, match="Use explicit string keys"):
+    with pytest.raises(ValidationError, match=r"Use explicit string keys"):
         Batch(simulations=sims, folder_name=PROJECT_NAME)
 
 
@@ -1649,7 +1649,7 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
     monkeypatch.setattr(Batch, "monitor", mock_monitor_interrupt)
 
     # run should save the batch file after upload, even if interrupted
-    with pytest.raises(RuntimeError, match="Simulated interruption"):
+    with pytest.raises(RuntimeError, match=r"Simulated interruption"):
         batch.run(path_dir=str(tmp_path))
 
 
@@ -1665,7 +1665,7 @@ def test_batch_run_does_not_save_file_when_upload_fails_early(tmp_path, monkeypa
     monkeypatch.setattr(Batch, "upload", mock_upload_fail)
     monkeypatch.setattr(Batch, "monitor", lambda *args, **kwargs: monitor_called.update(value=True))
 
-    with pytest.raises(RuntimeError, match="Simulated failure during upload"):
+    with pytest.raises(RuntimeError, match=r"Simulated failure during upload"):
         batch.run(path_dir=str(tmp_path))
 
     assert not os.path.exists(batch._batch_path(path_dir=str(tmp_path)))
@@ -1692,7 +1692,7 @@ def test_batch_run_surfaces_to_file_error_when_upload_succeeds(tmp_path, monkeyp
 
     monkeypatch.setattr(Batch, "monitor", _track_monitor)
 
-    with pytest.raises(RuntimeError, match="to_file failed"):
+    with pytest.raises(RuntimeError, match=r"to_file failed"):
         batch.run(path_dir=str(tmp_path))
 
     assert not monitor_called["value"]
@@ -1997,7 +1997,7 @@ def test_batch_download_surfaces_download_errors(monkeypatch, tmp_path):
     sims = {"task_a": make_sim()}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
 
-    with pytest.raises(RuntimeError, match="gzip extraction failed"):
+    with pytest.raises(RuntimeError, match=r"gzip extraction failed"):
         batch.download(path_dir=str(tmp_path))
 
 
@@ -2099,7 +2099,7 @@ def test_batch_upload_surfaces_upload_errors(monkeypatch):
     sims = {"task_a": make_sim()}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
 
-    with pytest.raises(RuntimeError, match="upload failed"):
+    with pytest.raises(RuntimeError, match=r"upload failed"):
         batch.upload()
     assert any("task_a" in msg for msg in error_messages)
 
@@ -2128,7 +2128,7 @@ def test_batch_start_surfaces_start_errors(monkeypatch):
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
     monkeypatch.setattr(Batch, "_prepare_uncached_jobs", lambda self: jobs_to_start)
 
-    with pytest.raises(RuntimeError, match="start failed"):
+    with pytest.raises(RuntimeError, match=r"start failed"):
         batch.start(priority=6)
 
     assert started == [("ok_task", 6), ("bad_task", 6)]
@@ -2453,7 +2453,7 @@ def test_load_invalid_task_raises(mock_webapi):
         f"{Env.current.web_api_endpoint}/health",
         status=200,
     )
-    with pytest.raises(WebNotFoundError, match="Resource not found \\(HTTP 404\\)") as exc_info:
+    with pytest.raises(WebNotFoundError, match=r"Resource not found \(HTTP 404\)") as exc_info:
         load(INVALID_TASK_ID, replace_existing=True)
     assert str(exc_info.value) == "Resource not found (HTTP 404)."
 
@@ -2763,7 +2763,7 @@ def test_job_upload_checks_folder_once(monkeypatch):
 
 def test_job_estimate_cost_logging(monkeypatch, tmp_path, capsys):
     def assert_estimate_cost_prints(count: int) -> None:
-        out, err = capsys.readouterr()
+        out, _err = capsys.readouterr()
         assert out.count("estimate cost") == count, (
             f"expected {count}, got {out.count('estimate cost')}\nout: {out}"
         )

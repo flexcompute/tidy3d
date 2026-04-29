@@ -20,7 +20,9 @@ except ImportError:  # NumPy < 2.0
 try:
     from typing import Self, TypeAlias  # Python >= 3.11
 except ImportError:  # Python <3.11
-    from typing_extensions import Self, TypeAlias
+    from typing import TypeAlias
+
+    from typing_extensions import Self
 
 
 @cache

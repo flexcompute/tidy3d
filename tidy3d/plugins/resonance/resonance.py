@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
@@ -18,7 +18,7 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from typing import Literal, Union
+    from typing import Literal
 
     from tidy3d.components.types import ArrayComplex2D, ArrayComplex3D
 
@@ -37,12 +37,12 @@ class ResonanceData(Tidy3dBaseModel):
         title="Eigenvalues",
         description="Resonance eigenvalues.",
     )
-    complex_amplitudes: Optional[ArrayComplex1D] = Field(
+    complex_amplitudes: ArrayComplex1D | None = Field(
         None,
         title="Complex amplitudes",
         description="Complex resonance amplitudes",
     )
-    errors: Optional[ArrayFloat1D] = Field(
+    errors: ArrayFloat1D | None = Field(
         None,
         title="Errors",
         description="Rough eigenvalue error estimate.",
@@ -123,7 +123,7 @@ class ResonanceFinder(Tidy3dBaseModel):
             )
         return val
 
-    def run(self, signals: Union[FieldTimeData, tuple[FieldTimeData, ...]]) -> xr.Dataset:
+    def run(self, signals: FieldTimeData | tuple[FieldTimeData, ...]) -> xr.Dataset:
         """Finds resonances in a :class:`.FieldTimeData` or a Tuple of such.
         The time coordinates must be uniformly spaced, and the spacing must be the same
         across all supplied data. The resonance finder runs on the sum of the
@@ -276,7 +276,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         )
 
     def _aggregate_field_time(
-        self, signals: Union[FieldTimeData, tuple[FieldTimeData, ...]]
+        self, signals: FieldTimeData | tuple[FieldTimeData, ...]
     ) -> ScalarFieldTimeDataArray:
         """Aggregates several :class:`.FieldTimeData` into a single
         :class:`.ScalarFieldTimeDataArray`."""

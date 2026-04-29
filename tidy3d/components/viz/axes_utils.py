@@ -10,14 +10,14 @@ from tidy3d.exceptions import Tidy3dKeyError
 from tidy3d.packaging import pyvista
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, ParamSpec, TypeVar
+    from collections.abc import Callable
+    from typing import Any, ParamSpec, TypeVar
 
     import matplotlib.ticker as ticker
     from matplotlib.axes import Axes
 
     P = ParamSpec("P")
     T = TypeVar("T", bound=Callable[..., Axes])
-    from typing import Optional
 
     from tidy3d.components.types import Ax, Axis
 
@@ -299,7 +299,7 @@ def set_default_labels_and_title(
     axis: Axis,
     position: float,
     ax: Ax,
-    plot_length_units: Optional[LengthUnit] = None,
+    plot_length_units: LengthUnit | None = None,
 ) -> Ax:
     """Adds axis labels and title to plots involving spatial dimensions.
     When the ``plot_length_units`` are specified, the plot axes are scaled, and

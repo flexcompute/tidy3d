@@ -17,9 +17,9 @@ from tidy3d.components.autograd.functions import add_at, interpn, trapz
 from tidy3d.exceptions import format_chained_exception_message
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from types import ModuleType
-    from typing import Callable, Literal, Optional, SupportsInt, Union
+    from typing import Literal, SupportsInt
 
     from numpy.typing import NDArray
 
@@ -50,7 +50,7 @@ __all__ = [
 def _normalize_axes(
     ndim_array: int,
     ndim_kernel: int,
-    axes: Union[tuple[Iterable[SupportsInt], Iterable[SupportsInt]], None],
+    axes: tuple[Iterable[SupportsInt], Iterable[SupportsInt]] | None,
 ) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """Normalize the axes specification for convolution."""
 
@@ -229,10 +229,10 @@ def _get_pad_indices(
 
 def pad(
     array: NDArray,
-    pad_width: Union[int, tuple[int, int]],
+    pad_width: int | tuple[int, int],
     *,
     mode: PaddingType = "constant",
-    axis: Union[int, Iterable[int], None] = None,
+    axis: int | Iterable[int] | None = None,
     constant_value: float = 0.0,
 ) -> NDArray:
     """Pad an array along specified axes with a given mode and padding width.
@@ -298,7 +298,7 @@ def convolve(
     kernel: NDArray,
     *,
     padding: PaddingType = "constant",
-    axes: Union[tuple[list[SupportsInt], list[SupportsInt]], None] = None,
+    axes: tuple[list[SupportsInt], list[SupportsInt]] | None = None,
     mode: Literal["full", "valid", "same"] = "same",
 ) -> NDArray:
     """Convolve an array with a given kernel.
@@ -350,8 +350,8 @@ def convolve(
 
 
 def _get_footprint(
-    size: Union[int, tuple[int, int], None],
-    structure: Optional[NDArray],
+    size: int | tuple[int, int] | None,
+    structure: NDArray | None,
     maxval: float,
 ) -> NDArray:
     """Helper to generate the morphological footprint from size or structure."""
@@ -375,8 +375,8 @@ def _get_footprint(
 @primitive
 def grey_dilation(
     array: NDArray,
-    size: Union[int, tuple[int, int], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -425,8 +425,8 @@ def grey_dilation(
 def _vjp_maker_dilation(
     ans: NDArray,
     array: NDArray,
-    size: Union[int, tuple[int, int], None] = None,
-    structure: Optional[NDArray] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -498,8 +498,8 @@ defvjp(grey_dilation, _vjp_maker_dilation, argnums=[0])
 
 def grey_erosion(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -540,8 +540,8 @@ def grey_erosion(
 
 def grey_opening(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -573,8 +573,8 @@ def grey_opening(
 
 def grey_closing(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -606,8 +606,8 @@ def grey_closing(
 
 def morphological_gradient(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -639,8 +639,8 @@ def morphological_gradient(
 
 def morphological_gradient_internal(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -670,8 +670,8 @@ def morphological_gradient_internal(
 
 def morphological_gradient_external(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
-    structure: Union[NDArray, None] = None,
+    size: int | tuple[int, int] | None = None,
+    structure: NDArray | None = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
@@ -741,7 +741,7 @@ def rescale(
 
 
 def threshold(
-    array: NDArray, vmin: float = 0.0, vmax: float = 1.0, level: Union[float, None] = None
+    array: NDArray, vmin: float = 0.0, vmax: float = 1.0, level: float | None = None
 ) -> NDArray:
     """Apply a threshold to an array, setting values below the threshold to `vmin` and values above to `vmax`.
 
@@ -777,9 +777,7 @@ def threshold(
     return np.where(array < level, vmin, vmax)
 
 
-def smooth_max(
-    x: NDArray, tau: float = 1.0, axis: Union[int, tuple[int, ...], None] = None
-) -> float:
+def smooth_max(x: NDArray, tau: float = 1.0, axis: int | tuple[int, ...] | None = None) -> float:
     """Compute the smooth maximum of an array using temperature parameter tau.
 
     Parameters
@@ -799,9 +797,7 @@ def smooth_max(
     return tau * logsumexp(x / tau, axis=axis)
 
 
-def smooth_min(
-    x: NDArray, tau: float = 1.0, axis: Union[int, tuple[int, ...], None] = None
-) -> float:
+def smooth_min(x: NDArray, tau: float = 1.0, axis: int | tuple[int, ...] | None = None) -> float:
     """Compute the smooth minimum of an array using temperature parameter tau.
 
     Parameters

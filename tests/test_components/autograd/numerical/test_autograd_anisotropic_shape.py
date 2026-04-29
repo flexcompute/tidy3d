@@ -304,10 +304,10 @@ def test_finite_difference_anisotropic_shape(
         mesh_wvl_um,
         adj_wvl_um,
         monitor_bg_index,
-        pw_angle_deg,
+        _pw_angle_deg,
         order_x,
         order_y,
-        grating_mode,
+        _grating_mode,
         polyslab_medium_kind,
         polyslab_eps_vals,
         encasing_medium_kind,
@@ -396,7 +396,7 @@ def test_finite_difference_anisotropic_shape(
     height0 = 0.35 * 0.75 * mesh_wvl_um
     params0 = [width0, height0]
 
-    obj, adj_grad = obj_val_and_grad([params0])
+    _obj, adj_grad = obj_val_and_grad([params0])
 
     all_params = [
         [width0 + fd_step, height0],

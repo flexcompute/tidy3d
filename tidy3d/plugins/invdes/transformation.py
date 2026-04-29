@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, PositiveFloat
 
@@ -13,8 +13,6 @@ from tidy3d.plugins.autograd.invdes import make_filter_and_project
 from .base import InvdesBaseModel
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     import autograd.numpy as anp
 
     from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
@@ -82,7 +80,7 @@ class FilterProject(InvdesBaseModel):
         self,
         spatial_data: anp.ndarray,
         design_region_dl: float,
-        symmetry: Optional[MirrorSymmetry] = None,
+        symmetry: MirrorSymmetry | None = None,
     ) -> anp.ndarray:
         """Evaluate this transformation on spatial data, given the region grid size."""
         filt_proj = make_filter_and_project(
@@ -96,4 +94,4 @@ class FilterProject(InvdesBaseModel):
         return data_projected
 
 
-TransformationType = Union[FilterProject]
+TransformationType = FilterProject

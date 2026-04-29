@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import autograd.numpy as np
 from pydantic import Field, NonNegativeFloat
@@ -12,7 +12,7 @@ from .parametrizations import FilterAndProject
 from .symmetries import MirrorSymmetry, expand_mirror_symmetry
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from numpy.typing import NDArray
 
@@ -22,15 +22,15 @@ if TYPE_CHECKING:
 class ErosionDilationPenalty(Tidy3dBaseModel):
     """A class that computes a penalty for erosion/dilation of a parameter map not being unity."""
 
-    radius: Union[float, tuple[float, ...]] = Field(
+    radius: float | tuple[float, ...] = Field(
         title="Radius",
         description="The radius of the kernel.",
     )
-    dl: Union[float, tuple[float, ...]] = Field(
+    dl: float | tuple[float, ...] = Field(
         title="Grid Spacing",
         description="The grid spacing.",
     )
-    size_px: Optional[Union[int, tuple[int, ...]]] = Field(
+    size_px: int | tuple[int, ...] | None = Field(
         None,
         title="Size in Pixels",
         description="The size of the kernel in pixels.",
@@ -55,7 +55,7 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         title="Padding",
         description="The padding mode to use.",
     )
-    symmetry: Optional[MirrorSymmetry] = Field(
+    symmetry: MirrorSymmetry | None = Field(
         None,
         title="Mirror Symmetry",
         description="Optional per-axis mirror symmetry applied by expanding the array across "
@@ -118,15 +118,15 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
 
 
 def make_erosion_dilation_penalty(
-    radius: Union[float, tuple[float, ...]],
-    dl: Union[float, tuple[float, ...]],
+    radius: float | tuple[float, ...],
+    dl: float | tuple[float, ...],
     *,
-    size_px: Optional[Union[int, tuple[int, ...]]] = None,
+    size_px: int | tuple[int, ...] | None = None,
     beta: float = 20.0,
     eta: float = 0.5,
     delta_eta: float = 0.01,
     padding: PaddingType = "reflect",
-    symmetry: Optional[MirrorSymmetry] = None,
+    symmetry: MirrorSymmetry | None = None,
 ) -> Callable:
     """Computes a penalty for erosion/dilation of a parameter map not being unity.
 
@@ -199,7 +199,7 @@ def bezier_with_grads(
     return b, dbdt, dbd2t
 
 
-def bezier_curvature(x: NDArray, y: NDArray, t: Union[NDArray, float] = 0.5) -> NDArray:
+def bezier_curvature(x: NDArray, y: NDArray, t: NDArray | float = 0.5) -> NDArray:
     """
     Calculate the curvature of a Bezier curve at a given parameter t.
 

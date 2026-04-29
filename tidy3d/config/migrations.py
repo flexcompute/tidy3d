@@ -14,8 +14,6 @@ from .registry import get_sections
 from .schema_utils import TOP_LEVEL_METADATA_KEYS, _resolve_model_type
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from pydantic import BaseModel
 
 CONFIG_VERSION_KEY = "config_version"
@@ -178,7 +176,7 @@ def best_effort_filter(data: dict[str, Any]) -> dict[str, Any]:
     return filtered
 
 
-def _filter_plugins(value: Any, sections: dict[str, type[BaseModel]]) -> Optional[dict[str, Any]]:
+def _filter_plugins(value: Any, sections: dict[str, type[BaseModel]]) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         log.warning(
             "Configuration section 'plugins' should be a table; "

@@ -342,7 +342,7 @@ def test_finite_difference_numerical_structures(
 
     test_results = np.zeros((2, len(geom_init)))
 
-    obj, adj_grad = obj_val_and_grad([geom_init])
+    _obj, adj_grad = obj_val_and_grad([geom_init])
     adj_grad = np.squeeze(np.array(adj_grad))
 
     # empirical step size for finite difference calculation

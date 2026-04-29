@@ -40,7 +40,7 @@ from .test_autograd import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Any
 
 
 @pytest.mark.parametrize("monitor_key", ("mode", "diff", "field_point"))
@@ -838,7 +838,7 @@ def test_populate_parallel_adjoint_bases_passes_custom_vjp(use_emulated_run, mon
 
     custom_marker = (object(),)
     numerical_map_marker = {0: object()}
-    captured: list[tuple[Optional[dict[int, Any]], Optional[tuple[Any, ...]]]] = []
+    captured: list[tuple[dict[int, Any] | None, tuple[Any, ...] | None]] = []
 
     def _postprocess_capture(
         *,

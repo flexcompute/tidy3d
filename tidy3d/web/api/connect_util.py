@@ -17,18 +17,18 @@ from tidy3d.web import common
 from tidy3d.web.common import REFRESH_TIME
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional
+    from collections.abc import Callable
 
 
 def wait_for_connection(
-    decorated_fn: Optional[Callable[..., Any]] = None,
-    wait_time_sec: Optional[float] = None,
+    decorated_fn: Callable[..., Any] | None = None,
+    wait_time_sec: float | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]] | Callable[..., Any]:
     """Causes function to ignore connection errors and retry for ``wait_time_sec`` secs."""
 
     def decorator(
         web_fn: Callable[..., Any],
-        wait_time_sec: Optional[float] = wait_time_sec,
+        wait_time_sec: float | None = wait_time_sec,
     ) -> Callable[..., Any]:
         """Decorator returned by @wait_for_connection()"""
 

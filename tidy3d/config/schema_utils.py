@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    from typing import Optional
 
 TOP_LEVEL_METADATA_KEYS = frozenset({"default_profile"})
 
 
-def _resolve_model_type(annotation: Any) -> Optional[type[BaseModel]]:
+def _resolve_model_type(annotation: Any) -> type[BaseModel] | None:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return annotation
 

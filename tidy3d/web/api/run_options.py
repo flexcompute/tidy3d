@@ -3,22 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any
 
 from tidy3d.config import config
 from tidy3d.config.sections import VALID_VGPU_ALLOCATIONS
 from tidy3d.log import log
 from tidy3d.web.core.types import PayType
 
-if TYPE_CHECKING:
-    from typing import Union
-
 
 @dataclass(frozen=True)
 class ResolvedUploadOptions:
     """Resolved upload options after applying config defaults."""
 
-    solver_version: Optional[str]
+    solver_version: str | None
     simulation_type: str
 
 
@@ -26,29 +23,29 @@ class ResolvedUploadOptions:
 class ResolvedRunStartOptions:
     """Resolved config-backed run options for task start."""
 
-    solver_version: Optional[str]
-    worker_group: Optional[str]
-    additional_payload: Optional[dict[str, Any]]
+    solver_version: str | None
+    worker_group: str | None
+    additional_payload: dict[str, Any] | None
 
 
 @dataclass(frozen=True)
 class ResolvedVgpuStartOptions:
     """Resolved config-backed vGPU options for task start."""
 
-    priority: Optional[int]
-    vgpu_allocation: Optional[int]
-    ignore_memory_limit: Optional[bool]
+    priority: int | None
+    vgpu_allocation: int | None
+    ignore_memory_limit: bool | None
 
 
 def log_deprecated_run_args(
     *,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
-    simulation_type: Optional[str] = None,
-    pay_type: Optional[Union[PayType, str]] = None,
-    priority: Optional[int] = None,
-    vgpu_allocation: Optional[int] = None,
-    ignore_memory_limit: Optional[bool] = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
+    simulation_type: str | None = None,
+    pay_type: PayType | str | None = None,
+    priority: int | None = None,
+    vgpu_allocation: int | None = None,
+    ignore_memory_limit: bool | None = None,
 ) -> None:
     """Log a single deprecation hint for legacy run arguments."""
 
@@ -75,8 +72,8 @@ def log_deprecated_run_args(
 
 def resolve_upload_options(
     *,
-    solver_version: Optional[str],
-    simulation_type: Optional[str],
+    solver_version: str | None,
+    simulation_type: str | None,
 ) -> ResolvedUploadOptions:
     """Resolve upload options by applying config defaults."""
 
@@ -88,7 +85,7 @@ def resolve_upload_options(
     )
 
 
-def _resolve_additional_payload() -> Optional[dict[str, Any]]:
+def _resolve_additional_payload() -> dict[str, Any] | None:
     """Resolve the additional submit payload from config."""
 
     additional_payload = config.run.additional_payload
@@ -99,8 +96,8 @@ def _resolve_additional_payload() -> Optional[dict[str, Any]]:
 
 def resolve_run_start_options(
     *,
-    solver_version: Optional[str],
-    worker_group: Optional[str],
+    solver_version: str | None,
+    worker_group: str | None,
 ) -> ResolvedRunStartOptions:
     """Resolve config-backed run options for task start."""
 
@@ -112,7 +109,7 @@ def resolve_run_start_options(
 
 
 def resolve_pay_type(
-    pay_type: Optional[Union[PayType, str]], *, apply_config_default: bool = True
+    pay_type: PayType | str | None, *, apply_config_default: bool = True
 ) -> PayType:
     """Resolve a pay type override against config defaults."""
 
@@ -124,9 +121,9 @@ def resolve_pay_type(
 
 def resolve_vgpu_start_options(
     *,
-    priority: Optional[int],
-    vgpu_allocation: Optional[int],
-    ignore_memory_limit: Optional[bool],
+    priority: int | None,
+    vgpu_allocation: int | None,
+    ignore_memory_limit: bool | None,
     apply_config_defaults: bool = True,
 ) -> ResolvedVgpuStartOptions:
     """Resolve config-backed vGPU options for task start."""

@@ -7,7 +7,7 @@ import torch
 from autograd import make_vjp
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from torch.autograd.function import FunctionCtx
 

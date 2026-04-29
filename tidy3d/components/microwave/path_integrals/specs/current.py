@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, field_validator
@@ -25,8 +25,6 @@ from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from tidy3d.components.data.data_array import DataArray
     from tidy3d.components.types import Ax, Bound
     from tidy3d.components.types.base import Axis
@@ -74,8 +72,8 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
 
     def _to_path_integral_specs(
         self,
-        h_horizontal: Optional[DataArray] = None,
-        h_vertical: Optional[DataArray] = None,
+        h_horizontal: DataArray | None = None,
+        h_vertical: DataArray | None = None,
     ) -> tuple[AxisAlignedPathIntegralSpec, ...]:
         """Returns four ``AxisAlignedPathIntegralSpec`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""
@@ -157,9 +155,9 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         plot_arrow: bool = True,
         **path_kwargs: Any,
@@ -265,9 +263,9 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         plot_arrow: bool = True,
         **path_kwargs: Any,
@@ -339,11 +337,9 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     ... )
     """
 
-    path_specs: tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...] = (
-        Field(
-            title="Path Specifications",
-            description="Definition of the disjoint path specifications for each isolated contour integral.",
-        )
+    path_specs: tuple[AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec, ...] = Field(
+        title="Path Specifications",
+        description="Definition of the disjoint path specifications for each isolated contour integral.",
     )
 
     sum_spec: Literal["sum", "split"] = Field(
@@ -358,9 +354,9 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         plot_arrow: bool = True,
         **path_kwargs: Any,
@@ -396,8 +392,8 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     @field_validator("path_specs")
     @classmethod
     def _path_specs_not_empty(
-        cls, val: tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...]
-    ) -> tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...]:
+        cls, val: tuple[AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec, ...]
+    ) -> tuple[AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec, ...]:
         """Makes sure at least one path spec has been supplied"""
         # overall shape of vertices
         if len(val) < 1:

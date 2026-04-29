@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import (
@@ -30,7 +30,7 @@ from .types import TYPE_TAG_STR, Direction, FreqBound
 from .types.mode_spec import ModeSpecType
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from numpy.typing import NDArray
 
@@ -85,7 +85,7 @@ MAX_BROADBAND_MODE_ABC_NUM_FREQS = 101
 class BoundaryEdge(ABC, Tidy3dBaseModel):
     """Electromagnetic boundary condition at a domain edge."""
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Name",
         description="Optional unique name for boundary.",
@@ -124,7 +124,7 @@ class ABCBoundary(AbstractABCBoundary):
     See, for example, John B. Schneider, Understanding the Finite-Difference Time-Domain Method, Chapter 6.
     """
 
-    permittivity: Optional[float] = Field(
+    permittivity: float | None = Field(
         None,
         title="Effective Permittivity",
         description="Effective permittivity for determining propagation constant. "
@@ -133,7 +133,7 @@ class ABCBoundary(AbstractABCBoundary):
         ge=1.0,
     )
 
-    conductivity: Optional[NonNegativeFloat] = Field(
+    conductivity: NonNegativeFloat | None = Field(
         None,
         title="Effective Conductivity",
         description="Effective conductivity for determining propagation constant. "
@@ -285,7 +285,7 @@ class ModeABCBoundary(AbstractABCBoundary):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = Field(
+    freq_spec: PositiveFloat | BroadbandModeABCSpec | None = Field(
         None,
         title="Absorption Frequency Specification",
         description="Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.",
@@ -311,7 +311,7 @@ class ModeABCBoundary(AbstractABCBoundary):
     def from_source(
         cls,
         source: ModeSource,
-        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+        freq_spec: PositiveFloat | BroadbandModeABCSpec | None = None,
     ) -> Self:
         """Instantiate from a ``ModeSource``.
 
@@ -348,9 +348,9 @@ class ModeABCBoundary(AbstractABCBoundary):
     @classmethod
     def from_monitor(
         cls,
-        monitor: Union[ModeMonitor, ModeSolverMonitor],
+        monitor: ModeMonitor | ModeSolverMonitor,
         mode_index: NonNegativeInt = 0,
-        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+        freq_spec: PositiveFloat | BroadbandModeABCSpec | None = None,
     ) -> Self:
         """Instantiate from a ``ModeMonitor`` or ``ModeSolverMonitor``.
 
@@ -402,7 +402,7 @@ class InternalAbsorber(Box):
         "one can use the same `size` and `center` as for the source and simply set `shift` to 1.",
     )
 
-    boundary_spec: Union[ModeABCBoundary, ABCBoundary] = Field(
+    boundary_spec: ModeABCBoundary | ABCBoundary = Field(
         ...,
         title="Boundary Specification",
         description="Boundary specification for defining effective propagation index in the one-way wave equation.",
@@ -414,8 +414,8 @@ class InternalAbsorber(Box):
     @field_validator("boundary_spec")
     @classmethod
     def _must_provide_permittivity(
-        cls, val: Union[ModeABCBoundary, ABCBoundary]
-    ) -> Union[ModeABCBoundary, ABCBoundary]:
+        cls, val: ModeABCBoundary | ABCBoundary
+    ) -> ModeABCBoundary | ABCBoundary:
         """Validate that permittivity is provided for ABCBoundary."""
         if isinstance(val, ABCBoundary) and val.permittivity is None:
             raise ValidationError(
@@ -438,10 +438,10 @@ class InternalAbsorber(Box):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        ax: Optional[Ax] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        ax: Ax | None = None,
         **patch_kwargs: Any,
     ) -> Ax:
         """Plot this absorber."""
@@ -475,7 +475,7 @@ class InternalAbsorber(Box):
 # """ Bloch boundary """
 
 # sources from which Bloch boundary conditions can be defined
-BlochSourceType = Union[GaussianBeam, ModeSource, PlaneWave, TFSF]
+BlochSourceType = GaussianBeam | ModeSource | PlaneWave | TFSF
 
 
 class BlochBoundary(BoundaryEdge):
@@ -511,7 +511,7 @@ class BlochBoundary(BoundaryEdge):
         source: BlochSourceType,
         domain_size: float,
         axis: Axis,
-        medium: Optional[Medium] = None,
+        medium: Medium | None = None,
     ) -> Self:
         """Set the Bloch vector component based on a given angled source and its center frequency.
            Note that if a broadband angled source is used, only the frequency components near the
@@ -975,24 +975,24 @@ class Absorber(AbsorberSpec):
 
 
 # pml types allowed in simulation init
-PMLTypes = Union[PML, StablePML, Absorber, None]
+PMLTypes = PML | StablePML | Absorber | None
 
 
 # """ boundary specification classes """
 
 # types of boundaries that can be used in Simulation
 
-BoundaryEdgeType = Union[
-    Periodic,
-    PECBoundary,
-    PMCBoundary,
-    PML,
-    StablePML,
-    Absorber,
-    BlochBoundary,
-    ABCBoundary,
-    ModeABCBoundary,
-]
+BoundaryEdgeType = (
+    Periodic
+    | PECBoundary
+    | PMCBoundary
+    | PML
+    | StablePML
+    | Absorber
+    | BlochBoundary
+    | ABCBoundary
+    | ModeABCBoundary
+)
 
 
 class Boundary(Tidy3dBaseModel):
@@ -1123,7 +1123,7 @@ class Boundary(Tidy3dBaseModel):
         source: BlochSourceType,
         domain_size: float,
         axis: Axis,
-        medium: Optional[Medium] = None,
+        medium: Medium | None = None,
     ) -> Self:
         """Bloch boundary specification on both sides along a dimension based on a given source.
 
@@ -1182,8 +1182,8 @@ class Boundary(Tidy3dBaseModel):
     @classmethod
     def abc(
         cls,
-        permittivity: Optional[PositiveFloat] = None,
-        conductivity: Optional[NonNegativeFloat] = None,
+        permittivity: PositiveFloat | None = None,
+        conductivity: NonNegativeFloat | None = None,
     ) -> Self:
         """ABC boundary specification on both sides along a dimension.
 
@@ -1207,7 +1207,7 @@ class Boundary(Tidy3dBaseModel):
         plane: Box,
         mode_spec: ModeSpecType = DEFAULT_MODE_SPEC_MODE_ABC,
         mode_index: NonNegativeInt = 0,
-        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+        freq_spec: PositiveFloat | BroadbandModeABCSpec | None = None,
     ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension.
 
@@ -1247,7 +1247,7 @@ class Boundary(Tidy3dBaseModel):
     def mode_abc_from_source(
         cls,
         source: ModeSource,
-        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+        freq_spec: PositiveFloat | BroadbandModeABCSpec | None = None,
     ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode source.
 
@@ -1272,9 +1272,9 @@ class Boundary(Tidy3dBaseModel):
     @classmethod
     def mode_abc_from_monitor(
         cls,
-        monitor: Union[ModeMonitor, ModeSolverMonitor],
+        monitor: ModeMonitor | ModeSolverMonitor,
         mode_index: NonNegativeInt = 0,
-        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+        freq_spec: PositiveFloat | BroadbandModeABCSpec | None = None,
     ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode monitor.
 

@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING
 from tidy3d.exceptions import SetupError, format_chained_exception_message
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from IPython.core.display_functions import DisplayHandle
 
     from tidy3d import Scene, Simulation
@@ -69,7 +67,7 @@ def plot_scene_3d(scene: Scene, width: int = 800, height: int = 800) -> None:
 
 
 def plot_sim_3d(
-    sim: Union[Simulation, str], width: int = 800, height: int = 800, is_gz_base64: bool = False
+    sim: Simulation | str, width: int = 800, height: int = 800, is_gz_base64: bool = False
 ) -> DisplayHandle:
     """Make 3D display of simulation in ipython notebook."""
 

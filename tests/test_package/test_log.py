@@ -408,7 +408,6 @@ def test_suppress_output_during_repr():
     This mirrors what happens with CustomMedium (permittivity=None by default, but validator
     requires either permittivity or eps_dataset to be provided).
     """
-    from typing import Optional
 
     from pydantic import model_validator
 
@@ -421,7 +420,7 @@ def test_suppress_output_during_repr():
     # - Has optional field with None default (so Pydantic can instantiate it)
     # - Raises SetupError in validator when value is None (which logs an error before raising)
     class _ModelRequiringValue(Tidy3dBaseModel):
-        value: Optional[float] = None
+        value: float | None = None
 
         @model_validator(mode="after")
         def _check_value(self):

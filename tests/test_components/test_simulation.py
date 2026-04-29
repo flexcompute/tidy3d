@@ -761,7 +761,7 @@ def test_validate_symmetry_boundaries():
             z=td.Boundary.pml(),
         ),
     )
-    with pytest.raises(ValidationError) as excinfo:
+    with pytest.raises(ValidationError, match=r"Symmetry") as excinfo:
         td.Simulation(
             size=(1, 1, 1),
             symmetry=(1, 1, 1),
@@ -1577,7 +1577,7 @@ def test_sim_monitor_homogeneous():
         phi=[0],
     )
 
-    with pytest.raises(SetupError, match="zero-measure sets"):
+    with pytest.raises(SetupError, match=r"zero-measure sets"):
         _ = td.Simulation._projection_monitor_mediums_in_bounds(
             center=(0, 0, 0),
             size=(1, 1, 1),
@@ -1617,7 +1617,7 @@ def test_proj_monitor_periodic_bloch_boundaries_3d():
             z=td.Boundary.pml(),
         ),
     ):
-        with pytest.raises(ValidationError, match="periodic/Bloch boundaries"):
+        with pytest.raises(ValidationError, match=r"periodic/Bloch boundaries"):
             _ = td.Simulation(
                 size=(2.2, 2.2, 2),
                 structures=(),
@@ -1891,7 +1891,7 @@ def test_diffraction_monitor_order_grid_size():
         normal_dir="+",
     )
 
-    with pytest.raises(ValidationError, match="100000000"):
+    with pytest.raises(ValidationError, match=r"100000000"):
         _ = td.Simulation(
             size=(2000, 2000, 1),
             medium=td.Medium(permittivity=16),
@@ -1922,7 +1922,7 @@ def test_diffraction_monitor_storage_size():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
-    with pytest.raises(SetupError, match="maximum of 50.00GB"):
+    with pytest.raises(SetupError, match=r"maximum of 50.00GB"):
         sim.validate_pre_upload(source_required=False)
 
 
@@ -4623,7 +4623,7 @@ def test_structures_per_medium(monkeypatch):
     monkeypatch.setattr(scene, "MAX_STRUCTURES_PER_MEDIUM", 3, raising=False)
     structs = [td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=shared_med) for _ in range(4)]
 
-    with pytest.raises(ValidationError, match="use the same medium"):
+    with pytest.raises(ValidationError, match=r"use the same medium"):
         _ = td.Simulation(
             size=(10, 10, 10),
             run_time=1e-12,

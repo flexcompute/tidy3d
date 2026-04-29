@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 import xarray as xr
@@ -33,7 +33,7 @@ from .common import PROJECTION_FREQ_CHUNK_SIZE, PTS_PER_WVL
 from .exact import _ExactFieldProjectionMixin
 
 if TYPE_CHECKING:
-    from typing import Literal, Union
+    from typing import Literal
 
     from numpy.typing import NDArray
     from pydantic import ValidationInfo
@@ -74,7 +74,7 @@ class FieldProjector(
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
     """
 
-    sim_data: Optional[SimulationData] = Field(
+    sim_data: SimulationData | None = Field(
         ...,
         title="Simulation data",
         description="Container for simulation data containing the near field monitors.",
@@ -86,7 +86,7 @@ class FieldProjector(
         "near field.",
     )
 
-    pts_per_wavelength: Optional[int] = Field(
+    pts_per_wavelength: int | None = Field(
         PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
@@ -94,7 +94,7 @@ class FieldProjector(
         "will not resampled, but will still be colocated.",
     )
 
-    origin: Optional[Coordinate] = Field(
+    origin: Coordinate | None = Field(
         None,
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -102,9 +102,9 @@ class FieldProjector(
         json_schema_extra={"units": MICROMETER},
     )
 
-    _source_data: Optional[dict[str, FieldData]] = PrivateAttr(default=None)
-    _projection_medium: Optional[MediumType] = PrivateAttr(default=None)
-    _projection_size: Optional[Coordinate] = PrivateAttr(default=None)
+    _source_data: dict[str, FieldData] | None = PrivateAttr(default=None)
+    _projection_medium: MediumType | None = PrivateAttr(default=None)
+    _projection_size: Coordinate | None = PrivateAttr(default=None)
     _RAW_CONTEXT_KEY: ClassVar[str] = "raw_projection_context"
 
     @model_validator(mode="after")
@@ -296,7 +296,7 @@ class FieldProjector(
         surface: FieldProjectionSurface,
         required_components: tuple[str, ...],
         dimensionality: Literal["auto", "2D", "3D"],
-    ) -> tuple[str, Optional[int]]:
+    ) -> tuple[str, int | None]:
         """Infer and validate whether the raw source is line-like (2D) or surface-like (3D)."""
         _, tangential_axes = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
         sampled_axes = []
@@ -464,7 +464,7 @@ class FieldProjector(
 
     @staticmethod
     def _projection_size_from_bounds(
-        bounds: tuple[Coordinate, Coordinate], collapsed_axis: Optional[int] = None
+        bounds: tuple[Coordinate, Coordinate], collapsed_axis: int | None = None
     ) -> Coordinate:
         """Return a non-degenerate size tuple describing the source support."""
         size = [bmax - bmin for bmin, bmax in zip(*bounds)]
@@ -928,8 +928,8 @@ class FieldProjector(
     @staticmethod
     def trapezoid(
         ary: NDArray,
-        pts: Union[Iterable[NDArray], NDArray],
-        axes: Union[Iterable[int], int] = 0,
+        pts: Iterable[NDArray] | NDArray,
+        axes: Iterable[int] | int = 0,
     ) -> NDArray:
         """Trapezoidal integration in n dimensions.
 
@@ -939,7 +939,7 @@ class FieldProjector(
             Array to integrate.
         pts : Iterable[np.ndarray]
             Iterable of points for each dimension.
-        axes : Union[Iterable[int], int]
+        axes : Iterable[int] | int
             Iterable of axes along which to integrate. If not an iterable, assume 1D integration.
 
         Returns

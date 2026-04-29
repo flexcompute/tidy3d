@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, TypeVar
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional
+    from collections.abc import Callable
 
 T = TypeVar("T", bound=BaseModel)
 
 _SECTIONS: dict[str, type[BaseModel]] = {}
 _HANDLERS: dict[str, Callable[[BaseModel], None]] = {}
-_MANAGER: Optional[ConfigManagerProtocol] = None
+_MANAGER: ConfigManagerProtocol | None = None
 
 
 class ConfigManagerProtocol:
@@ -33,7 +33,7 @@ def attach_manager(manager: ConfigManagerProtocol) -> None:
     _MANAGER = manager
 
 
-def get_manager() -> Optional[ConfigManagerProtocol]:
+def get_manager() -> ConfigManagerProtocol | None:
     """Return the currently attached configuration manager, if any."""
 
     return _MANAGER

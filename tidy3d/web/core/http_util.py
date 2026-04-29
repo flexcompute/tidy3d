@@ -31,7 +31,8 @@ from .core_config import get_logger
 from .exceptions import WebError, WebNotFoundError
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional, TypeAlias
+    from collections.abc import Callable
+    from typing import TypeAlias
 
 JSONType: TypeAlias = dict[str, Any] | list[Any] | str | int
 HEALTH_CHECK_TIMEOUT = 10
@@ -56,7 +57,7 @@ def get_user_agent() -> str:
     return os.environ.get("TIDY3D_AGENT", f"Python-Client/{get_version()}")
 
 
-def api_key() -> Optional[str]:
+def api_key() -> str | None:
     """Get the api key for the current environment."""
 
     if os.environ.get(SIMCLOUD_APIKEY):
@@ -109,7 +110,7 @@ def api_key_auth(request: requests.request) -> requests.request:
     return request
 
 
-def get_headers() -> dict[str, Optional[str]]:
+def get_headers() -> dict[str, str | None]:
     """get headers for http request.
 
     Returns
@@ -283,7 +284,7 @@ class HttpSessionManager:
 
     @http_interceptor
     def get(
-        self, path: str, json: JSONType = None, params: Optional[dict[str, Any]] = None
+        self, path: str, json: JSONType = None, params: dict[str, Any] | None = None
     ) -> requests.Response:
         """Get the resource."""
         self.reinit()
@@ -299,7 +300,7 @@ class HttpSessionManager:
 
     @http_interceptor
     def put(
-        self, path: str, json: JSONType = None, files: Optional[dict[str, Any]] = None
+        self, path: str, json: JSONType = None, files: dict[str, Any] | None = None
     ) -> requests.Response:
         """Update the resource."""
         self.reinit()
@@ -309,7 +310,7 @@ class HttpSessionManager:
 
     @http_interceptor
     def delete(
-        self, path: str, json: JSONType = None, params: Optional[dict[str, Any]] = None
+        self, path: str, json: JSONType = None, params: dict[str, Any] | None = None
     ) -> requests.Response:
         """Delete the resource."""
         self.reinit()

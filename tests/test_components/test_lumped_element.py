@@ -428,7 +428,7 @@ def test_distribution_variants(dist_type, width):
     else:
         assert structure is None
     network = linear_element.to_structure(grid)
-    L, C = linear_element.estimate_parasitic_elements(grid)
+    _L, C = linear_element.estimate_parasitic_elements(grid)
     assert C >= 0
 
     # Grid is fine enough that there are two connections made along x
@@ -441,7 +441,7 @@ def test_distribution_variants(dist_type, width):
     else:
         assert structure is None
     network = linear_element.to_structure(grid)
-    L, C = linear_element.estimate_parasitic_elements(grid)
+    _L, C = linear_element.estimate_parasitic_elements(grid)
     assert C >= 0
 
 
@@ -532,9 +532,9 @@ def test_parse_spice_value_scale_suffixes(s, expected):
 def test_parse_spice_value_invalid():
     """Invalid value raises ``ValueError``; unknown scale suffix is ignored (scale 1.0)."""
     parse = td.CircuitImpedanceModel._parse_spice_value
-    with pytest.raises(ValueError, match="Empty value"):
+    with pytest.raises(ValueError, match=r"Empty value"):
         parse("")
-    with pytest.raises(ValueError, match="Cannot parse"):
+    with pytest.raises(ValueError, match=r"Cannot parse"):
         parse("abc")
     # Unknown scale prefix (e.g. "x") is not an error; value is parsed with scale 1.0
     assert parse("1x") == pytest.approx(1.0)
@@ -631,7 +631,7 @@ def test_parse_spice_file_two_voltage_sources_raises(tmp_path):
     """
     path = tmp_path / "circuit.cir"
     path.write_text(netlist)
-    with pytest.raises(ValueError, match="at most one voltage source"):
+    with pytest.raises(ValueError, match=r"at most one voltage source"):
         td.CircuitImpedanceModel._parse_spice_file(path)
 
 
@@ -643,7 +643,7 @@ def test_parse_spice_file_no_rlc_raises(tmp_path):
     """
     path = tmp_path / "circuit.cir"
     path.write_text(netlist)
-    with pytest.raises(ValueError, match="no R, C, or L"):
+    with pytest.raises(ValueError, match=r"no R, C, or L"):
         td.CircuitImpedanceModel._parse_spice_file(path)
 
 
@@ -655,7 +655,7 @@ def test_parse_spice_file_component_line_too_short_raises(tmp_path):
     """
     path = tmp_path / "circuit.cir"
     path.write_text(netlist)
-    with pytest.raises(ValueError, match="Component line must have name"):
+    with pytest.raises(ValueError, match=r"Component line must have name"):
         td.CircuitImpedanceModel._parse_spice_file(path)
 
 
@@ -691,7 +691,7 @@ def test_parse_spice_file_mixed_ground_labels_warns(tmp_path):
     path = tmp_path / "mixed_gnd.cir"
     path.write_text(netlist)
     with patch("tidy3d.components.lumped_element.log") as mock_log:
-        comp_list, port_p, port_m = td.CircuitImpedanceModel._parse_spice_file(path)
+        comp_list, _port_p, _port_m = td.CircuitImpedanceModel._parse_spice_file(path)
     assert len(comp_list) == 2
     # Parser treats 0 and gnd as different nodes (three nodes: 1, 0, gnd)
     assert mock_log.warning.call_count >= 1
@@ -772,7 +772,7 @@ def test_component_value_must_be_positive():
 
 def test_component_nodes_must_be_distinct_and_non_empty():
     """LumpedCircuitComponent rejects self-loops (node_plus == node_minus) and empty node labels."""
-    with pytest.raises(ValidationError, match="node_plus and node_minus must be distinct"):
+    with pytest.raises(ValidationError, match=r"node_plus and node_minus must be distinct"):
         LumpedCircuitComponent(
             element_type="R", node_plus="1", node_minus="1", value=50.0, name="R1"
         )
@@ -991,11 +991,11 @@ def test_effective_admittance_port_nodes_same_raises():
         ),
     ]
     freqs = np.linspace(1e9, 2e9, 5)
-    with pytest.raises(ValueError, match="distinct|cannot be the same"):
+    with pytest.raises(ValueError, match=r"distinct|cannot be the same"):
         _effective_admittance_from_component_list(
             component_list, freqs, port_node_plus="1", port_node_minus="1"
         )
-    with pytest.raises(ValueError, match="distinct|cannot be the same"):
+    with pytest.raises(ValueError, match=r"distinct|cannot be the same"):
         _effective_admittance_from_component_list(
             component_list, freqs, port_node_plus="0", port_node_minus="0"
         )
@@ -1204,11 +1204,11 @@ def test_lookup_index_raises_when_node_not_in_circuit():
         ),
     ]
     freqs = np.linspace(1e9, 2e9, 5)
-    with pytest.raises((ValueError, ValidationError), match="not a node in the circuit"):
+    with pytest.raises((ValueError, ValidationError), match=r"not a node in the circuit"):
         _effective_admittance_from_component_list(
             component_list, freqs, port_node_plus="99", port_node_minus="0"
         )
-    with pytest.raises((ValueError, ValidationError), match="not a node in the circuit"):
+    with pytest.raises((ValueError, ValidationError), match=r"not a node in the circuit"):
         _effective_admittance_from_component_list(
             component_list, freqs, port_node_plus="1", port_node_minus="99"
         )
@@ -1251,15 +1251,15 @@ def test_parse_spice_file_voltage_source_too_short_raises(tmp_path):
     """
     path = tmp_path / "bad_v.cir"
     path.write_text(netlist)
-    with pytest.raises(ValueError, match="Voltage source line needs at least two nodes"):
+    with pytest.raises(ValueError, match=r"Voltage source line needs at least two nodes"):
         td.CircuitImpedanceModel._parse_spice_file(path)
 
 
 def test_parse_spice_file_not_a_file_raises(tmp_path):
     """_parse_spice_file raises FileNotFoundError when path is a directory or does not exist."""
-    with pytest.raises(FileNotFoundError, match="not a file or does not exist"):
+    with pytest.raises(FileNotFoundError, match=r"not a file or does not exist"):
         td.CircuitImpedanceModel._parse_spice_file(tmp_path)  # directory
-    with pytest.raises(FileNotFoundError, match="not a file or does not exist"):
+    with pytest.raises(FileNotFoundError, match=r"not a file or does not exist"):
         td.CircuitImpedanceModel._parse_spice_file(tmp_path / "nonexistent.cir")
 
 
@@ -1268,7 +1268,7 @@ def test_parse_spice_file_too_large_raises(tmp_path):
     path = tmp_path / "huge.cir"
     path.write_text("Title\nR1 1 0 50\n")
     path.write_bytes(b"x" * (MAX_SPICE_FILE_SIZE_BYTES + 1))
-    with pytest.raises(ValueError, match="exceeds maximum allowed"):
+    with pytest.raises(ValueError, match=r"exceeds maximum allowed"):
         td.CircuitImpedanceModel._parse_spice_file(path)
 
 
@@ -1283,7 +1283,7 @@ def test_circuit_impedance_model_disconnected_components_raises():
         ),
     )
     freqs = (1e9, 2e9)
-    with pytest.raises(ValueError, match="disconnected"):
+    with pytest.raises(ValueError, match=r"disconnected"):
         td.CircuitImpedanceModel(
             components=disconnected_comps,
             freq_range=(freqs[0], freqs[1]),
@@ -1298,7 +1298,7 @@ def test_circuit_impedance_model_port_nodes_same_raises():
         ),
     )
     freqs = (1e9, 2e9)
-    with pytest.raises((ValueError, ValidationError), match="distinct|cannot be the same"):
+    with pytest.raises((ValueError, ValidationError), match=r"distinct|cannot be the same"):
         td.CircuitImpedanceModel(
             components=comps,
             freq_range=(freqs[0], freqs[1]),
@@ -1316,7 +1316,7 @@ def test_circuit_impedance_model_port_node_not_in_circuit_raises():
     )
     freqs = (1e9, 2e9)
     with pytest.raises(
-        (ValueError, ValidationError), match="port_node_plus.*not a node|not.*endpoint"
+        (ValueError, ValidationError), match=r"port_node_plus.*not a node|not.*endpoint"
     ):
         td.CircuitImpedanceModel(
             components=comps,
@@ -1325,7 +1325,7 @@ def test_circuit_impedance_model_port_node_not_in_circuit_raises():
             port_node_minus="0",
         )
     with pytest.raises(
-        (ValueError, ValidationError), match="port_node_minus.*not a node|not.*endpoint"
+        (ValueError, ValidationError), match=r"port_node_minus.*not a node|not.*endpoint"
     ):
         td.CircuitImpedanceModel(
             components=comps,
@@ -1347,7 +1347,7 @@ def test_circuit_impedance_model_freq_range_optional():
     )
     model = td.CircuitImpedanceModel(components=comps, freq_range=None)
     # CircuitImpedanceModel does not provide _as_admittance_function (only RLCNetwork/AdmittanceNetwork do)
-    with pytest.raises(AttributeError, match="_as_admittance_function"):
+    with pytest.raises(AttributeError, match=r"_as_admittance_function"):
         _ = model._as_admittance_function
     # admittance() on element uses _get_effective_admittance and works
     freqs = np.linspace(0.2e9, 8e9, 20)
@@ -1362,7 +1362,7 @@ def test_circuit_impedance_model_freq_range_optional():
     assert len(Y) == len(freqs)
     assert np.all(np.isfinite(Y))
     # When freq_range is None and no frequency_range passed, _resolve_freq_range raises (used inside _to_medium)
-    with pytest.raises(ValueError, match="freq_range"):
+    with pytest.raises(ValueError, match=r"freq_range"):
         model._resolve_fit_freqs(None)
     # to_structure with frequency_range works (use grid with multiple cells so snapped box has non-zero lateral size)
     grid = td.Grid(boundaries=td.Coords(x=[0, 1, 2], y=[0, 1], z=[0, 1, 2]))
@@ -1414,9 +1414,9 @@ def test_get_effective_admittance_zero_or_negative_frequency_raises():
         ),
     )
     model = td.CircuitImpedanceModel(components=comps, freq_range=(1e9, 2e9))
-    with pytest.raises(ValueError, match="positive|singular"):
+    with pytest.raises(ValueError, match=r"positive|singular"):
         model._get_effective_admittance(np.array([0.0, 1e9]))
-    with pytest.raises(ValueError, match="positive|singular"):
+    with pytest.raises(ValueError, match=r"positive|singular"):
         model._get_effective_admittance(np.array([-1e9, 1e9]))
 
 
@@ -1492,7 +1492,7 @@ def test_from_spice_port_override(tmp_path):
 
 def test_from_touchstone_not_implemented():
     """from_touchstone raises NotImplementedError."""
-    with pytest.raises(NotImplementedError, match="not yet implemented"):
+    with pytest.raises(NotImplementedError, match=r"not yet implemented"):
         td.CircuitImpedanceModel.from_touchstone("dummy.s1p")
 
 

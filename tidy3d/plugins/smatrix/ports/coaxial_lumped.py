@@ -25,8 +25,6 @@ from tidy3d.exceptions import SetupError, ValidationError
 from .base_lumped import AbstractLumpedPort
 
 if TYPE_CHECKING:
-    from typing import Optional
-
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
@@ -120,8 +118,8 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     def to_source(
         self,
         source_time: SourceTimeType,
-        snap_center: Optional[float] = None,
-        grid: Optional[Grid] = None,
+        snap_center: float | None = None,
+        grid: Grid | None = None,
         **kwargs: Any,
     ) -> CustomCurrentSource:
         """Create a current source from the lumped port."""
@@ -213,7 +211,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             current_dataset=dataset_E,
         )
 
-    def to_load(self, snap_center: Optional[float] = None) -> CoaxialLumpedResistor:
+    def to_load(self, snap_center: float | None = None) -> CoaxialLumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # Snapping is done here so plots of the simulation will more accurately portray the setup.
@@ -232,7 +230,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
@@ -256,7 +254,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)

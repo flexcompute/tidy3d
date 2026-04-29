@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, field_validator, model_validator
@@ -32,7 +33,7 @@ def _resolve_mirror_symmetry(
     array_shape: tuple[int, ...],
     design_region: DesignRegionType,
     simulation: td.Simulation,
-) -> Optional[MirrorSymmetry]:
+) -> MirrorSymmetry | None:
     """Mirror boundaries relevant to a design-region array inside a simulation."""
     rmin, rmax = design_region.geometry.bounds
     mirror_symmetry = []
@@ -77,18 +78,18 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
 
-    metric: Optional[ExpressionType] = Field(
+    metric: ExpressionType | None = Field(
         None,
         title="Objective Metric",
         description="Serializable expression defining the objective function.",
     )
 
     @abc.abstractmethod
-    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> Optional[MirrorSymmetry]:
+    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> MirrorSymmetry | None:
         """Mirror boundaries relevant to a design-region array for this inverse design."""
 
     def make_objective_fn(
-        self, post_process_fn: Optional[Callable] = None, maximize: bool = True
+        self, post_process_fn: Callable | None = None, maximize: bool = True
     ) -> Callable[[anp.ndarray], tuple[float, dict]]:
         """Construct the objective function for this InverseDesign object."""
 
@@ -100,7 +101,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
         direction_multiplier = 1 if maximize else -1
 
-        def objective_fn(params: anp.ndarray, aux_data: Optional[dict] = None) -> float:
+        def objective_fn(params: anp.ndarray, aux_data: dict | None = None) -> float:
             """Full objective function."""
             symmetry = self._resolve_mirror_symmetry(params.shape)
             data = self.to_simulation_data(params=params, symmetry=symmetry)
@@ -162,7 +163,7 @@ class InverseDesign(AbstractInverseDesign):
         description="Simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: Optional[tuple[str, ...]] = Field(
+    output_monitor_names: tuple[str, ...] | None = Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -262,7 +263,7 @@ class InverseDesign(AbstractInverseDesign):
 
         return monitor_fields
 
-    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> Optional[MirrorSymmetry]:
+    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> MirrorSymmetry | None:
         """Mirror boundaries relevant to a design-region array in this simulation."""
         return _resolve_mirror_symmetry(
             array_shape=array_shape,
@@ -271,7 +272,7 @@ class InverseDesign(AbstractInverseDesign):
         )
 
     def to_simulation(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None
     ) -> td.Simulation:
         """Convert the ``InverseDesign`` to a corresponding ``td.Simulation`` with traced fields."""
         if symmetry is None:
@@ -294,7 +295,7 @@ class InverseDesign(AbstractInverseDesign):
         )
 
     def to_simulation_data(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None, **kwargs: Any
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None, **kwargs: Any
     ) -> td.SimulationData:
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         simulation = self.to_simulation(params=params, symmetry=symmetry)
@@ -309,7 +310,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         description="Set of simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: Optional[tuple[Union[tuple[str, ...], None], ...]] = Field(
+    output_monitor_names: tuple[tuple[str, ...] | None, ...] | None = Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -380,7 +381,7 @@ class InverseDesignMulti(AbstractInverseDesign):
 
         return designs_list
 
-    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> Optional[MirrorSymmetry]:
+    def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> MirrorSymmetry | None:
         """Mirror boundaries relevant to a shared design-region array across all simulations."""
         mirror_symmetries = [
             _resolve_mirror_symmetry(
@@ -403,7 +404,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         return mirror_symmetry
 
     def to_simulation(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None
     ) -> dict[str, td.Simulation]:
         r"""Convert the ``InverseDesign`` to a corresponding dict of ``td.Simulation``\s."""
         if symmetry is None:
@@ -414,11 +415,11 @@ class InverseDesignMulti(AbstractInverseDesign):
         return dict(zip(self.task_names, simulation_list))
 
     def to_simulation_data(
-        self, params: anp.ndarray, symmetry: Optional[MirrorSymmetry] = None, **kwargs: Any
+        self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None, **kwargs: Any
     ) -> td.web.BatchData:
         r"""Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``\s and run async."""
         simulations = self.to_simulation(params, symmetry=symmetry)
         return self.run_async(simulations, **kwargs)
 
 
-InverseDesignType = Union[InverseDesign, InverseDesignMulti]
+InverseDesignType = InverseDesign | InverseDesignMulti

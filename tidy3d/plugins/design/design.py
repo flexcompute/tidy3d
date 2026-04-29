@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-from typing import TYPE_CHECKING, Any, Optional, get_args
+from typing import TYPE_CHECKING, Any, get_args
 
 from pydantic import Field, model_validator
 
@@ -26,7 +26,7 @@ from .parameter import ParameterAny, ParameterInt, ParameterType
 from .result import Result
 
 if TYPE_CHECKING:
-    from typing import Callable, Union
+    from collections.abc import Callable
 
     from tidy3d.log import Console
 
@@ -107,7 +107,7 @@ class DesignSpace(Tidy3dBaseModel):
         "Only used when pre-post functions are supplied.",
     )
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         title="Name",
         description="Optional name for the design space.",
@@ -155,10 +155,10 @@ class DesignSpace(Tidy3dBaseModel):
         fn_args: list[dict[str, Any]],
         fn_values: list[Any],
         fn_source: str,
-        task_names: Optional[tuple[str]] = None,
-        task_ids: Optional[list] = None,
-        task_paths: Optional[list] = None,
-        aux_values: Optional[list[Any]] = None,
+        task_names: tuple[str] | None = None,
+        task_ids: list | None = None,
+        task_paths: list | None = None,
+        aux_values: list[Any] | None = None,
         opt_output: Any = None,
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
@@ -190,9 +190,9 @@ class DesignSpace(Tidy3dBaseModel):
     def run(
         self,
         fn: Callable,
-        fn_post: Optional[Callable] = None,
+        fn_post: Callable | None = None,
         verbose: bool = True,
-        priority: Optional[int] = None,
+        priority: int | None = None,
     ) -> Result:
         """Explore a parameter space with a supplied method using the user supplied function.
         Supplied functions are used to evaluate the design space and are called within the method.
@@ -335,7 +335,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_pre: Callable,
         fn_post: Callable,
         console: Console,
-        priority: Optional[int] = None,
+        priority: int | None = None,
     ) -> tuple[list[dict], list[dict], list[Any]]:
         """Run a function with Tidy3D implicitly called in between."""
         handler = self._get_evaluate_fn_pre_post(
@@ -375,12 +375,12 @@ class DesignSpace(Tidy3dBaseModel):
         fn_post: Callable,
         fn_mid: Callable,
         console: Console,
-        priority: Optional[int],
+        priority: int | None,
     ) -> Any:
         """Get function that tries to use batch processing on a set of arguments."""
 
         class Pre_Post_Handler:
-            def __init__(self, console: Console, priority: Optional[int]) -> None:
+            def __init__(self, console: Console, priority: int | None) -> None:
                 self.sim_counter = 0
                 self.sim_names = []
                 self.sim_ids = []
@@ -421,7 +421,7 @@ class DesignSpace(Tidy3dBaseModel):
     def _run_batch(
         batch: Batch,
         path_dir: str,
-        priority: Optional[int] = None,
+        priority: int | None = None,
     ) -> BatchData:
         """Run a batch and return the BatchData."""
         batch_out = batch.run(path_dir=path_dir, priority=priority)
@@ -432,7 +432,7 @@ class DesignSpace(Tidy3dBaseModel):
         pre_out: dict[int, Any],
         sim_counter: int,
         console: Console,
-        priority: Optional[int],
+        priority: int | None,
     ) -> _FnMidResult:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
 
@@ -592,12 +592,12 @@ class DesignSpace(Tidy3dBaseModel):
 
     def run_batch(
         self,
-        fn_pre: Callable[Any, Union[WorkflowType, list[WorkflowType], dict[str, WorkflowType]]],
+        fn_pre: Callable[Any, WorkflowType | list[WorkflowType] | dict[str, WorkflowType]],
         fn_post: Callable[
-            Union[WorkflowDataType, list[WorkflowDataType], dict[str, WorkflowDataType]], Any
+            WorkflowDataType | list[WorkflowDataType] | dict[str, WorkflowDataType], Any
         ],
         path_dir: str = ".",
-        priority: Optional[int] = None,
+        priority: int | None = None,
         **batch_kwargs: Any,
     ) -> Result:
         """
@@ -710,7 +710,7 @@ class DesignSpace(Tidy3dBaseModel):
             return None
         return round(per_run_estimate * run_count, 3)
 
-    def summarize(self, fn_pre: Optional[Callable] = None, verbose: bool = True) -> dict[str, Any]:
+    def summarize(self, fn_pre: Callable | None = None, verbose: bool = True) -> dict[str, Any]:
         """Summarize the setup of the DesignSpace
 
         Prints a summary of the DesignSpace including the method and associated args, the parameters,

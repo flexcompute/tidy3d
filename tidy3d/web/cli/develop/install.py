@@ -9,15 +9,12 @@ from __future__ import annotations
 import platform
 import re
 import subprocess
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import click
 
 from .index import develop
 from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_install_directory
-
-if TYPE_CHECKING:
-    from typing import Optional
 
 __all__ = [
     "activate_uv_python",
@@ -87,7 +84,7 @@ def verify_pandoc_is_installed_and_version_less_than_3() -> bool:
         return False
 
 
-def verify_pipx_is_installed() -> Optional[bool]:
+def verify_pipx_is_installed() -> bool | None:
     """
     Verify if pipx is installed on the system.
 

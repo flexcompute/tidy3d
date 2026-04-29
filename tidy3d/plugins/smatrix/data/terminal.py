@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, TypeAdapter
@@ -37,14 +37,14 @@ if TYPE_CHECKING:
 # - complex: uniform impedance applied to all ports (diagonal matrix)
 # - PortDataArray: per-port impedance with dims (f, port) → diagonal matrix
 # - TerminalPortDataArray: full impedance matrix with dims (f, port_out, port_in)
-RenormalizedReferenceImpedance = Union[complex, TerminalPortDataArray, PortDataArray]
+RenormalizedReferenceImpedance = complex | TerminalPortDataArray | PortDataArray
 _ref_impedance_adapter = TypeAdapter(RenormalizedReferenceImpedance)
 
 
 class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
-    port_reference_impedances: Optional[TerminalPortDataArray] = Field(
+    port_reference_impedances: TerminalPortDataArray | None = Field(
         None,
         title="Port Reference Impedances",
         description="Reference impedance matrix for each port used in the S-parameter calculation. "
@@ -114,7 +114,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         "and from which this data was generated.",
     )
 
-    renormalized_reference_impedance: Optional[RenormalizedReferenceImpedance] = Field(
+    renormalized_reference_impedance: RenormalizedReferenceImpedance | None = Field(
         None,
         title="Renormalized Reference Impedance",
         description="When set, overrides port_reference_impedances for all S-matrix computations. "
@@ -207,8 +207,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     def smatrix(
         self,
-        assume_ideal_excitation: Optional[bool] = None,
-        s_param_def: Optional[SParamDef] = None,
+        assume_ideal_excitation: bool | None = None,
+        s_param_def: SParamDef | None = None,
     ) -> MicrowaveSMatrixData:
         """Computes and returns the S-matrix and port reference impedances.
 
@@ -353,7 +353,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         self,
         port_index: NetworkIndex,
         monitor_name: str,
-        a_port: Union[FreqDataArray, complex],
+        a_port: FreqDataArray | complex,
         a_raw_port: FreqDataArray,
     ) -> MonitorData:
         """Normalize monitor data to a desired complex amplitude at a specific port.
@@ -392,8 +392,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     def get_antenna_metrics_data(
         self,
-        port_amplitudes: Optional[dict[NetworkIndex, complex]] = None,
-        monitor_name: Optional[str] = None,
+        port_amplitudes: dict[NetworkIndex, complex] | None = None,
+        monitor_name: str | None = None,
     ) -> AntennaMetricsData:
         """Calculate antenna parameters using superposition of fields from multiple port excitations.
 
@@ -462,7 +462,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     def compute_wave_amplitudes_at_each_port(
         self,
         sim_data: SimulationData,
-        port_reference_impedances: Optional[TerminalPortDataArray] = None,
+        port_reference_impedances: TerminalPortDataArray | None = None,
         s_param_def: SParamDef = "pseudo",
     ) -> tuple[PortDataArray, PortDataArray]:
         """Compute the incident and reflected amplitudes at each port.
@@ -503,7 +503,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     def compute_power_wave_amplitudes_at_each_port(
         self,
         sim_data: SimulationData,
-        port_reference_impedances: Optional[TerminalPortDataArray] = None,
+        port_reference_impedances: TerminalPortDataArray | None = None,
     ) -> tuple[PortDataArray, PortDataArray]:
         """Compute the incident and reflected power wave amplitudes at each port.
         The computed amplitudes have not been normalized.
@@ -528,7 +528,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     def s_to_z(
         self,
-        assume_ideal_excitation: Optional[bool] = None,
+        assume_ideal_excitation: bool | None = None,
         s_param_def: SParamDef = "pseudo",
     ) -> TerminalPortDataArray:
         """Converts the S-matrix to the Z-matrix using the port reference impedances.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, TypeAdapter, field_validator
 
@@ -26,19 +26,19 @@ class MaterialLibrary(Queryable):
         title="Material Library Name",
         description="Material Library Name",
     )
-    medium: Optional[MediumType] = Field(
+    medium: MediumType | None = Field(
         None,
         title="medium",
         description="medium",
         alias="calcResult",
     )
-    medium_type: Optional[str] = Field(
+    medium_type: str | None = Field(
         None,
         title="medium type",
         description="medium type",
         alias="mediumType",
     )
-    json_input: Optional[dict] = Field(
+    json_input: dict | None = Field(
         None,
         title="json input",
         description="original input",

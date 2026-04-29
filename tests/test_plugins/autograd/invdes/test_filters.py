@@ -31,7 +31,7 @@ def test_get_kernel_size(radius, dl, size_px, expected):
 
 def test_get_kernel_size_invalid_arguments():
     with pytest.raises(
-        ValueError, match="Either 'size_px' or both 'radius' and 'dl' must be provided."
+        ValueError, match=r"Either 'size_px' or both 'radius' and 'dl' must be provided."
     ):
         _get_kernel_size(None, None, None)
 

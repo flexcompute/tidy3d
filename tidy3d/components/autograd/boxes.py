@@ -11,7 +11,7 @@ from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.numpy.numpy_wrapper import _astype
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
 TidyArrayBox = ArrayBox  # NOT a subclass
 

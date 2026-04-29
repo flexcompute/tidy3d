@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field
@@ -99,19 +99,19 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         "associated with the monitors of the original :class:`.EMESimulation`.",
     )
 
-    smatrix: Optional[EMESMatrixDataset] = Field(
+    smatrix: EMESMatrixDataset | None = Field(
         None,
         title="S Matrix",
         description="Scattering matrix of the EME simulation.",
     )
 
-    coeffs: Optional[Union[EMECoefficientData, EMECoefficientDataset]] = Field(
+    coeffs: EMECoefficientData | EMECoefficientDataset | None = Field(
         None,
         title="Coefficients",
         description="Coefficients from the EME simulation. Useful for debugging and optimization.",
     )
 
-    port_modes_raw: Optional[EMEModeSolverData] = Field(
+    port_modes_raw: EMEModeSolverData | None = Field(
         None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
@@ -120,7 +120,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     )
 
     @cached_property
-    def port_modes(self) -> Optional[EMEModeSolverData]:
+    def port_modes(self) -> EMEModeSolverData | None:
         """Modes associated with the two ports of the EME device.
         The scattering matrix is expressed in this basis.
         Note: these modes are symmetry expanded."""
@@ -129,7 +129,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         return self.port_modes_raw.symmetry_expanded_copy
 
     def _extract_mode_solver_data(
-        self, data: EMEModeSolverData, eme_cell_index: int, sweep_index: Optional[int] = None
+        self, data: EMEModeSolverData, eme_cell_index: int, sweep_index: int | None = None
     ) -> ModeSolverData:
         """Extract :class:`.ModeSolverData` at a given ``eme_cell_index``.
         Assumes the :class:`.EMEModeSolverMonitor` spans the entire simulation and has
@@ -262,7 +262,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         return port_modes_list
 
     def smatrix_in_basis(
-        self, modes1: Union[FieldData, ModeData] = None, modes2: Union[FieldData, ModeData] = None
+        self, modes1: FieldData | ModeData = None, modes2: FieldData | ModeData = None
     ) -> EMESMatrixDataset:
         """Express the scattering matrix in the provided basis.
         Change of basis is done by computing overlaps between provided modes and port modes.
@@ -509,7 +509,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     def field_in_basis(
         self,
         field: EMEFieldData,
-        modes: Union[FieldData, ModeData] = None,
+        modes: FieldData | ModeData = None,
         port_index: Literal[0, 1] = 0,
     ) -> EMEFieldData:
         """Express the electromagnetic field in the provided basis.
