@@ -5,6 +5,7 @@ Microwave & RF |:satellite:|
     :hidden:
 
     component_modeler
+    smatrix_definitions
     material
     rf_material_library
     path_integrals
@@ -33,6 +34,7 @@ This page consolidates Tidy3D features related to microwave and RF simulation. W
 The following sections discuss:
 
 * :doc:`component_modeler` — The core simulation object in microwave/RF models
+* :doc:`smatrix_definitions` — Explanation of pseudo-wave, power-wave, and symmetric pseudo-wave formulations
 * :doc:`material` — Typical material types in microwave/RF simulation
 * :doc:`rf_material_library` — Dispersive models for real-world RF materials
 * :ref:`layer_grid_refinement` — Automated grid refinement for planar structures (e.g. PCBs)

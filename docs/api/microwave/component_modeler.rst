@@ -83,6 +83,10 @@ The S-matrix is stored as a :class:`~tidy3d.rf.MicrowaveSMatrixData` whose ``dat
 
    At this moment, Tidy3D uses the physics phase convention :math:`e^{-i\omega t}`. Other RF simulation software and texts may use the electrical engineering convention :math:`e^{i\omega t}`. This affects the sign of the imaginary part of calculated S-parameters and impedance values. To convert between the two, simply use the complex conjugation operation, e.g. ``np.conjugate()``.
 
+.. note::
+
+   The ``s_param_def`` parameter controls which wave definition is used when extracting S-parameters. For a detailed explanation of the three supported definitions and their properties, see :ref:`smatrix_definitions`.
+
 .. seealso::
 
    To learn more about the web API workflow in Tidy3D, please refer to the following pages:
