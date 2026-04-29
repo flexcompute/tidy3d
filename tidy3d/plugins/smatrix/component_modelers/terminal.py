@@ -1216,7 +1216,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         injection_axis = port.injection_axis
 
         # Normalize to dict {label: spec}
-        if isinstance(impedance_specs, (list, tuple)):
+        if isinstance(impedance_specs, list | tuple):
             specs_dict = {f"M{i}": spec for i, spec in enumerate(impedance_specs)}
         else:
             specs_dict = {"M0": impedance_specs}
@@ -1501,10 +1501,12 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         new_absorbers = list(sim_wo_source.internal_absorbers)
         for wave_port in self._wave_ports + self._terminal_wave_ports:
             if wave_port.absorber:
-                # absorbers are shifted together with sources
+                # absorbers are shifted together with sources; use the updated grid
+                # (sim_wo_source has mesh overrides + updated wavelength) so that the
+                # absorber snap position is consistent with _extruded_structures.
                 mode_src_pos = wave_port.center[
                     wave_port.injection_axis
-                ] + self._shift_value_signed(wave_port)
+                ] + self._shift_value_signed(wave_port, simulation=sim_wo_source)
                 port_absorber = wave_port.to_absorber(
                     snap_center=mode_src_pos,
                     freq_spec=BroadbandModeABCSpec(
@@ -1756,9 +1758,12 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         """Adds the source corresponding to the ``source_index`` to the base simulation."""
         port, selection_index = self.network_dict[source_index]
         index_kwargs = {}
-        if isinstance(port, (WavePort, TerminalWavePort)):
-            # Source is placed just before the field monitor of the port
-            mode_src_pos = port.center[port.injection_axis] + self._shift_value_signed(port)
+        if isinstance(port, WavePort | TerminalWavePort):
+            # Source is placed just before the field monitor of the port; use base_sim grid
+            # so source and absorber are snapped consistently to the same updated grid.
+            mode_src_pos = port.center[port.injection_axis] + self._shift_value_signed(
+                port, simulation=self.base_sim
+            )
             resolved_spec = self._resolved_mode_specs[port.name]
             # use terminal_label if TerminalWavePort, otherwise use mode_index
             if isinstance(port, TerminalWavePort):

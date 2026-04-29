@@ -321,13 +321,22 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
         return source_indices_needed
 
-    def _shift_value_signed(self, port: Port | WavePort) -> float:
-        """How far (signed) to shift the source from the monitor."""
+    def _shift_value_signed(
+        self,
+        port: Port | WavePort,
+        simulation: Simulation,
+    ) -> float:
+        """How far (signed) to shift the source from the monitor.
 
+        Parameters
+        ----------
+        simulation : Simulation
+            Simulation whose grid and bounds are used for cell-index lookup.
+        """
         return _shift_value_signed(
             obj=port,
-            grid=self.simulation.grid,
-            bounds=self.simulation.bounds,
+            grid=simulation.grid,
+            bounds=simulation.bounds,
             direction=port.direction,
             shift=-2,
             name=f"Port {port.name}",

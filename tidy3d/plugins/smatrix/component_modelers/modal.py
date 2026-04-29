@@ -219,7 +219,7 @@ class ModalComponentModeler(AbstractComponentModeler):
             A new :class:`.Port` object with its center shifted.
         """
 
-        shift_value = self._shift_value_signed(port=port)
+        shift_value = self._shift_value_signed(port=port, simulation=self.simulation)
         center_shifted = list(port.center)
         normal_dim, plane_dims = port.pop_axis([0, 1, 2], port.size.index(0.0))
         center_shifted[normal_dim] += shift_value

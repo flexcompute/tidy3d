@@ -1344,7 +1344,7 @@ def test_port_source_snapped_to_PML(tmp_path):
         modeler.sim_dict
 
     with pytest.raises(SetupError):
-        modeler._shift_value_signed(port)
+        modeler._shift_value_signed(port, simulation=modeler.simulation)
 
     # also validate the negative side
     voltage_path = voltage_path.updated_copy(center=(-port_pos, 0, 0))
@@ -1364,7 +1364,7 @@ def test_port_source_snapped_to_PML(tmp_path):
         modeler.sim_dict
 
     with pytest.raises(SetupError):
-        modeler._shift_value_signed(port)
+        modeler._shift_value_signed(port, simulation=modeler.simulation)
 
 
 def test_port_impedance_check():

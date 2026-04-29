@@ -318,7 +318,7 @@ def test_ports_too_close_boundary():
             update={"center": port_center_at_edge, "direction": port_dir}
         )
         with pytest.raises(SetupError):
-            modeler._shift_value_signed(port=port_at_edge)
+            modeler._shift_value_signed(port=port_at_edge, simulation=modeler.simulation)
 
 
 def test_validate_batch_supplied(tmp_path):
