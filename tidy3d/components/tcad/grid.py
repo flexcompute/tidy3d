@@ -239,8 +239,11 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
     non_refined_structures: tuple[str, ...] = Field(
         (),
         title="Structures Without Refinement",
-        description="List of structures for which ``dl_interface`` will not be enforced. "
-        "``dl_bulk`` is used instead.",
+        description="List of structures whose owned interfaces do not enforce "
+        "``dl_interface``. For interfaces shared by multiple structures, ownership follows "
+        "structure precedence: the last matching structure in the simulation's structure list "
+        "decides whether the interface is refined. Structures in this list also do not "
+        "receive volume refinement from ``uniform_grid_mediums``.",
     )
 
     mesh_refinements: tuple[discriminated_union(GridRefinementRegion | GridRefinementLine), ...] = (
