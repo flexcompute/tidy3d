@@ -109,6 +109,34 @@ html[data-theme=dark] .dataframe {
     background-color: var(--pst-color-primary);
 }
 
+.tidy3d-version-switcher {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 1.25rem;
+    padding: 0.9rem;
+    border: 1px solid var(--pst-color-border, rgba(0, 0, 0, 0.12));
+    border-radius: 0.75rem;
+    background: var(--pst-color-surface, rgba(184, 161, 139, 0.08));
+}
+
+.tidy3d-version-switcher__label {
+    font-family: 'flexcompute_subtitle', sans-serif;
+    font-size: 0.85rem;
+    color: var(--pst-color-text-muted);
+}
+
+.tidy3d-version-switcher__select {
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--pst-color-border, rgba(0, 0, 0, 0.12));
+    border-radius: 0.6rem;
+    background: var(--pst-color-background);
+    color: var(--pst-color-text-base);
+    font-family: 'flexcompute_regular', sans-serif;
+}
+
 /* TODO make sure this is only for the API tables */
 /*table {*/
 /*  border: solid;*/

@@ -38,6 +38,8 @@ full_build = True
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("_ext"))
+from docs_version import is_public_docs_version_tag, normalize_docs_version  # noqa: E402
+
 # sys.path.insert(0, os.path.abspath("source"))
 # sys.path.insert(0, os.path.abspath("notebooks"))
 # # sys.path.insert(0, os.path.abspath(""))
@@ -151,7 +153,10 @@ html_css_files = [
     "css/custom.css",
 ]
 html_extra_path = ["./_static/robots.txt", "./_static/"]
-html_js_files = ["js/custom-download.js"]
+html_js_files = [
+    "js/custom-download.js",
+    "js/version-switcher.js",
+]
 htmlhelp_basename = "tidy3ddoc"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
 html_sourcelink_suffix = ""
@@ -238,24 +243,30 @@ texinfo_documents = [
 ]
 todo_include_todos = False
 
-GIT_TAG_OUTPUT = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
-GIT_BRANCH_OUTPUT = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-current_tag = GIT_TAG_OUTPUT.decode().strip()
-current_branch = GIT_BRANCH_OUTPUT.decode().strip()
-print(current_tag, current_branch)
-if not current_tag and current_branch:
-    if current_branch == "develop":
-        version = "stable"
-    elif current_branch == "latest":
-        version = "latest"
-    else:
-        version = "latest"
-elif current_tag:
-    if re.match(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$", current_tag):
-        version = current_tag
-    else:
-        version = "latest"
-# version = tidy3d.__version__
+
+def _resolve_docs_version() -> str:
+    env_version = os.environ.get("TIDY3D_DOCS_VERSION") or os.environ.get("READTHEDOCS_VERSION")
+    if env_version:
+        normalized_env_version = normalize_docs_version(env_version)
+        print(
+            "Using docs version override from environment: "
+            f"{env_version} -> {normalized_env_version}"
+        )
+        return normalized_env_version
+
+    git_tag_output = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
+    git_branch_output = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    current_tag = git_tag_output.decode().strip()
+    current_branch = git_branch_output.decode().strip()
+    print(current_tag, current_branch)
+    if not current_tag and current_branch:
+        return normalize_docs_version(current_branch)
+    if current_tag and is_public_docs_version_tag(current_tag):
+        return current_tag
+    return "latest"
+
+
+version = _resolve_docs_version()
 
 latex_elements = {
     "preamble": r"""

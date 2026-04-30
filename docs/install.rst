@@ -110,7 +110,7 @@ To get a specific version eg. ``x.y.z`` of tidy3d, including the "pre-release" v
 
     pip install tidy3d==x.y.z
 
-The documentation for the most recent release is marked as "latest" and is available `here <https://docs.flexcompute.com/projects/tidy3d/en/latest/>`__. The documentation page also allows one to select the state of the docs based on version by toggling the dropdown in the bottom left corner.
+The documentation for the most recent release is marked as "latest" and is available `here <https://docs.flexcompute.com/projects/tidy3d/en/latest/>`__. The documentation page also includes a version switcher so you can jump between ``latest``, ``stable``, and published release builds.
 
 
 Advanced Installation Instructions

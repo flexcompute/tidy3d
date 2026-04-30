@@ -15,15 +15,26 @@ def process_robots_txt(app, exception):
     with open(robots_file) as f:
         contents = f.read()
 
-    expected_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
     html_baseurl = f"{app.config['html_baseurl'].rstrip('/')}/"
-    rtd_version = os.environ.get("READTHEDOCS_VERSION")
-    if rtd_version == "latest" and html_baseurl != expected_baseurl:
-        raise ValueError(
-            "html_baseurl must be the latest docs URL for robots.txt generation. "
-            f"Expected {expected_baseurl!r}, got {html_baseurl!r}."
-        )
-    site_map = f"{expected_baseurl.rstrip('/')}/sitemap.xml"
+    if html_baseurl.startswith("https://dev.docs.flexcompute.com/"):
+        contents = "User-agent: *\nDisallow: /\n"
+        with open(robots_file, "w") as f:
+            f.write(contents)
+        return
+
+    expected_baseurls = {"https://docs.flexcompute.com/projects/tidy3d/en/latest/"}
+    default_sitemap_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
+    rtd_version = os.environ.get("TIDY3D_DOCS_VERSION") or os.environ.get("READTHEDOCS_VERSION")
+    if rtd_version == "latest":
+        if html_baseurl not in expected_baseurls:
+            raise ValueError(
+                "html_baseurl must be a supported latest docs URL for robots.txt "
+                "generation. "
+                f"Expected one of {sorted(expected_baseurls)!r}, got {html_baseurl!r}."
+            )
+        site_map = f"{html_baseurl.rstrip('/')}/sitemap.xml"
+    else:
+        site_map = f"{default_sitemap_baseurl.rstrip('/')}/sitemap.xml"
 
     lines = [
         line

@@ -62,7 +62,7 @@ Runs comprehensive test suite including:
 
 - Creates GitHub release (draft or final)
 - Publishes to PyPI (final releases only)
-- Syncs documentation to ReadTheDocs
+- Hands documentation source to Flexcompute documentation publishing automation
 - Syncs branches (final releases only)
 
 Test Validation

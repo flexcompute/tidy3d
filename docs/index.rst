@@ -9,8 +9,8 @@ Electromagnetics Platform
    :target: https://pypi.python.org/pypi/tidy3d
 .. image:: https://img.shields.io/pypi/v/tidy3d.svg?style=for-the-badge
    :target: https://pypi.python.org/pypi/tidy3d/
-.. image:: https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest&style=for-the-badge
-   :target: https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/?badge=latest
+.. image:: https://img.shields.io/badge/docs-flexcompute-00643C?style=for-the-badge
+   :target: https://docs.flexcompute.com/projects/tidy3d/en/latest/
 .. image:: https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/run_tests.yml?style=for-the-badge
 .. image:: https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/daquinteroflex/4702549574741e87deaadba436218ebd/raw/tidy3d_extension.json
 .. image:: https://img.shields.io/github/license/flexcompute/tidy3d?style=for-the-badge
