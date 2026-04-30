@@ -316,7 +316,11 @@ class GaussianDoping(AbstractDopingBox):
 
 
 class CustomDoping(AbstractDopingBox):
-    """Sets a custom doping in the specified box.
+    """Sets a custom doping profile in the specified box.
+
+    :class:`.CustomDoping` wraps a :class:`.SpatialDataArray` as an additive doping box so
+    arbitrary spatial doping profiles can be summed with other doping boxes in ``N_a`` and
+    ``N_d``.
 
     Example
     -------

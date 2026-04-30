@@ -47,6 +47,7 @@ Doping
 
    ConstantDoping
    GaussianDoping
+   CustomDoping
 
 
 Bandgap

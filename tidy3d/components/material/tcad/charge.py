@@ -254,7 +254,9 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     Note
     ----
-        - Both :math:`N_a` and :math:`N_d` can be either a positive number or an ``xarray.DataArray``.
+        - Both :math:`N_a` and :math:`N_d` can be specified using one or more doping boxes.
+          Contributions from multiple boxes are summed. Use :class:`.CustomDoping` to add a
+          :class:`.SpatialDataArray` custom profile to other doping boxes.
         - Default values for parameters and models are those appropriate for Silicon.
         - The current implementation is a good approximation for non-degenerate semiconductors.
 
