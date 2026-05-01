@@ -107,6 +107,7 @@ dev = [
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
   "trame-vuetify>=2.0.0,<3.0.0",
+  "nest-asyncio>=1.6.0,<2.0.0",
   "cma>=4.4.1,<5.0.0",
   "diff-cover>=10.1.0,<11.0.0",
   "openpyxl>=3.1.5,<4.0.0",
@@ -171,6 +172,7 @@ pyvista = [
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
   "trame-vuetify>=2.0.0,<3.0.0",
+  "nest-asyncio>=1.6.0,<2.0.0",
 ]
 ruff = ["ruff==0.14.1"]
 heatcharge = [

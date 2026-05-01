@@ -277,7 +277,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
             Whether to display in an external window. If None (default), automatically
             detects environment (inline in notebooks, windowed otherwise). Set to True
             to force external window even when running in a notebook, which provides
-            better interactivity and performance. Only used when ``plotter`` is None.
+            better interactivity and performance.
         window_size : tuple = (800, 600)
             Size of the window (width, height) when creating new plotter.
         **mesh_kwargs
@@ -404,7 +404,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         windowed : bool = None
             Whether to display in an external window. If None (default), automatically
             detects environment (inline in notebooks, windowed otherwise). Set to True
-            to force external window. Only used when ``plotter`` is None.
+            to force external window.
         window_size : tuple = (800, 600)
             Size of the window (width, height) when creating new plotter.
         **arrow_kwargs

@@ -210,6 +210,48 @@ def _is_notebook() -> bool:
         return False
 
 
+_trame_server_launched = False
+
+
+def _ensure_trame_server_running() -> None:
+    """Pre-launch PyVista's trame Jupyter server using plain ``nest_asyncio``.
+
+    PyVista 0.47+ launches the server synchronously via
+    ``pyvista.trame.jupyter.elegantly_launch``, which hard-imports
+    ``nest_asyncio2``. That fork's asyncio monkey-patch is incompatible
+    with Python 3.13 and crashes the kernel.
+
+    Bring the server up ourselves with plain ``nest_asyncio`` so the
+    server is already running by the time ``plotter.show()`` runs and
+    PyVista's broken sync launch path is skipped.
+    """
+    global _trame_server_launched
+    if _trame_server_launched:
+        return
+    try:
+        import asyncio
+
+        import nest_asyncio
+        from pyvista.trame.jupyter import launch_server
+
+        nest_asyncio.apply()
+        asyncio.get_event_loop().run_until_complete(launch_server().ready)
+        _trame_server_launched = True
+    except Exception as exc:
+        from tidy3d.log import log
+
+        log.warning(
+            "Failed to pre-launch PyVista's trame Jupyter server "
+            "(%s: %s). Inline plots may fall back to a static image. "
+            "Workaround: run `from pyvista.trame.jupyter import "
+            "launch_server; await launch_server().ready` once at the "
+            "top of your notebook.",
+            type(exc).__name__,
+            exc,
+            log_once=True,
+        )
+
+
 def add_plotter_if_none(plot: Callable) -> Callable:
     """Decorates ``plot(*args, **kwargs, plotter=None)`` function for PyVista.
     If plotter=None in the function call, creates a plotter and feeds it to rest of function.
@@ -263,6 +305,12 @@ def add_plotter_if_none(plot: Callable) -> Callable:
         if windowed is None:
             # Auto-detect: windowed=False (inline) in notebooks, True otherwise
             windowed = not _is_notebook()
+
+        # Pre-launch the trame server in notebook mode regardless of whether
+        # the plotter is user-provided or created here. PyVista's broken sync
+        # launch path is only skipped if the server is already running.
+        if not windowed:
+            _ensure_trame_server_running()
 
         # Track if we created the plotter
         plotter_created = plotter is None
