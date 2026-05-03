@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.11.2] - 2026-05-03
+
+### Added
+
+- Added documentation page explaining the three S-parameter definitions (`pseudo`, `power`, `symmetric_pseudo`) in `TerminalComponentModeler`, including mathematical derivations, symmetry properties, and power calculations.
+- `TerminalComponentModeler` now warns when its `freqs` exceeds the soft limit used by frequency-domain monitors.
+- Added local EME support for expressing a propagated S-matrix in user-supplied port modes.
+
+### Changed
+
+- Added `Result.real_cost` to the design plugin so pre/post runs can report billed FlexCredit usage after execution.
+- Increased the maximum number of EME cells from 100 to 500.
+
+### Fixed
+
+- Fixed mode solver to place PEC boundaries at the closest grid boundary outside the monitor plane, matching user expectations when using the plane bounds as PEC locations (common in RF workflows). Added `solver_field_bounds` to ensure accurate field interpolation near the hard boundary.
+- Fixed `eps_model()` across Tidy3D media classes to consistently accept scalar, list, and NumPy array frequency inputs, including custom and anisotropic media.
+- Fixed `ModeSimulation.from_mode_solver()` to infer a wavelength from the mode-solver-associated simulation source when converting simulations that use auto grid without an explicit `grid_spec.wavelength`.
+- Fixed TFSF source validation to reject setups whose in-domain region collapses to zero extent along both tangential directions, such as 1D simulations.
+- Fixed CustomPoleResidue adjoint postprocessing to preserve the frequency axis for zero-gradient multi-frequency chunks.
+- Stabilized Tidy3D model JSON float formatting across supported pydantic-core versions.
+- Fixed EME S-matrix basis conversion for `EMEModeSweep` results that request different numbers of modes at different sweep points.
+- Fixed `TerminalComponentModeler` to snap `WavePort` internal absorbers and mode sources to the updated simulation grid (which includes the wavelength override and mesh overrides) rather than the original user-provided grid, preventing absorbers from landing off-grid in the final simulation.
+- Fixed inline PyVista plots in Jupyter on Python 3.13+ so they render interactively instead of failing or falling back to a static image.
+
 ## [2.11.1] - 2026-04-21
 
 ### Added
@@ -2099,6 +2124,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.11.2]: https://github.com/flexcompute/tidy3d/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
