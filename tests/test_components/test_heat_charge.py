@@ -2496,9 +2496,17 @@ def test_additional_edge_cases():
 
 
 def test_fossum():
-    """Check that fossum model can be defined."""
+    """Check that fossum model can be defined and warns when ``A`` is not 1."""
 
-    _ = td.FossumCarrierLifetime(tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1)
+    with AssertLogLevel(None):
+        _ = td.FossumCarrierLifetime(
+            tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1
+        )
+
+    with AssertLogLevel("WARNING", contains_str="'FossumCarrierLifetime.A'"):
+        _ = td.FossumCarrierLifetime(
+            tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=2, B=0, C=1, alpha=1
+        )
 
 
 @pytest.mark.parametrize("symmetry", [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0)])

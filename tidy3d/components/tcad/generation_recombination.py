@@ -8,6 +8,7 @@ from pydantic import Field, PositiveFloat, model_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import PERCMCUBE, SECOND
+from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
@@ -15,16 +16,31 @@ if TYPE_CHECKING:
 
 class FossumCarrierLifetime(Tidy3dBaseModel):
     """
-    Parameters for the Fossum carrier lifetime model
+    Doping- and temperature-dependent SRH carrier lifetime.
 
     Notes
     -----
 
-        This model expresses the carrier lifetime as a function of the temperature and doping concentration.
+        This model expresses the Shockley-Read-Hall carrier lifetime as a
+        function of absolute temperature :math:`T` and total ionized dopant
+        concentration :math:`N = N_D + N_A`:
 
         .. math::
 
-            \\tau = \\frac{\\tau_{300} \\left( T/300 \\right)^\\alpha_T}{A + B (N/N_0) + C (N/N_0)^\\alpha}
+            \\tau(N, T) = \\frac{\\tau_{300}\\,(T/300)^{\\alpha_T}}{A + B\\,(N/N_0) + C\\,(N/N_0)^{\\alpha}}
+
+        The model is physically meaningful only with :math:`A = 1`; a
+        warning is emitted if any other value is provided. The
+        :math:`B\\,(N/N_0)` term is the linear doping form introduced by
+        Fossum [1]_, which alone gives
+        :math:`\\tau \\propto 1/(1 + N/N_0)`. The
+        :math:`C\\,(N/N_0)^{\\alpha}` term adds a higher-order doping
+        contribution; typical exponents are :math:`\\alpha = 1`
+        (Fossum-shaped) or :math:`\\alpha = 2`, which reproduces the
+        Auger-like high-doping behaviour obtained by collapsing the
+        SRH + Auger parallel combination of Roulston et al. [2]_ into a
+        single denominator. The :math:`(T/300)^{\\alpha_T}` factor is the
+        empirical temperature scaling of Klaassen [3]_.
 
     Example
     -------
@@ -42,7 +58,19 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
     References
     ----------
 
-        Fossum, J. G., and D. S. Lee. "A physical model for the dependence of carrier lifetime on doping density in nondegenerate silicon." Solid-State Electronics 25.8 (1982): 741-747.
+        .. [1] Fossum, J. G., and D. S. Lee. "A physical model for the
+               dependence of carrier lifetime on doping density in
+               nondegenerate silicon." Solid-State Electronics 25.8 (1982):
+               741-747.
+
+        .. [2] Roulston, D. J., N. D. Arora, and S. G. Chamberlain.
+               "Modeling and measurement of minority-carrier lifetime versus
+               doping in diffused layers of n+-p silicon diodes." IEEE
+               Transactions on Electron Devices ED-29.2 (1982): 284-291.
+
+        .. [3] Klaassen, D. B. M. "A unified mobility model for device
+               simulation - II. Temperature dependence of carrier mobility
+               and lifetime." Solid-State Electronics 35.7 (1992): 961-967.
 
     """
 
@@ -82,6 +110,23 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
         title="Exponent constant",
         description="Exponent constant",
     )
+
+    @model_validator(mode="after")
+    def _warn_if_A_not_one(self: Self) -> Self:
+        """Warn if ``A`` is set to a value other than 1.
+
+        Published parameterizations of this lifetime form (Fossum,
+        Roulston, Klaassen, Schenk) typically take ``A = 1``; other values
+        may have no physical interpretation.
+        """
+        if self.A != 1:
+            log.warning(
+                f"'FossumCarrierLifetime.A' is set to {self.A}, but A = 1 is "
+                "the typical value in published parameterizations of this "
+                "model. Setting a different value may have no physical "
+                "interpretation."
+            )
+        return self
 
 
 CarrierLifetimeType = FossumCarrierLifetime
