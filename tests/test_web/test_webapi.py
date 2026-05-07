@@ -37,9 +37,10 @@ from tidy3d.web.api.container import (
     Job,
     WebContainer,
 )
+from tidy3d.web.api.container_utils import flatten_container
 from tidy3d.web.api.run import _collect_by_hash, run
 from tidy3d.web.api.run_options import log_deprecated_run_args
-from tidy3d.web.api.tidy3d_stub import Tidy3dStubData, task_type_name_of
+from tidy3d.web.api.tidy3d_stub import Tidy3dStub, Tidy3dStubData, task_type_name_of
 from tidy3d.web.api.webapi import (
     abort,
     default_data_filename,
@@ -1286,7 +1287,7 @@ def test_batch_data_items_dict_loads_all_tasks(monkeypatch):
 
     monkeypatch.setattr(BatchData, "load_sim_data", _fake_load)
 
-    loaded_data = dict(batch_data.items())
+    loaded_data = dict(batch_data.task_items())
 
     assert loaded_data == {task_name: f"loaded_{task_name}" for task_name in task_names}
     assert loaded_task_names == list(task_names)
@@ -1574,21 +1575,20 @@ def test_batch_accepts_string_simulation_keys():
     assert tuple(batch.simulations.keys()) == ("0", "1")
 
 
-def test_batch_rejects_numeric_simulation_keys_with_clear_message():
+def test_batch_rejects_numeric_simulation_keys():
     sims = {0: make_sim()}
 
-    with pytest.raises(
-        ValidationError,
-        match=r"Batch simulations keys must be strings \(task names\)",
-    ):
+    with pytest.raises(ValidationError, match="mapping keys must be strings") as exc_info:
         Batch(simulations=sims, folder_name=PROJECT_NAME)
+    assert exc_info.value.errors()[0]["loc"] == ("simulations",)
 
 
-def test_batch_rejects_non_string_non_numeric_simulation_keys():
+def test_batch_rejects_tuple_simulation_keys_legacy_case():
     sims = {("task",): make_sim()}
 
-    with pytest.raises(ValidationError, match=r"Use explicit string keys"):
+    with pytest.raises(ValidationError, match="mapping keys must be strings") as exc_info:
         Batch(simulations=sims, folder_name=PROJECT_NAME)
+    assert exc_info.value.errors()[0]["loc"] == ("simulations",)
 
 
 @responses.activate
@@ -2138,7 +2138,8 @@ def test_batch_start_surfaces_start_errors(monkeypatch):
 def test_batch_load_parallel_status_collection(monkeypatch, tmp_path):
     warning_messages = []
     monkeypatch.setattr(
-        "tidy3d.web.api.container.log.warning", lambda msg: warning_messages.append(msg)
+        "tidy3d.web.api.container.log.warning",
+        lambda msg, **kwargs: warning_messages.append(msg),
     )
 
     sims = {"ok_task": make_sim(), "bad_task": make_sim()}
@@ -2154,7 +2155,79 @@ def test_batch_load_parallel_status_collection(monkeypatch, tmp_path):
 
     assert data.task_ids == {"ok_task": "ok_task_id"}
     assert set(data.task_paths.keys()) == {"ok_task"}
-    assert warning_messages == ["Not loading 'bad_task' as the task errored."]
+    assert "Not loading 'bad_task' as the task errored." in warning_messages
+
+
+def test_batch_load_nested_partial_failure_returns_none(monkeypatch, tmp_path):
+    warning_messages = []
+    error_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.log.warning",
+        lambda msg, **kwargs: warning_messages.append(msg),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.log.error", lambda msg: error_messages.append(msg)
+    )
+
+    sim_container = {"group": [make_sim(), make_sim()]}
+    batch = Batch(simulations=sim_container, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+    flat_simulations = batch._flat_simulations
+    task_names = list(flat_simulations.keys())
+    batch._cached_properties = {
+        "jobs": {
+            task_names[0]: LoadStatusFakeJob(
+                "ok_task_id", "success", flat_simulations[task_names[0]]
+            ),
+            task_names[1]: LoadStatusFakeJob(
+                "bad_task_id", "blocked", flat_simulations[task_names[1]]
+            ),
+        }
+    }
+
+    apply_common_patches(
+        monkeypatch,
+        tmp_path,
+        taskid_to_sim={"ok_task_id": flat_simulations[task_names[0]]},
+    )
+
+    data = batch.load(path_dir=str(tmp_path), skip_download=True)
+
+    assert isinstance(data, BatchData)
+    assert data["group"][1] is None
+    assert f"Not loading '{task_names[1]}' as the task errored." in warning_messages
+    assert error_messages == [
+        f"Task '{task_names[1]}' has no loaded result available in this batch; returning None."
+    ]
+
+
+def test_batch_load_flat_partial_failure_keeps_keyerror(monkeypatch, tmp_path):
+    warning_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.log.warning",
+        lambda msg, **kwargs: warning_messages.append(msg),
+    )
+
+    sims = {"ok_task": make_sim(), "bad_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+    batch._cached_properties = {
+        "jobs": {
+            "ok_task": LoadStatusFakeJob("ok_task_id", "success", sims["ok_task"]),
+            "bad_task": LoadStatusFakeJob("bad_task_id", "blocked", sims["bad_task"]),
+        }
+    }
+
+    apply_common_patches(
+        monkeypatch,
+        tmp_path,
+        taskid_to_sim={"ok_task_id": sims["ok_task"]},
+    )
+
+    data = batch.load(path_dir=str(tmp_path), skip_download=True)
+
+    assert data.task_tree is None
+    with pytest.raises(KeyError):
+        _ = data["bad_task"]
+    assert "Not loading 'bad_task' as the task errored." in warning_messages
 
 
 def test_batch_load_reuses_terminal_status_snapshot(monkeypatch, tmp_path):
@@ -2199,7 +2272,8 @@ def test_batch_load_does_not_upload_unknown_tasks(monkeypatch, tmp_path):
 
     monkeypatch.setattr("tidy3d.web.api.container.Job._upload", _raise_upload)
     monkeypatch.setattr(
-        "tidy3d.web.api.container.log.warning", lambda msg: warning_messages.append(msg)
+        "tidy3d.web.api.container.log.warning",
+        lambda msg, **kwargs: warning_messages.append(msg),
     )
 
     sims = {"task_a": make_sim()}
@@ -2215,7 +2289,8 @@ def test_batch_load_does_not_upload_unknown_tasks(monkeypatch, tmp_path):
 def test_batch_load_keeps_cached_task_with_missing_task_id(monkeypatch, tmp_path):
     warning_messages = []
     monkeypatch.setattr(
-        "tidy3d.web.api.container.log.warning", lambda msg: warning_messages.append(msg)
+        "tidy3d.web.api.container.log.warning",
+        lambda msg, **kwargs: warning_messages.append(msg),
     )
 
     class CachedMissingTaskIdJob:
@@ -2579,6 +2654,208 @@ def test_run_with_flexible_containers_offline_lazy(monkeypatch, tmp_path):
 
     assert data[0].simulation == sim1
     assert data[1]["sim2"].simulation == sim2
+
+
+@responses.activate
+def test_batch_with_flexible_containers_offline(monkeypatch, tmp_path):
+    sim1 = make_sim()
+    sim2 = sim1.updated_copy(run_time=sim1.run_time / 2)
+    sim_container = [sim1, {"sim": sim1, "sim2": sim2}, (sim2, [sim1])]
+
+    batch = Batch(
+        simulations=sim_container,
+        folder_name=PROJECT_NAME,
+        verbose=False,
+        lazy=True,
+    )
+    assert isinstance(batch.simulations, tuple)
+    assert isinstance(batch.simulations[1], dict)
+    assert isinstance(batch.simulations[2], tuple)
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=batch._flat_simulations)
+
+    data = batch.run(path_dir=str(tmp_path))
+
+    assert len(batch.jobs) == 5
+    assert isinstance(data, BatchData)
+    assert len(data) == 3
+    assert tuple(data.keys()) == (0, 1, 2)
+    assert is_lazy_object(data[0])
+
+    assert isinstance(data[1], dict)
+    assert is_lazy_object(data[1]["sim"])
+    assert is_lazy_object(data[1]["sim2"])
+    assert data[1]["sim"].simulation == sim1
+    assert data[1]["sim2"].simulation == sim2
+
+    assert isinstance(data[2], tuple)
+    assert is_lazy_object(data[2][0])
+    assert isinstance(data[2][1], tuple)
+    assert is_lazy_object(data[2][1][0])
+    assert data[2][0].simulation == sim2
+    assert data[2][1][0].simulation == sim1
+    assert len(dict(data.task_items())) == 5
+
+
+def test_batch_preserves_flat_parent_tasks_for_unsanitized_task_names():
+    sims = {"my task": make_sim()}
+    parent_tasks = {"my task": ("parent_a",)}
+
+    batch = Batch(simulations=sims, parent_tasks=parent_tasks, verbose=False)
+
+    assert batch.parent_tasks == parent_tasks
+    assert batch.jobs["my task"].parent_tasks == ("parent_a",)
+
+
+@responses.activate
+def test_batch_tuple_shape_survives_file_roundtrip(monkeypatch, tmp_path):
+    sim1 = make_sim()
+    sim2 = sim1.updated_copy(run_time=sim1.run_time / 2)
+    sim_container = {"outer": (sim1, [sim2])}
+
+    batch = Batch(simulations=sim_container, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+    batch_path = tmp_path / "batch_nested.hdf5"
+    batch.to_file(batch_path)
+
+    loaded_batch = Batch.from_file(batch_path, lazy=True)
+    assert isinstance(loaded_batch.simulations["outer"], tuple)
+    assert isinstance(loaded_batch.simulations["outer"][1], tuple)
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=loaded_batch._flat_simulations)
+
+    data = loaded_batch.run(path_dir=str(tmp_path))
+
+    assert isinstance(data, BatchData)
+    assert isinstance(data["outer"], tuple)
+    assert is_lazy_object(data["outer"][0])
+    assert isinstance(data["outer"][1], tuple)
+    assert is_lazy_object(data["outer"][1][0])
+    assert data["outer"][0].simulation == sim1
+    assert data["outer"][1][0].simulation == sim2
+
+
+@responses.activate
+def test_batch_with_nested_top_level_list_offline(monkeypatch, tmp_path):
+    sim1 = make_sim()
+    sim2 = sim1.updated_copy(run_time=sim1.run_time / 2)
+    sim3 = sim1.updated_copy(run_time=sim1.run_time / 3)
+    sim_container = [sim1, [sim2, sim3]]
+
+    batch = Batch(simulations=sim_container, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=batch._flat_simulations)
+
+    data = batch.run(path_dir=str(tmp_path))
+
+    assert isinstance(data, BatchData)
+    assert is_lazy_object(data[0])
+    assert isinstance(data[1], tuple)
+    assert is_lazy_object(data[1][0])
+    assert is_lazy_object(data[1][1])
+    assert data[0].simulation == sim1
+    assert data[1][0].simulation == sim2
+    assert data[1][1].simulation == sim3
+
+
+def test_batch_data_mapping_views_for_nested_sequence(monkeypatch):
+    task_names = ("task_a", "task_b")
+    batch_data = BatchData(
+        task_paths={task_name: f"{task_name}.hdf5" for task_name in task_names},
+        task_ids={task_name: f"id_{task_name}" for task_name in task_names},
+        cached_tasks=dict.fromkeys(task_names, False),
+        is_downloaded=True,
+        task_tree=task_names,
+    )
+
+    monkeypatch.setattr(BatchData, "load_sim_data", lambda self, task_name: f"loaded_{task_name}")
+
+    keys = batch_data.keys()
+    items = batch_data.items()
+    values = batch_data.values()
+
+    assert len(keys) == 2
+    assert 0 in keys
+    assert list(keys) == [0, 1]
+    assert list(items) == [(0, "loaded_task_a"), (1, "loaded_task_b")]
+    assert list(items) == [(0, "loaded_task_a"), (1, "loaded_task_b")]
+    assert list(values) == ["loaded_task_a", "loaded_task_b"]
+
+    with pytest.raises(KeyError):
+        _ = batch_data[-1]
+    with pytest.raises(KeyError):
+        _ = batch_data[2]
+
+
+@responses.activate
+def test_batch_top_level_sequence_preserves_legacy_task_names(monkeypatch, tmp_path):
+    sim1 = make_sim()
+    sim2 = sim1.updated_copy(run_time=sim1.run_time / 2)
+    sim_container = [sim1, sim2]
+
+    monkeypatch.setattr(Tidy3dStub, "get_default_task_name", lambda self: "legacy_task")
+
+    batch = Batch(simulations=sim_container, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+    assert tuple(batch._flat_simulations) == ("legacy_task_1", "legacy_task_2")
+    assert batch.task_tree is None
+    batch_path = tmp_path / "batch_top_level_sequence.hdf5"
+    batch.to_file(batch_path)
+
+    loaded_batch = Batch.from_file(batch_path, lazy=True)
+    assert loaded_batch.task_tree is None
+    assert tuple(loaded_batch.jobs) == ("legacy_task_1", "legacy_task_2")
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=loaded_batch._flat_simulations)
+
+    data = loaded_batch.run(path_dir=str(tmp_path))
+
+    assert isinstance(data, BatchData)
+    assert data.task_tree is None
+    assert tuple(data) == ("legacy_task_1", "legacy_task_2")
+    assert is_lazy_object(data["legacy_task_1"])
+    with pytest.raises(KeyError):
+        _ = data[0]
+
+
+@responses.activate
+def test_flat_batch_preserves_unsanitized_task_names(monkeypatch, tmp_path):
+    sim = make_sim()
+    task_name = "my task"
+
+    batch = Batch(simulations={task_name: sim}, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+    assert batch._flat_simulations == {task_name: sim}
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=batch._flat_simulations)
+
+    data = batch.run(path_dir=str(tmp_path))
+
+    assert isinstance(data, BatchData)
+    assert is_lazy_object(data[task_name])
+    assert data[task_name].simulation == sim
+
+
+def test_batch_rejects_tuple_mapping_key():
+    sim = make_sim()
+    sim_container = {("task",): sim}
+
+    with pytest.raises(ValueError, match="mapping keys must be strings"):
+        Batch(simulations=sim_container, folder_name=PROJECT_NAME, verbose=False, lazy=True)
+
+
+@pytest.mark.parametrize("container_key", [("task",), 1])
+def test_batch_rejects_non_string_mapping_key(container_key):
+    sim = make_sim()
+    with pytest.raises(ValueError, match="mapping keys must be strings"):
+        Batch(
+            simulations={container_key: sim},
+            folder_name=PROJECT_NAME,
+            verbose=False,
+            lazy=True,
+        )
+
+
+def test_flatten_container_avoids_sanitized_name_collisions():
+    flat = flatten_container(
+        {"x y": "first", "x_y": "second", "x_y__2": "third"},
+        is_leaf=lambda value: isinstance(value, str),
+    )
+
+    assert len(flat) == 3
+    assert set(flat.values()) == {"first", "second", "third"}
 
 
 @responses.activate

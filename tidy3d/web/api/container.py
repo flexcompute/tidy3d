@@ -13,14 +13,23 @@ import uuid
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast, get_args
 
-from pydantic import Field, PositiveInt, PrivateAttr, field_validator, model_validator
+from pydantic import (
+    Field,
+    PositiveInt,
+    PrivateAttr,
+    TypeAdapter,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d._runtime import WASM_BUILD
-from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.base import TYPE_TO_CLASS_MAP, Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.workflow import WorkflowType
@@ -28,6 +37,11 @@ from tidy3d.config import config
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
+from tidy3d.web.api.container_types import BatchInput, BatchTaskTree
+from tidy3d.web.api.container_utils import (
+    flatten_task_container,
+    reconstruct_task_container,
+)
 from tidy3d.web.api.states import (
     COMPLETED_PERCENT,
     COMPLETED_STATES,
@@ -48,12 +62,13 @@ from tidy3d.web.core.task_info import BatchDetail
 from tidy3d.web.core.types import PayType
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Hashable, Iterator
     from os import PathLike
 
     from rich.progress import TaskID
 
     from tidy3d.components.types.workflow import WorkflowDataType
+    from tidy3d.web.api.container_types import BatchOutput
     from tidy3d.web.core.task_info import RunInfo, TaskInfo
 
 DEFAULT_DATA_DIR = "."
@@ -80,6 +95,84 @@ BatchCategoryType = Literal[
 def _default_batch_num_workers() -> int:
     """Default worker count from runtime config."""
     return config.web.default_num_workers
+
+
+def _validate_batch_mapping_key(key: object) -> None:
+    """Ensure batch mapping keys are strings."""
+    if not isinstance(key, str):
+        raise ValueError(
+            "Batch simulation mapping keys must be strings. "
+            f"Got key {key!r} of type {type(key).__name__!r}."
+        )
+
+
+def _is_flat_batch_simulation_mapping(simulations: object) -> bool:
+    """Return ``True`` for the historical flat ``dict[str, WorkflowType]`` batch shape."""
+    return isinstance(simulations, Mapping) and all(
+        isinstance(task_name, str) and isinstance(simulation, WorkflowType)
+        for task_name, simulation in simulations.items()
+    )
+
+
+def _is_flat_batch_simulation_sequence(simulations: object) -> bool:
+    """Return ``True`` for the historical top-level sequence-of-workflows batch shape."""
+    return isinstance(simulations, tuple) and all(
+        isinstance(simulation, WorkflowType) for simulation in simulations
+    )
+
+
+def _normalize_task_tree_node(value: object) -> object:
+    """Restore tuple-backed task-tree sequence nodes after file deserialization."""
+    if isinstance(value, tuple):
+        return tuple(_normalize_task_tree_node(item) for item in value)
+    if isinstance(value, list):
+        return tuple(_normalize_task_tree_node(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _normalize_task_tree_node(item) for key, item in value.items()}
+    return value
+
+
+def _legacy_sequence_task_mapping(
+    simulations: tuple[WorkflowType, ...],
+) -> dict[TaskName, WorkflowType]:
+    """Build the historical flat task-name mapping for top-level workflow sequences."""
+    flat_simulations: dict[TaskName, WorkflowType] = {}
+    for index, simulation in enumerate(simulations, 1):
+        stub = Tidy3dStub(simulation=simulation)
+        task_name = stub.get_default_task_name() + f"_{index}"
+        flat_simulations[task_name] = simulation
+    return flat_simulations
+
+
+def _is_serialized_workflow_leaf(value: object) -> bool:
+    """Return ``True`` only for serialized workflow-model leaves."""
+    if not isinstance(value, Mapping):
+        return False
+
+    type_name = value.get("type")
+    if not isinstance(type_name, str):
+        return False
+
+    workflow_cls = TYPE_TO_CLASS_MAP.get(type_name)
+    return isinstance(workflow_cls, type) and any(
+        issubclass(workflow_cls, candidate) for candidate in _workflow_leaf_classes()
+    )
+
+
+@lru_cache(maxsize=1)
+def _workflow_leaf_classes() -> tuple[type, ...]:
+    """Flatten ``WorkflowType`` into its concrete runtime classes."""
+
+    def _flatten(type_hint: object) -> tuple[type, ...]:
+        args = get_args(type_hint)
+        if not args:
+            return (type_hint,) if isinstance(type_hint, type) else ()
+        return tuple(cls for arg in args for cls in _flatten(arg))
+
+    return _flatten(WorkflowType)
+
+
+_WORKFLOW_ADAPTER = TypeAdapter(discriminated_union(WorkflowType))
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -653,11 +746,12 @@ class BatchData(Tidy3dBaseModel, Mapping):
     Notes
     -----
 
-        When the batch is completed, the output is not a :class:`~tidy3d.SimulationData` but rather a
-        :class:`BatchData`. The data within this :class:`BatchData` object can either be indexed
-        directly ``batch_results[task_name]`` or can be looped through ``batch_results.items()`` to
-        get the :class:`~tidy3d.SimulationData` for each task.
-        Converting with ``dict(batch_results.items())`` eagerly touches all tasks and can load all
+        When the batch is completed, the output is not a :class:`~tidy3d.SimulationData` but rather
+        a :class:`BatchData`. For flat batches created from ``dict[str, simulation]``, this behaves
+        like the historical flat task-name mapping. For nested batches, indexing and iteration
+        follow the original top-level container shape while flat task access remains available
+        through ``load_sim_data()`` and ``task_items()``. Converting nested results with
+        ``dict(batch_results.items())`` eagerly touches all top-level entries and can load all
         results.
 
     See Also
@@ -708,8 +802,19 @@ class BatchData(Tidy3dBaseModel, Mapping):
         description="Whether the simulation data was downloaded before.",
     )
 
-    _data_cache: dict[TaskName, WorkflowDataType] = PrivateAttr(default_factory=dict)
+    task_tree: BatchTaskTree | None = Field(
+        None,
+        title="Task Tree",
+        description="Optional nested mapping from container positions to flat batch task names.",
+    )
+
     _cache_enabled: bool | None = PrivateAttr(default=None)
+
+    @field_validator("task_tree", mode="before")
+    @classmethod
+    def _normalize_task_tree(cls, value: object) -> object:
+        """Restore tuple-backed sequence nodes after file deserialization."""
+        return _normalize_task_tree_node(value)
 
     def _should_cache_data(self) -> bool:
         """Return True when in-memory caching should be enabled for batch data."""
@@ -778,21 +883,65 @@ class BatchData(Tidy3dBaseModel, Mapping):
             return self._get_cached_value_by_key("load_sim_data", task_name, lambda: data)
         return data
 
-    def __getitem__(self, task_name: TaskName) -> WorkflowDataType:
-        """Get the simulation data object for a given ``task_name``.
-
-        When ``config.batch_data_cache.enabled`` is `True` and the batch data size is within
-        the configured threshold, the result is cached in memory.
-        """
+    def _load_sim_data_if_available(self, task_name: str) -> WorkflowDataType | None:
+        """Load task data when available, or ``None`` for skipped / errored tasks."""
+        if task_name not in self.task_paths or task_name not in self.task_ids:
+            log.error(
+                f"Task '{task_name}' has no loaded result available in this batch; returning None."
+            )
+            return None
         return self.load_sim_data(task_name)
 
-    def __iter__(self) -> Iterator[TaskName]:
-        """Iterate over the task names."""
+    def _load_container_node(self, node: BatchTaskTree) -> BatchOutput:
+        """Load a nested container node using the stored task-name tree."""
+        return reconstruct_task_container(node, self._load_sim_data_if_available)
+
+    def __getitem__(self, key: Hashable) -> WorkflowDataType | BatchOutput:
+        """Get batch results by flat task name or by nested container key/index.
+
+        When a nested simulation container was used to create the batch, top-level dict
+        keys and sequence indices are resolved against that normalized container shape
+        before falling back to flat task-name lookup.
+        """
+        if self.task_tree is not None:
+            if isinstance(self.task_tree, dict) and key in self.task_tree:
+                return self._load_container_node(self.task_tree[key])
+            if isinstance(self.task_tree, tuple) and isinstance(key, int):
+                if 0 <= key < len(self.task_tree):
+                    return self._load_container_node(self.task_tree[key])
+                raise KeyError(key)
+
+        if isinstance(key, str):
+            return self.load_sim_data(key)
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[Hashable]:
+        """Iterate over top-level container keys, or flat task names for flat batches."""
+        if isinstance(self.task_tree, dict):
+            return iter(self.task_tree)
+        if isinstance(self.task_tree, tuple):
+            return iter(range(len(self.task_tree)))
         return iter(self.task_paths)
 
     def __len__(self) -> int:
-        """Return the number of tasks in the batch."""
+        """Return the top-level container size, or task count for flat batches."""
+        if isinstance(self.task_tree, (dict, tuple)):
+            return len(self.task_tree)
         return len(self.task_paths)
+
+    def task_names(self) -> Iterator[TaskName]:
+        """Return an iterator over flat batch task names."""
+        return iter(self.task_paths)
+
+    def task_items(self) -> Iterator[tuple[TaskName, WorkflowDataType]]:
+        """Iterate over flat ``(task_name, sim_data)`` pairs."""
+        for task_name in self.task_paths:
+            yield task_name, self.load_sim_data(task_name)
+
+    def task_values(self) -> Iterator[WorkflowDataType]:
+        """Iterate over flat simulation data values."""
+        for _, value in self.task_items():
+            yield value
 
     @classmethod
     def load(
@@ -810,10 +959,10 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
         Returns
         ------
-        :class:`BatchData`
-            Contains Union[:class:`~tidy3d.SimulationData`, :class:`~tidy3d.HeatSimulationData`,
-            :class:`~tidy3d.EMESimulationData`] for each Union[:class:`~tidy3d.Simulation`,
-            :class:`~tidy3d.HeatSimulation`, :class:`~tidy3d.EMESimulation`] in :class:`Batch`.
+        :class:`.BatchData`
+            Returns a ``BatchData`` mapping. When initialized from a nested container,
+            ``__getitem__`` also supports the original top-level dict keys and sequence
+            indices.
         """
         base_dir = Path(path_dir)
         batch_file = Batch._batch_path(path_dir=base_dir)
@@ -849,12 +998,10 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: (
-        dict[TaskName, discriminated_union(WorkflowType)]
-        | tuple[discriminated_union(WorkflowType), ...]
-    ) = Field(
+    simulations: BatchInput = Field(
         title="Simulations",
-        description="Mapping of task names to Simulations to run as a batch.",
+        description="Simulation or nested container of simulations to run as a batch. "
+        "Nested mapping containers must use string keys.",
     )
 
     folder_name: str = Field(
@@ -927,6 +1074,12 @@ class Batch(WebContainer):
         "fields that were not used to create the task will cause errors.",
     )
 
+    task_tree: BatchTaskTree | None = Field(
+        None,
+        title="Task Tree",
+        description="Internal nested mapping from container positions to flat batch task names.",
+    )
+
     lazy: bool = Field(
         False,
         title="Lazy",
@@ -937,22 +1090,84 @@ class Batch(WebContainer):
     _terminal_status_by_task: dict[TaskName, str] = PrivateAttr(default_factory=dict)
     _terminal_task_id_by_task: dict[TaskName, TaskId] = PrivateAttr(default_factory=dict)
 
+    @field_validator("simulations", mode="plain")
+    @classmethod
+    def _skip_simulations_field_revalidation(cls, value: object) -> BatchInput:
+        """Skip recursive ``BatchInput`` validation after field-level normalization."""
+        return cast(BatchInput, value)
+
+    @field_serializer("simulations", mode="plain", return_type=Any)
+    def _serialize_simulations(self, value: BatchInput) -> Any:
+        """Serialize normalized workflow containers without re-walking ``BatchInput``."""
+        return value
+
     @field_validator("simulations", mode="before")
     @classmethod
-    def _validate_simulation_keys_are_task_names(cls, simulations: Any) -> Any:
-        """Ensure mapping keys are task-name strings with a concise error message."""
-        if not isinstance(simulations, Mapping):
-            return simulations
+    def _normalize_simulations_field(cls, value: object) -> object:
+        """Normalize nested simulation containers on the field for loc-aware errors."""
+        return cls._validate_simulations_container(value)
 
-        for task_name in simulations:
-            if not isinstance(task_name, str):
-                raise ValueError(
-                    "Batch simulations keys must be strings (task names). "
-                    f"Got key {task_name!r} of type {type(task_name).__name__!r}. "
-                    "Use explicit string keys, for example: simulations[str(i)] = simulation."
-                )
+    @field_validator("task_tree", mode="before")
+    @classmethod
+    def _normalize_batch_task_tree(cls, value: object) -> object:
+        """Restore tuple-backed sequence nodes after batch file deserialization."""
+        return _normalize_task_tree_node(value)
 
-        return simulations
+    @staticmethod
+    def _validate_simulations_container(simulations: object) -> object:
+        """Validate container structure while normalizing sequences to tuples."""
+
+        def _recur(value: object) -> object:
+            if isinstance(value, WorkflowType):
+                return value
+            if _is_serialized_workflow_leaf(value):
+                return _WORKFLOW_ADAPTER.validate_python(value)
+            if isinstance(value, tuple):
+                return tuple(_recur(item) for item in value)
+            if isinstance(value, list):
+                return tuple(_recur(item) for item in value)
+            if isinstance(value, Mapping):
+                result = {}
+                for key, item in value.items():
+                    _validate_batch_mapping_key(key)
+                    result[key] = _recur(item)
+                return result
+            raise TypeError(f"Unsupported element in container: {type(value)!r}")
+
+        return _recur(simulations)
+
+    @cached_property
+    def _flattened_simulations(self) -> tuple[dict[TaskName, WorkflowType], BatchTaskTree]:
+        """Return the flat task mapping plus tuple-backed task tree for this batch."""
+        if _is_flat_batch_simulation_mapping(self.simulations):
+            flat_simulations = dict(self.simulations)
+            return flat_simulations, {task_name: task_name for task_name in flat_simulations}
+        if _is_flat_batch_simulation_sequence(self.simulations):
+            flat_simulations = _legacy_sequence_task_mapping(self.simulations)
+            return flat_simulations, tuple(flat_simulations)
+        return flatten_task_container(
+            self.simulations,
+            is_leaf=lambda value: isinstance(value, WorkflowType),
+            validate_dict_key=_validate_batch_mapping_key,
+        )
+
+    @property
+    def _flat_simulations(self) -> dict[TaskName, WorkflowType]:
+        """Flat task-name mapping used by batch internals."""
+        return self._flattened_simulations[0]
+
+    @property
+    def _simulation_task_tree(self) -> BatchTaskTree:
+        """Transient task tree derived from ``self.simulations`` when needed."""
+        return self._flattened_simulations[1]
+
+    @property
+    def _has_nested_simulation_container(self) -> bool:
+        """Whether batch results should expose nested container access."""
+        return not (
+            _is_flat_batch_simulation_mapping(self.simulations)
+            or _is_flat_batch_simulation_sequence(self.simulations)
+        )
 
     def run(
         self,
@@ -986,9 +1201,9 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`~tidy3d.SimulationData`, :class:`~tidy3d.HeatSimulationData`,
-            :class:`~tidy3d.EMESimulationData`] for each Union[:class:`~tidy3d.Simulation`,
-            :class:`~tidy3d.HeatSimulation`, :class:`~tidy3d.EMESimulation`] in :class:`Batch`.
+            Contains the batch results. Flat batches keep the historical task-name mapping
+            interface, while nested batches expose the original top-level container shape.
+            Use ``task_items()`` or ``load_sim_data(task_name)`` for flat task access.
 
         Note
         ----
@@ -997,14 +1212,17 @@ class Batch(WebContainer):
         >>> from tidy3d.web.api.container import Batch
         >>> custom_batch = Batch()
         >>> batch_data = custom_batch.run() # doctest: +SKIP
-        >>> for task_name, sim_data in batch_data.items(): # doctest: +SKIP
+        >>> for task_name, sim_data in batch_data.task_items(): # doctest: +SKIP
         ...     # do something with data. # doctest: +SKIP
 
-        ``batch_data`` iterates over task names and loads the corresponding data
-        from file one by one. If no file exists for that task, it downloads it.
-        When ``config.batch_data_cache.enabled`` is ``True`` and the
+        For flat batches, ``batch_data`` iterates over task names and loads the corresponding
+        data from file one by one. Nested batches instead iterate over top-level container
+        entries; use ``task_items()`` for flat task iteration. If no file exists for a task,
+        it is downloaded when accessed. When ``config.batch_data_cache.enabled`` is ``True`` and the
         total size of all task files is below `config.batch_data_cache.max_total_size_gb`,
         accessed results are cached in memory to avoid repeated loads.
+
+        Nested mapping containers must use string keys.
         """
         loaded = [job.load_if_cached for job in self.jobs.values()]
         self._check_path_dir(path_dir)
@@ -1040,14 +1258,7 @@ class Batch(WebContainer):
         if self.jobs_cached is not None:
             return self.jobs_cached
 
-        if isinstance(self.simulations, tuple):
-            simulations = {}
-            for i, sim in enumerate(self.simulations, 1):
-                stub = Tidy3dStub(simulation=sim)
-                task_name = stub.get_default_task_name() + f"_{i}"
-                simulations[task_name] = sim
-        else:
-            simulations = self.simulations
+        simulations = self._flat_simulations
 
         # the type of job to upload (to generalize to subclasses)
         JobType = self._job_type
@@ -1084,6 +1295,7 @@ class Batch(WebContainer):
         Example
         -------
         >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+
         """
         jobs_cached = self._cached_properties.get("jobs")
         if jobs_cached is not None:
@@ -1092,6 +1304,9 @@ class Batch(WebContainer):
                 task_id = job._cached_properties.get("task_id")
                 jobs[key] = job.updated_copy(task_id_cached=task_id)
             self = self.updated_copy(jobs_cached=jobs)
+        self = self.updated_copy(
+            task_tree=self._simulation_task_tree if self._has_nested_simulation_container else None
+        )
         super(Batch, self).to_file(fname=fname)  # noqa: UP008
 
     @classmethod
@@ -1673,7 +1888,7 @@ class Batch(WebContainer):
 
         Note
         ----
-        To load and iterate through the data, use :meth:`Batch.items()`.
+        To load and iterate through the data, use :meth:`BatchData.task_items()`.
 
         The data for each task will be named as ``{path_dir}/{task_id}.hdf5``.
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
@@ -1881,13 +2096,20 @@ class Batch(WebContainer):
             cached_tasks=loaded_from_cache,
             lazy=self.lazy,
             is_downloaded=True,
+            task_tree=(
+                self.task_tree
+                if self.task_tree is not None
+                else self._simulation_task_tree
+                if self._has_nested_simulation_container
+                else None
+            ),
         )
 
         for task_name, job in self.jobs.items():
             if task_name not in task_paths:
                 continue
             if isinstance(job.simulation, ModeSolver):
-                job_data = data[task_name]
+                job_data = data.load_sim_data(task_name)
                 if not loaded_from_cache[task_name]:
                     _store_mode_solver_in_cache(
                         task_ids[task_name], job.simulation, job_data, task_paths[task_name]
