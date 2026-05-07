@@ -1177,6 +1177,49 @@ def test_polyslab_set_safe_update_repairs_self_intersections():
     assert not np.allclose(repaired_ring, broken_ring)
 
 
+def test_polyslab_set_safe_update_preserves_stable_ring_order_after_area_flip():
+    small = td.PolySlab(
+        vertices=np.array([[5.0, 0.0], [6.0, 0.0], [6.0, 1.0], [5.0, 1.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    big = td.PolySlab(
+        vertices=np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    polyslab_set = PolySlabSet(
+        solid_polyslabs=(small, big),
+        hole_polyslabs=(),
+        solid_frame_boundary_vertex_mask=(
+            np.zeros((4,), dtype=bool),
+            np.zeros((4,), dtype=bool),
+        ),
+        hole_frame_boundary_vertex_mask=(),
+        frame_bounds=((-10.0, -10.0), (10.0, 10.0)),
+        in_plane_step=1.0,
+    )
+    assert polyslab_set.stable_ring_refs == (("solid", 1), ("solid", 0))
+
+    new_big = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], dtype=float)
+    new_small = np.array([[5.0, 0.0], [10.0, 0.0], [10.0, 5.0], [5.0, 5.0]], dtype=float)
+    proposed_flat = np.concatenate([new_big.reshape(-1), new_small.reshape(-1)])
+
+    updated, status = polyslab_set.safe_update(
+        proposed_flat,
+        freeze_boundary=False,
+        respect_bounds=True,
+    )
+
+    assert status == SelfIntersectionStatus.FULL_UPDATE_APPLIED
+    assert updated.stable_ring_refs == polyslab_set.stable_ring_refs
+
+    internal_areas = [
+        float(ShapelyPolygon(np.asarray(ring, dtype=float)).area) for ring in updated.ring_vertices
+    ]
+    assert internal_areas == pytest.approx([1.0, 25.0])
+
+
 def test_repair_self_intersecting_ring_repairs_invalid_ring():
     current_ring = np.array(
         [
@@ -1468,6 +1511,53 @@ def test_polyslab_set_to_structures_preserves_nested_topology_order():
     assert [structure.medium.permittivity for structure in structures] == pytest.approx(
         [12.0, 1.5, 12.0]
     )
+
+
+def test_polyslab_set_preserves_stable_internal_order_but_area_sorts_structures():
+    first = td.PolySlab(
+        vertices=np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    second = td.PolySlab(
+        vertices=np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]], dtype=float),
+        slab_bounds=(-0.2, 0.2),
+        axis=2,
+    )
+    polyslab_set = PolySlabSet(
+        solid_polyslabs=(first, second),
+        hole_polyslabs=(),
+        solid_frame_boundary_vertex_mask=(
+            np.array([False, False, False, False]),
+            np.array([False, False, False, False]),
+        ),
+        hole_frame_boundary_vertex_mask=(),
+        frame_bounds=((0.0, 0.0), (4.0, 4.0)),
+        in_plane_step=1.0,
+    )
+
+    flat_before = polyslab_set.flatten_ring_vertices()
+    counts_before = polyslab_set.ring_vertex_counts
+
+    first_small = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], dtype=float)
+    second_big = np.array([[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0]], dtype=float)
+    updated = polyslab_set.with_ring_vertices((first_small, second_big))
+
+    np.testing.assert_allclose(updated.ring_vertices[0], first_small)
+    np.testing.assert_allclose(updated.ring_vertices[1], second_big)
+    assert updated.ring_vertex_counts == counts_before
+    assert updated.flatten_ring_vertices().shape == flat_before.shape
+
+    structures = updated.to_structures(
+        foreground_medium=make_scalar_medium(12.0),
+        background_medium=make_scalar_medium(1.5),
+        name_prefix="stable_order",
+    )
+    structure_areas = [
+        float(ShapelyPolygon(np.asarray(structure.geometry.vertices, dtype=float)).area)
+        for structure in structures
+    ]
+    assert structure_areas == pytest.approx(sorted(structure_areas, reverse=True))
 
 
 @pytest.mark.parametrize("pixel_exact", [False, True])

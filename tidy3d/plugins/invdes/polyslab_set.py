@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from functools import cached_property
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
@@ -42,6 +41,32 @@ class PolySlabSet:
     hole_frame_boundary_vertex_mask: tuple[npo.ndarray, ...]
     frame_bounds: Bound2D
     in_plane_step: float
+    _stable_ring_refs: tuple[tuple[str, int], ...] | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        expected_ring_refs = tuple(
+            [("solid", idx) for idx in range(len(self.solid_polyslabs))]
+            + [("hole", idx) for idx in range(len(self.hole_polyslabs))]
+        )
+        stable_ring_refs = self._stable_ring_refs
+        if stable_ring_refs is None:
+            stable_ring_refs = ordered_ring_refs_by_area(self.solid_polyslabs, self.hole_polyslabs)
+        else:
+            if len(stable_ring_refs) != len(expected_ring_refs):
+                raise ValueError("stable_ring_refs length must match total number of rings.")
+            if set(stable_ring_refs) != set(expected_ring_refs):
+                raise ValueError(
+                    "stable_ring_refs must be a permutation of all solid/hole ring refs."
+                )
+        object.__setattr__(self, "_stable_ring_refs", stable_ring_refs)
+
+    @property
+    def stable_ring_refs(self) -> tuple[tuple[str, int], ...]:
+        """Read-only stable internal ring order preserved across updates."""
+        stable_ring_refs = self._stable_ring_refs
+        if stable_ring_refs is None:
+            raise RuntimeError("stable ring refs were not initialized.")
+        return stable_ring_refs
 
     @staticmethod
     def from_contour_data(
@@ -134,10 +159,6 @@ class PolySlabSet:
             in_plane_step=float("inf"),
         )
 
-    @cached_property
-    def _ring_refs(self) -> tuple[tuple[str, int], ...]:
-        return ordered_ring_refs_by_area(self.solid_polyslabs, self.hole_polyslabs)
-
     def _lookup_polyslab(self, ring_ref: tuple[str, int]) -> PolySlab:
         ring_type, ring_idx = ring_ref
         if ring_type == "solid":
@@ -157,12 +178,12 @@ class PolySlabSet:
     @property
     def ring_types(self) -> tuple[str, ...]:
         """Ring types aligned with ``polyslabs`` order."""
-        return tuple(ring_type for ring_type, _ in self._ring_refs)
+        return tuple(ring_type for ring_type, _ in self.stable_ring_refs)
 
     @property
     def polyslabs(self) -> tuple[PolySlab, ...]:
         """All polyslabs in ordered ring sequence."""
-        return tuple(self._lookup_polyslab(ring_ref) for ring_ref in self._ring_refs)
+        return tuple(self._lookup_polyslab(ring_ref) for ring_ref in self.stable_ring_refs)
 
     @property
     def ring_vertices(self) -> tuple[ArrayFloat2D, ...]:
@@ -177,7 +198,7 @@ class PolySlabSet:
     @property
     def frame_boundary_vertex_mask(self) -> tuple[npo.ndarray, ...]:
         """Boolean per-vertex frame mask aligned with ``polyslabs`` order."""
-        return tuple(self._lookup_mask(ring_ref) for ring_ref in self._ring_refs)
+        return tuple(self._lookup_mask(ring_ref) for ring_ref in self.stable_ring_refs)
 
     def flatten_ring_vertices(self) -> npo.ndarray:
         """Flatten all ring vertices into a ``(2 * sum_i N_i,)`` vector."""
@@ -203,7 +224,7 @@ class PolySlabSet:
     def with_ring_vertices(self, ring_vertices: Sequence[ArrayFloat2D]) -> PolySlabSet:
         """Return a copy with updated ring vertices, preserving split + masks + metadata."""
         ring_vertices_list = list(ring_vertices)
-        ring_refs = self._ring_refs
+        ring_refs = self.stable_ring_refs
         if len(ring_vertices_list) != len(ring_refs):
             raise ValueError("ring_vertices length must match number of polyslabs.")
 
@@ -245,6 +266,7 @@ class PolySlabSet:
             hole_frame_boundary_vertex_mask=tuple(hole_masks),
             frame_bounds=self.frame_bounds,
             in_plane_step=self.in_plane_step,
+            _stable_ring_refs=self.stable_ring_refs,
         )
 
     def with_flat_ring_vertices(self, flat_vertices: ArrayFloat1D) -> PolySlabSet:
@@ -293,6 +315,7 @@ class PolySlabSet:
             hole_frame_boundary_vertex_mask=self.hole_frame_boundary_vertex_mask,
             frame_bounds=self.frame_bounds,
             in_plane_step=self.in_plane_step,
+            _stable_ring_refs=self.stable_ring_refs,
         )
 
     def _prepare_updated_rings(
@@ -465,6 +488,6 @@ class PolySlabSet:
             hole_polyslabs=self.hole_polyslabs,
             foreground_medium=foreground_medium,
             background_medium=background_medium,
-            ring_refs=self._ring_refs,
+            ring_refs=ordered_ring_refs_by_area(self.solid_polyslabs, self.hole_polyslabs),
             name_prefix=name_prefix,
         )
