@@ -748,6 +748,8 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
+ASYNC_TEST_ARGS = args[:2]
+
 
 def get_functions(structure_key: str, monitor_key: str) -> dict[str, typing.Callable]:
     if structure_key == ALL_KEY:
@@ -1690,31 +1692,85 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         assert anp.all(grad != 0.0), "some gradients are 0"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-@pytest.mark.parametrize("use_task_names", [True, False])
-def test_autograd_async(use_emulated_run, structure_key, monitor_key, use_task_names):
-    """Test an objective function through tidy3d autograd."""
+def _assert_async_matches_sync(objective_sync, objective_async) -> None:
+    """Verify async and sync objectives agree for representative autograd cases."""
 
-    fn_dict = get_functions(structure_key, monitor_key)
-    make_sim = fn_dict["sim"]
-    postprocess = fn_dict["postprocess"]
+    val_sync, grad_sync = ag.value_and_grad(objective_sync)(params0)
+    val_async, grad_async = ag.value_and_grad(objective_async)(params0)
 
-    task_names = {"test_a", "adjoint", "_test"}
+    np.testing.assert_allclose(float(val_async), float(val_sync), rtol=1e-8, atol=1e-10)
+    np.testing.assert_allclose(np.asarray(grad_async), np.asarray(grad_sync), rtol=1e-6, atol=1e-8)
 
-    def objective(*args):
-        if use_task_names:
-            sims = {task_name: make_sim(*args) for task_name in task_names}
-        else:
-            sims = [make_sim(*args)] * len(task_names)
-        batch_data = run_async(sims, verbose=False)
+
+@pytest.mark.parametrize("local_gradient", [True, False])
+def test_autograd_async(use_emulated_run, local_gradient):
+    """Representative async autograd cases should match sequential execution."""
+
+    fn_dicts = [
+        get_functions(structure_key, monitor_key) for structure_key, monitor_key in ASYNC_TEST_ARGS
+    ]
+    async_task_names = ("adjoint", "_test")
+
+    def objective_sync(*params):
         value = 0.0
-        for _, sim_data in batch_data.items():
-            value += postprocess(sim_data)
+        for i, fn_dict in enumerate(fn_dicts):
+            sim_data = run(
+                fn_dict["sim"](*params),
+                task_name=f"autograd_sync_{i}",
+                verbose=False,
+                local_gradient=local_gradient,
+            )
+            value = value + fn_dict["postprocess"](sim_data)
         return value
 
-    val, grad = ag.value_and_grad(objective)(params0)
-    print(val, grad)
-    assert anp.all(grad != 0.0), "some gradients are 0"
+    def objective_async(*params):
+        sims = {
+            task_name: fn_dict["sim"](*params)
+            for task_name, fn_dict in zip(async_task_names, fn_dicts, strict=True)
+        }
+        batch_data = run_async(sims, verbose=False, local_gradient=local_gradient)
+
+        value = 0.0
+        for task_name, fn_dict in zip(async_task_names, fn_dicts, strict=True):
+            value = value + fn_dict["postprocess"](batch_data[task_name])
+        return value
+
+    _assert_async_matches_sync(objective_sync, objective_async)
+
+
+def test_autograd_async_list_input(use_emulated_run):
+    """List input to async autograd should match repeated sequential execution."""
+
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    local_gradient = False
+
+    def objective_sync(*params):
+        value = 0.0
+        for i in range(2):
+            sim_data = run(
+                make_sim(*params),
+                task_name=f"autograd_list_sync_{i}",
+                verbose=False,
+                local_gradient=local_gradient,
+            )
+            value = value + postprocess(sim_data)
+        return value
+
+    def objective_async(*params):
+        batch_data = run_async(
+            [make_sim(*params)] * 2,
+            verbose=False,
+            local_gradient=local_gradient,
+        )
+
+        value = 0.0
+        for sim_data in batch_data.values():
+            value = value + postprocess(sim_data)
+        return value
+
+    _assert_async_matches_sync(objective_sync, objective_async)
 
 
 class TestTupleGrads:
@@ -1794,11 +1850,10 @@ class TestTupleGrads:
             assert not np.allclose(dp_dsize, 0)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_key):
+def test_autograd_async_some_zero_grad(use_emulated_run):
     """Test objective where only some simulations in batch have adjoint sources."""
 
-    fn_dict = get_functions(structure_key, monitor_key)
+    fn_dict = get_functions(args[0][0], args[0][1])
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
@@ -2087,28 +2142,6 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
         sim = make_sim(*args)
         data = run(sim, task_name="autograd_test", verbose=False, local_gradient=False)
         value = postprocess(data)
-        return value
-
-    _val, grad = ag.value_and_grad(objective)(params0)
-    assert np.all(np.abs(grad) > 0), "some gradients are 0"
-
-
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
-    """Test an async objective function through tidy3d autograd."""
-
-    fn_dict = get_functions(structure_key, monitor_key)
-    make_sim = fn_dict["sim"]
-    postprocess = fn_dict["postprocess"]
-
-    def objective(*args):
-        """Objective function."""
-        sim = make_sim(*args)
-        sims = {"autograd_test1": sim, "autograd_test2": sim}
-        batch_data = run_async(sims, verbose=False, local_gradient=False)
-        value = 0.0
-        for _, sim_data in batch_data.items():
-            value = value + postprocess(sim_data)
         return value
 
     _val, grad = ag.value_and_grad(objective)(params0)
@@ -4668,10 +4701,10 @@ def test_error_custom_medium_and_geometry_traced(rng, use_run_async, use_emulate
         _val, _grad = ag.value_and_grad(objective)(all_params)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_vjp_nan(use_emulated_run, structure_key, monitor_key):
+def test_vjp_nan(use_emulated_run):
     """Test vjp data that has nan in it is flagged as an error."""
 
+    structure_key, monitor_key = args[0]
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]

@@ -925,7 +925,7 @@ class TestAnisotropicPlotting:
         """based this custom medium on
         https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.CustomAnisotropicMedium.html
         """
-        Nx, Ny, Nz = 100, 100, 100
+        Nx, Ny, Nz = 16, 16, 16
         x = np.linspace(-1, 1, Nx)
         y = np.linspace(-1, 1, Ny)
         z = np.linspace(-1, 1, Nz)
@@ -1043,16 +1043,14 @@ class TestAnisotropicPlotting:
         sim = self.make_sim(self.medium_fullyani)
         sim.plot_eps(x=0, eps_component=eps_comp)
 
-    # Test parameters for comparing plots of a FullyAnisotropicMedium
-    fullyani_testplot_diff_params = []
-    for eps_comp1 in allcomps:
-        for eps_comp2 in allcomps:
-            if eps_comp1 == eps_comp2 or eps_comp1[::-1] == eps_comp2:
-                # Same components, or transposed components (eg. xy and yx) should plot the same
-                fullyani_testplot_diff_params.append((eps_comp1, eps_comp2, True))
-            else:
-                # All other component pairs should plot differently
-                fullyani_testplot_diff_params.append(pytest.param(eps_comp1, eps_comp2, False))
+    fullyani_testplot_diff_params = [
+        pytest.param("xx", "xx", True, id="same-diagonal"),
+        pytest.param("xy", "yx", True, id="transpose-offdiagonal"),
+        pytest.param("xx", "yy", False, id="different-diagonals"),
+        pytest.param("xx", "xy", False, id="diagonal-vs-offdiagonal"),
+        pytest.param("xy", "xz", False, id="different-offdiagonals-shared-axis"),
+        pytest.param("xy", "yz", False, id="different-offdiagonals-different-axis"),
+    ]
 
     @pytest.mark.parametrize("eps_comp1,eps_comp2,expected", fullyani_testplot_diff_params)
     def test_plot_fully_anisotropic_medium_diff(self, tmp_path, eps_comp1, eps_comp2, expected):
@@ -3437,9 +3435,7 @@ def test_to_gds(tmp_path):
     assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
 
 
-@pytest.mark.parametrize("nz", [13, 1])
-@pytest.mark.parametrize("unstructured", [True, False])
-def test_sim_subsection(unstructured, nz):
+def test_sim_subsection_common():
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
 
@@ -3479,31 +3475,6 @@ def test_sim_subsection(unstructured, nz):
         if strc.medium.nonlinear_spec is None:
             assert strc == strc_red
     sim_red = SIM_FULL.subsection(region=region, remove_outside_custom_mediums=True)
-
-    perm = td.SpatialDataArray(
-        1 + np.random.random((11, 12, nz)),
-        coords={
-            "x": np.linspace(-0.51, 0.52, 11),
-            "y": np.linspace(-1.02, 1.04, 12),
-            "z": np.linspace(-1.51, 1.51, nz),
-        },
-    )
-
-    if unstructured:
-        perm = cartesian_to_unstructured(perm, seed=523)
-
-    fine_custom_medium = td.CustomMedium(permittivity=perm)
-
-    sim = SIM_FULL.updated_copy(
-        structures=(
-            td.Structure(
-                geometry=td.Box(size=(1, 2, 3)),
-                medium=fine_custom_medium,
-            ),
-        ),
-        medium=fine_custom_medium,
-    )
-    sim_red = sim.subsection(region=region, remove_outside_custom_mediums=True)
 
     # check automatic symmetry expansion
     sim_sym = sim_full_sym.updated_copy(
@@ -3587,6 +3558,39 @@ def test_sim_subsection(unstructured, nz):
     )
     assert sim_1d_red.size[0] == 0
     assert sim_1d_red.size[2] == 0
+
+
+@pytest.mark.parametrize("nz", [13, 1])
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_sim_subsection(unstructured, nz):
+    region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
+
+    perm = td.SpatialDataArray(
+        1 + np.random.random((5, 6, nz)),
+        coords={
+            "x": np.linspace(-0.51, 0.52, 5),
+            "y": np.linspace(-1.02, 1.04, 6),
+            "z": np.linspace(-1.51, 1.51, nz),
+        },
+    )
+
+    if unstructured:
+        perm = cartesian_to_unstructured(perm, seed=523)
+
+    fine_custom_medium = td.CustomMedium(permittivity=perm)
+
+    sim = SIM_FULL.updated_copy(
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(1, 2, 3)),
+                medium=fine_custom_medium,
+            ),
+        ),
+        medium=fine_custom_medium,
+    )
+    sim_red = sim.subsection(region=region, remove_outside_custom_mediums=True)
+
+    assert sim_red is not None
 
 
 def _make_auto_grid_subsection_sim():

@@ -628,6 +628,48 @@ def test_sweep(sweep_method, monkeypatch):
     assert float_label in sweep_results_df, "didn't assign column header properly for float"
 
 
+def test_run_batch_smoke(monkeypatch):
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    design_space = tdd.DesignSpace(
+        parameters=[
+            tdd.ParameterFloat(name="radius", span=(0.25, 0.25), num_points=1),
+            tdd.ParameterInt(name="num_spheres", span=(1, 1)),
+            tdd.ParameterAny(name="tag", allowed_values=("tag1",)),
+        ],
+        method=tdd.MethodGrid(),
+    )
+
+    results = design_space.run_batch(
+        scs_pre_batch, scs_post_batch, path_dir="", batch_kwargs={"fake_kwarg": None}
+    )
+
+    assert isinstance(results, tdd.Result)
+    assert results.dims == ("radius", "num_spheres", "tag")
+
+
+def test_container_outputs_with_constants(monkeypatch):
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    design_space = tdd.DesignSpace(
+        parameters=[
+            tdd.ParameterFloat(name="radius", span=(0.25, 0.25), num_points=1),
+            tdd.ParameterInt(name="num_spheres", span=(1, 1)),
+            tdd.ParameterAny(name="tag", allowed_values=("tag1",)),
+        ],
+        method=tdd.MethodGrid(),
+    )
+
+    list_result = design_space.run(scs_pre_list_const, scs_post_list_const)
+    dict_result = design_space.run(scs_pre_dict_const, scs_post_dict_const)
+
+    assert isinstance(list_result, tdd.Result)
+    assert isinstance(dict_result, tdd.Result)
+    assert list_result.dims == ("radius", "num_spheres", "tag")
+    assert dict_result.dims == ("radius", "num_spheres", "tag")
+
+
 def test_priority_forwarded_to_batch(monkeypatch):
     captured_priority = {}
 

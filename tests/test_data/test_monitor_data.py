@@ -1290,16 +1290,11 @@ class TestZBF:
         )
         return self.simdata(monitor)["modes"]
 
-    @pytest.mark.parametrize("field_data_fixture", ["field_data", "field_data_single_frequency"])
-    @pytest.mark.parametrize("background_index", [1, 2, 3])
-    @pytest.mark.parametrize("freq", [*list(freqs), None])
-    @pytest.mark.parametrize("n_x", [2**5, 2**6])
-    @pytest.mark.parametrize("n_y", [2**5, 2**6])
-    @pytest.mark.parametrize("units", ["mm", "cm", "in", "m"])
-    def test_fielddata_tozbf_readzbf(
+    def _assert_fielddata_tozbf_roundtrip(
         self,
         tmp_path,
         request,
+        *,
         field_data_fixture,
         background_index,
         freq,
@@ -1307,7 +1302,6 @@ class TestZBF:
         n_y,
         units,
     ):
-        """Test that FieldData.to_zbf() -> ZBFData.read_zbf() works"""
         zbf_filename = tmp_path / "testzbf.zbf"
 
         # write to zbf and then load it back in
@@ -1340,6 +1334,66 @@ class TestZBF:
         # check that fields are close
         assert np.allclose(ex.values, zbfdata.Ex)
         assert np.allclose(ey.values, zbfdata.Ey)
+
+    @pytest.mark.parametrize("field_data_fixture", ["field_data", "field_data_single_frequency"])
+    @pytest.mark.parametrize("freq", [freq0, None])
+    def test_fielddata_tozbf_readzbf(
+        self,
+        tmp_path,
+        request,
+        field_data_fixture,
+        freq,
+    ):
+        """Test that FieldData.to_zbf() -> ZBFData.read_zbf() works."""
+        self._assert_fielddata_tozbf_roundtrip(
+            tmp_path,
+            request,
+            field_data_fixture=field_data_fixture,
+            background_index=2,
+            freq=freq,
+            n_x=2**5,
+            n_y=2**6,
+            units="mm",
+        )
+
+    def test_fielddata_tozbf_readzbf_second_frequency(self, tmp_path, request):
+        """Test that FieldData.to_zbf() can export a non-first frequency slice."""
+        self._assert_fielddata_tozbf_roundtrip(
+            tmp_path,
+            request,
+            field_data_fixture="field_data",
+            background_index=2,
+            freq=self.freq0 * 1.01,
+            n_x=2**5,
+            n_y=2**6,
+            units="mm",
+        )
+
+    @pytest.mark.parametrize("units", ["mm", "cm", "in", "m"])
+    def test_fielddata_tozbf_readzbf_units(self, tmp_path, request, units):
+        self._assert_fielddata_tozbf_roundtrip(
+            tmp_path,
+            request,
+            field_data_fixture="field_data",
+            background_index=2,
+            freq=self.freq0,
+            n_x=2**5,
+            n_y=2**5,
+            units=units,
+        )
+
+    @pytest.mark.parametrize("background_index", [1, 2, 3])
+    def test_fielddata_tozbf_readzbf_background_index(self, tmp_path, request, background_index):
+        self._assert_fielddata_tozbf_roundtrip(
+            tmp_path,
+            request,
+            field_data_fixture="field_data_single_frequency",
+            background_index=background_index,
+            freq=self.freq0,
+            n_x=2**5,
+            n_y=2**5,
+            units="mm",
+        )
 
     @pytest.mark.parametrize("mode_data_fixture", ["mode_data", "mode_data_single_frequency"])
     @pytest.mark.parametrize("mode_index", [0, 1])

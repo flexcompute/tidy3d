@@ -27,7 +27,6 @@ FREQ0 = 1e14
 L_SIM = 1.0
 MNT_NAME1 = "mnt_name1"
 MNT_NAME2 = "mnt_name2"
-HISTORY_FNAME = "tests/data/invdes_history.json"
 
 
 mnt1 = td.FieldMonitor(
@@ -448,12 +447,12 @@ def test_invdes_multi_rejects_inconsistent_simulation_symmetry():
         )
 
 
-def make_optimizer():
+def make_optimizer(results_cache_fname: str | None = None):
     """Make a ``tdi.Optimizer``."""
     design = make_invdes()
     return tdi.AdamOptimizer(
         design=design,
-        results_cache_fname=HISTORY_FNAME,
+        results_cache_fname=results_cache_fname,
         learning_rate=0.2,
         num_steps=1,
     )
@@ -557,14 +556,16 @@ def test_continue_run_fns(use_emulated_run):  # noqa: F811
 
 
 @pytest.mark.slow
-def test_continue_run_from_file(use_emulated_run):  # noqa: F811
+def test_continue_run_from_file(tmp_path, use_emulated_run):  # noqa: F811
     """Test continuing an already run inverse design from file."""
+    history_fname = str(tmp_path / "invdes_history.json")
     result_orig = make_result(use_emulated_run)
-    optimizer_orig = make_optimizer()
+    result_orig.to_file(history_fname)
+    optimizer_orig = make_optimizer(results_cache_fname=history_fname)
     optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 1)
     num_steps_continue = 2
     result_full = optimizer.continue_run_from_file(
-        HISTORY_FNAME, num_steps=2, post_process_fn=post_process_fn
+        history_fname, num_steps=num_steps_continue, post_process_fn=post_process_fn
     )
     num_steps_orig = len(result_orig.history["params"])
     num_steps_new = len(result_full.history["params"])
@@ -573,7 +574,9 @@ def test_continue_run_from_file(use_emulated_run):  # noqa: F811
     )
 
     # test the convenience function to load it from file
-    result_full = optimizer.continue_run_from_history(num_steps=2, post_process_fn=post_process_fn)
+    result_full = optimizer.continue_run_from_history(
+        num_steps=num_steps_continue, post_process_fn=post_process_fn
+    )
     num_steps_orig = num_steps_new
     num_steps_new = len(result_full.history["params"])
     assert num_steps_new == num_steps_orig + num_steps_continue, (

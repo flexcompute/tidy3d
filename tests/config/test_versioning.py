@@ -854,6 +854,14 @@ def test_config_upgrade_check_does_not_crash_on_import_with_invalid_config(mock_
     )
     env = os.environ.copy()
     env["TIDY3D_BASE_DIR"] = str(mock_config_dir.parent)
+    for key in (
+        "COV_CORE_SOURCE",
+        "COV_CORE_CONFIG",
+        "COV_CORE_DATAFILE",
+        "COV_CORE_BRANCH",
+        "COV_CORE_CONTEXT",
+    ):
+        env.pop(key, None)
     completed = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
