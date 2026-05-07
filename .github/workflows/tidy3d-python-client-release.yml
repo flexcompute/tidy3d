@@ -1,0 +1,168 @@
+name: "public/tidy3d/github-release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to create or publish, for example v2.11.1"
+        required: true
+        type: string
+      target_ref:
+        description: "Branch or commit to tag when creating or moving the tag"
+        required: false
+        default: "develop"
+        type: string
+      create_or_update_tag:
+        description: "Create the tag if missing, or move it when overwrite is enabled"
+        required: false
+        default: true
+        type: boolean
+      overwrite_existing_tag:
+        description: "Allow moving an existing tag that points to a different commit"
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: "Create the GitHub release as a draft"
+        required: false
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark the GitHub release as a prerelease"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  create-github-release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+      TARGET_REF: ${{ github.event.inputs.target_ref }}
+      CREATE_OR_UPDATE_TAG: ${{ github.event.inputs.create_or_update_tag }}
+      OVERWRITE_EXISTING_TAG: ${{ github.event.inputs.overwrite_existing_tag }}
+    steps:
+      - name: checkout-target-ref
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ env.TARGET_REF }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: validate-release-tag
+        run: |
+          set -euo pipefail
+          tag_regex='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$'
+          if [[ ! "$RELEASE_TAG" =~ $tag_regex ]]; then
+            echo "Invalid release tag: $RELEASE_TAG"
+            echo "Expected format: v{major}.{minor}.{patch}[rc{num}]"
+            exit 1
+          fi
+
+      - name: prepare-tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git fetch --tags origin
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          target_sha="$(git rev-parse HEAD)"
+          echo "Target ref: $TARGET_REF"
+          echo "Target sha: $target_sha"
+
+          if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+            existing_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+            echo "Existing tag sha: $existing_sha"
+
+            if [[ "$CREATE_OR_UPDATE_TAG" != "true" ]]; then
+              echo "Using existing tag without modification."
+              exit 0
+            fi
+
+            if [[ "$existing_sha" == "$target_sha" ]]; then
+              echo "Tag already points at the target commit."
+              exit 0
+            fi
+
+            if [[ "$OVERWRITE_EXISTING_TAG" != "true" ]]; then
+              echo "Tag $RELEASE_TAG already exists at $existing_sha."
+              echo "Set overwrite_existing_tag=true to move it to $target_sha."
+              exit 1
+            fi
+
+            git tag -d "$RELEASE_TAG" || true
+            git push origin ":refs/tags/$RELEASE_TAG"
+          else
+            if [[ "$CREATE_OR_UPDATE_TAG" != "true" ]]; then
+              echo "Tag $RELEASE_TAG does not exist and create_or_update_tag=false."
+              exit 1
+            fi
+          fi
+
+          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG" "$target_sha"
+          git push origin "refs/tags/$RELEASE_TAG"
+
+      - name: build-release-notes
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          release_tag = os.environ["RELEASE_TAG"]
+          version = release_tag[1:] if release_tag.startswith("v") else release_tag
+          release_header_re = re.compile(r"^## \[(?P<version>[^\]]+)\] - \d{4}-\d{2}-\d{2}\s*$")
+          compare_link_re = re.compile(r"^\[(?P<version>[^\]]+)\]:\s+(?P<url>\S+)\s*$")
+
+          changelog_lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+
+          start_index = None
+          for index, line in enumerate(changelog_lines):
+              match = release_header_re.match(line)
+              if match and match.group("version") == version:
+                  start_index = index + 1
+                  break
+
+          if start_index is None:
+              raise ValueError(f"Could not find CHANGELOG.md section for version {version!r}.")
+
+          end_index = len(changelog_lines)
+          for index in range(start_index, len(changelog_lines)):
+              if changelog_lines[index].startswith("## ["):
+                  end_index = index
+                  break
+
+          body = "\n".join(changelog_lines[start_index:end_index]).strip()
+          if not body:
+              raise ValueError(f"CHANGELOG.md section for version {version!r} is empty.")
+
+          compare_link = ""
+          for line in changelog_lines:
+              match = compare_link_re.match(line)
+              if match and match.group("version") == version:
+                  compare_link = match.group("url")
+                  break
+
+          sections = ["## What's Changed", "", body]
+          if compare_link:
+              sections.extend(["", f"**Full Changelog**: {compare_link}"])
+          sections.append("")
+          Path("RELEASE_NOTES.md").write_text("\n".join(sections), encoding="utf-8")
+          PY
+
+      - name: create-github-release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ env.TARGET_REF }}
+          body_path: RELEASE_NOTES.md
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
