@@ -1631,6 +1631,105 @@ def test_far_field_integral_pairs_matches_reference():
     np.testing.assert_allclose(np.asarray(actual), expected, rtol=1e-12, atol=1e-12)
 
 
+@pytest.mark.parametrize("idx_u, idx_v, surface_axis", [(0, 1, 2), (0, 2, 1), (1, 2, 0)])
+def test_far_fields_from_currents_pairs_3d_vjp(idx_u, idx_v, surface_axis):
+    rng = np.random.default_rng(5)
+    n_pairs = 6
+    shape = [3, 4, 5]
+    shape[surface_axis] = 1
+
+    currents = rng.standard_normal((4, *shape)) + 1j * rng.standard_normal((4, *shape))
+    pts = [np.cumsum(rng.random(size)) for size in shape]
+    theta = rng.uniform(0, np.pi, n_pairs)
+    phi = rng.uniform(0, 2 * np.pi, n_pairs)
+    sin_theta = np.sin(theta)
+    cos_theta = np.cos(theta)
+    sin_phi = np.sin(phi)
+    cos_phi = np.cos(phi)
+    propagation_factor = 0.31j
+    eta = 2.4
+
+    spec = _FarFieldIntegralSpec(
+        weights=tuple(_trapz_weights_1d(pt) for pt in pts),
+        idx_u=idx_u,
+        idx_v=idx_v,
+        is_2d=False,
+        idx_integration_1d=None,
+    )
+    kernel_spec = field_projection_common._FarFieldProjectionKernelSpec(
+        integral=spec,
+        pts=(pts[0], pts[1], pts[2]),
+        propagation_factor=propagation_factor,
+        eta=eta,
+    )
+    phases = field_projection_common._paired_far_field_phases(
+        pts[0], pts[1], pts[2], propagation_factor, sin_theta, cos_theta, sin_phi, cos_phi
+    )
+
+    def reference(currents_in):
+        projected_components = []
+        axes = tuple(sorted((idx_u, idx_v)))
+        pts_int = tuple(pts[axis] for axis in axes)
+        for component in currents_in:
+            projected_pairs = []
+            for idx_pair in range(n_pairs):
+                chunk = (
+                    phases[0][:, idx_pair][:, None, None]
+                    * phases[1][:, idx_pair][None, :, None]
+                    * phases[2][:, idx_pair][None, None, :]
+                    * component
+                )
+                projected_pairs.append(FieldProjector.trapezoid(chunk, pts_int, axes))
+            projected_components.append(
+                anp.reshape(anp.stack(projected_pairs, axis=-1), theta.shape)
+            )
+
+        return field_projection_common._spherical_far_fields_from_projected_components(
+            projected_components,
+            idx_u=idx_u,
+            idx_v=idx_v,
+            surface_axis=surface_axis,
+            sin_theta=sin_theta,
+            cos_theta=cos_theta,
+            sin_phi=sin_phi,
+            cos_phi=cos_phi,
+            eta=eta,
+            paired_observations=True,
+        )
+
+    def primitive(currents_in):
+        return field_projection_common._far_fields_from_currents_pairs_3d(
+            field_projection_common._TangentialSurfaceCurrents(
+                electric_u=currents_in[0],
+                electric_v=currents_in[1],
+                magnetic_u=currents_in[2],
+                magnetic_v=currents_in[3],
+            ),
+            kernel_spec,
+            surface_axis,
+            field_projection_common._PairedAngleTrig(
+                sin_theta=sin_theta,
+                cos_theta=cos_theta,
+                sin_phi=sin_phi,
+                cos_phi=cos_phi,
+            ),
+        )
+
+    vjp_primitive, ans_primitive = make_vjp(primitive)(currents)
+    vjp_reference, ans_reference = make_vjp(reference)(currents)
+
+    np.testing.assert_allclose(
+        np.asarray(ans_primitive), np.asarray(ans_reference), rtol=1e-12, atol=1e-12
+    )
+
+    g = rng.standard_normal(np.asarray(ans_reference).shape) + 1j * rng.standard_normal(
+        np.asarray(ans_reference).shape
+    )
+    grad_primitive = np.asarray(vjp_primitive(g))
+    grad_reference = np.asarray(vjp_reference(g))
+    np.testing.assert_allclose(grad_primitive, grad_reference, rtol=1e-10, atol=1e-10)
+
+
 @pytest.mark.parametrize("idx_integration_1d", [0, 1, 2])
 def test_far_field_integral_pairs_matches_reference_2d(idx_integration_1d):
     rng = np.random.default_rng(3)

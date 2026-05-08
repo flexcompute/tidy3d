@@ -91,7 +91,7 @@ class _ApproximateAngleProjectionMixin:
 
         projected_components = []
         phases = (phase_0, phase_1, phase_2)
-        for field_component in prepared.field_components:
+        for field_component in prepared.field_components.as_tuple():
             projected = _far_field_integral(field_component, phases, prepared.integral)
             projected_components.append(anp.reshape(projected, (len(theta), len(phi))))
 

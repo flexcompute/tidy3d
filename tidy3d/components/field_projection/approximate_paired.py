@@ -22,7 +22,9 @@ from .common import (
     FIELD_COMPONENT_NAMES,
     PROJECTION_FREQ_CHUNK_SIZE,
     _far_field_integral_pairs,
+    _far_fields_from_currents_pairs_3d,
     _frequency_chunk_slices,
+    _PairedAngleTrig,
     _prepare_far_field_projection,
     _projection_data_from_fields,
     _spherical_far_fields_from_projected_components,
@@ -66,6 +68,19 @@ class _ApproximatePairedProjectionMixin:
 
         pts = prepared.pts
         propagation_factor = prepared.propagation_factor
+        if not prepared.integral.is_2d:
+            return _far_fields_from_currents_pairs_3d(
+                prepared.field_components,
+                prepared.kernel_spec,
+                surface_axis,
+                _PairedAngleTrig(
+                    sin_theta=sin_theta,
+                    cos_theta=cos_theta,
+                    sin_phi=sin_phi,
+                    cos_phi=cos_phi,
+                ),
+            )
+
         phase_0 = np.exp(
             (propagation_factor * pts[0])[:, None] * sin_theta[None, :] * cos_phi[None, :]
         )
@@ -76,7 +91,7 @@ class _ApproximatePairedProjectionMixin:
 
         projected_components = []
         phases = (phase_0, phase_1, phase_2)
-        for field_component in prepared.field_components:
+        for field_component in prepared.field_components.as_tuple():
             projected = _far_field_integral_pairs(field_component, phases, prepared.integral)
             projected_components.append(anp.reshape(projected, theta.shape))
 

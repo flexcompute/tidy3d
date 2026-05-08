@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 import autograd.numpy as anp
 import numpy as np
+from autograd.extend import defvjp, primitive
 from rich.progress import track
 
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData
@@ -17,7 +18,7 @@ from tidy3d.exceptions import SetupError, format_chained_exception_message
 from tidy3d.log import get_logging_console
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     import xarray as xr
 
@@ -46,6 +47,7 @@ AXIS_WEIGHT_SHAPES = ((-1, 1, 1), (1, -1, 1), (1, 1, -1))
 
 ArrayLikeN2F = float | tuple[float, ...] | ArrayComplex4D
 _TrackedItem = TypeVar("_TrackedItem")
+_TangentialCurrentComponentName = Literal["electric_u", "electric_v", "magnetic_u", "magnetic_v"]
 
 
 def _track_if_verbose(
@@ -108,14 +110,76 @@ class _FarFieldIntegralSpec:
 
 
 @dataclass(frozen=True)
-class _PreparedFarFieldProjection:
-    """Prepared arrays reused across far-field evaluations at one frequency."""
+class _FarFieldProjectionKernelSpec:
+    """Static metadata for one prepared far-field projection kernel."""
 
-    field_components: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     integral: _FarFieldIntegralSpec
     pts: tuple[np.ndarray, np.ndarray, np.ndarray]
     propagation_factor: complex
     eta: complex
+
+
+@dataclass(frozen=True)
+class _TangentialSurfaceCurrents:
+    """Tangential electric and magnetic current components on a projection surface."""
+
+    electric_u: np.ndarray
+    electric_v: np.ndarray
+    magnetic_u: np.ndarray
+    magnetic_v: np.ndarray
+
+    def as_tuple(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Return current components in projected-field order."""
+
+        return (self.electric_u, self.electric_v, self.magnetic_u, self.magnetic_v)
+
+
+@dataclass(frozen=True)
+class _PairedAngleTrig:
+    """Precomputed trigonometric values for paired spherical observation angles."""
+
+    sin_theta: np.ndarray
+    cos_theta: np.ndarray
+    sin_phi: np.ndarray
+    cos_phi: np.ndarray
+
+
+if TYPE_CHECKING:
+    _FarFieldsFromCurrentsPairs3DVJPMaker = Callable[
+        [
+            np.ndarray,
+            np.ndarray,
+            np.ndarray,
+            np.ndarray,
+            np.ndarray,
+            _FarFieldProjectionKernelSpec,
+            Axis,
+            _PairedAngleTrig,
+        ],
+        Callable[[np.ndarray], np.ndarray],
+    ]
+
+
+@dataclass(frozen=True)
+class _PreparedFarFieldProjection:
+    """Prepared arrays reused across far-field evaluations at one frequency."""
+
+    field_components: _TangentialSurfaceCurrents
+    integral: _FarFieldIntegralSpec
+    pts: tuple[np.ndarray, np.ndarray, np.ndarray]
+    propagation_factor: complex
+    eta: complex
+
+    @property
+    def kernel_spec(self) -> _FarFieldProjectionKernelSpec:
+        """Return projection metadata without differentiable field component arrays."""
+
+        return _FarFieldProjectionKernelSpec(
+            integral=self.integral,
+            pts=self.pts,
+            propagation_factor=self.propagation_factor,
+            eta=self.eta,
+        )
 
 
 def _prepare_far_field_projection(
@@ -169,14 +233,15 @@ def _prepare_far_field_projection(
     pts = tuple(currents[name].values for name in ("x", "y", "z"))
     weights = tuple(_trapz_weights_1d(pt) for pt in pts)
 
-    field_components = tuple(
-        anp.reshape(currents_f[field_component].data, currents_f[field_component].shape)
-        for field_component in (
-            "E" + cmp_1,
-            "E" + cmp_2,
-            "H" + cmp_1,
-            "H" + cmp_2,
-        )
+    electric_u = currents_f["E" + cmp_1]
+    electric_v = currents_f["E" + cmp_2]
+    magnetic_u = currents_f["H" + cmp_1]
+    magnetic_v = currents_f["H" + cmp_2]
+    field_components = _TangentialSurfaceCurrents(
+        electric_u=anp.reshape(electric_u.data, electric_u.shape),
+        electric_v=anp.reshape(electric_v.data, electric_v.shape),
+        magnetic_u=anp.reshape(magnetic_u.data, magnetic_u.shape),
+        magnetic_v=anp.reshape(magnetic_v.data, magnetic_v.shape),
     )
 
     return _PreparedFarFieldProjection(
@@ -463,3 +528,302 @@ def _far_field_integral_pairs(
 
     currents_phase = anp.tensordot(weighted_currents, phase_1, axes=((1,), (0,)))
     return anp.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_2
+
+
+def _far_field_integral_pairs_3d_numpy(
+    currents: np.ndarray,
+    phase_0: np.ndarray,
+    phase_1: np.ndarray,
+    phase_2: np.ndarray,
+    spec: _FarFieldIntegralSpec,
+) -> np.ndarray:
+    """Evaluate a 3D paired far-field integral using NumPy.
+
+    The paired Cartesian/k-space projection path evaluates this integral once per
+    field component, frequency, source surface, and observation batch. Letting
+    autograd trace every weighting, contraction, and summation retains a large
+    graph. The integral is linear in ``currents`` and all phase factors are static
+    for the local projection, so the VJP can apply the adjoint integral directly.
+    """
+
+    output_axis = spec.remaining_axis
+    integrated_axes = spec.integrated_axes
+    weighted_currents = _apply_axis_weights(currents, spec.weights, integrated_axes)
+
+    if output_axis == 0:
+        currents_phase = np.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        return np.sum(currents_phase * phase_1[None, :, :], axis=1) * phase_0
+    if output_axis == 1:
+        currents_phase = np.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        return np.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_1
+
+    currents_phase = np.tensordot(weighted_currents, phase_1, axes=((1,), (0,)))
+    return np.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_2
+
+
+def _paired_weighted_phase_sum(
+    phase_left: np.ndarray, phase_right: np.ndarray, weights: np.ndarray
+) -> np.ndarray:
+    """Contract paired phase products over observation points."""
+
+    return anp.tensordot(phase_left, phase_right * weights[None, :], axes=((1,), (1,)))
+
+
+def _far_field_integral_pairs_3d_currents_vjp(
+    g: np.ndarray,
+    phase_0: np.ndarray,
+    phase_1: np.ndarray,
+    phase_2: np.ndarray,
+    spec: _FarFieldIntegralSpec,
+) -> np.ndarray:
+    """Apply the reverse paired far-field integral to an output cotangent."""
+
+    weights = spec.weights
+    output_axis = spec.remaining_axis
+
+    if output_axis == 0:
+        grad = anp.stack(
+            [
+                _paired_weighted_phase_sum(phase_1, phase_2, weighted_bar)
+                for weighted_bar in g * phase_0
+            ],
+            axis=0,
+        )
+        return grad * weights[1][None, :, None] * weights[2][None, None, :]
+
+    if output_axis == 1:
+        grad = anp.stack(
+            [
+                _paired_weighted_phase_sum(phase_0, phase_2, weighted_bar)
+                for weighted_bar in g * phase_1
+            ],
+            axis=1,
+        )
+        return grad * weights[0][:, None, None] * weights[2][None, None, :]
+
+    grad = anp.stack(
+        [
+            _paired_weighted_phase_sum(phase_0, phase_1, weighted_bar)
+            for weighted_bar in g * phase_2
+        ],
+        axis=2,
+    )
+    return grad * weights[0][:, None, None] * weights[1][None, :, None]
+
+
+def _paired_far_field_phases(
+    pts_0: np.ndarray,
+    pts_1: np.ndarray,
+    pts_2: np.ndarray,
+    propagation_factor: complex,
+    sin_theta: np.ndarray,
+    cos_theta: np.ndarray,
+    sin_phi: np.ndarray,
+    cos_phi: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Build separable paired-observation phase arrays."""
+
+    phase_0 = np.exp((propagation_factor * pts_0)[:, None] * sin_theta[None, :] * cos_phi[None, :])
+    phase_1 = np.exp((propagation_factor * pts_1)[:, None] * sin_theta[None, :] * sin_phi[None, :])
+    phase_2 = np.exp((propagation_factor * pts_2)[:, None] * cos_theta[None, :])
+    return phase_0, phase_1, phase_2
+
+
+def _far_fields_from_currents_pairs_3d(
+    field_components: _TangentialSurfaceCurrents,
+    kernel_spec: _FarFieldProjectionKernelSpec,
+    surface_axis: Axis,
+    angle_trig: _PairedAngleTrig,
+) -> np.ndarray:
+    """Project 3D paired fields and convert to spherical E/H with one custom VJP."""
+
+    return _far_fields_from_currents_pairs_3d_components(
+        *field_components.as_tuple(),
+        kernel_spec,
+        surface_axis,
+        angle_trig,
+    )
+
+
+@primitive
+def _far_fields_from_currents_pairs_3d_components(
+    electric_u: np.ndarray,
+    electric_v: np.ndarray,
+    magnetic_u: np.ndarray,
+    magnetic_v: np.ndarray,
+    kernel_spec: _FarFieldProjectionKernelSpec,
+    surface_axis: Axis,
+    angle_trig: _PairedAngleTrig,
+) -> np.ndarray:
+    """Project separate tangential current arrays with component-wise VJPs."""
+
+    pts_0, pts_1, pts_2 = kernel_spec.pts
+    phase_0, phase_1, phase_2 = _paired_far_field_phases(
+        pts_0,
+        pts_1,
+        pts_2,
+        kernel_spec.propagation_factor,
+        angle_trig.sin_theta,
+        angle_trig.cos_theta,
+        angle_trig.sin_phi,
+        angle_trig.cos_phi,
+    )
+
+    def project_component(component: np.ndarray) -> np.ndarray:
+        """Project one current component onto the paired observation angles."""
+
+        return np.reshape(
+            _far_field_integral_pairs_3d_numpy(
+                component, phase_0, phase_1, phase_2, kernel_spec.integral
+            ),
+            angle_trig.sin_theta.shape,
+        )
+
+    projected_components = [
+        project_component(component)
+        for component in (electric_u, electric_v, magnetic_u, magnetic_v)
+    ]
+
+    return _spherical_far_fields_from_projected_components(
+        projected_components,
+        idx_u=kernel_spec.integral.idx_u,
+        idx_v=kernel_spec.integral.idx_v,
+        surface_axis=surface_axis,
+        sin_theta=angle_trig.sin_theta,
+        cos_theta=angle_trig.cos_theta,
+        sin_phi=angle_trig.sin_phi,
+        cos_phi=angle_trig.cos_phi,
+        eta=kernel_spec.eta,
+        paired_observations=True,
+    )
+
+
+def _projected_axis_cotangent_pairs(
+    *,
+    axis: Axis,
+    theta_bar: np.ndarray,
+    phi_bar: np.ndarray,
+    sin_theta: np.ndarray,
+    cos_theta: np.ndarray,
+    sin_phi: np.ndarray,
+    cos_phi: np.ndarray,
+) -> np.ndarray:
+    """Return one xyz component of a projected vector-field cotangent."""
+
+    if axis == 0:
+        return theta_bar * cos_theta * cos_phi - phi_bar * sin_phi
+    if axis == 1:
+        return theta_bar * cos_theta * sin_phi + phi_bar * cos_phi
+    return -theta_bar * sin_theta
+
+
+def _projected_component_cotangent_pairs(
+    g: np.ndarray,
+    *,
+    component_name: _TangentialCurrentComponentName,
+    idx_u: Axis,
+    idx_v: Axis,
+    sin_theta: np.ndarray,
+    cos_theta: np.ndarray,
+    sin_phi: np.ndarray,
+    cos_phi: np.ndarray,
+    eta: complex,
+) -> np.ndarray:
+    """Map spherical E/H cotangents to one projected current-component cotangent."""
+
+    e_theta_bar = g[1] + g[5] / eta
+    e_phi_bar = g[2] - g[4] / eta
+
+    match component_name:
+        case "electric_u":
+            axis = idx_u
+            theta_bar = -eta * e_theta_bar
+            phi_bar = -eta * e_phi_bar
+        case "electric_v":
+            axis = idx_v
+            theta_bar = -eta * e_theta_bar
+            phi_bar = -eta * e_phi_bar
+        case "magnetic_u":
+            axis = idx_u
+            theta_bar = e_phi_bar
+            phi_bar = -e_theta_bar
+        case "magnetic_v":
+            axis = idx_v
+            theta_bar = e_phi_bar
+            phi_bar = -e_theta_bar
+
+    return _projected_axis_cotangent_pairs(
+        axis=axis,
+        theta_bar=theta_bar,
+        phi_bar=phi_bar,
+        sin_theta=sin_theta,
+        cos_theta=cos_theta,
+        sin_phi=sin_phi,
+        cos_phi=cos_phi,
+    )
+
+
+def _far_fields_from_currents_pairs_3d_component_vjp(
+    component_name: _TangentialCurrentComponentName,
+) -> _FarFieldsFromCurrentsPairs3DVJPMaker:
+    """Build a VJP maker for one tangential current component."""
+
+    def vjp_maker(
+        _ans: np.ndarray,
+        _electric_u: np.ndarray,
+        _electric_v: np.ndarray,
+        _magnetic_u: np.ndarray,
+        _magnetic_v: np.ndarray,
+        kernel_spec: _FarFieldProjectionKernelSpec,
+        _surface_axis: Axis,
+        angle_trig: _PairedAngleTrig,
+    ) -> Callable[[np.ndarray], np.ndarray]:
+        def vjp(g: np.ndarray) -> np.ndarray:
+            spec = kernel_spec.integral
+            pts_0, pts_1, pts_2 = kernel_spec.pts
+            projected_bar = _projected_component_cotangent_pairs(
+                g,
+                component_name=component_name,
+                idx_u=spec.idx_u,
+                idx_v=spec.idx_v,
+                sin_theta=angle_trig.sin_theta,
+                cos_theta=angle_trig.cos_theta,
+                sin_phi=angle_trig.sin_phi,
+                cos_phi=angle_trig.cos_phi,
+                eta=kernel_spec.eta,
+            )
+            output_axis = spec.remaining_axis
+            phase_0, phase_1, phase_2 = _paired_far_field_phases(
+                pts_0,
+                pts_1,
+                pts_2,
+                kernel_spec.propagation_factor,
+                angle_trig.sin_theta,
+                angle_trig.cos_theta,
+                angle_trig.sin_phi,
+                angle_trig.cos_phi,
+            )
+            output_size = (pts_0.size, pts_1.size, pts_2.size)[output_axis]
+            g_projected = anp.reshape(projected_bar, (output_size, -1))
+
+            return _far_field_integral_pairs_3d_currents_vjp(
+                g_projected,
+                phase_0,
+                phase_1,
+                phase_2,
+                spec,
+            )
+
+        return vjp
+
+    return vjp_maker
+
+
+defvjp(
+    _far_fields_from_currents_pairs_3d_components,
+    _far_fields_from_currents_pairs_3d_component_vjp("electric_u"),
+    _far_fields_from_currents_pairs_3d_component_vjp("electric_v"),
+    _far_fields_from_currents_pairs_3d_component_vjp("magnetic_u"),
+    _far_fields_from_currents_pairs_3d_component_vjp("magnetic_v"),
+    argnums=(0, 1, 2, 3),
+)
