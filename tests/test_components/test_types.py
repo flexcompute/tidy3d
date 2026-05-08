@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import numpy as np
 import pytest
-from pydantic import ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 
+from tidy3d.components.autograd.types import (
+    PathType,
+    TracedComplex,
+    TracedFloat,
+    TracedPoleAndResidue,
+    TracedPolesAndResidues,
+    TracedPositiveFloat,
+    TracedSize1D,
+)
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayLike, Complex
+from tidy3d.components.types import ArrayLike, Complex, PoleAndResidue
 from tidy3d.components.types.base import array_alias
 
 
@@ -19,6 +31,124 @@ def test_schemas():
 
     _ = S(f=[13], c=1 + 1j, ca=[1 + 1j])
     S.model_json_schema()
+
+
+def _canonicalize_schema(schema: Any) -> Any:
+    if isinstance(schema, dict):
+        canonical = {key: _canonicalize_schema(value) for key, value in schema.items()}
+        for key in ("anyOf", "oneOf"):
+            if key in canonical:
+                canonical[key] = sorted(canonical[key], key=repr)
+        if "required" in canonical:
+            canonical["required"] = sorted(canonical["required"])
+        return canonical
+    if isinstance(schema, list):
+        return [_canonicalize_schema(item) for item in schema]
+    return schema
+
+
+def _assert_schema_matches(schema: dict[str, Any], expected: dict[str, Any]) -> None:
+    assert _canonicalize_schema(schema) == _canonicalize_schema(expected)
+
+
+def _number_schema() -> dict[str, Any]:
+    return {"type": "number"}
+
+
+def _complex_object_schema() -> dict[str, Any]:
+    return {
+        "additionalProperties": False,
+        "properties": {"imag": _number_schema(), "real": _number_schema()},
+        "required": ["imag", "real"],
+        "type": "object",
+    }
+
+
+def _fixed_tuple_schema(*items: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "array",
+        "minItems": len(items),
+        "maxItems": len(items),
+        "prefixItems": list(items),
+    }
+
+
+def _var_tuple_schema(item: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "array", "items": item}
+
+
+def _complex_validation_schema() -> dict[str, Any]:
+    return {
+        "anyOf": [
+            _number_schema(),
+            _fixed_tuple_schema(_number_schema(), _number_schema()),
+            _complex_object_schema(),
+        ]
+    }
+
+
+def test_traced_tuple_aliases_emit_exact_schemas():
+    _assert_schema_matches(
+        TypeAdapter(TracedComplex).json_schema(mode="validation"),
+        expected=_complex_validation_schema(),
+    )
+    _assert_schema_matches(
+        TypeAdapter(TracedComplex).json_schema(mode="serialization"),
+        expected=_complex_object_schema(),
+    )
+    _assert_schema_matches(
+        TypeAdapter(TracedPoleAndResidue).json_schema(mode="validation"),
+        expected=_fixed_tuple_schema(_complex_validation_schema(), _complex_validation_schema()),
+    )
+    _assert_schema_matches(
+        TypeAdapter(TracedPoleAndResidue).json_schema(mode="serialization"),
+        expected=_fixed_tuple_schema(
+            _complex_object_schema(),
+            _complex_object_schema(),
+        ),
+    )
+    _assert_schema_matches(
+        TypeAdapter(TracedPolesAndResidues).json_schema(mode="validation"),
+        expected=_var_tuple_schema(
+            _fixed_tuple_schema(_complex_validation_schema(), _complex_validation_schema())
+        ),
+    )
+    _assert_schema_matches(
+        TypeAdapter(TracedPolesAndResidues).json_schema(mode="serialization"),
+        expected=_var_tuple_schema(
+            _fixed_tuple_schema(_complex_object_schema(), _complex_object_schema())
+        ),
+    )
+    _assert_schema_matches(
+        TypeAdapter(PathType).json_schema(),
+        expected=_var_tuple_schema({"anyOf": [{"type": "integer"}, {"type": "string"}]}),
+    )
+
+
+def test_traced_scalar_fields_emit_field_constraints():
+    class S(Tidy3dBaseModel):
+        minimum_value: TracedFloat = Field(ge=1.0)
+        bounded_value: TracedFloat = Field(gt=0.0, le=2.0)
+        positive_value: TracedPositiveFloat
+        size_value: TracedSize1D
+
+    schema = S.model_json_schema()["properties"]
+
+    assert schema["minimum_value"]["minimum"] == 1.0
+    assert schema["bounded_value"]["exclusiveMinimum"] == 0.0
+    assert schema["bounded_value"]["maximum"] == 2.0
+    assert schema["positive_value"]["exclusiveMinimum"] == 0
+    assert schema["size_value"]["minimum"] == 0
+
+
+def test_pole_and_residue_adapter_json_roundtrip():
+    adapter = TypeAdapter(PoleAndResidue)
+
+    pole = adapter.validate_python(((1.0, 2.0), (3.0, 4.0)))
+    payload = json.loads(adapter.dump_json(pole))
+
+    assert payload == [{"real": 1.0, "imag": 2.0}, {"real": 3.0, "imag": 4.0}]
+    assert adapter.validate_json(json.dumps(payload)) == pole
 
 
 def test_array_like():

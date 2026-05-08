@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic as pd
@@ -93,6 +95,23 @@ def test_validate_largest_pole_parameters():
 
     with pytest.raises(pd.ValidationError):
         _ = td.PoleResidue(poles=[((-1 + 2j), (1e50 + 3j))])
+
+
+def test_pole_residue_json_roundtrip():
+    pole_residue = td.PoleResidue(
+        eps_inf=2.0,
+        poles=((-1 + 2j, 3 + 4j), (-2 + 5j, 6 + 7j)),
+    )
+
+    payload = json.loads(pole_residue.model_dump_json())
+    assert payload["poles"][0][0] == {"real": -1.0, "imag": 2.0}
+    assert payload["poles"][1][1] == {"real": 6.0, "imag": 7.0}
+
+    roundtrip = td.PoleResidue.model_validate_json(json.dumps(payload))
+    assert roundtrip == pole_residue
+    assert isinstance(roundtrip.poles, tuple)
+    assert all(isinstance(pole, tuple) for pole in roundtrip.poles)
+    assert all(isinstance(value, complex) for pole in roundtrip.poles for value in pole)
 
 
 def test_medium_conversions():

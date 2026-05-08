@@ -13,7 +13,7 @@ from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, TypeAdapte
 
 from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
 from tidy3d.components.types.base import _auto_serializer, _from_complex_dict
-from tidy3d.components.types.utils import _add_schema
+from tidy3d.components.types.utils import _add_schema, _typed_tuple
 
 from .utils import get_static, hasbox
 
@@ -39,8 +39,52 @@ Box.__str__ = lambda self: f"{self._value} <{type(self).__name__}>"
 Box.__repr__ = Box.__str__
 
 
+_JSON_SCHEMA_VALIDATION_KEYS = {
+    "ge": "minimum",
+    "gt": "exclusiveMinimum",
+    "le": "maximum",
+    "lt": "exclusiveMaximum",
+    "multiple_of": "multipleOf",
+}
+
+
+def _iter_pydantic_json_schema_updates(core_schema: Any) -> Any:
+    if isinstance(core_schema, dict):
+        updates = core_schema.get("metadata", {}).get("pydantic_js_updates")
+        if updates:
+            yield updates
+        for value in core_schema.values():
+            yield from _iter_pydantic_json_schema_updates(value)
+    elif isinstance(core_schema, list):
+        for value in core_schema:
+            yield from _iter_pydantic_json_schema_updates(value)
+
+
+class _TracedAliasJsonSchema:
+    """Expose the base alias schema without dropping field-level constraints."""
+
+    def __init__(self, validation_schema: dict[str, Any], serialization_schema: dict[str, Any]):
+        self._validation_schema = validation_schema
+        self._serialization_schema = serialization_schema
+
+    def __get_pydantic_json_schema__(self, core_schema: Any, handler: Any) -> dict[str, Any]:
+        schema = copy.deepcopy(
+            self._serialization_schema
+            if handler.mode == "serialization"
+            else self._validation_schema
+        )
+        for updates in _iter_pydantic_json_schema_updates(core_schema):
+            for key, value in updates.items():
+                json_schema_key = _JSON_SCHEMA_VALIDATION_KEYS.get(key)
+                if json_schema_key is not None:
+                    schema[json_schema_key] = value
+        return schema
+
+
 def traced_alias(base_alias: Any, *, name: str | None = None) -> TypeAlias:
     base_adapter = TypeAdapter(base_alias, config={"arbitrary_types_allowed": True})
+    validation_schema = base_adapter.json_schema(mode="validation")
+    serialization_schema = base_adapter.json_schema(mode="serialization")
 
     def _validate_box_or_container(v: Any) -> Any:
         # Normalize serialized complex arrays before Union validation so they are
@@ -94,6 +138,7 @@ def traced_alias(base_alias: Any, *, name: str | None = None) -> TypeAlias:
         object,
         BeforeValidator(_validate_box_or_container),
         PlainSerializer(_serialize_traced, when_used="json"),
+        _TracedAliasJsonSchema(validation_schema, serialization_schema),
     ]
 
 
@@ -106,13 +151,13 @@ TracedComplex = traced_alias(Complex)
 TracedSize1D = traced_alias(Size1D)
 
 # derived traced types (these mirror the types in `components.types`)
-TracedSize = tuple[TracedSize1D, TracedSize1D, TracedSize1D]
-TracedCoordinate = tuple[TracedFloat, TracedFloat, TracedFloat]
-TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
-TracedPolesAndResidues = tuple[TracedPoleAndResidue, ...]
+TracedSize = _typed_tuple(tuple[TracedSize1D, TracedSize1D, TracedSize1D])
+TracedCoordinate = _typed_tuple(tuple[TracedFloat, TracedFloat, TracedFloat])
+TracedPoleAndResidue = _typed_tuple(tuple[TracedComplex, TracedComplex])
+TracedPolesAndResidues = _typed_tuple(tuple[TracedPoleAndResidue, ...])
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
-PathType = tuple[int | str, ...]
+PathType = _typed_tuple(tuple[int | str, ...])
 AutogradFieldMap = TracedDict[PathType, Box]
 
 InterpolationType = Literal["nearest", "linear"]

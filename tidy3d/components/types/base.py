@@ -18,6 +18,7 @@ from pydantic import (
 from pydantic.functional_serializers import PlainSerializer
 from pydantic.json_schema import WithJsonSchema
 
+from tidy3d.components.types.utils import complex_json_schema, complex_object_json_schema
 from tidy3d.exceptions import format_chained_exception_message
 
 if TYPE_CHECKING:
@@ -228,25 +229,9 @@ def _parse_complex(v: Any) -> complex:
     return v
 
 
-_COMPLEX_JSON_SCHEMA_OBJECT = {
-    "type": "object",
-    "properties": {"real": {"type": "number"}, "imag": {"type": "number"}},
-    "required": ["real", "imag"],
-    "additionalProperties": False,
-}
+_COMPLEX_JSON_SCHEMA_OBJECT = complex_object_json_schema()
 
-_COMPLEX_JSON_SCHEMA_VALIDATION = {
-    "anyOf": [
-        {"type": "number"},
-        {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "prefixItems": [{"type": "number"}, {"type": "number"}],
-        },
-        _COMPLEX_JSON_SCHEMA_OBJECT,
-    ]
-}
+_COMPLEX_JSON_SCHEMA_VALIDATION = complex_json_schema()
 
 
 Complex = Annotated[
