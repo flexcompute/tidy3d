@@ -62,6 +62,7 @@ class TaskType(str, Enum):
 
 class PayType(str, Enum):
     CREDITS = "FLEX_CREDIT"
+    VGPU = "GPU_RESERVED"
     AUTO = "AUTO"
 
     @classmethod

@@ -334,6 +334,9 @@ def test_pay_type_case_insensitivity(set_api_key):
         "credits",
         "CREDITS",
         PayType.CREDITS,
+        "vgpu",
+        "VGPU",
+        PayType.VGPU,
     ]
 
     for pay_type in valid_pay_types:
