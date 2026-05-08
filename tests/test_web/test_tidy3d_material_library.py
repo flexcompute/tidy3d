@@ -6,7 +6,6 @@ import responses
 import tidy3d as td
 from tidy3d import config
 from tidy3d.web.api.material_library import MaterialLibrary
-from tidy3d.web.core.environment import Env
 
 config.switch_profile("dev")
 
@@ -24,7 +23,7 @@ def set_api_key(monkeypatch):
 def test_lib(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/libraries",
+        f"{config.web.api_endpoint}/tidy3d/libraries",
         json={"data": [{"id": "3eb06d16-208b-487b-864b-e9b1d3e010a7", "name": "medium1"}]},
         status=200,
     )

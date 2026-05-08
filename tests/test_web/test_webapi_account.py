@@ -9,7 +9,6 @@ from tidy3d import config
 from tidy3d.web.api.webapi import (
     account,
 )
-from tidy3d.web.core.environment import Env
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
@@ -32,7 +31,7 @@ def mock_get_account(monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/py/account",
+        f"{config.web.api_endpoint}/tidy3d/py/account",
         json={
             "data": {
                 "credit": 10.0,

@@ -8,6 +8,7 @@ from responses import matchers
 
 import tidy3d as td
 from tidy3d import HeatSimulation
+from tidy3d import config as td_config
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.webapi import (
@@ -20,7 +21,6 @@ from tidy3d.web.api.webapi import (
     run,
     upload,
 )
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.types import PayType, TaskType
 
 from ..test_components.test_heat import make_heat_sim
@@ -52,7 +52,7 @@ def mock_upload(monkeypatch, set_api_key):
     """Mocks webapi.upload."""
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{td_config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
         json={"data": {"projectId": FOLDER_ID, "projectName": PROJECT_NAME}},
         status=200,
@@ -60,7 +60,7 @@ def mock_upload(monkeypatch, set_api_key):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
+        f"{td_config.web.api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
@@ -95,7 +95,7 @@ def mock_get_info(monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
                 "taskId": TASK_ID,
@@ -119,14 +119,14 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         match=[
             matchers.json_params_matcher(
                 {
                     "solverVersion": None,
                     "workerGroup": None,
                     "protocolVersion": td.version.__version__,
-                    "enableCaching": Env.current.enable_caching,
+                    "enableCaching": td_config.web.enable_caching,
                     "payType": PayType.AUTO,
                     "priority": None,
                     "vgpuAllocation": None,
@@ -206,7 +206,7 @@ def mock_metadata(monkeypatch, set_api_key):
     """Mocks call to metadata api"""
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
         json={
             "data": {
                 "createdAt": CREATED_AT,
@@ -221,7 +221,7 @@ def mock_get_run_info(monkeypatch, set_api_key):
     """Mocks webapi.get_run_info"""
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/progress",
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/progress",
         json={
             "data": {
                 "perc_done": 100,
@@ -305,7 +305,7 @@ def test_run(mock_webapi, monkeypatch, tmp_path):
 def test_abort_task(set_api_key, mock_get_info):
     responses.add(
         responses.PUT,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abort",
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/abort",
         match=[
             matchers.json_params_matcher(
                 {

@@ -8,7 +8,7 @@
 - `ConfigManager` merges builtin defaults, saved files, environment overrides, and runtime edits, then runs section handlers.
 - `ConfigLoader` handles disk IO while `serializer.py` preserves comments and key order inside TOML files.
 - `registry.py` tracks sections and handlers so late imports (plugins, tests) attach automatically.
-- `legacy.py` keeps the historical API working by delegating to the manager.
+- Historical config accessors were removed in Tidy3D 2.12.
 
 ## Runtime Flow
 
@@ -33,7 +33,6 @@ flowchart LR
     subgraph Manager
         manager_py["manager.ConfigManager"] --> loader_py
         manager_py --> handlers["Registered handlers"]
-        manager_py --> legacy_wrapper["legacy.LegacyConfigWrapper"]
         manager_py --> plugins_accessor["plugins accessor"]
     end
 
@@ -57,7 +56,6 @@ flowchart LR
 - `loader.py` - Resolves the config directory, loads `config.toml` and `profiles/<name>.toml`, parses environment overrides, applies schema migrations, centralizes section payload iteration/validation helpers, and writes atomically through `serializer.build_document`.
 - `serializer.py` - Builds stable TOML documents with descriptive comments derived from section docstrings.
 - `profiles.py` - Supplies builtin profiles merged ahead of user overrides.
-- `legacy.py` - Implements backward-compatible wrappers and deprecation warnings around the manager.
 - `migrations.py` - Schema versioning utilities and the `vN -> vN+1` migration registry.
 - `deprecations.py` - Centralizes deprecated/removed field warnings during config validation.
 - `schema_utils.py` - Shared helpers for walking nested config model annotations.

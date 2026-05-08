@@ -7,7 +7,6 @@ import tidy3d as td
 from tidy3d import config
 from tidy3d.plugins.dispersion import DispersionFitter
 from tidy3d.web.api.material_fitter import FitterOptions, MaterialFitterTask
-from tidy3d.web.core.environment import Env
 
 config.switch_profile("dev")
 
@@ -29,7 +28,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/fitter/1234",
+        f"{config.web.api_endpoint}/tidy3d/fitter/1234",
         json={"data": "https://example.com"},
         status=200,
     )
@@ -47,7 +46,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/fitter/fit",
+        f"{config.web.api_endpoint}/tidy3d/fitter/fit",
         json={
             "data": {
                 "id": "1234",
@@ -62,7 +61,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/fitter/1234",
+        f"{config.web.api_endpoint}/tidy3d/fitter/1234",
         json={"data": {"status": "running"}},
         status=200,
     )
@@ -75,7 +74,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/fitter/save",
+        f"{config.web.api_endpoint}/tidy3d/fitter/save",
         json={
             "data": {
                 "id": "1234",

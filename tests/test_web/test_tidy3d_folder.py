@@ -6,7 +6,6 @@ from responses import matchers
 
 import tidy3d as td
 from tidy3d import config
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.task_core import Folder
 
 config.switch_profile("dev")
@@ -25,7 +24,7 @@ def set_api_key(monkeypatch):
 def test_list_folders(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects",
+        f"{config.web.api_endpoint}/tidy3d/projects",
         json={"data": [{"projectId": "1234", "projectName": "default"}]},
         status=200,
     )
@@ -37,7 +36,7 @@ def test_list_folders(set_api_key):
 def test_get_folder(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project?projectName=default",
+        f"{config.web.api_endpoint}/tidy3d/project?projectName=default",
         json={"data": {"projectId": "1234", "projectName": "default"}},
         status=200,
     )
@@ -50,20 +49,20 @@ def test_create_and_remove_folder(set_api_key):
     folder_name = "test folder2"
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project?projectName={folder_name}",
+        f"{config.web.api_endpoint}/tidy3d/project?projectName={folder_name}",
         json={"data": {"projectId": "1234", "projectName": "default"}},
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects",
+        f"{config.web.api_endpoint}/tidy3d/projects",
         match=[matchers.json_params_matcher({"projectName": folder_name})],
         json={"data": {"projectId": "1234", "projectName": folder_name}},
         status=200,
     )
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234",
+        f"{config.web.api_endpoint}/tidy3d/projects/1234",
         status=200,
     )
 

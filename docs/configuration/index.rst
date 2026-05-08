@@ -150,12 +150,6 @@ Command Line Helpers
 Use ``tidy3d configure`` to store your API key in ``config.toml``. The command
 creates the directory if it is missing and updates only the ``web`` section.
 
-If you have older files in ``~/.tidy3d``, run ``tidy3d config migrate`` to move
-them into the new location described above. The command copies the legacy files
-into the canonical directory, leaving the originals untouched unless you pass
-``--delete-legacy``. Use ``--overwrite`` if you have already started using the
-new location and want to replace those files with the legacy versions.
-
 Use ``tidy3d config upgrade`` to preview or apply schema migrations for
 ``config.toml`` and profile files. Pass ``--dry-run`` to inspect diffs or
 ``--check`` in CI. Automatic write-back can be disabled with
@@ -166,20 +160,17 @@ Legacy Access Points
 --------------------
 
 Older code paths such as ``tidy3d.config.logging_level`` and ``tidy3d.config.Env``
-still work. They emit a ``DeprecationWarning`` each time you use them to help
-you transition to the modern interface. See :doc:`migration` for advice on
-updating scripts that depend on these names.
+were removed in Tidy3D 2.12. Accessing these names now raises an error with
+replacement guidance.
 
 Next Steps
 ----------
 
 - :doc:`reference`
-- :doc:`migration`
 - :doc:`../api/configuration`
 
 .. toctree::
    :hidden:
 
    reference
-   migration
    nexus

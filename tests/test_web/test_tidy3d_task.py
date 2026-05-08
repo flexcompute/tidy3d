@@ -10,7 +10,6 @@ from responses import matchers
 import tidy3d as td
 from tidy3d import config
 from tidy3d.web.core import http_util
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
 from tidy3d.web.core.types import PayType, TaskType
 
@@ -42,7 +41,7 @@ def set_api_key(monkeypatch):
 def test_list_tasks(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects",
+        f"{config.web.api_endpoint}/tidy3d/projects",
         json={"data": [{"projectId": "1234", "projectName": "default"}]},
         status=200,
     )
@@ -52,7 +51,7 @@ def test_list_tasks(set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/1234/tasks",
         json={"data": [{"taskId": "1234", "createdAt": "2022-01-01T00:00:00.000Z"}]},
         status=200,
     )
@@ -64,7 +63,7 @@ def test_list_tasks(set_api_key):
 def test_query_task(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
@@ -90,7 +89,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
@@ -109,7 +108,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
 def test_upload(monkeypatch, set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
@@ -133,14 +132,14 @@ def test_create(set_api_key):
     task_id = "1234"
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": "test folder2"})],
         json={"data": {"projectId": "1234", "projectName": "test folder2"}},
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{task_id}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/{task_id}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
@@ -173,14 +172,14 @@ def test_submit(set_api_key):
     task_name = "test task"
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": "test folder1"})],
         json={"data": {"projectId": project_id, "projectName": "test folder1"}},
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{project_id}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/{project_id}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
@@ -204,14 +203,14 @@ def test_submit(set_api_key):
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         match=[
             matchers.json_params_matcher(
                 {
                     "protocolVersion": http_util.get_version(),
                     "solverVersion": None,
                     "workerGroup": None,
-                    "enableCaching": Env.current.enable_caching,
+                    "enableCaching": config.web.enable_caching,
                     "payType": PayType.AUTO,
                     "priority": None,
                     "vgpuAllocation": None,
@@ -236,7 +235,7 @@ def test_submit(set_api_key):
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "taskId": TASK_ID,
             "taskName": task_name,
@@ -262,7 +261,7 @@ def test_batch_submit_additional_payload(set_api_key):
     task = BatchTask(taskId="batch-task-id")
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/rf/task/batch-task-id/submit",
+        f"{config.web.api_endpoint}/rf/task/batch-task-id/submit",
         match=[
             matchers.json_params_matcher(
                 {
@@ -289,14 +288,14 @@ def test_pay_type_case_insensitivity(set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": "test pay type folder"})],
         json={"data": {"projectId": project_id, "projectName": "test pay type folder"}},
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{project_id}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/{project_id}/tasks",
         json={
             "data": {
                 "taskId": TASK_ID,
@@ -309,7 +308,7 @@ def test_pay_type_case_insensitivity(set_api_key):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         json={
             "data": {
                 "taskId": TASK_ID,
@@ -346,7 +345,7 @@ def test_estimate_cost(set_api_key):
     TASK_ID = "3eb06d16-208b-487b-864b-e9b1d3e010a7"
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
@@ -364,7 +363,7 @@ def test_estimate_cost(set_api_key):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
         json={"data": {"flexUnit": 2.33}},
         status=200,
     )
@@ -382,7 +381,7 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
     monkeypatch.setattr("tidy3d.web.core.task_core.download_file", mock)
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
@@ -402,7 +401,7 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
 def test_get_running_tasks(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/py/tasks",
+        f"{config.web.api_endpoint}/tidy3d/py/tasks",
         json={"data": [{"taskId": "1234", "status": "queued"}]},
         status=200,
     )

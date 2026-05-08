@@ -9,26 +9,12 @@ from pydantic import Field
 from tidy3d.config import get_manager, reload_config
 from tidy3d.config import loader as config_loader
 from tidy3d.config import registry as config_registry
-from tidy3d.config.legacy import finalize_legacy_migration
-from tidy3d.config.loader import migrate_legacy_config
 from tidy3d.config.sections import ConfigSection
 from tidy3d.web.cli.app import tidy3d_cli
 
 
 def _config_path(config_dir: Path) -> Path:
     return config_dir / "config.toml"
-
-
-def test_loads_legacy_flat_config(mock_config_dir):
-    legacy_path = mock_config_dir / "config"
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy_path.write_text('apikey = "legacy-key"\n', encoding="utf-8")
-
-    reload_config(profile="default")
-    manager = get_manager()
-    web = manager.get_section("web")
-    assert web.apikey is not None
-    assert web.apikey.get_secret_value() == "legacy-key"
 
 
 def test_save_includes_descriptions(config_manager, mock_config_dir):
@@ -150,57 +136,6 @@ def test_plugin_descriptions(mock_config_dir):
         reload_config(profile="default")
 
 
-def test_finalize_legacy_migration_promotes_flat_file(tmp_path):
-    canonical_dir = tmp_path / "canonical"
-    canonical_dir.mkdir()
-    legacy_file = canonical_dir / "config"
-    legacy_file.write_text('apikey = "legacy-key"\n', encoding="utf-8")
-    extra_file = canonical_dir / "extra.txt"
-    extra_file.write_text("keep", encoding="utf-8")
-
-    finalize_legacy_migration(canonical_dir)
-
-    config_toml = canonical_dir / "config.toml"
-    assert config_toml.exists()
-    content = config_toml.read_text(encoding="utf-8")
-    assert "[web]" in content
-    assert "[logging]" in content
-    assert "Lowest logging level that will be emitted." in content
-    assert "legacy-key" in content
-    assert not legacy_file.exists()
-    assert extra_file.exists()
-    assert extra_file.read_text(encoding="utf-8") == "keep"
-
-
-def test_migrate_legacy_config_promotes_structured_config(tmp_path, monkeypatch):
-    legacy_dir = tmp_path / "legacy"
-    legacy_dir.mkdir()
-    legacy_file = legacy_dir / "config"
-    legacy_file.write_text('apikey = "legacy-key"\n', encoding="utf-8")
-    (legacy_dir / "extra.txt").write_text("keep", encoding="utf-8")
-
-    canonical_dir = tmp_path / "canonical"
-
-    monkeypatch.setattr(config_loader, "legacy_config_directory", lambda: legacy_dir)
-    monkeypatch.setattr(config_loader, "canonical_config_directory", lambda: canonical_dir)
-
-    destination = migrate_legacy_config()
-
-    assert destination == canonical_dir
-    config_toml = canonical_dir / "config.toml"
-    assert config_toml.exists()
-    content = config_toml.read_text(encoding="utf-8")
-    assert "[web]" in content
-    assert "[logging]" in content
-    assert "Lowest logging level that will be emitted." in content
-    assert "legacy-key" in content
-    assert not (canonical_dir / "config").exists()
-    extra_file = canonical_dir / "extra.txt"
-    assert extra_file.exists()
-    assert extra_file.read_text(encoding="utf-8") == "keep"
-    assert legacy_dir.exists()
-
-
 def test_is_writable_ignores_file_not_found_cleanup(tmp_path, monkeypatch):
     original_unlink = pathlib.Path.unlink
 
@@ -245,3 +180,29 @@ def test_resolve_config_directory_prefers_existing_base_dir(tmp_path, monkeypatc
     monkeypatch.setattr(config_loader, "_is_writable", _boom)
 
     assert config_loader.resolve_config_directory() == config_dir
+
+
+def test_resolve_config_directory_legacy_dir_with_unwritable_canonical_uses_temp_warning(
+    tmp_path, monkeypatch
+):
+    canonical_dir = tmp_path / "xdg" / "tidy3d"
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    fallback_dir = tmp_path / "temp" / "config"
+    messages = []
+
+    monkeypatch.setattr(config_loader, "canonical_config_directory", lambda: canonical_dir)
+    monkeypatch.setattr(config_loader, "legacy_config_directory", lambda: legacy_dir)
+    monkeypatch.setattr(config_loader, "_is_writable", lambda _path: False)
+    monkeypatch.setattr(config_loader, "_temporary_config_dir", lambda: fallback_dir)
+    monkeypatch.setattr(
+        config_loader.log,
+        "warning",
+        lambda message, *args, **kwargs: messages.append(message),
+    )
+
+    assert config_loader.resolve_config_directory() == fallback_dir
+
+    legacy_warning = next(message for message in messages if "removed legacy location" in message)
+    assert str(canonical_dir / "config.toml") not in legacy_warning
+    assert any(str(fallback_dir) in message for message in messages)

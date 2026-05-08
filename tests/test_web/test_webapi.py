@@ -61,7 +61,6 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.constants import MODE_DATA_HDF5_GZ
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.exceptions import WebNotFoundError
 from tidy3d.web.core.task_core import BatchTask
 from tidy3d.web.core.types import PayType, TaskType
@@ -223,7 +222,7 @@ def mock_upload(monkeypatch, set_api_key):
     """Mocks webapi.upload."""
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
         json={"data": {"projectId": FOLDER_ID, "projectName": PROJECT_NAME}},
         status=200,
@@ -231,7 +230,7 @@ def mock_upload(monkeypatch, set_api_key):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
@@ -266,7 +265,7 @@ def mock_get_info(monkeypatch, set_api_key):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
                 "taskId": TASK_ID,
@@ -293,7 +292,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
             "solverVersion": None,
             "workerGroup": None,
             "protocolVersion": td.version.__version__,
-            "enableCaching": Env.current.enable_caching,
+            "enableCaching": config.web.enable_caching,
             "payType": PayType.AUTO,
             "priority": priority,
             "vgpuAllocation": vgpu_allocation,
@@ -302,7 +301,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
 
         responses.add(
             responses.POST,
-            f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+            f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
             match=[matchers.json_params_matcher(expected_body)],
             json={
                 "data": {
@@ -386,7 +385,7 @@ def mock_metadata(monkeypatch, set_api_key):
     """Mocks call to metadata api"""
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
         json={
             "data": {
                 "createdAt": CREATED_AT,
@@ -422,7 +421,7 @@ def mock_get_run_info(monkeypatch, set_api_key):
     """Mocks webapi.get_run_info"""
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/progress",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/progress",
         json={
             "data": {
                 "perc_done": 100,
@@ -606,14 +605,14 @@ def test_upload_uses_run_config_defaults(
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
         json={"data": {"projectId": FOLDER_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
@@ -631,7 +630,7 @@ def test_upload_uses_run_config_defaults(
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
         match=[
             matchers.json_params_matcher(
                 {
@@ -661,14 +660,14 @@ def test_start_uses_config_defaults(set_api_key, mock_get_info, reset_run_option
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         match=[
             matchers.json_params_matcher(
                 {
                     "solverVersion": "config_solver",
                     "workerGroup": "config_group",
                     "protocolVersion": None,
-                    "enableCaching": Env.current.enable_caching,
+                    "enableCaching": config.web.enable_caching,
                     "payType": PayType.CREDITS,
                     "priority": 5,
                     "vgpuAllocation": 4,
@@ -696,14 +695,14 @@ def test_start_explicit_args_override_config_defaults(
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         match=[
             matchers.json_params_matcher(
                 {
                     "solverVersion": None,
                     "workerGroup": "explicit_group",
                     "protocolVersion": td.version.__version__,
-                    "enableCaching": Env.current.enable_caching,
+                    "enableCaching": config.web.enable_caching,
                     "payType": PayType.AUTO,
                     "priority": 1,
                     "vgpuAllocation": 2,
@@ -742,14 +741,14 @@ def test_start_uses_scoped_config_without_leaking(
 
         responses.add(
             responses.POST,
-            f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+            f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
             match=[
                 matchers.json_params_matcher(
                     {
                         "solverVersion": None,
                         "workerGroup": "scoped_group",
                         "protocolVersion": td.version.__version__,
-                        "enableCaching": Env.current.enable_caching,
+                        "enableCaching": config.web.enable_caching,
                         "payType": PayType.CREDITS,
                         "priority": 7,
                         "vgpuAllocation": None,
@@ -793,7 +792,7 @@ def test_start_batch_ignores_config_run_defaults(monkeypatch, set_api_key, reset
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/rf/task/{batch_task_id}/submit",
+        f"{config.web.api_endpoint}/rf/task/{batch_task_id}/submit",
         match=[
             matchers.json_params_matcher(
                 {
@@ -825,7 +824,7 @@ def test_start_batch_uses_config_run_additional_payload(
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/rf/task/{batch_task_id}/submit",
+        f"{config.web.api_endpoint}/rf/task/{batch_task_id}/submit",
         match=[
             matchers.json_params_matcher(
                 {
@@ -1301,7 +1300,7 @@ def test_batch_data_items_dict_loads_all_tasks(monkeypatch):
 def test_delete(set_api_key, mock_get_info):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}",
         json={
             "data": {
                 "taskId": TASK_ID,
@@ -1315,7 +1314,7 @@ def test_delete(set_api_key, mock_get_info):
 
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/group/group123/versions",
+        f"{config.web.api_endpoint}/tidy3d/group/group123/versions",
         match=[
             matchers.json_params_matcher(
                 {
@@ -1334,7 +1333,7 @@ def test_delete(set_api_key, mock_get_info):
 
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}",
         json={
             "data": {
                 "taskId": TASK_ID,
@@ -1398,14 +1397,14 @@ def test_download_log(monkeypatch, mock_get_info, tmp_path):
 def test_delete_old(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
         json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{FOLDER_ID}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{FOLDER_ID}/tasks",
         json={"data": 0, "warning": "string"},
         status=200,
     )
@@ -1417,14 +1416,14 @@ def test_delete_old(set_api_key):
 def test_get_tasks(set_api_key):
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{config.web.api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
         json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
+        f"{config.web.api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
         json={"data": [{"taskId": TASK_ID, "createdAt": CREATED_AT}]},
         status=200,
     )
@@ -1460,7 +1459,7 @@ def test_real_cost(mock_get_info):
 def test_abort_task(set_api_key):
     responses.add(
         responses.PUT,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abort",
+        f"{config.web.api_endpoint}/tidy3d/tasks/abort",
         match=[
             matchers.json_params_matcher(
                 {
@@ -1474,7 +1473,7 @@ def test_abort_task(set_api_key):
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "taskId": TASK_ID,
             "taskName": TASK_NAME,
@@ -2523,13 +2522,13 @@ def test_load_invalid_task_raises(mock_webapi):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{INVALID_TASK_ID}/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{INVALID_TASK_ID}/detail",
         json={"error": "Task not found"},
         status=404,
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/health",
+        f"{config.web.api_endpoint}/health",
         status=200,
     )
     with pytest.raises(WebNotFoundError, match=r"Resource not found \(HTTP 404\)") as exc_info:
@@ -2543,13 +2542,13 @@ def test_load_invalid_task_404_includes_endpoint_troubleshooting(mock_webapi):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{INVALID_TASK_ID}/detail",
+        f"{config.web.api_endpoint}/tidy3d/tasks/{INVALID_TASK_ID}/detail",
         json={"error": "Task not found"},
         status=404,
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/health",
+        f"{config.web.api_endpoint}/health",
         status=404,
     )
     with pytest.raises(
@@ -2557,9 +2556,7 @@ def test_load_invalid_task_404_includes_endpoint_troubleshooting(mock_webapi):
         match="Additionally, the API endpoint appears unavailable",
     ) as exc_info:
         load(INVALID_TASK_ID, replace_existing=True)
-    assert f"The configured API endpoint is '{Env.current.web_api_endpoint}'." in str(
-        exc_info.value
-    )
+    assert f"The configured API endpoint is '{config.web.api_endpoint}'." in str(exc_info.value)
     assert "verify `config.web.api_endpoint` points to the expected Tidy3D API endpoint" in str(
         exc_info.value
     )

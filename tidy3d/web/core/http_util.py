@@ -14,7 +14,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
 from tidy3d import log
-from tidy3d.config import config
+from tidy3d.config import config, get_manager
 
 from . import core_config
 from .constants import (
@@ -75,6 +75,12 @@ def api_key() -> str | None:
     return str(apikey)
 
 
+def config_toml_path() -> str:
+    """Return the active config.toml path for user-facing setup messages."""
+
+    return str(get_manager().config_dir / "config.toml")
+
+
 def api_key_auth(request: requests.request) -> requests.request:
     """Save the authentication info in a request.
 
@@ -95,10 +101,9 @@ def api_key_auth(request: requests.request) -> requests.request:
             "API key not found. To get your API key, sign into 'https://tidy3d.simulation.cloud' "
             "and copy it from your 'Account' page. Then you can configure tidy3d through command "
             "line 'tidy3d configure' and enter your API key when prompted. "
-            "Alternatively, especially if using windows, you can manually create the configuration "
-            "file by creating a file at their home directory '~/.tidy3d/config' (unix) or "
-            "'.tidy3d/config' (windows) containing the following line: "
-            "apikey = 'XXX'. Here XXX is your API key copied from your account page within quotes."
+            f"Alternatively, create '{config_toml_path()}' "
+            "with a [web] section containing apikey = 'XXX'. Here XXX is your API key "
+            "copied from your account page within quotes."
         )
     if not version:
         raise ValueError("version not found.")

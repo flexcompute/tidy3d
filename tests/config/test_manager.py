@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pytest
 
-from tidy3d.config import Env, config, get_manager, reload_config
+from tidy3d.config import config, get_manager, reload_config
 from tidy3d.web.core.types import PayType
 
 
@@ -60,7 +62,6 @@ def test_uppercase_profile_normalization(monkeypatch):
         assert manager.profile == "dev"
         web = manager.get_section("web")
         assert str(web.api_endpoint) == "https://tidy3d-api.dev-simulation.cloud"
-        assert Env.current.name == "dev"
     finally:
         reload_config(profile="default")
 
@@ -224,6 +225,46 @@ def test_config_context_manager_restores_runtime_overrides(config_manager):
     assert config.run.worker_group is None
     assert config.vgpu.priority is None
     assert config.run.pay_type == "AUTO"
+
+
+def test_removed_config_accessors_fail_in_scoped_context(config_manager):
+    with config as scoped_config:
+        with pytest.raises(AttributeError, match=r"tidy3d\.config\.logging_level"):
+            scoped_config.logging_level = "INFO"
+
+        with pytest.raises(AttributeError, match=r"config\.switch_profile"):
+            _ = scoped_config.Env
+
+
+def test_removed_config_module_assignment_fails():
+    import tidy3d.config as config_module
+
+    with pytest.raises(AttributeError, match=r"tidy3d\.config\.logging_level"):
+        config_module.logging_level = "INFO"
+
+    assert "logging_level" not in config_module.__dict__
+
+
+def test_config_module_helpers_remain_accessible():
+    config_module = importlib.import_module("tidy3d.config")
+
+    assert config_module.reload_config is reload_config
+    assert config_module.get_manager is get_manager
+
+
+def test_removed_config_module_import_has_replacement_message():
+    with pytest.raises(ImportError, match=r"tidy3d\.config\.Env.*config\.switch_profile"):
+        from tidy3d.config import Env  # noqa: F401
+
+
+def test_reload_config_returns_proxy_with_removed_accessor_guards(config_manager):
+    reloaded = reload_config(profile="default")
+
+    with pytest.raises(AttributeError, match=r"tidy3d\.config\.logging_level"):
+        reloaded.logging_level = "INFO"
+
+    with pytest.raises(AttributeError, match=r"config\.switch_profile"):
+        _ = reloaded.Env
 
 
 def test_config_context_manager_restores_nested_overrides(config_manager):

@@ -12,6 +12,7 @@ import responses
 import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import Coords, Grid, ModeIndexDataArray, ScalarFieldDataArray, ScalarModeFieldDataArray
+from tidy3d import config as td_config
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.derivatives import create_d_matrices, create_sfactor_b, create_sfactor_f
@@ -21,7 +22,6 @@ from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
-from tidy3d.web.core.environment import Env
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured
 
@@ -177,7 +177,7 @@ def mock_remote_api(monkeypatch):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        f"{td_config.web.api_endpoint}/tidy3d/project",
         match=[responses.matchers.query_param_matcher({"projectName": PROJECT_NAME})],
         json={"data": {"projectId": PROJECT_ID, "projectName": PROJECT_NAME}},
         status=200,
@@ -185,7 +185,7 @@ def mock_remote_api(monkeypatch):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/modesolver/py",
+        f"{td_config.web.api_endpoint}/tidy3d/modesolver/py",
         match=[
             responses.matchers.json_params_matcher(
                 {
@@ -213,7 +213,7 @@ def mock_remote_api(monkeypatch):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/modesolver/py",
+        f"{td_config.web.api_endpoint}/tidy3d/modesolver/py",
         match=[
             responses.matchers.json_params_matcher(
                 {
@@ -241,7 +241,7 @@ def mock_remote_api(monkeypatch):
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/modesolver/py/{TASK_ID}/{SOLVER_ID}",
+        f"{td_config.web.api_endpoint}/tidy3d/modesolver/py/{TASK_ID}/{SOLVER_ID}",
         json={
             "data": {
                 "refId": TASK_ID,
@@ -257,7 +257,7 @@ def mock_remote_api(monkeypatch):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/modesolver/py/{TASK_ID}/{SOLVER_ID}/run",
+        f"{td_config.web.api_endpoint}/tidy3d/modesolver/py/{TASK_ID}/{SOLVER_ID}/run",
         json={
             "data": {
                 "refId": TASK_ID,

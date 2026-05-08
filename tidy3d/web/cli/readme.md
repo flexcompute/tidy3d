@@ -14,7 +14,12 @@ You can find your API key in the web http://tidy3d.simulation.cloud
 ``tidy3d configure``, then enter your API key when prompted
 
 #### Manually
-``echo 'apikey = "your_api_key"' > ~/.tidy3d/config``
+Create ``config.toml`` in the Tidy3D configuration directory with:
+
+```toml
+[web]
+apikey = "your_api_key"
+```
 
 ## Publishing Package
 
@@ -98,5 +103,4 @@ This changed the `uv.lock` and `pyproject.toml`.
 I then bumped the version in `version.py` and `pyproject.toml` to `1.8.1` (otherwise, could not upload again to PyPI for same version) and repeated the publishing steps from above again.
 
 Testing the newly pip-installed version I was able to successfully import tidy3d and run a simulation!
-
 

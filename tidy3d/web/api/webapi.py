@@ -38,6 +38,7 @@ from tidy3d.web.core.constants import (
     SIM_FILE_HDF5_GZ,
     SIMULATION_DATA_HDF5_GZ,
 )
+from tidy3d.web.core.http_util import config_toml_path
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import TaskType
@@ -1937,10 +1938,9 @@ def test() -> None:
                 "API key. To get your API key, sign into 'https://tidy3d.simulation.cloud' and "
                 "copy it from your 'Account' page. Then you can configure tidy3d through "
                 "command line 'tidy3d configure' (recommended). Alternatively, one can "
-                "manually create the configuration file by creating a file at your home "
-                "directory '~/.tidy3d/config' (unix) or '.tidy3d/config' (windows) with "
-                "content like: \n\napikey = 'XXX' \n\nHere XXX is your API key copied from "
-                f"your account page within quotes.\n\nFor details, check the instructions at {url}.",
+                f"manually create '{config_toml_path()}' "
+                "with content like: \n\n[web]\napikey = 'XXX' \n\nHere XXX is your API key "
+                f"copied from your account page within quotes.\n\nFor details, check the instructions at {url}.",
                 e,
             )
         ) from e

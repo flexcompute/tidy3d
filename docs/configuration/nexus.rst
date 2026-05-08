@@ -143,25 +143,6 @@ The base configuration file (``~/.config/tidy3d/config.toml``) stores the API ke
 
 The nexus profile file contains only your custom nexus-specific settings (endpoints, SSL, caching). The API key is stored in the base config and shared across all profiles. When the nexus profile is loaded, these settings override the built-in nexus defaults (localhost:5000). The ``default_profile`` setting in the base config tells Tidy3D to automatically load the nexus profile on startup.
 
-.. note::
-   **Automatic Migration:** If you have an existing configuration in the old flat format (``~/.tidy3d/config``), Tidy3D will automatically convert it to the new structured format on first use. Your old configuration will be backed up as ``config.migrated``.
-
-Legacy Format (deprecated)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For reference, the old flat format that is automatically migrated:
-
-.. code-block:: toml
-
-   # Old format: ~/.tidy3d/config (automatically migrated)
-   apikey = "your-api-key"
-   web_api_endpoint = "http://nexus.company.com/tidy3d-api"
-   website_endpoint = "http://nexus.company.com/tidy3d"
-   s3_region = "us-east-1"
-   s3_endpoint = "http://nexus.company.com:9000"
-   ssl_verify = false
-   enable_caching = false
-
 Python Usage
 ------------
 
@@ -378,20 +359,6 @@ Or interactively:
    # Or just web section
    print(config.web)
 
-Migrate Legacy Configuration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Manually migrate old configuration to new format:
-
-.. code-block:: bash
-
-   tidy3d config migrate
-
-Options:
-
-* ``--delete-legacy``: Remove old ``~/.tidy3d`` directory after migration
-* ``--overwrite``: Overwrite existing new-format configuration
-
 Remove Configuration
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -459,21 +426,6 @@ Verify S3 endpoint configuration:
    else:
        print("Using default AWS S3")
 
-Legacy Environment Check (Deprecated)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For backward compatibility, the old Environment API still works:
-
-.. code-block:: python
-
-   # Old API (deprecated, but still functional)
-   from tidy3d.web.core.environment import Env
-   print(f"Environment: {Env.current.name}")
-   print(f"API Endpoint: {Env.current.web_api_endpoint}")
-
-.. warning::
-   The ``Env`` API is deprecated and will be removed in a future version. Use ``tidy3d.config`` instead.
-
 Common Issues
 ~~~~~~~~~~~~~
 
@@ -504,16 +456,6 @@ Solution: Environment variables override the default profile. Check for override
    env | grep TIDY3D
 
 If ``TIDY3D_CONFIG_PROFILE``, ``TIDY3D_PROFILE``, or ``TIDY3D_ENV`` is set, it will override the default profile from config.
-
-**Issue: Old config file still exists**
-
-The old flat config file is automatically backed up during migration. It's safe to delete:
-
-.. code-block:: bash
-
-   # Old config is backed up as config.migrated
-   ls ~/.tidy3d/
-   # You can safely remove: rm ~/.tidy3d/config.migrated
 
 **Issue: API key validation fails**
 

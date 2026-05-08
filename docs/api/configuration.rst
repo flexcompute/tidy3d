@@ -16,17 +16,6 @@ Manager and Helpers
    get_manager
    reload_config
 
-Legacy Compatibility
---------------------
-
-.. autosummary::
-   :toctree: _autosummary/
-   :template: module.rst
-
-   LegacyConfigWrapper
-   Environment
-   EnvironmentConfig
-
 Registration Utilities
 ----------------------
 

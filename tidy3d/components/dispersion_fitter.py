@@ -161,7 +161,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         False,
         title="Show unweighted RMS",
         description="Whether to show unweighted RMS error in addition to the default weighted "
-        'RMS error. Requires ``td.config.logging_level = "INFO"``.',
+        'RMS error. Requires ``td.config.logging.level = "INFO"``.',
     )
     relaxed: bool | None = Field(
         None,

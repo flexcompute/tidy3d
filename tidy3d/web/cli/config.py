@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import difflib
-import shutil
 import ssl
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse, urlunparse
@@ -11,12 +10,7 @@ from urllib.parse import urlparse, urlunparse
 import click
 import requests
 
-from tidy3d.config.loader import (
-    ConfigLoader,
-    canonical_config_directory,
-    legacy_config_directory,
-    migrate_legacy_config,
-)
+from tidy3d.config.loader import ConfigLoader
 from tidy3d.config.migrations import (
     CURRENT_CONFIG_VERSION,
     FORWARD_COMPAT_STRICT,
@@ -443,74 +437,10 @@ def config_upgrade(dry_run: bool, check: bool, profiles: tuple[str, ...]) -> Non
         click.echo(f"Upgraded {len(changed_paths)} configuration file(s).")
 
 
-def _run_config_migration(overwrite: bool, delete_legacy: bool) -> None:
-    legacy_dir = legacy_config_directory()
-    if not legacy_dir.exists():
-        click.echo("No legacy configuration directory found at '~/.tidy3d'; nothing to migrate.")
-        return
-
-    canonical_dir = canonical_config_directory()
-    try:
-        destination = migrate_legacy_config(overwrite=overwrite, remove_legacy=delete_legacy)
-    except FileExistsError:
-        if delete_legacy:
-            try:
-                shutil.rmtree(legacy_dir)
-            except OSError as exc:
-                click.echo(
-                    f"Destination '{canonical_dir}' already exists and the legacy directory "
-                    f"could not be removed. Error: {exc}"
-                )
-                return
-            click.echo(
-                f"Destination '{canonical_dir}' already exists. "
-                "Skipped copying legacy files and removed the legacy '~/.tidy3d' directory."
-            )
-            return
-        click.echo(
-            f"Destination '{canonical_dir}' already exists. "
-            "Use '--overwrite' to replace the existing files."
-        )
-        return
-    except RuntimeError as exc:
-        click.echo(str(exc))
-        return
-    except FileNotFoundError:
-        click.echo("No legacy configuration directory found; nothing to migrate.")
-        return
-
-    click.echo(f"Configuration migrated to '{destination}'.")
-    if delete_legacy:
-        click.echo("The legacy '~/.tidy3d' directory was removed.")
-    else:
-        click.echo(
-            f"The legacy directory remains at '{legacy_dir}'. "
-            "Remove it after confirming the new configuration works, or rerun with '--delete-legacy'."
-        )
-
-
-@click.command(name="config-migrate")
-@click.option(
-    "--overwrite",
-    is_flag=True,
-    help="Replace existing files in the destination configuration directory if they already exist.",
-)
-@click.option(
-    "--delete-legacy",
-    is_flag=True,
-    help="Remove the legacy '~/.tidy3d' directory after a successful migration.",
-)
-def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
-    """Copy configuration files from '~/.tidy3d' to the canonical location."""
-
-    _run_config_migration(overwrite, delete_legacy)
-
-
 @click.group()
 def config_group() -> None:
     """Configuration utilities."""
 
 
-config_group.add_command(config_migrate, name="migrate")
 config_group.add_command(config_reset, name="reset")
 config_group.add_command(config_upgrade, name="upgrade")

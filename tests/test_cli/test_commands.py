@@ -20,10 +20,7 @@ def test_tidy3d_root_command_names_are_unique():
 def test_config_group_commands_are_namespaced():
     config_group = tidy3d_cli.commands["config"]
 
-    migrate_cmd = config_group.commands["migrate"]
     reset_cmd = config_group.commands["reset"]
 
-    assert migrate_cmd.name == "config-migrate"
     assert reset_cmd.name == "config-reset"
-    assert "config-migrate" not in tidy3d_cli.commands
     assert "config-reset" not in tidy3d_cli.commands

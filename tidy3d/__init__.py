@@ -515,7 +515,7 @@ def set_logging_level(level: str) -> None:
     """Raise a warning here instead of setting the logging level."""
     raise DeprecationWarning(
         "``set_logging_level`` no longer supported. "
-        f"To set the logging level, call ``tidy3d.config.logging_level = {level}``."
+        f"To set the logging level, call ``tidy3d.config.logging.level = {level}``."
     )
 
 

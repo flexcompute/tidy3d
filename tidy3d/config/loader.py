@@ -47,7 +47,6 @@ class ConfigLoader:
         self.config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._docs: dict[Path, tomlkit.TOMLDocument] = {}
         self._pending_writes: dict[Path, tomlkit.TOMLDocument] = {}
-        self._pending_legacy_moves: dict[Path, tuple[Path, Path]] = {}
 
     def load_base(
         self,
@@ -56,13 +55,10 @@ class ConfigLoader:
         queue_migration_write: bool | None = None,
         validation_profile: str | None = None,
     ) -> dict[str, Any]:
-        """Load base configuration from config.toml.
-
-        If config.toml doesn't exist but the legacy flat config does,
-        automatically migrate to the new format.
-        """
+        """Load base configuration from config.toml."""
 
         config_path = self.config_dir / "config.toml"
+        _warn_legacy_flat_config_ignored(config_dir=self.config_dir, config_path=config_path)
         if queue_migration_write is None:
             queue_migration_write = commit_writes
         data = self._read_toml(
@@ -72,63 +68,7 @@ class ConfigLoader:
         )
         if commit_writes:
             self.commit_pending_writes()
-        if data:
-            return data
-
-        # Check for legacy flat config
-        from .legacy import load_legacy_flat_config
-
-        legacy_path = self.config_dir / "config"
-        legacy = load_legacy_flat_config(self.config_dir)
-
-        # Auto-migrate if legacy config exists
-        if legacy and legacy_path.exists():
-            log.info(
-                f"Detected legacy configuration at '{legacy_path}'. "
-                "Automatically migrating to new format..."
-            )
-
-            try:
-                migrated = self._migrate_legacy_payload(legacy)
-            except Exception as exc:
-                self._warn_legacy_auto_migration_failed(exc)
-                return legacy
-
-            queued_legacy_write = False
-            if queue_migration_write:
-                queued_legacy_write = self._queue_legacy_migration_write(
-                    config_path=config_path,
-                    legacy_path=legacy_path,
-                    migrated=migrated,
-                    validation_profile=validation_profile,
-                )
-
-            if commit_writes and queued_legacy_write:
-                self.commit_pending_writes()
-                if not legacy_path.exists():
-                    backup_path = legacy_path.with_suffix(".migrated")
-                    log.info(
-                        f"Migration complete. Configuration saved to '{config_path}'. "
-                        f"Legacy config backed up as '{backup_path.name}'."
-                    )
-
-            return migrated
-
-        if legacy:
-            try:
-                return self._migrate_legacy_payload(legacy)
-            except Exception as exc:
-                self._warn_legacy_auto_migration_failed(exc)
-                return legacy
-        return {}
-
-    def _warn_legacy_auto_migration_failed(self, exc: Exception) -> None:
-        """Log a consistent warning when legacy payload migration fails."""
-
-        log.warning(
-            f"Failed to auto-migrate legacy configuration: {exc}. "
-            "Using legacy data without migration."
-        )
+        return data or {}
 
     def load_user_profile(
         self,
@@ -235,17 +175,11 @@ class ConfigLoader:
             return
         if not auto_migrate_enabled():
             self._pending_writes.clear()
-            self._pending_legacy_moves.clear()
             return
 
         for path, document in list(self._pending_writes.items()):
-            legacy_move = self._pending_legacy_moves.get(path)
             try:
                 self._atomic_write_document(path, document, keep_backup=True)
-                if legacy_move is not None:
-                    legacy_path, backup_path = legacy_move
-                    if legacy_path.exists():
-                        legacy_path.rename(backup_path)
             except Exception as exc:
                 log.warning(f"Failed to write migrated configuration file '{path}': {exc}")
             finally:
@@ -419,29 +353,6 @@ class ConfigLoader:
 
     def _clear_pending_path(self, path: Path) -> None:
         self._pending_writes.pop(path, None)
-        self._pending_legacy_moves.pop(path, None)
-
-    def _queue_legacy_migration_write(
-        self,
-        *,
-        config_path: Path,
-        legacy_path: Path,
-        migrated: dict[str, Any],
-        validation_profile: str | None = None,
-    ) -> bool:
-        if not self._should_queue_migration_write(
-            config_path, migrated, validation_profile=validation_profile
-        ):
-            self._clear_pending_path(config_path)
-            return False
-        document = self._build_document(config_path, migrated)
-        self._docs[config_path] = document
-        self._pending_writes[config_path] = document
-        self._pending_legacy_moves[config_path] = (
-            legacy_path,
-            legacy_path.with_suffix(".migrated"),
-        )
-        return True
 
     def _is_profile_path(self, path: Path) -> bool:
         profiles_dir = (self.config_dir / "profiles").resolve()
@@ -509,15 +420,6 @@ class ConfigLoader:
         validation_tree = self._validation_tree_for_path(path, data, validation_profile)
         build_validated_models(validation_tree, error_context="validate", log_errors=False)
 
-    def _migrate_legacy_payload(self, data: dict[str, Any]) -> dict[str, Any]:
-        if not data:
-            return {}
-        document = tomlkit.parse(toml.dumps(data))
-        apply_migrations(document, 0, CURRENT_CONFIG_VERSION)
-        set_config_version(document, CURRENT_CONFIG_VERSION)
-        migrated = toml.loads(tomlkit.dumps(document))
-        return strip_config_version(migrated)
-
     def _apply_schema_migrations(
         self,
         path: Path,
@@ -570,7 +472,6 @@ class ConfigLoader:
                     path, migrated, validation_profile=validation_profile
                 ):
                     self._pending_writes[path] = document
-                    self._pending_legacy_moves.pop(path, None)
                 else:
                     self._clear_pending_path(path)
             return migrated
@@ -867,8 +768,18 @@ def _warn_legacy_dir_ignored(*, canonical_dir: Path, legacy_dir: Path) -> None:
     if legacy_dir.exists():
         log.warning(
             f"Using canonical configuration directory at '{canonical_dir}'. "
-            "Found legacy directory at '~/.tidy3d', which will be ignored. "
-            "Remove it manually or run 'tidy3d config migrate --delete-legacy' to clean up.",
+            f"Found legacy directory at '{legacy_dir}', which will be ignored. "
+            f"Tidy3D configuration now uses '{canonical_dir / 'config.toml'}'.",
+            log_once=True,
+        )
+
+
+def _warn_legacy_flat_config_ignored(*, config_dir: Path, config_path: Path) -> None:
+    legacy_path = config_dir / "config"
+    if legacy_path.is_file():
+        log.warning(
+            f"Found legacy configuration file at '{legacy_path}', which is no longer loaded. "
+            f"Tidy3D configuration now uses '{config_path}'.",
             log_once=True,
         )
 
@@ -898,15 +809,20 @@ def resolve_config_directory() -> Path:
         _warn_legacy_dir_ignored(canonical_dir=canonical_dir, legacy_dir=legacy_dir)
         return canonical_dir
 
+    fallback_dir = _temporary_config_dir()
+
     if legacy_dir.exists():
         log.warning(
-            "Configuration found in legacy location '~/.tidy3d'. Consider running 'tidy3d config migrate'.",
+            f"Configuration found in removed legacy location '{legacy_dir}', which will be "
+            "ignored.",
             log_once=True,
         )
-        return legacy_dir
 
-    log.warning(f"Unable to write to '{canonical_dir}'; falling back to temporary directory.")
-    return _temporary_config_dir()
+    log.warning(
+        f"Unable to write to '{canonical_dir}'; falling back to temporary directory "
+        f"'{fallback_dir}'."
+    )
+    return fallback_dir
 
 
 def _xdg_config_home() -> Path:
@@ -934,56 +850,3 @@ def _is_writable(path: Path) -> bool:
         return True
     except Exception:
         return False
-
-
-def migrate_legacy_config(*, overwrite: bool = False, remove_legacy: bool = False) -> Path:
-    """Copy configuration files from the legacy ``~/.tidy3d`` directory to the canonical location.
-
-    Parameters
-    ----------
-    overwrite : bool
-        If ``True``, existing files in the canonical directory will be replaced.
-    remove_legacy : bool
-        If ``True``, the legacy directory is removed after a successful migration.
-
-    Returns
-    -------
-    Path
-        The path of the canonical configuration directory.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the legacy directory does not exist.
-    FileExistsError
-        If the destination already exists and ``overwrite`` is ``False``.
-    RuntimeError
-        If the legacy and canonical directories resolve to the same location.
-    """
-
-    legacy_dir = legacy_config_directory()
-    if not legacy_dir.exists():
-        raise FileNotFoundError("Legacy configuration directory '~/.tidy3d' was not found.")
-
-    canonical_dir = canonical_config_directory()
-    if canonical_dir.resolve() == legacy_dir.resolve():
-        raise RuntimeError(
-            "Legacy and canonical configuration directories are the same path; nothing to migrate."
-        )
-
-    if canonical_dir.exists() and not overwrite:
-        raise FileExistsError(
-            f"Destination '{canonical_dir}' already exists. Pass overwrite=True to replace existing files."
-        )
-
-    canonical_dir.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(legacy_dir, canonical_dir, dirs_exist_ok=overwrite)
-
-    from .legacy import finalize_legacy_migration  # local import to avoid circular dependency
-
-    finalize_legacy_migration(canonical_dir)
-
-    if remove_legacy:
-        shutil.rmtree(legacy_dir)
-
-    return canonical_dir
