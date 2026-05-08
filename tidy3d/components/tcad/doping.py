@@ -38,39 +38,83 @@ class AbstractDopingBox(Box):
         json_schema_extra={"units": MICROMETER},
     )
 
-    def _get_indices_in_box(
-        self, coords: dict[str, ArrayLike], meshgrid: bool = True
-    ) -> tuple[NDArray[np.bool_], NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-        """Returns locations inside box"""
+    @staticmethod
+    def _complete_coords(
+        coords: dict[str, ArrayLike], meshgrid: bool
+    ) -> dict[str, NDArray[np.floating]]:
+        """Return x, y, z coordinate arrays, filling omitted axes at zero."""
 
-        # work out whether x,y, and z are present
-        dim_missing = len(list(coords.keys())) < 3
-        if dim_missing:
-            for var_name in "xyz":
-                if var_name not in coords:
-                    coords[var_name] = [0]
+        coords_full = {axis: np.asarray(coords[axis]) for axis in "xyz" if axis in coords}
+        if len(coords_full) == 3 and meshgrid:
+            return coords_full
 
         if meshgrid:
-            X, Y, Z = np.meshgrid(coords["x"], coords["y"], coords["z"], indexing="ij")
+            fill_value = np.array([0.0])
         else:
-            X = coords["x"]
-            Y = coords["y"]
-            Z = coords["z"]
+            fill_shape = next(iter(coords_full.values())).shape if coords_full else (1,)
+            fill_value = np.zeros(fill_shape)
 
-        new_bounds = [list(self.bounds[0]), list(self.bounds[1])]
-        for d in range(3):
-            if new_bounds[0][d] == new_bounds[1][d]:
-                new_bounds[0][d] = -np.inf
-                new_bounds[1][d] = np.inf
+        coords_full = {axis: coords_full.get(axis, fill_value) for axis in "xyz"}
+        if not meshgrid:
+            x, y, z = np.broadcast_arrays(coords_full["x"], coords_full["y"], coords_full["z"])
+            coords_full = {"x": x, "y": y, "z": z}
 
-        # let's assume some of these coordinates may lay outside the box
-        indices_in_box = np.logical_and(new_bounds[0][0] <= X, new_bounds[1][0] >= X)
-        indices_in_box = np.logical_and(indices_in_box, new_bounds[0][1] <= Y)
-        indices_in_box = np.logical_and(indices_in_box, new_bounds[1][1] >= Y)
-        indices_in_box = np.logical_and(indices_in_box, new_bounds[0][2] <= Z)
-        indices_in_box = np.logical_and(indices_in_box, new_bounds[1][2] >= Z)
+        return coords_full
 
-        return indices_in_box, X, Y, Z
+    def _coords_for_inside(
+        self, coords_full: dict[str, NDArray[np.floating]]
+    ) -> dict[str, NDArray[np.floating]]:
+        """Nudge exact finite-boundary coordinates inward before geometry inside checks."""
+
+        coords_inside = {}
+        for axis_index, axis in enumerate("xyz"):
+            coord = coords_full[axis]
+            lower = self.bounds[0][axis_index]
+            upper = self.bounds[1][axis_index]
+            center = self.center[axis_index]
+
+            coord_inside = coord
+            if np.isfinite(lower):
+                coord_inside = np.where(
+                    coord_inside == lower, np.nextafter(lower, center), coord_inside
+                )
+            if np.isfinite(upper):
+                coord_inside = np.where(
+                    coord_inside == upper, np.nextafter(upper, center), coord_inside
+                )
+
+            coords_inside[axis] = coord_inside
+
+        return coords_inside
+
+    def _get_inside_and_coords(
+        self, coords: dict[str, ArrayLike], meshgrid: bool = True
+    ) -> tuple[
+        dict[str, NDArray[np.floating]],
+        NDArray[np.bool_],
+        NDArray[np.floating],
+        NDArray[np.floating],
+        NDArray[np.floating],
+    ]:
+        """Returns completed coordinates and locations inside the doping box."""
+
+        coords_full = self._complete_coords(coords=coords, meshgrid=meshgrid)
+        x = coords_full["x"]
+        y = coords_full["y"]
+        z = coords_full["z"]
+        coords_inside = self._coords_for_inside(coords_full)
+        x_inside = coords_inside["x"]
+        y_inside = coords_inside["y"]
+        z_inside = coords_inside["z"]
+
+        if meshgrid:
+            indices_in_box = self.inside_meshgrid(x_inside, y_inside, z_inside)
+            X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+        else:
+            X, Y, Z = x, y, z
+            indices_in_box = self.inside(x_inside, y_inside, z_inside)
+
+        return coords_full, indices_in_box, X, Y, Z
 
     @model_validator(mode="after")
     def _post_init_validators(self) -> Self:
@@ -108,7 +152,7 @@ class ConstantDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        indices_in_box, X, _, _ = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
+        _, indices_in_box, X, _, _ = self._get_inside_and_coords(coords=coords, meshgrid=meshgrid)
 
         contrib = np.zeros(X.shape)
         contrib[indices_in_box] = self.concentration
@@ -230,7 +274,7 @@ class GaussianDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict[str, ArrayLike], meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
+        _, indices_in_box, X, Y, Z = self._get_inside_and_coords(coords=coords, meshgrid=meshgrid)
 
         x_contrib = np.zeros(X.shape)
         x_contrib[indices_in_box] = 1.0
@@ -359,20 +403,22 @@ class CustomDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        indices_in_box, X, _Y, _Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
+        coords_full, indices_in_box, X, _Y, _Z = self._get_inside_and_coords(
+            coords=coords, meshgrid=meshgrid
+        )
 
         contrib = np.zeros(X.shape)
         # interpolate
         if meshgrid:
-            interp_result = self.concentration.interp(coords)
+            interp_result = self.concentration.interp(coords_full)
             contrib[indices_in_box] = interp_result.values[indices_in_box]
         else:
             # X, Y, Z are 1D arrays of coordinates
-            # interp_result = self.concentration.interp(coords)
+            # interp_result = self.concentration.interp(coords_full)
             # contrib = np.zeros(X.shape)
             # contrib[indices_in_box] = interp_result.values[indices_in_box]
 
-            interp_coords = coords
+            interp_coords = coords_full
             interp_da = {
                 name: xr.DataArray(data, dims="new_dim") for name, data in interp_coords.items()
             }

@@ -2133,6 +2133,26 @@ def test_gaussian_doping_get_contrib_2d_coords():
     _ = box._get_contrib(coords)
 
 
+def test_gaussian_doping_get_contrib_includes_exact_float_bounds():
+    """Test GaussianDoping includes exact finite bounds with both coordinate modes."""
+    box = td.GaussianDoping(
+        center=(0, -0.95, 0),
+        size=(2, 0.1, 2),
+        ref_con=1e6,
+        concentration=1e18,
+        width=0.1,
+        source="ymin",
+    )
+    y_bounds = np.array([box.bounds[0][1], box.bounds[1][1]])
+
+    meshgrid_contrib = box._get_contrib({"x": [0], "y": y_bounds, "z": [0]})
+    assert np.all(meshgrid_contrib > 0)
+
+    coords = {"x": np.zeros(2), "y": y_bounds, "z": np.zeros(2)}
+    pointwise_contrib = box._get_contrib(coords, meshgrid=False)
+    assert np.all(pointwise_contrib > 0)
+
+
 def test_gaussian_doping_bounds_behavior():
     """Test GaussianDoping bounds behavior."""
     box_coords = ((-1, -1, -1), (1, 1, 1))

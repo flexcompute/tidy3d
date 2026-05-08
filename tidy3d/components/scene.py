@@ -2077,6 +2077,7 @@ class Scene(Tidy3dBaseModel):
                         coords_dict = {
                             "xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)
                         }
+                        coords_dict["xyz"[normal_axis_ind]] = [normal_position]
                         contrib = doping_box._get_contrib(coords_dict)
                         struct_doping[n] = struct_doping[n] + contrib
 

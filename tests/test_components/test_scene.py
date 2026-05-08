@@ -569,6 +569,73 @@ def test_plot_property():
     try_plotting(mpm, display=display_plots, scale="symlog")
 
 
+def test_plot_property_doping_uses_nonzero_slice_position():
+    """Make sure doping boxes are evaluated on the requested slice."""
+
+    semicon = td.material_library["cSi"].variants["Si_MultiPhysics"].medium.charge
+    acceptor_box = td.ConstantDoping(center=(0, 0, 1.5), size=(2, 2, 0.2), concentration=7)
+    donor_box = td.ConstantDoping(concentration=0)
+    medium = td.MultiPhysicsMedium(
+        optical=td.Medium(permittivity=11.7),
+        charge=semicon.updated_copy(N_a=[acceptor_box], N_d=[donor_box]),
+        name="Si_MultiPhysics",
+    )
+    scene = td.Scene(
+        medium=td.Medium(permittivity=1.0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 1.5), size=(2, 2, 0.2)),
+                medium=medium,
+            )
+        ],
+    )
+
+    _, ax = plt.subplots()
+    scene.plot_structures_property(z=1.5, property="N_a", ax=ax, limits=(0, 7))
+
+    plotted_values = ax.collections[-1].get_array()
+    np.testing.assert_allclose(plotted_values, 7)
+
+
+def test_plot_property_custom_doping_uses_nonzero_slice_position():
+    """Make sure custom doping boxes are evaluated on the requested slice."""
+
+    semicon = td.material_library["cSi"].variants["Si_MultiPhysics"].medium.charge
+    coords = np.linspace(-1, 1, 3)
+    z = np.array([0, 1.5, 3])
+    _, _, Z = np.meshgrid(coords, coords, z, indexing="ij")
+    concentration = td.SpatialDataArray(
+        data=Z,
+        coords={"x": coords, "y": coords, "z": z},
+    )
+    acceptor_box = td.CustomDoping(
+        center=(0, 0, 1.5),
+        size=(2, 2, 3),
+        concentration=concentration,
+    )
+    donor_box = td.ConstantDoping(concentration=0)
+    medium = td.MultiPhysicsMedium(
+        optical=td.Medium(permittivity=11.7),
+        charge=semicon.updated_copy(N_a=[acceptor_box], N_d=[donor_box]),
+        name="Si_MultiPhysics",
+    )
+    scene = td.Scene(
+        medium=td.Medium(permittivity=1.0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 1.5), size=(2, 2, 3)),
+                medium=medium,
+            )
+        ],
+    )
+
+    _, ax = plt.subplots()
+    scene.plot_structures_property(z=1.5, property="N_a", ax=ax, limits=(0, 3))
+
+    plotted_values = ax.collections[-1].get_array()
+    np.testing.assert_allclose(plotted_values, 1.5)
+
+
 def test_log_scale_with_custom_limits():
     """Test log scale with custom limits."""
 
