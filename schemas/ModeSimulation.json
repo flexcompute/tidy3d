@@ -13671,7 +13671,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2.11.2",
+      "default": "2.12.0.dev0",
       "type": "string"
     }
   },
