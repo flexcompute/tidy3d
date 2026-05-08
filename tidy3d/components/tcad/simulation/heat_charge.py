@@ -282,7 +282,9 @@ class HeatChargeSimulation(AbstractSimulation):
     ...         ),
     ...     ],
     ...     medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
-    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    ...     grid_spec=td.UniformUnstructuredGrid(
+    ...         dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2
+    ...     ),
     ...     sources=[td.HeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
     ...         td.HeatChargeBoundarySpec(
@@ -328,7 +330,9 @@ class HeatChargeSimulation(AbstractSimulation):
     ...     )],
     ...     center=(0, 0, 0),
     ...     size=(3, 3, 3),
-    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+    ...     grid_spec=td.UniformUnstructuredGrid(
+    ...         dl=0.05, min_edges_per_circumference=15, min_edges_per_side=2
+    ...     ),
     ...     boundary_spec=[bc_v1, bc_v2],
     ...     analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
     ...         tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=3e3, max_iters=400),
@@ -2002,7 +2006,9 @@ class HeatChargeSimulation(AbstractSimulation):
         ...     scene=scene,
         ...     center=(0, 0, 0),
         ...     size=(5, 6, 7),
-        ...     grid_spec=UniformUnstructuredGrid(dl=0.4),
+        ...     grid_spec=UniformUnstructuredGrid(
+        ...         dl=0.4, min_edges_per_circumference=15, min_edges_per_side=2
+        ...     ),
         ...     boundary_spec=[
         ...         HeatChargeBoundarySpec(
         ...             placement=StructureBoundary(structure="box"),

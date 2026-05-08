@@ -361,7 +361,9 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     ...         ),
     ...     ],
     ...     medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
-    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    ...     grid_spec=td.UniformUnstructuredGrid(
+    ...         dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2
+    ...     ),
     ...     sources=[td.HeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
     ...         td.HeatChargeBoundarySpec(
@@ -666,7 +668,9 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
     ...         ),
     ...     ],
     ...     medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
-    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    ...     grid_spec=td.UniformUnstructuredGrid(
+    ...         dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2
+    ...     ),
     ...     sources=[td.HeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
     ...         td.HeatChargeBoundarySpec(

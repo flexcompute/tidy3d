@@ -1266,6 +1266,16 @@ def test_grid_spec_validation(grid_specs):
     with pytest.raises(ValidationError):
         uniform_grid.updated_copy(min_edges_per_side=-1)
 
+    # Zero is accepted on both fields.
+    uniform_grid.updated_copy(min_edges_per_circumference=0, min_edges_per_side=0)
+
+    # Default-construction warns that the upcoming default change will affect this grid.
+    with AssertLogLevel("WARNING"):
+        td.UniformUnstructuredGrid(dl=0.1)
+    # Setting both fields explicitly silences the warning.
+    with AssertLogLevel(None):
+        td.UniformUnstructuredGrid(dl=0.1, min_edges_per_circumference=0, min_edges_per_side=0)
+
     # Test DistanceUnstructuredGrid
     distance_grid = grid_specs["distance"]
     with pytest.raises(ValidationError):
@@ -1996,7 +2006,9 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
                     placement=td.SimulationBoundary(),
                 )
             ],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=td.UniformUnstructuredGrid(
+                dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2
+            ),
             monitors=[
                 td.SteadyPotentialMonitor(
                     center=[0, 0, 0],

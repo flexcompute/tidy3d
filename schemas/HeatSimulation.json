@@ -9963,12 +9963,12 @@
         },
         "min_edges_per_circumference": {
           "default": 15,
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "type": "number"
         },
         "min_edges_per_side": {
           "default": 2,
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "type": "number"
         },
         "non_refined_structures": {

@@ -285,6 +285,21 @@ def test_grid_spec():
     with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(relative_min_dl=-1e-4)
 
+    # Zero is accepted on both fields and skips the corresponding sizing contribution.
+    _ = grid_spec.updated_copy(min_edges_per_circumference=0, min_edges_per_side=0)
+
+    # Direct construction without the two fields warns: defaults will change to 0.
+    with AssertLogLevel("WARNING"):
+        _ = UniformUnstructuredGrid(dl=0.1)
+    # Setting only one of the two still warns about the unset field.
+    with AssertLogLevel("WARNING"):
+        _ = UniformUnstructuredGrid(dl=0.1, min_edges_per_circumference=15)
+    # Setting both fields explicitly silences the warning, including 0.
+    with AssertLogLevel(None):
+        _ = UniformUnstructuredGrid(dl=0.1, min_edges_per_circumference=0, min_edges_per_side=0)
+    with AssertLogLevel(None):
+        _ = UniformUnstructuredGrid(dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2)
+
     grid_spec = make_distance_grid_spec()
     _ = grid_spec.updated_copy(relative_min_dl=0)
     with pytest.raises(ValidationError):
@@ -473,7 +488,9 @@ def test_heat_sim_bounds(shift_amount, log_level):
                     placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
                 )
             ],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=td.UniformUnstructuredGrid(
+                dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2
+            ),
             monitors=[
                 td.TemperatureMonitor(
                     center=(0, 0, 0),
