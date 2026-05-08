@@ -13,7 +13,7 @@ def test_tidy3d_root_command_names_are_unique():
     command_names = list(tidy3d_cli.commands.keys())
     assert len(command_names) == len(set(command_names))
     assert "config" in tidy3d_cli.commands
-    assert {"configure", "convert", "develop"}.issubset(set(command_names))
+    assert {"configure", "convert", "develop", "mcp"}.issubset(set(command_names))
     assert "migrate" not in tidy3d_cli.commands
 
 

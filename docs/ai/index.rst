@@ -57,10 +57,10 @@ For more comprehensive tutorials and the complete video series, visit our `Tidy3
 Using Tidy3D with AI Coding Agents
 -----------------------------------
 
-The FlexAgent MCP works with any MCP-compatible AI coding agent — not just the Tidy3D IDE extensions. To get started:
+The FlexAgent MCP works with AI coding agents through the Flexcompute plugin marketplace and through the Tidy3D IDE extensions. To get started:
 
-1. **Set up the MCP** — follow the instructions in `FlexAgent MCP — Standalone MCP Client <flex_agent.html#standalone-mcp-client>`_ for your client (Claude Code, Codex CLI, Cursor, Gemini CLI, etc.).
-2. **Add a bootstrap file** — save the markdown below as ``AGENTS.md`` (or ``CLAUDE.md`` for Claude Code) in your project root directory. This tells the agent how to use the MCP effectively.
+1. **Install the plugin** — follow `FlexAgent MCP — Agent Plugins <flex_agent.html#agent-plugins>`_ for Claude Code or Codex.
+2. **Use the plugin guidance** — the Tidy3D plugin provides the agent instructions and MCP registration. For clients without plugin support, save the markdown below as ``AGENTS.md`` (or ``CLAUDE.md`` for Claude Code) in your project root directory.
 3. **Review the simulation tips** — the `Simulation Tips for AI Agents <simulation_tips.html>`_ page covers workflow patterns, parameter sweeps, inverse design, and common pitfalls.
 
 .. code-block:: markdown
@@ -69,8 +69,8 @@ The FlexAgent MCP works with any MCP-compatible AI coding agent — not just the
 
    ## MCP Setup
 
-   If the Tidy3D MCP server is not already configured, see:
-   https://docs.flexcompute.com/projects/tidy3d/en/latest/ai/flex_agent.html#standalone-mcp-client
+   If the Tidy3D plugin or MCP server is not already configured, see:
+   https://docs.flexcompute.com/projects/tidy3d/en/latest/ai/flex_agent.html#agent-plugins
 
    ## Workflow
 
@@ -92,5 +92,3 @@ The FlexAgent MCP works with any MCP-compatible AI coding agent — not just the
     simulation_tips
     cursor_extension
     vscode_extension
-
-

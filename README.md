@@ -76,43 +76,55 @@ To get started, our documentation has a lot of [examples](https://docs.flexcompu
 
 ## FlexAgent MCP
 
-FlexAgent adds an AI-assisted layer on top of Tidy3D via the Model Context Protocol (MCP); read more about [AI-assisted simulation in Tidy3D](https://hs.flexcompute.com/news/ai-assisted-simulation-in-tidy3d-ushering-in-a-new-era-of-photonic-design). Install `tidy3d-mcp` directly when you want that experience outside the Tidy3D extensions for [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Flexcompute.tidy3d) and [Cursor](https://open-vsx.org/extension/Flexcompute/tidy3d). This repo also ships native plugin packaging for Claude Code and Gemini CLI.
-
-These commands assume [uv](https://docs.astral.sh/uv/getting-started/installation/) is installed on your machine.
-
-**Codex CLI / IDE**
-
-```bash
-codex mcp add tidy3d -- uvx tidy3d-mcp
-```
+FlexAgent connects AI clients to Tidy3D through the Model Context Protocol (MCP). For AI coding agents, install the Tidy3D plugin from the Flexcompute plugin marketplace. The plugin provides Tidy3D guidance and MCP registration; for now, configure MCP clients to launch the Python package runtime through `uvx tidy3d mcp`.
 
 **Claude Code**
 
-Add the Tidy3D marketplace, then install the plugin:
+In Claude Code:
 
-```bash
-claude plugin marketplace add https://github.com/flexcompute/tidy3d
-claude plugin install tidy3d@tidy3d
+```text
+/plugin marketplace add flexcompute/plugin-marketplace
+/plugin install tidy3d@flexcompute
 ```
 
-**Gemini CLI**
+If Claude Code is already running, reload plugins after installation:
 
-Install the extension from this repo:
-
-```bash
-gemini extensions install https://github.com/flexcompute/tidy3d
+```text
+/reload-plugins
 ```
 
-**Cursor CLI / IDE**
+**Codex**
 
-Cursor reuses the same schema across the editor and `cursor-agent`. Configure `.cursor/mcp.json` (per-project) or `~/.cursor/mcp.json` (global) and then run `cursor-agent mcp list` to verify:
+Add the Flexcompute marketplace:
+
+```bash
+codex plugin marketplace add flexcompute/plugin-marketplace
+```
+
+Then open Codex, run `/plugins`, choose the Flexcompute marketplace, and install Tidy3D.
+
+Configure Tidy3D through `uvx`:
+
+```bash
+uvx tidy3d configure
+```
+
+You can also set `SIMCLOUD_APIKEY` instead of running the configure command.
+
+For advanced manual MCP setup, launch the server directly:
+
+```bash
+uvx tidy3d mcp
+```
+
+For raw MCP client config, run the same command:
 
 ```json
 {
   "mcpServers": {
     "tidy3d": {
       "command": "uvx",
-      "args": ["tidy3d-mcp"]
+      "args": ["tidy3d", "mcp"]
     }
   }
 }

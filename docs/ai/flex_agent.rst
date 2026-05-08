@@ -23,12 +23,50 @@ For a comprehensive introduction to the Tidy3D + AI ecosystem, see the `Tidy3D +
 Installation
 ------------
 
-FlexAgent MCP can be installed in two ways: as part of the Tidy3D IDE extensions (recommended) or as a standalone MCP server for use with other MCP-compatible clients.
+FlexAgent MCP is available through the Flexcompute plugin marketplace, the Tidy3D IDE extensions, or direct MCP server launch.
+
+Agent Plugins
+~~~~~~~~~~~~~
+
+For AI coding agents, install the Tidy3D plugin from the Flexcompute plugin marketplace. The plugin provides Tidy3D guidance and MCP registration; for now, configure MCP clients to launch the Python package runtime through ``uvx tidy3d mcp``.
+
+**Claude Code:**
+
+In Claude Code:
+
+.. code-block:: text
+
+   /plugin marketplace add flexcompute/plugin-marketplace
+   /plugin install tidy3d@flexcompute
+
+If Claude Code is already running, reload plugins after installation:
+
+.. code-block:: text
+
+   /reload-plugins
+
+**Codex:**
+
+Add the Flexcompute marketplace:
+
+.. code-block:: bash
+
+   codex plugin marketplace add flexcompute/plugin-marketplace
+
+Then open Codex, run ``/plugins``, choose the Flexcompute marketplace, and install Tidy3D.
+
+Configure Tidy3D through ``uvx``:
+
+.. code-block:: bash
+
+   uvx tidy3d configure
+
+You can also set ``SIMCLOUD_APIKEY`` instead of running the configure command.
 
 Tidy3D Extensions
 ~~~~~~~~~~~~~~~~~
 
-**Recommended for most users**: FlexAgent MCP is seamlessly integrated within the Tidy3D extensions for Cursor and Visual Studio Code. When you install and configure these extensions, FlexAgent is automatically set up and ready to use.
+FlexAgent MCP is integrated within the Tidy3D extensions for Cursor and Visual Studio Code. When you install and configure these extensions, FlexAgent is automatically set up and ready to use.
 
 For detailed installation and setup instructions, see:
 
@@ -40,30 +78,21 @@ The extensions handle all FlexAgent configuration automatically, including API k
 Standalone MCP Client
 ~~~~~~~~~~~~~~~~~~~~~
 
-For users who want to use FlexAgent with other MCP-compatible clients (without the full Tidy3D extension), you can install the ``tidy3d-mcp`` server directly.
+For advanced manual setup with other MCP-compatible clients, use ``uvx`` to run Tidy3D without binding the MCP server to the client's project environment.
 
 **Prerequisites:**
 
-- `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ package manager installed
+- ``uvx`` available on ``PATH``
 - A Tidy3D API key (`get one free here <https://tidy3d.simulation.cloud/signup>`_)
+- Tidy3D configured with that key via ``uvx tidy3d configure``, or ``SIMCLOUD_APIKEY`` set
 
-**Register the server with your MCP client** – Use the configuration block below that matches your MCP client:
-
-**Codex CLI / IDE**
-
-.. code-block:: bash
-
-   codex mcp add tidy3d -- uvx tidy3d-mcp --api-key "YOUR_TIDY3D_API_KEY"
-
-**Claude CLI / Desktop / Code**
+Launch the server manually with:
 
 .. code-block:: bash
 
-   claude mcp add tidy3d -- uvx tidy3d-mcp --api-key "YOUR_TIDY3D_API_KEY"
+   uvx tidy3d mcp
 
-**Gemini CLI**
-
-Create or edit ``.gemini/settings.json`` (project) or ``~/.gemini/settings.json`` (global):
+For raw MCP client config, run the same command:
 
 .. code-block:: json
 
@@ -71,26 +100,10 @@ Create or edit ``.gemini/settings.json`` (project) or ``~/.gemini/settings.json`
      "mcpServers": {
        "tidy3d": {
          "command": "uvx",
-         "args": ["tidy3d-mcp", "--api-key", "YOUR_TIDY3D_API_KEY"]
+         "args": ["tidy3d", "mcp"]
        }
      }
    }
-
-**Cursor CLI / IDE**
-
-Cursor reuses the same schema across the editor and ``cursor-agent``. Configure ``.cursor/mcp.json`` (per-project) or ``~/.cursor/mcp.json`` (global) and then run ``cursor-agent mcp list`` to verify:
-
-.. code-block:: json
-
-   {
-     "mcpServers": {
-       "tidy3d": {
-         "command": "uvx",
-         "args": ["tidy3d-mcp", "--api-key", "YOUR_TIDY3D_API_KEY"]
-       }
-     }
-   }
-
 
 AI Collaboration Best Practices
 --------------------------------
@@ -218,4 +231,3 @@ Interpret results and create visualizations:
 - *"Plot the reflectance spectrum of all unit cell period values in the parameter sweep simulation in a single chart"*
 - *"Analyze the transmission spectrum and identify the resonance frequencies"*
 - *"Create a 2D plot showing the electric field distribution in the x-y plane at z=0"*
-
