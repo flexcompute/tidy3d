@@ -9,6 +9,7 @@ import pytest
 
 import tidy3d as td
 from tidy3d.exceptions import ValidationError
+from tidy3d.material_library.material_library import MaterialItem, VariantItem
 
 from ..utils import SIM_FULL, AssertLogLevel
 
@@ -26,6 +27,10 @@ MEDIUMS = [MEDIUM, ANIS_MEDIUM, PEC, PR, SM, LZ, DR, DB, PMC]
 f, AX = plt.subplots()
 
 RTOL = 0.001
+PALIK_LOWLOSS_MATERIALS = ("GaAs", "Ge", "InP", "SiO2", "cSi")
+PALIK_NOLOSS_MATERIALS = ("GaAs", "Ge", "SiO2", "cSi")
+PALIK_NOLOSS_VARIANT = "Palik_NoLoss"
+PALIK_LOWLOSS_VARIANT = "Palik_LowLoss"
 
 
 @pytest.mark.parametrize("component", MEDIUMS)
@@ -346,13 +351,136 @@ def test_pole_residue_loss_upper_bound():
     mat_new = mat_combined.copy(update={"frequency_range": (6e13, 1.2e14)})
     assert mat_new.loss_upper_bound > 30 and mat_new.loss_upper_bound < 35
 
-    # low loss Palik material from material library
-    loss_threshold = 2e-5
-    assert td.material_library["GaAs"]["Palik_Lossless"].loss_upper_bound < loss_threshold
-    assert td.material_library["Ge"]["Palik_Lossless"].loss_upper_bound < loss_threshold
-    assert td.material_library["InP"]["Palik_Lossless"].loss_upper_bound < loss_threshold
-    assert td.material_library["SiO2"]["Palik_Lossless"].loss_upper_bound < loss_threshold
-    assert td.material_library["cSi"]["Palik_Lossless"].loss_upper_bound < loss_threshold
+    for material_name in PALIK_NOLOSS_MATERIALS:
+        assert td.material_library[material_name][PALIK_NOLOSS_VARIANT].loss_upper_bound == 0
+
+
+def test_palik_noloss_materials_have_zero_loss():
+    """Make sure Palik_NoLoss variants are truly lossless across valid ranges."""
+    for material_name in PALIK_NOLOSS_MATERIALS:
+        medium = td.material_library[material_name][PALIK_NOLOSS_VARIANT]
+        freqs = np.geomspace(*medium.frequency_range, num=11)
+        _, index_k = medium.nk_model(freqs)
+
+        assert np.all(medium.eps_model(freqs).imag == 0)
+        assert np.all(index_k == 0)
+
+
+def test_palik_noloss_stays_close_to_lowloss_real_response():
+    """Make sure the raw-data no-loss refit remains close to the previous fit."""
+    for material_name in PALIK_NOLOSS_MATERIALS:
+        noloss_medium = td.material_library[material_name][PALIK_NOLOSS_VARIANT]
+        lowloss_medium = td.material_library[material_name][PALIK_LOWLOSS_VARIANT]
+        freqs = np.geomspace(*noloss_medium.frequency_range, num=101)
+        rel_error = np.abs(
+            (noloss_medium.eps_model(freqs).real - lowloss_medium.eps_model(freqs).real)
+            / lowloss_medium.eps_model(freqs).real
+        )
+
+        assert np.max(rel_error) < 0.07
+
+
+def test_palik_lowloss_materials_preserve_fitted_loss():
+    """Make sure the old fitted Palik variants remain available as Palik_LowLoss."""
+    for material_name in PALIK_LOWLOSS_MATERIALS:
+        medium = td.material_library[material_name][PALIK_LOWLOSS_VARIANT]
+        freqs = np.geomspace(*medium.frequency_range, num=11)
+        eps_imag = medium.eps_model(freqs).imag
+        _, index_k = medium.nk_model(freqs)
+
+        assert 0 < medium.loss_upper_bound < 1e-4
+        assert np.any(np.abs(eps_imag) > 0)
+        assert np.any(np.abs(index_k) > 0)
+
+
+def test_palik_lossless_alias_points_to_lowloss():
+    """Make sure the ambiguous old Palik_Lossless name remains a low-loss alias."""
+    for material_name in PALIK_LOWLOSS_MATERIALS:
+        material = td.material_library[material_name]
+        lowloss_medium = material[PALIK_LOWLOSS_VARIANT]
+
+        with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+            legacy_medium = material["Palik_Lossless"]
+        with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+            legacy_variant = material.variants["Palik_Lossless"]
+        with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+            legacy_variant_from_get = material.variants.get("Palik_Lossless")
+
+        assert legacy_medium == lowloss_medium
+        assert legacy_variant.medium == lowloss_medium
+        assert legacy_variant_from_get == material.variants[PALIK_LOWLOSS_VARIANT]
+        assert "Palik_Lossless" in material.variants
+        assert "Palik_Lossless" not in material.variants.keys()
+
+
+def test_palik_lossless_alias_get_returns_default_when_target_missing():
+    """Make sure the deprecated alias mapping preserves the dict.get contract."""
+    variants = td.material_library["SiO2"].variants.copy()
+    default_variant = VariantItem(medium=td.PoleResidue(name="fallback"))
+    variants.pop(PALIK_LOWLOSS_VARIANT)
+
+    with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+        legacy_variant = variants.get("Palik_Lossless", default_variant)
+
+    assert legacy_variant == default_variant
+
+
+def test_palik_lossless_alias_survives_round_trip():
+    """Make sure Palik_Lossless remains available after normal model round-trips."""
+    for material_name in PALIK_LOWLOSS_MATERIALS:
+        material = td.material_library[material_name]
+
+        round_tripped_materials = (
+            material.copy(),
+            material.copy(validate=False),
+            material.updated_copy(),
+            material.updated_copy(validate=False),
+            type(material).model_validate(material.model_dump()),
+        )
+
+        for round_tripped_material in round_tripped_materials:
+            with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+                legacy_medium = round_tripped_material["Palik_Lossless"]
+            with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+                legacy_variant = round_tripped_material.variants["Palik_Lossless"]
+
+            assert legacy_medium == round_tripped_material[PALIK_LOWLOSS_VARIANT]
+            assert legacy_variant == round_tripped_material.variants[PALIK_LOWLOSS_VARIANT]
+
+
+def test_palik_lossless_user_variant_is_not_rewritten():
+    """Make sure the built-in alias does not rewrite user-defined material variants."""
+    lossless_variant = VariantItem(medium=td.PoleResidue(name="custom_lossless"))
+    lowloss_variant = VariantItem(medium=td.PoleResidue(name="custom_lowloss"))
+    material = MaterialItem(
+        name="Custom Material",
+        variants={
+            "Palik_Lossless": lossless_variant,
+            "Palik_LowLoss": lowloss_variant,
+        },
+        default="Palik_Lossless",
+    )
+
+    with AssertLogLevel(None):
+        legacy_medium = material["Palik_Lossless"]
+
+    assert legacy_medium == lossless_variant.medium
+
+
+def test_palik_lossless_alias_does_not_apply_to_similarly_named_user_material():
+    """Make sure built-in Palik aliases are not inferred from material names alone."""
+    material = MaterialItem(
+        name="Silicon Dioxide",
+        variants={
+            PALIK_NOLOSS_VARIANT: VariantItem(medium=td.PoleResidue(name="custom_noloss")),
+            PALIK_LOWLOSS_VARIANT: VariantItem(medium=td.PoleResidue(name="custom_lowloss")),
+        },
+        default=PALIK_LOWLOSS_VARIANT,
+    )
+
+    assert "Palik_Lossless" not in material.variants
+    with pytest.raises(KeyError):
+        _ = material["Palik_Lossless"]
 
 
 def test_epsilon_eval():

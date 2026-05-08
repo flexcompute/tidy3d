@@ -108,6 +108,9 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
+
+
+
 Aluminum Arsenide ("AlAs")
 ==========================
 
@@ -387,7 +390,8 @@ Silicon (Crystalline) ("cSi")
    ``'Green2008'`` (default) 0.25 - 1.45 :math:`{\mu}m` 5-pole, lossy               [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
    ``'Green2008_Lossless'``  1.2 - 1.45 :math:`{\mu}m`  1-pole, lossless            [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
    ``'Li1993_293K'``         1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless            [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__    
-   ``'Palik_Lossless'``      1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss            [3]                                                                                                         
+   ``'Palik_NoLoss'``        1.2 - 6.0 :math:`{\mu}m`   1-pole, lossless            [3]
+   ``'Palik_LowLoss'``       1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss            [3]
    ``'Palik_Lossy'``         0.1 - 1.4 :math:`{\mu}m`   5-pole, lossy               [3]                                                                                                         
    ``'SalzbergVilla1957'``   1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless            [4][5] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Salzberg.yml>`__
    ``'Si_MultiPhysics'``     0.25 - 1.45 :math:`{\mu}m` :class:`MultiPhysicsMedium` [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
@@ -401,7 +405,9 @@ Examples:
 
 >>> medium = material_library['cSi']['Li1993_293K']
 
->>> medium = material_library['cSi']['Palik_Lossless']
+>>> medium = material_library['cSi']['Palik_NoLoss']
+
+>>> medium = material_library['cSi']['Palik_LowLoss']
 
 >>> medium = material_library['cSi']['Palik_Lossy']
 
@@ -477,14 +483,17 @@ Gallium Arsenide ("GaAs")
    ========================== ========================== ================ =========================================================================================================
    Variant                    Valid for                  Model Info       Reference                                                                                                
    ========================== ========================== ================ =========================================================================================================
-   ``'Palik_Lossless'``       1.1 - 30.0 :math:`{\mu}m`  2-pole, low loss [1]                                                                                                      
+   ``'Palik_NoLoss'``        1.1 - 6.8 :math:`{\mu}m`  2-pole, lossless [1]
+   ``'Palik_LowLoss'``        1.1 - 30.0 :math:`{\mu}m`  2-pole, low loss [1]
    ``'Palik_Lossy'``          0.22 - 1.3 :math:`{\mu}m`  6-pole, lossy    [1]                                                                                                      
    ``'Skauli2003'`` (default) 0.97 - 17.0 :math:`{\mu}m` 3-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/GaAs/Skauli.yml>`__
    ========================== ========================== ================ =========================================================================================================
 
 Examples:
 
->>> medium = material_library['GaAs']['Palik_Lossless']
+>>> medium = material_library['GaAs']['Palik_NoLoss']
+
+>>> medium = material_library['GaAs']['Palik_LowLoss']
 
 >>> medium = material_library['GaAs']['Palik_Lossy']
 
@@ -506,7 +515,8 @@ Germanium ("Ge")
    ============================ ========================== ================ ============================================================================================================
    ``'Icenogle1976'`` (default) 2.5 - 12.0 :math:`{\mu}m`  2-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ge/Icenogle.yml>`__
    ``'Nunley'``                 0.19 - 2.48 :math:`{\mu}m` 16-pole, lossy   [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data/main/Ge/nk/Nunley.yml>`__     
-   ``'Palik_Lossless'``         1.2 - 20.0 :math:`{\mu}m`  1-pole, low loss [4]                                                                                                         
+   ``'Palik_NoLoss'``           2.0 - 14.5 :math:`{\mu}m`  1-pole, lossless [4]
+   ``'Palik_LowLoss'``          1.2 - 20.0 :math:`{\mu}m`  1-pole, low loss [4]
    ``'Palik_Lossy'``            0.25 - 1.4 :math:`{\mu}m`  5-pole, lossy    [4]                                                                                                         
    ============================ ========================== ================ ============================================================================================================
 
@@ -516,7 +526,9 @@ Examples:
 
 >>> medium = material_library['Ge']['Nunley']
 
->>> medium = material_library['Ge']['Palik_Lossless']
+>>> medium = material_library['Ge']['Palik_NoLoss']
+
+>>> medium = material_library['Ge']['Palik_LowLoss']
 
 >>> medium = material_library['Ge']['Palik_Lossy']
 
@@ -644,14 +656,14 @@ Indium Phosphide ("InP")
    ========================== ========================== ================ ==============================================================================================================
    Variant                    Valid for                  Model Info       Reference                                                                                                     
    ========================== ========================== ================ ==============================================================================================================
-   ``'Palik_Lossless'``       0.93 - 10.0 :math:`{\mu}m` 1-pole, low loss [1]                                                                                                           
+   ``'Palik_LowLoss'``        0.93 - 10.0 :math:`{\mu}m` 1-pole, low loss [1]
    ``'Palik_Lossy'``          0.22 - 0.82 :math:`{\mu}m` 5-pole, lossy    [1]                                                                                                           
    ``'Pettit1965'`` (default) 0.95 - 10.0 :math:`{\mu}m` 2-pole, lossless [2][3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/InP/Pettit.yml>`__
    ========================== ========================== ================ ==============================================================================================================
 
 Examples:
 
->>> medium = material_library['InP']['Palik_Lossless']
+>>> medium = material_library['InP']['Palik_LowLoss']
 
 >>> medium = material_library['InP']['Palik_Lossy']
 
@@ -1122,19 +1134,22 @@ Silicon Dioxide ("SiO2")
 .. table::
    :widths: auto
 
-   ============================== ========================== ================ ===========
-   Variant                        Valid for                  Model Info       Reference  
-   ============================== ========================== ================ ===========
-   ``'Horiba'``                   0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy    [1]        
-   ``'Palik_Lossless'`` (default) 0.15 - 5.0 :math:`{\mu}m`  2-pole, low loss [2]        
-   ``'Palik_Lossy'``              4.0 - 250.0 :math:`{\mu}m` 5-pole, lossy    [2]        
-   ============================== ========================== ================ ===========
+   ================================= ========================== ================ ===========
+   Variant                           Valid for                  Model Info       Reference
+   ================================= ========================== ================ ===========
+   ``'Horiba'``                      0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy    [1]
+   ``'Palik_NoLoss'``                0.55 - 5.0 :math:`{\mu}m`  2-pole, lossless [2]
+   ``'Palik_LowLoss'`` (default)     0.15 - 5.0 :math:`{\mu}m`  2-pole, low loss [2]
+   ``'Palik_Lossy'``                 4.0 - 250.0 :math:`{\mu}m` 5-pole, lossy    [2]
+   ================================= ========================== ================ ===========
 
 Examples:
 
 >>> medium = material_library['SiO2']['Horiba']
 
->>> medium = material_library['SiO2']['Palik_Lossless']
+>>> medium = material_library['SiO2']['Palik_NoLoss']
+
+>>> medium = material_library['SiO2']['Palik_LowLoss']
 
 >>> medium = material_library['SiO2']['Palik_Lossy']
 
@@ -1357,4 +1372,3 @@ Examples:
 References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
-

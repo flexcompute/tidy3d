@@ -53,7 +53,7 @@ def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
             var_name: json.loads(var.medium._json_string) for var_name, var in mat.variants.items()
         }
         for mat_name, mat in material_library.items()
-        if not isinstance(mat, (type, MaterialItemUniaxial))
+        if not isinstance(mat, type | MaterialItemUniaxial)
     }
 
     # Uniaxial medium treated differently
@@ -137,6 +137,7 @@ class MaterialItem(Tidy3dBaseModel):
                 f"The data of the default variant '{self.default}' is not supplied; "
                 "please include it in the 'variants'."
             )
+        _with_palik_lossless_alias(self)
         return self
 
     def __getitem__(self, variant_name: str) -> PoleResidue | MultiPhysicsMedium:
@@ -148,8 +149,9 @@ class MaterialItem(Tidy3dBaseModel):
         """The default medium."""
         if self.name == "Silicon Dioxide":
             log.warning(
-                "Since Tidy3D 2.7, the default variant for silicon dioxide has been switched from "
-                "'Horiba' to 'Palik_Lossless'."
+                "The default variant for silicon dioxide is 'Palik_LowLoss', which was "
+                "previously named 'Palik_Lossless'. Use 'Palik_NoLoss' for a zero-loss "
+                "Palik model."
             )
         return self.variants[self.default].medium
 
@@ -238,6 +240,97 @@ class MaterialItemUniaxial(MaterialItem):
     def medium(self, optical_axis: Axis) -> AnisotropicMedium:
         """The default medium."""
         return self.variants[self.default].medium(optical_axis)
+
+
+PALIK_LOSSLESS_VARIANT = "Palik_Lossless"
+PALIK_NOLOSS_VARIANT = "Palik_NoLoss"
+PALIK_LOWLOSS_VARIANT = "Palik_LowLoss"
+
+PALIK_LOSSLESS_ALIAS_WARNING = (
+    f"The material-library variant '{PALIK_LOSSLESS_VARIANT}' is deprecated and maps to "
+    f"'{PALIK_LOWLOSS_VARIANT}' because it contains a tiny fitted loss despite its name. "
+    "Use 'Palik_NoLoss' where available for a zero-loss Palik model."
+)
+
+PALIK_LOSSLESS_ALIAS_MEDIUM_NAMES = {
+    "Gallium Arsenide": "GaAs_Palik_LowLoss",
+    "Germanium": "Ge_Palik_LowLoss",
+    "Indium Phosphide": "InP_Palik_LowLoss",
+    "Silicon (Crystalline)": "cSi_PalikLowLoss",
+    "Silicon Dioxide": "SiO2_Palik_LowLoss",
+}
+
+
+class _DeprecatedVariantAliasDict(dict[str, VariantItem]):
+    """Dictionary with deprecated lookup aliases that are hidden from iteration."""
+
+    def __init__(
+        self, variants: dict[str, VariantItem], aliases: dict[str, str] | None = None
+    ) -> None:
+        super().__init__(variants)
+        self._aliases = aliases or {}
+
+    def _resolve_alias(self, variant_name: str) -> str:
+        """Return the canonical variant for a deprecated alias and warn once per lookup."""
+        alias = self._aliases.get(variant_name)
+        if alias is None:
+            return variant_name
+        log.warning(PALIK_LOSSLESS_ALIAS_WARNING)
+        return alias
+
+    def __contains__(self, variant_name: object) -> bool:
+        """Treat deprecated aliases as present when their canonical target exists."""
+        if isinstance(variant_name, str):
+            alias = self._aliases.get(variant_name)
+            if alias is not None:
+                return super().__contains__(alias)
+        return super().__contains__(variant_name)
+
+    def __getitem__(self, variant_name: str) -> VariantItem:
+        """Return deprecated aliases while preserving normal dict iteration."""
+        return super().__getitem__(self._resolve_alias(variant_name))
+
+    def get(self, variant_name: str, default: VariantItem | None = None) -> VariantItem | None:
+        """Return deprecated aliases through the usual mapping helper."""
+        alias = self._aliases.get(variant_name)
+        if alias is not None:
+            log.warning(PALIK_LOSSLESS_ALIAS_WARNING)
+            return super().get(alias, default)
+        return super().get(variant_name, default)
+
+    def copy(self) -> _DeprecatedVariantAliasDict:
+        """Preserve alias lookups when users explicitly copy the variants mapping."""
+        return _DeprecatedVariantAliasDict(dict(self), aliases=dict(self._aliases))
+
+
+def _with_palik_lossless_alias(material_item: MaterialItem) -> MaterialItem:
+    """Keep old Palik_Lossless lookups available without listing them as variants."""
+    if isinstance(material_item.variants, _DeprecatedVariantAliasDict):
+        return material_item
+    if PALIK_LOSSLESS_VARIANT in material_item.variants:
+        return material_item
+
+    alias_medium_names = PALIK_LOSSLESS_ALIAS_MEDIUM_NAMES.get(material_item.name)
+    if alias_medium_names is None:
+        return material_item
+
+    lowloss_medium_name = alias_medium_names
+    lowloss_variant = material_item.variants.get(PALIK_LOWLOSS_VARIANT)
+    if lowloss_variant is None:
+        return material_item
+
+    if lowloss_variant.medium.name != lowloss_medium_name:
+        return material_item
+
+    object.__setattr__(
+        material_item,
+        "variants",
+        _DeprecatedVariantAliasDict(
+            material_item.variants,
+            aliases={PALIK_LOSSLESS_VARIANT: PALIK_LOWLOSS_VARIANT},
+        ),
+    )
+    return material_item
 
 
 LiNbO3_Zelmon1997 = VariantItemUniaxial(
@@ -926,9 +1019,28 @@ GaAs_Palik_Lossy = VariantItem(
     reference=[material_refs["Palik_Lossy"]],
 )
 
-GaAs_Palik_Lossless = VariantItem(
+GaAs_Palik_NoLoss = VariantItem(
     medium=PoleResidue(
-        name="GaAs_Palik_Lossless",
+        name="GaAs_Palik_NoLoss",
+        eps_inf=1.0,
+        poles=[
+            (
+                (0.0 + 1j * 333524452168.78815),
+                (0.0 - 1j * 6392996319943263.0),
+            ),
+            (
+                (0.0 + 1j * 5350121052897750.0),
+                (0.0 - 1j * 2.6358366870929732e16),
+            ),
+        ],
+        frequency_range=(44087126176470.59, 272538598181818.16),
+    ),
+    reference=[material_refs["Palik_NoLoss"]],
+)
+
+GaAs_Palik_LowLoss = VariantItem(
+    medium=PoleResidue(
+        name="GaAs_Palik_LowLoss",
         eps_inf=1.2402134414081076,
         poles=[
             (
@@ -942,7 +1054,7 @@ GaAs_Palik_Lossless = VariantItem(
         ],
         frequency_range=(9993081933333.334, 272538598181818.16),
     ),
-    reference=[material_refs["Palik_Lossless"]],
+    reference=[material_refs["Palik_LowLoss"]],
 )
 
 Ge_Icenogle1976 = VariantItem(
@@ -960,9 +1072,24 @@ Ge_Icenogle1976 = VariantItem(
     "main/Ge/Icenogle.yml",
 )
 
-Ge_Palik_Lossless = VariantItem(
+Ge_Palik_NoLoss = VariantItem(
     medium=PoleResidue(
-        name="Ge_Palik_Lossless",
+        name="Ge_Palik_NoLoss",
+        eps_inf=1.0,
+        poles=[
+            (
+                (0.0 + 1j * 4000960662304286.5),
+                (0.0 - 1j * 3.0004708993106404e16),
+            ),
+        ],
+        frequency_range=(20675341931034.484, 149896229000000.0),
+    ),
+    reference=[material_refs["Palik_NoLoss"]],
+)
+
+Ge_Palik_LowLoss = VariantItem(
+    medium=PoleResidue(
+        name="Ge_Palik_LowLoss",
         eps_inf=1.0,
         poles=[
             (
@@ -972,7 +1099,7 @@ Ge_Palik_Lossless = VariantItem(
         ],
         frequency_range=(14989622900000.0, 249827048333333.34),
     ),
-    reference=[material_refs["Palik_Lossless"]],
+    reference=[material_refs["Palik_LowLoss"]],
 )
 
 Ge_Palik_Lossy = VariantItem(
@@ -1190,9 +1317,9 @@ InP_Palik_Lossy = VariantItem(
     ],
 )
 
-InP_Palik_Lossless = VariantItem(
+InP_Palik_LowLoss = VariantItem(
     medium=PoleResidue(
-        name="InP_Palik_Lossless",
+        name="InP_Palik_LowLoss",
         eps_inf=1.0,
         poles=[
             (
@@ -1203,7 +1330,7 @@ InP_Palik_Lossless = VariantItem(
         frequency_range=(29979245800000.0, 322357481720430.06),
     ),
     reference=[
-        material_refs["Palik_Lossless"],
+        material_refs["Palik_LowLoss"],
     ],
 )
 
@@ -1641,9 +1768,28 @@ SiO2_Horiba = VariantItem(
     reference=[material_refs["Horiba"]],
 )
 
-SiO2_Palik_Lossless = VariantItem(
+SiO2_Palik_NoLoss = VariantItem(
     medium=PoleResidue(
-        name="SiO2_Palik_Lossless",
+        name="SiO2_Palik_NoLoss",
+        eps_inf=1.0,
+        poles=[
+            (
+                (0.0 + 1j * 184980080369957.72),
+                (0.0 - 1j * 88758428582369.77),
+            ),
+            (
+                (0.0 + 1j * 2.1152615798545252e16),
+                (0.0 - 1j * 1.167984925219996e16),
+            ),
+        ],
+        frequency_range=(59958491600000.0, 545077196363636.4),
+    ),
+    reference=[material_refs["Palik_NoLoss"]],
+)
+
+SiO2_Palik_LowLoss = VariantItem(
+    medium=PoleResidue(
+        name="SiO2_Palik_LowLoss",
         eps_inf=1.5385442336875639,
         poles=[
             (
@@ -1657,7 +1803,7 @@ SiO2_Palik_Lossless = VariantItem(
         ],
         frequency_range=(59958491600000.0, 1998616386666666.8),
     ),
-    reference=[material_refs["Palik_Lossless"]],
+    reference=[material_refs["Palik_LowLoss"]],
 )
 
 SiO2_Palik_Lossy = VariantItem(
@@ -2044,9 +2190,24 @@ cSi_PalikLossy = VariantItem(
     reference=[material_refs["Palik_Lossy"]],
 )
 
-cSi_PalikLossless = VariantItem(
+cSi_PalikNoLoss = VariantItem(
     medium=PoleResidue(
-        name="cSi_PalikLossless",
+        name="cSi_PalikNoLoss",
+        eps_inf=1.0,
+        poles=[
+            (
+                (0.0 - 1j * 6445155000140348.0),
+                (0.0 + 1j * 3.4470730496439236e16),
+            ),
+        ],
+        frequency_range=(49965409666666.664, 249827048333333.34),
+    ),
+    reference=[material_refs["Palik_NoLoss"]],
+)
+
+cSi_PalikLowLoss = VariantItem(
+    medium=PoleResidue(
+        name="cSi_PalikLowLoss",
         eps_inf=1.0,
         poles=[
             (
@@ -2056,7 +2217,7 @@ cSi_PalikLossless = VariantItem(
         ],
         frequency_range=(1199169832000.0, 249827048333333.34),
     ),
-    reference=[material_refs["Palik_Lossless"]],
+    reference=[material_refs["Palik_LowLoss"]],
 )
 
 cSi_MultiPhysics = VariantItem(
@@ -2245,24 +2406,30 @@ material_library = MaterialLibrary(
         },
         default="ZemaxPMLStable",
     ),
-    GaAs=MaterialItem(
-        name="Gallium Arsenide",
-        variants={
-            "Palik_Lossless": GaAs_Palik_Lossless,
-            "Palik_Lossy": GaAs_Palik_Lossy,
-            "Skauli2003": GaAs_Skauli2003,
-        },
-        default="Skauli2003",
+    GaAs=_with_palik_lossless_alias(
+        MaterialItem(
+            name="Gallium Arsenide",
+            variants={
+                "Palik_NoLoss": GaAs_Palik_NoLoss,
+                "Palik_LowLoss": GaAs_Palik_LowLoss,
+                "Palik_Lossy": GaAs_Palik_Lossy,
+                "Skauli2003": GaAs_Skauli2003,
+            },
+            default="Skauli2003",
+        )
     ),
-    Ge=MaterialItem(
-        name="Germanium",
-        variants={
-            "Palik_Lossless": Ge_Palik_Lossless,
-            "Palik_Lossy": Ge_Palik_Lossy,
-            "Icenogle1976": Ge_Icenogle1976,
-            "Nunley": Ge_Nunley,
-        },
-        default="Icenogle1976",
+    Ge=_with_palik_lossless_alias(
+        MaterialItem(
+            name="Germanium",
+            variants={
+                "Palik_NoLoss": Ge_Palik_NoLoss,
+                "Palik_LowLoss": Ge_Palik_LowLoss,
+                "Palik_Lossy": Ge_Palik_Lossy,
+                "Icenogle1976": Ge_Icenogle1976,
+                "Nunley": Ge_Nunley,
+            },
+            default="Icenogle1976",
+        )
     ),
     GeOx=MaterialItem(
         name="Germanium Oxide",
@@ -2306,14 +2473,16 @@ material_library = MaterialLibrary(
         },
         default="Palik",
     ),
-    InP=MaterialItem(
-        name="Indium Phosphide",
-        variants={
-            "Palik_Lossless": InP_Palik_Lossless,
-            "Palik_Lossy": InP_Palik_Lossy,
-            "Pettit1965": InP_Pettit1965,
-        },
-        default="Pettit1965",
+    InP=_with_palik_lossless_alias(
+        MaterialItem(
+            name="Indium Phosphide",
+            variants={
+                "Palik_LowLoss": InP_Palik_LowLoss,
+                "Palik_Lossy": InP_Palik_Lossy,
+                "Pettit1965": InP_Pettit1965,
+            },
+            default="Pettit1965",
+        )
     ),
     MgF2=MaterialItem(
         name="Magnesium Fluoride",
@@ -2456,14 +2625,17 @@ material_library = MaterialLibrary(
         },
         default="Horiba",
     ),
-    SiO2=MaterialItem(
-        name="Silicon Dioxide",
-        variants={
-            "Palik_Lossless": SiO2_Palik_Lossless,
-            "Palik_Lossy": SiO2_Palik_Lossy,
-            "Horiba": SiO2_Horiba,
-        },
-        default="Palik_Lossless",
+    SiO2=_with_palik_lossless_alias(
+        MaterialItem(
+            name="Silicon Dioxide",
+            variants={
+                "Palik_NoLoss": SiO2_Palik_NoLoss,
+                "Palik_LowLoss": SiO2_Palik_LowLoss,
+                "Palik_Lossy": SiO2_Palik_Lossy,
+                "Horiba": SiO2_Horiba,
+            },
+            default="Palik_LowLoss",
+        )
     ),
     SiON=MaterialItem(
         name="Silicon Oxynitride",
@@ -2546,18 +2718,21 @@ material_library = MaterialLibrary(
         },
         default="Horiba",
     ),
-    cSi=MaterialItem(
-        name="Silicon (Crystalline)",
-        variants={
-            "Palik_Lossless": cSi_PalikLossless,
-            "Palik_Lossy": cSi_PalikLossy,
-            "SalzbergVilla1957": cSi_SalzbergVilla1957,
-            "Li1993_293K": cSi_Li1993_293K,
-            "Green2008": cSi_Green2008,
-            "Green2008_Lossless": cSi_Green2008Lossless,
-            "Si_MultiPhysics": cSi_MultiPhysics,
-        },
-        default="Green2008",
+    cSi=_with_palik_lossless_alias(
+        MaterialItem(
+            name="Silicon (Crystalline)",
+            variants={
+                "Palik_NoLoss": cSi_PalikNoLoss,
+                "Palik_LowLoss": cSi_PalikLowLoss,
+                "Palik_Lossy": cSi_PalikLossy,
+                "SalzbergVilla1957": cSi_SalzbergVilla1957,
+                "Li1993_293K": cSi_Li1993_293K,
+                "Green2008": cSi_Green2008,
+                "Green2008_Lossless": cSi_Green2008Lossless,
+                "Si_MultiPhysics": cSi_MultiPhysics,
+            },
+            default="Green2008",
+        )
     ),
     LiNbO3=MaterialItemUniaxial(
         name="Lithium niobate",

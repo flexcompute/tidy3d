@@ -1476,7 +1476,7 @@ class Medium(AbstractMedium):
         **Common Library Materials (telecom, ~1.55 μm)**
 
         - Silicon: ``td.material_library['cSi']['Li1993_293K']`` (n ≈ 3.48)
-        - SiO2: ``td.material_library['SiO2']['Palik_Lossless']`` (n ≈ 1.44)
+        - SiO2: ``td.material_library['SiO2']['Palik_NoLoss']`` (n ≈ 1.44)
         - Si3N4: ``td.material_library['Si3N4']['Luke2015PMLStable']`` (n ≈ 2.0)
         - Gold: ``td.material_library['Au']['JohnsonChristy1972']``
         - Silver: ``td.material_library['Ag']['JohnsonChristy1972']``

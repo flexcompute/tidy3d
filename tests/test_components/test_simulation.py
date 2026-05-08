@@ -1844,6 +1844,28 @@ def test_diffraction_medium():
         )
 
 
+@pytest.mark.parametrize("material_name", ("GaAs", "Ge", "SiO2", "cSi"))
+def test_diffraction_monitor_accepts_palik_noloss_background(material_name):
+    """Palik_NoLoss library variants should pass the lossless diffraction check."""
+
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[200e12],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    _ = td.Simulation(
+        size=(2, 2, 2),
+        medium=td.material_library[material_name]["Palik_NoLoss"],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        monitors=(monitor,),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+
+
 def test_diffraction_monitor_boundary_validation_error_loc():
     """Make sure diffraction monitor boundary errors point to the monitor entry."""
 

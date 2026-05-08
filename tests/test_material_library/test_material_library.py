@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import json
+
 from rich.console import Console
 
 import tidy3d as td
-from tidy3d.material_library.material_library import MaterialItemUniaxial
+from tidy3d.material_library.material_library import MaterialItemUniaxial, export_matlib_to_file
+
+from ..utils import AssertLogLevel
+
+PALIK_MATERIALS = ("GaAs", "Ge", "InP", "SiO2", "cSi")
 
 
 def test_material_library_summary():
@@ -24,6 +30,42 @@ def test_material_summary():
 
     for _, material in td.material_library.items():
         print(material)
+
+
+def test_palik_lossless_alias_hidden_from_listing_and_export(tmp_path):
+    """Make sure the compatibility alias works but is not listed as a normal variant."""
+    for material_name in PALIK_MATERIALS:
+        material = td.material_library[material_name]
+        printed_material = str(material)
+        serialized_material = material.model_dump()
+        serialized_material_json = material.model_dump_json()
+
+        with AssertLogLevel("WARNING", contains_str="Palik_Lossless"):
+            legacy_variant = material.variants["Palik_Lossless"]
+
+        assert legacy_variant == material.variants["Palik_LowLoss"]
+        assert "Palik_Lossless" in material.variants
+        assert "Palik_Lossless" not in material.variants.keys()
+        assert "Palik_Lossless" not in serialized_material["variants"]
+        assert "Palik_Lossless" not in serialized_material_json
+        assert "Palik_Lossless" not in printed_material
+        assert "Palik_LowLoss" in printed_material
+        assert serialized_material["type"] == "MaterialItem"
+
+    export_path = tmp_path / "matlib.json"
+    export_matlib_to_file(export_path)
+    exported_library = json.loads(export_path.read_text())
+
+    for material_name in PALIK_MATERIALS:
+        exported_items = [
+            exported_material
+            for exported_name, exported_material in exported_library.items()
+            if f'("{material_name}")' in exported_name
+        ]
+
+        assert len(exported_items) == 1
+        assert "Palik_Lossless" not in exported_items[0]
+        assert "Palik_LowLoss" in exported_items[0]
 
 
 def test_variant_summary():
@@ -91,11 +133,9 @@ def test_variant_str():
     assert "eps_inf: 1.0" in printed_SiO2, "Expected eps_inf in SiO2 printed string"
     assert "poles: 1" in printed_SiO2, "Expected 1 pole in SiO2 printed string"
 
-    printed_SiO2_Palik_lossless = str(td.material_library["SiO2"].variants["Palik_Lossless"])
+    printed_SiO2_Palik_lossless = str(td.material_library["SiO2"].variants["Palik_NoLoss"])
 
-    assert "eps_inf: 1.5385442336875639" in printed_SiO2_Palik_lossless, (
-        "Expected eps_inf in SiO2 printed string"
-    )
+    assert "eps_inf: 1.0" in printed_SiO2_Palik_lossless, "Expected eps_inf in SiO2 printed string"
     assert "poles: 2" in printed_SiO2_Palik_lossless, "Expected 1 pole in SiO2 printed string"
 
     printed_SiO2_Palik_lossy = str(td.material_library["SiO2"].variants["Palik_Lossy"])
