@@ -159,10 +159,9 @@ def test_region_params():
 
     design_region = make_design_region()
 
-    _ = np.random.random(design_region.params_shape)
-    _ = design_region.params_random
-    _ = design_region.params_ones
-    _ = design_region.params_zeros
+    params = design_region.initial_parameters
+    assert params.shape == design_region.params_shape
+    npt.assert_allclose(params, 0.5)
 
 
 def test_region_uniform():
@@ -182,7 +181,7 @@ def test_region_penalties():
 
     region = make_design_region()
 
-    PARAMS_0 = region.params_random
+    PARAMS_0 = np.random.random(region.params_shape)
 
     # test some design region functions
     region.material_density(PARAMS_0)
@@ -228,7 +227,7 @@ def test_region_to_structure():
 
     region = make_design_region()
 
-    PARAMS_0 = region.params_ones
+    PARAMS_0 = np.ones(region.params_shape)
 
     _ = region.to_structure(PARAMS_0)
 
@@ -238,7 +237,7 @@ def test_region_params_bounds():
 
     region = make_design_region()
 
-    PARAMS_0 = region.params_ones
+    PARAMS_0 = np.ones(region.params_shape)
 
     with pytest.raises(ValueError):
         region.penalty_value(2 * PARAMS_0)
@@ -254,7 +253,7 @@ def test_region_inf_size():
     inf_size = list(region.size)
     inf_size[1] = td.inf
     region = region.updated_copy(size=inf_size)
-    params_0_inf = region.params_zeros
+    params_0_inf = np.zeros(region.params_shape)
     _ = region.to_structure(params_0_inf)
 
 
@@ -290,12 +289,12 @@ def test_region_priority():
     region = make_design_region()
 
     # Test default priority (None)
-    structure_default = region.to_structure(region.params_zeros)
+    structure_default = region.to_structure(np.zeros(region.params_shape))
     assert structure_default.priority is None
 
     # Test explicit priority value
     region = region.updated_copy(priority=1)
-    structure = region.to_structure(region.params_zeros)
+    structure = region.to_structure(np.zeros(region.params_shape))
     assert structure.priority == 1
 
 
@@ -358,7 +357,7 @@ def test_invdes_simulation_data(use_emulated_run, use_emulated_to_sim_data):  # 
     # monkeypatch.setattr(tdi.InverseDesign, "to_simulation_data", lambda self, params, **kwargs: run_emulated(self.simulation, task_name='test'))
 
     invdes = make_invdes()
-    params = invdes.design_region.params_random
+    params = invdes.design_region.initial_parameters
     invdes.to_simulation_data(params=params, task_name="test")
 
 
@@ -367,7 +366,7 @@ def test_invdes_mesh_override():
 
     region = make_design_region()
     invdes = make_invdes()
-    params = invdes.design_region.params_random
+    params = invdes.design_region.initial_parameters
 
     # if ``override_structure_dl`` left of ``None`` (default), use an override structure
     # defined by the design region, with a ``dl`` corresponding to the ``pixel_size``.
@@ -755,6 +754,59 @@ def test_parameter_spec_with_inverse_design(use_emulated_run, use_emulated_to_si
     )
 
     optimizer.run()
+
+
+def test_optimizer_run_initializes_from_custom_initialization_spec(use_emulated_run):  # noqa: F811
+    """Test optimizer.run() starts from the design region initialization spec."""
+    design_region = make_design_region()
+    expected_params = np.full(design_region.params_shape, 0.25)
+    design_region = design_region.updated_copy(
+        initialization_spec=CustomInitializationSpec(params=expected_params)
+    )
+
+    invdes = tdi.InverseDesign(
+        simulation=simulation,
+        design_region=design_region,
+        task_name="test_metric",
+    )
+
+    optimizer = tdi.AdamOptimizer(
+        design=invdes,
+        learning_rate=0.2,
+        num_steps=1,
+    )
+
+    result = optimizer.run(post_process_fn=post_process_fn)
+
+    npt.assert_allclose(result.params[0], expected_params)
+
+
+def test_optimizer_run_initializes_from_seeded_random_initialization_spec(
+    use_emulated_run,  # noqa: F811
+):
+    """Test optimizer.run() starts from the seeded random initialization spec."""
+    design_region = make_design_region()
+    initialization_spec = RandomInitializationSpec(seed=1)
+    expected_params = initialization_spec.create_parameters(design_region.params_shape)
+    design_region = design_region.updated_copy(initialization_spec=initialization_spec)
+
+    npt.assert_allclose(design_region.initial_parameters, expected_params)
+
+    invdes = tdi.InverseDesign(
+        simulation=simulation,
+        design_region=design_region,
+        task_name="test_metric",
+    )
+
+    optimizer = tdi.AdamOptimizer(
+        design=invdes,
+        learning_rate=0.2,
+        num_steps=1,
+    )
+
+    result = optimizer.run(post_process_fn=post_process_fn)
+
+    npt.assert_allclose(result.params[0], expected_params)
 
 
 def test_initial_simulation():

@@ -10,7 +10,6 @@ import autograd.numpy as anp
 import numpy as np
 from pydantic import Field, PositiveFloat, PositiveInt
 
-import tidy3d as td
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import SetupError
 from tidy3d.plugins.autograd.optimizers import Adam, apply_updates
@@ -86,7 +85,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(self, params0: anp.ndarray | None = None) -> InverseDesignResult:
+    def initialize_result(self) -> InverseDesignResult:
         """
         Create an initially empty `InverseDesignResult` from the starting parameters.
 
@@ -95,15 +94,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         InverseDesignResult
             An instance of `InverseDesignResult` initialized with the starting parameters and state.
         """
-        if params0 is not None:
-            td.log.warning(
-                "The 'params0' argument is deprecated and will be removed in the future. "
-                "Please use a 'DesignRegion.initialization_spec' in the design region "
-                "to specify initial parameters instead. For now, 'params0' will take precedence "
-                "over 'initialization_spec'."
-            )
-        else:
-            params0 = self.design.design_region.initial_parameters
+        params0 = self.design.design_region.initial_parameters
         state = self.initial_state(params0)
 
         # initialize empty result
@@ -113,9 +104,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         self,
         post_process_fn: Callable | None = None,
         callback: Callable | None = None,
-        params0: anp.ndarray = None,
     ) -> InverseDesignResult:
-        """Run this inverse design problem from an optional initial set of parameters.
+        """Run this inverse design problem.
 
         Parameters
         ----------
@@ -126,10 +116,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             Callback function to apply at every iteration step for extra functionality. Does not
             need to be differentiable. This takes the optimizer ``result`` as a positional argument
             and the ``step_index`` and ``aux_data`` as optional arguments.
-        params0 : anp.ndarray = None
-            Deprecated. Initial set of parameters. Use ``TopologyDesignRegion.intialization_spec`` instead.
         """
-        starting_result = self.initialize_result(params0)
+        starting_result = self.initialize_result()
         return self.continue_run(
             result=starting_result,
             num_steps=self.num_steps,

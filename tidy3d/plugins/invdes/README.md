@@ -213,20 +213,26 @@ When optimizing, we will update an array of design parameters. Therefore, the `D
 
 The shape of this array is automatically determined by the geometric parameters and `pixel_size` of the `TopologyDesignRegion`. This shape can be accessed as a `tuple` from `design_region.params_shape`.
 
-To make it convenient to initialize parameter arrays of the proper shape, there are a few properties of the `TopologyDesignRegion` instance:
+Initial optimization parameters are generated from the design region's `initialization_spec`.
+By default, the design region uses `UniformInitializationSpec(value=0.5)`.
+The initialization can be changed by supplying a different specification:
 
-* `TopologyDesignRegion.params_random` (creates an array uniformly sampled at random between 0 and 1)
+* `RandomInitializationSpec` creates an array uniformly sampled at random between 0 and 1.
 
-* `TopologyDesignRegion.params_ones` (creates an array of all 1)
+* `UniformInitializationSpec` creates an array with one constant value.
 
-* `TopologyDesignRegion.params_zeros` (creates an array of all 0)
+* `CustomInitializationSpec` stores a user-provided array.
 
-These properties can be combined together to conveniently set up your parameter array, for example:
+These specifications can be used to set up your starting parameter array, for example:
 
 ```py
-params0 = design_region.params_random
-params0 += np.fliplr(params0)
-params0 /= 2
+custom_params = np.random.random(design_region.params_shape)
+custom_params += np.fliplr(custom_params)
+custom_params /= 2
+design_region = design_region.updated_copy(
+    initialization_spec=tdi.CustomInitializationSpec(params=custom_params)
+)
+params0 = design_region.initial_parameters
 print(params0.shape)
 
 ```
@@ -295,7 +301,11 @@ Let's do this with a set of parameters all at 0.5 as it's a better starting poin
 
 ```py
 
-params0 = 0.5 * np.ones_like(params0)
+design_region = design_region.updated_copy(
+    initialization_spec=tdi.UniformInitializationSpec(value=0.5)
+)
+design = design.updated_copy(design_region=design_region)
+params0 = design.design_region.initial_parameters
 ```
 It can be useful to run the initial problem to ensure it looks correct before optimizing. For convenience, the `to_simulation_data()` method generates the simulation and runs it through `web.run()` to return the `SimulationData`, which can be visualized.```
 
@@ -330,13 +340,14 @@ optimizer = tdi.AdamOptimizer(
 ```
 ### Running the optimization
 
-Finally, we can use `result = Optimizer.run(params0)` on our initial parameters to run the inverse design problem.
+Finally, we can use `result = Optimizer.run()` to run the inverse design problem.
+The optimizer gets initial parameters from the design region's `initialization_spec`.
 
 This will construct our combined objective function behind the scenes, including the penalties and our post-processing function, use `autograd` to differentiate it, and feed it to a gradient-descent optimizer.
 
 ```py
 
-result = optimizer.run(params0, post_process_fn=post_process_fn)
+result = optimizer.run(post_process_fn=post_process_fn)
 
 ```
 ## Optimization Results

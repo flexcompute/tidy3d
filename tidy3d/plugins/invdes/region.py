@@ -20,8 +20,6 @@ from .penalty import PenaltyType
 from .transformation import TransformationType
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
-
     from tidy3d.compat import Self
     from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
 
@@ -294,42 +292,6 @@ class TopologyDesignRegion(DesignRegion):
         # TODO: if the structure is infinite but the simulation is finite, need reduced bounds
         num_pixels[np.logical_or(np.isinf(num_pixels), self.uniform)] = 1
         return tuple(int(n) for n in num_pixels)
-
-    def _warn_deprecate_params(self) -> None:
-        td.log.warning(
-            "Parameter initialization via design region methods is deprecated and will be "
-            "removed in the future. Please specify this through the design region's "
-            "'initialization_spec' instead."
-        )
-
-    def params_uniform(self, value: float) -> NDArray[np.floating]:
-        """Make an array of parameters with all the same value."""
-        self._warn_deprecate_params()
-        return value * np.ones(self.params_shape)
-
-    @property
-    def params_random(self) -> NDArray[np.floating]:
-        """Convenience for generating random parameters between (0,1) with correct shape."""
-        self._warn_deprecate_params()
-        return np.random.random(self.params_shape)
-
-    @property
-    def params_zeros(self) -> NDArray[np.floating]:
-        """Convenience for generating random parameters of all 0 values with correct shape."""
-        self._warn_deprecate_params()
-        return self.params_uniform(0.0)
-
-    @property
-    def params_half(self) -> NDArray[np.floating]:
-        """Convenience for generating random parameters of all 0.5 values with correct shape."""
-        self._warn_deprecate_params()
-        return self.params_uniform(0.5)
-
-    @property
-    def params_ones(self) -> NDArray[np.floating]:
-        """Convenience for generating random parameters of all 1 values with correct shape."""
-        self._warn_deprecate_params()
-        return self.params_uniform(1.0)
 
     @property
     def coords(self) -> dict[str, list[float]]:
