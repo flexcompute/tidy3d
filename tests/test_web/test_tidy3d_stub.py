@@ -10,7 +10,7 @@ import responses
 import tidy3d as td
 from tests.utils import AssertLogLevel
 from tidy3d import config
-from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.data_array import FreqVoltageDataArray, ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -73,6 +73,45 @@ def make_sim_data(file_size_gb=0.001):
     )
 
 
+def make_heat_charge_sim_data_with_device_characteristics(size=(1, 1, 1)):
+    """Makes heat-charge simulation data with device characteristic arrays."""
+    voltages = [-1, 0, 1]
+    monitor_size = tuple(0 if sim_size == 0 else 1 for sim_size in size)
+    device_characteristics = td.DeviceCharacteristics(
+        steady_dc_hole_capacitance=td.SteadyVoltageDataArray(
+            data=[0, 1, 4], coords={"v": voltages}
+        ),
+        steady_dc_electron_capacitance=td.SteadyVoltageDataArray(
+            data=[0, 1, 4], coords={"v": voltages}
+        ),
+        steady_dc_current_voltage=td.SteadyVoltageDataArray(
+            data=[0.1, 1.5, 3.6], coords={"v": voltages}
+        ),
+        steady_dc_resistance_voltage=td.SteadyVoltageDataArray(
+            data=[1.0, 2.0, 3.0], coords={"v": voltages}
+        ),
+        ac_current_voltage=FreqVoltageDataArray(
+            data=np.array([[1 + 1j, 2 + 2j, 3 + 3j], [4 + 4j, 5 + 5j, 6 + 6j]]),
+            coords={"f": [1e3, 2e3], "v": voltages},
+        ),
+    )
+    sim = td.HeatChargeSimulation(
+        size=size,
+        medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=1)),
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+            )
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        sources=[],
+        monitors=[td.TemperatureMonitor(size=monitor_size, name="temp", unstructured=True)],
+    )
+    return td.HeatChargeSimulationData(
+        simulation=sim, data=(), device_characteristics=device_characteristics, log=""
+    )
+
+
 @responses.activate
 def test_stub_to_hdf5_gz(tmp_path):
     """Tests the to_hdf5_gz method of Tidy3dStub."""
@@ -127,6 +166,35 @@ def test_stub_data_postprocess_logs(tmp_path):
         Tidy3dStubData.postprocess(file_path)
     finally:
         td.log.set_capture(False)
+
+
+@responses.activate
+@pytest.mark.parametrize(
+    ("size", "capacitance_units", "current_units", "resistance_units"),
+    [
+        ((1, 1, 1), "fF", "A", "\u03a9"),
+        ((0, 1, 1), "fF/um", "A/um", "\u03a9*um"),
+    ],
+)
+def test_stub_data_postprocess_device_characteristics_units(
+    tmp_path, size, capacitance_units, current_units, resistance_units
+):
+    """Tests device characteristic units after server data postprocessing."""
+    sim_data = make_heat_charge_sim_data_with_device_characteristics(size=size)
+    file_path = os.path.join(tmp_path, "heat_charge_data.hdf5")
+    sim_data.to_file(file_path)
+
+    processed = Tidy3dStubData.postprocess(file_path, lazy=False)
+    device_characteristics = processed.device_characteristics
+
+    assert device_characteristics.steady_dc_hole_capacitance.attrs["units"] == capacitance_units
+    assert device_characteristics.steady_dc_electron_capacitance.attrs["units"] == capacitance_units
+    assert device_characteristics.steady_dc_current_voltage.attrs["units"] == current_units
+    assert device_characteristics.steady_dc_resistance_voltage.attrs["units"] == resistance_units
+    assert device_characteristics.ac_current_voltage.attrs["units"] == current_units
+    assert device_characteristics.steady_dc_current_voltage.coords["v"].attrs["units"] == "V"
+    assert device_characteristics.ac_current_voltage.coords["v"].attrs["units"] == "V"
+    assert device_characteristics.ac_current_voltage.coords["f"].attrs["units"] == "Hz"
 
 
 @responses.activate

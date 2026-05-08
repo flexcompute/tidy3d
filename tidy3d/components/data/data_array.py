@@ -55,6 +55,7 @@ DIM_ATTRS = {
     "z": {"units": MICROMETER, "long_name": "z position"},
     "f": {"units": HERTZ, "long_name": "frequency"},
     "t": {"units": SECOND, "long_name": "time"},
+    "v": {"units": VOLT, "long_name": "voltage"},
     "direction": {"long_name": "propagation direction"},
     "mode_index": {"long_name": "mode index"},
     "terminal_label": {"long_name": "terminal label"},
@@ -133,7 +134,7 @@ class DataArray(xr.DataArray):
         if isbox(data) and not is_tidy_box(data):
             data = TidyArrayBox.from_arraybox(data)
         # do the same for xr.Variable or xr.DataArray type
-        elif isinstance(data, (xr.Variable, xr.DataArray)):
+        elif isinstance(data, xr.Variable | xr.DataArray):
             if isbox(data.data) and not is_tidy_box(data.data):
                 data.data = TidyArrayBox.from_arraybox(data.data)
         super().__init__(data, *args, **kwargs)
@@ -319,7 +320,7 @@ class DataArray(xr.DataArray):
 
     def to_hdf5(self, fname: PathLike | h5py.File, group_path: str) -> None:
         """Save an ``xr.DataArray`` to the hdf5 file or file handle with a given path to the group."""
-        if isinstance(fname, (str, pathlib.Path)):
+        if isinstance(fname, str | pathlib.Path):
             path = pathlib.Path(fname)
             path.parent.mkdir(parents=True, exist_ok=True)
             with h5py.File(path, "w") as f_handle:

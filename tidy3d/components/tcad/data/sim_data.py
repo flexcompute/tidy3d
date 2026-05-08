@@ -133,7 +133,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "has converged, these result should be close to that of electrons. "
         "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
         "to obtain the total capacitance.",
-        json_schema_extra={"units": "fF"},
+        json_schema_extra={"units": "fF", "units_2d": "fF/um"},
     )
 
     steady_dc_electron_capacitance: SteadyVoltageDataArray | None = Field(
@@ -143,7 +143,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "has converged, these result should be close to that of holes. "
         "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
         "to obtain the total capacitance.",
-        json_schema_extra={"units": "fF"},
+        json_schema_extra={"units": "fF", "units_2d": "fF/um"},
     )
 
     steady_dc_current_voltage: SteadyVoltageDataArray | None = Field(
@@ -152,7 +152,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         description="Device steady DC current-voltage relation for the device. "
         "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
         "to obtain the total current.",
-        json_schema_extra={"units": "A"},
+        json_schema_extra={"units": "A", "units_2d": "A/um"},
     )
 
     steady_dc_resistance_voltage: SteadyVoltageDataArray | None = Field(
@@ -162,7 +162,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
         "is given in Ohms. In 2D the resistance is given in :math:`\\Omega \\cdot \\mu\\text{m}`. "
         "For 2D simulations, multiply by the device depth (in μm) to obtain the resistance in Ω.",
-        json_schema_extra={"units": "Ω"},
+        json_schema_extra={"units": "Ω", "units_2d": "Ω*um"},
     )
 
     ac_current_voltage: FreqVoltageDataArray | None = Field(
@@ -173,8 +173,38 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "can be used to determine frequency-dependent device parameters like admittance. "
         "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
         "(extrusion length) to obtain the total current.",
-        json_schema_extra={"units": "A"},
+        json_schema_extra={"units": "A", "units_2d": "A/um"},
     )
+
+    @model_validator(mode="after")
+    def add_attrs_to_data_arrays(self) -> Self:
+        """Copy context-free field metadata onto device-characteristic data arrays."""
+        self._add_data_array_attrs()
+        return self
+
+    def _add_data_array_attrs(self, is_2d: bool | None = None) -> None:
+        """Copy field metadata onto device-characteristic data arrays."""
+        for field_name, field_info in type(self).model_fields.items():
+            data_array = getattr(self, field_name)
+            if data_array is None or not hasattr(data_array, "attrs"):
+                continue
+
+            metadata = (
+                field_info.json_schema_extra
+                if isinstance(field_info.json_schema_extra, dict)
+                else {}
+            )
+            units = metadata.get("units_2d" if is_2d else "units") if is_2d is not None else None
+            if units is None and field_info.title is None:
+                continue
+
+            data_array = data_array.copy(deep=False)
+            data_array.attrs = dict(data_array.attrs)
+            if units is not None:
+                data_array.attrs["units"] = units
+            if field_info.title is not None:
+                data_array.attrs["long_name"] = field_info.title
+            object.__setattr__(self, field_name, data_array)
 
 
 class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
@@ -364,6 +394,18 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         description="Data characterizing the device :class:`DeviceCharacteristics`.",
     )
 
+    @model_validator(mode="after")
+    def add_device_characteristic_units(self) -> Self:
+        """Copy dimensionality-aware units onto device-characteristic data arrays."""
+        if self.device_characteristics is None:
+            return self
+
+        device_characteristics = self.device_characteristics.copy(deep=False)
+        is_2d = any(size == 0 for size in self.simulation.size)
+        device_characteristics._add_data_array_attrs(is_2d=is_2d)
+        object.__setattr__(self, "device_characteristics", device_characteristics)
+        return self
+
     @equal_aspect
     @add_ax_if_none
     def plot_field(
@@ -431,7 +473,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         # field.name = field_name
         field_data = self._field_component_value(field, val)
 
-        if isinstance(monitor_data, (TemperatureData, VolumeMeshData)):
+        if isinstance(monitor_data, TemperatureData | VolumeMeshData):
             property_to_plot = "heat_conductivity"
         elif isinstance(monitor_data, SteadyPotentialData):
             property_to_plot = "electric_conductivity"

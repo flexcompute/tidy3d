@@ -1323,17 +1323,40 @@ def test_min_mesh_size(grid_specs):
 
 
 def test_device_characteristics():
+    from tidy3d.components.data.data_array import FreqVoltageDataArray
+
     C = [0, 1, 4]
     V = [-1, -0.5, 0]
     intensities = [0.1, 1.5, 3.6]
     capacitance = td.SteadyVoltageDataArray(data=C, coords={"v": V})
     current_voltage = td.SteadyVoltageDataArray(data=intensities, coords={"v": V})
-    _ = td.DeviceCharacteristics(
+    resistance_voltage = td.SteadyVoltageDataArray(data=[1.0, 2.0, 3.0], coords={"v": V})
+    ac_current_voltage = FreqVoltageDataArray(
+        data=np.array([[1 + 1j, 2 + 2j, 3 + 3j], [4 + 4j, 5 + 5j, 6 + 6j]]),
+        coords={"f": [1e3, 2e3], "v": V},
+    )
+
+    device_characteristics = td.DeviceCharacteristics(
         steady_dc_hole_capacitance=capacitance,
         steady_dc_electron_capacitance=capacitance,
         steady_dc_current_voltage=current_voltage,
-        steady_dc_resistance_voltage=current_voltage,
+        steady_dc_resistance_voltage=resistance_voltage,
+        ac_current_voltage=ac_current_voltage,
     )
+    assert "units" not in device_characteristics.steady_dc_hole_capacitance.attrs
+    assert "units" not in device_characteristics.steady_dc_current_voltage.attrs
+    assert "units" not in device_characteristics.steady_dc_resistance_voltage.attrs
+    assert "units" not in device_characteristics.ac_current_voltage.attrs
+    assert (
+        device_characteristics.steady_dc_hole_capacitance.attrs["long_name"]
+        == "Steady DC hole capacitance"
+    )
+    assert (
+        device_characteristics.steady_dc_electron_capacitance.attrs["long_name"]
+        == "Steady DC electron capacitance"
+    )
+    assert device_characteristics.steady_dc_current_voltage.coords["v"].attrs["units"] == "V"
+    assert device_characteristics.ac_current_voltage.coords["v"].attrs["units"] == "V"
 
 
 def test_heat_charge_sources(structures):
