@@ -9,15 +9,36 @@ if TYPE_CHECKING:
     from IPython.core.display_functions import DisplayHandle
 
     from tidy3d import Scene, Simulation
+    from tidy3d.components.types import Coordinate, Size
 
 
-def plot_scene_3d(scene: Scene, width: int = 800, height: int = 800) -> None:
+def plot_scene_3d(
+    scene: Scene,
+    width: int = 800,
+    height: int = 800,
+    *,
+    size: Size | None = None,
+    center: Coordinate | None = None,
+) -> None:
     import gzip
     import json
     from base64 import b64encode
     from io import BytesIO
 
     import h5py
+    import numpy as np
+
+    from tidy3d.components.autograd.utils import get_static
+
+    def static_bound_list(bound: Size | Coordinate) -> list[float]:
+        static_bound = get_static(bound)
+        if hasattr(static_bound, "tolist"):
+            static_bound = static_bound.tolist()
+        static_bound = get_static(static_bound)
+        return np.asarray(static_bound, dtype=float).tolist()
+
+    bounds_size = static_bound_list(scene.size if size is None else size)
+    bounds_center = static_bound_list(scene.center if center is None else center)
 
     # Serialize scene to HDF5 in-memory
     buffer = BytesIO()
@@ -39,11 +60,11 @@ def plot_scene_3d(scene: Scene, width: int = 800, height: int = 800) -> None:
                     if name == "JSON_STRING":
                         # Parse and update JSON string
                         json_str = (
-                            data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else data
+                            data.decode("utf-8") if isinstance(data, bytes | bytearray) else data
                         )
                         json_data = json.loads(json_str)
-                        json_data["size"] = list(scene.size)
-                        json_data["center"] = list(scene.center)
+                        json_data["size"] = bounds_size
+                        json_data["center"] = bounds_center
                         json_data["grid_spec"] = {}
                         new_str = json.dumps(json_data)
                         dst.create_dataset(name, data=new_str.encode("utf-8"))

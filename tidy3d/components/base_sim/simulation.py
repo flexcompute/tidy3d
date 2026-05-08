@@ -20,7 +20,7 @@ from tidy3d.components.validators import (
     assert_unique_names,
     call_wrapped_validator,
 )
-from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_symmetry
+from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_symmetry, plot_scene_3d
 from tidy3d.exceptions import Tidy3dKeyError
 from tidy3d.log import log
 from tidy3d.version import __version__
@@ -707,4 +707,6 @@ class AbstractSimulation(Box, ABC):
             height of the 3d view dom's size
 
         """
-        return self.scene.plot_3d(width=width, height=height)
+        return plot_scene_3d(
+            self.scene, width=width, height=height, size=self.size, center=self.center
+        )

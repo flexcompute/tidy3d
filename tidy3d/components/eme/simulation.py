@@ -1099,7 +1099,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 (
                     medium
                     for medium in mediums
-                    if isinstance(medium, (AnisotropicMedium, FullyAnisotropicMedium))
+                    if isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium)
                 ),
                 key=hash,
             )
@@ -1300,7 +1300,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _validate_anisotropic_bend_repetitions(self) -> Self:
         """Reject repeated bent units when each repetition would need a distinct anisotropy frame."""
         if not any(
-            isinstance(medium, (AnisotropicMedium, FullyAnisotropicMedium))
+            isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium)
             for medium in self.scene.mediums
         ):
             return self
@@ -2819,7 +2819,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 return None
             if isinstance(modes, ModeSimulationData):
                 return modes.modes_raw
-            if isinstance(modes, (ElectromagneticFieldData, ModeSolverData)):
+            if isinstance(modes, ElectromagneticFieldData | ModeSolverData):
                 return modes
             raise ValidationError(
                 f"'{name}' must be ElectromagneticFieldData, ModeSolverData, "
