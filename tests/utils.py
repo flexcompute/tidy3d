@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -1152,13 +1154,34 @@ def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, fiel
 
 def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
-
-    return _make_simulation_data(
+    sim_data = _make_simulation_data(
         simulation,
-        path=path,
+        path=None,
         x0=kwargs.get("x0", 1.0),
         data_gen_fn=DATA_GEN_FN,
     )
+    if path is None:
+        return sim_data
+
+    output_path = Path(path)
+    if output_path.name == "simulation_data.hdf5":
+        tmp_fd, tmp_name = tempfile.mkstemp(
+            prefix=f"{output_path.stem}-",
+            suffix=output_path.suffix,
+            dir=output_path.parent,
+        )
+        os.close(tmp_fd)
+        tmp_path = Path(tmp_name)
+        try:
+            sim_data.to_file(str(tmp_path))
+            os.replace(tmp_path, output_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        return sim_data
+
+    sim_data.to_file(str(output_path))
+    return sim_data
 
 
 def assert_single_value_error_loc(excinfo, expected_loc, message_contains=None):

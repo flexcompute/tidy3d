@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-# keys for data into auxiliary dictionary (re-exported in autograd.py for tests)
+# Compatibility constants for legacy aux/context payload keys.
+# The client now uses typed AutogradContext/ParallelAdjointState objects, but
+# backend and downstream callers may still import these names.
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
 AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 AUX_KEY_FWD_TASK_ID = "task_id_fwd"

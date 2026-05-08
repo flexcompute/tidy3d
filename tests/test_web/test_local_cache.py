@@ -340,12 +340,12 @@ def _patch_run_pipeline(
             context.simulation_data_forward = stub_data
         return stub_data._strip_traced_fields()
 
-    def _fake_postprocess_adj(
-        sim_data_adj=None, sim_data_orig=None, sim_data_fwd=None, sim_fields_keys=None, **_
-    ):
+    def _fake_postprocess_adj(*, sim_data_adj=None, postprocess_inputs=None, **_):
         """Return zeros for every requested field key."""
         counters["download"] += 1  # mimic VJP file download per autograd run
-        sim_fields_keys = sim_fields_keys or []
+        sim_fields_keys = []
+        if postprocess_inputs is not None:
+            sim_fields_keys = postprocess_inputs.sim_fields_keys
         return dict.fromkeys(sim_fields_keys, 0.0)
 
     def _fake_field_map_from_file(*args, **kwargs):

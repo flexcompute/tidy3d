@@ -1005,6 +1005,10 @@ def test_regular_autograd_internal_simulation_type_does_not_warn(monkeypatch, ca
         "tidy3d.web.api.autograd.autograd.setup_fwd",
         lambda sim_fields, sim_original, local_gradient: sim_original,
     )
+    monkeypatch.setattr(
+        "tidy3d.web.api.autograd.strategy.setup_fwd",
+        lambda sim_fields, sim_original, local_gradient: sim_original,
+    )
     monkeypatch.setattr("tidy3d.web.api.container.Folder.get", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         "tidy3d.web.api.webapi.resolve_upload_options",

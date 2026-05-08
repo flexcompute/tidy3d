@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from tidy3d.web.api.autograd.backward import postprocess_adj
+from tidy3d.web.api.autograd.context import AdjointPostprocessInputs
 
 from .postprocess_adj_utils import (
     DATASET_ROOT,
@@ -33,9 +34,13 @@ class ProfileArtifacts:
 def _run_postprocess_adj(inputs: PostprocessAdjInputs) -> dict:
     return postprocess_adj(
         sim_data_adj=inputs.sim_data_adj,
-        sim_data_orig=inputs.sim_data_orig,
-        sim_data_fwd=inputs.sim_data_fwd,
-        sim_fields_keys=inputs.sim_fields_keys,
+        postprocess_inputs=AdjointPostprocessInputs(
+            sim_data_orig=inputs.sim_data_orig,
+            sim_data_fwd=inputs.sim_data_fwd,
+            sim_fields_keys=inputs.sim_fields_keys,
+            numerical_structure_map={},
+            custom_vjp=None,
+        ),
     )
 
 

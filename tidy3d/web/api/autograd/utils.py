@@ -110,3 +110,11 @@ def filter_vjp_map(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
             )
         data_fields_vjp_static[k] = v_static
     return data_fields_vjp_static
+
+
+def zero_vjp_map(sim_fields_original: AutogradFieldMap) -> AutogradFieldMap:
+    """Return a VJP map with zero values matching ``sim_fields_original`` types/shapes."""
+    return {
+        key: (type(value)(0 * x for x in value) if isinstance(value, (list, tuple)) else 0 * value)
+        for key, value in sim_fields_original.items()
+    }

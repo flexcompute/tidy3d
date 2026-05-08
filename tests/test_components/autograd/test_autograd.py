@@ -38,8 +38,10 @@ from tidy3d.plugins.smatrix import ComponentModeler, Port
 from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
+from tidy3d.web.api.autograd import hooks
+from tidy3d.web.api.autograd import strategy as autograd_strategy
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom, verify_custom_vjp
-from tidy3d.web.api.autograd.context import AutogradContext
+from tidy3d.web.api.autograd.context import AdjointPostprocessInputs, AutogradContext
 from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
 from ...utils import (
@@ -219,8 +221,6 @@ _run_was_emulated = [False]
 def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
-    import tidy3d
-
     if TEST_MODE in ("pipeline", "speed"):
         task_name_fwd = "task_fwd"
         AUX_KEY_SIM_FIELDS_KEYS = "sim_fields_keys"
@@ -301,9 +301,13 @@ def use_emulated_run(monkeypatch):
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
                 sim_data_adj=sim_data_adj,
-                sim_data_orig=sim_data_orig,
-                sim_data_fwd=sim_data_fwd,
-                sim_fields_keys=sim_fields_keys,
+                postprocess_inputs=AdjointPostprocessInputs(
+                    sim_data_orig=sim_data_orig,
+                    sim_data_fwd=sim_data_fwd,
+                    sim_fields_keys=sim_fields_keys,
+                    numerical_structure_map={},
+                    custom_vjp=None,
+                ),
             )
 
             return traced_fields_vjp
@@ -346,13 +350,9 @@ def use_emulated_run(monkeypatch):
             return vjp_dict
 
         monkeypatch.setattr(webapi, "run", run_emulated)
-        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
-        monkeypatch.setattr(
-            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", emulated_run_async_fwd
-        )
-        monkeypatch.setattr(
-            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d_bwd", emulated_run_async_bwd
-        )
+        monkeypatch.setattr(hooks, "_run_tidy3d", emulated_run_fwd)
+        monkeypatch.setattr(hooks, "_run_async_tidy3d", emulated_run_async_fwd)
+        monkeypatch.setattr(hooks, "_run_async_tidy3d_bwd", emulated_run_async_bwd)
 
         _run_was_emulated[0] = True
         return emulated_run_fwd, emulated_run_bwd
@@ -1910,7 +1910,7 @@ def test_async_vjp_parallel_only_keeps_full_sim_field_keys(monkeypatch):
         )
 
     monkeypatch.setattr(
-        autograd_module, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
+        autograd_strategy, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
     )
 
     vjp_fn = autograd_module._run_async_bwd(
@@ -1955,9 +1955,9 @@ def test_async_vjp_sequential_path_keeps_full_sim_field_keys(monkeypatch):
         }
 
     monkeypatch.setattr(
-        autograd_module, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
+        autograd_strategy, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
     )
-    monkeypatch.setattr(autograd_module, "_run_async_tidy3d_bwd", _fake_run_async_tidy3d_bwd)
+    monkeypatch.setattr(hooks, "_run_async_tidy3d_bwd", _fake_run_async_tidy3d_bwd)
 
     vjp_fn = autograd_module._run_async_bwd(
         data_fields_original_dict={task_name: {("data", 0, "amps"): np.array([1.0])}},
@@ -2002,9 +2002,9 @@ def test_vjp_sequential_path_keeps_full_sim_field_keys(monkeypatch):
         }
 
     monkeypatch.setattr(
-        autograd_module, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
+        autograd_strategy, "_prepare_adjoints_from_vjp", _fake_prepare_adjoints_from_vjp
     )
-    monkeypatch.setattr(autograd_module, "_run_async_tidy3d_bwd", _fake_run_async_tidy3d_bwd)
+    monkeypatch.setattr(hooks, "_run_async_tidy3d_bwd", _fake_run_async_tidy3d_bwd)
 
     vjp_fn = autograd_module._run_bwd(
         data_fields_original={("data", 0, "amps"): np.array([1.0])},
@@ -4148,7 +4148,7 @@ def test_gaussian_overlap_multifreq_grouped_to_one_adjoint_source(use_emulated_r
         waist_distance=0.2,
     )
 
-    setup_adj_orig = autograd_module.setup_adj
+    setup_adj_orig = autograd_strategy.setup_adj
     process_adj_orig = td.SimulationData._process_adjoint_sources
     captured = {"num_sims_adj": None, "num_sources_first_sim": None}
     captured_infos = []
@@ -4164,7 +4164,7 @@ def test_gaussian_overlap_multifreq_grouped_to_one_adjoint_source(use_emulated_r
         captured["num_sources_first_sim"] = len(sims_adj[0].sources) if sims_adj else 0
         return sims_adj
 
-    monkeypatch.setattr(autograd_module, "setup_adj", setup_adj_capture)
+    monkeypatch.setattr(autograd_strategy, "setup_adj", setup_adj_capture)
     monkeypatch.setattr(td.SimulationData, "_process_adjoint_sources", process_adj_capture)
 
     def objective(params):

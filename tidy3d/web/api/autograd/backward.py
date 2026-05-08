@@ -33,7 +33,8 @@ if TYPE_CHECKING:
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.geometry.utils import GeometryType
 
-    from .types import CustomVJPConfig, NumericalStructureConfig
+    from .context import AdjointPostprocessInputs
+    from .types import NumericalStructureConfig
 
 
 # Scaling factor for chunk-dependent memory growth on top of the baseline estimate.
@@ -240,13 +241,15 @@ def _to_sim_fields_vjp(
 @disable_local_subpixel
 def postprocess_adj(
     sim_data_adj: td.SimulationData,
-    sim_data_orig: td.SimulationData,
-    sim_data_fwd: td.SimulationData,
-    sim_fields_keys: list[tuple],
-    numerical_structure_map: dict[int, NumericalStructureConfig] | None = None,
-    custom_vjp: tuple[CustomVJPConfig, ...] | None = None,
+    *,
+    postprocess_inputs: AdjointPostprocessInputs,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
+    sim_data_orig = postprocess_inputs.sim_data_orig
+    sim_data_fwd = postprocess_inputs.sim_data_fwd
+    sim_fields_keys = postprocess_inputs.sim_fields_keys
+    numerical_structure_map = postprocess_inputs.numerical_structure_map
+    custom_vjp = postprocess_inputs.custom_vjp
 
     def get_all_paths(match_structure_index: int) -> tuple[tuple[Any, ...], ...]:
         """Get traced autograd paths for one structure index.

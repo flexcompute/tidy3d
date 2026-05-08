@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 import tidy3d as td
-import tidy3d.web.api.autograd.autograd as autograd_api
 import tidy3d.web.api.autograd.parallel_adjoint as parallel_adjoint_api
+import tidy3d.web.api.autograd.strategy as autograd_strategy
 from tidy3d.components.autograd.parallel_adjoint_bases import (
     DiffractionAdjointBasis,
     ModeAdjointBasis,
@@ -20,7 +20,13 @@ from tidy3d.components.autograd.utils import adjoint_fwidth_from_simulation
 from tidy3d.components.diffraction import COS_THETA_THRESH, diffraction_angle_is_propagating
 from tidy3d.config import config
 from tidy3d.web import run, run_async
-from tidy3d.web.api.autograd.context import AutogradContext, ParallelAdjointState
+from tidy3d.web.api.autograd import hooks
+from tidy3d.web.api.autograd.context import (
+    AdjointTaskContext,
+    AutogradContext,
+    ForwardTaskContext,
+    ParallelAdjointState,
+)
 from tidy3d.web.api.autograd.parallel_adjoint import (
     _outgoing_mode_direction,
     apply_parallel_adjoint,
@@ -41,6 +47,63 @@ from .test_autograd import (
 
 if TYPE_CHECKING:
     from typing import Any
+
+
+class _BatchDataStub(dict):
+    """Minimal dict-like test double for BatchData with required ``task_paths`` attribute."""
+
+    def __init__(self, *args, task_paths: dict[str, str] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.task_paths = task_paths or {}
+
+
+def _make_forward_task_context(
+    *,
+    task_name: str,
+    sim: td.Simulation,
+    sim_fields: dict[tuple, Any],
+    context: AutogradContext | None = None,
+    max_num_adjoint_per_fwd: int = 100,
+) -> ForwardTaskContext:
+    return ForwardTaskContext.from_inputs(
+        task_name=task_name,
+        sim_fields=sim_fields,
+        sim_original=sim.to_static(),
+        context=context or AutogradContext(),
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        numerical_structures={},
+        custom_vjp=None,
+    )
+
+
+def _make_adjoint_task_context(
+    *,
+    task_name: str,
+    sim_fields_original: dict[tuple, Any],
+    sim_data_orig: td.SimulationData,
+    sim_data_fwd: td.SimulationData | None = None,
+    forward_task_id: str | None = None,
+    parallel_info: ParallelAdjointState | None,
+    max_num_adjoint_per_fwd: int = 100,
+    numerical_structures: dict[int, Any] | None = None,
+    custom_vjp: tuple[Any, ...] | None = None,
+    local_gradient: bool,
+) -> AdjointTaskContext:
+    context = AutogradContext(
+        simulation_data_original=sim_data_orig,
+        simulation_data_forward=sim_data_fwd,
+        forward_task_id=forward_task_id,
+        parallel_adjoint_state=parallel_info,
+    )
+    return AdjointTaskContext.from_inputs(
+        task_name=task_name,
+        sim_fields_original=sim_fields_original,
+        context=context,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        numerical_structures=numerical_structures or {},
+        custom_vjp=custom_vjp,
+        local_gradient=local_gradient,
+    )
 
 
 @pytest.mark.parametrize("monitor_key", ("mode", "diff", "field_point"))
@@ -316,10 +379,11 @@ def test_parallel_adjoint_mode_direction_policy_assume_outgoing(monkeypatch):
     monkeypatch.setattr(config.adjoint, "parallel_adjoint_mode_direction_policy", "assume_outgoing")
 
     payload = prepare_parallel_adjoint(
-        simulation=sim.to_static(),
-        sim_fields_keys=list(sim_fields.keys()),
-        task_name="parallel_mode_direction",
-        max_num_adjoint_per_fwd=100,
+        _make_forward_task_context(
+            task_name="parallel_mode_direction",
+            sim=sim,
+            sim_fields=sim_fields,
+        )
     )
 
     assert payload is not None
@@ -352,25 +416,26 @@ def test_parallel_adjoint_unresolved_residual_vjp_fails(use_emulated_run, monkey
     vjp = np.zeros_like(mode_data.amps.values, dtype=complex)
     vjp[0, 0, 0] = 1.0 + 0.0j
 
-    monkeypatch.setattr(autograd_api, "setup_adj", lambda **_: [])
+    monkeypatch.setattr(autograd_strategy, "setup_adj", lambda **_: [])
     with pytest.raises(
         td.exceptions.AdjointError,
         match="could not resolve remaining non-zero VJP entries",
     ):
-        autograd_api._prepare_adjoints_from_vjp(
-            data_fields_vjp={("data", monitor_index, "amps"): vjp},
-            sim_fields_original=sim_fields,
-            sim_data_orig=sim_data,
-            sim_fields_keys=list(sim_fields.keys()),
-            max_num_adjoint_per_fwd=100,
-            parallel_info=ParallelAdjointState(
+        autograd_strategy._prepare_adjoints_from_vjp(
+            task_context=_make_adjoint_task_context(
                 task_name="parallel_unresolved_residual_vjp",
-                num_sims=0,
-                basis_specs=[],
-                basis_maps={},
-                basis_task_map={},
+                sim_fields_original=sim_fields,
+                sim_data_orig=sim_data,
+                parallel_info=ParallelAdjointState(
+                    task_name="parallel_unresolved_residual_vjp",
+                    num_sims=0,
+                    basis_specs=[],
+                    basis_maps={},
+                    basis_task_map={},
+                ),
+                local_gradient=True,
             ),
-            task_name="parallel_unresolved_residual_vjp",
+            data_fields_vjp={("data", monitor_index, "amps"): vjp},
         )
 
 
@@ -394,16 +459,17 @@ def test_nonparallel_unresolved_vjp_returns_zero_map(use_emulated_run, monkeypat
     vjp = np.zeros_like(mode_data.amps.values, dtype=complex)
     vjp[0, 0, 0] = 1.0 + 0.0j
 
-    monkeypatch.setattr(autograd_api, "setup_adj", lambda **_: [])
+    monkeypatch.setattr(autograd_strategy, "setup_adj", lambda **_: [])
     with AssertLogLevel("WARNING", contains_str="contains no sources"):
-        vjp_traced_fields, sims_adj, has_adj_sources = autograd_api._prepare_adjoints_from_vjp(
+        vjp_traced_fields, sims_adj, has_adj_sources = autograd_strategy._prepare_adjoints_from_vjp(
+            task_context=_make_adjoint_task_context(
+                task_name="nonparallel_unresolved_vjp_zero_map",
+                sim_fields_original=sim_fields,
+                sim_data_orig=sim_data,
+                parallel_info=None,
+                local_gradient=False,
+            ),
             data_fields_vjp={("data", monitor_index, "amps"): vjp},
-            sim_fields_original=sim_fields,
-            sim_data_orig=sim_data,
-            sim_fields_keys=list(sim_fields.keys()),
-            max_num_adjoint_per_fwd=100,
-            parallel_info=None,
-            task_name="nonparallel_unresolved_vjp_zero_map",
         )
 
     assert not sims_adj
@@ -430,10 +496,11 @@ def test_parallel_adjoint_diffraction_bases(monkeypatch):
     monkeypatch.setattr(config.adjoint, "parallel_run", True)
 
     payload = prepare_parallel_adjoint(
-        simulation=sim.to_static(),
-        sim_fields_keys=list(sim_fields.keys()),
-        task_name="parallel_diffraction_bases",
-        max_num_adjoint_per_fwd=100,
+        _make_forward_task_context(
+            task_name="parallel_diffraction_bases",
+            sim=sim,
+            sim_fields=sim_fields,
+        )
     )
 
     assert payload is not None
@@ -529,10 +596,11 @@ def test_parallel_adjoint_mode_bases(monkeypatch):
     monkeypatch.setattr(config.adjoint, "parallel_run", True)
 
     payload = prepare_parallel_adjoint(
-        simulation=sim.to_static(),
-        sim_fields_keys=list(sim_fields.keys()),
-        task_name="parallel_mode_bases",
-        max_num_adjoint_per_fwd=100,
+        _make_forward_task_context(
+            task_name="parallel_mode_bases",
+            sim=sim,
+            sim_fields=sim_fields,
+        )
     )
 
     assert payload is not None
@@ -551,10 +619,11 @@ def test_parallel_adjoint_point_field_bases(monkeypatch):
     monkeypatch.setattr(config.adjoint, "parallel_run", True)
 
     payload = prepare_parallel_adjoint(
-        simulation=sim.to_static(),
-        sim_fields_keys=list(sim_fields.keys()),
-        task_name="parallel_point_field_bases",
-        max_num_adjoint_per_fwd=100,
+        _make_forward_task_context(
+            task_name="parallel_point_field_bases",
+            sim=sim,
+            sim_fields=sim_fields,
+        )
     )
 
     assert payload is not None
@@ -706,13 +775,13 @@ def test_parallel_adjoint_launches_parallel_tasks(use_emulated_run, monkeypatch)
     task_names = {"pa_task_1", "pa_task_2"}
 
     captured_task_names: set[str] = set()
-    orig_run_async = autograd_api._run_async_tidy3d
+    orig_run_async = hooks._run_async_tidy3d
 
     def _run_async_capture(simulations, **run_kwargs):
         captured_task_names.update(simulations.keys())
         return orig_run_async(simulations, **run_kwargs)
 
-    monkeypatch.setattr(autograd_api, "_run_async_tidy3d", _run_async_capture)
+    monkeypatch.setattr(hooks, "_run_async_tidy3d", _run_async_capture)
     monkeypatch.setattr(config.adjoint, "local_gradient", True)
     monkeypatch.setattr(config.adjoint, "parallel_run", True)
     monkeypatch.setattr(config.adjoint, "max_adjoint_per_fwd", 100)
@@ -738,14 +807,14 @@ def test_local_backward_batch_does_not_pass_path(use_emulated_run, monkeypatch):
     fn_dict = get_functions("medium", "mode")
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
-    orig_run_async = autograd_api._run_async_tidy3d
+    orig_run_async = hooks._run_async_tidy3d
 
     def _run_async_capture(simulations, **run_kwargs):
         if simulations and all("_adjoint_" in task_name for task_name in simulations):
             assert "path" not in run_kwargs
         return orig_run_async(simulations, **run_kwargs)
 
-    monkeypatch.setattr(autograd_api, "_run_async_tidy3d", _run_async_capture)
+    monkeypatch.setattr(hooks, "_run_async_tidy3d", _run_async_capture)
     monkeypatch.setattr(config.adjoint, "local_gradient", True)
     monkeypatch.setattr(config.adjoint, "parallel_run", False)
     monkeypatch.setattr(config.adjoint, "max_adjoint_per_fwd", 100)
@@ -843,12 +912,16 @@ def test_populate_parallel_adjoint_bases_passes_custom_vjp(use_emulated_run, mon
     def _postprocess_capture(
         *,
         sim_data_adj,
-        sim_data_orig,
-        sim_data_fwd,
-        sim_fields_keys,
+        sim_data_orig=None,
+        sim_data_fwd=None,
+        sim_fields_keys=None,
         numerical_structure_map=None,
         custom_vjp=None,
+        postprocess_inputs=None,
     ):
+        if postprocess_inputs is not None:
+            numerical_structure_map = postprocess_inputs.numerical_structure_map
+            custom_vjp = postprocess_inputs.custom_vjp
         captured.append((numerical_structure_map, custom_vjp))
         return {("structures", 0, "medium", "permittivity"): np.array(2.0)}
 
@@ -869,16 +942,22 @@ def test_populate_parallel_adjoint_bases_passes_custom_vjp(use_emulated_run, mon
     context.simulation_data_original = sim_data
     context.simulation_data_forward = sim_data
     parallel_adjoint_api._populate_parallel_adjoint_bases(
-        batch_data={
-            "parallel_custom_vjp_task": sim_data,
-            "parallel_custom_vjp_task_parallel_adj_0": sim_data,
-        },
-        task_name="parallel_custom_vjp_task",
+        batch_data=_BatchDataStub(
+            {
+                "parallel_custom_vjp_task": sim_data,
+                "parallel_custom_vjp_task_parallel_adj_0": sim_data,
+            }
+        ),
         payload=payload,
-        sim_fields_keys=list(sim_fields.keys()),
-        context=context,
-        numerical_structure_map=numerical_map_marker,
-        custom_vjp=custom_marker,
+        task_context=ForwardTaskContext.from_inputs(
+            task_name="parallel_custom_vjp_task",
+            sim_fields=sim_fields,
+            sim_original=sim.to_static(),
+            context=context,
+            max_num_adjoint_per_fwd=100,
+            numerical_structures=numerical_map_marker,
+            custom_vjp=custom_marker,
+        ),
     )
 
     assert len(captured) == 2
@@ -923,9 +1002,15 @@ def test_populate_parallel_adjoint_bases_missing_batch_data_raises(use_emulated_
 
     with pytest.raises(td.exceptions.AdjointError, match="unexpectedly missing"):
         parallel_adjoint_api._populate_parallel_adjoint_bases(
-            batch_data={"parallel_missing_batch_task": sim_data},
-            task_name="parallel_missing_batch_task",
+            batch_data=_BatchDataStub({"parallel_missing_batch_task": sim_data}),
             payload=payload,
-            sim_fields_keys=list(sim_fields.keys()),
-            context=context,
+            task_context=ForwardTaskContext.from_inputs(
+                task_name="parallel_missing_batch_task",
+                sim_fields=sim_fields,
+                sim_original=sim.to_static(),
+                context=context,
+                max_num_adjoint_per_fwd=100,
+                numerical_structures={},
+                custom_vjp=None,
+            ),
         )

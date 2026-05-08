@@ -17,7 +17,7 @@ from tidy3d.plugins.smatrix.ports.modal import GaussianPort as ModalGaussianPort
 from tidy3d.plugins.smatrix.ports.modal import Port as ModalPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort as RectLumpedPort
 from tidy3d.web import run
-from tidy3d.web.api.autograd import autograd as web_ag
+from tidy3d.web.api.autograd import hooks
 
 
 def _run_emulated_minimal(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
@@ -153,17 +153,27 @@ def _emulated_run_async_tidy3d(simulations, **kwargs):
         sim_data_map[task_name] = _run_emulated_minimal(sim)
 
     class _BatchLike(dict):
+        def __init__(self, data_map):
+            super().__init__(data_map)
+            # Keep the stub compatible with BatchData callers that inspect file paths.
+            self.task_paths = dict.fromkeys(data_map, "")
+
         def __getitem__(self, key):
             return sim_data_map[key]
 
     return _BatchLike(sim_data_map), {}
 
 
+def _emulated_run_tidy3d(simulation, task_name, **kwargs):
+    return _run_emulated_minimal(simulation), task_name
+
+
 @pytest.fixture
 def patch_web_autograd_emulator(monkeypatch):
     """Patch web autograd internals to use the local minimal emulator."""
 
-    monkeypatch.setattr(web_ag, "_run_async_tidy3d", _emulated_run_async_tidy3d)
+    monkeypatch.setattr(hooks, "_run_tidy3d", _emulated_run_tidy3d)
+    monkeypatch.setattr(hooks, "_run_async_tidy3d", _emulated_run_async_tidy3d)
     yield
 
 

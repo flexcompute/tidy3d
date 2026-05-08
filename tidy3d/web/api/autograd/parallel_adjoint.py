@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -26,7 +26,10 @@ from tidy3d.components.data.sim_data import AdjointSourceInfo, make_adjoint_simu
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.config import config
 from tidy3d.web.api.autograd.backward import postprocess_adj
-from tidy3d.web.api.autograd.context import ParallelAdjointState
+from tidy3d.web.api.autograd.context import (
+    AdjointPostprocessInputs,
+    ParallelAdjointState,
+)
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -36,7 +39,7 @@ if TYPE_CHECKING:
     from tidy3d.components.data.monitor_data import MonitorData
     from tidy3d.components.source.utils import SourceType
     from tidy3d.components.types.monitor import MonitorType
-    from tidy3d.web.api.autograd.context import AutogradContext
+    from tidy3d.web.api.autograd.context import ForwardTaskContext
     from tidy3d.web.api.container import BatchData
 
 
@@ -177,17 +180,35 @@ def _select_sim_data_freq(
     return sim_data_adj.updated_copy(simulation=sim_updated, data=tuple(data_updated))
 
 
+def _compute_basis_vjp_maps_for_basis(
+    *,
+    sim_data_adj: td.SimulationData,
+    basis_spec: ParallelAdjointBasis,
+    postprocess_inputs: AdjointPostprocessInputs,
+) -> dict[str, AutogradFieldMap]:
+    post_norm = _adjoint_post_norm_for_basis(sim_data_adj, basis_spec)
+    sim_data_adj_basis = _select_sim_data_freq(sim_data_adj, basis_spec.freq)
+    sim_data_adj_basis = _with_post_norm(sim_data_adj_basis, post_norm)
+    basis_real = postprocess_adj(
+        sim_data_adj=sim_data_adj_basis,
+        postprocess_inputs=postprocess_inputs,
+    )
+    basis_imag = postprocess_adj(
+        sim_data_adj=_scale_adjoint_field_data(sim_data_adj_basis, 1j),
+        postprocess_inputs=postprocess_inputs,
+    )
+    return {"real": basis_real, "imag": basis_imag}
+
+
 def _populate_parallel_adjoint_bases(
     batch_data: BatchData,
-    task_name: str,
     payload: ParallelAdjointPayload,
-    sim_fields_keys: list[tuple],
-    context: AutogradContext,
-    numerical_structure_map: dict[int, Any] | None = None,
-    custom_vjp: tuple[Any, ...] | None = None,
+    task_context: ForwardTaskContext,
 ) -> None:
-    sim_data_orig = context.simulation_data_original
-    sim_data_fwd = context.simulation_data_forward
+    """Populate eager parallel-adjoint basis maps on context."""
+    context = task_context.context
+
+    postprocess_inputs = AdjointPostprocessInputs.from_forward_task_context(task_context)
     basis_maps: dict[ParallelAdjointBasis, dict[str, AutogradFieldMap]] = {}
     for adj_task_name, basis_specs in payload.task_map.items():
         if not basis_specs:
@@ -198,41 +219,28 @@ def _populate_parallel_adjoint_bases(
             )
         sim_data_adj = batch_data[adj_task_name]
         for basis_spec in basis_specs:
-            basis_map = basis_maps.setdefault(basis_spec, {})
-            post_norm = _adjoint_post_norm_for_basis(sim_data_adj, basis_spec)
-            sim_data_adj_basis = _select_sim_data_freq(sim_data_adj, basis_spec.freq)
-            sim_data_adj_basis = _with_post_norm(sim_data_adj_basis, post_norm)
-            basis_real = postprocess_adj(
-                sim_data_adj=sim_data_adj_basis,
-                sim_data_orig=sim_data_orig,
-                sim_data_fwd=sim_data_fwd,
-                sim_fields_keys=sim_fields_keys,
-                numerical_structure_map=numerical_structure_map,
-                custom_vjp=custom_vjp,
-            )
-            basis_map["real"] = basis_real
-            basis_map["imag"] = postprocess_adj(
-                sim_data_adj=_scale_adjoint_field_data(sim_data_adj_basis, 1j),
-                sim_data_orig=sim_data_orig,
-                sim_data_fwd=sim_data_fwd,
-                sim_fields_keys=sim_fields_keys,
-                numerical_structure_map=numerical_structure_map,
-                custom_vjp=custom_vjp,
+            basis_maps[basis_spec] = _compute_basis_vjp_maps_for_basis(
+                sim_data_adj=sim_data_adj,
+                basis_spec=basis_spec,
+                postprocess_inputs=postprocess_inputs,
             )
 
-    if basis_maps:
-        basis_task_map: dict[ParallelAdjointBasis, str] = {}
-        for adj_task_name, bases in payload.task_map.items():
-            for basis in bases:
-                if basis in basis_maps:
-                    basis_task_map[basis] = adj_task_name
-        context.parallel_adjoint_state = ParallelAdjointState(
-            basis_specs=list(basis_maps.keys()),
-            basis_maps=basis_maps,
-            basis_task_map=basis_task_map,
-            num_sims=len(payload.task_map),
-            task_name=payload.task_name,
-        )
+    if not basis_maps:
+        return
+
+    basis_task_map: dict[ParallelAdjointBasis, str] = {}
+    for adj_task_name, bases in payload.task_map.items():
+        for basis in bases:
+            if basis in basis_maps:
+                basis_task_map[basis] = adj_task_name
+
+    context.parallel_adjoint_state = ParallelAdjointState(
+        task_name=payload.task_name,
+        num_sims=len(payload.task_map),
+        basis_specs=list(basis_maps.keys()),
+        basis_maps=basis_maps,
+        basis_task_map=basis_task_map,
+    )
 
 
 def _group_parallel_adjoint_bases_by_port(
@@ -291,11 +299,12 @@ class ParallelAdjointPayload:
 
 
 def prepare_parallel_adjoint(
-    simulation: td.Simulation,
-    sim_fields_keys: list[tuple],
-    task_name: str,
-    max_num_adjoint_per_fwd: int,
+    task_context: ForwardTaskContext,
 ) -> ParallelAdjointPayload | None:
+    simulation = task_context.sim_original
+    sim_fields_keys = task_context.sim_fields_keys
+    task_name = task_context.task_name
+    max_num_adjoint_per_fwd = task_context.max_num_adjoint_per_fwd
     if not config.adjoint.parallel_run:
         return None
 
@@ -414,6 +423,7 @@ def relocate_parallel_adjoint_files(
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         src.replace(dst)
+        task_paths[task_name] = str(dst)
 
 
 def apply_parallel_adjoint(
