@@ -759,15 +759,6 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             The supplied or created matplotlib axes.
         """
         # get the DataArray corresponding to the monitor_name and field_name
-        # deprecated intensity
-        if field_name == "int":
-            log.warning(
-                "'int' field name is deprecated and will be removed in the future. Please use "
-                "field_name='E' and val='abs^2' for the same effect."
-            )
-            field_name = "E"
-            val = "abs^2"
-
         if field_name in ("E", "H") or field_name[0] == "S":
             # Derived fields
             field_data = self._get_scalar_field_from_data(
@@ -824,22 +815,6 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 field_data = field_data.sel(**{axis: pos}, method="nearest")
             else:
                 field_data = field_data.interp(**{axis: pos}, kwargs={"bounds_error": True})
-
-        # warn about new API changes and replace the values
-        if "freq" in sel_kwargs:
-            log.warning(
-                "'freq' supplied to 'plot_field', frequency selection key renamed to 'f' and "
-                "'freq' will error in future release, please update your local script to use "
-                "'f=value'."
-            )
-            sel_kwargs["f"] = sel_kwargs.pop("freq")
-        if "time" in sel_kwargs:
-            log.warning(
-                "'time' supplied to 'plot_field', frequency selection key renamed to 't' and "
-                "'time' will error in future release, please update your local script to use "
-                "'t=value'."
-            )
-            sel_kwargs["t"] = sel_kwargs.pop("time")
 
         # select the extra coordinates out of the data from user-specified kwargs
         for coord_name, coord_val in sel_kwargs.items():

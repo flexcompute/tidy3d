@@ -397,11 +397,11 @@ def test_heat_sim():
     _ = heat_sim.plot(x=0)
     plt.close()
 
-    _ = heat_sim.plot_heat_conductivity(y=0)
+    _ = heat_sim.plot_property(y=0, property="heat_conductivity")
     plt.close()
 
     heat_sim_sym = heat_sim.updated_copy(symmetry=(0, 1, 1))
-    _ = heat_sim_sym.plot_heat_conductivity(z=0, colorbar="source")
+    _ = heat_sim_sym.plot_property(z=0, property="source")
     plt.close()
 
     # no negative symmetry

@@ -226,7 +226,7 @@ def test_plot(phase):
         )
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        _ = sim_data.plot_field("field", "int", f=1e14, phase=phase, **xyz_kwargs)
+        _ = sim_data.plot_field("field", "E", val="abs^2", f=1e14, phase=phase, **xyz_kwargs)
         plt.close()
 
     # plot field time data
@@ -240,7 +240,7 @@ def test_plot(phase):
             plt.close()
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        _ = sim_data.plot_field("field_time", "int", t=0.0, phase=phase, **xyz_kwargs)
+        _ = sim_data.plot_field("field_time", "E", val="abs^2", t=0.0, phase=phase, **xyz_kwargs)
         plt.close()
 
     # plot mode field data
@@ -249,7 +249,7 @@ def test_plot(phase):
             "mode_with_fields", field_cmp, val="real", f=1e14, mode_index=1, phase=phase
         )
         plt.close()
-    _ = sim_data.plot_field("mode_with_fields", "int", f=1e14, mode_index=1, phase=phase)
+    _ = sim_data.plot_field("mode_with_fields", "E", val="abs^2", f=1e14, mode_index=1, phase=phase)
     plt.close()
 
 
@@ -272,7 +272,9 @@ def test_plot_field_custom_cmap():
 def test_plot_field_missing_derived_data():
     sim_data = make_sim_data()
     with pytest.raises(Tidy3dKeyError):
-        sim_data.plot_field(field_monitor_name="field_time", field_name="E", val="int")
+        sim_data.plot_field(
+            field_monitor_name="field_time", field_name="E", val="not_a_field_value"
+        )
 
 
 def test_plot_field_missing_field_value():
@@ -365,7 +367,7 @@ def test_derived_components(field_name, val):
                 field_name=field_name,
                 val=val,
                 y=0.0,
-                time=1e-12,
+                t=1e-12,
             )
     else:
         sim_data.plot_field(
@@ -373,28 +375,26 @@ def test_derived_components(field_name, val):
             field_name=field_name,
             val=val,
             y=0.0,
-            time=1e-12,
+            t=1e-12,
         )
     plt.close()
 
 
 def test_logscale():
     sim_data = make_sim_data()
-    sim_data.plot_field("field_time", "Ex", val="real", scale="dB", y=0.0, time=1e-12)
+    sim_data.plot_field("field_time", "Ex", val="real", scale="dB", y=0.0, t=1e-12)
     plt.close()
 
 
-def test_sel_kwarg_freq():
-    """Use freq in sel_kwarg, should still work (but warning) for 1.6.x"""
+def test_sel_kwarg_f():
     sim_data = make_sim_data()
-    sim_data.plot_field("mode_with_fields", "Ex", y=0.0, val="real", freq=1e14, mode_index=1)
+    sim_data.plot_field("mode_with_fields", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
     plt.close()
 
 
-def test_sel_kwarg_time():
-    """Use time in sel_kwarg, should still work (but warning) for 1.6.x"""
+def test_sel_kwarg_t():
     sim_data = make_sim_data()
-    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", time=1e-12)
+    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", t=1e-12)
     plt.close()
 
 
