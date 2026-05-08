@@ -8,7 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.utils import _dot_numpy, _outer_dot_numpy
+from tidy3d.components.data.utils import _complex_power_flow_numpy, _dot_numpy, _outer_dot_numpy
 from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 
 from .derivatives import create_d_matrices as d_mats
@@ -33,6 +33,9 @@ TOL_DEGENERATE_CANDIDATE = 1e3 * TOL_EIGS
 TOL_NEEDS_ORTHOGONALIZATION = 1e2 * TOL_EIGS
 # Tolerance for deciding on the matrix to be diagonal or tensorial
 TOL_TENSORIAL = 1e-6
+# Re(P_z) must exceed this fraction of |P_z| to be a reliable direction indicator;
+# below this, the mode is treated as lossless-evanescent (Re(P_z) ≈ 0 by physics).
+TOL_POWER_FLOW_DIRECTION = 1e2 * TOL_EIGS
 # shift target neff by this value, both rel and abs, whichever results in larger shift
 TARGET_SHIFT = 10 * fp_eps
 # Preconditioner: "Jacobi" or "Material" based
@@ -475,11 +478,47 @@ class EigSolver(Tidy3dBaseModel):
         # We only can orthogonalize reciprocal modes in this manner.
         if is_reciprocal:
             dl_f, dl_b = dls
-            # Normalize all modes so self-dot equals 1.0 and find any self-orthogonal modes
             all_modes = list(range(num_modes))
             original_shape = E.shape
             E = E.reshape((3, Nx, Ny, num_modes))
             H = H.reshape((3, Nx, Ny, num_modes))
+
+            # Resolve the ±sqrt branch ambiguity for lossless evanescent modes,
+            # modes with gain, and other less common mode types BEFORE normalization
+            # and degenerate-mode orthogonalization so that members of a degenerate
+            # subspace that landed on opposite branches are recognized as degenerate
+            # (their eigenvalues align after the flip).
+            # Convention: ``direction`` here means the time-averaged power
+            # flow direction, NOT the sign of the phase constant. Re(n_eff)
+            # is allowed to be negative (e.g. a lossy guide below cutoff).
+            # For purely evanescent modes Re(P_z) ≈ 0, we fall back
+            # to the algebraic passive convention ``keff ≥ 0``.
+            # The flip_mask is invariant to subsequent rescaling because power_flow
+            # scales as |c|² under (E,H)→c·(E,H), preserving sign(Re P_z).
+            if not is_tensorial:
+                dS = (np.outer(dl_f[0], dl_b[1]), np.outer(dl_b[0], dl_f[1]))
+                # Move mode axis to leading so the spatial axes (Nx, Ny) are last
+                # and broadcast cleanly against dS in _complex_power_flow_numpy.
+                E_tan = (np.moveaxis(E[0], -1, 0), np.moveaxis(E[1], -1, 0))
+                H_tan = (np.moveaxis(H[0], -1, 0), np.moveaxis(H[1], -1, 0))
+                power_flow = _complex_power_flow_numpy(E_tan, H_tan, dS)
+
+                expected_sign = 1.0 if direction == "+" else -1.0
+                abs_pz = np.abs(power_flow)
+                reliable = np.abs(power_flow.real) > TOL_POWER_FLOW_DIRECTION * abs_pz
+                flip_for_direction = reliable & (power_flow.real * expected_sign < 0)
+                flip_for_passive = (~reliable) & (keff < 0)
+                flip_mask = flip_for_direction | flip_for_passive
+
+                if np.any(flip_mask):
+                    flip_idx = np.where(flip_mask)[0]
+                    H[0, ..., flip_idx] *= -1
+                    H[1, ..., flip_idx] *= -1
+                    E[2, ..., flip_idx] *= -1
+                    neff[flip_idx] *= -1
+                    keff[flip_idx] *= -1
+
+            # Normalize all modes so self-dot equals 1.0 and find any self-orthogonal modes
             E, H, self_orthogonal_modes = cls._normalize_modes(
                 E, H, dl_f, dl_b, all_modes, TOL_NEEDS_ORTHOGONALIZATION
             )
@@ -487,6 +526,7 @@ class EigSolver(Tidy3dBaseModel):
             E, H = cls._orthogonalize_degenerate_modes(
                 E, H, neff, keff, dl_f, dl_b, self_orthogonal_modes
             )
+
             E = E.reshape(original_shape)
             H = H.reshape(original_shape)
 
@@ -956,7 +996,9 @@ class EigSolver(Tidy3dBaseModel):
 
     @classmethod
     def eigs_to_effective_index(
-        cls, eig_list: ArrayComplex, mode_solver_type: ModeSolverType
+        cls,
+        eig_list: ArrayComplex,
+        mode_solver_type: ModeSolverType,
     ) -> tuple[ArrayFloat, ArrayFloat]:
         """Convert obtained eigenvalues to n_eff and k_eff.
 
@@ -982,7 +1024,7 @@ class EigSolver(Tidy3dBaseModel):
         # for diagonal type, eigenvalues are -(neff + 1j * keff)**2
         if mode_solver_type == "diagonal":
             sqrt_eig_list = np.emath.sqrt(-eig_list + 0j)
-            return np.real(sqrt_eig_list), np.imag(sqrt_eig_list)
+            return sqrt_eig_list.real, sqrt_eig_list.imag
 
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
 
