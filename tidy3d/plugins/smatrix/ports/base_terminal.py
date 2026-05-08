@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
 
 if TYPE_CHECKING:
@@ -40,16 +39,6 @@ class AbstractTerminalPort(AbstractBasePort, MicrowaveBaseModel):
         **kwargs: Any,
     ) -> Source:
         """Create a current source from a terminal-based port."""
-
-    def to_field_monitors(
-        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid | None = None
-    ) -> list[FieldMonitor] | list[ModeMonitor]:
-        """DEPRECATED: Monitors used to compute the port voltage and current."""
-        log.warning(
-            "'to_field_monitors' method name is deprecated and will be removed in the future. Please use "
-            "'to_monitors' for the same effect."
-        )
-        return self.to_monitors(freqs=freqs, snap_center=snap_center, grid=grid)
 
     @abstractmethod
     def to_monitors(
