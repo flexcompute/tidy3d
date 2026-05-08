@@ -16,6 +16,162 @@ LAYER_REFINEMENT = LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2))
 LAYER2D_REFINEMENT = LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 0))
 
 
+def _contains_point(points, target, atol=1e-6):
+    """Whether a 2D point list contains ``target`` within tolerance."""
+    return any(np.allclose(point, target, atol=atol) for point in points)
+
+
+def _contains_optional_point(points, target, atol=1e-6):
+    """Whether a 3D optional coordinate list contains ``target`` within tolerance."""
+    for point in points:
+        match = True
+        for value, expected in zip(point, target):
+            if value is None or expected is None:
+                match &= value is None and expected is None
+            else:
+                match &= np.isclose(value, expected, atol=atol)
+        if match:
+            return True
+    return False
+
+
+def _assert_same_point_set(actual, expected, atol=1e-6):
+    """Assert that two 2D point sets match up to reordering."""
+    assert len(actual) == len(expected)
+    for point in actual:
+        assert _contains_point(expected, point, atol=atol)
+    for point in expected:
+        assert _contains_point(actual, point, atol=atol)
+
+
+def _corners_for_vertices(vertices, collapse_extent=None):
+    """Detect corners for one 2D polygon vertex list."""
+    polyslab = td.PolySlab(vertices=vertices, axis=2, slab_bounds=[-1, 1])
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+    finder = CORNER_FINDER
+    if collapse_extent is not None:
+        finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=collapse_extent)
+    return finder.corners(normal_axis=2, coord=0, structure_list=structures)
+
+
+def _assert_rounded_case_matches_sharp_baseline(
+    sharp_vertices, rounded_vertices, expected_corner, collapse_extent, should_recover
+):
+    """Compare rounded-corner recovery against the corresponding sharp-corner baseline."""
+    sharp_corners = _corners_for_vertices(sharp_vertices)
+    assert _contains_point(sharp_corners, expected_corner) == should_recover
+
+    rounded_corners = _corners_for_vertices(rounded_vertices)
+    assert not _contains_point(rounded_corners, expected_corner)
+
+    recovered_corners = _corners_for_vertices(rounded_vertices, collapse_extent=collapse_extent)
+    assert _contains_point(recovered_corners, expected_corner) == should_recover
+    _assert_same_point_set(recovered_corners, sharp_corners)
+
+
+def _sharp_rectangle_vertices(xmax=4.0, ymax=4.0):
+    """Axis-aligned rectangle with sharp corners."""
+    return [(0.0, 0.0), (xmax, 0.0), (xmax, ymax), (0.0, ymax)]
+
+
+def _rounded_convex_corner_vertices(radius=1.0, xmax=4.0, ymax=4.0, num_arc_pts=16):
+    """Rectangle with the lower-left corner replaced by a quarter-circle chain."""
+    arc = [
+        (radius + radius * np.cos(t), radius + radius * np.sin(t))
+        for t in np.linspace(np.pi, 1.5 * np.pi, num_arc_pts)
+    ]
+    return [*arc, (xmax, 0.0), (xmax, ymax), (0.0, ymax)]
+
+
+def _rounded_top_right_corner_vertices(xmax=3.0, ymax=3.0, radius=1.0, num_arc_pts=16):
+    """Rectangle with the upper-right corner replaced by a quarter-circle chain."""
+    cx, cy = xmax - radius, ymax - radius
+    arc = [
+        (cx + radius * np.cos(t), cy + radius * np.sin(t))
+        for t in np.linspace(0, 0.5 * np.pi, num_arc_pts)
+    ]
+    return [
+        (0.0, 0.0),
+        (xmax, 0.0),
+        (xmax, ymax - radius),
+        *arc[1:-1],
+        (xmax - radius, ymax),
+        (0.0, ymax),
+    ]
+
+
+def _rounded_convex_corner_split_support_vertices(radius=1.0, xmax=4.0, ymax=4.0, num_arc_pts=16):
+    """Rounded lower-left corner with extra collinear vertices on the adjacent straight supports."""
+    arc = [
+        (radius + radius * np.cos(t), radius + radius * np.sin(t))
+        for t in np.linspace(np.pi, 1.5 * np.pi, num_arc_pts)
+    ]
+    return [
+        *arc,
+        (1.5, 0.0),
+        (2.5, 0.0),
+        (xmax, 0.0),
+        (xmax, ymax),
+        (0.0, ymax),
+        (0.0, 2.5),
+        (0.0, 1.5),
+    ]
+
+
+def _chamfered_convex_corner_vertices(offset=1.0, xmax=4.0, ymax=4.0):
+    """Rectangle with the lower-left corner replaced by a single chamfer segment."""
+    return [(offset, 0.0), (xmax, 0.0), (xmax, ymax), (0.0, ymax), (0.0, offset)]
+
+
+def _rounded_concave_notch_vertices(
+    xmax=4.0, ymax=4.0, notch_x=2.0, notch_y=2.0, radius=1.0, num_arc_pts=16
+):
+    """L-shaped polygon with a rounded concave notch corner at ``(notch_x, notch_y)``."""
+    cx, cy = notch_x + radius, notch_y + radius
+    arc = [
+        (cx + radius * np.cos(t), cy + radius * np.sin(t))
+        for t in np.linspace(1.5 * np.pi, np.pi, num_arc_pts)
+    ]
+    return [
+        (0.0, 0.0),
+        (xmax, 0.0),
+        (xmax, notch_y),
+        (notch_x + radius, notch_y),
+        *arc[1:-1],
+        (notch_x, notch_y + radius),
+        (notch_x, ymax),
+        (0.0, ymax),
+    ]
+
+
+def _sharp_concave_notch_vertices(xmax=4.0, ymax=4.0, notch_x=2.0, notch_y=2.0):
+    """L-shaped polygon with a sharp concave notch corner at ``(notch_x, notch_y)``."""
+    return [
+        (0.0, 0.0),
+        (xmax, 0.0),
+        (xmax, notch_y),
+        (notch_x, notch_y),
+        (notch_x, ymax),
+        (0.0, ymax),
+    ]
+
+
+def _rotate_vertices(vertices, angle, center=(0.0, 0.0)):
+    """Rotate a 2D vertex list about ``center``."""
+    center = np.asarray(center, dtype=float)
+    rotation = np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]], dtype=float
+    )
+    return [
+        tuple(rotation @ (np.asarray(vertex, dtype=float) - center) + center) for vertex in vertices
+    ]
+
+
+def _shear_vertices(vertices, shear):
+    """Apply the linear map ``(x, y) -> (x + shear * y, y)``."""
+    return [(x + shear * y, y) for x, y in vertices]
+
+
 def test_2dcorner_finder_filter_collinear_vertex():
     """In corner finder, test that collinear vertices are filtered"""
     # 2nd and 3rd vertices are on a collinear line
@@ -62,6 +218,251 @@ def test_2dcorner_finder_polygon_with_hole():
     corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
     # 4 interior, 4 exterior
     assert len(corners) == 8
+
+
+def test_2dcorner_finder_detect_rounded_convex_corner():
+    """Collapse a small rounded convex chain into one synthetic corner."""
+    polyslab = td.PolySlab(
+        vertices=_rounded_convex_corner_vertices(radius=0.5),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, (0.0, 0.0))
+    assert len(corners) == 3
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=0.55)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, (0.0, 0.0))
+    assert not _contains_point(corners, (0.0, 0.5))
+    assert not _contains_point(corners, (0.5, 0.0))
+    assert len(corners) == 4
+
+
+def test_2dcorner_finder_detect_flipped_rounded_corner():
+    """Detect the diagonally flipped rounded corner and avoid the inner false positive."""
+    polyslab = td.PolySlab(
+        vertices=_rounded_top_right_corner_vertices(),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, (3.0, 3.0))
+    assert len(corners) == 3
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=1.05)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, (3.0, 3.0))
+    assert not _contains_point(corners, (2.0, 2.0))
+    assert len(corners) == 4
+
+
+def test_2dcorner_finder_detect_chamfered_corner():
+    """Collapse a small chamfer into the same synthetic sharp corner."""
+    polyslab = td.PolySlab(
+        vertices=_chamfered_convex_corner_vertices(),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, (0.0, 0.0))
+    assert len(corners) == 5
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=1.05)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, (0.0, 0.0))
+    assert not _contains_point(corners, (0.0, 1.0))
+    assert not _contains_point(corners, (1.0, 0.0))
+    assert len(corners) == 4
+
+
+def test_2dcorner_finder_detect_rotated_rounded_convex_corner():
+    """Recover a rounded convex corner whose support edges are rotated off the global axes."""
+    angle = np.pi / 6
+    expected_corner = _rotate_vertices([(0.0, 0.0)], angle)[0]
+    polyslab = td.PolySlab(
+        vertices=_rotate_vertices(_rounded_convex_corner_vertices(radius=0.5), angle),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, expected_corner)
+    assert len(corners) == 3
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=0.55)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, expected_corner)
+    assert len(corners) == 4
+
+
+def test_2dcorner_finder_rounded_collapse_is_ring_order_invariant():
+    """Recover the same rounded corner even when the ring starts inside the rounded chain."""
+    angle = np.pi / 4
+    vertices = _rotate_vertices(_rounded_convex_corner_vertices(radius=0.5), angle)
+    shifted_vertices = vertices[3:] + vertices[:3]
+    ring = np.array([*shifted_vertices, shifted_vertices[0]], dtype=float)
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=0.55)
+    corners, _ = rounded_corner_finder._filter_collinear_vertices(
+        rounded_corner_finder._collapse_rounded_corners(ring)
+    )
+
+    expected_corners = _rotate_vertices([(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)], angle)
+    assert len(corners) == len(expected_corners)
+    for expected_corner in expected_corners:
+        assert _contains_point(corners, expected_corner)
+
+
+def test_2dcorner_finder_detect_rotated_chamfered_corner():
+    """Recover a chamfered corner whose support edges are rotated off the global axes."""
+    angle = -np.pi / 5
+    expected_corner = _rotate_vertices([(0.0, 0.0)], angle)[0]
+    polyslab = td.PolySlab(
+        vertices=_rotate_vertices(_chamfered_convex_corner_vertices(), angle),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, expected_corner)
+    assert len(corners) == 5
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=1.05)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, expected_corner)
+    assert len(corners) == 4
+
+
+def test_2dcorner_finder_detect_non_right_rounded_convex_corner_consistent_with_legacy():
+    """Recover a rounded 135-degree corner exactly when the sharp legacy corner is detected."""
+    shear = -1.0
+    expected_corner = _shear_vertices([(0.0, 0.0)], shear)[0]
+    _assert_rounded_case_matches_sharp_baseline(
+        sharp_vertices=_shear_vertices(_sharp_rectangle_vertices(), shear),
+        rounded_vertices=_shear_vertices(_rounded_convex_corner_vertices(radius=0.5), shear),
+        expected_corner=expected_corner,
+        collapse_extent=0.8,
+        should_recover=True,
+    )
+
+
+def test_2dcorner_finder_detect_rounded_corner_with_split_support_runs():
+    """Recover the rounded corner when adjacent straight supports are split into collinear segments."""
+    angle = np.pi / 6
+    expected_corner = _rotate_vertices([(0.0, 0.0)], angle)[0]
+    vertices = _rotate_vertices(_rounded_convex_corner_split_support_vertices(radius=0.5), angle)
+    shifted_vertices = vertices[6:] + vertices[:6]
+    polyslab = td.PolySlab(vertices=shifted_vertices, axis=2, slab_bounds=[-1, 1])
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, expected_corner)
+    assert len(corners) == 3
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=0.55)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, expected_corner)
+    assert len(corners) == 4
+
+
+def test_2dcorner_finder_does_not_invent_corners_on_circle():
+    """Do not synthesize corners on a smooth curve with no straight support runs."""
+    circle = td.Cylinder(radius=1.0, axis=2, length=2.0)
+    structures = [td.Structure(geometry=circle, medium=td.PEC)]
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=1.1)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert len(corners) == 0
+
+
+def test_2dcorner_finder_detect_rounded_concave_corner():
+    """Collapse a rounded concave notch back to the missing sharp corner."""
+    polyslab = td.PolySlab(
+        vertices=_rounded_concave_notch_vertices(),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, (2.0, 2.0))
+    assert len(corners) == 5
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=1.05)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, (2.0, 2.0))
+    assert len(corners) == 6
+
+
+def test_2dcorner_finder_detect_rotated_rounded_concave_corner():
+    """Recover a rounded concave notch whose support edges are rotated off the global axes."""
+    angle = np.pi / 7
+    expected_corner = _rotate_vertices([(2.0, 2.0)], angle)[0]
+    polyslab = td.PolySlab(
+        vertices=_rotate_vertices(_rounded_concave_notch_vertices(), angle),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, expected_corner)
+    assert len(corners) == 5
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=1.05)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert _contains_point(corners, expected_corner)
+    assert len(corners) == 6
+
+
+def test_2dcorner_finder_detect_non_right_rounded_concave_corner_consistent_with_legacy():
+    """Recover a rounded 225-degree notch exactly when the sharp legacy corner is detected."""
+    shear = -1.0
+    expected_corner = _shear_vertices([(2.0, 2.0)], shear)[0]
+    _assert_rounded_case_matches_sharp_baseline(
+        sharp_vertices=_shear_vertices(_sharp_concave_notch_vertices(), shear),
+        rounded_vertices=_shear_vertices(_rounded_concave_notch_vertices(), shear),
+        expected_corner=expected_corner,
+        collapse_extent=1.5,
+        should_recover=True,
+    )
+
+
+def test_2dcorner_finder_respects_rounded_corner_extent():
+    """Do not synthesize a corner when the rounded chain exceeds the allowed extent."""
+    polyslab = td.PolySlab(
+        vertices=_rounded_convex_corner_vertices(radius=1.0),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structures = [td.Structure(geometry=polyslab, medium=td.PEC)]
+
+    rounded_corner_finder = CORNER_FINDER.updated_copy(corner_rounding_collapse_extent=0.5)
+    corners = rounded_corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert not _contains_point(corners, (0.0, 0.0))
+    assert len(corners) == 3
+
+
+def test_2dcorner_finder_does_not_detect_shallow_rounded_bend_below_angle_threshold():
+    """Do not recover a rounded bend whose sharp turn would fail the legacy angle threshold."""
+    shear = -np.sqrt(3.0)
+    expected_corner = _shear_vertices([(0.0, 0.0)], shear)[0]
+    _assert_rounded_case_matches_sharp_baseline(
+        sharp_vertices=_shear_vertices(_sharp_rectangle_vertices(), shear),
+        rounded_vertices=_shear_vertices(_rounded_convex_corner_vertices(radius=0.5), shear),
+        expected_corner=expected_corner,
+        collapse_extent=1.4,
+        should_recover=False,
+    )
 
 
 def test_gridrefinement():
@@ -156,6 +557,48 @@ def test_layerrefinement_snapping_points():
     points = LAYER_REFINEMENT._snapping_points_along_axis
     assert len(points) == 1
     assert points[0] == (None, None, -1)
+
+
+def test_layerrefinement_detect_rounded_corner():
+    """LayerRefinementSpec should expose the synthetic rounded corner as a snapping point."""
+    polyslab = td.PolySlab(
+        vertices=_rounded_convex_corner_vertices(),
+        axis=2,
+        slab_bounds=[-1, 1],
+    )
+    structure = td.Structure(geometry=polyslab, medium=td.PEC)
+    sim_bounds = [
+        [-td.inf] * 3,
+        [td.inf] * 3,
+    ]
+    boundary_types = [[None] * 2] * 3
+
+    layer_without_rounding = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+    )
+    points = layer_without_rounding.generate_snapping_points(
+        [structure], sim_bounds, boundary_types
+    )
+    assert not _contains_optional_point(points, (0.0, 0.0, None))
+
+    layer_with_rounding = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(corner_rounding_collapse_extent=1.05),
+    )
+    points = layer_with_rounding.generate_snapping_points([structure], sim_bounds, boundary_types)
+    assert _contains_optional_point(points, (0.0, 0.0, None))
+
+    override_structures = layer_with_rounding.generate_override_structures(
+        grid_size_in_vacuum=1.0,
+        structure_list=[structure],
+        sim_bounds=sim_bounds,
+        boundary_type=boundary_types,
+    )
+    assert any(
+        np.allclose(override.geometry.center[:2], (0.0, 0.0)) for override in override_structures
+    )
 
 
 def test_grid_spec_with_layers():

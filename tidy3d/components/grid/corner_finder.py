@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
+from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.geometry.utils import merging_geometries_on_plane
+from tidy3d.components.geometry.vertex_utils import remove_adjacent_duplicate_vertices
 from tidy3d.components.medium import PEC, LossyMetalMedium
-from tidy3d.constants import inf
+from tidy3d.constants import fp_eps, inf
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from numpy.typing import NDArray
 
     from tidy3d.components.structure import Structure
@@ -24,6 +28,26 @@ CORNER_ANGLE_THRESOLD = 0.25 * np.pi
 N_SHAPELY_QUAD_SEGS = 8
 # whether to clean tiny features that sometimes occurs in shapely operations
 SHAPELY_CLEANUP = False
+# Compare normalized directions with a small multiple of machine epsilon.
+ROUND_DIRECTION_TOL = fp_eps * 64
+# Use the next representable float at at least this scale so tiny geometries still get a
+# stable absolute tolerance instead of falling back to raw machine epsilon.
+ROUND_GEOMETRY_TOL_SCALE_FLOOR = 1024.0
+# Single-edge supports still need to be clearly above numerical noise to be meaningful.
+MIN_SUPPORT_RUN_TOL_FACTOR = 8.0
+# A support edge should stand out clearly from the discretized rounded-chain segments around it.
+MIN_SUPPORT_CHAIN_RATIO = 2.0
+
+
+class _SupportRun(NamedTuple):
+    """Contiguous support edges that lie on the same straight line."""
+
+    start_edge: int
+    end_edge: int
+    start_vertex: int
+    end_vertex: int
+    direction: ArrayFloat1D
+    length: float
 
 
 class CornerFinderSpec(Tidy3dBaseModel):
@@ -52,6 +76,16 @@ class CornerFinderSpec(Tidy3dBaseModel):
         title="Distance Threshold In Corner Identification",
         description="If not ``None`` and the distance of the vertex to its neighboring vertices "
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
+    )
+
+    corner_rounding_collapse_extent: PositiveFloat | None = Field(
+        None,
+        title="Corner Rounding Collapse Extent",
+        description="If not ``None``, collapse a small rounded or chamfered corner chain bounded "
+        "by straight support edges, convex or concave, back to the support-line intersection "
+        "when its local in-plane extent stays below this value and the recovered sharp corner "
+        "would pass ``angle_threshold``. Useful for imported GDS/STL polygons whose sharp "
+        "corners were discretized into short segments.",
     )
 
     concave_resolution: PositiveInt | None = Field(
@@ -183,18 +217,312 @@ class CornerFinderSpec(Tidy3dBaseModel):
                 if self.distance_threshold is not None:
                     poly = poly.simplify(self.distance_threshold, preserve_topology=True)
                 corners_xy, corners_convexity = self._filter_collinear_vertices(
-                    list(poly.exterior.coords)
+                    self._collapse_rounded_corners(list(poly.exterior.coords))
                 )
                 corner_list.append(corners_xy)
                 convexity_list.append(corners_convexity)
                 # in case the polygon has holes
                 for poly_inner in poly.interiors:
                     corners_xy, corners_convexity = self._filter_collinear_vertices(
-                        list(poly_inner.coords)
+                        self._collapse_rounded_corners(list(poly_inner.coords))
                     )
                     corner_list.append(corners_xy)
                     convexity_list.append(corners_convexity)
         return self._ravel_corners_and_convexity(ravel, corner_list, convexity_list)
+
+    @staticmethod
+    def _close_ring(points: ArrayFloat2D) -> ArrayFloat2D:
+        """Append the first point to the end of an open ring."""
+        return np.vstack([points, points[0]])
+
+    def _collapse_rounded_corners(self, vertices: ArrayFloat2D) -> ArrayFloat2D:
+        """Collapse short rounded runs between straight support edges.
+
+        The detector scans each polygon ring for a short intermediate chain between two
+        straight support edges. The missing sharp corner is inferred from the intersection of
+        those two support lines, then the chain is collapsed only if the recovered sharp corner
+        would pass the legacy angle threshold and the chain remains local and monotone in the
+        support-edge basis.
+        """
+
+        max_extent = self.corner_rounding_collapse_extent
+        if max_extent is None:
+            return vertices
+
+        vertices = np.asarray(vertices, dtype=float)
+        points = vertices[:-1]
+        if len(points) < 4:
+            return vertices
+
+        tol = self._corner_geometry_tolerance(points, max_extent)
+        dir_tol = ROUND_DIRECTION_TOL
+        points = remove_adjacent_duplicate_vertices(points, tol=tol, drop_closing_duplicate=True)
+        if len(points) < 4:
+            return self._close_ring(points)
+
+        # Normalize all polygon edges together so the later support-run scan can stay vectorized.
+        edge_dirs, edge_lengths = self._edge_directions(points)
+
+        start_ind = self._first_direction_change(edge_dirs, dir_tol)
+        points = np.roll(points, axis=0, shift=-start_ind)
+        edge_dirs = np.roll(edge_dirs, axis=0, shift=-start_ind)
+        edge_lengths = np.roll(edge_lengths, axis=0, shift=-start_ind)
+
+        # Open the cyclic ring at a direction change so the run builder never has to merge
+        # across the array boundary.
+        support_runs, edge_to_run = self._support_runs(edge_dirs, edge_lengths, dir_tol)
+        if len(support_runs) < 2:
+            return self._close_ring(points)
+
+        best_chain_cache: dict[int, tuple[int, ArrayFloat1D, int] | None] = {}
+
+        def get_best_rounded_chain(start_run_ind: int) -> tuple[int, ArrayFloat1D, int] | None:
+            """Cache rounded-chain candidates for one collapse pass."""
+            if start_run_ind not in best_chain_cache:
+                best_chain_cache[start_run_ind] = self._best_rounded_chain(
+                    points=points,
+                    support_runs=support_runs,
+                    start_run_ind=start_run_ind,
+                    max_extent=max_extent,
+                    tol=tol,
+                    dir_tol=dir_tol,
+                )
+            return best_chain_cache[start_run_ind]
+
+        start_run_ind = self._scan_start_run(support_runs, get_best_rounded_chain)
+
+        collapsed = []
+        num_points = len(points)
+        # Start the cyclic walk at the chosen anchor run's start vertex so the array boundary
+        # stays before that run without physically rotating the vertex or support-run arrays.
+        ind = support_runs[start_run_ind].start_vertex
+        consumed = 0
+
+        while consumed < num_points:
+            current_run_ind = edge_to_run[(ind - 1) % num_points]
+            if support_runs[current_run_ind].end_vertex == ind:
+                candidate = get_best_rounded_chain(current_run_ind)
+                if candidate is not None:
+                    end_run_ind, corner, chain_size = candidate
+                    collapsed.append(corner)
+                    consumed += chain_size
+                    ind = (support_runs[end_run_ind].start_edge + 1) % num_points
+                    continue
+
+            collapsed.append(points[ind])
+            ind = (ind + 1) % num_points
+            consumed += 1
+
+        collapsed = remove_adjacent_duplicate_vertices(
+            np.array(collapsed, dtype=float), tol=tol, drop_closing_duplicate=True
+        )
+        if len(collapsed) < 3:
+            return self._close_ring(points)
+        return self._close_ring(collapsed)
+
+    @staticmethod
+    def _cyclic_vertex_slice(points: ArrayFloat2D, start_ind: int, end_ind: int) -> ArrayFloat2D:
+        """Vertices from ``start_ind`` to ``end_ind`` on a cyclic ring, inclusive."""
+        if start_ind <= end_ind:
+            return points[start_ind : end_ind + 1]
+        return np.concatenate((points[start_ind:], points[: end_ind + 1]), axis=0)
+
+    @staticmethod
+    def _corner_geometry_tolerance(points: ArrayFloat2D, max_extent: float) -> float:
+        """Position tolerance from scale-based floating-point spacing."""
+        span = float(np.max(np.ptp(points, axis=0)))
+        scale = max(span, max_extent, ROUND_GEOMETRY_TOL_SCALE_FLOOR)
+        return float(increment_float(scale, 1) - scale)
+
+    @staticmethod
+    def _edge_directions(points: ArrayFloat2D) -> tuple[ArrayFloat2D, ArrayFloat1D]:
+        """Return normalized edge directions and lengths for one polygon ring."""
+        deltas = np.roll(points, axis=0, shift=-1) - points
+        lengths = np.linalg.norm(deltas, axis=1)
+        return deltas / lengths[:, np.newaxis], lengths
+
+    @staticmethod
+    def _cross_2d(
+        vec1: ArrayFloat1D | ArrayFloat2D, vec2: ArrayFloat1D | ArrayFloat2D
+    ) -> float | ArrayFloat1D:
+        """Scalar 2D cross product for one vector pair or an array of vector pairs."""
+        return vec1[..., 0] * vec2[..., 1] - vec1[..., 1] * vec2[..., 0]
+
+    @staticmethod
+    def _directions_form_supported_corner(
+        dir1: ArrayFloat1D, dir2: ArrayFloat1D, angle_threshold: float, dir_tol: float
+    ) -> bool:
+        """Whether the support-edge turn would be kept by the legacy sharp-corner filter."""
+        cross = float(CornerFinderSpec._cross_2d(dir1, dir2))
+        if abs(cross) <= dir_tol:
+            return False
+        # ``dir1`` follows the polygon into the corner, while ``dir2`` leaves it. The legacy
+        # detector compares the outgoing rays from the sharp corner, so its angle test becomes a
+        # minimum turn-angle test on the traversal directions used here.
+        return float(np.dot(dir1, dir2)) <= np.cos(angle_threshold)
+
+    def _first_direction_change(self, edge_dirs: ArrayFloat2D, dir_tol: float) -> int:
+        """Pick a deterministic edge-direction change to open the cyclic ring."""
+        changed = np.abs(self._cross_2d(np.roll(edge_dirs, axis=0, shift=1), edge_dirs)) > dir_tol
+        change_inds = np.flatnonzero(changed)
+        return int(change_inds[0]) if len(change_inds) > 0 else 0
+
+    @staticmethod
+    def _support_runs(
+        edge_dirs: ArrayFloat2D,
+        edge_lengths: ArrayFloat1D,
+        dir_tol: float,
+    ) -> tuple[list[_SupportRun], list[int]]:
+        """Merge adjacent collinear edges into straight support runs.
+
+        The ring has already been opened at a direction change, so this only has to segment the
+        linearized edge array and never merge across the array boundary.
+        """
+        num_edges = len(edge_dirs)
+        changed = np.abs(CornerFinderSpec._cross_2d(edge_dirs[:-1], edge_dirs[1:])) > dir_tol
+        run_starts = np.concatenate(([0], np.flatnonzero(changed) + 1))
+        run_ends = np.concatenate((run_starts[1:] - 1, [num_edges - 1]))
+        run_sizes = run_ends - run_starts + 1
+        cumulative_lengths = np.concatenate(([0.0], np.cumsum(edge_lengths)))
+        run_lengths = cumulative_lengths[run_ends + 1] - cumulative_lengths[run_starts]
+        edge_to_run = np.repeat(np.arange(len(run_starts)), run_sizes).tolist()
+
+        runs = [
+            _SupportRun(
+                start_edge=int(start_edge),
+                end_edge=int(end_edge),
+                start_vertex=int(start_edge),
+                end_vertex=int((end_edge + 1) % num_edges),
+                direction=edge_dirs[start_edge],
+                length=float(run_length),
+            )
+            for start_edge, end_edge, run_length in zip(run_starts, run_ends, run_lengths)
+        ]
+        return runs, edge_to_run
+
+    def _scan_start_run(
+        self,
+        support_runs: list[_SupportRun],
+        get_best_rounded_chain: Callable[[int], tuple[int, ArrayFloat1D, int] | None],
+    ) -> int:
+        """Pick a support run that begins a valid rounded-chain collapse when possible."""
+        for run_ind in range(len(support_runs)):
+            if get_best_rounded_chain(run_ind) is not None:
+                return run_ind
+        return 0
+
+    @classmethod
+    def _support_line_corner(
+        cls,
+        start_point: ArrayFloat1D,
+        end_point: ArrayFloat1D,
+        start_dir: ArrayFloat1D,
+        end_dir: ArrayFloat1D,
+    ) -> ArrayFloat1D:
+        """Return the intersection of two non-parallel support lines."""
+        # Callers only pass normalized directions that already passed the legacy corner-angle
+        # gate and are non-parallel, so the support-line intersection is well-defined here.
+        det = cls._cross_2d(start_dir, end_dir)
+        offset = end_point - start_point
+        factor = cls._cross_2d(offset, end_dir) / det
+        return start_point + factor * start_dir
+
+    @classmethod
+    def _support_basis(cls, start_dir: ArrayFloat1D, end_dir: ArrayFloat1D) -> ArrayFloat2D:
+        """Return an orthonormal local basis aligned with the two support directions."""
+        basis0 = start_dir
+        basis1 = end_dir - float(np.dot(end_dir, basis0)) * basis0
+        # Callers only pass normalized directions that already passed the corner-angle gate and
+        # are non-parallel, so the second basis vector cannot collapse here.
+        basis1_norm = np.linalg.norm(basis1)
+        basis1 = basis1 / basis1_norm
+        return np.vstack((basis0, basis1))
+
+    def _best_rounded_chain(
+        self,
+        points: ArrayFloat2D,
+        support_runs: list[_SupportRun],
+        start_run_ind: int,
+        max_extent: float,
+        tol: float,
+        dir_tol: float,
+    ) -> tuple[int, ArrayFloat1D, int] | None:
+        """Find the longest valid rounded chain after ``start_run_ind`` if one exists."""
+        num_runs = len(support_runs)
+        if num_runs < 3:
+            return None
+
+        start_run = support_runs[start_run_ind]
+        start_ind = start_run.end_vertex
+        start_dir = start_run.direction
+        best_candidate = None
+
+        for step in range(2, num_runs):
+            end_run_ind = (start_run_ind + step) % num_runs
+            end_run = support_runs[end_run_ind]
+            end_dir = end_run.direction
+            if not self._directions_form_supported_corner(
+                start_dir, end_dir, self.angle_threshold, dir_tol
+            ):
+                continue
+
+            end_vertex = end_run.start_vertex
+            chain = self._cyclic_vertex_slice(points, start_ind, end_vertex)
+            # The supports define the missing sharp corner; the intermediate chain is what we
+            # test as a rounded or chamfered approximation to that corner.
+            if not self._has_viable_support_lengths(start_run, end_run, chain, tol):
+                continue
+            corner = self._support_line_corner(chain[0], chain[-1], start_dir, end_dir)
+            if self._is_valid_rounded_component(chain, corner, start_dir, end_dir, max_extent, tol):
+                best_candidate = (end_run_ind, corner, len(chain))
+
+        return best_candidate
+
+    @staticmethod
+    def _has_viable_support_lengths(
+        start_run: _SupportRun, end_run: _SupportRun, chain: ArrayFloat2D, tol: float
+    ) -> bool:
+        """Require meaningful straight supports and reject local arc fragments.
+
+        Rounded-chain fragments can also look locally monotone, so the flanking supports must be
+        clearly longer than the chain segments they bracket. That keeps the detector focused on
+        real straight-edge / rounded-corner / straight-edge patterns instead of partial arcs.
+        """
+        chain_edge_lengths = np.linalg.norm(np.diff(chain, axis=0), axis=1)
+        min_support = min(start_run.length, end_run.length)
+        if min_support <= MIN_SUPPORT_RUN_TOL_FACTOR * tol:
+            return False
+        return min_support > MIN_SUPPORT_CHAIN_RATIO * float(chain_edge_lengths.max()) + tol
+
+    @classmethod
+    def _is_valid_rounded_component(
+        cls,
+        chain: ArrayFloat2D,
+        corner: ArrayFloat1D,
+        start_dir: ArrayFloat1D,
+        end_dir: ArrayFloat1D,
+        max_extent: float,
+        tol: float,
+    ) -> bool:
+        """Whether the rounded run stays local and monotone in the support basis."""
+        basis = cls._support_basis(start_dir, end_dir)
+
+        # Work in the local support basis so the same checks apply to axis-aligned and rotated
+        # geometry. A valid rounded/chamfered chain stays inside one local quadrant and moves
+        # monotonically from one support line to the other.
+        local_chain = np.matmul(chain - corner, basis.T)
+        max_deviation = np.max(np.abs(local_chain), axis=0)
+        if np.any(max_deviation > max_extent + tol):
+            return False
+
+        local_diffs = np.diff(local_chain, axis=0)
+        nonzero_motion = np.abs(local_diffs) > tol
+        if not np.all(np.any(nonzero_motion, axis=0)):
+            return False
+
+        positive_motion = np.all(np.where(nonzero_motion, local_diffs > 0, True), axis=0)
+        negative_motion = np.all(np.where(nonzero_motion, local_diffs < 0, True), axis=0)
+        return bool(np.all(positive_motion | negative_motion))
 
     def _ravel_corners_and_convexity(
         self, ravel: bool, corner_list: list[ArrayFloat2D], convexity_list: list[ArrayFloat1D]

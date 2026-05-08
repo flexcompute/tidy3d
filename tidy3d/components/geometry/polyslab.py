@@ -26,6 +26,7 @@ from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 from . import base, triangulation
+from .vertex_utils import remove_adjacent_duplicate_vertices
 
 if TYPE_CHECKING:
     from gdstk import Cell
@@ -1791,10 +1792,7 @@ class PolySlab(base.Planar):
         np.ndarray
             Vertices of polygon.
         """
-
-        vertices_f = np.roll(vertices, shift=-1, axis=0)
-        vertices_diff = np.linalg.norm(vertices - vertices_f, axis=1)
-        return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
+        return remove_adjacent_duplicate_vertices(vertices, rtol=_IS_CLOSE_RTOL)
 
     @staticmethod
     def _proper_vertices(vertices: ArrayFloat2D) -> NDArray:

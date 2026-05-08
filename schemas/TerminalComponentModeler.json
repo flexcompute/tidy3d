@@ -3155,6 +3155,18 @@
           ],
           "default": null
         },
+        "corner_rounding_collapse_extent": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "distance_threshold": {
           "anyOf": [
             {
@@ -9579,6 +9591,7 @@
             "attrs": {},
             "concave_resolution": null,
             "convex_resolution": null,
+            "corner_rounding_collapse_extent": null,
             "distance_threshold": null,
             "medium": "metal",
             "mixed_resolution": null,
