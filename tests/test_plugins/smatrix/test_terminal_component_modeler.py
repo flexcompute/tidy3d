@@ -411,6 +411,31 @@ def test_no_port(tmp_path):
         modeler.get_port_by_name(port_name="NOT_A_PORT")
 
 
+def test_ports_union_discriminated_on_type(tmp_path):
+    """An invalid WavePort dict must produce a single WavePort-anchored error (FXC-7220).
+
+    Before the discriminator was added, pydantic smart-union matched against every
+    branch and surfaced LumpedPort-scoped errors (e.g. ``_voltage_axis_in_plane``)
+    for WavePort inputs, making the port appear to be misidentified as a LumpedPort.
+    """
+    modeler = make_component_modeler(planar_pec=True)
+    bad_waveport = {
+        "type": "WavePort",
+        "center": [0, 0, 0],
+        "size": [1, 0, 1],
+        "direction": "+",
+        "name": "port_1",
+        "mode_spec": {"type": "MicrowaveModeSpec", "num_modes": 1},
+        "not_a_real_field": True,
+    }
+    with pytest.raises(ValidationError) as excinfo:
+        modeler.updated_copy(ports=[bad_waveport])
+    errors = excinfo.value.errors(include_input=False, include_url=False)
+    assert len(errors) == 1
+    assert errors[0]["type"] == "extra_forbidden"
+    assert errors[0]["loc"] == ("ports", 0, "WavePort", "not_a_real_field")
+
+
 def test_plot_sim(tmp_path):
     modeler = make_component_modeler(planar_pec=False)
     modeler.plot_sim(z=0)

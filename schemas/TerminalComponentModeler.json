@@ -19054,7 +19054,16 @@
     "ports": {
       "default": [],
       "items": {
-        "anyOf": [
+        "discriminator": {
+          "mapping": {
+            "CoaxialLumpedPort": "#/$defs/CoaxialLumpedPort",
+            "LumpedPort": "#/$defs/LumpedPort",
+            "TerminalWavePort": "#/$defs/TerminalWavePort",
+            "WavePort": "#/$defs/WavePort"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
           {
             "$ref": "#/$defs/CoaxialLumpedPort"
           },

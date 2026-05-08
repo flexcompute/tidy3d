@@ -367,7 +367,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             Microwave Theory Tech., vol. 13, no. 2, pp. 194-202, March 1965.
     """
 
-    ports: tuple[TerminalPortType, ...] = Field(
+    ports: tuple[discriminated_union(TerminalPortType), ...] = Field(
         (),
         title="Terminal Ports",
         description="Collection of lumped and wave ports associated with the network. "

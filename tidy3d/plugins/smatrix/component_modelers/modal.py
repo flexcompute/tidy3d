@@ -11,6 +11,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Complex
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import GLANCING_CUTOFF
 from tidy3d.exceptions import SetupError
@@ -47,7 +48,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
     """
 
-    ports: tuple[ModalPortType, ...] = Field(
+    ports: tuple[discriminated_union(ModalPortType), ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
