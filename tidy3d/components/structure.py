@@ -397,7 +397,6 @@ class Structure(AbstractStructure):
     medium: StructureMediumType = Field(
         title="Medium",
         description="Defines the electromagnetic properties of the structure's medium.",
-        discriminator=TYPE_TAG_STR,
     )
 
     def _priority(self, priority_mode: PriorityMode) -> int:

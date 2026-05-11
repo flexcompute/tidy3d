@@ -18,6 +18,7 @@ from pathlib import Path
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
     ClassVar,
     Literal,
@@ -34,14 +35,7 @@ import xarray as xr
 import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from pydantic import (
     ValidationError as PydanticValidationError,
 )
@@ -66,6 +60,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from typing import NoReturn
 
+    from pydantic import ValidationInfo
     from pydantic.fields import FieldInfo
     from pydantic.functional_validators import ModelWrapValidatorHandler
 
@@ -269,6 +264,28 @@ def field_allows_scalar(field: FieldInfo) -> bool:
     return allows_scalar(annotation)
 
 
+def annotation_allows_none(annotation: Any) -> bool:
+    """Return ``True`` if ``annotation`` accepts ``None``."""
+    origin = get_origin(annotation)
+    return origin in (Union, UnionType) and any(arg is type(None) for arg in get_args(annotation))
+
+
+def annotation_has_discriminator(annotation: Any) -> bool:
+    """Return ``True`` if ``annotation`` carries a discriminator in nested ``Annotated`` metadata."""
+    origin = get_origin(annotation)
+
+    if origin is Annotated:
+        base, *metadata = get_args(annotation)
+        if any(getattr(item, "discriminator", None) for item in metadata):
+            return True
+        return annotation_has_discriminator(base)
+
+    if origin in (Union, UnionType):
+        return any(annotation_has_discriminator(arg) for arg in get_args(annotation))
+
+    return False
+
+
 @total_ordering
 class Tidy3dBaseModel(BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
@@ -424,6 +441,38 @@ class Tidy3dBaseModel(BaseModel):
         except Exception:
             log.abort_capture()
             raise
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_empty_optional_discriminated_fields(
+        cls: type[T], data: Any, info: ValidationInfo
+    ) -> Any:
+        """Treat legacy empty dict payloads as ``None`` for optional discriminated fields on file load."""
+        if not hasattr(data, "get"):
+            return data
+
+        context = info.context or {}
+        if not context.get("from_file"):
+            return data
+
+        updated = None
+        for field_name, field in cls.model_fields.items():
+            field_value = data.get(field_name)
+            if not isinstance(field_value, Mapping) or field_value:
+                continue
+            if not annotation_allows_none(field.annotation):
+                continue
+            if not (
+                getattr(field, "discriminator", None)
+                or annotation_has_discriminator(field.annotation)
+            ):
+                continue
+
+            if updated is None:
+                updated = dict(data)
+            updated[field_name] = None
+
+        return updated if updated is not None else data
 
     def _raise_validation_error_at_loc(
         self, message: Any, *loc: Any, log_error: bool = True
@@ -598,6 +647,12 @@ class Tidy3dBaseModel(BaseModel):
         cls, model_dict: dict[str, Any], **parse_obj_kwargs: Any
     ) -> Tidy3dBaseModel:
         """Parse ``model_dict`` while optionally auto-dispatching when called on the base class."""
+        parse_obj_kwargs = dict(parse_obj_kwargs)
+        context = parse_obj_kwargs.get("context")
+        context = {} if context is None else dict(context)
+        context.setdefault("from_file", True)
+        parse_obj_kwargs["context"] = context
+
         if cls is Tidy3dBaseModel:
             return cls._model_validate(model_dict, **parse_obj_kwargs)
         return cls.model_validate(model_dict, **parse_obj_kwargs)

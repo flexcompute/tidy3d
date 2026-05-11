@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tidy3d.components.types.base import discriminated_union
+
 from .multi_physics import MultiPhysicsMedium
 from .solver_types import (
     ChargeMediumType,
@@ -11,7 +13,7 @@ from .solver_types import (
     OpticalMediumType3D,
 )
 
-StructureMediumType = (
+StructureMediumType = discriminated_union(
     MultiPhysicsMedium
     | OpticalMediumType
     | ElectricalMediumType

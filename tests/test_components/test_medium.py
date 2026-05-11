@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -86,6 +87,29 @@ def test_medium():
         _ = td.Medium(permittivity=0.0)
     with pytest.raises(pd.ValidationError):
         _ = td.Medium(conductivity=-1.0)
+
+
+def test_empty_heat_spec_dict_stays_invalid_for_direct_validation():
+    raw_medium = td.Medium(permittivity=2.0, heat_spec=td.SolidSpec(conductivity=1.0)).model_dump()
+    raw_medium["heat_spec"] = {}
+
+    with pytest.raises(
+        pd.ValidationError, match="Unable to extract tag using discriminator 'type'"
+    ):
+        td.Medium.model_validate(raw_medium)
+
+
+def test_empty_heat_spec_dict_loads_as_none_from_file_without_errors(caplog, tmp_path):
+    raw_medium = td.Medium(permittivity=2.0, heat_spec=td.SolidSpec(conductivity=1.0)).model_dump()
+    raw_medium["heat_spec"] = {}
+    medium_path = tmp_path / "legacy_medium.json"
+    medium_path.write_text(json.dumps(raw_medium))
+
+    with caplog.at_level(logging.ERROR):
+        medium = td.Medium.from_file(medium_path)
+
+    assert medium.heat_spec is None
+    assert not caplog.records
 
 
 def test_validate_largest_pole_parameters():
@@ -957,13 +981,48 @@ def test_nonlinear_medium():
         _ = sim.updated_copy(medium=med, path="structures/0")
 
 
-def test_nonlinear_spec_empty_dict_is_ignored():
+def test_empty_nonlinear_spec_dict_stays_invalid_for_direct_validation():
     assert td.Medium(nonlinear_spec=td.NonlinearSpec()).nonlinear_spec is not None
 
     medium_dict = td.Medium().model_dump()
     medium_dict["nonlinear_spec"] = {}
 
-    assert td.Medium.model_validate(medium_dict).nonlinear_spec is None
+    with pytest.raises(
+        pd.ValidationError, match="Unable to extract tag using discriminator 'type'"
+    ):
+        td.Medium.model_validate(medium_dict)
+
+
+def test_empty_nonlinear_spec_dict_loads_as_none_from_file_without_errors(caplog, tmp_path):
+    medium_dict = td.Medium().model_dump()
+    medium_dict["nonlinear_spec"] = {}
+    medium_path = tmp_path / "legacy_medium_nonlinear.json"
+    medium_path.write_text(json.dumps(medium_dict))
+
+    with caplog.at_level(logging.ERROR):
+        medium = td.Medium.from_file(medium_path)
+
+    assert medium.nonlinear_spec is None
+    assert not caplog.records
+
+
+def test_legacy_nonlinear_spec_dicts_validate_without_explicit_type():
+    medium = td.Medium(nonlinear_spec={"chi3": 1.0})
+    assert isinstance(medium.nonlinear_spec, td.NonlinearSusceptibility)
+    assert medium.nonlinear_spec.chi3 == 1.0
+
+    medium = td.Medium.model_validate(
+        {
+            "permittivity": 2.0,
+            "nonlinear_spec": {
+                "models": [{"type": "KerrNonlinearity", "n2": 1.0}],
+                "num_iters": 3,
+            },
+        }
+    )
+    assert isinstance(medium.nonlinear_spec, td.NonlinearSpec)
+    assert isinstance(medium.nonlinear_spec.models[0], td.KerrNonlinearity)
+    assert medium.nonlinear_spec.num_iters == 3
 
 
 def test_custom_medium():

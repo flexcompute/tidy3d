@@ -363,7 +363,6 @@ class HeatChargeSimulation(AbstractSimulation):
         title="Background Medium",
         description="Background medium of simulation, defaults to a standard dispersion-less :class:`.Medium` if not "
         "specified.",
-        discriminator=TYPE_TAG_STR,
     )
     """
     Background medium of simulation, defaults to a standard dispersion-less :class:`.Medium` if not specified.

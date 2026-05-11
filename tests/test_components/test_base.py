@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import pytest
@@ -400,6 +400,24 @@ def test_parse_obj_respects_subclasses():
 
     with pytest.raises(ValidationError):
         DispatchChild.model_validate({"type": "DispatchBase", "value": 2})
+
+
+def test_empty_optional_discriminated_normalization_skips_array_like_fields():
+    class TaggedA(Tidy3dBaseModel):
+        type: Literal["a"] = "a"
+
+    class TaggedB(Tidy3dBaseModel):
+        type: Literal["b"] = "b"
+
+    class Container(Tidy3dBaseModel):
+        payload: Any
+        tagged: Annotated[TaggedA | TaggedB, Field(discriminator="type")] | None = None
+
+    data = {"payload": np.array([1, 2]), "tagged": {}}
+    parsed = Container.model_validate(data, context={"from_file": True})
+
+    assert parsed.tagged is None
+    np.testing.assert_array_equal(parsed.payload, data["payload"])
 
 
 def test_find_paths_empty_model():

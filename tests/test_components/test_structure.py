@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+
 import autograd as ag
 import autograd.numpy as anp
 import gdstk
@@ -8,6 +11,49 @@ import pytest
 from pydantic import ValidationError
 
 import tidy3d as td
+
+
+def test_empty_background_medium_dict_stays_invalid_for_direct_validation():
+    medium = td.PerturbationMedium.from_unperturbed(
+        medium=td.Medium(permittivity=12.0),
+        perturbation_spec=td.IndexPerturbation(
+            delta_n=td.ParameterPerturbation(
+                heat=td.LinearHeatPerturbation(temperature_ref=300.0, coeff=1e-4)
+            ),
+            freq=td.C_0,
+        ),
+    )
+    raw_structure = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=medium).model_dump()
+    raw_structure["background_medium"] = {}
+
+    with pytest.raises(ValidationError, match="Unable to extract tag using discriminator 'type'"):
+        td.Structure.model_validate(raw_structure)
+
+
+def test_empty_background_medium_dict_loads_as_none_from_file_without_errors(caplog, tmp_path):
+    medium = td.PerturbationMedium.from_unperturbed(
+        medium=td.Medium(permittivity=12.0),
+        perturbation_spec=td.IndexPerturbation(
+            delta_n=td.ParameterPerturbation(
+                heat=td.LinearHeatPerturbation(temperature_ref=300.0, coeff=1e-4)
+            ),
+            freq=td.C_0,
+        ),
+    )
+    raw_structure = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=medium).model_dump()
+    raw_structure["background_medium"] = {}
+    structure_path = tmp_path / "legacy_structure.json"
+    structure_path.write_text(json.dumps(raw_structure))
+
+    with caplog.at_level(logging.ERROR):
+        structure = td.Structure.from_file(structure_path)
+
+    assert structure.background_medium is None
+    assert isinstance(structure.medium, td.PerturbationMedium)
+    assert not any(
+        "Missing spatial profiles of 'permittivity' or 'eps_dataset'." in record.message
+        for record in caplog.records
+    )
 
 
 def test_to_gds(tmp_path):

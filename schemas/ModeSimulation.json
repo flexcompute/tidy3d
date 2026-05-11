@@ -260,10 +260,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -528,10 +539,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -1793,10 +1815,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -1922,10 +1955,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -2917,10 +2961,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -3333,10 +3388,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -3633,10 +3699,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -4055,10 +4132,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -4245,10 +4333,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -4444,10 +4543,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -4739,10 +4849,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -5012,10 +5133,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -5180,10 +5312,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -5583,10 +5726,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -7027,10 +7181,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -7159,10 +7324,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -7474,10 +7650,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -7600,10 +7787,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -7845,94 +8043,133 @@
         "background_medium": {
           "anyOf": [
             {
-              "$ref": "#/$defs/AnisotropicMedium"
-            },
-            {
-              "$ref": "#/$defs/AnisotropicMediumFromMedium2D"
-            },
-            {
-              "$ref": "#/$defs/ChargeConductorMedium"
-            },
-            {
-              "$ref": "#/$defs/ChargeInsulatorMedium"
-            },
-            {
-              "$ref": "#/$defs/CustomAnisotropicMedium"
-            },
-            {
-              "$ref": "#/$defs/CustomDebye"
-            },
-            {
-              "$ref": "#/$defs/CustomDrude"
-            },
-            {
-              "$ref": "#/$defs/CustomLorentz"
-            },
-            {
-              "$ref": "#/$defs/CustomMedium"
-            },
-            {
-              "$ref": "#/$defs/CustomPoleResidue"
-            },
-            {
-              "$ref": "#/$defs/CustomSellmeier"
-            },
-            {
-              "$ref": "#/$defs/Debye"
-            },
-            {
-              "$ref": "#/$defs/Drude"
-            },
-            {
-              "$ref": "#/$defs/FluidMedium"
-            },
-            {
-              "$ref": "#/$defs/FluidSpec"
-            },
-            {
-              "$ref": "#/$defs/FullyAnisotropicMedium"
-            },
-            {
-              "$ref": "#/$defs/Lorentz"
-            },
-            {
-              "$ref": "#/$defs/LossyMetalMedium"
-            },
-            {
-              "$ref": "#/$defs/Medium"
-            },
-            {
-              "$ref": "#/$defs/Medium2D"
-            },
-            {
-              "$ref": "#/$defs/MultiPhysicsMedium"
-            },
-            {
-              "$ref": "#/$defs/PECMedium"
-            },
-            {
-              "$ref": "#/$defs/PMCMedium"
-            },
-            {
-              "$ref": "#/$defs/PerturbationMedium"
-            },
-            {
-              "$ref": "#/$defs/PerturbationPoleResidue"
-            },
-            {
-              "$ref": "#/$defs/PoleResidue"
-            },
-            {
-              "$ref": "#/$defs/Sellmeier"
-            },
-            {
-              "$ref": "#/$defs/SemiconductorMedium"
-            },
-            {
-              "$ref": "#/$defs/SolidMedium"
-            },
-            {
-              "$ref": "#/$defs/SolidSpec"
+              "discriminator": {
+                "mapping": {
+                  "AnisotropicMedium": "#/$defs/AnisotropicMedium",
+                  "AnisotropicMediumFromMedium2D": "#/$defs/AnisotropicMediumFromMedium2D",
+                  "ChargeConductorMedium": "#/$defs/ChargeConductorMedium",
+                  "ChargeInsulatorMedium": "#/$defs/ChargeInsulatorMedium",
+                  "CustomAnisotropicMedium": "#/$defs/CustomAnisotropicMedium",
+                  "CustomDebye": "#/$defs/CustomDebye",
+                  "CustomDrude": "#/$defs/CustomDrude",
+                  "CustomLorentz": "#/$defs/CustomLorentz",
+                  "CustomMedium": "#/$defs/CustomMedium",
+                  "CustomPoleResidue": "#/$defs/CustomPoleResidue",
+                  "CustomSellmeier": "#/$defs/CustomSellmeier",
+                  "Debye": "#/$defs/Debye",
+                  "Drude": "#/$defs/Drude",
+                  "FluidMedium": "#/$defs/FluidMedium",
+                  "FluidSpec": "#/$defs/FluidSpec",
+                  "FullyAnisotropicMedium": "#/$defs/FullyAnisotropicMedium",
+                  "Lorentz": "#/$defs/Lorentz",
+                  "LossyMetalMedium": "#/$defs/LossyMetalMedium",
+                  "Medium": "#/$defs/Medium",
+                  "Medium2D": "#/$defs/Medium2D",
+                  "MultiPhysicsMedium": "#/$defs/MultiPhysicsMedium",
+                  "PECMedium": "#/$defs/PECMedium",
+                  "PMCMedium": "#/$defs/PMCMedium",
+                  "PerturbationMedium": "#/$defs/PerturbationMedium",
+                  "PerturbationPoleResidue": "#/$defs/PerturbationPoleResidue",
+                  "PoleResidue": "#/$defs/PoleResidue",
+                  "Sellmeier": "#/$defs/Sellmeier",
+                  "SemiconductorMedium": "#/$defs/SemiconductorMedium",
+                  "SolidMedium": "#/$defs/SolidMedium",
+                  "SolidSpec": "#/$defs/SolidSpec"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/AnisotropicMedium"
+                },
+                {
+                  "$ref": "#/$defs/AnisotropicMediumFromMedium2D"
+                },
+                {
+                  "$ref": "#/$defs/ChargeConductorMedium"
+                },
+                {
+                  "$ref": "#/$defs/ChargeInsulatorMedium"
+                },
+                {
+                  "$ref": "#/$defs/CustomAnisotropicMedium"
+                },
+                {
+                  "$ref": "#/$defs/CustomDebye"
+                },
+                {
+                  "$ref": "#/$defs/CustomDrude"
+                },
+                {
+                  "$ref": "#/$defs/CustomLorentz"
+                },
+                {
+                  "$ref": "#/$defs/CustomMedium"
+                },
+                {
+                  "$ref": "#/$defs/CustomPoleResidue"
+                },
+                {
+                  "$ref": "#/$defs/CustomSellmeier"
+                },
+                {
+                  "$ref": "#/$defs/Debye"
+                },
+                {
+                  "$ref": "#/$defs/Drude"
+                },
+                {
+                  "$ref": "#/$defs/FluidMedium"
+                },
+                {
+                  "$ref": "#/$defs/FluidSpec"
+                },
+                {
+                  "$ref": "#/$defs/FullyAnisotropicMedium"
+                },
+                {
+                  "$ref": "#/$defs/Lorentz"
+                },
+                {
+                  "$ref": "#/$defs/LossyMetalMedium"
+                },
+                {
+                  "$ref": "#/$defs/Medium"
+                },
+                {
+                  "$ref": "#/$defs/Medium2D"
+                },
+                {
+                  "$ref": "#/$defs/MultiPhysicsMedium"
+                },
+                {
+                  "$ref": "#/$defs/PECMedium"
+                },
+                {
+                  "$ref": "#/$defs/PMCMedium"
+                },
+                {
+                  "$ref": "#/$defs/PerturbationMedium"
+                },
+                {
+                  "$ref": "#/$defs/PerturbationPoleResidue"
+                },
+                {
+                  "$ref": "#/$defs/PoleResidue"
+                },
+                {
+                  "$ref": "#/$defs/Sellmeier"
+                },
+                {
+                  "$ref": "#/$defs/SemiconductorMedium"
+                },
+                {
+                  "$ref": "#/$defs/SolidMedium"
+                },
+                {
+                  "$ref": "#/$defs/SolidSpec"
+                }
+              ]
             },
             {
               "type": "null"
@@ -10084,10 +10321,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -10232,10 +10480,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -10760,10 +11019,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -10942,10 +11212,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -11234,10 +11515,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -11726,10 +12018,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -12017,10 +12320,21 @@
         "nonlinear_spec": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NonlinearSpec"
-            },
-            {
-              "$ref": "#/$defs/NonlinearSusceptibility"
+              "discriminator": {
+                "mapping": {
+                  "NonlinearSpec": "#/$defs/NonlinearSpec",
+                  "NonlinearSusceptibility": "#/$defs/NonlinearSusceptibility"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NonlinearSpec"
+                },
+                {
+                  "$ref": "#/$defs/NonlinearSusceptibility"
+                }
+              ]
             },
             {
               "type": "null"
@@ -12455,94 +12769,133 @@
         "background_medium": {
           "anyOf": [
             {
-              "$ref": "#/$defs/AnisotropicMedium"
-            },
-            {
-              "$ref": "#/$defs/AnisotropicMediumFromMedium2D"
-            },
-            {
-              "$ref": "#/$defs/ChargeConductorMedium"
-            },
-            {
-              "$ref": "#/$defs/ChargeInsulatorMedium"
-            },
-            {
-              "$ref": "#/$defs/CustomAnisotropicMedium"
-            },
-            {
-              "$ref": "#/$defs/CustomDebye"
-            },
-            {
-              "$ref": "#/$defs/CustomDrude"
-            },
-            {
-              "$ref": "#/$defs/CustomLorentz"
-            },
-            {
-              "$ref": "#/$defs/CustomMedium"
-            },
-            {
-              "$ref": "#/$defs/CustomPoleResidue"
-            },
-            {
-              "$ref": "#/$defs/CustomSellmeier"
-            },
-            {
-              "$ref": "#/$defs/Debye"
-            },
-            {
-              "$ref": "#/$defs/Drude"
-            },
-            {
-              "$ref": "#/$defs/FluidMedium"
-            },
-            {
-              "$ref": "#/$defs/FluidSpec"
-            },
-            {
-              "$ref": "#/$defs/FullyAnisotropicMedium"
-            },
-            {
-              "$ref": "#/$defs/Lorentz"
-            },
-            {
-              "$ref": "#/$defs/LossyMetalMedium"
-            },
-            {
-              "$ref": "#/$defs/Medium"
-            },
-            {
-              "$ref": "#/$defs/Medium2D"
-            },
-            {
-              "$ref": "#/$defs/MultiPhysicsMedium"
-            },
-            {
-              "$ref": "#/$defs/PECMedium"
-            },
-            {
-              "$ref": "#/$defs/PMCMedium"
-            },
-            {
-              "$ref": "#/$defs/PerturbationMedium"
-            },
-            {
-              "$ref": "#/$defs/PerturbationPoleResidue"
-            },
-            {
-              "$ref": "#/$defs/PoleResidue"
-            },
-            {
-              "$ref": "#/$defs/Sellmeier"
-            },
-            {
-              "$ref": "#/$defs/SemiconductorMedium"
-            },
-            {
-              "$ref": "#/$defs/SolidMedium"
-            },
-            {
-              "$ref": "#/$defs/SolidSpec"
+              "discriminator": {
+                "mapping": {
+                  "AnisotropicMedium": "#/$defs/AnisotropicMedium",
+                  "AnisotropicMediumFromMedium2D": "#/$defs/AnisotropicMediumFromMedium2D",
+                  "ChargeConductorMedium": "#/$defs/ChargeConductorMedium",
+                  "ChargeInsulatorMedium": "#/$defs/ChargeInsulatorMedium",
+                  "CustomAnisotropicMedium": "#/$defs/CustomAnisotropicMedium",
+                  "CustomDebye": "#/$defs/CustomDebye",
+                  "CustomDrude": "#/$defs/CustomDrude",
+                  "CustomLorentz": "#/$defs/CustomLorentz",
+                  "CustomMedium": "#/$defs/CustomMedium",
+                  "CustomPoleResidue": "#/$defs/CustomPoleResidue",
+                  "CustomSellmeier": "#/$defs/CustomSellmeier",
+                  "Debye": "#/$defs/Debye",
+                  "Drude": "#/$defs/Drude",
+                  "FluidMedium": "#/$defs/FluidMedium",
+                  "FluidSpec": "#/$defs/FluidSpec",
+                  "FullyAnisotropicMedium": "#/$defs/FullyAnisotropicMedium",
+                  "Lorentz": "#/$defs/Lorentz",
+                  "LossyMetalMedium": "#/$defs/LossyMetalMedium",
+                  "Medium": "#/$defs/Medium",
+                  "Medium2D": "#/$defs/Medium2D",
+                  "MultiPhysicsMedium": "#/$defs/MultiPhysicsMedium",
+                  "PECMedium": "#/$defs/PECMedium",
+                  "PMCMedium": "#/$defs/PMCMedium",
+                  "PerturbationMedium": "#/$defs/PerturbationMedium",
+                  "PerturbationPoleResidue": "#/$defs/PerturbationPoleResidue",
+                  "PoleResidue": "#/$defs/PoleResidue",
+                  "Sellmeier": "#/$defs/Sellmeier",
+                  "SemiconductorMedium": "#/$defs/SemiconductorMedium",
+                  "SolidMedium": "#/$defs/SolidMedium",
+                  "SolidSpec": "#/$defs/SolidSpec"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/AnisotropicMedium"
+                },
+                {
+                  "$ref": "#/$defs/AnisotropicMediumFromMedium2D"
+                },
+                {
+                  "$ref": "#/$defs/ChargeConductorMedium"
+                },
+                {
+                  "$ref": "#/$defs/ChargeInsulatorMedium"
+                },
+                {
+                  "$ref": "#/$defs/CustomAnisotropicMedium"
+                },
+                {
+                  "$ref": "#/$defs/CustomDebye"
+                },
+                {
+                  "$ref": "#/$defs/CustomDrude"
+                },
+                {
+                  "$ref": "#/$defs/CustomLorentz"
+                },
+                {
+                  "$ref": "#/$defs/CustomMedium"
+                },
+                {
+                  "$ref": "#/$defs/CustomPoleResidue"
+                },
+                {
+                  "$ref": "#/$defs/CustomSellmeier"
+                },
+                {
+                  "$ref": "#/$defs/Debye"
+                },
+                {
+                  "$ref": "#/$defs/Drude"
+                },
+                {
+                  "$ref": "#/$defs/FluidMedium"
+                },
+                {
+                  "$ref": "#/$defs/FluidSpec"
+                },
+                {
+                  "$ref": "#/$defs/FullyAnisotropicMedium"
+                },
+                {
+                  "$ref": "#/$defs/Lorentz"
+                },
+                {
+                  "$ref": "#/$defs/LossyMetalMedium"
+                },
+                {
+                  "$ref": "#/$defs/Medium"
+                },
+                {
+                  "$ref": "#/$defs/Medium2D"
+                },
+                {
+                  "$ref": "#/$defs/MultiPhysicsMedium"
+                },
+                {
+                  "$ref": "#/$defs/PECMedium"
+                },
+                {
+                  "$ref": "#/$defs/PMCMedium"
+                },
+                {
+                  "$ref": "#/$defs/PerturbationMedium"
+                },
+                {
+                  "$ref": "#/$defs/PerturbationPoleResidue"
+                },
+                {
+                  "$ref": "#/$defs/PoleResidue"
+                },
+                {
+                  "$ref": "#/$defs/Sellmeier"
+                },
+                {
+                  "$ref": "#/$defs/SemiconductorMedium"
+                },
+                {
+                  "$ref": "#/$defs/SolidMedium"
+                },
+                {
+                  "$ref": "#/$defs/SolidSpec"
+                }
+              ]
             },
             {
               "type": "null"

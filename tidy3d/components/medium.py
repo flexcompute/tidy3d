@@ -78,6 +78,7 @@ from .nonlinear import (  # noqa: F401
     KerrNonlinearity,
     NonlinearModel,
     NonlinearSpec,
+    NonlinearSpecType,
     NonlinearSusceptibility,
     TwoPhotonAbsorption,
 )
@@ -233,7 +234,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "useful in some cases.",
     )
 
-    nonlinear_spec: NonlinearSpec | NonlinearSusceptibility | None = Field(
+    nonlinear_spec: NonlinearSpecType | None = Field(
         None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
@@ -275,11 +276,15 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @field_validator("nonlinear_spec", mode="before")
     @classmethod
-    def _normalize_empty_nonlinear_spec_dict(cls, val: Any) -> Any:
-        """Treat an empty nonlinear spec mapping as a missing value."""
-        if isinstance(val, Mapping) and not val:
-            return None
-        return val
+    def _add_nonlinear_spec_type_to_legacy_mapping(cls, val: Any) -> Any:
+        """Add a discriminator to legacy raw dict nonlinear_spec inputs."""
+        if not isinstance(val, Mapping) or not val or TYPE_TAG_STR in val:
+            return val
+
+        spec_type = (
+            "NonlinearSpec" if "models" in val or "num_iters" in val else "NonlinearSusceptibility"
+        )
+        return {TYPE_TAG_STR: spec_type, **val}
 
     def _validate_nonlinear_spec(self) -> Self:
         """Check compatibility with nonlinear_spec."""
