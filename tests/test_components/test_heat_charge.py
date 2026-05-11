@@ -1609,6 +1609,96 @@ def test_heat_charge_analysis_spec_error_loc(heat_simulation):
     assert_single_value_error_loc(excinfo, ("boundary_spec",), "SSACVoltageSource")
 
 
+def test_ssac_accepts_fermi_dirac():
+    """Fermi-Dirac + SSAC is supported by the GPU (accelerated) solver.
+
+    The analytic ∂γ/∂(n,p) terms in the DC Jacobian make the linearization
+    self-consistent with the FD residual, so the same operator drives both
+    the DC Newton solve and the AC small-signal linearization.  This test
+    only verifies the *gating*: the simulation must construct cleanly,
+    auto-mode must resolve to GPU, and explicit GPU/CPU selections must
+    both be accepted (no SetupError raised).
+    """
+    metal_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    structures = [
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+            medium=metal_medium,
+            name="cathode",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(1, 1, 1), size=(2, 2, 2)),
+            medium=CHARGE_SIMULATION.intrinsic_Si,
+            name="silicon",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(2, 2, 2), size=(2, 2, 2)),
+            medium=metal_medium,
+            name="anode",
+        ),
+    ]
+    base_sim = td.HeatChargeSimulation(
+        size=(8, 8, 8),
+        center=(0, 0, 0),
+        structures=structures,
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+                condition=td.VoltageBC(
+                    source=td.SSACVoltageSource(voltage=[0, 1, 2], amplitude=1e-3)
+                ),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="voltage",
+                unstructured=False,
+            )
+        ],
+        analysis_spec=td.IsothermalSSACAnalysis(
+            temperature=300, freqs=[1e3, 1e4], fermi_dirac=True
+        ),
+    )
+
+    # GPU requested explicitly — accepted.
+    assert (
+        base_sim.updated_copy(use_accelerated_solver=True)._resolve_use_accelerated_solver is True
+    )
+    # GPU auto (None) — resolves to True (SSAC+FD is supported).
+    assert base_sim._resolve_use_accelerated_solver is True
+    # CPU requested explicitly — also allowed.
+    assert (
+        base_sim.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver is False
+    )
+    # DC + FD on GPU is allowed.
+    dc_sim = base_sim.updated_copy(
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300, fermi_dirac=True),
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0, 1])),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+        ],
+        use_accelerated_solver=True,
+    )
+    assert dc_sim._resolve_use_accelerated_solver is True
+
+
 def test_charge_simulation_voltage_bc_error_loc(heat_simulation):
     with pytest.raises(ValidationError) as excinfo:
         _ = heat_simulation.updated_copy(

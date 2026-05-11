@@ -44,6 +44,9 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
+from tidy3d.components.tcad.generation_recombination import (
+    SelberherrImpactIonization,
+)
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
     UniformUnstructuredGrid,
@@ -409,6 +412,18 @@ class HeatChargeSimulation(AbstractSimulation):
         title="Analysis specification.",
         description="The `analysis_spec` is used to specify the type of simulation. Currently, it is used to "
         "specify Charge simulations or transient Heat simulations.",
+    )
+
+    use_accelerated_solver: bool | None = Field(
+        None,
+        title="Use accelerated solver.",
+        description="Controls whether the GPU-accelerated charge solver is used. "
+        "When ``None`` (default), the solver is selected automatically: the accelerated "
+        "solver is used for steady-state charge simulations (DC and SSAC, isothermal or "
+        "non-isothermal, with or without Fermi-Dirac statistics), falling back to the "
+        "legacy CPU-only solver for unsupported configurations (impact ionization). "
+        "Set to ``True`` to force the accelerated solver (if supported) "
+        "or ``False`` to force the legacy CPU-only solver.",
     )
 
     @field_validator("structures")
@@ -2067,6 +2082,46 @@ class HeatChargeSimulation(AbstractSimulation):
             simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         return simulation_types
+
+    @property
+    def _is_accelerated_solver_supported(self) -> tuple[bool, str]:
+        """Whether the GPU-accelerated solver supports this simulation configuration.
+
+        Returns a ``(supported, reason)`` pair.  *reason* is only meaningful
+        when *supported* is ``False`` and describes the unsupported feature.
+        """
+        if not isinstance(self.analysis_spec, SteadyChargeDCAnalysis):
+            return (
+                False,
+                "requires a 'SteadyChargeDCAnalysis' analysis spec (or a derivative)",
+            )
+        for structure in self.structures:
+            if structure.medium.charge is not None and isinstance(
+                structure.medium.charge, SemiconductorMedium
+            ):
+                for model in structure.medium.charge.R:
+                    if isinstance(model, SelberherrImpactIonization):
+                        return False, "impact ionization source terms are not supported"
+        return True, ""
+
+    @property
+    def _resolve_use_accelerated_solver(self) -> bool:
+        """Resolved value of :attr:`use_accelerated_solver`.
+
+        When the field is ``None`` (auto), returns ``True`` when the simulation
+        is supported by the accelerated solver.  An explicit ``True`` raises if
+        the simulation is not supported.  An explicit ``False`` always returns
+        ``False``.
+        """
+        supported, reason = self._is_accelerated_solver_supported
+        if self.use_accelerated_solver is True and not supported:
+            raise SetupError(
+                "'use_accelerated_solver=True' was requested but the current simulation "
+                f"is not supported by the accelerated solver: {reason}"
+            )
+        if self.use_accelerated_solver is not None:
+            return self.use_accelerated_solver
+        return supported
 
     def _useHeatSourceFromConductionSim(self) -> bool:
         """Returns True if 'HeatFromElectricSource' has been defined."""

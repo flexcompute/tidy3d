@@ -115,16 +115,16 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
     def _warn_if_A_not_one(self: Self) -> Self:
         """Warn if ``A`` is set to a value other than 1.
 
-        Published parameterizations of this lifetime form (Fossum,
-        Roulston, Klaassen, Schenk) typically take ``A = 1``; other values
-        may have no physical interpretation.
+        All published parameterizations of this lifetime form (Fossum,
+        Roulston, Klaassen, Schenk) take ``A = 1``; other values have no
+        physical interpretation in the literature.
         """
         if self.A != 1:
             log.warning(
-                f"'FossumCarrierLifetime.A' is set to {self.A}, but A = 1 is "
-                "the typical value in published parameterizations of this "
-                "model. Setting a different value may have no physical "
-                "interpretation."
+                f"'FossumCarrierLifetime.A' is set to {self.A}, but A=1 is "
+                "the only value consistent with the published "
+                "parameterizations of this model. Other values have no "
+                "physical interpretation."
             )
         return self
 

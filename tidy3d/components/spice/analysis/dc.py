@@ -4,10 +4,11 @@ This class defines standard SPICE electrical_analysis types (electrical simulati
 
 from __future__ import annotations
 
-from pydantic import Field, PositiveFloat, PositiveInt
+from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import KELVIN
+from tidy3d.log import log
 
 
 class ChargeToleranceSpec(Tidy3dBaseModel):
@@ -47,6 +48,41 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         "are ramped up until they reach their specified value. This parameter "
         "determines how many of this iterations it takes to reach full values.",
     )
+
+    max_pseudo_steps: PositiveInt = Field(
+        default=60,
+        title="Maximum pseudo steps.",
+        description="Maximum number of pseudo time steps used per physical step "
+        "in the drift-diffusion solver.",
+    )
+
+    cfl_number: PositiveFloat = Field(
+        default=1e9,
+        title="CFL number.",
+        description="CFL multiplier used in the drift-diffusion solver. "
+        "Controls the pseudo time step size.",
+    )
+
+    preconditioner_iterations: PositiveInt = Field(
+        default=50,
+        title="Preconditioner iterations.",
+        description="Maximum number of preconditioner iterations in "
+        "the linear solver of the drift-diffusion solver.",
+    )
+
+    @model_validator(mode="after")
+    def _warn_non_default_solver_params(self) -> ChargeToleranceSpec:
+        """Warn when solver parameters differ from their defaults."""
+        field_names = ("max_pseudo_steps", "cfl_number", "preconditioner_iterations")
+        fields = type(self).model_fields
+        changed = [name for name in field_names if getattr(self, name) != fields[name].default]
+        if changed:
+            log.warning(
+                f"Non-default values detected for {', '.join(changed)} in "
+                "'ChargeToleranceSpec'. Settings different than the defaults can lead to "
+                "long simulation times, lack of convergence, and divergence."
+            )
+        return self
 
 
 class SteadyChargeDCAnalysis(Tidy3dBaseModel):

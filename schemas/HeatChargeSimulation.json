@@ -993,8 +993,23 @@
           "default": {},
           "type": "object"
         },
+        "cfl_number": {
+          "default": 1000000000.0,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
         "max_iters": {
           "default": 30,
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "max_pseudo_steps": {
+          "default": 60,
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "preconditioner_iterations": {
+          "default": 50,
           "exclusiveMinimum": 0,
           "type": "integer"
         },
@@ -5276,7 +5291,10 @@
           "default": {
             "abs_tol": 10000000000.0,
             "attrs": {},
+            "cfl_number": 1000000000.0,
             "max_iters": 30,
+            "max_pseudo_steps": 60,
+            "preconditioner_iterations": 50,
             "ramp_up_iters": 1,
             "rel_tol": 1e-10,
             "type": "ChargeToleranceSpec"
@@ -5320,7 +5338,10 @@
           "default": {
             "abs_tol": 10000000000.0,
             "attrs": {},
+            "cfl_number": 1000000000.0,
             "max_iters": 30,
+            "max_pseudo_steps": 60,
+            "preconditioner_iterations": 50,
             "ramp_up_iters": 1,
             "rel_tol": 1e-10,
             "type": "ChargeToleranceSpec"
@@ -7859,7 +7880,10 @@
           "default": {
             "abs_tol": 10000000000.0,
             "attrs": {},
+            "cfl_number": 1000000000.0,
             "max_iters": 30,
+            "max_pseudo_steps": 60,
+            "preconditioner_iterations": 50,
             "ramp_up_iters": 1,
             "rel_tol": 1e-10,
             "type": "ChargeToleranceSpec"
@@ -8889,7 +8913,10 @@
           "default": {
             "abs_tol": 10000000000.0,
             "attrs": {},
+            "cfl_number": 1000000000.0,
             "max_iters": 30,
+            "max_pseudo_steps": 60,
+            "preconditioner_iterations": 50,
             "ramp_up_iters": 1,
             "rel_tol": 1e-10,
             "type": "ChargeToleranceSpec"
@@ -10891,6 +10918,17 @@
       "const": "HeatChargeSimulation",
       "default": "HeatChargeSimulation",
       "type": "string"
+    },
+    "use_accelerated_solver": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "version": {
       "default": "2.12.0.dev0",
