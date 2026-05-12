@@ -16,6 +16,7 @@ from tidy3d.components.grid.grid import _compute_1d_cell_sizes
 from tidy3d.components.types import ArrayLike, Bound
 from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
+from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 
 from .types import PathType
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     import xarray as xr
 
     from tidy3d.compat import Self
+    from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import xyz
 
 FieldDataDict = dict[str, ScalarFieldDataArray]
@@ -35,6 +37,7 @@ EpsType = ScalarFieldDataArray
 ArrayFloat = NDArray[np.floating]
 ArrayComplex = NDArray[np.complexfloating]
 AUTOGRAD_COORDINATE_TOLERANCE = 1e-12
+CLIP_INSIDE_PROBE_FRACTION = 1e-3
 
 
 class LazyInterpolator:
@@ -170,6 +173,9 @@ class DerivativeInfo:
     """Indicates if structure material is PEC.
     If True, the structure is partially surrounded by a PEC material."""
 
+    clipped_geometry: GeometryType | None = None
+    """Final clipped geometry used for p±eps*n inside/outside masking."""
+
     interpolators: dict | None = None
     """Pre-computed interpolators.
     Optional pre-computed interpolators for field components and permittivity data.
@@ -295,7 +301,11 @@ class DerivativeInfo:
                     if override_method is not None:
                         method = override_method
                     interpolator_obj = RegularGridInterpolator(
-                        points_with_freq, data, method=method, bounds_error=False, fill_value=None
+                        points_with_freq,
+                        data,
+                        method=method,
+                        bounds_error=False,
+                        fill_value=None,
                     )
 
                     def interpolator(coords: ArrayFloat) -> ArrayComplex:
@@ -342,6 +352,210 @@ class DerivativeInfo:
 
         self._interpolators_cache[cache_key] = interpolators
         return interpolators
+
+    @staticmethod
+    def _evaluate_geometry_inside_points(geometry: Any, points: ArrayFloat) -> NDArray[np.bool_]:
+        """Evaluate ``geometry.inside`` for an ``(N, 3)`` point array."""
+        if points.ndim != 2 or points.shape[1] != 3:
+            raise ValueError("`points` must have shape (N, 3).")
+
+        xs, ys, zs = points[:, 0], points[:, 1], points[:, 2]
+        inside_values = np.asarray(geometry.inside(xs, ys, zs), dtype=bool).reshape(-1)
+        return inside_values
+
+    def _clip_active_from_inside_check(
+        self, spatial_coords: ArrayFloat, normals: ArrayFloat
+    ) -> NDArray[np.bool_]:
+        """Compute active clip points from p±eps*n inside/outside checks."""
+        if self.clipped_geometry is None:
+            raise ValueError(
+                "Clip-context shape gradients require `clipped_geometry` for inside checks."
+            )
+
+        probe_eps = CLIP_INSIDE_PROBE_FRACTION * self.min_spacing_from_permittivity
+        points_minus = spatial_coords - probe_eps * normals
+        points_plus = spatial_coords + probe_eps * normals
+
+        operation = getattr(self.clipped_geometry, "operation", None)
+        use_bounds_prefilter = operation in ("difference", "intersection")
+
+        if use_bounds_prefilter:
+            clipped_bounds_min = np.asarray(
+                self.clipped_geometry.bounds[0], dtype=spatial_coords.dtype
+            )
+            clipped_bounds_max = np.asarray(
+                self.clipped_geometry.bounds[1], dtype=spatial_coords.dtype
+            )
+            clipped_bounds_min -= AUTOGRAD_COORDINATE_TOLERANCE
+            clipped_bounds_max += AUTOGRAD_COORDINATE_TOLERANCE
+
+            in_bounds_minus = np.all(
+                (points_minus >= clipped_bounds_min[None, :])
+                & (points_minus <= clipped_bounds_max[None, :]),
+                axis=1,
+            )
+            in_bounds_plus = np.all(
+                (points_plus >= clipped_bounds_min[None, :])
+                & (points_plus <= clipped_bounds_max[None, :]),
+                axis=1,
+            )
+
+            inside_minus = np.zeros(spatial_coords.shape[0], dtype=bool)
+            inside_plus = np.zeros(spatial_coords.shape[0], dtype=bool)
+
+            if np.any(in_bounds_minus):
+                inside_minus[in_bounds_minus] = self._evaluate_geometry_inside_points(
+                    self.clipped_geometry, points_minus[in_bounds_minus]
+                )
+            if np.any(in_bounds_plus):
+                inside_plus[in_bounds_plus] = self._evaluate_geometry_inside_points(
+                    self.clipped_geometry, points_plus[in_bounds_plus]
+                )
+        else:
+            inside_minus = self._evaluate_geometry_inside_points(
+                self.clipped_geometry, points_minus
+            )
+            inside_plus = self._evaluate_geometry_inside_points(self.clipped_geometry, points_plus)
+
+        return np.logical_or(inside_minus, inside_plus)
+
+    def _eps_data_contains_metal_like_values(self) -> bool:
+        """Return whether any ``eps_data`` component contains PEC-like values."""
+        threshold = config.adjoint.pec_detection_threshold
+        for eps_array in self.eps_data.values():
+            eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
+            if np.min(eps_real) < threshold:
+                return True
+        return False
+
+    def _evaluate_gradient_core(
+        self,
+        spatial_coords: ArrayFloat,
+        normals: ArrayFloat,
+        perps1: ArrayFloat,
+        perps2: ArrayFloat,
+        interpolators: dict,
+    ) -> np.ndarray:
+        """Compute unclipped shape gradients for the provided point set."""
+        if self._outside_snapped_points_reach_simulation_boundary(
+            spatial_coords=spatial_coords, normals=normals
+        ):
+            log.warning(
+                "One or more gradient integration points lie on the simulation boundary and "
+                "their outward normal points further outside the simulation domain. "
+                "Shape-gradient integration may be one-sided or non-smooth at those locations.",
+                log_once=True,
+            )
+
+        # In all paths below, we need to have computed the gradient integration for a
+        # dielectric-dielectric interface.
+        vjps_dielectric = self._evaluate_dielectric_gradient_at_points(
+            spatial_coords,
+            normals,
+            perps1,
+            perps2,
+            interpolators,
+        )
+
+        def _pec_outside_mask_and_flag() -> tuple[np.ndarray, bool]:
+            """Detect PEC outside points and whether any are present."""
+            mask_pec_outside_local = self._detect_pec_gradient_points(
+                spatial_coords,
+                normals,
+                interpolators["eps_data"],
+                is_outside=True,
+            )
+            has_pec_outside_local = bool(np.any(mask_pec_outside_local > 0))
+            return mask_pec_outside_local, has_pec_outside_local
+
+        if self.is_medium_pec:
+            # The structure medium is PEC, but there may be a part of the interface that has
+            # dielectric placed on top of or around it where we want to use the dielectric
+            # gradient integration. We use the mask to choose between the PEC-dielectric and
+            # dielectric-dielectric parts of the border.
+
+            # Detect PEC by looking just outside the boundary.
+            mask_pec_outside, has_pec_outside = _pec_outside_mask_and_flag()
+
+            # Detect PEC by looking just inside the boundary
+            mask_pec_inside = self._detect_pec_gradient_points(
+                spatial_coords,
+                normals,
+                interpolators["eps_data"],
+                is_outside=False,
+            )
+
+            # Compute PEC gradients, pulling fields outside of the boundary
+            vjps_pec_inside = self._evaluate_pec_gradient_at_points(
+                spatial_coords,
+                normals,
+                perps1,
+                perps2,
+                interpolators,
+                is_outside=True,
+            )
+
+            if has_pec_outside:
+                # Compute PEC gradients, pulling fields outside of the boundary
+                vjps_pec_outside = -self._evaluate_pec_gradient_at_points(
+                    spatial_coords,
+                    normals,
+                    perps1,
+                    perps2,
+                    interpolators,
+                    is_outside=False,
+                )
+
+                overlap = (mask_pec_inside == 1) & (mask_pec_outside == 1)
+                mask_pec_inside[overlap] = 0.5
+                mask_pec_outside[overlap] = 0.5
+                vjps_pec = mask_pec_inside * vjps_pec_inside + mask_pec_outside * vjps_pec_outside
+
+                mask_pec = mask_pec_inside + mask_pec_outside
+            else:
+                vjps_pec = mask_pec_inside * vjps_pec_inside
+                mask_pec = mask_pec_inside
+
+            vjps = vjps_pec + (1.0 - mask_pec) * vjps_dielectric
+        elif self.background_medium_is_pec:
+            # The structure medium is dielectric, but there may be a part of the interface that has
+            # PEC placed on top of or around it where we want to use the PEC gradient integration.
+            # We use the mask to choose between the dielectric-dielectric and PEC-dielectric parts
+            # of the border.
+
+            # Detect PEC by looking just outside the boundary
+            mask_pec_outside, has_pec_outside = _pec_outside_mask_and_flag()
+            if has_pec_outside:
+                # Compute PEC gradients, pulling fields inside of the boundary and applying a
+                # negative sign because inside/outside definitions are switched.
+                vjps_pec_outside = -self._evaluate_pec_gradient_at_points(
+                    spatial_coords,
+                    normals,
+                    perps1,
+                    perps2,
+                    interpolators,
+                    is_outside=False,
+                )
+                vjps = (
+                    mask_pec_outside * vjps_pec_outside + (1.0 - mask_pec_outside) * vjps_dielectric
+                )
+            else:
+                vjps = vjps_dielectric
+        else:
+            # The structure and its background are both assumed to be dielectric, so we use the
+            # dielectric-dielectric gradient integration.
+            if self._eps_data_contains_metal_like_values():
+                log.warning(
+                    "Detected metal-like permittivity values in eps_data while using "
+                    "dielectric-only shape gradient integration. If PEC surroundings are "
+                    "intended, set the structure background medium to PEC so the PEC correction "
+                    "is applied.",
+                    log_once=True,
+                )
+            vjps = vjps_dielectric
+
+        # sum over frequency dimension
+        return np.sum(vjps, axis=-1)
 
     def evaluate_gradient_at_points(
         self,
@@ -393,84 +607,42 @@ class DerivativeInfo:
                 "Missing permittivity data for geometry gradients: 'eps_data' must be provided."
             )
 
-        if self._outside_snapped_points_reach_simulation_boundary(
-            spatial_coords=spatial_coords, normals=normals
-        ):
-            log.warning(
-                "One or more gradient integration points lie on the simulation boundary and "
-                "their outward normal points further outside the simulation domain. "
-                "Shape-gradient integration may be one-sided or non-smooth at those locations.",
-                log_once=True,
+        if self.clipped_geometry is None:
+            return self._evaluate_gradient_core(
+                spatial_coords=spatial_coords,
+                normals=normals,
+                perps1=perps1,
+                perps2=perps2,
+                interpolators=interpolators,
             )
 
-        # In all paths below, we need to have computed the gradient integration for a
-        # dielectric-dielectric interface.
-        vjps_dielectric = self._evaluate_dielectric_gradient_at_points(
-            spatial_coords,
-            normals,
-            perps1,
-            perps2,
-            interpolators,
+        clip_active = self._clip_active_from_inside_check(
+            spatial_coords=spatial_coords, normals=normals
         )
 
-        if self.is_medium_pec:
-            # The structure medium is PEC, but there may be a part of the interface that has
-            # dielectric placed on top of or around it where we want to use the dielectric
-            # gradient integration. We use the mask to choose between the PEC-dielectric and
-            # dielectric-dielectric parts of the border.
+        n_points = spatial_coords.shape[0]
+        active_idx = np.flatnonzero(clip_active)
+        if active_idx.size == 0:
+            return np.zeros(n_points, dtype=config.adjoint.gradient_dtype_float)
 
-            # Detect PEC by looking just inside the boundary
-            mask_pec = self._detect_pec_gradient_points(
-                spatial_coords,
-                normals,
-                interpolators["eps_data"],
-                is_outside=False,
+        vjps_active = self._evaluate_gradient_core(
+            spatial_coords=spatial_coords[active_idx],
+            normals=normals[active_idx],
+            perps1=perps1[active_idx],
+            perps2=perps2[active_idx],
+            interpolators=interpolators,
+        )
+
+        invalid_active = ~np.isfinite(vjps_active)
+        if np.any(invalid_active):
+            num_invalid_inside = int(np.count_nonzero(invalid_active))
+            raise AdjointError(
+                "Detected non-finite clip-context gradient values inside occupied clip "
+                f"regions ({num_invalid_inside} points)."
             )
 
-            # Compute PEC gradients, pulling fields outside of the boundary
-            vjps_pec = self._evaluate_pec_gradient_at_points(
-                spatial_coords,
-                normals,
-                perps1,
-                perps2,
-                interpolators,
-                is_outside=True,
-            )
-
-            vjps = mask_pec * vjps_pec + (1.0 - mask_pec) * vjps_dielectric
-        elif self.background_medium_is_pec:
-            # The structure medium is dielectric, but there may be a part of the interface that has
-            # PEC placed on top of or around it where we want to use the PEC gradient integration.
-            # We use the mask to choose between the dielectric-dielectric and PEC-dielectric parts
-            # of the border.
-
-            # Detect PEC by looking just outside the boundary
-            mask_pec = self._detect_pec_gradient_points(
-                spatial_coords,
-                normals,
-                interpolators["eps_data"],
-                is_outside=True,
-            )
-
-            # Compute PEC gradients, pulling fields inside of the boundary and applying a negative
-            # sign compared to above because inside and outside definitions are switched
-            vjps_pec = -self._evaluate_pec_gradient_at_points(
-                spatial_coords,
-                normals,
-                perps1,
-                perps2,
-                interpolators,
-                is_outside=False,
-            )
-
-            vjps = mask_pec * vjps_pec + (1.0 - mask_pec) * vjps_dielectric
-        else:
-            # The structure and its background are both assumed to be dielectric, so we use the
-            # dielectric-dielectric gradient integration.
-            vjps = vjps_dielectric
-
-        # sum over frequency dimension
-        vjps = np.sum(vjps, axis=-1)
+        vjps = np.zeros(n_points, dtype=vjps_active.dtype)
+        vjps[active_idx] = vjps_active
 
         return vjps
 
@@ -659,8 +831,9 @@ class DerivativeInfo:
             keepdims=True,
         )
 
-        # adjust coordinates by half a grid point outside boundary such that nearest interpolation
-        # point snaps to outside the boundary
+        # adjust coordinates by a partial grid point outside boundary such that nearest interpolation
+        # point snaps to outside the boundary. The grid point fraction is set by the
+        # config.adjoint.boundary_snapping_fraction parameter
         normal_direction = 1.0 if is_outside else -1.0
         adjust_spatial_coords = (
             spatial_coords

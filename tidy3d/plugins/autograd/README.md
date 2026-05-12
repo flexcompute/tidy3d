@@ -318,6 +318,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | regular mediums                                                   | `Medium.permittivity`, `Medium.conductivity`            |
 | spatially varying mediums (for topology optimization mainly)      | `CustomMedium.permittivity`, `CustomMedium.eps_dataset` |
 | groups of geometries with the same medium (for faster processing) | `GeometryGroup.geometries`                              |
+| clip operations (`union`, `intersection`, `difference`, `symmetric_difference`), including nested `ClipOperation` trees | traced parameters in underlying geometries (`geometry_a` and `geometry_b`) |
 | complex and self-intersecting polyslabs                           | `ComplexPolySlab.vertices`                              |
 | dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
 | spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
@@ -337,6 +338,7 @@ The following components are traceable as outputs of the `td.SimulationData`
 We also support the following high-level features:
 
 - To manually set the background permittivity of a structure for purposes of shape optimization, one can set `Structure.background_medium`.
+- Shape gradients are supported through `ClipOperation`, including nested boolean geometry trees.
 - Compute gradients for objective functions that rely on multi-frequency data using a single broadband adjoint source. Note that this only works for mode monitors.
 - Enable local gradient processing by setting `local_gradient=True` in the web run functions.
   This will cause the forward and adjoint field monitor data to be downloaded locally.

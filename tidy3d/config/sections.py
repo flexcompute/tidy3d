@@ -170,7 +170,7 @@ class AdjointConfig(ConfigSection):
     )
 
     minimum_spacing_fraction: float = Field(
-        1e-2,
+        1e-3,
         title="Minimum spacing fraction",
         description=(
             "Minimum normalized spacing allowed when constructing adaptive finite-difference "

@@ -3282,18 +3282,6 @@ class ClipOperation(Geometry):
         description="Second operand for the set operation. It can also be any geometry type.",
     )
 
-    @field_validator("geometry_a", "geometry_b")
-    @classmethod
-    def _geometries_untraced(cls, val: GeometryType) -> GeometryType:
-        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
-        traced = val._strip_traced_fields()
-        if traced:
-            raise ValidationError(
-                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
-                "'ClipOperation' does not currently support automatic differentiation."
-            )
-        return val
-
     @staticmethod
     def to_polygon_list(base_geometry: Shapely, cleanup: bool = False) -> list[Shapely]:
         """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
@@ -3587,6 +3575,70 @@ class ClipOperation(Geometry):
         new_geom_a = self.geometry_a._update_from_bounds(bounds=bounds, axis=axis)
         new_geom_b = self.geometry_b._update_from_bounds(bounds=bounds, axis=axis)
         return self.updated_copy(geometry_a=new_geom_a, geometry_b=new_geom_b)
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives by accumulating contributions from both operands."""
+        geometry_paths = {"geometry_a": [], "geometry_b": []}
+        for path in derivative_info.paths:
+            if not path:
+                raise ValidationError("Encountered empty path while processing ClipOperation VJP.")
+
+            geometry_key, *sub_path = path
+            if geometry_key not in geometry_paths:
+                raise ValidationError(
+                    "ClipOperation derivative path must start with 'geometry_a' or 'geometry_b', "
+                    f"got '{geometry_key}'."
+                )
+            geometry_paths[geometry_key].append(tuple(sub_path))
+
+        if derivative_info.clipped_geometry is None:
+            raise ValidationError(
+                "ClipOperation derivative evaluation requires `clipped_geometry`."
+            )
+
+        geometry_map = {
+            "geometry_a": self.geometry_a,
+            "geometry_b": self.geometry_b,
+        }
+        grad_vjps = {}
+
+        # Reuse interpolation data for both operands to avoid duplicate setup.
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+
+        with derivative_info.cache_min_spacing_from_permittivity():
+            for geometry_key, geometry in geometry_map.items():
+                paths = geometry_paths[geometry_key]
+                if not paths:
+                    continue
+
+                geometry_info = derivative_info.updated_copy(
+                    paths=paths,
+                    bounds=geometry.bounds,
+                    bounds_intersect=self.bounds_intersection(
+                        geometry.bounds, derivative_info.simulation_bounds
+                    ),
+                    deep=False,
+                    interpolators=interpolators,
+                )
+
+                vjp_dict_geometry = geometry._compute_derivatives(geometry_info)
+
+                for geo_path, geo_vjp in vjp_dict_geometry.items():
+                    full_path = (geometry_key, *geo_path)
+                    if full_path in grad_vjps:
+                        existing = grad_vjps[full_path]
+                        if isinstance(existing, (list, tuple)) and isinstance(
+                            geo_vjp, (list, tuple)
+                        ):
+                            grad_vjps[full_path] = type(existing)(
+                                x + y for x, y in zip(existing, geo_vjp)
+                            )
+                        else:
+                            grad_vjps[full_path] = existing + geo_vjp
+                    else:
+                        grad_vjps[full_path] = geo_vjp
+
+        return grad_vjps
 
 
 class GeometryGroup(Geometry):

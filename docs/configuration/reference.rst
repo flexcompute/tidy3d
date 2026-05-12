@@ -123,8 +123,8 @@ remote defaults and emits a warning reminding you to enable local gradients.
      - ``0.1``
      - No
      - Fallback fraction of the minimum wavelength when adaptive spacing is needed (must be ``>= 0``).
-   * - ``minimum_spacing_fraction``
-     - ``0.01``
+  * - ``minimum_spacing_fraction``
+    - ``0.001``
      - No
      - Smallest normalized spacing allowed when constructing adaptive finite-difference stencils (must be ``>= 0``).
    * - ``local_gradient``

@@ -86,7 +86,7 @@ def test_adjoint_defaults(config_manager):
     assert adjoint.quadrature_sample_fraction == pytest.approx(0.4)
     assert adjoint.gauss_quadrature_order == 7
     assert adjoint.edge_clip_tolerance == pytest.approx(1e-9)
-    assert adjoint.minimum_spacing_fraction == pytest.approx(1e-2)
+    assert adjoint.minimum_spacing_fraction == pytest.approx(1e-3)
     assert adjoint.gradient_precision == "single"
     assert adjoint.max_traced_structures == 500
     assert adjoint.max_adjoint_per_fwd == 10

@@ -50,6 +50,8 @@ def test_flexible_boundary_integration(
     """Test that we can integrate dielectric-dielectric and dielectric-PEC boundaries on the same structure and that
     we are not sensitive to the structure we choose for autograd when the boundary is shared."""
     monkeypatch.setattr(config.adjoint, "default_wavelength_fraction", 0.01)
+    monkeypatch.setattr(config.adjoint, "minimum_spacing_fraction", 0.01)
+
     thickness = 0.0 if is_2d else 0.3 * ADJ_WVL_UM
     pec_material = td.PEC2D if is_2d else td.PECMedium()
     box_2d_dielectric_material_left = td.Medium2D.from_medium(

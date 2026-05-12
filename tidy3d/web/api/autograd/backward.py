@@ -439,6 +439,26 @@ def _warn_if_nonuniform_gaussian_source_background(
             break
 
 
+def _geometry_contains_clip_operation(geometry: GeometryType) -> bool:
+    """Return True when ``geometry`` contains a ClipOperation at any depth."""
+    if geometry is None:
+        return False
+
+    if isinstance(geometry, td.ClipOperation):
+        return True
+
+    if isinstance(geometry, td.Transformed):
+        return _geometry_contains_clip_operation(geometry.geometry)
+
+    if isinstance(geometry, td.GeometryArray):
+        return _geometry_contains_clip_operation(geometry.geometry)
+
+    if isinstance(geometry, td.GeometryGroup):
+        return any(_geometry_contains_clip_operation(g) for g in geometry.geometries)
+
+    return False
+
+
 def _process_source_gradients(
     sim_data_adj: td.SimulationData,
     sim_data_orig: td.SimulationData,
@@ -628,6 +648,9 @@ def _process_structure_gradients(
     )
 
     structure = sim_data_fwd.simulation.structures[structure_index]
+    clipped_geometry = (
+        structure.geometry if _geometry_contains_clip_operation(structure.geometry) else None
+    )
 
     # auto permittivity detection
     sim_orig = sim_data_orig.simulation
@@ -669,7 +692,6 @@ def _process_structure_gradients(
         eps_box=plane_eps,
         sim_orig=sim_orig,
     )
-
     n_freqs = len(adjoint_frequencies)
     H_info_exists = np.all([f"H{dim}" in fld_fwd.field_components for dim in "xyz"])
 
@@ -797,6 +819,7 @@ def _process_structure_gradients(
             is_medium_pec=structure.medium.is_pec,
             background_medium_is_pec=structure.background_medium
             and structure.background_medium.is_pec,
+            clipped_geometry=clipped_geometry,
         )
 
         if structure_paths:
