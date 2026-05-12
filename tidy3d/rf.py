@@ -137,6 +137,7 @@ from tidy3d.plugins.smatrix.data.terminal import (
     TerminalComponentModelerData,
 )
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
+from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
@@ -192,6 +193,7 @@ __all__ = [
     "HannWindow",
     "HuraySurfaceRoughness",
     "ImpedanceCalculator",
+    "ImpedanceSpec",
     "InternalAbsorber",
     "KaiserWindow",
     "LayerRefinementSpec",

@@ -816,7 +816,7 @@ def test_lumped_port_from_structures():
     lp_options["signal_terminal"] = str_resonator_basic
     LP1 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP1", **lp_options)
     assert LP1.voltage_axis == lp_options["voltage_axis"]
-    assert np.isclose(LP1.impedance, lp_options["impedance"])
+    assert np.isclose(LP1._impedance, lp_options["impedance"])
 
     # make sure that `port_width` does not cause port geometry exceed overlap of terminals
     lp_options["port_width"] = 1000
@@ -1002,7 +1002,7 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
     """
     modeler = make_coaxial_component_modeler()
     port1 = modeler.ports[0]
-    port_impedance = port1.impedance
+    port_impedance = port1._impedance
     freqs = np.linspace(1e9, 10e9, 11)
     # Emulate perfect power transmission
     voltage_amplitude = 1.0
@@ -1042,6 +1042,48 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
     voltage = np.ones_like(freqs) * voltage_amplitude
     current = np.ones_like(freqs) * current_amplitude
     power = TerminalComponentModelerData.compute_power_delivered_by_port(sim_data=None, port=port1)
+    assert np.allclose(power.values, 0.5 * (power_a**2 - power_b**2))
+
+
+def test_power_delivered_helper_complex_impedance(monkeypatch):
+    """Power wave computations are correct for LumpedPort with complex ImpedanceSpec.
+
+    Uses Pozar eq. 4.60–4.61 with a complex reference impedance to verify the
+    conjugation and scaling in compute_power_delivered_by_port.
+    """
+    from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
+
+    Z = 50 + 30j
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 1, 2),
+        voltage_axis=2,
+        name="port_1",
+        impedance=ImpedanceSpec(impedance=Z, frequency=1e9),
+    )
+    freqs = np.linspace(1e9, 10e9, 11)
+
+    # Pozar 4.60 / 4.61: build voltage/current from known incident/reflected amplitudes
+    power_a = 2.0
+    power_b = 1.0
+    Zr = port._impedance
+    Rr = np.sqrt(np.real(Zr))
+    voltage_amplitude = (np.conj(Zr) * power_a + Zr * power_b) / Rr
+    current_amplitude = (power_a - power_b) / Rr
+
+    voltage = np.ones_like(freqs) * voltage_amplitude
+    current = np.ones_like(freqs) * current_amplitude
+
+    def compute_voltage_patch(self, sim_data):
+        return FreqDataArray(voltage, coords={"f": freqs})
+
+    def compute_current_patch(self, sim_data):
+        return FreqDataArray(current, coords={"f": freqs})
+
+    monkeypatch.setattr(LumpedPort, "compute_voltage", compute_voltage_patch)
+    monkeypatch.setattr(LumpedPort, "compute_current", compute_current_patch)
+
+    power = TerminalComponentModelerData.compute_power_delivered_by_port(sim_data=None, port=port)
     assert np.allclose(power.values, 0.5 * (power_a**2 - power_b**2))
 
 
@@ -3890,3 +3932,83 @@ def test_wave_port_to_mode_solver_uses_mode_simulation_override_path():
     )
 
     assert mode_solver == mode_sim._mode_solver
+
+
+# ── LumpedPort: real vs complex impedance ─────────────────────────────────────
+
+
+def test_lumped_port_real_impedance_to_load():
+    """Real impedance produces an RLCNetwork (purely resistive load)."""
+    from tidy3d.components.lumped_element import RLCNetwork
+    from tidy3d.plugins.smatrix import LumpedPort
+
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 0.5e-6, 0.5e-6),
+        voltage_axis=2,
+        name="port_real",
+        impedance=50.0,
+    )
+    load = port.to_load()
+    assert isinstance(load.network, RLCNetwork)
+    assert load.network.resistance == pytest.approx(50.0)
+
+
+def test_lumped_port_complex_impedance_to_load():
+    """Complex impedance produces a series RL RLCNetwork."""
+    from tidy3d.components.lumped_element import RLCNetwork
+    from tidy3d.plugins.smatrix import LumpedPort
+    from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
+
+    f = 1e9
+    R, X = 50.0, 10.0
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 0.5e-6, 0.5e-6),
+        voltage_axis=2,
+        name="port_complex",
+        impedance=ImpedanceSpec(impedance=R + X * 1j, frequency=f),
+    )
+    load = port.to_load()
+    assert isinstance(load.network, RLCNetwork)
+    assert load.network.resistance == pytest.approx(R)
+    expected_L = X / (2.0 * np.pi * f)
+    assert load.network.inductance == pytest.approx(expected_L)
+    assert load.network.capacitance is None
+
+
+def test_lumped_port_negative_real_impedance_raises():
+    """Negative real part of impedance (active load) must raise ValidationError."""
+    from pydantic import ValidationError
+
+    from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
+
+    with pytest.raises(ValidationError, match="non-negative real part"):
+        ImpedanceSpec(impedance=-10 + 5j, frequency=1e9)
+
+
+@pytest.mark.parametrize(
+    "spec_kwargs",
+    [
+        {"impedance": 50.0},
+        {"impedance": 50 + 0j},
+        {"impedance": 50 + 25j, "frequency": 1e9},
+        {"impedance": 50 - 25j, "frequency": 1e9},
+        {"impedance": 100 + 0j},
+    ],
+)
+def test_lumped_port_various_impedances_produce_valid_load(spec_kwargs):
+    """Parametrized: a range of valid ImpedanceSpec values all produce a well-formed RLC load."""
+    from tidy3d.components.lumped_element import RLCNetwork
+    from tidy3d.plugins.smatrix import LumpedPort
+    from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
+
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 0.5e-6, 0.5e-6),
+        voltage_axis=2,
+        name="port_param",
+        impedance=ImpedanceSpec(**spec_kwargs),
+    )
+    load = port.to_load()
+    assert isinstance(load.network, RLCNetwork)

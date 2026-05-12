@@ -12,7 +12,7 @@ from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils_2d import increment_float
-from tidy3d.components.lumped_element import CoaxialLumpedResistor
+from tidy3d.components.lumped_element import _IMPEDANCE_ATOL, CoaxialLumpedResistor
 from tidy3d.components.microwave.path_integrals.integrals.current import Custom2DCurrentIntegral
 from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAlignedVoltageIntegral
 from tidy3d.components.microwave.path_integrals.specs.base import AbstractAxesRH
@@ -39,6 +39,12 @@ DEFAULT_COAX_SOURCE_NUM_POINTS = 11
 
 class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     """Class representing a single coaxial lumped port.
+
+    Note
+    ----
+    Only purely resistive impedances are supported. Providing an :attr:`impedance` with
+    a non-zero imaginary part raises a validation error. For complex impedance support,
+    use :class:`LumpedPort` instead.
 
     Example
     -------
@@ -112,6 +118,21 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
                     f"must be less than its 'outer_diameter' {self.outer_diameter}."
                 ),
                 "inner_diameter",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _ensure_real_impedance(self) -> Self:
+        """Raise an error if a complex impedance is provided, since CoaxialLumpedPort only
+        supports a purely resistive load. Use LumpedPort for complex impedance support."""
+        if abs(self._impedance.imag) >= _IMPEDANCE_ATOL:
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    "CoaxialLumpedPort only supports a purely resistive load. "
+                    f"Got impedance with non-zero imaginary part: {self._impedance}. "
+                    "Use LumpedPort (rectangular) for complex impedance support."
+                ),
+                "impedance",
             )
         return self
 
@@ -224,7 +245,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             inner_diameter=self.inner_diameter,
             normal_axis=self.injection_axis,
             num_grid_cells=self.num_grid_cells,
-            resistance=np.real(self.impedance),
+            resistance=self._impedance.real,
             enable_snapping_points=self.enable_snapping_points,
             name=f"{self.name}_resistor",
         )

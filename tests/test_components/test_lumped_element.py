@@ -17,6 +17,8 @@ from tidy3d.components.lumped_element import (
     network_complex_permittivity,
 )
 
+from ..utils import assert_single_value_error_loc
+
 
 def test_lumped_resistor():
     resistor = td.LumpedResistor(
@@ -1346,8 +1348,8 @@ def test_circuit_impedance_model_freq_range_optional():
         ),
     )
     model = td.CircuitImpedanceModel(components=comps, freq_range=None)
-    # CircuitImpedanceModel does not provide _as_admittance_function (only RLCNetwork/AdmittanceNetwork do)
-    with pytest.raises(AttributeError, match=r"_as_admittance_function"):
+    # CircuitImpedanceModel does not support _as_admittance_function (only RLCNetwork/AdmittanceNetwork do)
+    with pytest.raises(NotImplementedError):
         _ = model._as_admittance_function
     # admittance() on element uses _get_effective_admittance and works
     freqs = np.linspace(0.2e9, 8e9, 20)
@@ -1509,3 +1511,269 @@ def test_parse_spice_file_blank_line_in_body_skipped(tmp_path):
     assert len(comp_list) == 1
     assert comp_list[0].element_type == "R"
     assert p_plus == "1" and p_minus == "0"
+
+
+# ---------------------------------------------------------------------------
+# _AdmittanceFitter shared base class
+# ---------------------------------------------------------------------------
+
+
+def test_admittance_fitter_inheritance():
+    """CircuitImpedanceModel inherits from _AdmittanceFitter."""
+    from tidy3d.components.lumped_element import _AdmittanceFitter
+
+    assert issubclass(td.CircuitImpedanceModel, _AdmittanceFitter)
+
+
+def test_admittance_fitter_freq_range_validation():
+    """_AdmittanceFitter.freq_range rejects f_min <= 0 and f_min >= f_max."""
+    comps = (
+        LumpedCircuitComponent(
+            element_type="R", node_plus="1", node_minus="0", value=50.0, name="R1"
+        ),
+    )
+    # f_min <= 0
+    with pytest.raises(Exception, match="positive"):
+        td.CircuitImpedanceModel(components=comps, freq_range=(0.0, 1e9))
+    # f_min >= f_max
+    with pytest.raises(Exception, match="strictly increasing"):
+        td.CircuitImpedanceModel(components=comps, freq_range=(2e9, 1e9))
+
+
+# ---------------------------------------------------------------------------
+# ImpedanceSpec
+# ---------------------------------------------------------------------------
+
+
+def test_impedance_spec_real():
+    """ImpedanceSpec accepts a purely real impedance without frequency."""
+    spec = td.ImpedanceSpec(impedance=50)
+    assert complex(spec.impedance) == pytest.approx(50 + 0j)
+    assert spec.frequency is None
+
+
+def test_impedance_spec_inductive():
+    """ImpedanceSpec accepts a complex impedance with positive imaginary part (inductive)."""
+    spec = td.ImpedanceSpec(impedance=50 + 30j, frequency=1e9)
+    assert complex(spec.impedance) == pytest.approx(50 + 30j)
+    assert np.isclose(spec.frequency, 1e9)
+
+
+def test_impedance_spec_capacitive():
+    """ImpedanceSpec accepts a complex impedance with negative imaginary part (capacitive)."""
+    spec = td.ImpedanceSpec(impedance=50 - 20j, frequency=2e9)
+    assert complex(spec.impedance) == pytest.approx(50 - 20j)
+    assert np.isclose(spec.frequency, 2e9)
+
+
+def test_impedance_spec_zero_raises():
+    """ImpedanceSpec rejects Z=0 (short circuit)."""
+    with pytest.raises(Exception, match="non-zero"):
+        td.ImpedanceSpec(impedance=0)
+
+
+def test_impedance_spec_negative_real_raises():
+    """ImpedanceSpec rejects negative real part (active load)."""
+    with pytest.raises(Exception, match="non-negative real part"):
+        td.ImpedanceSpec(impedance=-50)
+    with pytest.raises(Exception, match="non-negative real part"):
+        td.ImpedanceSpec(impedance=-10 + 5j, frequency=1e9)
+
+
+def test_impedance_spec_complex_no_freq_raises():
+    """ImpedanceSpec rejects complex impedance without frequency, error loc is 'frequency'."""
+    with pytest.raises(ValidationError) as excinfo:
+        td.ImpedanceSpec(impedance=50 + 30j)
+    assert_single_value_error_loc(excinfo, ("frequency",), message_contains="frequency")
+
+
+def test_impedance_spec_zero_real_complex_raises():
+    """ImpedanceSpec rejects purely reactive impedance (R=0 with X!=0), error loc is 'impedance'."""
+    with pytest.raises(ValidationError) as excinfo:
+        td.ImpedanceSpec(impedance=30j, frequency=1e9)
+    assert_single_value_error_loc(excinfo, ("impedance",), message_contains="strictly positive")
+
+
+def test_impedance_spec_serialization_roundtrip():
+    """ImpedanceSpec round-trips through model_dump / model_validate and model_dump_json / model_validate_json."""
+    spec = td.ImpedanceSpec(impedance=50 + 30j, frequency=1e9)
+    # Python-mode round-trip
+    data = spec.model_dump()
+    restored = td.ImpedanceSpec.model_validate(data)
+    assert complex(restored.impedance) == pytest.approx(complex(spec.impedance))
+    assert np.isclose(restored.frequency, spec.frequency)
+    # JSON round-trip
+    json_str = spec.model_dump_json()
+    restored_json = td.ImpedanceSpec.model_validate_json(json_str)
+    assert complex(restored_json.impedance) == pytest.approx(complex(spec.impedance))
+    assert np.isclose(restored_json.frequency, spec.frequency)
+
+
+def test_lumped_port_impedance_json_roundtrip():
+    """LumpedPort with ImpedanceSpec round-trips through JSON serialization."""
+    from tidy3d.plugins.smatrix import LumpedPort
+
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 1, 2),
+        voltage_axis=2,
+        name="port",
+        impedance=td.ImpedanceSpec(impedance=50 + 30j, frequency=1e9),
+    )
+    json_str = port.model_dump_json()
+    port2 = LumpedPort.model_validate_json(json_str)
+    assert port2._impedance == pytest.approx(port._impedance)
+    assert complex(port2.impedance.impedance) == pytest.approx(complex(port.impedance.impedance))
+    assert port2.impedance.frequency == pytest.approx(port.impedance.frequency)
+
+
+def test_lumped_port_scalar_impedance_complex_raises_at_loc():
+    """LumpedPort rejects a plain complex scalar with non-zero imaginary part, error loc is 'impedance'."""
+    from tidy3d.plugins.smatrix import LumpedPort
+
+    with pytest.raises(ValidationError) as excinfo:
+        LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, name="p", impedance=30j)
+    assert_single_value_error_loc(excinfo, ("impedance",))
+
+
+# ---------------------------------------------------------------------------
+# LumpedPort.to_load() with ImpedanceSpec
+# ---------------------------------------------------------------------------
+
+
+def _make_lumped_port(impedance_spec):
+    """Helper to create a LumpedPort with the given ImpedanceSpec."""
+    from tidy3d.plugins.smatrix import LumpedPort
+
+    return LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 1, 2),
+        voltage_axis=2,
+        name="port",
+        impedance=impedance_spec,
+    )
+
+
+def test_lumped_port_to_load_real_impedance():
+    """LumpedPort.to_load() with real impedance produces an RLCNetwork resistor."""
+    port = _make_lumped_port(td.ImpedanceSpec(impedance=75.0))
+    load = port.to_load()
+    assert isinstance(load.network, td.RLCNetwork)
+    assert load.network.resistance == pytest.approx(75.0)
+    assert load.network.inductance is None
+    assert load.network.capacitance is None
+
+
+def _eval_impedance_at_freq(network, f: float) -> complex:
+    """Evaluate series RLC network impedance at frequency f using engineering convention (s=jω)."""
+    a, b = network._as_admittance_function
+    s = 1j * 2.0 * np.pi * f
+    numer = sum(coeff * s**m for m, coeff in enumerate(a))
+    denom = sum(coeff * s**m for m, coeff in enumerate(b))
+    return denom / numer  # Z = 1/Y = b(s)/a(s)
+
+
+def test_lumped_port_to_load_inductive():
+    """LumpedPort.to_load() with inductive impedance produces a series RL network
+    whose impedance equals R + jX at the measurement frequency."""
+    f = 1e9
+    R, X = 50.0, 30.0
+    port = _make_lumped_port(td.ImpedanceSpec(impedance=R + X * 1j, frequency=f))
+    load = port.to_load()
+    net = load.network
+    assert isinstance(net, td.RLCNetwork)
+    assert net.resistance == pytest.approx(R)
+    assert net.capacitance is None
+    expected_L = X / (2.0 * np.pi * f)
+    assert net.inductance == pytest.approx(expected_L)
+    # Verify actual impedance at measurement frequency matches R + jX
+    assert _eval_impedance_at_freq(net, f) == pytest.approx(complex(R + X * 1j), rel=1e-6)
+
+
+def test_lumped_port_to_load_capacitive():
+    """LumpedPort.to_load() with capacitive impedance produces a series RC network
+    whose impedance equals R + jX at the measurement frequency."""
+    f = 2e9
+    R, X = 50.0, -20.0
+    port = _make_lumped_port(td.ImpedanceSpec(impedance=R + X * 1j, frequency=f))
+    load = port.to_load()
+    net = load.network
+    assert isinstance(net, td.RLCNetwork)
+    assert net.resistance == pytest.approx(R)
+    assert net.inductance is None
+    expected_C = 1.0 / (-X * 2.0 * np.pi * f)
+    assert net.capacitance == pytest.approx(expected_C)
+    # Verify actual impedance at measurement frequency matches R + jX
+    assert _eval_impedance_at_freq(net, f) == pytest.approx(complex(R + X * 1j), rel=1e-6)
+
+
+def test_lumped_port_backward_compat_impedance():
+    """Legacy 'impedance=' kwarg is accepted and silently converted to ImpedanceSpec."""
+    from tidy3d.plugins.smatrix import LumpedPort
+
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0, 1, 2),
+        voltage_axis=2,
+        name="port",
+        impedance=50,
+    )
+    assert port._impedance == pytest.approx(50 + 0j)
+
+
+# ---------------------------------------------------------------------------
+# _inject_fit_freqs_into_lumped_elements (CircuitImpedanceModel)
+# ---------------------------------------------------------------------------
+
+
+def test_terminal_modeler_injects_freq_range_for_circuit_impedance():
+    """_inject_fit_freqs_into_lumped_elements injects freq_range into CircuitImpedanceModel(freq_range=None)."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import (
+        _inject_fit_freqs_into_lumped_elements,
+    )
+
+    comps = (
+        LumpedCircuitComponent(
+            element_type="R", node_plus="1", node_minus="0", value=50.0, name="R1"
+        ),
+    )
+    net = td.CircuitImpedanceModel(components=comps)
+    element = td.LinearLumpedElement(
+        center=[0, 0, 0],
+        size=[1, 0, 1],
+        voltage_axis=0,
+        network=net,
+        name="circuit_load",
+    )
+    freqs = (1e9, 5e9, 10e9)
+    injected = _inject_fit_freqs_into_lumped_elements([element], freqs)
+    assert len(injected) == 1
+    assert injected[0].network.freq_range == (1e9, 10e9)
+
+    # to_structures works after injection
+    grid = td.Grid(boundaries=td.Coords(x=[0, 1, 2], y=[0, 1], z=[0, 1, 2]))
+    structures = injected[0].to_structures(grid)
+    assert len(structures) >= 1
+
+
+def test_terminal_modeler_does_not_overwrite_existing_freq_range():
+    """_inject_fit_freqs_into_lumped_elements does not overwrite an already-set freq_range."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import (
+        _inject_fit_freqs_into_lumped_elements,
+    )
+
+    comps = (
+        LumpedCircuitComponent(
+            element_type="R", node_plus="1", node_minus="0", value=50.0, name="R1"
+        ),
+    )
+    net = td.CircuitImpedanceModel(components=comps, freq_range=(2e9, 8e9))
+    element = td.LinearLumpedElement(
+        center=[0, 0, 0],
+        size=[1, 0, 1],
+        voltage_axis=0,
+        network=net,
+        name="circuit_load",
+    )
+    injected = _inject_fit_freqs_into_lumped_elements([element], (1e9, 10e9))
+    assert injected[0].network.freq_range == (2e9, 8e9)  # unchanged

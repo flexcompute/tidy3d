@@ -25,6 +25,7 @@ from tidy3d.plugins.smatrix.data.terminal import (
     TerminalComponentModelerData,
 )
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
+from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import AstigmaticGaussianPort, GaussianPort, Port
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
@@ -49,6 +50,7 @@ __all__ = [
     "ComponentModelerType",
     "DirectivityMonitorSpec",
     "GaussianPort",
+    "ImpedanceSpec",
     "LumpedPort",
     "MicrowaveSMatrixData",
     "ModalComponentModeler",

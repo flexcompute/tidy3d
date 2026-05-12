@@ -2777,6 +2777,9 @@
         "impedance": {
           "anyOf": [
             {
+              "$ref": "#/$defs/ImpedanceSpec"
+            },
+            {
               "additionalProperties": false,
               "properties": {
                 "imag": {
@@ -9874,6 +9877,71 @@
       },
       "type": "object"
     },
+    "ImpedanceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "frequency": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "impedance": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "imag": {
+                  "type": "number"
+                },
+                "real": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "imag",
+                "real"
+              ],
+              "type": "object"
+            },
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": 50
+        },
+        "type": {
+          "const": "ImpedanceSpec",
+          "default": "ImpedanceSpec",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "IndexPerturbation": {
       "additionalProperties": false,
       "properties": {
@@ -10995,6 +11063,9 @@
         },
         "impedance": {
           "anyOf": [
+            {
+              "$ref": "#/$defs/ImpedanceSpec"
+            },
             {
               "additionalProperties": false,
               "properties": {

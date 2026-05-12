@@ -504,6 +504,9 @@ from .log import log, set_logging_console, set_logging_file
 from .material_library.material_library import material_library
 from .material_library.parametric_materials import Graphene
 
+# lumped port impedance specification
+from .plugins.smatrix.ports.base_lumped import ImpedanceSpec
+
 # updater
 from .updater import Updater
 
@@ -746,6 +749,7 @@ __all__ = [
     "HuraySurfaceRoughness",
     "HurkxDirectBandToBandTunneling",
     "ImpedanceCalculator",
+    "ImpedanceSpec",
     "IndexPerturbation",
     "IndexedDataArray",
     "IndexedFieldDataArray",

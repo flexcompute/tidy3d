@@ -18,7 +18,11 @@ from tidy3d.components.geometry.utils import (
     snap_box_to_grid,
 )
 from tidy3d.components.geometry.utils_2d import increment_float
-from tidy3d.components.lumped_element import LinearLumpedElement, RLCNetwork
+from tidy3d.components.lumped_element import (
+    _IMPEDANCE_ATOL,
+    LinearLumpedElement,
+    RLCNetwork,
+)
 from tidy3d.components.medium import LossyMetalMedium, PECMedium
 from tidy3d.components.microwave.path_integrals.integrals.current import AxisAlignedCurrentIntegral
 from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAlignedVoltageIntegral
@@ -37,7 +41,6 @@ if TYPE_CHECKING:
     from tidy3d.components.data.data_array import FreqDataArray
     from tidy3d.components.data.sim_data import SimulationData
     from tidy3d.components.grid.grid import Grid, YeeGrid
-    from tidy3d.components.lumped_element import LumpedResistor
     from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import Coordinate, FreqArray, Size
@@ -46,25 +49,38 @@ if TYPE_CHECKING:
 class LumpedPort(AbstractLumpedPort, Box):
     """Class representing a single rectangular lumped port.
 
+    The port must be planar (exactly one zero-size dimension). The impedance is specified via
+    :attr:`impedance`. For a purely real impedance a resistor load is used. For a complex
+    impedance ``Z = R + jX`` the load is a series RL (``X > 0``) or series RC (``X < 0``)
+    network inferred from the measurement frequency in the :class:`ImpedanceSpec`.
+
     Note
     ----
-    The port must be planar (exactly one zero-size dimension). One-dimensional ports
-    (two zero-size dimensions) are not supported. If you need a narrow port, provide a
-    small but finite width along the lateral axis (e.g., ``fp_eps`` or larger).
+    One-dimensional ports (two zero-size dimensions) are not supported. If you need a narrow
+    port, provide a small but finite width along the lateral axis (e.g., ``fp_eps`` or larger).
 
     Example
     -------
+    >>> from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
     >>> port1 = LumpedPort(center=(0, 0, 0),
     ...             size=(0, 1, 2),
     ...             voltage_axis=2,
     ...             name="port_1",
     ...             impedance=50
     ...         )
+    >>> port_complex = LumpedPort(center=(0, 0, 0),
+    ...             size=(0, 1, 2),
+    ...             voltage_axis=2,
+    ...             name="port_rl",
+    ...             impedance=ImpedanceSpec(impedance=50+30j, frequency=1e9)
+    ...         )
 
     See Also
     --------
     :class:`.LinearLumpedElement`
         The lumped element representing the load of the port.
+    :class:`.ImpedanceSpec`
+        Combines the reference impedance and measurement frequency.
     """
 
     voltage_axis: Axis = Field(
@@ -149,15 +165,38 @@ class LumpedPort(AbstractLumpedPort, Box):
             current_amplitude_definition="total",
         )
 
-    def to_load(self, snap_center: float | None = None) -> LumpedResistor:
-        """Create a load resistor from the lumped port."""
+    def to_load(self, snap_center: float | None = None) -> LinearLumpedElement:
+        """Create a load from the lumped port using an RLC network inferred from
+        :attr:`impedance`.
+
+        For a real impedance ``Z = R``, a pure resistor is used. For a complex impedance
+        ``Z = R + jX`` (with ``X > 0``) a series RL network is constructed where
+        ``L = X / (2π·f)``. For a capacitive load (``X < 0``) a series RC network is used
+        where ``C = 1 / (−X · 2π·f)``.
+        """
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # It is done here so plots of the simulation will more accurately portray the setup
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center
 
-        network = RLCNetwork(resistance=np.real(self.impedance))
+        Z = self._impedance
+        R = Z.real
+        X = Z.imag
+
+        if abs(X) < _IMPEDANCE_ATOL:
+            network = RLCNetwork(resistance=R)
+        elif X > 0:
+            # Inductive: Z_L = jωL  →  L = X / ω
+            omega = 2.0 * np.pi * self.impedance.frequency
+            L = X / omega
+            network = RLCNetwork(resistance=R, inductance=L)
+        else:
+            # Capacitive: Z_C = 1/(jωC)  →  C = 1 / (−X · ω)
+            omega = 2.0 * np.pi * self.impedance.frequency
+            C = 1.0 / (-X * omega)
+            network = RLCNetwork(resistance=R, capacitance=C)
+
         return LinearLumpedElement(
             center=center,
             size=self.size,

@@ -224,7 +224,7 @@ def port_reference_impedances(modeler_data: TerminalComponentModelerData) -> Ter
 
         elif isinstance(port, AbstractLumpedPort):
             # LumpedPorts have a constant diagonal reference impedance
-            data = np.full(num_freqs, port.impedance)
+            data = np.full(num_freqs, port._impedance)
             indexer = {"port_out": network_index, "port_in": network_index}
             port_impedances = port_impedances._with_updated_data(data=data, coords=indexer)
 

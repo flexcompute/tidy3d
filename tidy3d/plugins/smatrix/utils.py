@@ -312,12 +312,16 @@ def compute_power_wave_amplitudes(
     port: LumpedPortType, sim_data: SimulationData
 ) -> tuple[FreqDataArray, FreqDataArray]:
     r"""Calculates the unnormalized power wave amplitudes from port voltage (V),
-    current (I), and impedance (Z0) using:
+    current (I), and impedance (Z0) using the Kurokawa (1965) power wave definition:
 
     .. math::
 
-        a = (V + Z0*I) / (2 * \sqrt(Re(Z0)))
-        b = (V - Z0*I) / (2 * \sqrt(Re(Z0)))
+        a = (V + Z_0 I) / (2 \sqrt{\mathrm{Re}(Z_0)})
+        b = (V - Z_0^* I) / (2 \sqrt{\mathrm{Re}(Z_0)})
+
+    where :math:`Z_0^*` denotes the complex conjugate of :math:`Z_0`. For real
+    :math:`Z_0` this reduces to the standard pseudo-wave formula. The relation
+    :math:`P = \tfrac{1}{2}(|a|^2 - |b|^2)` holds for net power delivered.
 
     Parameters
     ----------
@@ -333,8 +337,9 @@ def compute_power_wave_amplitudes(
     """
     voltage, current = compute_port_VI(port, sim_data)
     # Amplitudes for the incident and reflected power waves
-    a = (voltage + port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
-    b = (voltage - port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
+    Z0 = port._impedance
+    a = (voltage + Z0 * current) / 2 / np.sqrt(Z0.real)
+    b = (voltage - Z0.conjugate() * current) / 2 / np.sqrt(Z0.real)
     return a, b
 
 
