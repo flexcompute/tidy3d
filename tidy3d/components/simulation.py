@@ -32,7 +32,12 @@ from tidy3d.exceptions import (
     format_chained_exception_message,
 )
 from tidy3d.log import log
-from tidy3d.packaging import disable_local_subpixel, supports_local_subpixel, tidy3d_extras
+from tidy3d.packaging import (
+    check_tidy3d_extras_licensed_feature,
+    disable_local_subpixel,
+    supports_local_subpixel,
+    tidy3d_extras,
+)
 from tidy3d.updater import Updater
 
 from .base import cached_property
@@ -3643,12 +3648,22 @@ class Simulation(AbstractYeeGridSimulation):
         if any(s == 0 for s in self.size):
             incompatible.append("Zero-size (collapsed) simulation dimensions.")
 
+        for axis_name, num_cells in zip(("x", "y", "z"), self.grid.num_cells):
+            if num_cells <= 1:
+                incompatible.append(f"Single-cell {axis_name}-axis (quasi-2D simulation).")
+
         if boundary_spec is not None:
             x_boundary = boundary_spec.x
             if isinstance(x_boundary.plus, (Periodic, BlochBoundary)) or isinstance(
                 x_boundary.minus, (Periodic, BlochBoundary)
             ):
                 incompatible.append("Periodic or Bloch boundary condition along x.")
+            for axis_name in ("x", "y", "z"):
+                axis_boundary = boundary_spec[axis_name]
+                if isinstance(axis_boundary.plus, (ABCBoundary, ModeABCBoundary)) or isinstance(
+                    axis_boundary.minus, (ABCBoundary, ModeABCBoundary)
+                ):
+                    incompatible.append(f"ABC or ModeABC boundary condition along {axis_name}.")
 
         if incompatible:
             detail = "\n".join(f"  - {item}" for item in incompatible)
@@ -6143,17 +6158,12 @@ class Simulation(AbstractYeeGridSimulation):
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
 
         if self.relax_courant:
-            try:
-                from tidy3d_extras.extension import _relax_courant
-            except ImportError as exc:
-                raise ImportError(
-                    format_chained_exception_message(
-                        "'relax_courant' requires the 'tidy3d_extras' package to be installed",
-                        exc,
-                    )
-                ) from exc
-            dl_mins_xyz = [float(np.min(sizes)) for sizes in self.grid.sizes.to_list]
-            relax_ratio = _relax_courant(dl_mins=dl_mins_xyz)
+            check_tidy3d_extras_licensed_feature("relax_courant")
+            boundaries = self.grid.boundaries.to_list
+            dl_mins_xyz = [float(np.min(np.diff(b))) for b in boundaries]
+            relax_ratio = tidy3d_extras["mod"].extension._relax_courant(
+                dl_mins=dl_mins_xyz, coord_boundaries=boundaries[0]
+            )
         else:
             relax_ratio = 1.0
 
