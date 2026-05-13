@@ -50,7 +50,7 @@ def test_port_absorbers_simulations():
     # in Simulation
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -66,7 +66,7 @@ def test_port_absorbers_simulations():
 
     sim = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -87,7 +87,7 @@ def test_port_absorbers_simulations():
     with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -124,7 +124,7 @@ def test_port_absorbers_simulations():
     # manually
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -142,7 +142,7 @@ def test_port_absorbers_simulations():
     # or at least one source
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -163,7 +163,7 @@ def test_port_absorbers_simulations():
     ):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -295,7 +295,7 @@ def test_abc_boundaries_simulations():
     # in Simulation
     sim = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -310,7 +310,7 @@ def test_abc_boundaries_simulations():
     with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -329,7 +329,7 @@ def test_abc_boundaries_simulations():
     # ok if ABC boundary is not crossed
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -346,7 +346,7 @@ def test_abc_boundaries_simulations():
     # or if we override manually
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -360,7 +360,7 @@ def test_abc_boundaries_simulations():
     with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -390,7 +390,7 @@ def test_abc_boundaries_simulations():
     ):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -424,7 +424,7 @@ def test_abc_boundaries_simulations():
     # manually
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -438,7 +438,7 @@ def test_abc_boundaries_simulations():
     # or at least one source
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -453,7 +453,7 @@ def test_abc_boundaries_simulations():
     ):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -473,7 +473,7 @@ def test_abc_boundaries_simulations():
     with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -488,7 +488,7 @@ def test_abc_boundaries_simulations():
     with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,
@@ -500,7 +500,7 @@ def test_abc_boundaries_simulations():
     # ok if abc with permittivity only
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -511,7 +511,7 @@ def test_abc_boundaries_simulations():
     )
     _ = td.Simulation(
         center=[0, 0, 0],
-        size=[1, 1, 1],
+        size=[2, 2, 2],
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=10,
             wavelength=wvl_um,
@@ -524,7 +524,7 @@ def test_abc_boundaries_simulations():
     with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
-            size=[1, 1, 1],
+            size=[2, 2, 2],
             grid_spec=td.GridSpec.auto(
                 min_steps_per_wvl=10,
                 wavelength=wvl_um,

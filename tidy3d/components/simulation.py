@@ -1037,6 +1037,28 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return pml_thicknesses
 
+    def _pml_extrusion_clipping_bound_ind(self, axis: int, side: int) -> int | None:
+        """Grid-boundary index where the PML extrusion clipping inset reaches into the domain.
+
+        The "extrusion region" spans from the outer simulation boundary through the PML and an
+        additional :data:`CLIPPING_MARGIN` cells of interior. This method returns the inner-most
+        boundary index of that region (i.e., ``num_layers + CLIPPING_MARGIN`` on the minus side
+        and the analogous index counting from the far end on the plus side).
+
+        Returns ``None`` when there are no absorber layers on that side or the computed index
+        falls outside the grid. This helper does not check whether ``extrude_structures`` is
+        actually enabled — callers that only care when extrusion is active must gate separately.
+        """
+        n_layers = self.num_pml_layers[axis][side]
+        if n_layers == 0:
+            return None
+        n_bounds = len(self.grid.boundaries.to_list[axis])
+        if side == 0:
+            idx = n_layers + CLIPPING_MARGIN
+            return idx if idx < n_bounds else None
+        idx = n_bounds - 1 - n_layers - CLIPPING_MARGIN
+        return idx if idx >= 0 else None
+
     @cached_property
     def _internal_layerrefinement_boundary_types(self) -> list[list[str | None]]:
         """Boundary types for layer refinement."""
@@ -2364,8 +2386,17 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return structure
 
-    def _pec_frame_box(self, obj: AbstractModeSource | InternalAbsorber) -> tuple[Box, int, str]:
-        """Return pec bounding box, frame axis and object's direction."""
+    def _pec_frame_span_inds(
+        self, obj: AbstractModeSource | InternalAbsorber
+    ) -> tuple[np.ndarray, int, str]:
+        """Return grid-boundary index ranges ``[[beg, end], ...]`` the PEC frame covers,
+        its frame axis, and the object's direction.
+
+        Tangential axes use ``ModeSolver._snapped_mode_domain`` so the returned indices
+        match where the mode-solver PEC boundaries are actually placed; the injection
+        axis uses ``discretize_inds`` extended by ``frame.length`` cells for mode sources.
+        """
+        from tidy3d.components.geometry.utils import find_snap_location
         from tidy3d.components.mode.mode_solver import ModeSolver
 
         direction = obj.direction
@@ -2374,28 +2405,37 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         else:
             axis = obj.size.index(0.0)
 
-        # Tangential axes: snap using same logic as mode solver PEC boundaries
         snapped = ModeSolver._snapped_mode_domain(self.grid, obj, axis)
+        coords = self.grid.boundaries.to_list
 
-        min_b, max_b = list(snapped.bounds[0]), list(snapped.bounds[1])
+        span_inds = np.zeros((3, 2), dtype=int)
+        for dim in range(3):
+            if dim == axis:
+                continue
+            span_inds[dim] = [
+                find_snap_location(coords[dim], snapped.bounds[0][dim], "lower"),
+                find_snap_location(coords[dim], snapped.bounds[1][dim], "upper"),
+            ]
 
-        # Injection axis: index-based extension by frame.length cells
-        span_inds_axis = self.grid.discretize_inds(obj, relax_precision=True)[axis]
-        coords_axis = self.grid.boundaries.to_list[axis]
+        ind_min, ind_max = self.grid.discretize_inds(obj, relax_precision=True)[axis]
         if isinstance(obj, AbstractModeSource):
             length = obj.frame.length
-            ind_min, ind_max = span_inds_axis
             if direction == "+":
                 ind_max += length - 1
             else:
                 ind_min -= length - 1
-            min_b[axis] = coords_axis[ind_min]
-            max_b[axis] = coords_axis[ind_max]
-        else:
-            min_b[axis] = coords_axis[span_inds_axis[0]]
-            max_b[axis] = coords_axis[span_inds_axis[1]]
+        span_inds[axis] = [ind_min, ind_max]
 
-        return (Box.from_bounds(min_b, max_b), axis, direction)
+        return span_inds, axis, direction
+
+    def _pec_frame_box(self, obj: AbstractModeSource | InternalAbsorber) -> tuple[Box, int, str]:
+        """Return pec bounding box, frame axis and object's direction."""
+        span_inds, axis, direction = self._pec_frame_span_inds(obj)
+        coords = self.grid.boundaries.to_list
+        box_bounds = [
+            [coords[dim][span_inds[dim][0]], coords[dim][span_inds[dim][1]]] for dim in range(3)
+        ]
+        return Box.from_bounds(*np.transpose(box_bounds)), axis, direction
 
     @cached_property
     def _modal_plane_frames(self) -> list[Structure]:
@@ -4728,6 +4768,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_structures_not_at_edges()
         self._validate_no_structures_pml()
         self._validate_no_structures_close_to_pml()
+        self._validate_pec_frame_not_in_pml_extrusion()
         self._validate_tfsf_nonuniform_grid()
         self._validate_tfsf_aux_sources()
         self._validate_nonlinear_specs()
@@ -4943,42 +4984,20 @@ class Simulation(AbstractYeeGridSimulation):
         num_pml_layers = self.num_pml_layers
 
         def is_within_clipping_margin(axis_idx: int, struct_val: float, side_idx: int) -> bool:
-            """Check if structure is within ``CLIPPING_MARGIN`` cells from absorber start.
-
-            Returns True if structure is within ``CLIPPING_MARGIN`` cells from where the absorber starts.
-
-            Args:
-                axis_idx: Axis index (0=x, 1=y, 2=z)
-                struct_val: Structure boundary coordinate value
-                side_idx: Side index (0=min, 1=max)
-            """
-            if num_pml_layers[axis_idx][side_idx] == 0:
+            """Check if ``struct_val`` falls inside the ``CLIPPING_MARGIN`` inset, i.e. between
+            the absorber-domain interface and the inner edge of the extrusion region."""
+            clipping_bound_idx = self._pml_extrusion_clipping_bound_ind(axis_idx, side_idx)
+            if clipping_bound_idx is None:
                 return False
-
             grid_axis = grid_boundaries[axis_idx]
             num_layers = num_pml_layers[axis_idx][side_idx]
-
             if side_idx == 0:
-                # Absorber starts at cell index num_layers
-                # Extrusion clipping bound is at num_layers + CLIPPING_MARGIN
-                clipping_bound_idx = num_layers + CLIPPING_MARGIN
-                if clipping_bound_idx >= len(grid_axis):
-                    return False
                 absorber_start_coord = grid_axis[num_layers]
                 clipping_bound_coord = grid_axis[clipping_bound_idx]
-                # Structure is within clipping margin if it's between absorber start and clipping bound
                 return absorber_start_coord <= struct_val <= clipping_bound_coord
-            else:
-                # Absorber starts at cell index len(grid_axis) - num_layers - 1
-                # Extrusion clipping bound is at len(grid_axis) - num_layers - 1 - CLIPPING_MARGIN
-                absorber_start_idx = len(grid_axis) - num_layers - 1
-                clipping_bound_idx = absorber_start_idx - CLIPPING_MARGIN
-                if clipping_bound_idx < 0:
-                    return False
-                absorber_start_coord = grid_axis[absorber_start_idx]
-                clipping_bound_coord = grid_axis[clipping_bound_idx]
-                # Structure is within clipping margin if it's between clipping bound and absorber start
-                return clipping_bound_coord <= struct_val <= absorber_start_coord
+            absorber_start_coord = grid_axis[len(grid_axis) - num_layers - 1]
+            clipping_bound_coord = grid_axis[clipping_bound_idx]
+            return clipping_bound_coord <= struct_val <= absorber_start_coord
 
         with log as consolidated_logger:
 
@@ -5043,6 +5062,60 @@ class Simulation(AbstractYeeGridSimulation):
                                     axis_idx, struct_val, side_idx
                                 )
                                 warn(structure, istruct, axis + side_suffix, extrusion_flag)
+
+    def _validate_pec_frame_not_in_pml_extrusion(self) -> None:
+        """Error if an automatically added PEC frame overlaps the PML extrusion region.
+
+        Works in grid-boundary index space: each PEC frame spans ``[beg, end]`` along every axis,
+        and each PML side with ``extrude_structures`` enabled forbids the index range covering
+        the PML plus an additional ``CLIPPING_MARGIN`` cells of interior (the clipping inset).
+        Touching counts as overlap.
+        """
+        # Collect auto-added PEC frame index spans alongside the field/loc they originate from.
+        frames: list[tuple[np.ndarray, str, int, str]] = []
+        for src_idx, src in enumerate(self.sources):
+            if isinstance(src, AbstractModeSource) and isinstance(src.frame, PECFrame):
+                span_inds, _, _ = self._pec_frame_span_inds(src)
+                descr = (
+                    f"mode source '{src.name}'" if src.name else f"mode source at index {src_idx}"
+                )
+                frames.append((span_inds, "sources", src_idx, descr))
+        for abs_idx, absorber in enumerate(self._shifted_internal_absorbers):
+            span_inds, _, _ = self._pec_frame_span_inds(absorber)
+            frames.append(
+                (span_inds, "internal_absorbers", abs_idx, f"internal absorber at index {abs_idx}")
+            )
+        if not frames:
+            return
+
+        boundaries = self.boundary_spec.to_list
+        grid_boundaries = self.grid.boundaries.to_list
+
+        for axis in range(3):
+            n_bounds = len(grid_boundaries[axis])
+            for side in (0, 1):
+                bnd = boundaries[axis][side]
+                if not isinstance(bnd, AbsorberSpec) or not bnd.extrude_structures:
+                    continue
+                clip_ind = self._pml_extrusion_clipping_bound_ind(axis, side)
+                if clip_ind is None:
+                    continue
+                ext_lo, ext_hi = (0, clip_ind) if side == 0 else (clip_ind, n_bounds - 1)
+                for span_inds, field, loc, descr in frames:
+                    beg, end = span_inds[axis]
+                    if beg <= ext_hi and end >= ext_lo:
+                        axis_label = "xyz"[axis]
+                        side_label = f"{'-+'[side]}{axis_label}"
+                        self._raise_validation_error_at_loc(
+                            f"The automatically added PEC frame for {descr} overlaps the "
+                            f"{bnd.type} extrusion region on the '{side_label}' boundary. "
+                            f"The extrusion region extends {CLIPPING_MARGIN} grid cells beyond "
+                            f"the {bnd.type} into the simulation domain; increase the simulation "
+                            f"size along '{axis_label}', move the source/absorber away from "
+                            f"that boundary, or disable 'extrude_structures' on that side.",
+                            field,
+                            loc,
+                        )
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,

@@ -173,12 +173,17 @@ def _make_stripline_sim() -> td.Simulation:
         layer_refinement_specs=[lr_spec, lr_spec_top, lr_spec_bot],
     )
 
+    # Disable structure extrusion on x since the wave port spans len_inf laterally;
+    # otherwise its PEC frame collides with the x-PML extrusion region by construction.
+    pml_no_extrude = td.PML(extrude_structures=False)
     return td.Simulation(
         size=(50 * _MIL, _SL_H + 2 * _SL_T, 1.05 * _SL_L),
         center=(0, 0, 0),
         grid_spec=grid_spec,
         boundary_spec=td.BoundarySpec(
-            x=td.Boundary.pml(), y=td.Boundary.pec(), z=td.Boundary.pml()
+            x=td.Boundary(plus=pml_no_extrude, minus=pml_no_extrude),
+            y=td.Boundary.pec(),
+            z=td.Boundary.pml(),
         ),
         structures=[str_sub, str_signal, str_gnd_top, str_gnd_bot],
         monitors=[],

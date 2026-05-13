@@ -222,9 +222,9 @@ def make_coaxial_simulation(length: float | None = None, grid_spec: td.GridSpec 
     # Make simulation
     center_sim = [0, 0, 0]
     size_sim = [
-        4 * Router,
-        4 * Router,
-        length + 0.5 * wavelength0,
+        4 * Router + 0.5 * wavelength0,
+        4 * Router + 0.5 * wavelength0,
+        length + wavelength0,
     ]
 
     sim = td.Simulation(
@@ -410,9 +410,12 @@ def make_differential_stripline_modeler():
         layer_refinement_specs=[lr_spec, lr_spec2, lr_spec3],
     )
 
-    # boundary specs
+    # boundary specs — disable structure extrusion on x since the wave port intentionally
+    # spans the full lateral domain (size=len_inf); its PEC frame would otherwise collide
+    # with the x-PML extrusion region by construction.
+    pml_no_extrude = td.PML(extrude_structures=False)
     boundary_spec = td.BoundarySpec(
-        x=td.Boundary.pml(),
+        x=td.Boundary(plus=pml_no_extrude, minus=pml_no_extrude),
         y=td.Boundary.pec(),
         z=td.Boundary.pml(),
     )

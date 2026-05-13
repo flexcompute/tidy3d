@@ -813,6 +813,10 @@ class PML(AbsorberSpec):
         Structures that terminate inside PML can cause evanescent fields at the interface to be
         amplified by the absorber, potentially leading to simulation divergence.
 
+        Unlike the :class:`AbsorberSpec` base, :class:`PML` overrides ``extrude_structures`` to default
+        to ``True`` so that structures terminating near the boundary are automatically extruded through
+        the PML.
+
     Example
     -------
     >>> pml = PML(num_layers=10)
@@ -1298,7 +1302,10 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def pml(
-        cls, num_layers: NonNegativeInt = 12, parameters: PMLParams = DefaultPMLParameters
+        cls,
+        num_layers: NonNegativeInt = 12,
+        parameters: PMLParams = DefaultPMLParameters,
+        extrude_structures: bool = True,
     ) -> Self:
         """PML boundary specification on both sides along a dimension.
 
@@ -1308,13 +1315,23 @@ class Boundary(Tidy3dBaseModel):
             Number of layers of standard PML to add to + and - boundaries.
         parameters : :class:`~tidy3d.PMLParams`
             Parameters of the complex frequency-shifted absorption poles.
+        extrude_structures : bool = True
+            Forwarded to :class:`PML`. Defaults to ``True`` to match
+            :class:`PML`'s class default. Set ``False`` to opt out, for example
+            when a wave-port source intentionally spans the full lateral domain
+            via symmetry.
 
         Example
         -------
         >>> pml = Boundary.pml(num_layers=20)
+        >>> pml = Boundary.pml(extrude_structures=False)
         """
-        plus = PML(num_layers=num_layers, parameters=parameters)
-        minus = PML(num_layers=num_layers, parameters=parameters)
+        plus = PML(
+            num_layers=num_layers, parameters=parameters, extrude_structures=extrude_structures
+        )
+        minus = PML(
+            num_layers=num_layers, parameters=parameters, extrude_structures=extrude_structures
+        )
         return cls(plus=plus, minus=minus)
 
     @classmethod
@@ -1322,6 +1339,7 @@ class Boundary(Tidy3dBaseModel):
         cls,
         num_layers: NonNegativeInt = 40,
         parameters: PMLParams = DefaultStablePMLParameters,
+        extrude_structures: bool = True,
     ) -> Self:
         """Stable PML boundary specification on both sides along a dimension.
 
@@ -1331,13 +1349,23 @@ class Boundary(Tidy3dBaseModel):
             Number of layers of 'stable' PML to add to + and - boundaries.
         parameters : :class:`~tidy3d.PMLParams`
             'Stable' parameters of the complex frequency-shifted absorption poles.
+        extrude_structures : bool = True
+            Forwarded to :class:`StablePML`. Defaults to ``True`` to match
+            :class:`StablePML`'s class default. Set ``False`` to opt out, for
+            example when a wave-port source intentionally spans the full lateral
+            domain via symmetry.
 
         Example
         -------
         >>> stable_pml = Boundary.stable_pml(num_layers=40)
+        >>> stable_pml = Boundary.stable_pml(extrude_structures=False)
         """
-        plus = StablePML(num_layers=num_layers, parameters=parameters)
-        minus = StablePML(num_layers=num_layers, parameters=parameters)
+        plus = StablePML(
+            num_layers=num_layers, parameters=parameters, extrude_structures=extrude_structures
+        )
+        minus = StablePML(
+            num_layers=num_layers, parameters=parameters, extrude_structures=extrude_structures
+        )
         return cls(plus=plus, minus=minus)
 
     @classmethod
@@ -1345,6 +1373,7 @@ class Boundary(Tidy3dBaseModel):
         cls,
         num_layers: NonNegativeInt = 40,
         parameters: PMLParams = DefaultAbsorberParameters,
+        extrude_structures: bool = False,
     ) -> Self:
         """Adiabatic absorber boundary specification on both sides along a dimension.
 
@@ -1354,13 +1383,22 @@ class Boundary(Tidy3dBaseModel):
             Number of layers of absorber to add to + and - boundaries.
         parameters : :class:`~tidy3d.PMLParams`
             Adiabatic absorber parameters.
+        extrude_structures : bool = False
+            Forwarded to :class:`Absorber`. Defaults to ``False`` to match
+            :class:`Absorber`'s class default. Set ``True`` to opt in to
+            structure extrusion through the absorber.
 
         Example
         -------
         >>> absorber = Boundary.absorber(num_layers=40)
+        >>> absorber = Boundary.absorber(extrude_structures=True)
         """
-        plus = Absorber(num_layers=num_layers, parameters=parameters)
-        minus = Absorber(num_layers=num_layers, parameters=parameters)
+        plus = Absorber(
+            num_layers=num_layers, parameters=parameters, extrude_structures=extrude_structures
+        )
+        minus = Absorber(
+            num_layers=num_layers, parameters=parameters, extrude_structures=extrude_structures
+        )
         return cls(plus=plus, minus=minus)
 
 

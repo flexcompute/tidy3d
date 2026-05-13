@@ -3110,12 +3110,17 @@ def _make_wave_port_auto_num_modes_setup():
         layer_refinement_specs=[lr_spec, lr_spec_top, lr_spec_bot],
     )
 
+    # Disable structure extrusion on x since the wave port spans len_inf laterally;
+    # otherwise its PEC frame collides with the x-PML extrusion region by construction.
+    pml_no_extrude = td.PML(extrude_structures=False)
     sim = td.Simulation(
         size=(50 * mil, h + 2 * t, 1.05 * L),
         center=(0, 0, 0),
         grid_spec=grid_spec,
         boundary_spec=td.BoundarySpec(
-            x=td.Boundary.pml(), y=td.Boundary.pec(), z=td.Boundary.pml()
+            x=td.Boundary(plus=pml_no_extrude, minus=pml_no_extrude),
+            y=td.Boundary.pec(),
+            z=td.Boundary.pml(),
         ),
         structures=[str_sub, str_signal, str_gnd_top, str_gnd_bot],
         monitors=[],
