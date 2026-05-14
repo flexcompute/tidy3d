@@ -35,7 +35,7 @@ def test_dispatcher_rejects_non_local_or_incomplete_bridge_url(bridge_url):
 
 def test_viewer_inline_payload_accepts_file_uri(tmp_path):
     source = tmp_path / "simulation.py"
-    source.write_text("sim = object()\n", encoding="utf-8")
+    source.write_bytes(b"sim = object()\n")
 
     payload = viewer.build_inline_payload(source.as_uri())
 
