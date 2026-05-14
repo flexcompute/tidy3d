@@ -30,8 +30,10 @@ def _loss_like_impl(sim: td.Simulation, design_box: td.Box, p: np.ndarray, param
 def _make_centered_linear_structure_case(shape: tuple[int, int]):
     """Construct a centered 2D initialization case with linear epsilon mapping."""
 
+    # Keep two cells of background around the design box so extras local-subpixel
+    # validation has enough clipping margin for warning-focused tests.
     sim = td.Simulation(
-        size=(2.0, 2.0, 0.0),
+        size=(5.0, 5.0, 0.0),
         grid_spec=td.GridSpec.uniform(dl=1.0),
         boundary_spec=td.BoundarySpec.pml(x=True, y=True),
         run_time=1e-12,
@@ -339,8 +341,10 @@ def test_initialize_params_from_simulation_no_warning_when_center_is_sampled():
 def test_initialize_params_from_simulation_no_warning_for_singleton_axis_off_center():
     """A singleton axis is invariant and should not warn if its lone sample is off-center."""
 
+    # Keep enough background in every finite dimension so this test only asserts
+    # the design-grid center warning behavior, not local-subpixel extrusion.
     sim = td.Simulation(
-        size=(2.0, 2.0, 1.0),
+        size=(5.0, 5.0, 5.0),
         grid_spec=td.GridSpec.uniform(dl=1.0),
         boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
         run_time=1e-12,
