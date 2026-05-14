@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import io
+
 import numpy as np
 import pydantic as pd
 import pytest
 from matplotlib import pyplot as plt
+from rich.console import Console
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
+from tidy3d.log import LogHandler, log
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
@@ -3540,3 +3544,49 @@ def test_eme_local_mode_sweep():
         # Truncated-away modes are NaN-padded
         # (see test_eme_stack_sweep_points_nan_pads_ragged_modes).
         assert np.nansum(T) > 0
+
+
+@pytest.mark.numerical
+def test_eme_local_propagate_progress_default_renders(monkeypatch):
+    """Default ``progress=True``: ``propagate`` renders a bar for every phase
+    of both ``compute_overlaps`` and ``propagate_from_overlaps`` via the real
+    logger console. A regression that flipped the default to ``False`` or
+    broke ``propagate``'s kwarg forwarding to either lower method would lose
+    one of the six phase labels."""
+    buf = io.StringIO()
+    captured = Console(file=buf, force_terminal=True, width=80)
+    monkeypatch.setitem(log.handlers, "console", LogHandler(captured, "WARNING"))
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=2)
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    sim.propagate(mode_data)  # default progress kwarg
+
+    out = buf.getvalue()
+    for phase in (
+        "stage_cell_modes",
+        "compute_cell_overlap",
+        "compute_interface_overlap",
+        "compute_cell_smatrix",
+        "compute_interface_smatrix",
+        "compute_smatrix",
+    ):
+        assert phase in out, f"missing phase {phase!r} in captured progress output"
+
+
+@pytest.mark.numerical
+def test_eme_local_propagate_progress_false_leaves_handlers_untouched(monkeypatch):
+    """``progress=False`` does not auto-install the default console handler.
+
+    Regression for a previous bug where ``_ProgressContext`` called
+    ``get_logging_console()`` even on the disabled path, silently
+    re-enabling stdout logging after an explicit opt-out. Covers both
+    ``compute_overlaps`` and ``propagate_from_overlaps`` because
+    ``propagate`` forwards the kwarg to each.
+    """
+    monkeypatch.delitem(log.handlers, "console", raising=False)
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=2)
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    sim.propagate(mode_data, progress=False)
+
+    assert "console" not in log.handlers

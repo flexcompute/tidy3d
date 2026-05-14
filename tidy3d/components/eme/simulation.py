@@ -37,7 +37,7 @@ from tidy3d.components.validators import (
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.log import log
+from tidy3d.log import NoOpProgress, Progress, get_logging_console, log
 
 from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGridSpecType
 from .monitor import (
@@ -57,6 +57,7 @@ from .sweep import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from types import TracebackType
 
     from pydantic import NonNegativeInt, PositiveInt
 
@@ -153,6 +154,47 @@ def _stack_sweep_points(arrays: list[EMESMatrixDataArray]) -> EMESMatrixDataArra
         for a in arrays
     ]
     return xr.concat(reindexed, dim="sweep_index")
+
+
+class _ProgressContext:
+    """Multi-phase ``rich`` progress bar for the EME local staged pipeline.
+
+    Wraps :func:`tidy3d.log.Progress` with one task per declared phase. Phases
+    with ``total == 0`` are skipped to avoid showing already-done bars for
+    pipeline steps that have no work to do.
+    """
+
+    def __init__(self, show_progress: bool, phases: list[tuple[str, int]]) -> None:
+        self._show_progress = show_progress
+        self._phases = [(name, total) for name, total in phases if total > 0]
+        self._task_ids: dict[str, object | None] = {}
+        self._cm = None
+        self._progress = None
+
+    def __enter__(self) -> _ProgressContext:
+        # Skip get_logging_console() on the disabled path: that helper auto-installs
+        # the default console handler if one is missing, which would silently
+        # re-enable stdout logging after an explicit progress=False call.
+        if self._show_progress:
+            self._cm = Progress(console=get_logging_console(), show_progress=True)
+        else:
+            self._cm = NoOpProgress()
+        self._progress = self._cm.__enter__()
+        for name, total in self._phases:
+            self._task_ids[name] = self._progress.add_task(description=name, total=total)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self._cm.__exit__(exc_type, exc_val, tb)
+
+    def tick(self, phase: str, n: int = 1) -> None:
+        if phase in self._task_ids:
+            self._progress.update(self._task_ids[phase], advance=n)
 
 
 class EMESimulation(AbstractYeeGridSimulation):
@@ -2269,6 +2311,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     def compute_overlaps(
         self,
         mode_data: Sequence[ModeSimulationData | ModeSolverData],
+        progress: bool = True,
     ) -> tuple[list[EMEStageCellOverlap], list[EMEStageInterfaceOverlap]]:
         """Stage modes and compute all per-cell and per-interface overlaps.
 
@@ -2284,6 +2327,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         mode_data : Sequence[:class:`.ModeSimulationData` | :class:`.ModeSolverData`]
             One mode result per EME cell, in cell order.  Typically
             ``[ms.run_local() for ms in sim.mode_simulations]``.
+        progress : bool
+            If ``True`` (default), show a ``rich`` progress bar on the logging
+            console.
 
         Returns
         -------
@@ -2301,24 +2347,38 @@ class EMESimulation(AbstractYeeGridSimulation):
         if len(mode_data) != num_cells:
             raise ValidationError(f"Expected {num_cells} mode data entries, got {len(mode_data)}.")
 
-        cell_modes = [self.stage_cell_modes(mode_data[i], cell_index=i) for i in range(num_cells)]
+        num_interfaces = len(self.cell_index_pairs)
+        with _ProgressContext(
+            progress,
+            phases=[
+                ("stage_cell_modes", num_cells),
+                ("compute_cell_overlap", num_cells),
+                ("compute_interface_overlap", num_interfaces),
+            ],
+        ) as pc:
+            cell_modes: list[EMEStageCellModes] = []
+            for i in range(num_cells):
+                cell_modes.append(self.stage_cell_modes(mode_data[i], cell_index=i))
+                pc.tick("stage_cell_modes")
 
-        cell_overlaps: list[EMEStageCellOverlap] = []
-        for cm in cell_modes:
-            cell_overlaps.append(self.compute_cell_overlap(cm))
+            cell_overlaps: list[EMEStageCellOverlap] = []
+            for cm in cell_modes:
+                cell_overlaps.append(self.compute_cell_overlap(cm))
+                gc.collect()
+                pc.tick("compute_cell_overlap")
+
+            modes_by_idx = {cm.cell_index: cm for cm in cell_modes}
+            interface_overlaps: list[EMEStageInterfaceOverlap] = []
+            for li, ri in self.cell_index_pairs:
+                interface_overlaps.append(
+                    self.compute_interface_overlap(modes_by_idx[li], modes_by_idx[ri])
+                )
+                gc.collect()
+                pc.tick("compute_interface_overlap")
+
+            # Release mode field data — no longer needed after overlaps
+            del cell_modes, modes_by_idx
             gc.collect()
-
-        modes_by_idx = {cm.cell_index: cm for cm in cell_modes}
-        interface_overlaps: list[EMEStageInterfaceOverlap] = []
-        for li, ri in self.cell_index_pairs:
-            interface_overlaps.append(
-                self.compute_interface_overlap(modes_by_idx[li], modes_by_idx[ri])
-            )
-            gc.collect()
-
-        # Release mode field data — no longer needed after overlaps
-        del cell_modes, modes_by_idx
-        gc.collect()
 
         return cell_overlaps, interface_overlaps
 
@@ -2575,6 +2635,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         self,
         cell_overlaps: list[EMEStageCellOverlap],
         interface_overlaps: list[EMEStageInterfaceOverlap],
+        progress: bool = True,
     ) -> EMESMatrixDataset:
         """Propagate to the device S-matrix using pre-computed overlaps.
 
@@ -2595,6 +2656,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         interface_overlaps : list[:class:`.EMEStageInterfaceOverlap`]
             One per interface, in the order of :attr:`cell_index_pairs`,
             typically from :meth:`compute_overlaps`.
+        progress : bool
+            If ``True`` (default), show a ``rich`` progress bar on the logging
+            console.
 
         Returns
         -------
@@ -2638,26 +2702,43 @@ class EMESimulation(AbstractYeeGridSimulation):
         cell_sms: list[EMEStageCellSMatrix] | None = None
         iface_sms: list[EMEStageInterfaceSMatrix] | None = None
 
-        per_point = []
-        for sweep_idx in range(num_sweep):
-            if cell_sms is None or self._sweep_cells:
-                cell_sms = [
-                    self.compute_cell_smatrix(co, sweep_index=sweep_idx) for co in cell_overlaps
-                ]
-            if iface_sms is None or self._sweep_interfaces:
-                iface_sms = [
-                    self.compute_interface_smatrix(
-                        overlaps_by_idx[li],
-                        overlaps_by_idx[ri],
-                        iface_overlaps_by_pair[(li, ri)],
-                        sweep_index=sweep_idx,
-                    )
-                    for (li, ri) in self.cell_index_pairs
-                ]
-            per_point.append(
-                self.compute_smatrix(cell_overlaps, cell_sms, iface_sms, sweep_index=sweep_idx)
-            )
-            gc.collect()
+        # Total per-phase work matches the actual invocation count under sweep
+        # invariance: when ``_sweep_cells`` is False the cell smatrices run only
+        # at sweep_idx=0; same for interfaces.
+        num_cell_sweeps = num_sweep if self._sweep_cells else 1
+        num_iface_sweeps = num_sweep if self._sweep_interfaces else 1
+        with _ProgressContext(
+            progress,
+            phases=[
+                ("compute_cell_smatrix", num_cells * num_cell_sweeps),
+                ("compute_interface_smatrix", num_interfaces * num_iface_sweeps),
+                ("compute_smatrix", num_sweep),
+            ],
+        ) as pc:
+            per_point = []
+            for sweep_idx in range(num_sweep):
+                if cell_sms is None or self._sweep_cells:
+                    cell_sms = []
+                    for co in cell_overlaps:
+                        cell_sms.append(self.compute_cell_smatrix(co, sweep_index=sweep_idx))
+                        pc.tick("compute_cell_smatrix")
+                if iface_sms is None or self._sweep_interfaces:
+                    iface_sms = []
+                    for li, ri in self.cell_index_pairs:
+                        iface_sms.append(
+                            self.compute_interface_smatrix(
+                                overlaps_by_idx[li],
+                                overlaps_by_idx[ri],
+                                iface_overlaps_by_pair[(li, ri)],
+                                sweep_index=sweep_idx,
+                            )
+                        )
+                        pc.tick("compute_interface_smatrix")
+                per_point.append(
+                    self.compute_smatrix(cell_overlaps, cell_sms, iface_sms, sweep_index=sweep_idx)
+                )
+                pc.tick("compute_smatrix")
+                gc.collect()
 
         if len(per_point) == 1:
             ds = per_point[0]
@@ -2687,6 +2768,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     def propagate(
         self,
         mode_data: Sequence[ModeSimulationData | ModeSolverData],
+        progress: bool = True,
     ) -> EMESMatrixDataset:
         """Propagate modes through the device to compute the full S-matrix.
 
@@ -2709,13 +2791,17 @@ class EMESimulation(AbstractYeeGridSimulation):
         mode_data : Sequence[:class:`.ModeSimulationData` | :class:`.ModeSolverData`]
             One mode result per EME cell, in cell order.  Typically
             ``[ms.run_local() for ms in sim.mode_simulations]``.
+        progress : bool
+            If ``True`` (default), show a ``rich`` progress bar on the logging
+            console. Forwarded to :meth:`compute_overlaps` and
+            :meth:`propagate_from_overlaps`.
 
         Returns
         -------
         :class:`.EMESMatrixDataset`
         """
-        cell_overlaps, interface_overlaps = self.compute_overlaps(mode_data)
-        return self.propagate_from_overlaps(cell_overlaps, interface_overlaps)
+        cell_overlaps, interface_overlaps = self.compute_overlaps(mode_data, progress=progress)
+        return self.propagate_from_overlaps(cell_overlaps, interface_overlaps, progress=progress)
 
     def smatrix_in_basis(
         self,
