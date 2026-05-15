@@ -5258,6 +5258,23 @@
     "IsothermalSSACAnalysis": {
       "additionalProperties": false,
       "properties": {
+        "at_voltages": {
+          "anyOf": [
+            {
+              "type": "ArrayLike",
+              "x-array-dtype": "<f8",
+              "x-array-forbid_nan": true,
+              "x-array-ndim": 1,
+              "x-array-scalar_to_1d": true,
+              "x-array-shape": null,
+              "x-array-strict": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "attrs": {
           "additionalProperties": true,
           "default": {},
@@ -7852,6 +7869,23 @@
     "SSACAnalysis": {
       "additionalProperties": false,
       "properties": {
+        "at_voltages": {
+          "anyOf": [
+            {
+              "type": "ArrayLike",
+              "x-array-dtype": "<f8",
+              "x-array-forbid_nan": true,
+              "x-array-ndim": 1,
+              "x-array-scalar_to_1d": true,
+              "x-array-shape": null,
+              "x-array-strict": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "attrs": {
           "additionalProperties": true,
           "default": {},
@@ -7905,6 +7939,7 @@
       "properties": {
         "amplitude": {
           "default": 1.0,
+          "exclusiveMinimum": 0,
           "type": "number"
         },
         "attrs": {

@@ -1003,6 +1003,16 @@ def test_freqs_validation():
     freqs, amplitude = sim._get_ssac_frequency_and_amplitude()
     assert np.isclose(freqs, freqs_input).all()
     assert np.isclose(1e-3, amplitude)
+    # Default: at_voltages is None ⇒ SSAC runs only at the last DC sweep voltage.
+    assert sim.analysis_spec.at_voltages is None
+
+    specific_voltage_spec = isothermal_spec.updated_copy(at_voltages=[0, 2])
+    specific_voltage_sim = sim.updated_copy(analysis_spec=specific_voltage_spec)
+    assert np.isclose(specific_voltage_sim.analysis_spec.at_voltages, [0, 2]).all()
+
+    with pytest.raises(ValidationError) as excinfo:
+        sim.updated_copy(analysis_spec=isothermal_spec.updated_copy(at_voltages=[3]))
+    assert_single_value_error_loc(excinfo, ("analysis_spec", "at_voltages"), "Missing voltages")
 
     with pytest.raises(ValidationError, match=r"'freqs' cannot contain infinite frequencies."):
         sim.updated_copy(analysis_spec=sim.analysis_spec.updated_copy(freqs=[1e2, np.inf]))

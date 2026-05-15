@@ -130,6 +130,13 @@ CYLINDER_RADIUS_TOL = 1e-6
 # Minimum radius as fraction of the larger radius (for tapered cylinders)
 MIN_CYLINDER_RADIUS_FRACTION = 0.01
 
+# Absolute tolerance (V) for matching SSAC `at_voltages` against the DC sweep.
+# Both lists travel through JSON as IEEE-754 doubles, so a machine-epsilon-scale
+# value is intentional — any larger tolerance would silently accept a voltage
+# the user did not configure. Mirrored by SSAC_VOLTAGE_MATCH_TOL_V in
+# Flow360DriftDiffusionSolver.cpp; keep in sync.
+SSAC_VOLTAGE_MATCH_TOL_V = 1e-14
+
 
 def _get_cylinder_radii_with_meshing_tol(
     geometry: Cylinder, min_mesh_size: float = 0
@@ -526,6 +533,9 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
         self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
         self._call_with_validation_loc(("boundary_spec",), self._check_freqs_requires_ac_source)
+        self._call_with_validation_loc(
+            ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
+        )
         simulation_types = self._check_simulation_types()
         if TCADAnalysisTypes.CHARGE in simulation_types:
             self._call_with_validation_loc(
@@ -817,6 +827,40 @@ class HeatChargeSimulation(AbstractSimulation):
                     "If 'freqs' is provided and not empty, at least one "
                     "'SSACVoltageSource' must be present in the boundary conditions."
                 )
+
+        return self
+
+    def _check_ssac_specific_voltages(self) -> Self:
+        """Validate user-selected SSAC bias points against the SSAC voltage source."""
+        analysis_spec = self.analysis_spec
+        if not isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
+            return self
+        if analysis_spec.at_voltages is None:
+            return self
+
+        ac_source_voltages = None
+        for bc in self.boundary_spec:
+            if isinstance(bc.condition, VoltageBC) and isinstance(
+                bc.condition.source, SSACVoltageSource
+            ):
+                ac_source_voltages = np.asarray(bc.condition.source.voltage, dtype=float)
+                break
+
+        if ac_source_voltages is None:
+            return self
+
+        missing_voltages = [
+            voltage
+            for voltage in analysis_spec.at_voltages
+            if not np.any(
+                np.isclose(ac_source_voltages, voltage, rtol=0.0, atol=SSAC_VOLTAGE_MATCH_TOL_V)
+            )
+        ]
+        if missing_voltages:
+            raise SetupError(
+                "Every entry in 'at_voltages' must be present in the "
+                f"'SSACVoltageSource.voltage' list. Missing voltages: {missing_voltages}."
+            )
 
         return self
 

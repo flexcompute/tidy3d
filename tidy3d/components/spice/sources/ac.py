@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field, FiniteFloat, field_validator
+from pydantic import Field, PositiveFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
@@ -44,11 +44,12 @@ class SSACVoltageSource(Tidy3dBaseModel):
         json_schema_extra={"units": VOLT},
     )
 
-    amplitude: FiniteFloat = Field(
+    amplitude: PositiveFloat = Field(
         default=1.0,
         title="Small Signal Amplitude",
         description="Amplitude of the small-signal perturbation for SSAC analysis.",
         json_schema_extra={"units": VOLT},
+        allow_inf_nan=False,
     )
 
     @field_validator("voltage")
@@ -57,11 +58,4 @@ class SSACVoltageSource(Tidy3dBaseModel):
         for v in val:
             if v == td_inf:
                 raise ValueError(f"Voltages must be finite. Current voltage={val}.")
-        return val
-
-    @field_validator("amplitude")
-    @classmethod
-    def validate_amplitude(cls, val: FiniteFloat) -> FiniteFloat:
-        if val == td_inf:
-            raise ValueError(f"Signal amplitude must be finite. Current amplitude={val}.")
         return val

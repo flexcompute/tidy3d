@@ -10,7 +10,7 @@ from tidy3d.components.spice.analysis.dc import (
     SteadyChargeDCAnalysis,
 )
 from tidy3d.components.types import ArrayFloat1D
-from tidy3d.constants import HERTZ
+from tidy3d.constants import HERTZ, VOLT
 from tidy3d.constants import inf as td_inf
 
 
@@ -40,6 +40,16 @@ class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
         description="List of frequencies for small signal AC analysis. "
         "At least one :class:`.SSACVoltageSource` must be present in the boundary conditions.",
         json_schema_extra={"units": HERTZ},
+    )
+
+    at_voltages: ArrayFloat1D | None = Field(
+        default=None,
+        title="SSAC Bias Voltages",
+        description="DC operating point voltages at which SSAC is run. "
+        "If ``None``, SSAC runs only at the last configured DC voltage. "
+        "Pass an explicit array (a subset of the DC sweep) to select specific bias points; "
+        "pass the full DC sweep to run SSAC at every voltage.",
+        json_schema_extra={"units": VOLT},
     )
 
     @field_validator("freqs")
