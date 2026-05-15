@@ -19231,7 +19231,7 @@
               "type": "null"
             }
           ],
-          "default": 5
+          "default": 12
         },
         "reference_impedance": {
           "anyOf": [
@@ -20119,7 +20119,7 @@
               "type": "null"
             }
           ],
-          "default": 5
+          "default": 12
         },
         "reference_impedance": {
           "anyOf": [

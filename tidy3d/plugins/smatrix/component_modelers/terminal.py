@@ -1445,12 +1445,23 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             port.to_load(snap_center=snap_centers[port.name]) for port in self._lumped_ports
         ]
 
-        # Add mesh overrides for any wave ports present
+        # Add mesh overrides and snapping points for any wave ports present.
+        # Port snaps are prepended so user-supplied snapping points retain
+        # precedence (see WavePort.to_mode_simulation for the same ordering).
         mesh_overrides = list(sim_intermediate.grid_spec.override_structures)
+        port_snapping_points: list = []
         for wave_port in self._wave_ports + self._terminal_wave_ports:
             if wave_port.num_grid_cells is not None:
                 mesh_overrides.extend(wave_port.to_mesh_overrides())
-        new_grid_spec = sim_intermediate.grid_spec.updated_copy(override_structures=mesh_overrides)
+                port_snapping_points.extend(wave_port.to_snapping_points())
+        snapping_points = [
+            *port_snapping_points,
+            *sim_intermediate.grid_spec.snapping_points,
+        ]
+        new_grid_spec = sim_intermediate.grid_spec.updated_copy(
+            override_structures=mesh_overrides,
+            snapping_points=snapping_points,
+        )
 
         # Update simulation (no monitors, no absorbers yet)
         sim = sim_intermediate.updated_copy(

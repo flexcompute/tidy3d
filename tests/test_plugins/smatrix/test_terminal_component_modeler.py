@@ -2330,6 +2330,97 @@ def test_wave_port_extrusion_vertex_tolerance():
     plt.close()
 
 
+def test_wave_port_mesh_overrides_aspect_ratio():
+    """Test that to_mesh_overrides applies aspect-ratio-aware cell counts."""
+    import math
+
+    from tidy3d.plugins.smatrix.ports.wave import MIN_WAVE_PORT_NUM_CELLS
+
+    # Square port: both axes should get num_grid_cells
+    port_square = WavePort(
+        center=(0, 0, 0), size=(0, 2, 2), direction="+", name="square", num_grid_cells=10
+    )
+    overrides = port_square.to_mesh_overrides()
+    assert len(overrides) == 1
+    dl = overrides[0].dl
+    # Both transverse axes (y=1, z=2) should get size/10
+    assert dl[1] == pytest.approx(2.0 / 10)
+    assert dl[2] == pytest.approx(2.0 / 10)
+
+    # Rectangular port 6:1 aspect ratio
+    port_rect = WavePort(
+        center=(0, 0, 0), size=(0, 6, 1), direction="+", name="rect", num_grid_cells=10
+    )
+    overrides = port_rect.to_mesh_overrides()
+    dl = overrides[0].dl
+    # Largest axis (y=6) gets 10 cells
+    assert dl[1] == pytest.approx(6.0 / 10)
+    # Smaller axis (z=1) gets ceil(10 * 1/6) = 2, clamped to MIN=3
+    expected_z_cells = max(MIN_WAVE_PORT_NUM_CELLS, math.ceil(10 * 1 / 6))
+    assert expected_z_cells == 3
+    assert dl[2] == pytest.approx(1.0 / expected_z_cells)
+
+    # 3:1 aspect ratio
+    port_3to1 = WavePort(
+        center=(0, 0, 0), size=(0, 3, 1), direction="+", name="3to1", num_grid_cells=10
+    )
+    overrides = port_3to1.to_mesh_overrides()
+    dl = overrides[0].dl
+    assert dl[1] == pytest.approx(3.0 / 10)
+    # ceil(10 * 1/3) = 4
+    assert dl[2] == pytest.approx(1.0 / 4)
+
+
+def test_wave_port_snapping_points():
+    """Test that to_snapping_points returns the two transverse corners of the port plane,
+    each pinned to the injection-axis center."""
+    # Port in the x=0 plane, transverse extents y in [-1, 1], z in [-2, 2]
+    port = WavePort(
+        center=(0, 0, 0), size=(0, 2, 4), direction="+", name="snap_test", num_grid_cells=10
+    )
+
+    points = port.to_snapping_points()
+    assert set(points) == {(0.0, -1.0, -2.0), (0.0, 1.0, 2.0)}
+
+
+def test_wave_port_snapping_points_disabled():
+    """When num_grid_cells is None, no snapping points are emitted."""
+    port = WavePort(
+        center=(0, 0, 0), size=(0, 2, 4), direction="+", name="no_snap", num_grid_cells=None
+    )
+    assert port.to_snapping_points() == []
+
+
+def test_terminal_component_modeler_emits_wave_port_snapping_points():
+    """The public TerminalComponentModeler path exposes wave-port snapping planes in its grid spec
+    and prepends them before any user-supplied snapping points so user snaps retain precedence."""
+    # A user-supplied snapping point well away from any port boundary so the assertion
+    # is unambiguous regardless of where the coaxial port is placed.
+    user_snap = (1.234, 5.678, 9.012)
+    modeler = make_coaxial_component_modeler(
+        grid_spec=td.GridSpec.auto(wavelength=10e3, snapping_points=[user_snap]),
+        port_refinement=True,
+        port_types=(WavePort, WavePort),
+    )
+    # _wave_ports / sim_dict / _base_sim_with_grid_and_lumped_elements are the public-ish
+    # boundary where port snaps get folded into the simulation grid spec.
+    _ = modeler.sim_dict
+    base_sim = modeler._base_sim_with_grid_and_lumped_elements
+    base_snaps = list(base_sim.grid_spec.snapping_points)
+
+    for port in modeler._wave_ports:
+        for expected in port.to_snapping_points():
+            assert expected in base_snaps
+
+    # User snap must survive the merge and land after every port-emitted snap so it wins
+    # under Mesher.insert_snapping_points precedence rules.
+    assert user_snap in base_snaps
+    user_snap_idx = base_snaps.index(user_snap)
+    for port in modeler._wave_ports:
+        for port_snap in port.to_snapping_points():
+            assert base_snaps.index(port_snap) < user_snap_idx
+
+
 def test_custom_source_time(monkeypatch, tmp_path):
     """Test that custom_source_time is properly used in the terminal component modeler."""
     # Create a custom source time
@@ -3360,7 +3451,8 @@ def test_wave_port_to_mode_simulation():
     )
     filtered_grid_spec = localized_sim.grid_spec
     filtered_grid_spec = filtered_grid_spec.updated_copy(
-        override_structures=[*filtered_grid_spec.override_structures, *port.to_mesh_overrides()]
+        override_structures=[*filtered_grid_spec.override_structures, *port.to_mesh_overrides()],
+        snapping_points=[*port.to_snapping_points(), *filtered_grid_spec.snapping_points],
     )
     filtered_structures = localized_sim.structures
 
@@ -3764,7 +3856,8 @@ def test_wave_port_to_mode_simulation_freezes_grid_when_extrusions_are_added():
     localized_sim = _wave_port_localized_scene(simulation, port)
     filtered_grid_spec = localized_sim.grid_spec
     filtered_grid_spec = filtered_grid_spec.updated_copy(
-        override_structures=[*filtered_grid_spec.override_structures, *port.to_mesh_overrides()]
+        override_structures=[*filtered_grid_spec.override_structures, *port.to_mesh_overrides()],
+        snapping_points=[*port.to_snapping_points(), *filtered_grid_spec.snapping_points],
     )
     filtered_structures = localized_sim.structures
     filtered_sim = simulation.updated_copy(
@@ -3830,7 +3923,12 @@ def test_wave_port_to_mode_simulation_keeps_transverse_axis_grid_hints():
     assert kept_override.dl == (None, None, 0.03)
     assert kept_override.geometry.bounds[0][0] == pytest.approx(override.geometry.bounds[0][0])
     assert kept_override.geometry.bounds[1][0] == pytest.approx(override.geometry.bounds[1][0])
-    assert mode_sim.grid_spec.snapping_points[-1] == (None, 0, snap_z)
+    # The user-supplied snapping point survives axis-relevant filtering. Port-emitted
+    # snapping points are prepended (see WavePort.to_mode_simulation) so that user
+    # snaps retain precedence in Mesher.insert_snapping_points.
+    snaps = mode_sim.grid_spec.snapping_points
+    assert (None, 0, snap_z) in snaps
+    assert snaps.index((None, 0, snap_z)) > 0
 
 
 def test_wave_port_to_mode_simulation_accepts_structure_and_grid_overrides():

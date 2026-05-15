@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Literal
 
@@ -68,11 +69,11 @@ if TYPE_CHECKING:
     from tidy3d.components.simulation import Simulation
     from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.structure import Structure
-    from tidy3d.components.types import Axis, FreqArray, Shapely, Symmetry
+    from tidy3d.components.types import Axis, CoordinateOptional, FreqArray, Shapely, Symmetry
     from tidy3d.components.types.base import PriorityMode
     from tidy3d.plugins.mode import ModeSolver
 
-DEFAULT_WAVE_PORT_NUM_CELLS = 5
+DEFAULT_WAVE_PORT_NUM_CELLS = 12
 MIN_WAVE_PORT_NUM_CELLS = 3
 DEFAULT_WAVE_PORT_FRAME = PECFrame()
 DEFAULT_REFERENCE_IMPEDANCE_VALUE = 50
@@ -100,9 +101,13 @@ class AbstractWavePort(AbstractTerminalPort, Box):
         DEFAULT_WAVE_PORT_NUM_CELLS,
         ge=MIN_WAVE_PORT_NUM_CELLS,
         title="Number of Grid Cells",
-        description="Number of mesh grid cells in the transverse plane of the `WavePort`. "
-        "Used in generating the suggested list of :class:`.MeshOverrideStructure` objects. "
-        "Must be greater than or equal to 3. When set to `None`, no grid refinement is performed.",
+        description="Minimum number of mesh grid cells along the largest transverse dimension "
+        "of the port. The smaller transverse dimension receives a proportionally "
+        "scaled number of cells based on the aspect ratio (minimum 3). "
+        "Used in generating the suggested list of :class:`.MeshOverrideStructure` objects, "
+        "and to emit snapping planes along the normal axis at the port center "
+        "and at the four transverse port boundaries. "
+        "Must be greater than or equal to 3. When set to ``None``, no grid refinement is performed.",
     )
 
     conjugated_dot_product: bool = Field(
@@ -626,11 +631,21 @@ class AbstractWavePort(AbstractTerminalPort, Box):
             )
             filtered_grid_spec = grid_spec if grid_spec is not None else simulation.grid_spec
 
-        # Append port-specific mesh overrides for the mode region.
+        # Add port-specific mesh overrides and snapping points for the mode region.
+        # Port snaps are prepended so that user-supplied snapping points retain
+        # precedence: `Mesher.insert_snapping_points` resolves entries in list
+        # order and a later snap within `min_step` of an earlier one replaces it.
         if self._is_using_mesh_refinement:
             overrides = list(filtered_grid_spec.override_structures)
             overrides.extend(self.to_mesh_overrides())
-            filtered_grid_spec = filtered_grid_spec.updated_copy(override_structures=overrides)
+            snapping_points = [
+                *self.to_snapping_points(),
+                *filtered_grid_spec.snapping_points,
+            ]
+            filtered_grid_spec = filtered_grid_spec.updated_copy(
+                override_structures=overrides,
+                snapping_points=snapping_points,
+            )
 
         simulation = simulation.updated_copy(
             grid_spec=filtered_grid_spec,
@@ -850,13 +865,23 @@ class AbstractWavePort(AbstractTerminalPort, Box):
 
     def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
         """Creates a list of :class:`.MeshOverrideStructure` for mesh refinement in the transverse
-        plane of the port. The mode source requires at least 3 grid cells in the transverse
-        dimensions, so these mesh overrides will be added to the simulation to ensure that this
-        requirement is satisfied.
+        plane of the port. ``num_grid_cells`` sets the cell count along the largest transverse
+        dimension; the smaller dimension receives a proportionally scaled count based on the
+        aspect ratio (minimum ``MIN_WAVE_PORT_NUM_CELLS``).
         """
+        sizes = {axis: self.size[axis] for axis in self.transverse_axes}
+        max_size = max(sizes.values())
+
         dl = [None] * 3
-        for trans_axis in self.transverse_axes:
-            dl[trans_axis] = self.size[trans_axis] / self.num_grid_cells
+        for axis, size in sizes.items():
+            if max_size == 0 or size == max_size:
+                num_cells = self.num_grid_cells
+            else:
+                num_cells = max(
+                    MIN_WAVE_PORT_NUM_CELLS,
+                    math.ceil(self.num_grid_cells * size / max_size),
+                )
+            dl[axis] = size / num_cells
 
         return [
             MeshOverrideStructure(
@@ -866,6 +891,17 @@ class AbstractWavePort(AbstractTerminalPort, Box):
                 priority=-1,
             )
         ]
+
+    def to_snapping_points(self) -> list[CoordinateOptional]:
+        """Creates a list of snapping points for the wave port: the two opposite corners of the
+        port plane. Together they snap the grid at the injection-axis center and at both
+        transverse extremes. Returns an empty list when mesh refinement is disabled.
+        """
+        if not self._is_using_mesh_refinement:
+            return []
+
+        rmin, rmax = self.bounds
+        return [rmin, rmax]
 
     def _get_mode_data(
         self, sim_mode_data: SimulationData | MicrowaveModeData
