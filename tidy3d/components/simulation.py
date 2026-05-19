@@ -18,6 +18,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic import (
+    ValidationError as PydanticValidationError,
+)
 
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
@@ -73,7 +76,7 @@ from .geometry.utils import (
 )
 from .geometry.utils_2d import get_bounds, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Grid
-from .grid.grid_spec import GridSpec, UniformGrid
+from .grid.grid_spec import GridSpec, UniformGrid, _GeneratedGridSizeError
 from .lumped_element import LumpedElementType
 from .medium import (
     AbstractCustomMedium,
@@ -446,7 +449,72 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         self._validate_num_lumped_elements()
         self._check_3d_simulation_with_lumped_elements()
         self._validate_boundary_spec_symmetry()
+        self._validate_auto_grid_size()
         return self
+
+    def _grid_spec_for_auto_grid_size_validation(self) -> GridSpec:
+        """Grid specification used to estimate AutoGrid cell sizes."""
+        grid_spec = self.grid_spec
+        if grid_spec.auto_grid_used and grid_spec.wavelength is None and hasattr(self, "freqs"):
+            return grid_spec.updated_copy(wavelength=C_0 / np.max(self.freqs))
+        return grid_spec
+
+    def _layerrefinement_boundary_types(self) -> list[list[str | None]]:
+        """Boundary types for layer refinement."""
+        boundary_types = [[None, None], [None, None], [None, None]]
+        for dim, boundary in enumerate(self.boundary_spec.to_list):
+            for side, edge in enumerate(boundary):
+                if isinstance(edge, (PECBoundary, PMCBoundary)):
+                    boundary_types[dim][side] = "pec/pmc"
+                elif isinstance(edge, (Periodic, BlochBoundary)):
+                    boundary_types[dim][side] = "periodic"
+        return boundary_types
+
+    def _validate_auto_grid_size(self) -> Self:
+        """Error if generated grid estimates cell sizes below the supported minimum."""
+        grid_spec = self._grid_spec_for_auto_grid_size_validation()
+        if not grid_spec.snapped_grid_used:
+            return self
+
+        try:
+            _ = self.grid
+        except _GeneratedGridSizeError as err:
+            self._raise_validation_error_at_loc(
+                str(err),
+                "grid_spec",
+                f"grid_{err.axis_name}",
+            )
+        except PydanticValidationError as err:
+            generated_grid_error = self._generated_grid_size_validation_error(err)
+            if generated_grid_error is None:
+                raise
+
+            grid_axis, message = generated_grid_error
+            self._raise_validation_error_at_loc(message, "grid_spec", grid_axis)
+        return self
+
+    @staticmethod
+    def _generated_grid_size_validation_error(
+        err: PydanticValidationError,
+    ) -> tuple[str, str] | None:
+        """Return generated-grid error loc and message from a nested validation error."""
+        errors = err.errors(include_url=False)
+        if len(errors) != 1:
+            return None
+
+        error = errors[0]
+        loc = tuple(error.get("loc", ()))
+        msg = error.get("msg", "")
+        if (
+            len(loc) == 2
+            and loc[0] == "grid_spec"
+            and loc[1] in ("grid_x", "grid_y", "grid_z")
+            and "generated a minimum grid spacing" in msg
+            and "below the supported minimum" in msg
+        ):
+            return loc[1], msg
+
+        return None
 
     def _validate_num_lumped_elements(self) -> Self:
         """Error if too many lumped elements present."""
@@ -1062,14 +1130,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     @cached_property
     def _internal_layerrefinement_boundary_types(self) -> list[list[str | None]]:
         """Boundary types for layer refinement."""
-        boundary_types = [[None, None], [None, None], [None, None]]
-        for dim, boundary in enumerate(self.boundary_spec.to_list):
-            for side, edge in enumerate(boundary):
-                if isinstance(edge, (PECBoundary, PMCBoundary)):
-                    boundary_types[dim][side] = "pec/pmc"
-                elif isinstance(edge, (Periodic, BlochBoundary)):
-                    boundary_types[dim][side] = "periodic"
-        return boundary_types
+        return self._layerrefinement_boundary_types()
 
     @cached_property
     def _internal_layerrefinement_merged_geos(self) -> list[tuple[Any, Shapely]]:
@@ -1546,16 +1607,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
         structures += self.static_structures
 
-        # Get boundary types (relevant for gap meshing)
-        boundary_types = [[None] * 2] * 3
-
-        for dim, boundary in enumerate(self.boundary_spec.to_list):
-            for side, edge in enumerate(boundary):
-                if isinstance(edge, (PECBoundary, PMCBoundary)):
-                    boundary_types[dim][side] = "pec/pmc"
-                elif isinstance(edge, (Periodic, BlochBoundary)):
-                    boundary_types[dim][side] = "periodic"
-
         grid, lines = self.grid_spec._make_grid_and_snapping_lines(
             structures=structures,
             symmetry=self.symmetry,
@@ -1565,7 +1616,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             lumped_elements=self.lumped_elements,
             internal_snapping_points=self.internal_snapping_points,
             internal_override_structures=self.internal_override_structures,
-            boundary_types=boundary_types,
+            boundary_types=self._layerrefinement_boundary_types(),
             structure_priority_mode=self.scene.structure_priority_mode,
             cached_merged_geos=self._internal_layerrefinement_merged_geos,
         )
@@ -3248,9 +3299,9 @@ class Simulation(AbstractYeeGridSimulation):
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
         call_wrapped_validator(validate_boundaries_for_zero_dims, self)
         self._validate_auto_grid_wavelength()
+        super()._run_after_validators()
         self._warn_3d_structures_missing_2d_yee_sampling_plane()
         call_wrapped_validator(
             assert_objects_in_sim_bounds, self, "sources", strict_inequality=True

@@ -946,8 +946,8 @@ def test_eme_simulation(eme_base_sim):
 
     lossy_invariant_aniso_med = td.AnisotropicMedium(
         xx=td.Medium(permittivity=2),
-        yy=td.Medium(permittivity=3, conductivity=1e8),
-        zz=td.Medium(permittivity=3, conductivity=1e8),
+        yy=td.Medium(permittivity=3, conductivity=1e2),
+        zz=td.Medium(permittivity=3, conductivity=1e2),
     )
     lossy_invariant_struct = sim.structures[0].updated_copy(medium=lossy_invariant_aniso_med)
     _ = sim.updated_copy(

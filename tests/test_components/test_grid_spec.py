@@ -9,6 +9,8 @@ from pydantic import ValidationError
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 
+from ..utils import assert_single_value_error_loc
+
 
 def make_grid_spec():
     return td.GridSpec(wavelength=1.0)
@@ -16,6 +18,57 @@ def make_grid_spec():
 
 def make_auto_grid_spec(dl_min=0.02):
     return td.GridSpec.auto(wavelength=1.0, dl_min=dl_min)
+
+
+def make_single_axis_auto_grid_spec(wavelength=5e-6):
+    grid_spec_kwargs = {}
+    if wavelength is not None:
+        grid_spec_kwargs["wavelength"] = wavelength
+    return td.GridSpec(
+        grid_x=td.AutoGrid(
+            min_steps_per_wvl=10,
+            min_steps_per_sim_size=1,
+        ),
+        grid_y=td.UniformGrid(dl=1e-6),
+        grid_z=td.UniformGrid(dl=1e-6),
+        **grid_spec_kwargs,
+    )
+
+
+def make_single_axis_quasiuniform_grid_spec(dl=5e-7):
+    return td.GridSpec(
+        grid_x=td.QuasiUniformGrid(dl=dl),
+        grid_y=td.UniformGrid(dl=1e-6),
+        grid_z=td.UniformGrid(dl=1e-6),
+    )
+
+
+def make_snapping_auto_grid_spec():
+    return td.GridSpec(
+        grid_x=td.AutoGrid(
+            min_steps_per_wvl=10,
+            min_steps_per_sim_size=1,
+        ),
+        grid_y=td.UniformGrid(dl=1e-6),
+        grid_z=td.UniformGrid(dl=1e-6),
+        wavelength=3e-5,
+        snapping_points=((0, 0, 0), (5e-7, 0, 0)),
+    )
+
+
+def make_grid_validation_kwargs():
+    return {
+        "structures": [
+            td.Structure(
+                geometry=td.Box(size=(4e-6, 4e-6, 4e-6)),
+                medium=td.Medium(),
+            )
+        ],
+        "symmetry": (0, 0, 0),
+        "periodic": (False, False, False),
+        "sources": [],
+        "num_pml_layers": ((0, 0), (0, 0), (0, 0)),
+    }
 
 
 def test_add_pml_to_bounds():
@@ -194,6 +247,24 @@ def test_auto_grid_from_sources():
         sources=[src],
         num_pml_layers=((10, 10), (0, 5), (0, 0)),
     )
+
+
+def test_simulation_auto_grid_missing_wavelength_validates_before_grid(monkeypatch):
+    """Test that missing AutoGrid wavelength is caught before grid construction."""
+
+    def fail_make_grid_and_snapping_lines(*args, **kwargs):
+        pytest.fail("Grid generation should not run without wavelength or sources.")
+
+    monkeypatch.setattr(
+        td.GridSpec, "_make_grid_and_snapping_lines", fail_make_grid_and_snapping_lines
+    )
+
+    with pytest.raises(ValidationError, match="wavelength"):
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.auto(),
+            run_time=1e-12,
+        )
 
 
 RTOL = 0.01
@@ -525,13 +596,13 @@ def test_domain_mismatch():
 @pytest.mark.parametrize(
     ("dl", "expect_exception"),
     [
-        (1e-8, True),  # Below 1e-7 => fail
-        (1e-7, False),  # Exactly at lower bound => pass
+        (1e-7, True),  # Below 1e-6 => fail
+        (1e-6, False),  # Exactly at lower bound => pass
         (0.0, True),  # Zero => fail
     ],
 )
 def test_uniform_grid_dl_validation(dl, expect_exception):
-    """Test the validator that checks 'dl' is between 1e-7 and 3e8 µm."""
+    """Test the validator that checks 'dl' is at least 1e-6 µm."""
     if expect_exception:
         with pytest.raises(ValidationError):
             _ = td.Simulation(
@@ -545,6 +616,348 @@ def test_uniform_grid_dl_validation(dl, expect_exception):
             grid_spec=td.GridSpec.uniform(dl=dl),
             run_time=1e-12,
         )
+
+
+@pytest.mark.parametrize(
+    ("wavelength", "expect_exception"),
+    [
+        (5e-6, True),
+        (3e-5, False),
+    ],
+)
+def test_autogrid_generated_dl_validation(wavelength, expect_exception):
+    """Test that AutoGrid-generated spacing below the unit-check threshold errors."""
+    sim_kwargs = {
+        "size": (4e-6, 4e-6, 4e-6),
+        "boundary_spec": td.BoundarySpec.pec(x=True, y=True, z=True),
+        "grid_spec": make_single_axis_auto_grid_spec(wavelength),
+        "run_time": 1e-12,
+    }
+
+    if expect_exception:
+        with pytest.raises(ValidationError) as excinfo:
+            _ = td.Simulation(**sim_kwargs)
+        assert_single_value_error_loc(excinfo, ("grid_spec", "grid_x"), "AutoGrid generated")
+    else:
+        sim = td.Simulation(**sim_kwargs)
+        assert sim.num_cells < 100
+
+
+def test_autogrid_make_grid_generated_dl_validation(monkeypatch):
+    """Test that direct GridSpec grid generation catches too-small AutoGrid spacing."""
+    grid_spec = make_single_axis_auto_grid_spec()
+
+    def fail_make_coords(*args, **kwargs):
+        raise AssertionError("AutoGrid.make_coords should not run after a failed size estimate.")
+
+    monkeypatch.setattr(td.AutoGrid, "make_coords", fail_make_coords)
+
+    with pytest.raises(SetupError, match="AutoGrid generated"):
+        _ = grid_spec.make_grid(**make_grid_validation_kwargs())
+
+
+def test_autogrid_make_grid_layer_refinement_validates_generated_grid(monkeypatch):
+    """Test that layer-refinement bounds do not fail before generated grid validation."""
+    grid_spec = make_single_axis_auto_grid_spec(wavelength=3e-5).updated_copy(
+        layer_refinement_specs=[
+            td.LayerRefinementSpec(
+                axis=0,
+                center=(0, 0, 0),
+                size=(4e-6, 4e-6, 4e-6),
+                corner_finder=None,
+                corner_refinement=None,
+                bounds_refinement=None,
+            )
+        ]
+    )
+
+    monkeypatch.setattr(td.LayerRefinementSpec, "suggested_dl_min", lambda *args, **kwargs: 1.5e-6)
+    monkeypatch.setattr(td.AutoGrid, "make_coords", lambda *args, **kwargs: np.array([-2e-6, 2e-6]))
+
+    grid = grid_spec.make_grid(**make_grid_validation_kwargs())
+
+    assert np.min(grid.sizes.x) > 1e-6
+
+
+def test_autogrid_make_grid_gap_refinement_validation(monkeypatch):
+    """Test that gap meshing validates the generated grid after remeshing."""
+    grid_spec = make_single_axis_auto_grid_spec(wavelength=3e-5).updated_copy(
+        layer_refinement_specs=[
+            td.LayerRefinementSpec(
+                axis=0,
+                center=(0, 0, 0),
+                size=(4e-6, 4e-6, 4e-6),
+                corner_finder=None,
+                corner_refinement=None,
+                bounds_refinement=None,
+                gap_meshing_iters=1,
+                dl_min_from_gap_width=True,
+            )
+        ]
+    )
+
+    monkeypatch.setattr(td.LayerRefinementSpec, "_merged_geos", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        td.LayerRefinementSpec,
+        "_resolve_gaps",
+        lambda *args, **kwargs: ([(0, None, None)], 1e-6),
+    )
+
+    make_grid_one_iteration = td.GridSpec._make_grid_one_iteration
+    num_grid_iterations = 0
+    old_grid = None
+
+    def wrapped_make_grid_one_iteration(*args, **kwargs):
+        nonlocal num_grid_iterations, old_grid
+        num_grid_iterations += 1
+        if num_grid_iterations == 1:
+            old_grid = make_grid_one_iteration(*args, **kwargs)
+            return old_grid
+        return old_grid
+
+    monkeypatch.setattr(td.GridSpec, "_make_grid_one_iteration", wrapped_make_grid_one_iteration)
+
+    _ = grid_spec.make_grid(**make_grid_validation_kwargs())
+    assert num_grid_iterations == 2
+
+
+def test_autogrid_make_grid_reuses_preprocessed_structures(monkeypatch):
+    """Test that grid generation does not rebuild override-augmented structures."""
+    grid_spec = td.GridSpec.auto(wavelength=1.55, min_steps_per_sim_size=1)
+    get_all_structures_affecting_grid = td.GridSpec._get_all_structures_affecting_grid
+    num_calls = 0
+
+    def wrapped_get_all_structures_affecting_grid(*args, **kwargs):
+        nonlocal num_calls
+        num_calls += 1
+        return get_all_structures_affecting_grid(*args, **kwargs)
+
+    monkeypatch.setattr(
+        td.GridSpec, "_get_all_structures_affecting_grid", wrapped_get_all_structures_affecting_grid
+    )
+
+    _ = grid_spec.make_grid(
+        **(
+            make_grid_validation_kwargs()
+            | {
+                "structures": [
+                    td.Structure(geometry=td.Box(size=(4, 4, 4)), medium=td.Medium()),
+                ]
+            }
+        )
+    )
+    assert num_calls == 1
+
+
+def test_autogrid_make_grid_snapping_validation():
+    """Test that snapping points cannot produce too-small generated spacing."""
+    with pytest.raises(SetupError, match="AutoGrid generated"):
+        _ = make_snapping_auto_grid_spec().make_grid(
+            **(
+                make_grid_validation_kwargs()
+                | {
+                    "structures": [
+                        td.Structure(
+                            geometry=td.Box(size=(1e-5, 4e-6, 4e-6)),
+                            medium=td.Medium(),
+                        )
+                    ]
+                }
+            )
+        )
+
+
+def test_autogrid_snapping_validation_loc():
+    """Test that snapping-driven generated spacing errors anchor on the grid spec."""
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.Simulation(
+            size=(1e-5, 4e-6, 4e-6),
+            boundary_spec=td.BoundarySpec.pec(x=True, y=True, z=True),
+            grid_spec=make_snapping_auto_grid_spec(),
+            run_time=1e-12,
+        )
+    assert_single_value_error_loc(excinfo, ("grid_spec", "grid_x"), "AutoGrid generated")
+
+
+def test_autogrid_validation_uses_zero_dim_normalized_boundaries(monkeypatch):
+    """Test that grid validation sees boundary updates for zero-size dimensions."""
+    boundary_types_seen = []
+    make_grid_and_snapping_lines = td.GridSpec._make_grid_and_snapping_lines
+
+    def wrapped_make_grid_and_snapping_lines(*args, **kwargs):
+        boundary_types_seen.append(kwargs["boundary_types"])
+        return make_grid_and_snapping_lines(*args, **kwargs)
+
+    monkeypatch.setattr(
+        td.GridSpec, "_make_grid_and_snapping_lines", wrapped_make_grid_and_snapping_lines
+    )
+
+    sim = td.Simulation(
+        size=(0, 4, 4),
+        boundary_spec=td.BoundarySpec.pml(x=True),
+        grid_spec=td.GridSpec.auto(wavelength=1.55),
+        run_time=1e-12,
+    )
+
+    assert boundary_types_seen[0][0] == ["periodic", "periodic"]
+    assert isinstance(sim.boundary_spec.x.minus, td.Periodic)
+    assert isinstance(sim.boundary_spec.x.plus, td.Periodic)
+
+
+def test_autogrid_gap_refinement_validation_loc(monkeypatch):
+    """Test that gap-refinement generated spacing errors anchor on the grid spec."""
+    grid_spec = make_single_axis_auto_grid_spec(wavelength=3e-5).updated_copy(
+        layer_refinement_specs=[
+            td.LayerRefinementSpec(
+                axis=0,
+                center=(0, 0, 0),
+                size=(4e-6, 4e-6, 4e-6),
+                corner_finder=None,
+                corner_refinement=None,
+                bounds_refinement=None,
+                gap_meshing_iters=1,
+                dl_min_from_gap_width=True,
+            )
+        ]
+    )
+
+    monkeypatch.setattr(td.LayerRefinementSpec, "_merged_geos", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        td.LayerRefinementSpec,
+        "_resolve_gaps",
+        lambda *args, **kwargs: ([(0, None, None)], 1e-6),
+    )
+
+    make_grid_one_iteration = td.GridSpec._make_grid_one_iteration
+    old_grid = None
+
+    def wrapped_make_grid_one_iteration(*args, **kwargs):
+        nonlocal old_grid
+        if old_grid is None:
+            old_grid = make_grid_one_iteration(*args, **kwargs)
+            return old_grid
+        return old_grid.updated_copy(
+            boundaries=old_grid.boundaries.updated_copy(x=np.array([-2e-6, -1.5e-6, 2e-6]))
+        )
+
+    monkeypatch.setattr(td.GridSpec, "_make_grid_one_iteration", wrapped_make_grid_one_iteration)
+
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.Simulation(
+            size=(4e-6, 4e-6, 4e-6),
+            boundary_spec=td.BoundarySpec.pec(x=True, y=True, z=True),
+            grid_spec=grid_spec,
+            run_time=1e-12,
+        )
+    assert_single_value_error_loc(excinfo, ("grid_spec", "grid_x"), "AutoGrid generated")
+
+
+def test_quasiuniform_generated_dl_validation():
+    """Test that quasi-uniform generated spacing below the unit-check threshold errors."""
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.Simulation(
+            size=(4e-6, 4e-6, 4e-6),
+            boundary_spec=td.BoundarySpec.pec(x=True, y=True, z=True),
+            grid_spec=make_single_axis_quasiuniform_grid_spec(),
+            run_time=1e-12,
+        )
+    assert_single_value_error_loc(excinfo, ("grid_spec", "grid_x"), "QuasiUniformGrid generated")
+
+
+def test_quasiuniform_make_grid_generated_dl_validation(monkeypatch):
+    """Test that direct quasi-uniform grid generation catches too-small spacing."""
+    grid_spec = make_single_axis_quasiuniform_grid_spec()
+
+    monkeypatch.setattr(
+        td.QuasiUniformGrid,
+        "make_coords",
+        lambda *args, **kwargs: pytest.fail("QuasiUniformGrid.make_coords should not run."),
+    )
+
+    with pytest.raises(SetupError, match="QuasiUniformGrid generated"):
+        _ = grid_spec.make_grid(**make_grid_validation_kwargs())
+
+
+@pytest.mark.parametrize(
+    ("sim_cls", "sim_kwargs"),
+    [
+        (
+            td.ModeSimulation,
+            {
+                "size": (4e-6, 4e-6, 0),
+                "mode_spec": td.ModeSpec(),
+                "boundary_spec": td.BoundarySpec(
+                    x=td.Boundary.pec(),
+                    y=td.Boundary.pec(),
+                    z=td.Boundary.periodic(),
+                ),
+            },
+        ),
+        (
+            td.EMESimulation,
+            {
+                "size": (4e-6, 4e-6, 4e-6),
+                "axis": 2,
+                "eme_grid_spec": td.EMEUniformGrid(
+                    num_cells=1,
+                    mode_spec=td.EMEModeSpec(num_modes=1),
+                ),
+                "boundary_spec": td.BoundarySpec.pec(x=True, y=True, z=True),
+            },
+        ),
+    ],
+    ids=["mode", "eme"],
+)
+def test_y_grid_simulation_autogrid_generated_dl_validation_loc(sim_cls, sim_kwargs):
+    """Test that Yee-grid simulations anchor too-small AutoGrid validation on their grid spec."""
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim_cls(
+            **sim_kwargs,
+            freqs=[td.C_0 / 5e-6],
+            grid_spec=make_single_axis_auto_grid_spec(wavelength=None),
+        )
+    assert_single_value_error_loc(excinfo, ("grid_spec", "grid_x"), "AutoGrid generated")
+
+
+@pytest.mark.parametrize(
+    ("sim_cls", "sim_kwargs"),
+    [
+        (
+            td.ModeSimulation,
+            {
+                "size": (1e-5, 4e-6, 0),
+                "mode_spec": td.ModeSpec(),
+                "boundary_spec": td.BoundarySpec(
+                    x=td.Boundary.pec(),
+                    y=td.Boundary.pec(),
+                    z=td.Boundary.periodic(),
+                ),
+            },
+        ),
+        (
+            td.EMESimulation,
+            {
+                "size": (1e-5, 4e-6, 4e-6),
+                "axis": 2,
+                "eme_grid_spec": td.EMEUniformGrid(
+                    num_cells=1,
+                    mode_spec=td.EMEModeSpec(num_modes=1),
+                ),
+                "boundary_spec": td.BoundarySpec.pec(x=True, y=True, z=True),
+            },
+        ),
+    ],
+    ids=["mode", "eme"],
+)
+def test_y_grid_simulation_autogrid_snapping_validation_loc(sim_cls, sim_kwargs):
+    """Test that Yee-grid simulations anchor snapping-driven grid errors on their grid spec."""
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim_cls(
+            **sim_kwargs,
+            freqs=[td.C_0 / 1.55],
+            grid_spec=make_snapping_auto_grid_spec(),
+        )
+    assert_single_value_error_loc(excinfo, ("grid_spec", "grid_x"), "AutoGrid generated")
 
 
 def test_custom_grid_boundary_validation():

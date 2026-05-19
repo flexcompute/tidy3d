@@ -98,7 +98,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     Example
     -------
     >>> from tidy3d import C_0, ModeSpec, BoundarySpec, Boundary
-    >>> lambda0 = 1550e-9
+    >>> lambda0 = 1.55
     >>> freq0 = C_0 / lambda0
     >>> freqs = [freq0]
     >>> sim_size = lambda0, lambda0, 0

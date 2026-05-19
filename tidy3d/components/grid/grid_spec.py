@@ -48,6 +48,14 @@ if TYPE_CHECKING:
 # estimated minimal grid size
 MIN_STEP_BOUND_SCALE = 0.5
 
+# Minimum physically meaningful grid spacing in micrometers. Smaller values usually indicate
+# that input quantities were specified with the wrong unit scale.
+MIN_GRID_SPACING = 1e-6
+UNITS_HELP_URL = (
+    "https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/faq/"
+    "What-are-the-units-used-in-the-simulation.html"
+)
+
 # Default refinement factor in GridRefinement when both dl and refinement_factor are not defined
 DEFAULT_REFINEMENT_FACTOR = 2
 
@@ -61,6 +69,16 @@ DL_MIN_FROM_GAPS_FRACTION = 0.45
 
 # Threshold for warning when dl_min_from_gaps is very small relative to lateral grid size
 GAP_REFINEMENT_WARNING_THRESH = 0.1
+
+
+class _GeneratedGridSizeError(SetupError):
+    """Raised when a generated grid spacing is below the supported minimum."""
+
+    def __init__(self, message: str, grid_name: str, axis_name: str, min_size: float) -> None:
+        self.grid_name = grid_name
+        self.axis_name = axis_name
+        self.min_size = min_size
+        super().__init__(message)
 
 
 # ---------------------------------------------------------------------------
@@ -431,11 +449,11 @@ class UniformGrid(GridSpec1d):
         """
         Ensure 'dl' is not too small.
         """
-        if val < 1e-7:
+        if val < MIN_GRID_SPACING:
             raise SetupError(
                 f"Uniform grid spacing 'dl' is {val} µm. "
                 "Please check your units! For more info on Tidy3D units, see: "
-                "https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/faq/What-are-the-units-used-in-the-simulation.html"
+                f"{UNITS_HELP_URL}"
             )
         return val
 
@@ -3060,6 +3078,31 @@ class GridSpec(Tidy3dBaseModel):
         `dl_min` (0 or None) is applied.
         """
 
+        return (
+            min(
+                self._estimated_min_dl_by_axis(
+                    wavelength=wavelength,
+                    structure_list=structure_list,
+                    sim_bounds=sim_bounds,
+                    boundary_types=boundary_types,
+                    cached_merged_geos=cached_merged_geos,
+                    lumped_elements=lumped_elements,
+                )
+            )
+            * MIN_STEP_BOUND_SCALE
+        )
+
+    def _estimated_min_dl_by_axis(
+        self,
+        wavelength: float,
+        structure_list: list[StructureType],
+        sim_bounds: tuple,
+        boundary_types: tuple[tuple[str, str], tuple[str, str], tuple[str, str]],
+        cached_merged_geos: list[list[tuple[Any, Shapely]]] | None = None,
+        lumped_elements: list[LumpedElementType] = (),
+        layer_refinement_scale: float = 1.0,
+    ) -> tuple[float, float, float]:
+        """Estimate minimum grid size per axis before full grid generation."""
         # split structure list into `Structure` and `MeshOverrideStructure`
         structures = [
             medium_str for medium_str in structure_list if isinstance(medium_str, Structure)
@@ -3067,40 +3110,45 @@ class GridSpec(Tidy3dBaseModel):
         mesh_structures = [
             mesh_str for mesh_str in structure_list if isinstance(mesh_str, MeshOverrideStructure)
         ]
+        for lumped_element in lumped_elements:
+            mesh_structures.extend(lumped_element.to_mesh_overrides())
 
-        min_dl = inf
-        # minimal grid size from MeshOverrideStructure
-        for structure in mesh_structures:
-            for dl in structure.dl:
-                if dl is not None and dl < min_dl:
-                    min_dl = dl
         # local simulation size derived from bounds
         sim_size_local = tuple(bmax - bmin for bmin, bmax in zip(*sim_bounds))
+        grids = (self.grid_x, self.grid_y, self.grid_z)
+        undefined_auto_axes = [
+            axis
+            for axis, grid in enumerate(grids)
+            if isinstance(grid, AutoGrid) and grid._undefined_dl_min
+        ]
 
         # from mesh specification
-        for grid in [self.grid_x, self.grid_y, self.grid_z]:
-            min_dl = min(min_dl, grid.estimated_min_dl(wavelength, structures, sim_size_local))
+        min_dl_by_axis = [
+            grid.estimated_min_dl(wavelength, structures, sim_size_local) for grid in grids
+        ]
+
+        # minimal grid size from MeshOverrideStructure
+        for structure in mesh_structures:
+            for axis, dl in enumerate(structure.dl):
+                if dl is not None:
+                    min_dl_by_axis[axis] = min(min_dl_by_axis[axis], dl)
 
         # from layer refinement specifications
-        if self.layer_refinement_used:
+        if self.layer_refinement_used and undefined_auto_axes:
             min_vacuum_dl = self._min_vacuum_dl_in_autogrid(wavelength, sim_size_local)
             for ind, layer in enumerate(self.layer_refinement_specs):
                 cached_merged = cached_merged_geos[ind] if cached_merged_geos is not None else None
-                min_dl = min(
-                    min_dl,
-                    layer.suggested_dl_min(
-                        min_vacuum_dl,
-                        structures,
-                        sim_bounds,
-                        boundary_types,
-                        cached_merged,
-                    ),
+                layer_dl_min = layer_refinement_scale * layer.suggested_dl_min(
+                    min_vacuum_dl,
+                    structures,
+                    sim_bounds,
+                    boundary_types,
+                    cached_merged,
                 )
-        # from lumped elements
-        for lumped_element in lumped_elements:
-            for override_structure in lumped_element.to_mesh_overrides():
-                min_dl = min(min_dl, min(override_structure.dl))
-        return min_dl * MIN_STEP_BOUND_SCALE
+                for axis in undefined_auto_axes:
+                    min_dl_by_axis[axis] = min(min_dl_by_axis[axis], layer_dl_min)
+
+        return tuple(min_dl_by_axis)
 
     def get_wavelength(self, sources: list[SourceType]) -> float:
         """Get wavelength for automatic mesh generation if needed."""
@@ -3175,6 +3223,92 @@ class GridSpec(Tidy3dBaseModel):
         )
 
         return grid
+
+    @staticmethod
+    def _generated_grid_size_error_message(grid_name: str, axis_name: str, min_size: float) -> str:
+        """Error message for generated grid cells below the supported minimum."""
+        return (
+            f"{grid_name} generated a minimum grid spacing of {min_size:.2e} µm "
+            f"along the '{axis_name}' axis, which is below the supported minimum "
+            f"of {MIN_GRID_SPACING:.1e} µm. Please check your units! For more info "
+            f"on Tidy3D units, see: {UNITS_HELP_URL}"
+        )
+
+    def _raise_generated_grid_size_error(
+        self, grid_name: str, axis_name: str, min_size: float
+    ) -> None:
+        """Raise a generated-grid spacing error with axis metadata."""
+        raise _GeneratedGridSizeError(
+            self._generated_grid_size_error_message(grid_name, axis_name, min_size),
+            grid_name,
+            axis_name,
+            min_size,
+        )
+
+    def _grid_spec_size_estimate_violation(
+        self,
+        wavelength: float,
+        structures: list[StructureType],
+        sim_bounds: tuple,
+    ) -> tuple[str, float, str] | None:
+        """Return the first generated-grid axis whose grid-spec estimate is too small."""
+        if not self.snapped_grid_used:
+            return None
+
+        sim_size = tuple(bmax - bmin for bmin, bmax in zip(*sim_bounds))
+        medium_structures = [
+            structure for structure in structures if isinstance(structure, Structure)
+        ]
+        min_dl_by_axis = [
+            grid.estimated_min_dl(wavelength, medium_structures, sim_size)
+            for grid in (self.grid_x, self.grid_y, self.grid_z)
+        ]
+
+        for axis, (grid_spec, min_size) in enumerate(
+            zip((self.grid_x, self.grid_y, self.grid_z), min_dl_by_axis)
+        ):
+            if not isinstance(grid_spec, AbstractAutoGrid):
+                continue
+            if sim_size[axis] == 0:
+                continue
+            if min_size >= MIN_GRID_SPACING:
+                continue
+            return "xyz"[axis], min_size, type(grid_spec).__name__
+
+        return None
+
+    def _generated_grid_size_violation(
+        self, grid: Grid, sim_size: tuple[float, float, float]
+    ) -> tuple[str, float, str] | None:
+        """Return the first generated-grid axis whose actual cell size is too small."""
+        if not self.snapped_grid_used:
+            return None
+
+        for axis, (grid_spec, sizes) in enumerate(
+            zip((self.grid_x, self.grid_y, self.grid_z), grid.sizes.to_list)
+        ):
+            if not isinstance(grid_spec, AbstractAutoGrid):
+                continue
+            if sim_size[axis] == 0:
+                continue
+
+            min_size = float(np.min(sizes))
+            if min_size >= MIN_GRID_SPACING:
+                continue
+            return "xyz"[axis], min_size, type(grid_spec).__name__
+
+        return None
+
+    def _validate_generated_grid_size(
+        self, grid: Grid, sim_size: tuple[float, float, float]
+    ) -> None:
+        """Error if a generated grid cell size is below the supported minimum."""
+        violation = self._generated_grid_size_violation(grid, sim_size)
+        if violation is None:
+            return
+
+        axis_name, min_size, grid_name = violation
+        self._raise_generated_grid_size_error(grid_name, axis_name, min_size)
 
     def _make_grid_and_snapping_lines(
         self,
@@ -3284,7 +3418,9 @@ class GridSpec(Tidy3dBaseModel):
             boundary_types=boundary_types,
             parse_structures_interval_coords=parse_structures_interval_coords,
             parse_structures_max_dl_list=parse_structures_max_dl_list,
+            all_structures=all_structures,
         )
+        self._validate_generated_grid_size(old_grid, sim_size=structures[0].geometry.size)
 
         # gap refinement only place snapping points, and decrease dl_min that only affects
         # snapping points insertion.
@@ -3364,6 +3500,7 @@ class GridSpec(Tidy3dBaseModel):
                     break
 
                 snapping_lines = snapping_lines + new_snapping_lines
+                dl_min_from_gaps = DL_MIN_FROM_GAPS_FRACTION * min_gap_width
 
                 new_grid = self._make_grid_one_iteration(
                     structures=structures,
@@ -3373,13 +3510,15 @@ class GridSpec(Tidy3dBaseModel):
                     num_pml_layers=num_pml_layers,
                     lumped_elements=lumped_elements,
                     internal_override_structures=internal_override_structures,
-                    internal_snapping_points=snapping_lines + internal_snapping_points,
-                    dl_min_from_gaps=DL_MIN_FROM_GAPS_FRACTION * min_gap_width,
+                    internal_snapping_points=snapping_lines + (internal_snapping_points or []),
+                    dl_min_from_gaps=dl_min_from_gaps,
                     structure_priority_mode=structure_priority_mode,
                     boundary_types=boundary_types,
                     parse_structures_interval_coords=parse_structures_interval_coords,
                     parse_structures_max_dl_list=parse_structures_max_dl_list,
+                    all_structures=all_structures,
                 )
+                self._validate_generated_grid_size(new_grid, sim_size=structures[0].geometry.size)
 
                 same = old_grid == new_grid
 
@@ -3409,6 +3548,7 @@ class GridSpec(Tidy3dBaseModel):
         structure_priority_mode: PriorityMode = "equal",
         parse_structures_interval_coords: list[np.ndarray] | None = None,
         parse_structures_max_dl_list: list[np.ndarray] | None = None,
+        all_structures: list[StructureType] | None = None,
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
@@ -3443,6 +3583,8 @@ class GridSpec(Tidy3dBaseModel):
         parse_structures_max_dl_list : Optional[List[np.ndarray]]
             If not None, pre-computed maximum grid spacing list from parsing structures for each dimension.
             List of length 3, one for each axis (x, y, z).
+        all_structures : Optional[List[StructureType]]
+            If not None, pre-computed original and override structures affecting the grid.
 
         Returns
         -------
@@ -3500,15 +3642,25 @@ class GridSpec(Tidy3dBaseModel):
             )
 
         sim_bounds = structures[0].geometry.bounds
-        all_structures = self._get_all_structures_affecting_grid(
-            structures,
-            wavelength,
-            lumped_elements,
-            boundary_types,
-            sim_bounds,
-            structure_priority_mode,
-            internal_override_structures,
+        if all_structures is None:
+            all_structures = self._get_all_structures_affecting_grid(
+                structures,
+                wavelength,
+                lumped_elements,
+                boundary_types,
+                sim_bounds,
+                structure_priority_mode,
+                internal_override_structures,
+            )
+
+        violation = self._grid_spec_size_estimate_violation(
+            wavelength=wavelength,
+            structures=all_structures,
+            sim_bounds=sim_bounds,
         )
+        if violation is not None:
+            axis_name, min_size, grid_name = violation
+            self._raise_generated_grid_size_error(grid_name, axis_name, min_size)
 
         # apply internal `dl_min` if any AutoGrid has unset `dl_min`
         update_dl_min = False
