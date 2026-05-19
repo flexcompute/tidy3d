@@ -2026,16 +2026,15 @@ def test_diffraction_monitor_fixed_angle_no_spurious_warning():
 
 
 @pytest.mark.parametrize(
-    "box_size,log_level",
+    "box_size",
     [
-        ((0.1, 0.1, 0.1), "INFO"),
-        ((1, 0.1, 0.1), "WARNING"),
-        ((0.1, 1, 0.1), "WARNING"),
-        ((0.1, 0.1, 1), "WARNING"),
+        (1, 0.1, 0.1),
+        (0.1, 1, 0.1),
+        (0.1, 0.1, 1),
     ],
 )
-def test_sim_structure_extent(box_size, log_level):
-    """Make sure we warn if structure extends exactly to simulation edges."""
+def test_periodic_boundaries_suppress_structure_extent_warnings(box_size):
+    """Make sure periodic boundaries suppress structure-at-edge warnings along each axis."""
 
     src = td.UniformCurrentSource(
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
@@ -2045,7 +2044,7 @@ def test_sim_structure_extent(box_size, log_level):
     )
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
 
-    with AssertLogLevel(log_level):
+    with AssertLogStr("WARNING", excludes_str="has bounds that extend exactly"):
         _ = td.Simulation(
             size=(1, 1, 1),
             structures=(box,),
@@ -5130,8 +5129,8 @@ def test_extrusion_warnings_with_absorber():
         )
 
 
-def test_extrusion_warnings_with_non_pml_boundaries():
-    """Test that extrusion warnings are not triggered for non-PML boundaries."""
+def test_boundary_edge_warnings_skip_periodic_bloch_but_not_pec():
+    """Test edge warnings are skipped for periodic/Bloch but not PEC boundaries."""
 
     # Structure that touches x-min edge only
     # Simulation: size=(2, 1, 1), center=(0, 0, 0) → bounds x:[-1, 1], y:[-0.5, 0.5], z:[-0.5, 0.5]
@@ -5148,16 +5147,15 @@ def test_extrusion_warnings_with_non_pml_boundaries():
         polarization="Ex",
     )
 
-    # Test with PEC boundary (no extrude_structures attribute)
+    # PEC is not periodic/Bloch and has no extrusion, so touching the edge should warn.
     boundary_spec_pec = td.BoundarySpec(
         x=td.Boundary(minus=td.PECBoundary(), plus=td.PECBoundary()),
         y=td.Boundary.pml(),
         z=td.Boundary.pml(),
     )
 
-    # Should still warn about structure at edges (extrusion not applicable)
     with AssertLogLevel("WARNING", contains_str="has bounds that extend exactly"):
-        sim = td.Simulation(
+        td.Simulation(
             size=(2, 1, 1),
             center=(0, 0, 0),
             structures=[structure],
@@ -5166,21 +5164,36 @@ def test_extrusion_warnings_with_non_pml_boundaries():
             run_time=1e-12,
         )
 
-    # Test with Periodic boundary (no extrude_structures attribute)
+    # Periodic and Bloch boundaries suppress the edge warning.
     boundary_spec_periodic = td.BoundarySpec(
         x=td.Boundary(minus=td.Periodic(), plus=td.Periodic()),
         y=td.Boundary.pml(),
         z=td.Boundary.pml(),
     )
 
-    # Should still warn about structure at edges
-    with AssertLogLevel("WARNING", contains_str="has bounds that extend exactly"):
-        sim = td.Simulation(
+    with AssertLogStr(log_level_expected="WARNING", excludes_str="has bounds that extend exactly"):
+        td.Simulation(
             size=(2, 1, 1),
             center=(0, 0, 0),
             structures=[structure],
             sources=[source],
             boundary_spec=boundary_spec_periodic,
+            run_time=1e-12,
+        )
+
+    boundary_spec_bloch = td.BoundarySpec(
+        x=td.Boundary.bloch(bloch_vec=0.2),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    with AssertLogStr(log_level_expected="WARNING", excludes_str="has bounds that extend exactly"):
+        td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_bloch,
             run_time=1e-12,
         )
 

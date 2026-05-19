@@ -9,6 +9,7 @@ import autograd.numpy as anp
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
+from tidy3d.components.boundary import BlochBoundary, Periodic
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import Medium, MediumType3D
 from tidy3d.components.scene import Scene
@@ -218,26 +219,14 @@ class AbstractSimulation(Box, ABC):
 
                 for idx, (sim_val, struct_val) in enumerate(zip(sim_bounds, struct_bounds)):
                     if anp.isclose(sim_val, struct_val):
-                        # Check if extrusion is enabled for this boundary
                         # Index 0-2: min bounds for x, y, z → boundaries[axis][0] (minus side)
                         # Index 3-5: max bounds for x, y, z → boundaries[axis][1] (plus side)
                         axis_idx = idx % 3
                         side_idx = idx // 3
 
-                        extrusion_enabled = False
-                        if boundaries is not None:
-                            try:
-                                boundary_edge = boundaries[axis_idx][side_idx]
-                                if (
-                                    hasattr(boundary_edge, "extrude_structures")
-                                    and boundary_edge.extrude_structures
-                                ):
-                                    extrusion_enabled = True
-                            except (IndexError, AttributeError):
-                                pass
-
-                        # Skip warning if extrusion is enabled
-                        if extrusion_enabled:
+                        if not self._warn_if_structure_touches_boundary(
+                            boundaries, axis_idx, side_idx
+                        ):
                             continue
 
                         consolidated_logger.warning(
@@ -247,6 +236,24 @@ class AbstractSimulation(Box, ABC):
                             "use td.inf as a size variable instead to make this explicit.",
                             custom_loc=["structures", istruct],
                         )
+
+    @staticmethod
+    def _warn_if_structure_touches_boundary(boundaries: Any, axis_idx: int, side_idx: int) -> bool:
+        """Return whether a structure touching a boundary should emit a warning."""
+        if boundaries is None:
+            return True
+
+        try:
+            boundary_edge = boundaries[axis_idx][side_idx]
+        except (IndexError, TypeError):
+            return True
+
+        if isinstance(boundary_edge, (Periodic, BlochBoundary)):
+            return False
+
+        return not (
+            hasattr(boundary_edge, "extrude_structures") and boundary_edge.extrude_structures
+        )
 
     def _validate_scene(self) -> Self:
         _ = self.scene
