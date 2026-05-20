@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import autograd.numpy as anp
 import numpy as np
+from autograd import make_vjp
 from autograd.extend import defvjp, primitive
 
 from tidy3d.components.autograd import hasbox
@@ -251,6 +252,12 @@ def _prepare_exact_surface_projection_point(
     )
 
 
+def _as_exact_projection_batch_coordinate(coord: ArrayLikeN2F) -> ArrayLikeN2F:
+    """Convert exact batch coordinates without breaking traced coordinate arrays."""
+
+    return anp.stack(coord)
+
+
 def _prepare_exact_surface_projection_batch(
     x: ArrayLikeN2F,
     y: ArrayLikeN2F,
@@ -259,9 +266,9 @@ def _prepare_exact_surface_projection_batch(
 ) -> _ExactProjectionPrepared:
     """Add point-dependent exact-projection geometry for a batch of observation points."""
 
-    x = anp.asarray(x)
-    y = anp.asarray(y)
-    z = anp.asarray(z)
+    x = _as_exact_projection_batch_coordinate(x)
+    y = _as_exact_projection_batch_coordinate(y)
+    z = _as_exact_projection_batch_coordinate(z)
     pts = prepared.pts
     surface_monitor = prepared.surface_monitor
     x_new = x[None, None, None, None, :] - pts[0][:, None, None, None, None]
@@ -287,6 +294,20 @@ def _prepare_exact_surface_projection_batch(
         r_hat_z=geometry.r_hat_z,
         theta_out=theta_out,
         phi_out=phi_out,
+    )
+
+
+def _prepare_exact_surface_projection_batch_coordinates(
+    coordinates: ArrayLikeN2F,
+    prepared: _ExactProjectionStatic,
+) -> _ExactProjectionPrepared:
+    """Add point-dependent exact-projection geometry from stacked observation coordinates."""
+
+    return _prepare_exact_surface_projection_batch(
+        x=coordinates[:, 0],
+        y=coordinates[:, 1],
+        z=coordinates[:, 2],
+        prepared=prepared,
     )
 
 
@@ -563,28 +584,39 @@ def _fields_for_surface_exact_vjp_impl(
 
 
 @primitive
-def _fields_for_surface_exact_primitive(
+def _fields_for_surface_exact_from_static_primitive(
     currents_tangential: np.ndarray,
-    prepared: _ExactProjectionPrepared,
+    x: float,
+    y: float,
+    z: float,
+    prepared_static: _ExactProjectionStatic,
 ) -> np.ndarray:
-    """Exact near-field projection primitive with custom VJP on tangential currents."""
+    """Exact point projection primitive with custom VJP on tangential currents."""
 
+    prepared = _prepare_exact_surface_projection_point(x=x, y=y, z=z, prepared=prepared_static)
     return _fields_for_surface_exact_impl(currents_tangential, prepared)
 
 
-def _fields_for_surface_exact_vjp(
+def _fields_for_surface_exact_from_static_vjp(
     ans: np.ndarray,
     currents_tangential: np.ndarray,
-    prepared: _ExactProjectionPrepared,
+    x: float,
+    y: float,
+    z: float,
+    prepared_static: _ExactProjectionStatic,
 ) -> Callable[[np.ndarray], np.ndarray]:
-    """Return the custom VJP for the stacked exact-kernel current input."""
+    """Return the custom VJP while keeping large Green-function arrays out of the closure."""
 
-    return lambda g: _fields_for_surface_exact_vjp_impl(g, prepared)
+    def vjp(g: np.ndarray) -> np.ndarray:
+        prepared = _prepare_exact_surface_projection_point(x=x, y=y, z=z, prepared=prepared_static)
+        return _fields_for_surface_exact_vjp_impl(g, prepared)
+
+    return vjp
 
 
 defvjp(
-    _fields_for_surface_exact_primitive,
-    _fields_for_surface_exact_vjp,
+    _fields_for_surface_exact_from_static_primitive,
+    _fields_for_surface_exact_from_static_vjp,
     argnums=[0],
 )
 
@@ -629,29 +661,96 @@ def _fields_for_surface_exact_batch_vjp_impl(
 
 
 @primitive
-def _fields_for_surface_exact_batch_primitive(
+def _fields_for_surface_exact_batch_from_static_primitive(
     currents_tangential: np.ndarray,
-    prepared: _ExactProjectionPrepared,
+    x: ArrayLikeN2F,
+    y: ArrayLikeN2F,
+    z: ArrayLikeN2F,
+    prepared_static: _ExactProjectionStatic,
 ) -> np.ndarray:
-    """Exact near-field projection primitive for a batch of observation points."""
+    """Exact batch projection primitive with custom VJP on tangential currents."""
 
+    prepared = _prepare_exact_surface_projection_batch(x=x, y=y, z=z, prepared=prepared_static)
     return _fields_for_surface_exact_batch_impl(currents_tangential, prepared)
 
 
-def _fields_for_surface_exact_batch_vjp(
+def _fields_for_surface_exact_batch_from_static_vjp(
     ans: np.ndarray,
     currents_tangential: np.ndarray,
-    prepared: _ExactProjectionPrepared,
+    x: ArrayLikeN2F,
+    y: ArrayLikeN2F,
+    z: ArrayLikeN2F,
+    prepared_static: _ExactProjectionStatic,
 ) -> Callable[[np.ndarray], np.ndarray]:
-    """Return the custom VJP for the batched exact-kernel current input."""
+    """Return the batched VJP while keeping Green-function arrays out of the closure."""
 
-    return lambda g: _fields_for_surface_exact_batch_vjp_impl(g, prepared)
+    def vjp(g: np.ndarray) -> np.ndarray:
+        prepared = _prepare_exact_surface_projection_batch(x=x, y=y, z=z, prepared=prepared_static)
+        return _fields_for_surface_exact_batch_vjp_impl(g, prepared)
+
+    return vjp
 
 
 defvjp(
-    _fields_for_surface_exact_batch_primitive,
-    _fields_for_surface_exact_batch_vjp,
+    _fields_for_surface_exact_batch_from_static_primitive,
+    _fields_for_surface_exact_batch_from_static_vjp,
     argnums=[0],
+)
+
+
+@primitive
+def _fields_for_surface_exact_batch_from_coordinates_primitive(
+    currents_tangential: np.ndarray,
+    coordinates: ArrayLikeN2F,
+    prepared_static: _ExactProjectionStatic,
+) -> np.ndarray:
+    """Exact batch projection primitive with custom VJPs on currents and coordinates."""
+
+    prepared = _prepare_exact_surface_projection_batch_coordinates(coordinates, prepared_static)
+    return _fields_for_surface_exact_batch_impl(currents_tangential, prepared)
+
+
+def _fields_for_surface_exact_batch_coordinates_current_vjp(
+    ans: np.ndarray,
+    currents_tangential: np.ndarray,
+    coordinates: ArrayLikeN2F,
+    prepared_static: _ExactProjectionStatic,
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Return the current VJP while keeping Green-function arrays out of the closure."""
+
+    def vjp(g: np.ndarray) -> np.ndarray:
+        prepared = _prepare_exact_surface_projection_batch_coordinates(coordinates, prepared_static)
+        return _fields_for_surface_exact_batch_vjp_impl(g, prepared)
+
+    return vjp
+
+
+def _fields_for_surface_exact_batch_coordinates_coordinate_vjp(
+    ans: np.ndarray,
+    currents_tangential: np.ndarray,
+    coordinates: ArrayLikeN2F,
+    prepared_static: _ExactProjectionStatic,
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Return the coordinate VJP without retaining forward Green-function tensors."""
+
+    def fields_for_coordinates(coordinates_in: ArrayLikeN2F) -> np.ndarray:
+        prepared = _prepare_exact_surface_projection_batch_coordinates(
+            coordinates_in, prepared_static
+        )
+        return _fields_for_surface_exact_batch_impl(currents_tangential, prepared)
+
+    def vjp(g: np.ndarray) -> np.ndarray:
+        coordinate_vjp, _ = make_vjp(fields_for_coordinates)(coordinates)
+        return coordinate_vjp(g)
+
+    return vjp
+
+
+defvjp(
+    _fields_for_surface_exact_batch_from_coordinates_primitive,
+    _fields_for_surface_exact_batch_coordinates_current_vjp,
+    _fields_for_surface_exact_batch_coordinates_coordinate_vjp,
+    argnums=[0, 1],
 )
 
 
@@ -764,11 +863,16 @@ class _ExactFieldProjectionMixin:
     ) -> NDArray:
         """Evaluate exact projection from precomputed surface currents and static geometry."""
 
-        prepared = _prepare_exact_surface_projection_point(x=x, y=y, z=z, prepared=prepared_static)
-
-        if hasbox(prepared):
+        if hasbox((x, y, z, prepared_static)):
+            # Preserve coordinate/static-geometry gradients; the point custom VJP only differentiates
+            # surface currents, so traced projection coordinates use the fully differentiable path.
+            prepared = _prepare_exact_surface_projection_point(
+                x=x, y=y, z=z, prepared=prepared_static
+            )
             return _fields_for_surface_exact_impl(currents_tangential, prepared)
-        return _fields_for_surface_exact_primitive(currents_tangential, prepared)
+        return _fields_for_surface_exact_from_static_primitive(
+            currents_tangential, x, y, z, prepared_static
+        )
 
     def _fields_for_surface_exact_batch_prepared(
         self,
@@ -780,11 +884,28 @@ class _ExactFieldProjectionMixin:
     ) -> NDArray:
         """Evaluate exact projection for a batch of observation points."""
 
-        prepared = _prepare_exact_surface_projection_batch(x=x, y=y, z=z, prepared=prepared_static)
-
-        if hasbox(prepared):
+        if hasbox((x, y, z)) and not hasbox(prepared_static):
+            coordinates = anp.stack(
+                (
+                    _as_exact_projection_batch_coordinate(x),
+                    _as_exact_projection_batch_coordinate(y),
+                    _as_exact_projection_batch_coordinate(z),
+                ),
+                axis=-1,
+            )
+            return _fields_for_surface_exact_batch_from_coordinates_primitive(
+                currents_tangential, coordinates, prepared_static
+            )
+        if hasbox((x, y, z, prepared_static)):
+            # Preserve static-geometry gradients; the coordinate primitive above only differentiates
+            # surface currents and observation coordinates.
+            prepared = _prepare_exact_surface_projection_batch(
+                x=x, y=y, z=z, prepared=prepared_static
+            )
             return _fields_for_surface_exact_batch_impl(currents_tangential, prepared)
-        return _fields_for_surface_exact_batch_primitive(currents_tangential, prepared)
+        return _fields_for_surface_exact_batch_from_static_primitive(
+            currents_tangential, x, y, z, prepared_static
+        )
 
     def _project_exact_fields_batch(
         self,

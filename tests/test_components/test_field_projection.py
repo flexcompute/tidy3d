@@ -5,7 +5,7 @@ from __future__ import annotations
 import autograd.numpy as anp
 import numpy as np
 import pytest
-from autograd import make_vjp
+from autograd import grad, make_vjp
 from pydantic import ValidationError
 
 import tidy3d as td
@@ -1787,16 +1787,14 @@ def test_fields_for_surface_exact_kernel_vjp():
     currents = projector.currents[surface.monitor.name]
     point = (3.0, 0.4, -0.2)
 
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
     prepared = field_projection_exact._prepare_exact_surface_projection_point(
-        x=point[0],
-        y=point[1],
-        z=point[2],
-        prepared=field_projection_exact._prepare_exact_surface_projection_static(
-            surface=surface,
-            currents=currents,
-            medium=projector.medium,
-            frequencies=projector.frequencies,
-        ),
+        x=point[0], y=point[1], z=point[2], prepared=prepared_static
     )
     components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
 
@@ -1804,7 +1802,9 @@ def test_fields_for_surface_exact_kernel_vjp():
         return field_projection_exact._fields_for_surface_exact_impl(currents_in, prepared)
 
     def primitive(currents_in):
-        return field_projection_exact._fields_for_surface_exact_primitive(currents_in, prepared)
+        return field_projection_exact._fields_for_surface_exact_from_static_primitive(
+            currents_in, point[0], point[1], point[2], prepared_static
+        )
 
     vjp_primitive, ans_primitive = make_vjp(primitive)(components)
     vjp_reference, ans_reference = make_vjp(reference)(components)
@@ -1842,12 +1842,6 @@ def test_fields_for_surface_exact_batch_kernel_vjp():
         medium=projector.medium,
         frequencies=projector.frequencies,
     )
-    prepared_batch = field_projection_exact._prepare_exact_surface_projection_batch(
-        x=points[:, 0],
-        y=points[:, 1],
-        z=points[:, 2],
-        prepared=prepared_static,
-    )
     components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
 
     def reference(currents_in):
@@ -1865,8 +1859,8 @@ def test_fields_for_surface_exact_batch_kernel_vjp():
         )
 
     def primitive(currents_in):
-        return field_projection_exact._fields_for_surface_exact_batch_primitive(
-            currents_in, prepared_batch
+        return field_projection_exact._fields_for_surface_exact_batch_from_static_primitive(
+            currents_in, points[:, 0], points[:, 1], points[:, 2], prepared_static
         )
 
     vjp_primitive, ans_primitive = make_vjp(primitive)(components)
@@ -1883,3 +1877,333 @@ def test_fields_for_surface_exact_batch_kernel_vjp():
     grad_primitive = np.asarray(vjp_primitive(g))
     grad_reference = np.asarray(vjp_reference(g))
     np.testing.assert_allclose(grad_primitive, grad_reference, rtol=1e-10, atol=1e-10)
+
+
+def test_fields_for_surface_exact_numeric_coordinate_wrappers_use_static_primitives(monkeypatch):
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=3)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+    num_freqs = len(np.atleast_1d(projector.frequencies))
+
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+
+    point_calls = []
+    batch_calls = []
+
+    def point_primitive(currents_arg, x_arg, y_arg, z_arg, prepared_arg):
+        point_calls.append((currents_arg, x_arg, y_arg, z_arg, prepared_arg))
+        return anp.full((6, num_freqs), 7.0 + 0j)
+
+    def batch_primitive(currents_arg, x_arg, y_arg, z_arg, prepared_arg):
+        batch_calls.append((currents_arg, x_arg, y_arg, z_arg, prepared_arg))
+        return anp.full((len(x_arg), 6, num_freqs), 11.0 + 0j)
+
+    def fail_large_preparation(*args, **kwargs):
+        raise AssertionError("numeric coordinates should not materialize prepared Green tensors")
+
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_fields_for_surface_exact_from_static_primitive",
+        point_primitive,
+    )
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_fields_for_surface_exact_batch_from_static_primitive",
+        batch_primitive,
+    )
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_prepare_exact_surface_projection_point",
+        fail_large_preparation,
+    )
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_prepare_exact_surface_projection_batch",
+        fail_large_preparation,
+    )
+
+    point_fields = projector._fields_for_surface_exact_prepared(
+        x=3.0,
+        y=0.4,
+        z=-0.2,
+        currents_tangential=components,
+        prepared_static=prepared_static,
+    )
+    np.testing.assert_allclose(point_fields, 7.0)
+    assert len(point_calls) == 1
+    assert point_calls[0][0] is components
+    assert point_calls[0][1:4] == (3.0, 0.4, -0.2)
+    assert point_calls[0][4] is prepared_static
+
+    points = np.array(
+        [
+            (3.0, 0.4, -0.2),
+            (2.8, -0.1, 0.3),
+        ]
+    )
+    batch_fields = projector._fields_for_surface_exact_batch_prepared(
+        x=points[:, 0],
+        y=points[:, 1],
+        z=points[:, 2],
+        currents_tangential=components,
+        prepared_static=prepared_static,
+    )
+    np.testing.assert_allclose(batch_fields, 11.0)
+    assert len(batch_calls) == 1
+    assert batch_calls[0][0] is components
+    np.testing.assert_allclose(batch_calls[0][1], points[:, 0])
+    np.testing.assert_allclose(batch_calls[0][2], points[:, 1])
+    np.testing.assert_allclose(batch_calls[0][3], points[:, 2])
+    assert batch_calls[0][4] is prepared_static
+
+
+def test_fields_for_surface_exact_traced_scalar_coordinate_fallback(monkeypatch):
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=3)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+    coords = anp.array([3.0, 0.4, -0.2])
+
+    def fail_static_primitive(*args, **kwargs):
+        raise AssertionError("traced coordinates should use the differentiable exact path")
+
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_fields_for_surface_exact_from_static_primitive",
+        fail_static_primitive,
+    )
+
+    def projected_sum(coords_in):
+        fields = projector._fields_for_surface_exact_prepared(
+            x=coords_in[0],
+            y=coords_in[1],
+            z=coords_in[2],
+            currents_tangential=components,
+            prepared_static=prepared_static,
+        )
+        return anp.real(anp.sum(fields))
+
+    def reference_sum(coords_in):
+        prepared = field_projection_exact._prepare_exact_surface_projection_point(
+            x=coords_in[0],
+            y=coords_in[1],
+            z=coords_in[2],
+            prepared=prepared_static,
+        )
+        fields = field_projection_exact._fields_for_surface_exact_impl(components, prepared)
+        return anp.real(anp.sum(fields))
+
+    grad_projected = np.asarray(grad(projected_sum)(coords))
+    grad_reference = np.asarray(grad(reference_sum)(coords))
+
+    np.testing.assert_allclose(grad_projected, grad_reference, rtol=1e-10, atol=1e-10)
+    assert np.linalg.norm(grad_projected) > 0
+
+
+@pytest.mark.parametrize("coordinate_form", ["list", "ndarray"])
+def test_fields_for_surface_exact_batch_traced_coordinate_fallback(coordinate_form, monkeypatch):
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=3)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+    num_points = 3
+
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+    coords = anp.array(
+        [
+            (3.0, 0.4, -0.2),
+            (2.8, -0.1, 0.3),
+            (3.2, 0.2, 0.1),
+        ]
+    ).reshape((-1,))
+
+    def fail_static_primitive(*args, **kwargs):
+        raise AssertionError("traced coordinates should use the differentiable exact path")
+
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_fields_for_surface_exact_batch_from_static_primitive",
+        fail_static_primitive,
+    )
+
+    def coordinate_args(coords_in):
+        points = anp.reshape(coords_in, (num_points, 3))
+        if coordinate_form == "list":
+            return (
+                [points[idx, 0] for idx in range(num_points)],
+                [points[idx, 1] for idx in range(num_points)],
+                [points[idx, 2] for idx in range(num_points)],
+            )
+        return points[:, 0], points[:, 1], points[:, 2]
+
+    def projected_sum(coords_in):
+        x, y, z = coordinate_args(coords_in)
+        fields = projector._fields_for_surface_exact_batch_prepared(
+            x=x,
+            y=y,
+            z=z,
+            currents_tangential=components,
+            prepared_static=prepared_static,
+        )
+        return anp.real(anp.sum(fields))
+
+    def reference_sum(coords_in):
+        x, y, z = coordinate_args(coords_in)
+        prepared = field_projection_exact._prepare_exact_surface_projection_batch(
+            x=x,
+            y=y,
+            z=z,
+            prepared=prepared_static,
+        )
+        fields = field_projection_exact._fields_for_surface_exact_batch_impl(components, prepared)
+        return anp.real(anp.sum(fields))
+
+    grad_projected = np.asarray(grad(projected_sum)(coords))
+    grad_reference = np.asarray(grad(reference_sum)(coords))
+
+    np.testing.assert_allclose(grad_projected, grad_reference, rtol=1e-10, atol=1e-10)
+    assert np.linalg.norm(grad_projected) > 0
+
+
+def test_fields_for_surface_exact_batch_traced_coordinate_and_current_vjp():
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=3)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+    num_points = 3
+
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+    coords = anp.array(
+        [
+            (3.0, 0.4, -0.2),
+            (2.8, -0.1, 0.3),
+            (3.2, 0.2, 0.1),
+        ]
+    )
+    params = anp.concatenate((anp.array([0.0]), anp.ravel(coords)))
+
+    def unpack(params_in):
+        current_scale = params_in[0]
+        points = anp.reshape(params_in[1:], (num_points, 3))
+        return components * (1.0 + 0.01 * current_scale), points
+
+    def projected_sum(params_in):
+        currents_in, points = unpack(params_in)
+        fields = projector._fields_for_surface_exact_batch_prepared(
+            x=points[:, 0],
+            y=points[:, 1],
+            z=points[:, 2],
+            currents_tangential=currents_in,
+            prepared_static=prepared_static,
+        )
+        return anp.real(anp.sum(fields))
+
+    def reference_sum(params_in):
+        currents_in, points = unpack(params_in)
+        prepared = field_projection_exact._prepare_exact_surface_projection_batch(
+            x=points[:, 0],
+            y=points[:, 1],
+            z=points[:, 2],
+            prepared=prepared_static,
+        )
+        fields = field_projection_exact._fields_for_surface_exact_batch_impl(currents_in, prepared)
+        return anp.real(anp.sum(fields))
+
+    grad_projected = np.asarray(grad(projected_sum)(params))
+    grad_reference = np.asarray(grad(reference_sum)(params))
+
+    np.testing.assert_allclose(grad_projected, grad_reference, rtol=1e-10, atol=1e-10)
+    assert np.linalg.norm(grad_projected) > 0
+
+
+@pytest.mark.parametrize("container_type", [list, tuple])
+def test_fields_for_surface_exact_batch_boxed_coordinate_sequence_fallback(
+    container_type, monkeypatch
+):
+    center = (0.0, 0.0, 0.0)
+    size = (2.0, 2.0, 0.0)
+    projector = make_clientside_projector(center=center, size=size, freqs=F0, num_points=3)
+    surface = projector.surfaces[0]
+    currents = projector.currents[surface.monitor.name]
+    y = anp.array([0.4, -0.1, 0.2])
+    z = anp.array([-0.2, 0.3, 0.1])
+
+    prepared_static = field_projection_exact._prepare_exact_surface_projection_static(
+        surface=surface,
+        currents=currents,
+        medium=projector.medium,
+        frequencies=projector.frequencies,
+    )
+    components = field_projection_exact._prepare_exact_surface_currents(surface, currents)
+    x = container_type([3.0, 2.8, 3.2])
+
+    def fail_static_primitive(*args, **kwargs):
+        raise AssertionError("traced coordinates should use the differentiable exact path")
+
+    monkeypatch.setattr(
+        field_projection_exact,
+        "_fields_for_surface_exact_batch_from_static_primitive",
+        fail_static_primitive,
+    )
+
+    def projected_sum(x_in):
+        fields = projector._fields_for_surface_exact_batch_prepared(
+            x=x_in,
+            y=y,
+            z=z,
+            currents_tangential=components,
+            prepared_static=prepared_static,
+        )
+        return anp.real(anp.sum(fields))
+
+    def reference_sum(x_in):
+        fields_by_point = []
+        for point_idx, x_coord in enumerate(x_in):
+            prepared = field_projection_exact._prepare_exact_surface_projection_point(
+                x=x_coord,
+                y=y[point_idx],
+                z=z[point_idx],
+                prepared=prepared_static,
+            )
+            fields_by_point.append(
+                field_projection_exact._fields_for_surface_exact_impl(components, prepared)
+            )
+        fields = anp.stack(fields_by_point, axis=0)
+        return anp.real(anp.sum(fields))
+
+    grad_projected = np.asarray(grad(projected_sum)(x))
+    grad_reference = np.asarray(grad(reference_sum)(x))
+
+    np.testing.assert_allclose(grad_projected, grad_reference, rtol=1e-10, atol=1e-10)
+    assert np.linalg.norm(grad_projected) > 0
