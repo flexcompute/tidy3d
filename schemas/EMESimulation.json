@@ -8137,6 +8137,67 @@
       ],
       "type": "object"
     },
+    "MasettiMobility": {
+      "additionalProperties": false,
+      "properties": {
+        "Cr": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "Cs": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "alpha": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "beta": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "exp_0": {
+          "type": "number"
+        },
+        "exp_max": {
+          "type": "number"
+        },
+        "mu_0": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "mu_1": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "mu_max": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "MasettiMobility",
+          "default": "MasettiMobility",
+          "type": "string"
+        }
+      },
+      "required": [
+        "Cr",
+        "Cs",
+        "alpha",
+        "beta",
+        "exp_0",
+        "exp_max",
+        "mu_0",
+        "mu_1",
+        "mu_max"
+      ],
+      "type": "object"
+    },
     "Medium": {
       "additionalProperties": false,
       "properties": {
@@ -12464,6 +12525,9 @@
             },
             {
               "$ref": "#/$defs/ConstantMobilityModel"
+            },
+            {
+              "$ref": "#/$defs/MasettiMobility"
             }
           ]
         },
@@ -12474,6 +12538,9 @@
             },
             {
               "$ref": "#/$defs/ConstantMobilityModel"
+            },
+            {
+              "$ref": "#/$defs/MasettiMobility"
             }
           ]
         },

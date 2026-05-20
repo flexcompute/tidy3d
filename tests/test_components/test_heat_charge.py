@@ -14,9 +14,10 @@ from tidy3d.components.tcad.types import (
     CaugheyThomasMobility,
     ConstantEffectiveDOS,
     ConstantEnergyBandGap,
+    MasettiMobility,
     SlotboomBandGapNarrowing,
 )
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, SetupError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
@@ -1681,13 +1682,13 @@ def test_ssac_accepts_fermi_dirac():
         ),
     )
 
-    # GPU requested explicitly — accepted.
+    # GPU requested explicitly - accepted.
     assert (
         base_sim.updated_copy(use_accelerated_solver=True)._resolve_use_accelerated_solver is True
     )
-    # GPU auto (None) — resolves to True (SSAC+FD is supported).
+    # GPU auto (None) - resolves to True (SSAC+FD is supported).
     assert base_sim._resolve_use_accelerated_solver is True
-    # CPU requested explicitly — also allowed.
+    # CPU requested explicitly - also allowed.
     assert (
         base_sim.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver is False
     )
@@ -1707,6 +1708,113 @@ def test_ssac_accepts_fermi_dirac():
         use_accelerated_solver=True,
     )
     assert dc_sim._resolve_use_accelerated_solver is True
+
+
+def test_masetti_requires_accelerated_solver():
+    """Masetti mobility is available only through the GPU charge solver."""
+    masetti = td.MasettiMobility(
+        mu_max=1417.0,
+        mu_0=52.2,
+        mu_1=43.4,
+        Cr=9.68e16,
+        Cs=3.43e20,
+        alpha=0.68,
+        beta=2.0,
+        exp_max=-2.5,
+        exp_0=-0.57,
+    )
+    silicon_charge = CHARGE_SIMULATION.intrinsic_Si.charge.updated_copy(
+        mobility_n=masetti,
+        mobility_p=masetti,
+    )
+    silicon = CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=silicon_charge)
+    metal = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    sim = td.HeatChargeSimulation(
+        size=(4, 4, 4),
+        center=(0, 0, 0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+                medium=silicon,
+                name="silicon",
+            ),
+            td.Structure(
+                geometry=td.Box(center=(-1, 0, 0), size=(1, 2, 2)),
+                medium=metal,
+                name="left",
+            ),
+            td.Structure(
+                geometry=td.Box(center=(1, 0, 0), size=(1, 2, 2)),
+                medium=metal,
+                name="right",
+            ),
+        ],
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="potential",
+                unstructured=True,
+            )
+        ],
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["left", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["right", "silicon"]),
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0.1])),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
+    )
+
+    assert sim._resolve_use_accelerated_solver is True
+    with pytest.raises(SetupError, match="MasettiMobility"):
+        _ = sim.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver
+
+    with pytest.raises(ValidationError, match="high-doping asymptote"):
+        _ = sim.updated_copy(analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=500))
+
+    mixed_charge = silicon_charge.updated_copy(
+        mobility_p=CHARGE_SIMULATION.intrinsic_Si.charge.mobility_p
+    )
+    mixed_silicon = silicon.updated_copy(charge=mixed_charge)
+    with pytest.raises(ValidationError, match="both electron and hole"):
+        _ = sim.updated_copy(
+            structures=[
+                sim.structures[0].updated_copy(medium=mixed_silicon),
+                *sim.structures[1:],
+            ]
+        )
+
+    impact_charge = silicon_charge.updated_copy(
+        R=[
+            td.SelberherrImpactIonization(
+                alpha_n_inf=7.03e5,
+                alpha_p_inf=1.582e6,
+                E_n_crit=1.23e6,
+                E_p_crit=2.03e6,
+                beta_n=1,
+                beta_p=1,
+            )
+        ]
+    )
+    unsupported_silicon = silicon.updated_copy(charge=impact_charge)
+    unsupported_sim = sim.updated_copy(
+        structures=[
+            sim.structures[0].updated_copy(medium=unsupported_silicon),
+            *sim.structures[1:],
+        ]
+    )
+    with pytest.raises(SetupError, match="MasettiMobility"):
+        _ = unsupported_sim._resolve_use_accelerated_solver
 
 
 def test_charge_simulation_voltage_bc_error_loc(heat_simulation):
@@ -2042,6 +2150,22 @@ def test_semiconductor_medium():
         mobility_p=ct_mobility,
     )
 
+    masetti_mobility = MasettiMobility(
+        mu_max=1417.0,
+        mu_0=52.2,
+        mu_1=0.0,
+        Cr=9.68e16,
+        Cs=3.43e20,
+        alpha=0.68,
+        beta=2.0,
+        exp_max=-2.5,
+        exp_0=-0.57,
+    )
+    _ = intrinsic_Si.updated_copy(
+        mobility_n=masetti_mobility,
+        mobility_p=masetti_mobility,
+    )
+
     fossum = td.FossumCarrierLifetime(
         tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1
     )
@@ -2079,6 +2203,35 @@ def test_semiconductor_medium():
     ]
     for m in N_models:
         _ = intrinsic_Si.updated_copy(N_c=m, N_v=m)
+
+
+def test_masetti_mobility_public_export():
+    """Masetti mobility is exposed through the public tidy3d namespace."""
+    mobility = td.MasettiMobility(
+        mu_max=1417.0,
+        mu_0=52.2,
+        mu_1=43.4,
+        Cr=9.68e16,
+        Cs=3.43e20,
+        alpha=0.68,
+        beta=2.0,
+        exp_max=-2.5,
+        exp_0=-0.57,
+    )
+    assert mobility.mu_1 == 43.4
+
+    with pytest.raises(ValidationError, match="'mu_1' must be smaller than 'mu_0'"):
+        _ = td.MasettiMobility(
+            mu_max=1417.0,
+            mu_0=43.4,
+            mu_1=43.4,
+            Cr=9.68e16,
+            Cs=3.43e20,
+            alpha=0.68,
+            beta=2.0,
+            exp_max=-2.5,
+            exp_0=-0.57,
+        )
 
 
 @pytest.mark.parametrize("shift_amount, log_level", [(1, None), (2, "WARNING")])

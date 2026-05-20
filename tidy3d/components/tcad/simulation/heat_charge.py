@@ -52,6 +52,7 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
+from tidy3d.components.tcad.mobility import MasettiMobility
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyCurrentDensityMonitor,
@@ -424,13 +425,14 @@ class HeatChargeSimulation(AbstractSimulation):
     use_accelerated_solver: bool | None = Field(
         None,
         title="Use accelerated solver.",
-        description="Controls whether the GPU-accelerated charge solver is used. "
+        description="Controls whether the accelerated charge solver is used. "
         "When ``None`` (default), the solver is selected automatically: the accelerated "
         "solver is used for steady-state charge simulations (DC and SSAC, isothermal or "
         "non-isothermal, with or without Fermi-Dirac statistics), falling back to the "
         "legacy CPU-only solver for unsupported configurations (impact ionization). "
         "Set to ``True`` to force the accelerated solver (if supported) "
-        "or ``False`` to force the legacy CPU-only solver.",
+        "or ``False`` to force the legacy CPU-only solver. Some models, such as "
+        "``MasettiMobility``, are only available with the accelerated solver.",
     )
 
     @field_validator("structures")
@@ -545,6 +547,7 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._check_charge_simulation_semiconductors
             )
+            self._call_with_validation_loc(("structures",), self._check_masetti_mobility_models)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
@@ -2129,7 +2132,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @property
     def _is_accelerated_solver_supported(self) -> tuple[bool, str]:
-        """Whether the GPU-accelerated solver supports this simulation configuration.
+        """Whether the accelerated solver supports this simulation configuration.
 
         Returns a ``(supported, reason)`` pair.  *reason* is only meaningful
         when *supported* is ``False`` and describes the unsupported feature.
@@ -2148,20 +2151,80 @@ class HeatChargeSimulation(AbstractSimulation):
                         return False, "impact ionization source terms are not supported"
         return True, ""
 
+    def _uses_gpu_only_mobility_model(self) -> bool:
+        """Whether the simulation uses a charge model unavailable in the CPU charge solver."""
+        for structure in self.structures:
+            charge = getattr(structure.medium, "charge", None)
+            if isinstance(charge, SemiconductorMedium) and (
+                isinstance(charge.mobility_n, MasettiMobility)
+                or isinstance(charge.mobility_p, MasettiMobility)
+            ):
+                return True
+        return False
+
+    def _check_masetti_mobility_models(self) -> Self:
+        """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0."""
+        temperature = getattr(self.analysis_spec, "temperature", None)
+        for structure in self.structures:
+            charge = getattr(structure.medium, "charge", None)
+            if not isinstance(charge, SemiconductorMedium):
+                continue
+            n_is_masetti = isinstance(charge.mobility_n, MasettiMobility)
+            p_is_masetti = isinstance(charge.mobility_p, MasettiMobility)
+            if n_is_masetti != p_is_masetti:
+                raise SetupError(
+                    "MasettiMobility must be used for both electron and hole mobility "
+                    "models in a semiconductor medium. Mixing MasettiMobility with "
+                    "another mobility family is not supported by the accelerated "
+                    "charge solver."
+                )
+            if temperature is None:
+                continue
+            for carrier, mobility in (
+                ("electron", charge.mobility_n),
+                ("hole", charge.mobility_p),
+            ):
+                if not isinstance(mobility, MasettiMobility):
+                    continue
+                high_doping_limit = (
+                    mobility.mu_0 * (temperature / 300.0) ** mobility.exp_0 - mobility.mu_1
+                )
+                if high_doping_limit <= 0.0:
+                    raise SetupError(
+                        f"MasettiMobility high-doping asymptote for {carrier} mobility "
+                        f"is non-positive at {temperature} K "
+                        "('mu_0 * (T/300)**exp_0 - mu_1' <= 0); the GPU evaluator would "
+                        "silently clamp mobility to zero at high doping. Reduce 'mu_1', "
+                        "increase 'mu_0', or use a lower isothermal temperature."
+                    )
+        return self
+
     @property
     def _resolve_use_accelerated_solver(self) -> bool:
         """Resolved value of :attr:`use_accelerated_solver`.
 
         When the field is ``None`` (auto), returns ``True`` when the simulation
         is supported by the accelerated solver.  An explicit ``True`` raises if
-        the simulation is not supported.  An explicit ``False`` always returns
-        ``False``.
+        the simulation is not supported.  Accelerated-only models also raise when auto
+        mode cannot resolve to the accelerated solver.
         """
         supported, reason = self._is_accelerated_solver_supported
+        uses_gpu_only_mobility = self._uses_gpu_only_mobility_model()
         if self.use_accelerated_solver is True and not supported:
             raise SetupError(
                 "'use_accelerated_solver=True' was requested but the current simulation "
                 f"is not supported by the accelerated solver: {reason}"
+            )
+        if self.use_accelerated_solver is False and uses_gpu_only_mobility:
+            raise SetupError(
+                "MasettiMobility is supported only by the accelerated charge solver. "
+                "Use 'use_accelerated_solver=True' or leave it as None."
+            )
+        if self.use_accelerated_solver is None and uses_gpu_only_mobility and not supported:
+            raise SetupError(
+                "MasettiMobility is supported only by the accelerated charge solver, "
+                "but this simulation is not supported by that solver: "
+                f"{reason}"
             )
         if self.use_accelerated_solver is not None:
             return self.use_accelerated_solver

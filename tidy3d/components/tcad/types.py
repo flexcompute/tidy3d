@@ -27,7 +27,11 @@ from tidy3d.components.tcad.generation_recombination import (
     SelberherrImpactIonization,
     ShockleyReedHallRecombination,
 )
-from tidy3d.components.tcad.mobility import CaugheyThomasMobility, ConstantMobilityModel
+from tidy3d.components.tcad.mobility import (
+    CaugheyThomasMobility,
+    ConstantMobilityModel,
+    MasettiMobility,
+)
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyCurrentDensityMonitor,
@@ -44,7 +48,7 @@ EffectiveDOSModelType = (
     ConstantEffectiveDOS | IsotropicEffectiveDOS | MultiValleyEffectiveDOS | DualValleyEffectiveDOS
 )
 EnergyBandGapModelType = ConstantEnergyBandGap | VarshniEnergyBandGap
-MobilityModelType = CaugheyThomasMobility | ConstantMobilityModel
+MobilityModelType = CaugheyThomasMobility | ConstantMobilityModel | MasettiMobility
 RecombinationModelType = (
     AugerRecombination
     | DistributedGeneration
