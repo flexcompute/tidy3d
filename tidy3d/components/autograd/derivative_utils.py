@@ -15,7 +15,7 @@ from tidy3d.components.data.utils import _zeros_like
 from tidy3d.components.grid.grid import _compute_1d_cell_sizes
 from tidy3d.components.types import ArrayLike, Bound
 from tidy3d.config import config
-from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
+from tidy3d.constants import C_0, EPSILON_0, MU_0
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 
@@ -195,19 +195,6 @@ class DerivativeInfo:
         kwargs.pop("deep", None)
         kwargs.pop("validate", None)
         return replace(self, **kwargs)
-
-    @staticmethod
-    def _nan_to_num_if_needed(
-        coords: ArrayFloat | ArrayComplex,
-    ) -> ArrayFloat | ArrayComplex:
-        """Convert NaN and infinite values to finite numbers, optimized for finite inputs."""
-        # skip check for small arrays
-        if coords.size < 1000:
-            return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
-
-        if np.isfinite(coords).all():
-            return coords
-        return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
 
     def create_interpolators(self, dtype: np.dtype[Any] | None = None) -> dict[str, Any]:
         """Create interpolators for field components and permittivity data.

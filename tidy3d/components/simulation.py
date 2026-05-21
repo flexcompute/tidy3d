@@ -1579,19 +1579,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         )
         return ax
 
-    # TODO: not yet supported
-    # def plot_3d(self, width=800, height=800) -> None:
-    #    """Render 3D plot of ``Simulation`` (in jupyter notebook only).
-    #    Parameters
-    #    ----------
-    #    width : float = 800
-    #        width of the 3d view dom's size
-    #    height : float = 800
-    #        height of the 3d view dom's size
-    #
-    #    """
-    #    return plot_sim_3d(self, width=width, height=height)
-
     @cached_property
     def _grid_and_snapping_lines(self) -> tuple[Grid, list[CoordinateOptional]]:
         """FDTD grid spatial locations and information.
@@ -5660,12 +5647,7 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
     def _warn_time_monitors_outside_run_time(self) -> None:
-        """Warn if time monitors start after the simulation run_time.
-        TODO: (remove this comment later) this is done as a pre-upload validator in view of a
-        planned change to allow ``run_time`` to accept a ``RunTimeSpec`` which would automatically
-        determine a run time based on simulation details. Then, we would have to access the
-        dynamically computed run_time e.g. through a ``_run_time`` cached property.
-        """
+        """Warn if time monitors start after the simulation run_time."""
         with log as consolidated_logger:
             for monitor in self.monitors:
                 if isinstance(monitor, TimeMonitor) and monitor.start > self._run_time:

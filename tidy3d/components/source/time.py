@@ -307,11 +307,6 @@ class GaussianPulse(Pulse):
         """Peak amplitude in frequency domain"""
         return self.amp_freq(self.peak_frequency)
 
-    @property
-    def _peak_time_amp(self) -> complex:
-        """Peak amplitude in time domain"""
-        return self.amp_time(self.peak_time)
-
     def frequency_range_sigma(self, sigma: float = DEFAULT_SIGMA) -> FreqBound:
         """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
         if not self.remove_dc_component:

@@ -226,12 +226,6 @@ def make_native_sphere_geometry(params: anp.ndarray, center: Sequence[float]) ->
     return td.Sphere(center=tuple(center), radius=params[0])
 
 
-def make_mesh_sphere_from_radius(params: anp.ndarray, center: Sequence[float]) -> td.Geometry:
-    radius = params[0]
-    radii = anp.full(3, radius)
-    return make_sphere_triangle_geometry(radii, center, scale_factor=1.0, scale_axis=0)
-
-
 def finite_difference_params(objective, params: anp.ndarray, finite_diff_step) -> np.ndarray:
     step = np.full_like(np.asarray(params, dtype=float), finite_diff_step, dtype=float)
     perturbations = []

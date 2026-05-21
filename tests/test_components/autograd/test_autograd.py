@@ -3894,17 +3894,6 @@ def power(amps: xr.DataArray) -> float:
     return anp.sum(anp.abs(amps.values) ** 2)
 
 
-def postprocess_0_src(sim_data: td.SimulationData) -> float:
-    """Postprocess function that should return 0 adjoint sources."""
-    return 0.0
-
-
-def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
-    objective = make_objective(postprocess_fn, structure_key=structure_key)
-    params = params0 + 1.0  # +1 is to avoid a warning in size_element with value 0
-    return ag.grad(objective)(params)
-
-
 def check_1_src_single(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 adjoint sources."""

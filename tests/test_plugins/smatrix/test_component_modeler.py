@@ -232,11 +232,6 @@ def run_component_modeler(monkeypatch, modeler: ModalComponentModeler) -> ModalC
     return modeler_data
 
 
-def get_port_data_array(monkeypatch, modeler: ModalComponentModeler):
-    modeler_data = run_component_modeler(monkeypatch=monkeypatch, modeler=modeler)
-    return modeler_data.smatrix().data
-
-
 def test_legacy_port_mode_spec_sort_spec_load():
     """Legacy ``sort_key=None`` in port mode specs should load through model validation."""
     sim = td.Simulation(

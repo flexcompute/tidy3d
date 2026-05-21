@@ -3261,8 +3261,6 @@ class ComplexPolySlabBase(PolySlab):
             List of :class:`.PolySlab` objects sharing ``axis`` and  slab bound properties.
         """
 
-        # TODO: change for 2.0
-        # handle reference plane kwarg
         all_vertices = PolySlab._load_gds_vertices(gds_cell, gds_layer, gds_dtype, gds_scale)
         polyslabs = [
             cls(

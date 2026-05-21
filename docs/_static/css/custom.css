@@ -136,12 +136,3 @@ html[data-theme=dark] .dataframe {
     color: var(--pst-color-text-base);
     font-family: 'flexcompute_regular', sans-serif;
 }
-
-/* TODO make sure this is only for the API tables */
-/*table {*/
-/*  border: solid;*/
-/*}*/
-
-/*th {*/
-/*  border: thin;*/
-/*}*/

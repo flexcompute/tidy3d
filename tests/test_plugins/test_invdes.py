@@ -304,12 +304,6 @@ def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     return anp.sum(intensity.values)
 
 
-def post_process_fn_kwargless(sim_data: td.SimulationData) -> float:
-    """Define a post-processing function with no kwargs specified."""
-    intensity = sim_data.get_intensity(MNT_NAME1)
-    return anp.sum(intensity.values)
-
-
 def post_process_fn_multi(batch_data: dict[str, td.SimulationData], **kwargs) -> float:
     """Define a post-processing function for batch."""
     val = 0.0
@@ -333,22 +327,6 @@ def make_invdes():
         design_region=make_design_region(),
         task_name="test",
     )
-
-
-class MockDataArray:
-    """Pretends to be a ``JaxDataArray`` with ``.values``."""
-
-    values = anp.linspace(0, 1, 10)
-
-
-class MockSimData:
-    """Pretends to be a ``JaxSimulationData``, returns a data array with ``.get_intensity()``."""
-
-    def get_intensity(self, name: str) -> MockDataArray:
-        return MockDataArray()
-
-    def __getitem__(self, name: str) -> MockDataArray:
-        return MockDataArray()
 
 
 def test_invdes_simulation_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811

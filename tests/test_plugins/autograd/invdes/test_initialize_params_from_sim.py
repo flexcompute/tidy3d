@@ -2,29 +2,11 @@ from __future__ import annotations
 
 import autograd.numpy as np
 import pytest
-from scipy.ndimage import zoom
 
 import tidy3d as td
 from tidy3d.plugins.autograd.invdes.parametrizations import initialize_params_from_simulation
 
 from ....utils import AssertLogLevel
-
-
-def _loss_like_impl(sim: td.Simulation, design_box: td.Box, p: np.ndarray, param_to_structure):
-    """Compute a similar loss to the initializer's, for verification only.
-
-    Uses simple zoom-based interpolation of the base permittivity to the parameter grid.
-    """
-    eps_base = sim.epsilon(box=design_box).data
-    eps_param = param_to_structure(p).medium.permittivity.data
-    factors = np.array(eps_param.shape) / np.array(eps_base.shape)
-    eps_base_interp = zoom(eps_base, factors, order=1)
-
-    denom = np.sqrt(np.sum(eps_base_interp.real**2 + eps_base_interp.imag**2))
-    denom = 1.0 if denom == 0 else denom
-
-    res = eps_base_interp - eps_param
-    return 0.5 * np.sum(res.real**2 + res.imag**2) / denom
 
 
 def _make_centered_linear_structure_case(shape: tuple[int, int]):

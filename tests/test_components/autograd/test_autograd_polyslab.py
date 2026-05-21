@@ -52,38 +52,6 @@ def polygon_area_centroid(verts: np.ndarray) -> tuple[float, float, float]:
     return abs(area), mx, my
 
 
-def edge_integrals(verts: np.ndarray):
-    """Per-edge geometric quantities"""
-    v0 = verts
-    v1 = np.roll(verts, -1, axis=0)
-    seg = v1 - v0
-
-    L = np.linalg.norm(seg, axis=1)  # segment length
-    n = np.stack([seg[:, 1], -seg[:, 0]], axis=1) / L[:, None]  # outward normal
-
-    int_x = 0.5 * (v0[:, 0] + v1[:, 0]) * L  # x ds per segment
-    int_y = 0.5 * (v0[:, 1] + v1[:, 1]) * L  # y ds per segment
-
-    return L, n, int_x, int_y
-
-
-def get_edge_intersection(v0, v1, x_clip):
-    """Find intersection of edge (v0, v1) with line x=x_clip."""
-    x0, y0 = v0
-    x1, y1 = v1
-    if np.isclose(x0, x1):  # vertical edge
-        return None, None
-    if (x0 <= x_clip and x1 <= x_clip) or (x0 > x_clip and x1 > x_clip):  # edge doesn't cross
-        return None, None
-
-    t = (x_clip - x0) / (x1 - x0)
-    if 0 <= t <= 1:
-        Iy = y0 + t * (y1 - y0)
-        I = np.array([x_clip, Iy])  # noqa: E741
-        return I, t
-    return None, None
-
-
 class DummyDI:
     """Stand-in for ``tidy3d.components.autograd.derivative_utils.DerivativeInfo``."""
 
