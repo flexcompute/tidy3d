@@ -123,10 +123,18 @@ remote defaults and emits a warning reminding you to enable local gradients.
      - ``0.1``
      - No
      - Fallback fraction of the minimum wavelength when adaptive spacing is needed (must be ``>= 0``).
-  * - ``minimum_spacing_fraction``
-    - ``0.001``
+   * - ``minimum_spacing_fraction``
+     - ``0.001``
      - No
      - Smallest normalized spacing allowed when constructing adaptive finite-difference stencils (must be ``>= 0``).
+   * - ``boundary_snapping_fraction``
+     - ``1.0``
+     - No
+     - Fraction of minimum local grid size used to snap coordinates outside of boundaries for shape gradients (must be ``>= 0.5``).
+   * - ``pec_detection_threshold``
+     - ``-100.0``
+     - No
+     - Real permittivity threshold below which a material is treated as PEC in shape-gradient boundary integration (must be ``<= 0``).
    * - ``local_gradient``
      - ``False``
      - Yes
@@ -142,7 +150,7 @@ remote defaults and emits a warning reminding you to enable local gradients.
    * - ``parallel_adjoint_mode_direction_policy``
      - ``"assume_outgoing"``
      - Yes
-     - Policy for selecting mode directions when launching parallel adjoint simulations. Accepts ``"assume_outgoing"``, ``"run_both_directions"``, or ``"no_parallel"``.
+     - Policy for selecting mode directions when launching parallel adjoint simulations. Accepts ``"assume_outgoing"`` or ``"run_both_directions"``.
    * - ``gradient_precision``
      - ``"single"``
      - No
@@ -171,14 +179,18 @@ remote defaults and emits a warning reminding you to enable local gradients.
      - ``None``
      - No
      - Upper bound on the number of frequencies processed per chunk during gradient evaluation. Set to a positive integer to enable chunking or leave ``None`` to disable it.
+   * - ``memory_allotment_fraction``
+     - ``0.75``
+     - Yes
+     - Fraction of reported available RAM reserved for local adjoint postprocessing when auto-selecting frequency chunk sizes (between ``0`` and ``1``).
    * - ``max_traced_structures``
      - ``500``
      - No
-     - Maximum number of structures whose fields may be traced in an adjoint run.
+     - Maximum number of structures whose fields may be traced in an adjoint run (must be positive).
    * - ``max_adjoint_per_fwd``
      - ``10``
      - No
-     - Maximum number of adjoint simulations dispatched per forward solve.
+     - Maximum number of adjoint simulations dispatched per forward solve (must be positive).
 
 
 Web (``config.web``)
@@ -222,10 +234,14 @@ Settings for the cloud API client and related environment overrides.
      - ``120``
      - No
      - HTTP request timeout in seconds (between ``0`` and ``300``).
+   * - ``default_num_workers``
+     - ``10``
+     - No
+     - Default worker count for configurable ``Batch`` thread pools when ``num_workers`` is not provided (must be positive). Upload/start uses a fixed concurrency of ``64`` workers.
    * - ``ssl_version``
      - ``None``
      - No
-     - Explicit TLS version to enforce (for example ``ssl.TLSVersion.TLSv1_2``). Leave ``None`` to let ``requests`` negotiate the version.
+     - Explicit TLS version to enforce. Accepts ``"TLSv1"``, ``"TLSv1_1"``, ``"TLSv1_2"``, or ``"TLSv1_3"``. Leave ``None`` to let ``requests`` negotiate the version.
    * - ``env_vars``
      - ``{}``
      - No
@@ -246,13 +262,13 @@ Controls the optional on-disk cache for simulation artifacts.
      - Persisted
      - Description
    * - ``enabled``
-     - ``False``
+     - ``True``
      - Yes
      - Turn the local cache on or off. When enabled, results are reused if the inputs match.
    * - ``directory``
-     - ``<base>/cache/simulations``
+     - Platform-dependent
      - Yes
-     - Directory where cached artifacts are stored. The path is expanded, resolved, and created if missing. ``<base>`` comes from ``TIDY3D_BASE_DIR`` when set, otherwise ``XDG_CACHE_HOME`` on Unix or ``~/.cache`` elsewhere (resolving to ``~/.cache/tidy3d/simulations`` by default).
+     - Directory where cached artifacts are stored. The path is expanded, resolved, and created if missing. Uses ``<TIDY3D_BASE_DIR>/cache/simulations`` when ``TIDY3D_BASE_DIR`` is set, otherwise ``<XDG_CACHE_HOME>/tidy3d/simulations`` when ``XDG_CACHE_HOME`` is set, and otherwise ``~/.cache/tidy3d/simulations``.
    * - ``max_size_gb``
      - ``10.0``
      - Yes
@@ -261,6 +277,56 @@ Controls the optional on-disk cache for simulation artifacts.
      - ``0``
      - Yes
      - Maximum number of cached simulations retained. ``0`` means no limit and eviction falls back to size constraints.
+
+
+Batch Data Cache (``config.batch_data_cache``)
+----------------------------------------------
+
+Controls the optional in-memory cache for loaded batch task data.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 18 10 48
+
+   * - Option
+     - Default
+     - Persisted
+     - Description
+   * - ``enabled``
+     - ``True``
+     - No
+     - Cache batch results in memory when files are below the size threshold.
+   * - ``max_total_size_gb``
+     - ``1.0``
+     - No
+     - Cache batch task data only when the combined size of all task data files is at or below this threshold. ``0`` disables the cache.
+
+
+vGPU (``config.vgpu``)
+----------------------
+
+Defaults used for virtual GPU cloud runs.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 18 10 48
+
+   * - Option
+     - Default
+     - Persisted
+     - Description
+   * - ``priority``
+     - ``None``
+     - No
+     - Default queue priority for vGPU runs. When set, must be between ``1`` and ``10``.
+   * - ``vgpu_allocation``
+     - ``None``
+     - No
+     - Default virtual GPU allocation for vGPU runs. When set, must be one of ``1``, ``2``, ``4``, or ``8``.
+   * - ``ignore_memory_limit``
+     - ``None``
+     - No
+     - Default flag to allow vGPU runs above the estimated memory limit.
 
 
 Plugins (``config.plugins``)
