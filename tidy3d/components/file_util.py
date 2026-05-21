@@ -7,11 +7,35 @@ import pathlib
 import shutil
 from typing import TYPE_CHECKING, Any
 
+import h5py
 import numpy as np
 
 if TYPE_CHECKING:
     from io import BytesIO
     from os import PathLike
+
+JSON_TAG = "JSON_STRING"
+
+
+def json_string_key(index: int) -> str:
+    """Get JSON string dataset key for chunk number ``index``."""
+    if index:
+        return f"{JSON_TAG}_{index}"
+    return JSON_TAG
+
+
+def json_string_from_hdf5(fname: PathLike | h5py.File) -> bytes:
+    """Load the model JSON string from an HDF5 file path or open file handle."""
+    if isinstance(fname, h5py.File):
+        f_handle = fname
+        num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
+        json_string = b""
+        for ind in range(num_string_parts):
+            json_string += f_handle[json_string_key(ind)][()]
+        return json_string
+
+    with h5py.File(fname, "r") as f_handle:
+        return json_string_from_hdf5(f_handle)
 
 
 def compress_file_to_gzip(input_file: PathLike, output_gz_file: PathLike | BytesIO) -> None:

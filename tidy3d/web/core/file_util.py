@@ -7,9 +7,7 @@ import os
 import shutil
 import tempfile
 
-import h5py
-
-from tidy3d.web.core.constants import JSON_TAG
+from tidy3d.components.file_util import json_string_from_hdf5
 
 
 def compress_file_to_gzip(input_file: os.PathLike, output_gz_file: os.PathLike) -> None:
@@ -56,28 +54,9 @@ def read_simulation_from_hdf5_gz(file_name: os.PathLike) -> str:
     return json_str
 
 
-"""TODO: _json_string_key and read_simulation_from_hdf5 are duplicated functions that also exist
-as methods in Tidy3dBaseModel. For consistency it would be best if this duplication is avoided."""
-
-
-def _json_string_key(index: int) -> str:
-    """Get json string key for string chunk number ``index``."""
-    if index:
-        return f"{JSON_TAG}_{index}"
-    return JSON_TAG
-
-
 def read_simulation_from_hdf5(file_name: os.PathLike) -> bytes:
     """read simulation str from hdf5"""
-    with h5py.File(file_name, "r") as f_handle:
-        num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
-        json_string = b""
-        for ind in range(num_string_parts):
-            json_string += f_handle[_json_string_key(ind)][()]
-    return json_string
-
-
-"""End TODO"""
+    return json_string_from_hdf5(file_name)
 
 
 def read_simulation_from_json(file_name: os.PathLike) -> str:

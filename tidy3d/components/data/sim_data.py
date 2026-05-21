@@ -25,6 +25,7 @@ from tidy3d.components.base import (
     cached_property,
 )
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
+from tidy3d.components.file_util import json_string_from_hdf5
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
@@ -597,7 +598,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 raise ValueError(f"could not find data in the supplied file {fname}")
 
             # get the monitor list from the json string
-            json_string = cls._json_string_from_hdf5(f_handle)
+            json_string = json_string_from_hdf5(f_handle)
             json_dict = json.loads(json_string)
             monitor_list = json_dict["simulation"]["monitors"]
 

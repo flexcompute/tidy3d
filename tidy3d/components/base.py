@@ -53,7 +53,13 @@ from .docstrings import (
     _fmt_ann_literal,
     _format_model_default,
 )
-from .file_util import compress_file_to_gzip, extract_gzip_file
+from .file_util import JSON_TAG as _JSON_TAG
+from .file_util import (
+    compress_file_to_gzip,
+    extract_gzip_file,
+    json_string_from_hdf5,
+    json_string_key,
+)
 from .types import TYPE_TAG_STR, Undefined
 
 if TYPE_CHECKING:
@@ -70,7 +76,7 @@ if TYPE_CHECKING:
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally
-JSON_TAG = "JSON_STRING"
+JSON_TAG = _JSON_TAG
 # If json string is larger than ``MAX_STRING_LENGTH``, split the string when storing in hdf5
 MAX_STRING_LENGTH = 1_000_000_000
 FORBID_SPECIAL_CHARACTERS = ["/"]
@@ -1392,27 +1398,6 @@ class Tidy3dBaseModel(BaseModel):
                     model_dict = model_dict[key]
         return model_dict
 
-    @staticmethod
-    def _json_string_key(index: int) -> str:
-        """Get json string key for string chunk number ``index``."""
-        if index:
-            return f"{JSON_TAG}_{index}"
-        return JSON_TAG
-
-    @classmethod
-    def _json_string_from_hdf5(cls: type[T], fname: PathLike | h5py.File) -> str:
-        """Load the model json string from an hdf5 file path or open file handle."""
-        if isinstance(fname, h5py.File):
-            f_handle = fname
-            num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
-            json_string = b""
-            for ind in range(num_string_parts):
-                json_string += f_handle[cls._json_string_key(ind)][()]
-            return json_string
-
-        with h5py.File(fname, "r") as f_handle:
-            return cls._json_string_from_hdf5(f_handle)
-
     @classmethod
     def _load_data_from_file(
         cls: type[T],
@@ -1529,7 +1514,7 @@ class Tidy3dBaseModel(BaseModel):
                 )
 
         f_handle = fname
-        model_dict = json.loads(cls._json_string_from_hdf5(fname=f_handle))
+        model_dict = json.loads(json_string_from_hdf5(f_handle))
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
         if load_data_arrays:
@@ -1612,7 +1597,7 @@ class Tidy3dBaseModel(BaseModel):
             for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
                 ind_start = int(ind * MAX_STRING_LENGTH)
                 ind_stop = min(int(ind + 1) * MAX_STRING_LENGTH, len(json_str))
-                f_handle[self._json_string_key(ind)] = json_str[ind_start:ind_stop]
+                f_handle[json_string_key(ind)] = json_str[ind_start:ind_stop]
 
             def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
                 """For every DataArray item in dictionary, write path of hdf5 group as value."""
