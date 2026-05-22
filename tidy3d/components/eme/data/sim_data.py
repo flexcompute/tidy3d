@@ -17,7 +17,7 @@ from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
-from .dataset import EMECoefficientDataset, EMESMatrixDataset
+from .dataset import EMECoefficientDataset, EMEDiagnosticsData, EMESMatrixDataset
 from .monitor_data import EMECoefficientData, EMEModeSolverData, EMEMonitorDataType
 
 if TYPE_CHECKING:
@@ -34,8 +34,8 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     Notes
     -----
         Contains the results of an :class:`.EMESimulation`, including the scattering matrix
-        (``smatrix``), port modes (``port_modes``), mode coefficients (``coeffs``), and any
-        monitor data recorded during the simulation.
+        (``smatrix``), diagnostics (``diagnostics``), port modes (``port_modes``), mode
+        coefficients (``coeffs``), and any monitor data recorded during the simulation.
 
         The scattering matrix is expressed in the basis of the port modes. Use
         :meth:`smatrix_in_basis` to re-express it in a different modal basis, for example
@@ -109,6 +109,12 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         None,
         title="Coefficients",
         description="Coefficients from the EME simulation. Useful for debugging and optimization.",
+    )
+
+    diagnostics: EMEDiagnosticsData | None = Field(
+        None,
+        title="Diagnostics",
+        description="Diagnostic quantities from the EME simulation.",
     )
 
     port_modes_raw: EMEModeSolverData | None = Field(

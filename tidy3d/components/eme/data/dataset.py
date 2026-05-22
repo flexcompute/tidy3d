@@ -9,6 +9,8 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
     EMECoefficientDataArray,
     EMEFluxDataArray,
+    EMEInterfaceCellIndexDataArray,
+    EMEInterfaceDiagnosticDataArray,
     EMEInterfaceSMatrixDataArray,
     EMEModeIndexDataArray,
     EMEScalarFieldDataArray,
@@ -238,6 +240,97 @@ class EMECoefficientDataset(Dataset):
         # for safety to prevent normalizing twice
         fields["flux"] = None
         return self.updated_copy(**fields)
+
+
+class EMEInterfaceDiagnostics(Dataset):
+    """Direct physical residual diagnostics for EME interface solves.
+
+    Each residual array is indexed by ``(f, sweep_index, eme_interface_index,
+    eme_port_index, mode_index)``. The :attr:`cell_index` and
+    :attr:`right_cell_index` arrays map each ``eme_interface_index`` to the
+    corresponding left/right EME cell pair, which keeps periodicity-sweep
+    interfaces uniquely addressable even when multiple interfaces share the same
+    left cell. The two tangential-field residuals are incident-normalized
+    squared field-energy ratios, so they are dimensionless and directly
+    comparable; the L2-balanced sum is available via the
+    :attr:`normalized_tangential_residual` property. Aperture variants exclude
+    mode-solver PML cells from the field metric and are available via
+    :attr:`normalized_aperture_tangential_residual`.
+    """
+
+    cell_index: EMEInterfaceCellIndexDataArray = Field(
+        title="Left Cell Index",
+        description="Left EME cell index for each interface diagnostic row.",
+    )
+
+    right_cell_index: EMEInterfaceCellIndexDataArray = Field(
+        title="Right Cell Index",
+        description="Right EME cell index for each interface diagnostic row.",
+    )
+
+    normalized_tangential_E_residual: EMEInterfaceDiagnosticDataArray = Field(
+        title="Normalized Tangential E Residual",
+        description=(
+            "Tangential electric-field residual energy divided by the fixed incident "
+            "tangential-field energy at EME interfaces."
+        ),
+    )
+
+    normalized_tangential_H_residual: EMEInterfaceDiagnosticDataArray = Field(
+        title="Normalized Tangential H Residual",
+        description=(
+            "Impedance-scaled tangential magnetic-field residual energy divided by the fixed "
+            "incident tangential-field energy at EME interfaces."
+        ),
+    )
+
+    normalized_aperture_tangential_E_residual: EMEInterfaceDiagnosticDataArray = Field(
+        title="Normalized Aperture Tangential E Residual",
+        description=(
+            "Tangential electric-field residual energy over the non-PML aperture divided by the "
+            "fixed incident tangential-field energy over the same aperture at EME interfaces."
+        ),
+    )
+
+    normalized_aperture_tangential_H_residual: EMEInterfaceDiagnosticDataArray = Field(
+        title="Normalized Aperture Tangential H Residual",
+        description=(
+            "Impedance-scaled tangential magnetic-field residual energy over the non-PML aperture "
+            "divided by the fixed incident tangential-field energy over the same aperture at EME "
+            "interfaces."
+        ),
+    )
+
+    power_defect: EMEInterfaceDiagnosticDataArray = Field(
+        title="Power Defect",
+        description=(
+            "Absolute interface power conservation defect for each incident mode; NaN when "
+            "the incident real power is negligible."
+        ),
+    )
+
+    @cached_property
+    def normalized_tangential_residual(self) -> EMEInterfaceDiagnosticDataArray:
+        """L2-balanced sum of the normalized squared E and H tangential-field residuals."""
+        return self.normalized_tangential_E_residual + self.normalized_tangential_H_residual
+
+    @cached_property
+    def normalized_aperture_tangential_residual(self) -> EMEInterfaceDiagnosticDataArray:
+        """Non-PML-aperture sum of the normalized squared E and H residuals."""
+        return (
+            self.normalized_aperture_tangential_E_residual
+            + self.normalized_aperture_tangential_H_residual
+        )
+
+
+class EMEDiagnosticsData(Dataset):
+    """Diagnostic quantities associated with an EME simulation."""
+
+    interface_residuals: EMEInterfaceDiagnostics | None = Field(
+        None,
+        title="Interface Residuals",
+        description="Direct physical residual diagnostics for local EME interface solves.",
+    )
 
 
 class EMEFieldDataset(ElectromagneticFieldDataset):

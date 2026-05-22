@@ -5802,7 +5802,7 @@
           "default": false
         },
         "increasing_mode_tolerance": {
-          "default": 0.0,
+          "default": 1e-12,
           "minimum": 0.0,
           "type": "number"
         },
@@ -14150,6 +14150,10 @@
         }
       ],
       "default": "passive"
+    },
+    "eme_diagnostics": {
+      "default": false,
+      "type": "boolean"
     },
     "eme_grid_spec": {
       "anyOf": [

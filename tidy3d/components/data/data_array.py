@@ -63,8 +63,11 @@ DIM_ATTRS = {
     "terminal_label_in": {"long_name": "input terminal label"},
     "eme_port_index": {"long_name": "EME port index"},
     "eme_cell_index": {"long_name": "EME cell index"},
+    "eme_interface_index": {"long_name": "EME interface index"},
     "mode_index_in": {"long_name": "mode index in"},
     "mode_index_out": {"long_name": "mode index out"},
+    "trace_index_in": {"long_name": "trace index in"},
+    "trace_index_out": {"long_name": "trace index out"},
     "sweep_index": {"long_name": "sweep index"},
     "theta": {"units": RADIAN, "long_name": "elevation angle"},
     "phi": {"units": RADIAN, "long_name": "azimuth angle"},
@@ -1639,6 +1642,33 @@ class EMEFluxDataArray(DataArray):
     _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
+class EMETraceMetricDataArray(DataArray):
+    """Field-metric matrix used by advanced EME interface diagnostics."""
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "trace_index_out", "trace_index_in")
+    _data_attrs = {"long_name": "interface trace metric"}
+
+
+class EMEInterfaceCellIndexDataArray(DataArray):
+    """Left or right EME cell index for each aggregated EME interface."""
+
+    __slots__ = ()
+    _dims = ("eme_interface_index",)
+    _data_attrs = {"long_name": "EME interface cell index"}
+
+
+class EMEInterfaceDiagnosticDataArray(DataArray):
+    """Scalar EME interface diagnostic value.
+
+    Indexed by interface, incident port, and incident mode.
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "eme_interface_index", "eme_port_index", "mode_index")
+    _data_attrs = {"long_name": "interface diagnostic"}
+
+
 class ChargeDataArray(DataArray):
     """Charge data array.
 
@@ -2314,6 +2344,9 @@ DATA_ARRAY_TYPES = [
     EMEModeIndexDataArray,
     EMEFluxDataArray,
     EMEFreqModeDataArray,
+    EMETraceMetricDataArray,
+    EMEInterfaceCellIndexDataArray,
+    EMEInterfaceDiagnosticDataArray,
     MixedModeDataArray,
     ChargeDataArray,
     SteadyVoltageDataArray,

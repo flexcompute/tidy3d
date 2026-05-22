@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 from rich.console import Console
 
 import tidy3d as td
+from tidy3d.components.data.data_array import EMETraceMetricDataArray
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import LogHandler, log
 
@@ -121,6 +122,40 @@ def test_sim_version_update():
         sim_new = td.EMESimulation.model_validate(sim_dict)
 
     assert sim_new.version == td.__version__
+
+
+def test_eme_mode_spec_increasing_mode_tolerance_default():
+    mode_spec = td.EMEModeSpec()
+
+    assert mode_spec.increasing_mode_tolerance == pytest.approx(1e-12)
+    assert td.EMEModeSpec(increasing_mode_tolerance=0).increasing_mode_tolerance == 0
+
+
+@pytest.mark.parametrize("num_pml", [(0, 0), (1, 1)])
+def test_eme_internal_mode_solves_use_corrected_solver_grid(eme_base_sim, num_pml):
+    """EME mode solves use the corrected mode-solver grid and branch convention."""
+    sim = eme_base_sim.updated_copy(
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=1,
+            mode_spec=td.EMEModeSpec(num_modes=1, num_pml=num_pml),
+        )
+    )
+    mode_solver = sim.mode_simulations[0]._mode_solver
+
+    assert mode_solver.conjugated_dot_product is True
+    assert mode_solver.use_colocated_integration is True
+    expected_bounds = mode_solver._compute_solver_field_bounds(
+        grid=mode_solver.simulation.grid,
+        plane=mode_solver.plane,
+        normal_axis=mode_solver.normal_axis,
+        symmetry=mode_solver.simulation.symmetry,
+        symmetry_center=mode_solver.simulation.center,
+    )
+    assert mode_solver._solver_field_bounds == expected_bounds
+    assert mode_solver.to_mode_solver_monitor(name="test").attrs == {}
+    assert sim.mode_solver_monitors[0].conjugated_dot_product is True
+    assert sim.mode_solver_monitors[0].use_colocated_integration is True
+    assert sim.mode_solver_monitors[0].attrs == {}
 
 
 def test_eme_grid():
@@ -286,7 +321,7 @@ def test_eme_grid():
     too_large_grid = td.EMEUniformGrid(num_cells=501, mode_spec=td.EMEModeSpec())
     with pytest.raises(pd.ValidationError):
         _ = too_large_grid.make_grid(center=sim_geom.center, size=sim_geom.size, axis=axis)
-    too_many_modes = td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=1000))
+    too_many_modes = td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=1001))
     with pytest.raises(pd.ValidationError):
         _ = too_many_modes.make_grid(center=sim_geom.center, size=sim_geom.size, axis=axis)
 
@@ -2642,6 +2677,21 @@ def _mda(data, freqs, nm0, nm1):
     )
 
 
+def _trace_metric(freqs, nm_left, nm_right):
+    """Build a small trace metric matrix for stage model tests."""
+    ntrace = 2 * (nm_left + nm_right)
+    data = np.eye(ntrace, dtype=complex).reshape(1, 1, ntrace, ntrace)
+    return EMETraceMetricDataArray(
+        data,
+        coords={
+            "f": freqs,
+            "sweep_index": [0],
+            "trace_index_out": np.arange(ntrace),
+            "trace_index_in": np.arange(ntrace),
+        },
+    )
+
+
 def _local_eme_basis_modes(sim, cell_index, name, num_modes=4):
     """Build real ModeSolverData on an EME cell plane for smatrix_in_basis tests."""
     plane = sim.eme_grid.mode_planes[cell_index]
@@ -2737,7 +2787,9 @@ def test_smatrix_in_basis_allows_truncated_mode_sweep_port_axes():
     np.testing.assert_array_equal(result.S22.mode_index_in.values, [0, 1, 2, 3])
 
 
-def make_local_eme_sim(num_cells=3, num_modes=4, sweep_spec=None, constraint="passive"):
+def make_local_eme_sim(
+    num_cells=3, num_modes=4, sweep_spec=None, constraint="passive", num_pml=(6, 6)
+):
     """Create a small EMESimulation for local propagation testing."""
     lambda0 = 1.55
     freq0 = td.C_0 / lambda0
@@ -2753,12 +2805,267 @@ def make_local_eme_sim(num_cells=3, num_modes=4, sweep_spec=None, constraint="pa
         axis=2,
         eme_grid_spec=td.EMEUniformGrid(
             num_cells=num_cells,
-            mode_spec=td.EMEModeSpec(num_modes=num_modes, num_pml=(6, 6)),
+            mode_spec=td.EMEModeSpec(num_modes=num_modes, num_pml=num_pml),
         ),
         freqs=[freq0],
         sweep_spec=sweep_spec,
         constraint=constraint,
     )
+
+
+@pytest.mark.numerical
+def test_eme_propagate_warns_when_diagnostics_requested():
+    """One-shot local propagation cannot return diagnostic data."""
+    sim = make_local_eme_sim(num_cells=2, num_modes=1, num_pml=(0, 0)).updated_copy(
+        eme_diagnostics=True
+    )
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+    with AssertLogLevel("WARNING", contains_str="eme_diagnostics=True"):
+        smatrix = sim.propagate(mode_data, progress=False)
+    assert isinstance(smatrix, td.EMESMatrixDataset)
+
+
+@pytest.mark.numerical
+def test_compute_interface_diagnostics_end_to_end_real_solve():
+    """End-to-end smoke test: real mode solve → cell overlaps → interface overlaps with
+    diagnostic metrics → interface S-matrix → flux-weighted ``power_defect``.
+
+    Verifies the modal-flux plumbing flows correctly from the solver through to
+    :func:`compute_interface_diagnostics`. The flux-weighting formula itself is
+    discriminated in the lower-level synthetic test
+    ``test_compute_interface_diagnostics_power_defect_is_flux_weighted``; this test
+    only verifies the public-API integration produces finite, sensible diagnostics
+    on a real solve.
+    """
+    sim = make_local_eme_sim(num_cells=2, num_modes=3).updated_copy(eme_diagnostics=True)
+    mode_data = [ms.run_local() for ms in sim.mode_simulations]
+
+    cell_modes = [sim.stage_cell_modes(md, cell_index=i) for i, md in enumerate(mode_data)]
+    cell_overlaps = [sim.compute_cell_overlap(cm) for cm in cell_modes]
+    iface_overlap = sim.compute_interface_overlap(
+        cell_modes[0],
+        cell_modes[1],
+        cell_overlaps[0],
+        cell_overlaps[1],
+    )
+    # Diagnostic-path fields were stamped end-to-end.
+    assert iface_overlap.electric_field_metric is not None
+    assert iface_overlap.magnetic_field_metric is not None
+    assert iface_overlap.aperture_electric_field_metric is not None
+    assert iface_overlap.aperture_magnetic_field_metric is not None
+
+    iface_smatrix = sim.compute_interface_smatrix(cell_overlaps[0], cell_overlaps[1], iface_overlap)
+    diag = sim.compute_interface_diagnostics(
+        cell_overlaps[0], cell_overlaps[1], iface_overlap, iface_smatrix
+    )
+
+    # All diagnostics finite, non-negative, with the canonical 5-D shape.
+    power_defects = diag.power_defect.values
+    e_res = diag.normalized_tangential_E_residual.values
+    h_res = diag.normalized_tangential_H_residual.values
+    aperture_e_res = diag.normalized_aperture_tangential_E_residual.values
+    aperture_h_res = diag.normalized_aperture_tangential_H_residual.values
+    for arr in (power_defects, e_res, h_res, aperture_e_res, aperture_h_res):
+        assert arr.ndim == 5
+        finite_mask = np.isfinite(arr)
+        assert finite_mask.any()
+        assert np.all(arr[finite_mask] >= 0.0)
+
+    # Both cells come from a uniform multimode dielectric guide ⇒ the interface
+    # S-matrix is the identity ⇒ all three diagnostics should be near zero for
+    # every populated mode at every populated port.
+    finite_pd = power_defects[np.isfinite(power_defects)]
+    np.testing.assert_array_less(finite_pd, 1e-6)
+    finite_e = e_res[np.isfinite(e_res)]
+    finite_h = h_res[np.isfinite(h_res)]
+    finite_aperture_e = aperture_e_res[np.isfinite(aperture_e_res)]
+    finite_aperture_h = aperture_h_res[np.isfinite(aperture_h_res)]
+    np.testing.assert_array_less(finite_e, 1e-6)
+    np.testing.assert_array_less(finite_h, 1e-6)
+    np.testing.assert_array_less(finite_aperture_e, 1e-6)
+    np.testing.assert_array_less(finite_aperture_h, 1e-6)
+
+
+def test_compute_interface_overlap_default_diagnostic_metrics_follows_sim_flag():
+    """Manual staged overlap defaults should not pay diagnostic cost unless enabled."""
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=1, num_pml=(0, 0))
+    left = sim.stage_cell_modes(_local_eme_basis_modes(sim, 0, "left", num_modes=1), cell_index=0)
+    right = sim.stage_cell_modes(_local_eme_basis_modes(sim, 1, "right", num_modes=1), cell_index=1)
+    left_overlap = sim.compute_cell_overlap(left)
+    right_overlap = sim.compute_cell_overlap(right)
+
+    default_overlap = sim.compute_interface_overlap(left, right, left_overlap, right_overlap)
+    assert default_overlap.electric_field_metric is None
+    assert default_overlap.magnetic_field_metric is None
+    assert default_overlap.aperture_electric_field_metric is None
+    assert default_overlap.aperture_magnetic_field_metric is None
+
+    diagnostic_sim = sim.updated_copy(eme_diagnostics=True)
+    diagnostic_default = diagnostic_sim.compute_interface_overlap(
+        left, right, left_overlap, right_overlap
+    )
+    assert diagnostic_default.electric_field_metric is not None
+    assert diagnostic_default.magnetic_field_metric is not None
+    assert diagnostic_default.aperture_electric_field_metric is not None
+    assert diagnostic_default.aperture_magnetic_field_metric is not None
+
+    explicit_overlap = sim.compute_interface_overlap(
+        left, right, left_overlap, right_overlap, include_diagnostic_metrics=True
+    )
+    assert explicit_overlap.electric_field_metric is not None
+
+
+def test_compute_interface_diagnostics_rejects_cell_overlap_freq_mismatch():
+    """Diagnostics read cell-overlap flux arrays and must validate their frequency grids."""
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=1)
+    freq = sim.freqs[0]
+    bad_freq = 1.01 * freq
+
+    def cell_overlap(cell_index, freqs):
+        return td.EMEStageCellOverlap(
+            cell_index=cell_index,
+            n_complex=td.ModeIndexDataArray(
+                np.ones((1, 1), dtype=complex),
+                coords={"f": freqs, "mode_index": [0]},
+            ),
+            complex_flux=td.FreqModeDataArray(
+                np.ones((1, 1), dtype=complex),
+                coords={"f": freqs, "mode_index": [0]},
+            ),
+            self_overlap=_mda(np.ones((1, 1, 1), dtype=complex), freqs, 1, 1),
+        )
+
+    interface_overlap = td.EMEStageInterfaceOverlap(
+        cell_index=0,
+        right_cell_index=1,
+        O12=_mda(np.ones((1, 1, 1), dtype=complex), [freq], 1, 1),
+        O21=_mda(np.ones((1, 1, 1), dtype=complex), [freq], 1, 1),
+        electric_field_metric=_trace_metric([freq], 1, 1),
+        magnetic_field_metric=_trace_metric([freq], 1, 1),
+        aperture_electric_field_metric=_trace_metric([freq], 1, 1),
+        aperture_magnetic_field_metric=_trace_metric([freq], 1, 1),
+    )
+    interface_smatrix = td.EMEStageInterfaceSMatrix(
+        cell_index=0,
+        right_cell_index=1,
+        sweep_index=0,
+        S11=_mda(np.zeros((1, 1, 1), dtype=complex), [freq], 1, 1),
+        S12=_mda(np.ones((1, 1, 1), dtype=complex), [freq], 1, 1),
+        S21=_mda(np.ones((1, 1, 1), dtype=complex), [freq], 1, 1),
+        S22=_mda(np.zeros((1, 1, 1), dtype=complex), [freq], 1, 1),
+    )
+
+    with pytest.raises(ValidationError, match="left cell overlap"):
+        sim.compute_interface_diagnostics(
+            cell_overlap(0, [bad_freq]),
+            cell_overlap(1, [freq]),
+            interface_overlap,
+            interface_smatrix,
+        )
+
+
+def test_stage_cell_modes_rejects_pre_truncated_basis():
+    """stage_cell_modes() requires the full internal basis from `_internal_mode_spec`.
+
+    The interface matching equations rely on every sorted mode being available
+    as a test row; truncating with `sort_spec.keep_modes` before staging would
+    silently fall back to a smaller test basis and lose the convergence
+    guarantee. Synthesize an under-sized ModeSolverData with the right plane
+    and frequencies (no real solve needed) and verify the validation fires.
+    """
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    # _get_mode_solver_data places the synthetic monitor at center=(0,0,-1)
+    # size=(inf,inf,0), freqs=[td.C_0]; build a sim whose cell 0 plane matches.
+    truncated_modes = 8
+    expected_num_modes = truncated_modes + 2
+    sim = td.EMESimulation(
+        size=(2, 2, 3),
+        axis=2,
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=3,
+            mode_spec=td.EMEModeSpec(num_modes=expected_num_modes, num_pml=(0, 0)),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        freqs=[td.C_0, 3e14],
+    )
+    assert sim._internal_mode_spec(0).num_modes == expected_num_modes
+
+    truncated = _get_mode_solver_data(modes_out=False, num_modes=truncated_modes)
+
+    with pytest.raises(ValidationError, match=f"at least {expected_num_modes} are required"):
+        sim.stage_cell_modes(truncated, cell_index=0)
+
+
+def test_cell_overlap_reconstructs_missing_trial_filter_mask():
+    """Cached cell overlaps without a mask must not bypass current propagation filters."""
+    freqs = [td.C_0]
+    mode_index = [0, 1, 2]
+    sort_spec = td.ModeSortSpec(
+        filter_key="n_eff",
+        filter_reference=1.5,
+        keep_modes="filtered",
+    )
+    sim = td.EMESimulation(
+        size=(1, 1, 1),
+        axis=2,
+        freqs=freqs,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=1,
+            mode_spec=td.EMEModeSpec(
+                num_modes=3,
+                num_pml=(0, 0),
+                sort_spec=sort_spec,
+                increasing_mode_tolerance=1e-6,
+            ),
+        ),
+    )
+    cell_overlap = td.EMEStageCellOverlap(
+        cell_index=0,
+        n_complex=td.ModeIndexDataArray(
+            np.array([[1.0, 2.0, 3.0 - 2e-6j]], dtype=complex),
+            coords={"f": freqs, "mode_index": mode_index},
+        ),
+        complex_flux=td.FreqModeDataArray(
+            np.ones((1, 3), dtype=complex),
+            coords={"f": freqs, "mode_index": mode_index},
+        ),
+        self_overlap=_mda(np.eye(3, dtype=complex)[None, :, :], freqs, 3, 3),
+    )
+
+    reconstructed = sim._cell_overlap_with_trial_filter_mask(cell_overlap)
+
+    assert reconstructed.filter_mask == (False, True, False)
+
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    cell_smatrix = sim.compute_cell_smatrix(cell_overlap)
+    np.testing.assert_array_equal(cell_smatrix.S11.mode_index_in.values, [1])
 
 
 def _mixed_mode_basis(modes, mixing, mode_index_start=0):
@@ -2883,7 +3190,16 @@ def test_eme_stage_models():
     assert co.cell_index == 2
 
     # Interface overlap with identity
-    io = td.EMEStageInterfaceOverlap(cell_index=0, right_cell_index=1, O12=S, O21=S)
+    io = td.EMEStageInterfaceOverlap(
+        cell_index=0,
+        right_cell_index=1,
+        O12=S,
+        O21=S,
+        electric_field_metric=_trace_metric([2e14], 2, 2),
+        magnetic_field_metric=_trace_metric([2e14], 2, 2),
+        aperture_electric_field_metric=_trace_metric([2e14], 2, 2),
+        aperture_magnetic_field_metric=_trace_metric([2e14], 2, 2),
+    )
     assert io.cell_index == 0
     assert io.right_cell_index == 1
 
@@ -2929,6 +3245,28 @@ def test_eme_stage_serialization():
     assert co2.cell_index == 0
     np.testing.assert_allclose(co2.self_overlap.values, S.values)
 
+    io = td.EMEStageInterfaceOverlap(
+        cell_index=0,
+        right_cell_index=1,
+        O12=S,
+        O21=S,
+        electric_field_metric=_trace_metric([2e14], 2, 2),
+        magnetic_field_metric=_trace_metric([2e14], 2, 2),
+        aperture_electric_field_metric=_trace_metric([2e14], 2, 2),
+        aperture_magnetic_field_metric=_trace_metric([2e14], 2, 2),
+    )
+    io2 = _roundtrip(io, td.EMEStageInterfaceOverlap)
+    assert io2.cell_index == 0
+    assert io2.right_cell_index == 1
+    np.testing.assert_allclose(
+        io2.electric_field_metric.values,
+        io.electric_field_metric.values,
+    )
+    np.testing.assert_allclose(
+        io2.aperture_electric_field_metric.values,
+        io.aperture_electric_field_metric.values,
+    )
+
     # Cell S-matrix round-trip
     csm = td.EMEStageCellSMatrix(cell_index=1, sweep_index=0, S11=S, S12=S, S21=S, S22=S)
     csm2 = _roundtrip(csm, td.EMEStageCellSMatrix)
@@ -2943,6 +3281,92 @@ def test_eme_stage_serialization():
     assert ism2.cell_index == 0
     assert ism2.right_cell_index == 1
     np.testing.assert_allclose(ism2.S12.values, S.values)
+
+
+def test_eme_compute_smatrix_selects_port_flux_by_trial_label():
+    """Flux normalization follows trial mode labels, not positional columns."""
+    from tidy3d.components.eme.data.stage import (
+        EMEStageCellOverlap,
+        EMEStageCellSMatrix,
+        EMEStageInterfaceSMatrix,
+    )
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=4)
+    freqs = list(sim.freqs)
+    full_mi = np.arange(4)
+    trial_mi = np.array([0, 2])
+
+    def _overlap(cell_index):
+        n_complex = td.ModeIndexDataArray(
+            np.full((1, 4), 1.5 + 0j), coords={"f": freqs, "mode_index": full_mi}
+        )
+        flux_values = (
+            np.array([[1.0, 10.0, 4.0, 10.0]], dtype=complex)
+            if cell_index == 0
+            else np.array([[9.0, 10.0, 16.0, 10.0]], dtype=complex)
+        )
+        flux = td.FreqModeDataArray(
+            flux_values,
+            coords={"f": freqs, "mode_index": full_mi},
+        )
+        so = td.EMESMatrixDataArray(
+            np.eye(4, dtype=complex).reshape(1, 1, 4, 4),
+            coords={
+                "f": freqs,
+                "sweep_index": [0],
+                "mode_index_out": full_mi,
+                "mode_index_in": full_mi,
+            },
+        )
+        return EMEStageCellOverlap(
+            cell_index=cell_index,
+            n_complex=n_complex,
+            complex_flux=flux,
+            self_overlap=so,
+        )
+
+    def _smatrix_stage(cls, cell_index, right_cell_index=None):
+        zero_block = np.zeros((1, 1, 2, 2), dtype=complex)
+        pass_block = np.eye(2, dtype=complex).reshape(1, 1, 2, 2)
+        coords = {
+            "f": freqs,
+            "sweep_index": [0],
+            "mode_index_out": trial_mi,
+            "mode_index_in": trial_mi,
+        }
+        zero = td.EMESMatrixDataArray(zero_block, coords=coords)
+        passthrough = td.EMESMatrixDataArray(pass_block, coords=coords)
+        kwargs = {
+            "sweep_index": 0,
+            "S11": zero,
+            "S12": passthrough,
+            "S21": passthrough,
+            "S22": zero,
+        }
+        if right_cell_index is None:
+            return cls(cell_index=cell_index, **kwargs)
+        return cls(cell_index=cell_index, right_cell_index=right_cell_index, **kwargs)
+
+    smatrix = sim.updated_copy(normalize=True).compute_smatrix(
+        cell_overlaps=[_overlap(0), _overlap(1)],
+        cell_smatrices=[
+            _smatrix_stage(EMEStageCellSMatrix, 0),
+            _smatrix_stage(EMEStageCellSMatrix, 1),
+        ],
+        interface_smatrices=[
+            _smatrix_stage(EMEStageInterfaceSMatrix, 0, right_cell_index=1),
+        ],
+        sweep_index=0,
+    )
+
+    np.testing.assert_allclose(smatrix.S21.values.squeeze(), np.diag([3.0, 2.0]))
+    np.testing.assert_allclose(smatrix.S12.values.squeeze(), np.diag([1.0 / 3.0, 1.0 / 2.0]))
 
 
 def test_eme_mode_simulations():
@@ -2963,6 +3387,26 @@ def test_eme_mode_simulations():
     mode_sims = sim_sweep.mode_simulations
     for ms in mode_sims:
         assert ms.mode_spec.num_modes == 4
+
+    filtered_sort = td.ModeSortSpec(filter_key="n_eff", filter_reference=0.0, keep_modes="filtered")
+    sim_filtered = sim_sweep.updated_copy(
+        eme_grid_spec=td.EMEUniformGrid(
+            num_cells=2,
+            mode_spec=td.EMEModeSpec(num_modes=4, num_pml=(6, 6), sort_spec=filtered_sort),
+        ),
+    )
+    for ms in sim_filtered.mode_simulations:
+        assert ms.mode_spec.sort_spec.keep_modes == "all"
+        assert ms.mode_spec.sort_spec.filter_key == "n_eff"
+
+    int_sort = td.ModeSortSpec(keep_modes=2)
+    with pytest.raises(pd.ValidationError):
+        _ = sim_sweep.updated_copy(
+            eme_grid_spec=td.EMEUniformGrid(
+                num_cells=2,
+                mode_spec=td.EMEModeSpec(num_modes=4, num_pml=(6, 6), sort_spec=int_sort),
+            ),
+        )
 
     # Bent anisotropic media in the global frame is rejected by the local
     # path: subpixel runs before the bend rotation and does not yet
@@ -3070,7 +3514,12 @@ def test_eme_local_warns_when_monitors_dropped():
         ]
         cell_overlaps = [sim_with_mnt.compute_cell_overlap(cm) for cm in cell_modes]
         iface_overlaps = [
-            sim_with_mnt.compute_interface_overlap(cell_modes[li], cell_modes[ri])
+            sim_with_mnt.compute_interface_overlap(
+                cell_modes[li],
+                cell_modes[ri],
+                cell_overlaps[li],
+                cell_overlaps[ri],
+            )
             for li, ri in sim_with_mnt.cell_index_pairs
         ]
         cell_sms = [sim_with_mnt.compute_cell_smatrix(co) for co in cell_overlaps]
@@ -3165,7 +3614,12 @@ def test_eme_local_staged_vs_oneshot():
     cell_modes = [sim.stage_cell_modes(md, cell_index=i) for i, md in enumerate(mode_data)]
     cell_overlaps = [sim.compute_cell_overlap(cm) for cm in cell_modes]
     iface_overlaps = [
-        sim.compute_interface_overlap(cell_modes[li], cell_modes[ri])
+        sim.compute_interface_overlap(
+            cell_modes[li],
+            cell_modes[ri],
+            cell_overlaps[li],
+            cell_overlaps[ri],
+        )
         for li, ri in sim.cell_index_pairs
     ]
     cell_sms = [sim.compute_cell_smatrix(co) for co in cell_overlaps]

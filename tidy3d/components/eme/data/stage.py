@@ -7,6 +7,7 @@ Each class represents one unit of work in the pipeline:
 3. :class:`EMEStageInterfaceOverlap` -- from :meth:`~..simulation.EMESimulation.compute_interface_overlap`
 4. :class:`EMEStageCellSMatrix` -- from :meth:`~..simulation.EMESimulation.compute_cell_smatrix`
 5. :class:`EMEStageInterfaceSMatrix` -- from :meth:`~..simulation.EMESimulation.compute_interface_smatrix`
+6. :class:`EMEStageInterfaceDiagnostics` -- from :meth:`~..simulation.EMESimulation.compute_interface_diagnostics`
 
 All stage objects support HDF5 serialization (``to_hdf5`` / ``from_hdf5``)
 for caching intermediates between sweep runs.
@@ -18,9 +19,11 @@ from __future__ import annotations
 
 from pydantic import Field, NonNegativeInt
 
-from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import (
+    EMEInterfaceDiagnosticDataArray,
     EMESMatrixDataArray,
+    EMETraceMetricDataArray,
     FreqModeDataArray,
     ModeIndexDataArray,
 )
@@ -59,19 +62,29 @@ class EMEStageCellOverlap(Tidy3dBaseModel):
         description="Self-overlap matrix (inner product of each mode with itself).",
     )
 
+    filter_mask: tuple[bool, ...] | None = Field(
+        None,
+        description="Per-mode propagation keep mask. Modes excluded by this mask remain "
+        "available to the interface matching basis but are not propagated as trial modes.",
+    )
+
+    interface_test_mask: tuple[bool, ...] | None = Field(
+        None,
+        description="Per-mode interface test keep mask for numerically usable modes. "
+        "Modes excluded by this mask have unusable EME interface self-overlap "
+        "and are removed from the interface matching equations.",
+    )
+
 
 class EMEStageInterfaceOverlap(Tidy3dBaseModel):
-    """Cross-cell overlap for one EME interface."""
+    """Cross-cell overlap and optional diagnostic metrics for one EME interface."""
 
     cell_index: NonNegativeInt = Field(
-        description="Left cell index. Kept as ``cell_index`` for parity with the per-cell "
-        "stage types; together with ``right_cell_index`` it fully identifies the interface.",
+        description="Left cell index. Together with ``right_cell_index`` fully identifies the interface.",
     )
 
     right_cell_index: NonNegativeInt = Field(
-        description="Right cell index. Under ``EMEPeriodicitySweep`` the same left cell can "
-        "appear in multiple pairs (e.g. ``(5, 1)`` and ``(5, 6)``), so both endpoints are "
-        "stamped explicitly to keep the interface self-identifying across HDF5 round-trips.",
+        description="Right cell index. Together with ``cell_index`` fully identifies the interface.",
     )
 
     O12: EMESMatrixDataArray = Field(
@@ -80,6 +93,30 @@ class EMEStageInterfaceOverlap(Tidy3dBaseModel):
 
     O21: EMESMatrixDataArray = Field(
         description="Cross-overlap from right cell modes to left cell modes.",
+    )
+
+    electric_field_metric: EMETraceMetricDataArray | None = Field(
+        None,
+        description="Tangential electric-field metric matrix used by the residual "
+        "diagnostic; populated only when overlaps are staged with diagnostics enabled.",
+    )
+
+    magnetic_field_metric: EMETraceMetricDataArray | None = Field(
+        None,
+        description="Tangential magnetic-field metric matrix used by the residual "
+        "diagnostic; populated only when overlaps are staged with diagnostics enabled.",
+    )
+
+    aperture_electric_field_metric: EMETraceMetricDataArray | None = Field(
+        None,
+        description="Tangential electric-field metric matrix with mode-solver PML layers excluded; "
+        "populated only when overlaps are staged with diagnostics enabled.",
+    )
+
+    aperture_magnetic_field_metric: EMETraceMetricDataArray | None = Field(
+        None,
+        description="Tangential magnetic-field metric matrix with mode-solver PML layers excluded; "
+        "populated only when overlaps are staged with diagnostics enabled.",
     )
 
 
@@ -111,3 +148,73 @@ class EMEStageInterfaceSMatrix(EMESMatrixDataset):
     sweep_index: NonNegativeInt = Field(
         description="Sweep point index.",
     )
+
+
+class EMEStageInterfaceDiagnostics(Tidy3dBaseModel):
+    """Direct physical residual diagnostics for one EME interface solve.
+
+    Per-interface staged artifact produced by
+    :meth:`~..simulation.EMESimulation.compute_interface_diagnostics`. See
+    :class:`.EMEInterfaceDiagnostics` for the aggregated dataset stored on
+    :class:`.EMESimulationData`.
+    """
+
+    cell_index: NonNegativeInt = Field(
+        description="Left cell index. Paired with ``right_cell_index`` to identify the interface.",
+    )
+
+    right_cell_index: NonNegativeInt = Field(
+        description="Right cell index.",
+    )
+
+    sweep_index: NonNegativeInt = Field(
+        description="Sweep point index.",
+    )
+
+    normalized_tangential_E_residual: EMEInterfaceDiagnosticDataArray = Field(
+        description=(
+            "Tangential electric-field residual energy divided by the fixed incident "
+            "tangential-field energy."
+        ),
+    )
+
+    normalized_tangential_H_residual: EMEInterfaceDiagnosticDataArray = Field(
+        description=(
+            "Impedance-scaled tangential magnetic-field residual energy divided by the fixed "
+            "incident tangential-field energy."
+        ),
+    )
+
+    normalized_aperture_tangential_E_residual: EMEInterfaceDiagnosticDataArray = Field(
+        description=(
+            "Tangential electric-field residual energy over the non-PML aperture divided by the "
+            "fixed incident tangential-field energy over the same aperture."
+        ),
+    )
+
+    normalized_aperture_tangential_H_residual: EMEInterfaceDiagnosticDataArray = Field(
+        description=(
+            "Impedance-scaled tangential magnetic-field residual energy over the non-PML aperture "
+            "divided by the fixed incident tangential-field energy over the same aperture."
+        ),
+    )
+
+    power_defect: EMEInterfaceDiagnosticDataArray = Field(
+        description=(
+            "Absolute interface power conservation defect for each incident mode; NaN when "
+            "the incident real power is negligible."
+        ),
+    )
+
+    @cached_property
+    def normalized_tangential_residual(self) -> EMEInterfaceDiagnosticDataArray:
+        """L2-balanced sum of the normalized squared E and H tangential-field residuals."""
+        return self.normalized_tangential_E_residual + self.normalized_tangential_H_residual
+
+    @cached_property
+    def normalized_aperture_tangential_residual(self) -> EMEInterfaceDiagnosticDataArray:
+        """Non-PML-aperture sum of the normalized squared E and H residuals."""
+        return (
+            self.normalized_aperture_tangential_E_residual
+            + self.normalized_aperture_tangential_H_residual
+        )

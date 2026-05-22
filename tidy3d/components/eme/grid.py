@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Coordinate, Size
 
 # grid limits
-MAX_NUM_MODES = 100
+MAX_NUM_MODES = 1000
 MAX_NUM_EME_CELLS = 500
 MAX_NUM_REPS = 100000
 
@@ -54,10 +54,20 @@ class EMEModeSpec(ModeSpec):
         - Includes an ``interp_spec`` field for frequency interpolation of modes,
           which can significantly reduce cost for broadband simulations.
         - Includes an ``increasing_mode_tolerance`` field for EME-only filtering of
-          weakly increasing modes. The default ``0.0`` preserves the previous behavior,
-          while positive values treat small negative imaginary effective indices as
-          numerical noise.
+          weakly increasing modes. The default treats roundoff-level negative
+          imaginary effective indices as numerical noise.
     """
+
+    num_modes: PositiveInt = Field(
+        1,
+        title="Number of modes",
+        description="Number of modes solved in each EME cell. The full solved basis is "
+        "available for interface testing and diagnostics, so interface memory grows "
+        "quadratically with this value and with the number of frequencies. Runtime can "
+        "grow steeply with the propagated trial-mode count. Use "
+        "'EMEModeSweep' for convergence sweeps and 'ModeSortSpec.keep_modes' to reduce "
+        "the propagated trial basis without reducing the solved test basis.",
+    )
 
     interp_spec: ModeInterpSpec | None = Field(
         ModeInterpSpec.cheb(num_points=5, reduce_data=True),
@@ -112,13 +122,13 @@ class EMEModeSpec(ModeSpec):
     )
 
     increasing_mode_tolerance: float = Field(
-        0.0,
+        1e-12,
         title="Increasing-mode filter tolerance",
         description="Unitless tolerance on ``-Im(n_eff)`` when filtering increasing modes "
         "from the EME propagation basis. A mode is dropped only if "
         "``Im(n_eff) < -increasing_mode_tolerance``. Set a small positive value such as "
-        "``1e-6`` to keep weakly increasing modes caused by numerical noise; leave it at "
-        "``0.0`` to preserve historical behavior.",
+        "``1e-6`` to keep weakly increasing modes caused by numerical noise; set it to "
+        "``0.0`` to apply the strict sign test.",
         ge=0.0,
     )
 

@@ -109,11 +109,13 @@ class EMEModeSweep(EMESweepSpec):
 
     num_modes: ArrayInt1D = Field(
         title="Number of Modes",
-        description="Max number of modes to use in the EME propagation step. "
-        "The EME propagation step is repeated after dropping modes with mode_index "
-        "exceeding this value. This can be used for convergence testing; reliable results "
-        "should be independent of the number of modes used. This value cannot exceed "
-        "the maximum number of modes in any EME cell in the simulation.",
+        description="Max number of trial / propagated modes to use in the EME propagation "
+        "step. The EME propagation step is repeated after restricting the trial basis to "
+        "modes with mode_index below this value, while the full EMEModeSpec.num_modes basis "
+        "remains available for interface testing. Mode filters are applied after this cap "
+        "without filling from higher mode indices. This can be used for convergence testing; "
+        "reliable results should be independent of the number of trial modes used. This "
+        "value cannot exceed the maximum number of modes in any EME cell in the simulation.",
     )
 
     @property
