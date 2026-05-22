@@ -6,11 +6,12 @@ import numpy as np
 import xarray as xr
 
 import tidy3d as td
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
 
 def compute_ring_vjp(
     parameters: np.ndarray,
-    derivative_info,
+    derivative_info: DerivativeInfo,
     create_ring_fn: Callable[[np.ndarray], td.Structure],
 ) -> dict[tuple[int], float]:
     """Compute finite-difference VJP values for ring parameter paths."""

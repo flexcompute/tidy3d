@@ -17,6 +17,19 @@ import tidy3d as td
 from tidy3d.log import DEFAULT_LEVEL, set_logging_console, set_logging_level
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register test options shared across the tidy3d test suite."""
+    parser.addoption(
+        "--numerical-eval-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Re-evaluate saved numerical artifacts from evaluation_data.npz "
+            "without collecting fresh simulation data."
+        ),
+    )
+
+
 @pytest.fixture
 def rng():
     seed = 36523525

@@ -16,7 +16,7 @@ from tidy3d.plugins.smatrix import ComponentModeler, Port
 from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
-from .numerical_helpers import compute_ring_vjp
+from .numerical_derivative_helpers import compute_ring_vjp
 
 PLOT_FD_ADJ_COMPARISON = False
 SAVE_FD_ADJ_DATA = False

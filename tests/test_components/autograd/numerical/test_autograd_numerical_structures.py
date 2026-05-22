@@ -15,7 +15,7 @@ from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
 from tidy3d.web.api.autograd.types import NumericalStructureConfig
 
-from .numerical_helpers import compute_ring_vjp
+from .numerical_derivative_helpers import compute_ring_vjp
 
 PLOT_FD_ADJ_COMPARISON = False
 SAVE_FD_ADJ_DATA = False

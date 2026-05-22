@@ -2,24 +2,65 @@
 from __future__ import annotations
 
 import operator
+from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any, TypeAlias, TypedDict
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from autograd.numpy.numpy_boxes import ArrayBox
+from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.types.base import Size
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_id,
+    finalize_result,
+    load_evaluation_data,
+    write_evaluation_data,
+)
+from .result_models import Metric
+
+EvalFnResult: TypeAlias = float | ArrayBox
+EvalFn: TypeAlias = Callable[[SimulationData], EvalFnResult]
+Diagnostics: TypeAlias = dict[str, float]
+MetricGroups: TypeAlias = tuple[list[Metric], list[Metric], Diagnostics]
+
+
+class FieldDataTestParameters(TypedDict):
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_size_wvl: Size
+    monitor_bg_index: float
+    eval_fn: EvalFn
+    eval_fn_name: str
+    cm_interp_method: str
+    test_number: int
+
+
+class FieldDataCaseIdentity(BaseModel):
+    """Semantic identity for one field-data numerical case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_size_wvl: Size
+    monitor_bg_index: float
+    eval_fn_name: str
+    cm_interp_method: str
+
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_field_test"
 
 RMS_THRESHOLD = 0.25
 
@@ -33,18 +74,18 @@ FINITE_DIFF_PERM_SEED = 1.5**2
 MESH_FACTOR_DESIGN = 30.0
 
 
-def get_sim_geometry(mesh_wvl_um):
+def get_sim_geometry(mesh_wvl_um: float) -> td.Box:
     return td.Box(size=(5 * mesh_wvl_um, 5 * mesh_wvl_um, 7 * mesh_wvl_um), center=(0, 0, 0))
 
 
 def make_base_sim(
-    mesh_wvl_um,
-    adj_wvl_um,
-    monitor_size_wvl,
-    box_for_override,
-    monitor_bg_index=1.0,
-    run_time=1e-11,
-):
+    mesh_wvl_um: float,
+    adj_wvl_um: float,
+    monitor_size_wvl: Size,
+    box_for_override: td.Box,
+    monitor_bg_index: float = 1.0,
+    run_time: float = 1e-11,
+) -> td.Simulation:
     sim_geometry = get_sim_geometry(mesh_wvl_um)
     sim_size_um = sim_geometry.size
     sim_center_um = sim_geometry.center
@@ -118,8 +159,13 @@ def make_base_sim(
 
 
 def create_objective_function(
-    geometry, create_sim_base, eval_fn, sim_path_dir, perm_init, cm_interp_method
-):
+    geometry: td.Box,
+    create_sim_base: Any,
+    eval_fn: EvalFn,
+    sim_path_dir: str,
+    perm_init: np.ndarray,
+    cm_interp_method: str,
+) -> Any:
     block_structure = td.Structure.from_permittivity_array(
         eps_data=perm_init,
         geometry=geometry,
@@ -169,14 +215,12 @@ def create_objective_function(
     return objective
 
 
-def make_eval_fns(monitor_size_wvl):
+def make_eval_fns(monitor_size_wvl: Size) -> tuple[list[EvalFn], list[str]]:
     num_nonzero_spatial_dims = 3 - np.sum(np.isclose(monitor_size_wvl, 0))
 
-    def intensity(sim_data):
+    def intensity(sim_data: SimulationData) -> EvalFnResult:
         field_data = sim_data["monitor_fields"]
         shape_x, shape_y, shape_z, *_ = field_data.Ex.values.shape
-
-        total = 0.0
         return np.sum(
             np.abs(field_data.Ex.values[shape_x // 2, shape_y // 2, shape_z // 2]) ** 2
             + np.abs(field_data.Ey.values[shape_x // 2, shape_y // 2, shape_z // 2]) ** 2
@@ -188,9 +232,8 @@ def make_eval_fns(monitor_size_wvl):
 
     if num_nonzero_spatial_dims == 2:
 
-        def flux(sim_data):
+        def flux(sim_data: SimulationData) -> EvalFnResult:
             field_data = sim_data["monitor_fields"]
-
             return np.sum(field_data.flux.values)
 
         eval_fns.append(flux)
@@ -202,10 +245,16 @@ def make_eval_fns(monitor_size_wvl):
 background_indices = [1.0, 1.5]
 mesh_wvls_um = [1.55, 1.55, 10 * 1.55, 10 * 1.55]
 adj_wvls_um = [1.55, 2.2, 10 * 1.55, 10 * 2.2]
-monitor_sizes_3d_wvl = [(0.5, 0.5, 0), (0.5, 0.5, 0.5), (0.5, 0, 0), (0, 0.5, 0), (0, 0, 0)]
+monitor_sizes_3d_wvl: list[Size] = [
+    (0.5, 0.5, 0),
+    (0.5, 0.5, 0.5),
+    (0.5, 0, 0),
+    (0, 0.5, 0),
+    (0, 0, 0),
+]
 cm_interp_methods = ["nearest", "linear"]
 
-field_data_test_parameters = []
+field_data_test_parameters: list[FieldDataTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -234,30 +283,31 @@ for idx in range(len(mesh_wvls_um)):
                     test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("field_data_test_parameters", field_data_test_parameters)
-def test_finite_difference_field_data(
-    field_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test a variety of autograd permittivity gradients for FieldData by"""
-    """comparing them to numerical finite difference."""
+def _case_identity(field_data_test_parameters: FieldDataTestParameters) -> FieldDataCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return FieldDataCaseIdentity(
+        mesh_wvl_um=field_data_test_parameters["mesh_wvl_um"],
+        adj_wvl_um=field_data_test_parameters["adj_wvl_um"],
+        monitor_size_wvl=field_data_test_parameters["monitor_size_wvl"],
+        monitor_bg_index=field_data_test_parameters["monitor_bg_index"],
+        eval_fn_name=field_data_test_parameters["eval_fn_name"],
+        cm_interp_method=field_data_test_parameters["cm_interp_method"],
+    )
 
-    num_tests = 0
-    for monitor_size_wvl in monitor_sizes_3d_wvl:
-        eval_fns, _ = make_eval_fns(monitor_size_wvl)
-        num_tests += len(eval_fns) * len(background_indices) * len(mesh_wvls_um)
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
-
-    test_number = field_data_test_parameters["test_number"]
-
+def _collect_field_data_evaluation_data(
+    field_data_test_parameters: FieldDataTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: str | Path,
+) -> EvaluationData:
+    """Collect the compact evaluation dataset needed for later offline re-evaluation."""
     (
         mesh_wvl_um,
         adj_wvl_um,
         monitor_size_wvl,
         monitor_bg_index,
         eval_fn,
-        eval_fn_name,
+        _eval_fn_name,
         cm_interp_method,
         test_number,
     ) = operator.itemgetter(
@@ -276,117 +326,201 @@ def test_finite_difference_field_data(
     block = td.Box(center=(0, 0, 0), size=(dim_um, dim_um, thickness_um))
 
     dim = 1 + int(dim_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    Nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
+    nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
 
     sim_geometry = get_sim_geometry(mesh_wvl_um)
-
     box_for_override = td.Box(
         center=(0, 0, 0), size=(*sim_geometry.size[0:2], thickness_um + mesh_wvl_um)
     )
 
-    eval_fns, _eval_fn_names = make_eval_fns(monitor_size_wvl)
-
-    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
-    sim_path_dir.mkdir(parents=True, exist_ok=True)
-
-    perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, Nz))
-
-    objective = create_objective_function(
-        block,
-        lambda mesh_wvl_um=mesh_wvl_um,
-        adj_wvl_um=adj_wvl_um,
-        monitor_size_wvl=monitor_size_wvl,
-        box_for_override=box_for_override,
-        monitor_bg_index=monitor_bg_index: make_base_sim(
-            mesh_wvl_um=mesh_wvl_um,
+    perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, nz))
+    with TemporaryDirectory(prefix=f"test{test_number}_", dir=numerical_case_dir) as sim_path_dir:
+        objective = create_objective_function(
+            block,
+            lambda mesh_wvl_um=mesh_wvl_um,
             adj_wvl_um=adj_wvl_um,
             monitor_size_wvl=monitor_size_wvl,
             box_for_override=box_for_override,
-            monitor_bg_index=monitor_bg_index,
-        ),
-        eval_fn,
-        sim_path_dir=str(sim_path_dir),
-        perm_init=perm_init,
-        cm_interp_method=cm_interp_method,
+            monitor_bg_index=monitor_bg_index: make_base_sim(
+                mesh_wvl_um=mesh_wvl_um,
+                adj_wvl_um=adj_wvl_um,
+                monitor_size_wvl=monitor_size_wvl,
+                box_for_override=box_for_override,
+                monitor_bg_index=monitor_bg_index,
+            ),
+            eval_fn,
+            sim_path_dir=sim_path_dir,
+            perm_init=perm_init,
+            cm_interp_method=cm_interp_method,
+        )
+
+        obj_val_and_grad = ag.value_and_grad(objective)
+        _obj, adj_grad = obj_val_and_grad([perm_init])
+
+        # Empirical step size from earlier field-data finite-difference experiments.
+        fd_step = 0.1
+        all_perm = []
+        pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
+
+        for fd_idx in range(NUM_FINITE_DIFFERENCE):
+            random_pattern = rng.random((dim, dim, nz)) - 0.5
+            random_pattern = gaussian_filter(random_pattern, sigma=3)
+            random_pattern /= np.linalg.norm(random_pattern)
+
+            pattern_dot_adj_gradient[fd_idx] = np.sum(random_pattern * adj_grad)
+
+            perm_up = perm_init.copy() + fd_step * random_pattern
+            perm_down = perm_init.copy() - fd_step * random_pattern
+            all_perm.extend((perm_up, perm_down))
+
+        all_obj = objective(all_perm)
+
+        fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
+        for fd_idx in range(NUM_FINITE_DIFFERENCE):
+            obj_up_location = 2 * fd_idx
+            obj_down_location = 2 * fd_idx + 1
+            fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (
+                2 * fd_step
+            )
+
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+    }
+
+
+def _evaluate_field_data_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> MetricGroups:
+    """Evaluate a saved-or-fresh field-data dataset into RFC-style metrics."""
+    fd_grad = np.asarray(evaluation_data["fd_grad"])
+    adj_grad_projected = np.asarray(evaluation_data["adj_grad_projected"])
+    rms_error = float(np.linalg.norm(fd_grad - adj_grad_projected))
+    fd_mag = float(np.linalg.norm(fd_grad))
+    adj_mag = float(np.linalg.norm(adj_grad_projected))
+    percentage_error = float(
+        100.0
+        * np.mean(
+            np.abs(fd_grad - adj_grad_projected) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+        )
     )
+    expected = RMS_THRESHOLD * fd_mag
 
-    obj_val_and_grad = ag.value_and_grad(objective)
+    regression_metrics = [
+        Metric(
+            name="rms_error",
+            observed=float(rms_error),
+            expected=float(expected),
+            comparator="lt",
+        )
+    ]
+    observation_metrics: list[Metric] = []
+    diagnostics = {
+        "rms_error": rms_error,
+        "fd_mag": fd_mag,
+        "adj_mag": adj_mag,
+        "percentage_error": percentage_error,
+    }
+    return regression_metrics, observation_metrics, diagnostics
 
-    _obj, adj_grad = obj_val_and_grad([perm_init])
 
-    # empirical step size from running other finite difference tests for field
-    # cases with permittivity
-    fd_step = 0.1
-
-    all_perm = []
-    pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
-
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        random_pattern = rng.random((dim, dim, Nz)) - 0.5
-        random_pattern = gaussian_filter(random_pattern, sigma=3)
-        random_pattern /= np.linalg.norm(random_pattern)
-
-        pattern_dot_adj_gradient[fd_idx] = np.sum(random_pattern * adj_grad)
-
-        perm_up = perm_init.copy() + fd_step * random_pattern
-        perm_down = perm_init.copy() - fd_step * random_pattern
-
-        all_perm.append(perm_up)
-        all_perm.append(perm_down)
-
-    all_obj = objective(all_perm)
-
-    fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        obj_up_location = 2 * fd_idx
-        obj_down_location = 2 * fd_idx + 1
-
-        fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
-
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
-    )
-
+def _print_field_data_summary(
+    field_data_test_parameters: FieldDataTestParameters,
+    diagnostics: Diagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print a compact case summary for fresh and eval-only runs."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Monitor size: {monitor_size_wvl}")
-    print(f"Background index for monitor: {monitor_bg_index}")
-    print(f"Eval function: {eval_fn_name}")
-    print(f"Custom medium interpolation method: {cm_interp_method}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
+    print(f"Numerical test #{field_data_test_parameters['test_number']}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{field_data_test_parameters['mesh_wvl_um']}, {field_data_test_parameters['adj_wvl_um']}"
+    )
+    print(f"Monitor size: {field_data_test_parameters['monitor_size_wvl']}")
+    print(f"Background index for monitor: {field_data_test_parameters['monitor_bg_index']}")
+    print(f"Eval function: {field_data_test_parameters['eval_fn_name']}")
+    print(f"Custom medium interpolation method: {field_data_test_parameters['cm_interp_method']}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
     print("-" * 20)
     print("\n" * 3)
+
+
+def _plot_field_data_comparison(evaluation_data: EvaluationData, *, eval_fn_name: str) -> None:
+    """Plot the saved FD and adjoint comparison arrays when interactive plotting is enabled."""
+    plt.plot(evaluation_data["adj_grad_projected"], color="g", linewidth=2.0, label="Adjoint")
+    plt.plot(
+        evaluation_data["fd_grad"],
+        color="b",
+        linewidth=1.5,
+        linestyle="--",
+        label="Finite difference",
+    )
+    plt.title(f"Gradient for objective: {eval_fn_name}")
+    plt.xlabel("Sample number")
+    plt.ylabel("Gradient value")
+    plt.legend()
+    plt.show()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "field_data_test_parameters",
+    field_data_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params)),
+)
+def test_finite_difference_field_data(
+    request: pytest.FixtureRequest,
+    field_data_test_parameters: FieldDataTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Test a variety of autograd permittivity gradients for FieldData by"""
+    """comparing them to numerical finite difference."""
+    case_identity = _case_identity(field_data_test_parameters)
+
+    if numerical_eval_only:
+        try:
+            evaluation_data = load_evaluation_data(numerical_case_dir, case_identity)
+        except FileNotFoundError as exc:
+            pytest.fail(
+                "Eval-only mode requires a saved evaluation dataset. "
+                f"Run this case once without `--numerical-eval-only` first. Missing: {exc.filename}"
+            )
+    else:
+        evaluation_data = _collect_field_data_evaluation_data(
+            field_data_test_parameters, rng, numerical_case_dir
+        )
+        write_evaluation_data(numerical_case_dir, evaluation_data, case_identity)
+
+    regression_metrics, observation_metrics, diagnostics = _evaluate_field_data_evaluation_data(
+        evaluation_data
+    )
+    _print_field_data_summary(
+        field_data_test_parameters,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0, label="Adjoint")
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--", label="Finite difference")
-        plt.title(f"Gradient for objective: {eval_fn_name}")
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.legend()
-        plt.show()
+        _plot_field_data_comparison(
+            evaluation_data, eval_fn_name=field_data_test_parameters["eval_fn_name"]
+        )
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
-
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
-
-    try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
-
-    test_number += 1
+    result_record = finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

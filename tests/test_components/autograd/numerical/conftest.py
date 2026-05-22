@@ -38,3 +38,9 @@ def numerical_case_dir(request, numerical_artifact_root: Path) -> Path:
     case_dir = numerical_artifact_root / safe_nodeid
     case_dir.mkdir(parents=True, exist_ok=True)
     return case_dir
+
+
+@pytest.fixture
+def numerical_eval_only(request) -> bool:
+    """Return whether numerical tests should skip data collection and load saved artifacts."""
+    return bool(request.config.getoption("--numerical-eval-only"))
