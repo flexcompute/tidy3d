@@ -77,6 +77,7 @@ from tidy3d.components.tcad.data.sim_data import (
     DeviceCharacteristics,
     HeatChargeSimulationData,
     HeatSimulationData,
+    SteadyConvergenceData,
     VolumeMesherData,
 )
 from tidy3d.components.tcad.data.types import (
@@ -183,6 +184,7 @@ from .components.boundary import (
 from .components.data.data_array import (
     CellDataArray,
     ChargeDataArray,
+    ConvergenceHistoryDataArray,
     DiffractionDataArray,
     EMECoefficientDataArray,
     EMEFluxDataArray,
@@ -609,6 +611,7 @@ __all__ = [
     "ContinuousWaveTimeModulation",
     "ContourPathAveraging",
     "ConvectionBC",
+    "ConvergenceHistoryDataArray",
     "Coords",
     "Coords1D",
     "CornerFinderSpec",
@@ -887,6 +890,7 @@ __all__ = [
     "SteadyCapacitanceData",
     "SteadyCapacitanceMonitor",
     "SteadyChargeDCAnalysis",
+    "SteadyConvergenceData",
     "SteadyCurrentDensityData",
     "SteadyCurrentDensityMonitor",
     "SteadyElectricFieldData",

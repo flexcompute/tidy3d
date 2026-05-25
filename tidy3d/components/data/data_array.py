@@ -1699,6 +1699,40 @@ class SteadyVoltageDataArray(DataArray):
     _dims = ("v",)
 
 
+class ConvergenceHistoryDataArray(DataArray):
+    """Per-iteration residual trace across a voltage sweep and solution components.
+
+    Dimensions:
+
+    * ``v`` -- sweep bias [V]
+    * ``pseudo_step`` -- Newton iteration index (0-based); ragged biases are
+      NaN-padded on this axis to the longest trace in the sweep.
+    * ``component`` -- solution component label (e.g. ``"potential"``,
+      ``"electrons"``, ``"holes"``, ``"temperature"``).
+
+    Values are residual norms in the native units of the corresponding solution
+    variable (volts for ``"potential"``; um^-3 for the carrier concentrations).
+    NaN at ``(v, k, c)`` means bias ``v`` did not reach iteration ``k`` for
+    component ``c``.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> import tidy3d as td
+    >>> V = [-1.0, 0.0]
+    >>> steps = [0, 1, 2]
+    >>> comps = ["potential"]
+    >>> data = np.array([[[3.2e-1], [1.7e-1], [1.1e-8]],
+    ...                  [[2.1e-1], [9.0e-2], [np.nan]]])
+    >>> history = td.ConvergenceHistoryDataArray(
+    ...     data=data, coords={"v": V, "pseudo_step": steps, "component": comps}
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("v", "pseudo_step", "component")
+
+
 class PointDataArray(DataArray):
     """A two-dimensional array that stores coordinates/field components for a collection of points.
     Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
@@ -2350,6 +2384,7 @@ DATA_ARRAY_TYPES = [
     MixedModeDataArray,
     ChargeDataArray,
     SteadyVoltageDataArray,
+    ConvergenceHistoryDataArray,
     PointDataArray,
     CellDataArray,
     IndexedDataArray,

@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
+    ConvergenceHistoryDataArray,
     FreqVoltageDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
@@ -105,6 +106,44 @@ def _compute_monitor_axis_limits(
     return ax_min, ax_max
 
 
+class SteadyConvergenceData(Tidy3dBaseModel):
+    """Per-bias Newton convergence state for a steady-state charge sweep.
+
+    Example
+    -------
+
+    >>> import tidy3d as td
+    >>> V = [-1, 0, 1]
+    >>> converged = td.SteadyVoltageDataArray(data=[1, 1, 0], coords={"v": V})
+    >>> n_iters = td.SteadyVoltageDataArray(data=[42, 38, 100], coords={"v": V})
+    >>> conv = SteadyConvergenceData(converged=converged, n_iters=n_iters)
+    """
+
+    converged: SteadyVoltageDataArray | None = Field(
+        None,
+        title="Converged",
+        description="``True`` at biases where the Newton iteration met the configured "
+        "tolerance and ``False`` otherwise.",
+    )
+
+    n_iters: SteadyVoltageDataArray | None = Field(
+        None,
+        title="Newton iterations",
+        description="Number of Newton iterations taken at each bias. At a non-converged "
+        "bias this equals the cap if ``max_iters`` was hit, or the count of attempted "
+        "steps before divergence.",
+    )
+
+    residual_history: ConvergenceHistoryDataArray | None = Field(
+        None,
+        title="Per-pseudo-step residual trace",
+        description="Per-bias trace of the absolute residual norm. Dimensions are "
+        "``(v, pseudo_step, component)``; ragged biases are NaN-padded along "
+        "``pseudo_step`` to the longest trace -- use ``n_iters`` for the unpadded "
+        "length per bias.",
+    )
+
+
 class DeviceCharacteristics(Tidy3dBaseModel):
     """Stores device characteristics. For example, in steady-state it stores
     the steady DC capacitance (provided an array of voltages has been defined
@@ -176,6 +215,14 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         json_schema_extra={"units": "A", "units_2d": "A/um"},
     )
 
+    dc_convergence: SteadyConvergenceData | None = Field(
+        None,
+        title="Steady DC convergence state",
+        description="Per-bias Newton convergence state for the steady DC sweep. When "
+        "present, callers can mask the I-V/C-V curves by ``dc_convergence.converged`` "
+        "to drop biases where the solver did not converge.",
+    )
+
     @model_validator(mode="after")
     def add_attrs_to_data_arrays(self) -> Self:
         """Copy context-free field metadata onto device-characteristic data arrays."""
@@ -184,9 +231,12 @@ class DeviceCharacteristics(Tidy3dBaseModel):
 
     def _add_data_array_attrs(self, is_2d: bool | None = None) -> None:
         """Copy field metadata onto device-characteristic data arrays."""
+        # Skip nested Tidy3dBaseModel fields -- their `attrs` is frozen.
+        from tidy3d.components.data.data_array import DataArray as _DataArray
+
         for field_name, field_info in type(self).model_fields.items():
             data_array = getattr(self, field_name)
-            if data_array is None or not hasattr(data_array, "attrs"):
+            if data_array is None or not isinstance(data_array, _DataArray):
                 continue
 
             metadata = (
