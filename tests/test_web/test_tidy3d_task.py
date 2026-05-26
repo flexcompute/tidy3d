@@ -257,6 +257,27 @@ def test_submit(set_api_key):
 
 
 @responses.activate
+def test_batch_get_preserves_status(set_api_key):
+    responses.add(
+        responses.GET,
+        f"{config.web.api_endpoint}/rf/task/batch-task-id/statistics",
+        json={
+            "data": {
+                "taskId": "batch-task-id",
+                "taskType": TaskType.TERMINAL_CM.name,
+                "status": "diverged",
+            }
+        },
+        status=200,
+    )
+
+    task = BatchTask.get("batch-task-id")
+
+    assert task.status == "diverged"
+    assert task.task_type == TaskType.TERMINAL_CM.name
+
+
+@responses.activate
 def test_batch_submit_additional_payload(set_api_key):
     task = BatchTask(taskId="batch-task-id")
     responses.add(

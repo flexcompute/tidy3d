@@ -872,6 +872,7 @@ class BatchTask(WebTask):
     task_type: str | None = Field(
         None, title="task_type", description="The type of task.", alias="taskType"
     )
+    status: str | None = Field(None, title="status", description="The status of the task.")
 
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> BatchTask:
@@ -897,7 +898,8 @@ class BatchTask(WebTask):
         # Extract taskType from response if available
         if resp:
             task_type = resp.get("taskType") if isinstance(resp, dict) else None
-            return BatchTask(taskId=task_id, taskType=task_type)
+            status = resp.get("status") if isinstance(resp, dict) else None
+            return BatchTask(taskId=task_id, taskType=task_type, status=status)
         return None
 
     def detail(self) -> BatchDetail:

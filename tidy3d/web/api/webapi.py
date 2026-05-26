@@ -21,6 +21,7 @@ from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.states import (
     ALL_POST_VALIDATE_STATES,
     COMPLETED_PERCENT,
+    DIVERGED_STATES,
     END_STATES,
     ERROR_STATES,
     MAX_STEPS,
@@ -150,6 +151,17 @@ def _remote_data_file(task: WebTask, task_type: str | None) -> str:
     if isinstance(task, BatchTask):
         return CM_DATA_HDF5_GZ
     return MODE_DATA_HDF5_GZ if task_type == TaskType.MODE_SOLVER.name else SIMULATION_DATA_HDF5_GZ
+
+
+def _raise_if_modeler_batch_diverged(task: WebTask) -> None:
+    """Raise before downloading aggregate modeler data for diverged RF batches."""
+
+    if isinstance(task, BatchTask) and (task.status or "").lower() in DIVERGED_STATES:
+        raise WebError(
+            "The RF/modeler task diverged, so aggregate component-modeler data "
+            "was not produced. Child simulation data may still be available on "
+            "the child task IDs."
+        )
 
 
 def _get_url(task_id: str) -> str:
@@ -1182,6 +1194,7 @@ def download(
     resolved_path, task, task_type = _resolve_download_target(
         task_id, path, task=task, task_type=task_type
     )
+    _raise_if_modeler_batch_diverged(task)
     task.get_data_hdf5(
         to_file=resolved_path,
         remote_data_file_gz=_remote_data_file(task, task_type),

@@ -27,7 +27,7 @@ from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import PointDipole
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, WebError
 from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import (
@@ -1160,6 +1160,26 @@ def test_download_respects_explicit_batch_path(monkeypatch, tmp_path):
     assert captured["to_file"] == explicit_path
 
 
+def test_download_rejects_diverged_batch_before_data_fetch(monkeypatch):
+    batch_task = BatchTask(
+        taskId=TASK_ID,
+        taskType=TaskType.TERMINAL_CM.name,
+        status="diverged",
+    )
+
+    def _fake_get(*args, **kwargs):
+        return batch_task
+
+    def _unexpected_data_fetch(*args, **kwargs):
+        raise AssertionError("diverged RF aggregate data should not be downloaded")
+
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _fake_get)
+    monkeypatch.setattr(BatchTask, "get_data_hdf5", _unexpected_data_fetch)
+
+    with pytest.raises(WebError, match="RF/modeler task diverged"):
+        download(TASK_ID, verbose=False)
+
+
 def test_load_uses_cm_default_path_for_batch(monkeypatch, tmp_path):
     captured = {"get_calls": 0}
     batch_task = BatchTask(taskId=TASK_ID, taskType=TaskType.TERMINAL_CM.name)
@@ -1740,6 +1760,25 @@ def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
     )
 
     assert job1_download_idx < job2_success_idx, "Download should start before other jobs finish"
+
+
+def test_batch_monitor_downloads_on_diverged(monkeypatch, tmp_path):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "task_a": FakeJob("task_a_id", ["diverged"], events),
+    }
+
+    batch.monitor(download_on_success=True, path_dir=str(tmp_path))
+
+    downloads = [event for event in events if event[1] == "download"]
+    assert downloads == [("task_a_id", "download", os.path.join(str(tmp_path), "task_a_id.hdf5"))]
 
 
 def test_batch_monitor_does_not_repoll_completed_jobs(monkeypatch, tmp_path):
