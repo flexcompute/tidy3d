@@ -7,7 +7,7 @@ import tidy3d as td
 from tidy3d import config
 from tidy3d.web.api.material_library import MaterialLibrary
 
-config.switch_profile("dev")
+pytestmark = pytest.mark.usefixtures("use_dev_profile")
 
 
 @pytest.fixture

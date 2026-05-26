@@ -9,7 +9,6 @@ import responses
 
 import tidy3d as td
 from tests.utils import AssertLogLevel
-from tidy3d import config
 from tidy3d.components.data.data_array import FreqVoltageDataArray, ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
@@ -20,7 +19,7 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub, Tidy3dStubData
 from tidy3d.web.core.types import TaskType
 
-config.switch_profile("test")
+pytestmark = pytest.mark.usefixtures("use_test_profile")
 
 
 def make_sim():

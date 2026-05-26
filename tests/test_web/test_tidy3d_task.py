@@ -13,7 +13,7 @@ from tidy3d.web.core import http_util
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
 from tidy3d.web.core.types import PayType, TaskType
 
-config.switch_profile("test")
+pytestmark = pytest.mark.usefixtures("use_test_profile")
 
 
 def make_sim():

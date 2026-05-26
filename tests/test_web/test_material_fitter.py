@@ -8,7 +8,7 @@ from tidy3d import config
 from tidy3d.plugins.dispersion import DispersionFitter
 from tidy3d.web.api.material_fitter import FitterOptions, MaterialFitterTask
 
-config.switch_profile("dev")
+pytestmark = pytest.mark.usefixtures("use_dev_profile")
 
 
 @pytest.fixture

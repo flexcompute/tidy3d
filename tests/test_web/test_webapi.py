@@ -79,7 +79,7 @@ INVALID_TASK_ID = "INVALID_TASK_ID"
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
-config.switch_profile("dev")
+pytestmark = pytest.mark.usefixtures("use_dev_profile")
 
 
 class FakeJob:

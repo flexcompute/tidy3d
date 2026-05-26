@@ -8,7 +8,7 @@ import tidy3d as td
 from tidy3d import config
 from tidy3d.web.core.task_core import Folder
 
-config.switch_profile("dev")
+pytestmark = pytest.mark.usefixtures("use_dev_profile")
 
 
 @pytest.fixture
