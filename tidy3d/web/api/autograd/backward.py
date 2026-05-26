@@ -13,7 +13,7 @@ from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.geometry.bound_ops import bounds_intersection
+from tidy3d.components.geometry.bound_ops import bounds_contains, bounds_intersection
 from tidy3d.components.source.adjoint_helpers import (
     collapse_source_adjoint_to_dataset_frequency,
 )
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from tidy3d.components.geometry.utils import GeometryType
 
     from .context import AdjointPostprocessInputs
-    from .types import NumericalStructureConfig
+    from .types import DerivativeView, NumericalStructureConfig
 
 
 # Scaling factor for chunk-dependent memory growth on top of the baseline estimate.
@@ -685,13 +685,30 @@ def _process_structure_gradients(
         ]
         return xr.concat(eps_by_f, dim="f").assign_coords(f=adjoint_frequencies)
 
-    updated_epsilon_full = functools.partial(
-        updated_epsilon_full_impl,
-        adjoint_frequencies=adjoint_frequencies,
-        structure_index=structure_index,
-        eps_box=plane_eps,
-        sim_orig=sim_orig,
-    )
+    def make_updated_epsilon(
+        select_adjoint_freqs: FreqDataArray | None,
+    ) -> Callable[[GeometryType], ScalarFieldDataArray]:
+        updated_epsilon_full = functools.partial(
+            updated_epsilon_full_impl,
+            adjoint_frequencies=adjoint_frequencies,
+            structure_index=structure_index,
+            eps_box=plane_eps,
+            sim_orig=sim_orig,
+        )
+
+        def updated_epsilon_wrapper(
+            replacement_geometry: GeometryType,
+            select_adjoint_freqs: FreqDataArray | None,
+            updated_epsilon_full: Callable | None,
+        ) -> ScalarFieldDataArray:
+            return updated_epsilon_full(replacement_geometry).sel(f=select_adjoint_freqs)
+
+        return functools.partial(
+            updated_epsilon_wrapper,
+            select_adjoint_freqs=select_adjoint_freqs,
+            updated_epsilon_full=updated_epsilon_full,
+        )
+
     n_freqs = len(adjoint_frequencies)
     H_info_exists = np.all([f"H{dim}" in fld_fwd.field_components for dim in "xyz"])
 
@@ -785,17 +802,8 @@ def _process_structure_gradients(
                 if key.startswith("H")
             }
 
-        def updated_epsilon_wrapper(
-            replacement_geometry: GeometryType,
-            select_adjoint_freqs: FreqDataArray | None,
-            updated_epsilon_full: Callable | None,
-        ) -> ScalarFieldDataArray:
-            return updated_epsilon_full(replacement_geometry).sel(f=select_adjoint_freqs)
-
-        updated_epsilon = functools.partial(
-            updated_epsilon_wrapper,
+        updated_epsilon = make_updated_epsilon(
             select_adjoint_freqs=select_adjoint_freqs,
-            updated_epsilon_full=updated_epsilon_full,
         )
 
         # create derivative info with sliced data
@@ -830,7 +838,114 @@ def _process_structure_gradients(
             _accumulate_field_map(vjp_value_map, vjp_chunk)
 
         if use_numerical_vjp:
-            gradients = numerical_vjp_fn(numerical_params_static, derivative_info=derivative_info)
+
+            def _derivative_helper_impl(
+                helper_derivative_info: DerivativeInfo,
+                *,
+                derivative_view: DerivativeView | None = None,
+                chunk_derivative_info: DerivativeInfo,
+            ) -> AutogradFieldMap:
+                requested_sections = {
+                    path[0]
+                    for path in helper_derivative_info.paths
+                    if len(path) > 0 and path[0] in ("geometry", "medium")
+                }
+
+                target_geometry = structure.geometry
+                target_medium = structure.medium
+                if derivative_view is not None:
+                    if derivative_view.geometry is not None:
+                        target_geometry = derivative_view.geometry
+                    if "geometry" in requested_sections:
+                        if derivative_view.geometry is None:
+                            log.warning(
+                                "derivative_helper received geometry paths but "
+                                "derivative_view.geometry is None; falling back to the original "
+                                "structure geometry.",
+                                log_once=True,
+                            )
+                    if derivative_view.medium is not None:
+                        target_medium = derivative_view.medium
+                    if "medium" in requested_sections:
+                        if derivative_view.medium is None:
+                            log.warning(
+                                "derivative_helper received medium paths but "
+                                "derivative_view.medium is None; falling back to the original "
+                                "structure medium.",
+                                log_once=True,
+                            )
+
+                target_structure = structure.updated_copy(
+                    geometry=target_geometry,
+                    medium=target_medium,
+                )
+                target_is_medium_pec = target_structure.medium.is_pec
+                target_background_medium_is_pec = bool(
+                    target_structure.background_medium and target_structure.background_medium.is_pec
+                )
+                if target_is_medium_pec and not chunk_derivative_info.is_medium_pec:
+                    raise AdjointError(
+                        "derivative_helper cannot switch to a PEC medium in derivative_view when "
+                        "the original structure was non-PEC because the required magnetic-field "
+                        "derivative data were not collected."
+                    )
+                if (
+                    target_background_medium_is_pec
+                    and not chunk_derivative_info.background_medium_is_pec
+                ):
+                    raise AdjointError(
+                        "derivative_helper cannot switch to a PEC background medium in "
+                        "derivative_view when the original structure background was non-PEC "
+                        "because the required magnetic-field derivative data were not collected."
+                    )
+                target_bounds = target_structure.geometry.bounds
+                if derivative_view is not None and derivative_view.geometry is not None:
+                    if not bounds_contains(struct_bounds, target_bounds):
+                        raise AdjointError(
+                            "derivative_helper derivative_view.geometry bounds must be contained "
+                            "within the original structure bounds because derivative fields are "
+                            "evaluated on the original monitor volume."
+                        )
+                shared_interpolators = helper_derivative_info.interpolators
+                if shared_interpolators is None:
+                    # Reuse per-chunk interpolators to avoid rebuilding in helper loops.
+                    shared_interpolators = chunk_derivative_info.create_interpolators()
+                # Do not replace eps_data or forward/adjoint fields here: derivative_view only
+                # changes derivative dispatch geometry/medium and does not rerun simulations.
+                helper_derivative_info_use = helper_derivative_info.updated_copy(
+                    bounds=target_bounds,
+                    bounds_intersect=bounds_intersection(sim_orig.bounds, target_bounds),
+                    updated_epsilon=make_updated_epsilon(
+                        select_adjoint_freqs=helper_derivative_info.frequencies,
+                    ),
+                    is_medium_pec=target_is_medium_pec,
+                    background_medium_is_pec=target_background_medium_is_pec,
+                    clipped_geometry=(
+                        target_structure.geometry
+                        if _geometry_contains_clip_operation(target_structure.geometry)
+                        else None
+                    ),
+                    interpolators=shared_interpolators,
+                    deep=False,
+                )
+                return target_structure._compute_derivatives(helper_derivative_info_use)
+
+            derivative_helper = functools.partial(
+                _derivative_helper_impl,
+                chunk_derivative_info=derivative_info,
+            )
+
+            if numerical_structure._uses_derivative_helper:
+                gradients = numerical_vjp_fn(
+                    numerical_params_static,
+                    derivative_info=derivative_info,
+                    derivative_helper=derivative_helper,
+                )
+            else:
+                gradients = numerical_vjp_fn(
+                    numerical_params_static,
+                    derivative_info=derivative_info,
+                )
 
             if not isinstance(gradients, dict):
                 raise AdjointError(

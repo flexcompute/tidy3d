@@ -349,7 +349,10 @@ def run_custom(
         Injected-structure hook. Each config creates a new structure from user parameters and appends it to
         the simulation structures list. Gradients are routed through synthetic
         ``("numerical", structure_index, param_index)`` paths handled by
-        ``compute_derivatives(parameters, derivative_info)``.
+        ``compute_derivatives(parameters, derivative_info)`` or
+        ``compute_derivatives(parameters, derivative_info, derivative_helper)``.
+        The optional ``derivative_helper`` supports ``derivative_view=...`` for
+        explicit geometry/medium derivative dispatch views.
     custom_vjp : Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None
         Replacement hook for existing traced structure paths. Each config overrides derivative computation
         for matching structure/path targets in the standard ``("structures", ...)`` path namespace.

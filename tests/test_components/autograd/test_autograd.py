@@ -42,7 +42,7 @@ from tidy3d.web.api.autograd import hooks
 from tidy3d.web.api.autograd import strategy as autograd_strategy
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom, verify_custom_vjp
 from tidy3d.web.api.autograd.context import AdjointPostprocessInputs, AutogradContext
-from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
+from tidy3d.web.api.autograd.types import CustomVJPConfig, DerivativeView, NumericalStructureConfig
 
 from ...utils import (
     SIM_FULL,
@@ -836,7 +836,7 @@ def make_polyslab_custom_vjp(custom_vjp_val):
 
 
 def make_polyslab_numerical_vjp(numerical_val):
-    def polyslab_numerical_vjp(parameters, derivative_info):
+    def polyslab_numerical_vjp(parameters, derivative_info, derivative_helper):
         vjps = {}
         for path in derivative_info.paths:
             vjps[path] = numerical_val
@@ -856,7 +856,7 @@ def test_run_custom_rejects_numerical_structures_for_unsupported_workflow_type()
             geometry=td.Box(size=(1, 1, 1)),
             medium=td.Medium(permittivity=1.0),
         ),
-        compute_derivatives=lambda parameters, derivative_info: {},
+        compute_derivatives=lambda parameters, derivative_info, derivative_helper: {},
         parameters=np.array([0.1]),
     )
 
@@ -984,16 +984,16 @@ def test_numerical_structure_signature_validation(error_type):
     def create_ok(parameters):
         return td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=1.0))
 
-    def vjp_ok(parameters, derivative_info):
+    def vjp_ok(parameters, derivative_info, derivative_helper):
         return {}
 
     def create_bad_num_args(parameters, extra_arg):
         return create_ok(parameters)
 
-    def vjp_bad_num_args(parameters, derivative_info, extra_arg):
+    def vjp_bad_num_args(parameters, derivative_info, derivative_helper, extra_arg):
         return {}
 
-    def vjp_bad_arg_name(parameters, d_info):
+    def vjp_bad_arg_name(parameters, d_info, derivative_helper):
         return {}
 
     create_fn = create_ok
@@ -1010,8 +1010,9 @@ def test_numerical_structure_signature_validation(error_type):
     elif error_type == "vjp_num_args":
         vjp_fn = vjp_bad_num_args
         expected_error = (
-            "NumericalStructureConfig.compute_derivatives should accept two arguments "
-            r"\(parameters, derivative_info\), and it currently accepts 3 arguments."
+            "NumericalStructureConfig.compute_derivatives should accept either two arguments "
+            r"\(parameters, derivative_info\) or three arguments "
+            r"\(parameters, derivative_info, derivative_helper\), and it currently accepts 4 arguments."
         )
     else:
         vjp_fn = vjp_bad_arg_name
@@ -1026,6 +1027,210 @@ def test_numerical_structure_signature_validation(error_type):
             compute_derivatives=vjp_fn,
             parameters=np.array([0.1]),
         )
+
+
+def test_numerical_structure_signature_validation_legacy_two_arg_vjp():
+    def create_ok(parameters):
+        return td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=1.0))
+
+    def vjp_legacy(parameters, derivative_info):
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    NumericalStructureConfig(
+        create=create_ok,
+        compute_derivatives=vjp_legacy,
+        parameters=np.array([0.1]),
+    )
+
+
+def test_numerical_structure_legacy_two_arg_vjp_runtime_dispatch(use_emulated_run):
+    """Legacy two-arg numerical VJP should execute end-to-end through run_custom."""
+    fn_dict = get_functions("polyslab", "mode")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    polyslab_axis = 0
+    callback_calls = {"count": 0}
+
+    def vjp_legacy(parameters, derivative_info):
+        callback_calls["count"] += 1
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    def objective(*args):
+        static_args = [get_static(arg) for arg in args]
+        base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+        structures = [
+            structure
+            for structure in base_sim.structures
+            if not isinstance(structure.geometry, td.PolySlab)
+        ]
+        sim_strip_structure = base_sim.updated_copy(structures=structures)
+        numerical_structure = NumericalStructureConfig(
+            create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+            compute_derivatives=vjp_legacy,
+            parameters=np.array(args).flatten(),
+        )
+        sim_data = run_custom(
+            sim_strip_structure,
+            numerical_structures=numerical_structure,
+            local_gradient=True,
+        )
+        return postprocess(sim_data)
+
+    _val, grad = ag.value_and_grad(objective)(params0)
+    assert callback_calls["count"] > 0
+    assert np.all(np.isfinite(grad))
+
+
+def test_numerical_structure_derivative_view_bounds_must_be_contained(use_emulated_run):
+    """Out-of-bounds derivative_view.geometry should raise a clear containment error."""
+    fn_dict = get_functions("polyslab", "mode")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    polyslab_axis = 0
+
+    def bad_override_vjp(parameters, derivative_info, derivative_helper):
+        lower, upper = derivative_info.bounds
+        center = tuple(0.5 * (lo + hi) for lo, hi in zip(lower, upper))
+        size = tuple((hi - lo) + 2.0 for lo, hi in zip(lower, upper))
+        helper_info = derivative_info.updated_copy(
+            paths=[("medium", "permittivity")],
+            deep=False,
+        )
+        derivative_helper(
+            helper_info,
+            derivative_view=DerivativeView(
+                geometry=td.Box(center=center, size=size),
+                medium=td.Medium(permittivity=2.0),
+            ),
+        )
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    def objective(*args):
+        static_args = [get_static(arg) for arg in args]
+        base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+        structures = [
+            structure
+            for structure in base_sim.structures
+            if not isinstance(structure.geometry, td.PolySlab)
+        ]
+        sim_strip_structure = base_sim.updated_copy(structures=structures)
+        numerical_structure = NumericalStructureConfig(
+            create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+            compute_derivatives=bad_override_vjp,
+            parameters=np.array(args).flatten(),
+        )
+        sim_data = run_custom(
+            sim_strip_structure,
+            numerical_structures=numerical_structure,
+            local_gradient=True,
+        )
+        return postprocess(sim_data)
+
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match=(
+            r"derivative_view\.geometry bounds must be contained within the original "
+            r"structure bounds"
+        ),
+    ):
+        ag.value_and_grad(objective)(params0)
+
+
+def test_numerical_structure_derivative_view_pec_upgrade_not_supported(use_emulated_run):
+    """PEC upgrades in derivative_view should error when original chunk is non-PEC."""
+    fn_dict = get_functions("polyslab", "mode")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    polyslab_axis = 0
+
+    def pec_upgrade_vjp(parameters, derivative_info, derivative_helper):
+        helper_info = derivative_info.updated_copy(
+            paths=[("medium", "permittivity")],
+            deep=False,
+        )
+        derivative_helper(
+            helper_info,
+            derivative_view=DerivativeView(medium=td.PEC),
+        )
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    def objective(*args):
+        static_args = [get_static(arg) for arg in args]
+        base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+        structures = [
+            structure
+            for structure in base_sim.structures
+            if not isinstance(structure.geometry, td.PolySlab)
+        ]
+        sim_strip_structure = base_sim.updated_copy(structures=structures)
+        numerical_structure = NumericalStructureConfig(
+            create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+            compute_derivatives=pec_upgrade_vjp,
+            parameters=np.array(args).flatten(),
+        )
+        sim_data = run_custom(
+            sim_strip_structure,
+            numerical_structures=numerical_structure,
+            local_gradient=True,
+        )
+        return postprocess(sim_data)
+
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match=r"cannot switch to a PEC medium in derivative_view",
+    ):
+        ag.value_and_grad(objective)(params0)
+
+
+def test_numerical_structure_derivative_view_clip_geometry_supported(use_emulated_run):
+    """ClipOperation derivative_view.geometry should be supported in derivative helper."""
+    fn_dict = get_functions("polyslab", "mode")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    polyslab_axis = 0
+
+    def clip_view_vjp(parameters, derivative_info, derivative_helper):
+        lower, upper = derivative_info.bounds
+        center = tuple(0.5 * (lo + hi) for lo, hi in zip(lower, upper))
+        size = tuple(0.25 * (hi - lo) for lo, hi in zip(lower, upper))
+        clip_geometry = td.ClipOperation(
+            operation="union",
+            geometry_a=td.Box(center=center, size=size),
+            geometry_b=td.Box(center=center, size=size),
+        )
+        helper_info = derivative_info.updated_copy(
+            paths=[("geometry", "geometry_a", "center")],
+            deep=False,
+        )
+        derivative_helper(
+            helper_info,
+            derivative_view=DerivativeView(geometry=clip_geometry),
+        )
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    def objective(*args):
+        static_args = [get_static(arg) for arg in args]
+        base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+        structures = [
+            structure
+            for structure in base_sim.structures
+            if not isinstance(structure.geometry, td.PolySlab)
+        ]
+        sim_strip_structure = base_sim.updated_copy(structures=structures)
+        numerical_structure = NumericalStructureConfig(
+            create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+            compute_derivatives=clip_view_vjp,
+            parameters=np.array(args).flatten(),
+        )
+        sim_data = run_custom(
+            sim_strip_structure,
+            numerical_structures=numerical_structure,
+            local_gradient=True,
+        )
+        return postprocess(sim_data)
+
+    _val, grad = ag.value_and_grad(objective)(params0)
+    assert np.all(np.isfinite(grad))
 
 
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])

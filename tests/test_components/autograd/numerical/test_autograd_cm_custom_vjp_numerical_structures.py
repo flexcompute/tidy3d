@@ -201,11 +201,12 @@ def create_ring(params):
     return td.Structure(geometry=ring_geo, medium=td.Medium(permittivity=ADJOINT_PERMITTIVITY))
 
 
-def vjp_ring(parameters, derivative_info):
+def vjp_ring(parameters, derivative_info, derivative_helper):
     return compute_ring_vjp(
         parameters=parameters,
         derivative_info=derivative_info,
         create_ring_fn=create_ring,
+        derivative_helper=derivative_helper,
     )
 
 
