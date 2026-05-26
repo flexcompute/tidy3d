@@ -146,5 +146,3 @@ single-ended and differential terminal excitations.
        direction='+',
        differential_pairs=(("T0", "T1"),),
    )
-
-~~~~

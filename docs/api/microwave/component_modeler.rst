@@ -38,6 +38,7 @@ Workflow
 In order to submit the simulation, use ``web.upload()``, ``web.start()``, ``web.monitor()``, and ``web.load()``.
 
 .. code-block:: python
+
    import tidy3d.web as web
 
    # Upload simulation and get cost estimate
@@ -57,6 +58,7 @@ Alternatively, use the ``web.run()`` method to perform all of the above in one s
 
 
 .. code-block:: python
+
    import tidy3d.web as web
 
    # Upload, run simulation, and download data
@@ -104,5 +106,3 @@ The S-matrix is stored as a :class:`~tidy3d.rf.MicrowaveSMatrixData` whose ``dat
    + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
    + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
    + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
-
-~~~~

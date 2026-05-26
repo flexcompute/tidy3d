@@ -55,6 +55,3 @@ Note that different :class:`.LayerRefinementSpec` instances are recommended for 
 
    + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
    + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
-
-
-~~~~

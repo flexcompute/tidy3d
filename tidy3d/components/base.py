@@ -2007,7 +2007,11 @@ class Tidy3dBaseModel(BaseModel):
             data_type = _fmt_ann_literal(ann, field_metadata=field_metadata)
 
             # default / default_factory
+            factory_name = ""
             if field.default_factory is not None:
+                raw_name = getattr(field.default_factory, "__name__", "")
+                if raw_name and raw_name != "<lambda>":
+                    factory_name = raw_name
                 try:
                     default_val = field.default_factory()
                 except Exception:
@@ -2023,6 +2027,12 @@ class Tidy3dBaseModel(BaseModel):
                 default_val = _clean_default_repr(
                     str(f"{default_val.__class__.__name__}({default_val})")
                 )
+            elif factory_name and default_val is not None and not isinstance(default_val, str):
+                # Collapse verbose defaults (multi-line / very long) produced by named factories
+                # to keep the numpydoc Parameters section well-formed.
+                repr_check = str(default_val)
+                if "\n" in repr_check or len(repr_check) > 120:
+                    default_val = f"{factory_name}()"
 
             default_str = "" if field.is_required() else f" = {default_val}"
             doc += f"    {field_name} : {data_type}{default_str}\n"

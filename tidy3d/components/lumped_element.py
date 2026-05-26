@@ -1985,7 +1985,7 @@ class LinearLumpedElement(RectangularLumpedElement):
     lead to a higher parasitic capacitance. Follow the link to the associated notebook for an example
     of using this field.
 
-    .. image:: ../../_static/img/lumped_dist_type.png
+    .. image:: /_static/img/lumped_dist_type.png
         :width: 50%
 
     See Also

@@ -65,7 +65,7 @@ For RF and microwave applications, use the **TerminalComponentModeler** (availab
 .. include:: /api/plugins/smatrix_migration.rst
 
 Further Details
-^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~
 
 .. autosummary::
    :toctree: ../_autosummary/

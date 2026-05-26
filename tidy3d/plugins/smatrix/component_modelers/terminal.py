@@ -273,7 +273,7 @@ class DirectivityMonitorSpec(MicrowaveBaseModel):
         None,
         title="Monitor Name",
         description=f"Optional name for the auto-generated monitor. "
-        f"If not provided, defaults to '{AUTO_RADIATION_MONITOR_NAME}_' + index of the monitor in the list of radiation monitors.",
+        f"If not provided, defaults to ``{AUTO_RADIATION_MONITOR_NAME}_<N>`` where ``<N>`` is the index of the monitor in the list of radiation monitors.",
     )
 
     freqs: tuple[NonNegativeInt, ...] | None = Field(

@@ -171,5 +171,3 @@ The :class:`Absorber` boundary type uses a fictitious lossy medium with ramped c
    For a general introduction to PMLs, please see the following FDTD101 resource:
 
    + `Introduction to perfectly matched layer (PML) <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`_
-
-~~~~

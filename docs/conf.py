@@ -89,7 +89,7 @@ custom_sitemap_excludes = [r"/notebooks/"]
 # divparams_enable_postprocessing = True # TODO FIX
 exclude_patterns = [
     "_docs/",
-    "_templates/",
+    "_templates/*",
     "_ext/",
     "**.ipynb_checkpoints",
     ".DS_Store",
@@ -218,6 +218,11 @@ myst_enable_extensions = [
     "colon_fence",
     "dollarmath",
 ]
+# Auto-generate anchors for markdown headings so `[link](#kebab-case)` refs in
+# included plugin READMEs resolve (matches GitHub rendering).
+myst_heading_anchors = 3
+# Included READMEs intentionally start at H2 (they nest under the page's H1).
+suppress_warnings = ["myst.header"]
 nbsphinx_allow_errors = True  # Continue through Jupyter errors
 nbsphinx_execute = "never"
 project = "tidy3d"

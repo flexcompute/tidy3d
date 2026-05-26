@@ -64,5 +64,3 @@ Logging
    log.set_logging_level
    log.set_log_suppression
    log.set_logging_file
-
-~~~~

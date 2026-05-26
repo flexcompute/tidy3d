@@ -3,9 +3,9 @@
 Automatic Differentiation with Autograd
 ---------------------------------------
 
-.. toctree::
-
-    ./../../../tidy3d/plugins/autograd/README
+.. include:: ../../../tidy3d/plugins/autograd/README.md
+   :parser: myst_parser.sphinx_
+   :start-line: 2
 
 Differential Operators
 ~~~~~~~~~~~~~~~~~~~~~~

@@ -239,5 +239,3 @@ These specification classes have the same parameters but are used for configurat
 
    + `Computing the characteristic impedance of transmission lines <../../notebooks/CharacteristicImpedanceCalculator.html>`_
    + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
-
-~~~~

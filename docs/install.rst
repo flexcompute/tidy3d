@@ -158,7 +158,7 @@ Some users or systems may require a more specialized installation, which we will
 
     .. group-tab:: uv |:musical_note:|
 
-        See the development installation `instructions <../development/index.html>`_. You can install ``tidy3d`` within reproducible environment guaranteed by the developers using the ``uv.lock`` installation and the ``uv`` toolchain.
+        Install ``tidy3d`` within a reproducible environment using the ``uv.lock`` installation and the ``uv`` toolchain.
 
 Optional Dependencies
 =====================

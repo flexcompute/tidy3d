@@ -421,6 +421,4 @@ Abstract Base Classes
    components.medium.AbstractPerturbationMedium
    components.medium.NonlinearModel
 
-These are abstract base classes that are inherited by some of the medium classes above. The user should not need to interact with these classes during regular usage. 
-   
-~~~~
+These are abstract base classes that are inherited by some of the medium classes above. The user should not need to interact with these classes during regular usage.

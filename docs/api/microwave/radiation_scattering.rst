@@ -100,5 +100,3 @@ Lobe characteristics such as direction, magnitude, and -3 dB beamwidth can be ob
    Example applications:
 
    + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
-
-~~~~

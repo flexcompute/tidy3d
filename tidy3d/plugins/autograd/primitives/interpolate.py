@@ -808,10 +808,10 @@ def interpolate_spline(
     order : int
         Order of the spline (1=linear, 2=quadratic, 3=cubic)
     endpoint_derivatives : tuple[float, float] = (None, None)
-        Derivatives at the endpoints (left, right)
-        Note: For order=1 (linear), all endpoint derivatives are ignored.
-              For order=2 (quadratic), only the left endpoint derivative is used.
-              For order=3 (cubic), both endpoint derivatives are used if provided.
+        Derivatives at the endpoints (left, right).
+        For order=1 (linear), all endpoint derivatives are ignored.
+        For order=2 (quadratic), only the left endpoint derivative is used.
+        For order=3 (cubic), both endpoint derivatives are used if provided.
 
     Returns
     -------

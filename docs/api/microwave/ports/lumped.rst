@@ -102,6 +102,3 @@ All lumped elements should be added to the ``lumped_elements`` field of the base
 
    + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
    + `Designing a power divider (part 3) <../../notebooks/WPDHarmonicSuppression3.html>`_
-
-
-~~~~

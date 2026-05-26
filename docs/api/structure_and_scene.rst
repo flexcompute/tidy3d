@@ -88,6 +88,3 @@ You can visualize the ``Scene`` using methods such as ``plot()``, ``plot_eps()``
 
    # Plot the previously defined Scene
    my_scene.plot(z=0)
-
-
-~~~~

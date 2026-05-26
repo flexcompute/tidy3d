@@ -1462,7 +1462,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         See also
         --------
-        :member:`dot`
+        :meth:`dot`
         """
 
         tan_dims = self._tangential_dims

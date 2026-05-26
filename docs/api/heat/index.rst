@@ -8,7 +8,6 @@ Heat |:fire:|
     mediums
     boundary_conditions
     source
-    discretization
     monitor
     output_data
 
@@ -17,6 +16,9 @@ Heat |:fire:|
 .. include:: /api/heat/mediums.rst
 .. include:: /api/heat/boundary_conditions.rst
 .. include:: /api/heat/source.rst
-.. include:: /api/heat/discretization.rst
 .. include:: /api/heat/monitor.rst
 .. include:: /api/heat/output_data.rst
+
+.. seealso::
+
+   Grid specifications for unstructured heat simulations are documented under :doc:`/api/mesh/discretization`.

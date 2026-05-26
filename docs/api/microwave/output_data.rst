@@ -93,5 +93,3 @@ Datasets and Data Arrays
 
    + `Performing visualization of simulation data <../../notebooks/VizData.html>`_
    + `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
-
-~~~~

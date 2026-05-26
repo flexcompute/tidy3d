@@ -59,7 +59,7 @@ class DesignSpace(Tidy3dBaseModel):
 
         Schematic outline of how to use the ``Design`` plugin to explore a design space.
 
-        .. image:: ../../../../_static/img/design.png
+        .. image:: /_static/img/design.png
             :width: 80%
             :align: center
 

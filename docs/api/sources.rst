@@ -232,5 +232,3 @@ Please see the learning center article linked below for more details.
    For more detailed explanation and examples, please see the following learning center resource:
 
    + `Defining spatially-varying sources <../notebooks/CustomFieldSource.html>`_
-
-~~~~

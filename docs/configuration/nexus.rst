@@ -534,5 +534,5 @@ For Nexus deployments with MinIO or other S3-compatible storage:
 See Also
 --------
 
-* :doc:`submit_simulations` - Submitting and managing simulations
+* :doc:`/api/submit_simulations` - Submitting and managing simulations
 * :doc:`../install` - Installation and API key setup

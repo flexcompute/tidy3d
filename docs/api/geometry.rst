@@ -330,5 +330,3 @@ Use the ``from_stl()`` class method to import from an external STL file, or ``fr
 
    + `Importing STL files <../notebooks/STLImport.html>`_
    + `Defining complex geometries using trimesh <../notebooks/CreatingGeometryUsingTrimesh.html>`_
-
-~~~~

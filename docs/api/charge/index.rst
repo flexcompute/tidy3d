@@ -18,3 +18,7 @@ Charge |:zap:|
 .. include:: /api/charge/source.rst
 .. include:: /api/charge/monitor.rst
 .. include:: /api/charge/output_data.rst
+
+.. seealso::
+
+   Grid specifications for unstructured charge simulations are documented under :doc:`/api/mesh/discretization`.

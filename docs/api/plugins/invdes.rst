@@ -3,9 +3,9 @@
 Inverse Design Plugin
 ---------------------
 
-.. toctree::
-
-    ./../../../tidy3d/plugins/invdes/README.md
+.. include:: ../../../tidy3d/plugins/invdes/README.md
+   :parser: myst_parser.sphinx_
+   :start-line: 2
 
 .. autosummary::
    :toctree: ../_autosummary/

@@ -483,7 +483,7 @@ Gallium Arsenide ("GaAs")
    ========================== ========================== ================ =========================================================================================================
    Variant                    Valid for                  Model Info       Reference                                                                                                
    ========================== ========================== ================ =========================================================================================================
-   ``'Palik_NoLoss'``        1.1 - 6.8 :math:`{\mu}m`  2-pole, lossless [1]
+   ``'Palik_NoLoss'``         1.1 - 6.8 :math:`{\mu}m`   2-pole, lossless [1]
    ``'Palik_LowLoss'``        1.1 - 30.0 :math:`{\mu}m`  2-pole, low loss [1]
    ``'Palik_Lossy'``          0.22 - 1.3 :math:`{\mu}m`  6-pole, lossy    [1]                                                                                                      
    ``'Skauli2003'`` (default) 0.97 - 17.0 :math:`{\mu}m` 3-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/GaAs/Skauli.yml>`__

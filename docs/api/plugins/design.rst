@@ -3,9 +3,12 @@
 Design Space Exploration
 ------------------------
 
-.. toctree::
+.. include:: ../../../tidy3d/plugins/design/README.md
+   :parser: myst_parser.sphinx_
+   :start-line: 2
 
-    ../../../tidy3d/plugins/design/README
+API Reference
+~~~~~~~~~~~~~
 
 .. autosummary::
    :toctree: ../_autosummary/

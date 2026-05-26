@@ -492,7 +492,7 @@ We also need to construct a post-processing function that will tell the optimize
 ```py
 
 def post_process_fn(batch_data: dict[str, td.SimulationData]) -> float:
-    ```Grab the power going left at the single waveguide monitor```
+    """Grab the power going left at the single waveguide monitor."""
     power_left = 0.0
     for _, sim_data in batch_data.items():
         amps = tdi.get_amps(sim_data, monitor_name=mnt_name_left, direction="-")

@@ -31,6 +31,8 @@ When you request a gradient, Tidy3D and `autograd` work together behind the scen
 1.  **Forward Pass**: Your code executes, running a standard FDTD simulation and calculating your scalar objective value. Tidy3D automatically stores the fields required for the subsequent gradient calculation.
 2.  **Backward Pass**: `autograd` propagates gradients backward. When it reaches the simulation step, Tidy3D sets up the required adjoint simulations and uses both forward and adjoint fields to efficiently compute the gradients with respect to the traced simulation parameters.
 
+Although `autograd` is used internally, we provide wrappers for other automatic differentiation frameworks, allowing you to use your preferred AD framework (e.g., `jax`, `pytorch`) with minimal syntax changes. For instance, you can refer to our PyTorch wrapper [here](https://docs.flexcompute.com/projects/tidy3d/en/latest/api/plugins/pytorch.html).
+
 ### Forward/Adjoint Flow
 
 The forward and backward passes follow this data flow:

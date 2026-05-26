@@ -732,7 +732,7 @@ class PML(AbsorberSpec):
 
         **1D Model Illustration**
 
-        Consider a transformed wave equation in the :math:`x` dimension below _`[1]`:
+        Consider a transformed wave equation in the :math:`x` dimension below [1]_:
 
         .. math::
 
@@ -779,7 +779,7 @@ class PML(AbsorberSpec):
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation.png
 
-        Incorporating a dispersive material into the PML can also cause simulation divergence in certain scenarios.
+        Incorporating a dispersive material into the PML can also cause simulation divergence in certain scenarios [2]_.
         If your simulation lacks any structures inserted into the PML at an angle, but includes dispersive material
         in PML, it is advisable to substitute a nondispersive material for the dispersive material. Alternatively,
         if dispersion is necessary, switching from the :class:`PML` to :class:`Absorber` can effectively address the
@@ -794,11 +794,13 @@ class PML(AbsorberSpec):
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
 
+        For background on the PML formulation [1]_ and its stability with dispersive materials [2]_,
+        see the references below.
 
         **References**
 
-        .. [1]  W.C. Chew and W.H. Weedon, Microwave and Optical Tech. Lett., 7 (13), 599,1994; S. Johnson, arXiv 2108.05348, 2021
-        .. [2]  Antonios Giannopoulos, IEEE Transactions on Antennas and Propagation, 56(9), 2995, 2008
+        .. [1]  W.C. Chew and W.H. Weedon, Microwave and Optical Tech. Lett., 7 (13), 599, 1994; S. Johnson, arXiv 2108.05348, 2021.
+        .. [2]  A. Giannopoulos, IEEE Transactions on Antennas and Propagation, 56 (9), 2995, 2008.
 
     Note
     ----

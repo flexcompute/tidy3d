@@ -10,6 +10,7 @@ Plugins
    smatrix
    resonance
    autograd
+   pytorch
    invdes
    design
    waveguide

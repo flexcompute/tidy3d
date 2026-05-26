@@ -2374,7 +2374,7 @@ class CustomMedium(AbstractCustomMedium):
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
-        at ``frequency``. Spatially, we take max{|eps|}, so that autoMesh generation
+        at ``frequency``. Spatially, we take :math:`\\max\\{|\\varepsilon|\\}`, so that autoMesh generation
         works appropriately.
         """
         return self._medium.eps_diagonal(frequency)
