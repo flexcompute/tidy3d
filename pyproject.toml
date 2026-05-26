@@ -34,7 +34,7 @@ dependencies = [
   "toml>=0.10.2,<0.11.0",
   "tomlkit>=0.13.2,<0.16.0",
   "autograd>=1.7.0,<2.0.0",
-  "scipy>=1.14,<2.0",
+  "scipy>=1.14,<2.0,!=1.15.0,!=1.15.1,!=1.15.2",
   "boto3>=1.28.0,<2.0.0",
   "requests>=2.31.0,<3.0.0",
   "pyjwt>=2.10.1,<3.0.0",
@@ -326,9 +326,8 @@ banned-module-level-imports = ["scipy", "matplotlib"]
 ]
 
 [tool.pytest.ini_options]
-# TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
 addopts = """
---cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical and not perf and not generate_profile and not performance_profile'
+--cov=tidy3d --doctest-modules -n auto --dist worksteal -m 'not numerical and not perf and not generate_profile and not performance_profile'
 """
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
