@@ -1,6 +1,6 @@
 .. currentmodule:: tidy3d
 
-Automatic Differentiation with Autograd 
+Automatic Differentiation with Autograd
 ---------------------------------------
 
 .. toctree::
@@ -16,6 +16,18 @@ Differential Operators
 
     plugins.autograd.differential_operators.grad
     plugins.autograd.differential_operators.value_and_grad
+
+Optimizers
+~~~~~~~~~~
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+    plugins.autograd.optimizers.Adam
+    plugins.autograd.optimizers.adam
+    plugins.autograd.optimizers.apply_updates
+    plugins.autograd.optimizers.optimize
 
 Functions
 ~~~~~~~~~
@@ -75,17 +87,19 @@ Inverse Design
     plugins.autograd.invdes.ConicFilter
     plugins.autograd.invdes.ErosionDilationPenalty
     plugins.autograd.invdes.FilterAndProject
+    plugins.autograd.invdes.GaussianFilter
     plugins.autograd.invdes.grey_indicator
+    plugins.autograd.invdes.initialize_params_from_simulation
     plugins.autograd.invdes.make_circular_filter
     plugins.autograd.invdes.make_conic_filter
     plugins.autograd.invdes.make_curvature_penalty
     plugins.autograd.invdes.make_erosion_dilation_penalty
     plugins.autograd.invdes.make_filter
     plugins.autograd.invdes.make_filter_and_project
+    plugins.autograd.invdes.make_gaussian_filter
     plugins.autograd.invdes.ramp_projection
-    plugins.autograd.invdes.tanh_projection
     plugins.autograd.invdes.smoothed_projection
+    plugins.autograd.invdes.symmetrize_diagonal
     plugins.autograd.invdes.symmetrize_mirror
     plugins.autograd.invdes.symmetrize_rotation
-    plugins.autograd.invdes.symmetrize_diagonal
-
+    plugins.autograd.invdes.tanh_projection
