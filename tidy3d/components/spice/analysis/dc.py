@@ -34,7 +34,7 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     )
 
     max_iters: PositiveInt = Field(
-        default=30,
+        default=120,
         title="Maximum number of iterations.",
         description="Indicates the maximum number of iterations to be run. "
         "The solver will stop either when this maximum of iterations is met "
