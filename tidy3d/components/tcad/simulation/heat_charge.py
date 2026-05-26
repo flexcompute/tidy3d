@@ -44,9 +44,6 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
-from tidy3d.components.tcad.generation_recombination import (
-    SelberherrImpactIonization,
-)
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
     UniformUnstructuredGrid,
@@ -427,12 +424,11 @@ class HeatChargeSimulation(AbstractSimulation):
         title="Use accelerated solver.",
         description="Controls whether the accelerated charge solver is used. "
         "When ``None`` (default), the solver is selected automatically: the accelerated "
-        "solver is used for steady-state charge simulations (DC and SSAC, isothermal or "
-        "non-isothermal, with or without Fermi-Dirac statistics), falling back to the "
-        "legacy CPU-only solver for unsupported configurations (impact ionization). "
-        "Set to ``True`` to force the accelerated solver (if supported) "
-        "or ``False`` to force the legacy CPU-only solver. Some models, such as "
-        "``MasettiMobility``, are only available with the accelerated solver.",
+        "solver is used for any steady-state charge simulation (DC and SSAC, "
+        "isothermal or non-isothermal, Boltzmann or Fermi-Dirac, with or without "
+        "Selberherr impact ionization).  Set to ``True`` to force the accelerated "
+        "solver or ``False`` to force the legacy CPU-only solver.  Some models, "
+        "such as ``MasettiMobility``, are only available with the accelerated solver.",
     )
 
     @field_validator("structures")
@@ -2142,13 +2138,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 False,
                 "requires a 'SteadyChargeDCAnalysis' analysis spec (or a derivative)",
             )
-        for structure in self.structures:
-            if structure.medium.charge is not None and isinstance(
-                structure.medium.charge, SemiconductorMedium
-            ):
-                for model in structure.medium.charge.R:
-                    if isinstance(model, SelberherrImpactIonization):
-                        return False, "impact ionization source terms are not supported"
         return True, ""
 
     def _uses_gpu_only_mobility_model(self) -> bool:

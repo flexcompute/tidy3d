@@ -1794,28 +1794,6 @@ def test_masetti_requires_accelerated_solver():
             ]
         )
 
-    impact_charge = silicon_charge.updated_copy(
-        R=[
-            td.SelberherrImpactIonization(
-                alpha_n_inf=7.03e5,
-                alpha_p_inf=1.582e6,
-                E_n_crit=1.23e6,
-                E_p_crit=2.03e6,
-                beta_n=1,
-                beta_p=1,
-            )
-        ]
-    )
-    unsupported_silicon = silicon.updated_copy(charge=impact_charge)
-    unsupported_sim = sim.updated_copy(
-        structures=[
-            sim.structures[0].updated_copy(medium=unsupported_silicon),
-            *sim.structures[1:],
-        ]
-    )
-    with pytest.raises(SetupError, match="MasettiMobility"):
-        _ = unsupported_sim._resolve_use_accelerated_solver
-
 
 def test_charge_simulation_voltage_bc_error_loc(heat_simulation):
     with pytest.raises(ValidationError) as excinfo:

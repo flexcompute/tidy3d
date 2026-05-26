@@ -60,7 +60,18 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         default=1e9,
         title="CFL number.",
         description="CFL multiplier used in the drift-diffusion solver. "
-        "Controls the pseudo time step size.",
+        "Controls the pseudo time step size and acts as the upper bound "
+        "of the adaptive CFL controller.",
+    )
+
+    cfl_min: PositiveFloat | None = Field(
+        default=None,
+        title="Minimum CFL number.",
+        description="Lower bound of the adaptive CFL controller in the drift-diffusion "
+        "solver. When ``None`` (default), the solver uses ``cfl_number * 1e-6`` so "
+        "behaviour matches setups that predate this field. Setting ``cfl_min`` equal "
+        "to ``cfl_number`` effectively runs the solver with a constant CFL (no "
+        "adaptive backoff).",
     )
 
     preconditioner_iterations: PositiveInt = Field(
@@ -73,7 +84,12 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     @model_validator(mode="after")
     def _warn_non_default_solver_params(self) -> ChargeToleranceSpec:
         """Warn when solver parameters differ from their defaults."""
-        field_names = ("max_pseudo_steps", "cfl_number", "preconditioner_iterations")
+        field_names = (
+            "max_pseudo_steps",
+            "cfl_number",
+            "cfl_min",
+            "preconditioner_iterations",
+        )
         fields = type(self).model_fields
         changed = [name for name in field_names if getattr(self, name) != fields[name].default]
         if changed:
@@ -81,6 +97,19 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
                 f"Non-default values detected for {', '.join(changed)} in "
                 "'ChargeToleranceSpec'. Settings different than the defaults can lead to "
                 "long simulation times, lack of convergence, and divergence."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _warn_cfl_min_above_max(self) -> ChargeToleranceSpec:
+        """Warn when ``cfl_min`` exceeds ``cfl_number`` (the adaptive-CFL upper bound)."""
+        if self.cfl_min is not None and self.cfl_min > self.cfl_number:
+            log.warning(
+                f"'cfl_min' ({self.cfl_min}) is greater than 'cfl_number' "
+                f"({self.cfl_number}) in 'ChargeToleranceSpec'. The adaptive CFL "
+                "controller expects cfl_min <= cfl_number; with these bounds "
+                "inverted the controller will clamp to the (smaller) upper bound "
+                "every step and the solver may not behave as intended."
             )
         return self
 
