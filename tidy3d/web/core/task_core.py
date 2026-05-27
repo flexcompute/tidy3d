@@ -14,6 +14,7 @@ from pydantic import Field, TypeAdapter
 
 import tidy3d as td
 from tidy3d.config import config
+from tidy3d.config.sections import VALID_VGPU_ALLOCATIONS
 from tidy3d.exceptions import ValidationError, format_chained_exception_message
 
 from . import http_util
@@ -986,18 +987,12 @@ class BatchTask(WebTask):
             The server's response to the submit request.
         """
 
-        # TODO: add support for pay_type, priority, vgpu_allocation, and ignore_memory_limit arguments
-        if pay_type != PayType.AUTO:
-            raise NotImplementedError(
-                "The 'pay_type' argument is not yet supported and will be ignored."
-            )
-        if priority is not None:
-            raise NotImplementedError(
-                "The 'priority' argument is not yet supported and will be ignored."
-            )
-        if vgpu_allocation is not None:
-            raise NotImplementedError(
-                "The 'vgpu_allocation' argument is not yet supported and will be ignored."
+        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
+        if priority is not None and (priority < 1 or priority > 10):
+            raise ValueError("Priority must be between '1' and '10' if specified.")
+        if vgpu_allocation is not None and vgpu_allocation not in VALID_VGPU_ALLOCATIONS:
+            raise ValueError(
+                f"vgpu_allocation must be one of {list(VALID_VGPU_ALLOCATIONS)} if specified."
             )
         if ignore_memory_limit is not None:
             raise NotImplementedError(
@@ -1011,6 +1006,12 @@ class BatchTask(WebTask):
             "protocolVersion": protocol_version,
             "workerGroup": worker_group,
         }
+        if pay_type != PayType.AUTO:
+            payload["payType"] = pay_type.value
+        if priority is not None:
+            payload["priority"] = priority
+        if vgpu_allocation is not None:
+            payload["vgpuAllocation"] = vgpu_allocation
         serialized_additional_payload = _serialize_additional_payload(additional_payload)
         if serialized_additional_payload is not None:
             payload["additionalPayload"] = serialized_additional_payload

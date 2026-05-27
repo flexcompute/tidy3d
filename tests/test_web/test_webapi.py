@@ -843,7 +843,7 @@ def test_start_batch_uses_config_run_additional_payload(
 
 
 @responses.activate
-def test_start_batch_explicit_priority_preserves_legacy_error(
+def test_start_batch_explicit_vgpu_options_submits(
     monkeypatch, set_api_key, reset_run_option_config
 ):
     batch_task_id = "batch-task-id"
@@ -853,15 +853,29 @@ def test_start_batch_explicit_priority_preserves_legacy_error(
         lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
     )
 
-    with pytest.raises(
-        NotImplementedError,
-        match=r"The 'priority' argument is not yet supported and will be ignored.",
-    ):
-        start(batch_task_id, priority=5)
+    responses.add(
+        responses.POST,
+        f"{config.web.api_endpoint}/rf/task/{batch_task_id}/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": None,
+                    "protocolVersion": td.version.__version__,
+                    "workerGroup": None,
+                    "priority": 5,
+                    "vgpuAllocation": 4,
+                }
+            )
+        ],
+        json={"data": {"taskId": batch_task_id}},
+        status=200,
+    )
+
+    start(batch_task_id, priority=5, vgpu_allocation=4)
 
 
 @responses.activate
-def test_start_batch_invalid_priority_preserves_legacy_error(
+def test_start_batch_invalid_priority_raises_value_error(
     monkeypatch, set_api_key, reset_run_option_config
 ):
     batch_task_id = "batch-task-id"
@@ -871,15 +885,12 @@ def test_start_batch_invalid_priority_preserves_legacy_error(
         lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
     )
 
-    with pytest.raises(
-        NotImplementedError,
-        match=r"The 'priority' argument is not yet supported and will be ignored.",
-    ):
+    with pytest.raises(ValueError, match=r"Priority must be between"):
         start(batch_task_id, priority=0)
 
 
 @responses.activate
-def test_start_batch_invalid_vgpu_allocation_preserves_legacy_error(
+def test_start_batch_invalid_vgpu_allocation_raises_value_error(
     monkeypatch, set_api_key, reset_run_option_config
 ):
     batch_task_id = "batch-task-id"
@@ -889,10 +900,7 @@ def test_start_batch_invalid_vgpu_allocation_preserves_legacy_error(
         lambda task_id: td.web.core.task_core.BatchTask(taskId=task_id),
     )
 
-    with pytest.raises(
-        NotImplementedError,
-        match=r"The 'vgpu_allocation' argument is not yet supported and will be ignored.",
-    ):
+    with pytest.raises(ValueError, match=r"vgpu_allocation must be one of"):
         start(batch_task_id, vgpu_allocation=3)
 
 

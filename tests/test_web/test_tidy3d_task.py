@@ -301,6 +301,47 @@ def test_batch_submit_additional_payload(set_api_key):
 
 
 @responses.activate
+def test_batch_submit_pay_type(set_api_key):
+    task = BatchTask(taskId="batch-task-id")
+    responses.add(
+        responses.POST,
+        f"{config.web.api_endpoint}/rf/task/batch-task-id/submit",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "solverVersion": None,
+                    "protocolVersion": td.version.__version__,
+                    "workerGroup": None,
+                    "payType": PayType.CREDITS.value,
+                    "priority": 5,
+                    "vgpuAllocation": 4,
+                }
+            )
+        ],
+        json={"data": {"taskId": "batch-task-id"}},
+        status=200,
+    )
+
+    task.submit(pay_type="FLEX_CREDIT", priority=5, vgpu_allocation=4)
+
+
+@pytest.mark.parametrize("priority", [0, -1, 11])
+def test_batch_submit_invalid_priority(priority):
+    task = BatchTask(taskId="batch-task-id")
+
+    with pytest.raises(ValueError, match=r"Priority must be between"):
+        task.submit(priority=priority)
+
+
+@pytest.mark.parametrize("vgpu_allocation", [0, 3, 9])
+def test_batch_submit_invalid_vgpu_allocation(vgpu_allocation):
+    task = BatchTask(taskId="batch-task-id")
+
+    with pytest.raises(ValueError, match=r"vgpu_allocation must be one of"):
+        task.submit(vgpu_allocation=vgpu_allocation)
+
+
+@responses.activate
 def test_pay_type_case_insensitivity(set_api_key):
     """Test PayType enum's case-insensitive behavior with different string formats."""
     project_id = "1234"
