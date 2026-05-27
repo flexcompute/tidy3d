@@ -55,10 +55,12 @@ Documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 [project.optional-dependencies]
 dev = [
   "bayesian-optimization>=2.0.0,<4.0.0",
+  "colour-science>=0.4.7,<0.5.0; python_version >= '3.11'",
   "coverage>=7.13.1,<8.0.0",
   "dill>=0.4.0,<0.5.0",
   "gdstk>=0.9.49,<1.1",
   "grcwa>=0.1.2,<0.2.0",
+  "hvplot>=0.12.0,<1.0.0",
   "ipython>=8.38.0,<9.0.0",
   "torch>=2.2.0,<3.0.0; sys_platform == 'darwin'",
   "torch>=2.2.0,<3.0.0; sys_platform != 'darwin'",
@@ -104,7 +106,8 @@ dev = [
   "trimesh>=4.6,<5.0.0",
   "scikit-rf>=1.9.0,<2.0.0",
   "vtk>=9.6.0,<10.0.0",
-  "pyvista>=0.45,<0.48.0",
+  "pyvista[jupyter]>=0.45,<0.48.0",
+  "jupyter-bokeh>=4.0.5,<5.0.0",
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
   "trame-vuetify>=2.0.0,<3.0.0",
