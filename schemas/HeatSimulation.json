@@ -11038,15 +11038,8 @@
       "type": "string"
     },
     "use_accelerated_solver": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": true,
+      "type": "boolean"
     },
     "version": {
       "default": "2.12.0.dev0",

@@ -47,8 +47,9 @@ class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
         title="SSAC Bias Voltages",
         description="DC operating point voltages at which SSAC is run. "
         "If ``None``, SSAC runs only at the last configured DC voltage. "
-        "Pass an explicit array (a subset of the DC sweep) to select specific bias points; "
-        "pass the full DC sweep to run SSAC at every voltage.",
+        "Pass an explicit array (a subset of the DC sweep) to select specific bias points. "
+        "This bias-point selection is only supported by the GPU accelerated charge solver; "
+        "with the CPU charge solver, leave this as ``None``.",
         json_schema_extra={"units": VOLT},
     )
 

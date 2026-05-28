@@ -17,7 +17,7 @@ from tidy3d.components.tcad.types import (
     MasettiMobility,
     SlotboomBandGapNarrowing,
 )
-from tidy3d.exceptions import DataError, SetupError
+from tidy3d.exceptions import DataError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
@@ -1686,7 +1686,7 @@ def test_ssac_accepts_fermi_dirac():
     assert (
         base_sim.updated_copy(use_accelerated_solver=True)._resolve_use_accelerated_solver is True
     )
-    # GPU auto (None) - resolves to True (SSAC+FD is supported).
+    # GPU by default - resolves to True (SSAC+FD is supported).
     assert base_sim._resolve_use_accelerated_solver is True
     # CPU requested explicitly - also allowed.
     assert (
@@ -1708,6 +1708,84 @@ def test_ssac_accepts_fermi_dirac():
         use_accelerated_solver=True,
     )
     assert dc_sim._resolve_use_accelerated_solver is True
+
+
+def test_non_charge_sim_always_accelerated(heat_simulation, conduction_simulation):
+    """``use_accelerated_solver`` only applies to charge sims: heat and conduction
+    always run on the accelerated solver, so the resolver returns ``False`` (no
+    GPU charge prism mesh) and an explicit ``False`` is rejected.
+    """
+    for sim in (heat_simulation, conduction_simulation):
+        assert sim._resolve_use_accelerated_solver is False
+        with pytest.raises(ValidationError) as excinfo:
+            _ = sim.updated_copy(use_accelerated_solver=False)
+        assert_single_value_error_loc(
+            excinfo, ("use_accelerated_solver",), "only valid for charge simulations"
+        )
+
+
+def test_ssac_bias_selection_requires_accelerated_solver():
+    """SSAC ``at_voltages`` bias-point selection is available only on the accelerated solver.
+
+    The CPU charge solver always runs the AC response at every swept bias point, so any
+    explicit ``at_voltages`` (subset or full sweep) is accelerated-only and
+    ``use_accelerated_solver=False`` is rejected at construction.
+    """
+    metal_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    structures = [
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)), medium=metal_medium, name="cathode"
+        ),
+        td.Structure(
+            geometry=td.Box(center=(1, 1, 1), size=(2, 2, 2)),
+            medium=CHARGE_SIMULATION.intrinsic_Si,
+            name="silicon",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(2, 2, 2), size=(2, 2, 2)), medium=metal_medium, name="anode"
+        ),
+    ]
+    sim = td.HeatChargeSimulation(
+        size=(8, 8, 8),
+        center=(0, 0, 0),
+        structures=structures,
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+                condition=td.VoltageBC(
+                    source=td.SSACVoltageSource(voltage=[0, 1, 2], amplitude=1e-3)
+                ),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage", unstructured=True
+            )
+        ],
+        analysis_spec=td.IsothermalSSACAnalysis(
+            temperature=300, freqs=[1e3, 1e4], at_voltages=[0, 2]
+        ),
+    )
+
+    # With at_voltages set, the default still resolves to the accelerated solver.
+    assert sim._resolve_use_accelerated_solver is True
+
+    # The CPU solver cannot honor any explicit selection (subset or full sweep), so
+    # use_accelerated_solver=False is rejected at construction.
+    for at_voltages in ([0, 2], [0, 1, 2]):
+        spec = sim.analysis_spec.updated_copy(at_voltages=at_voltages)
+        with pytest.raises(ValidationError) as excinfo:
+            _ = sim.updated_copy(analysis_spec=spec, use_accelerated_solver=False)
+        assert_single_value_error_loc(excinfo, ("use_accelerated_solver",), "at_voltages")
 
 
 def test_masetti_requires_accelerated_solver():
@@ -1776,8 +1854,9 @@ def test_masetti_requires_accelerated_solver():
     )
 
     assert sim._resolve_use_accelerated_solver is True
-    with pytest.raises(SetupError, match="MasettiMobility"):
-        _ = sim.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim.updated_copy(use_accelerated_solver=False)
+    assert_single_value_error_loc(excinfo, ("use_accelerated_solver",), "MasettiMobility")
 
     with pytest.raises(ValidationError, match="high-doping asymptote"):
         _ = sim.updated_copy(analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=500))

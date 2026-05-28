@@ -419,16 +419,15 @@ class HeatChargeSimulation(AbstractSimulation):
         "specify Charge simulations or transient Heat simulations.",
     )
 
-    use_accelerated_solver: bool | None = Field(
-        None,
+    use_accelerated_solver: bool = Field(
+        True,
         title="Use accelerated solver.",
-        description="Controls whether the accelerated charge solver is used. "
-        "When ``None`` (default), the solver is selected automatically: the accelerated "
-        "solver is used for any steady-state charge simulation (DC and SSAC, "
-        "isothermal or non-isothermal, Boltzmann or Fermi-Dirac, with or without "
-        "Selberherr impact ionization).  Set to ``True`` to force the accelerated "
-        "solver or ``False`` to force the legacy CPU-only solver.  Some models, "
-        "such as ``MasettiMobility``, are only available with the accelerated solver.",
+        description="Controls the solver used for charge simulations. When ``True`` "
+        "(default), the GPU accelerated charge solver is used. Set to ``False`` "
+        "to use the CPU charge solver instead; this is rejected when the simulation uses "
+        "a feature available only on the GPU accelerated solver, such as ``MasettiMobility``. "
+        "The flag applies only to charge simulations: heat and conduction simulations "
+        "always run on the GPU accelerated solver, so ``False`` is not allowed for them.",
     )
 
     @field_validator("structures")
@@ -569,6 +568,9 @@ class HeatChargeSimulation(AbstractSimulation):
             )
             self._check_transient_heat_time_warning()
         self._call_with_validation_loc(("structures",), self._check_non_isothermal_is_possible)
+        self._call_with_validation_loc(
+            ("use_accelerated_solver",), self._check_use_accelerated_solver
+        )
         return self
 
     def _monitors_cross_solids(self) -> Self:
@@ -2126,30 +2128,40 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return simulation_types
 
-    @property
-    def _is_accelerated_solver_supported(self) -> tuple[bool, str]:
-        """Whether the accelerated solver supports this simulation configuration.
+    def _accelerated_only_features(self) -> list[str]:
+        """Configured features that only the accelerated charge solver supports.
 
-        Returns a ``(supported, reason)`` pair.  *reason* is only meaningful
-        when *supported* is ``False`` and describes the unsupported feature.
+        These cannot run on the CPU charge solver, so requesting
+        ``use_accelerated_solver=False`` while any of them is present is an error.
+        Returns the human-readable feature names; an empty list means the
+        configuration is fully supported by the CPU charge solver.
         """
-        if not isinstance(self.analysis_spec, SteadyChargeDCAnalysis):
-            return (
-                False,
-                "requires a 'SteadyChargeDCAnalysis' analysis spec (or a derivative)",
-            )
-        return True, ""
-
-    def _uses_gpu_only_mobility_model(self) -> bool:
-        """Whether the simulation uses a charge model unavailable in the CPU charge solver."""
+        features = []
         for structure in self.structures:
             charge = getattr(structure.medium, "charge", None)
             if isinstance(charge, SemiconductorMedium) and (
                 isinstance(charge.mobility_n, MasettiMobility)
                 or isinstance(charge.mobility_p, MasettiMobility)
             ):
-                return True
-        return False
+                features.append("MasettiMobility")
+                break
+
+        if self._ssac_uses_bias_point_selection():
+            features.append("SSAC 'at_voltages' bias-point selection")
+
+        return features
+
+    def _ssac_uses_bias_point_selection(self) -> bool:
+        """Whether SSAC selects specific bias points via ``at_voltages``.
+
+        The CPU charge solver always evaluates the AC response at every swept bias
+        point and cannot honor an explicit selection, so any ``at_voltages`` is only
+        available on the accelerated solver.
+        """
+        return (
+            isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis))
+            and self.analysis_spec.at_voltages is not None
+        )
 
     def _check_masetti_mobility_models(self) -> Self:
         """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0."""
@@ -2188,36 +2200,53 @@ class HeatChargeSimulation(AbstractSimulation):
                     )
         return self
 
+    def _check_use_accelerated_solver(self) -> Self:
+        """Validate ``use_accelerated_solver`` for the simulation type and features.
+
+        Resolving the flag raises a ``SetupError`` for invalid combinations
+        (``use_accelerated_solver=False`` on a non-charge simulation, or on a charge
+        simulation that uses an accelerated-only feature). Triggering it here surfaces
+        the error at construction, anchored to the field by ``_call_with_validation_loc``.
+        """
+        _ = self._resolve_use_accelerated_solver
+        return self
+
     @property
     def _resolve_use_accelerated_solver(self) -> bool:
         """Resolved value of :attr:`use_accelerated_solver`.
 
-        When the field is ``None`` (auto), returns ``True`` when the simulation
-        is supported by the accelerated solver.  An explicit ``True`` raises if
-        the simulation is not supported.  Accelerated-only models also raise when auto
-        mode cannot resolve to the accelerated solver.
+        The accelerated solver is the default for every simulation. The
+        ``use_accelerated_solver`` flag only applies to charge simulations:
+
+        * Charge simulations use the accelerated solver unless
+          ``use_accelerated_solver=False`` selects the CPU charge solver. That
+          request raises when the configuration uses a feature only the
+          accelerated solver supports (e.g. ``MasettiMobility``).
+        * Heat and conduction simulations always run on the accelerated solver, so
+          ``use_accelerated_solver=False`` is rejected for them. The accelerated
+          *charge* mesh/solver path does not apply, so this resolves to ``False``
+          (no charge prism mesh is generated).
         """
-        supported, reason = self._is_accelerated_solver_supported
-        uses_gpu_only_mobility = self._uses_gpu_only_mobility_model()
-        if self.use_accelerated_solver is True and not supported:
-            raise SetupError(
-                "'use_accelerated_solver=True' was requested but the current simulation "
-                f"is not supported by the accelerated solver: {reason}"
-            )
-        if self.use_accelerated_solver is False and uses_gpu_only_mobility:
-            raise SetupError(
-                "MasettiMobility is supported only by the accelerated charge solver. "
-                "Use 'use_accelerated_solver=True' or leave it as None."
-            )
-        if self.use_accelerated_solver is None and uses_gpu_only_mobility and not supported:
-            raise SetupError(
-                "MasettiMobility is supported only by the accelerated charge solver, "
-                "but this simulation is not supported by that solver: "
-                f"{reason}"
-            )
-        if self.use_accelerated_solver is not None:
-            return self.use_accelerated_solver
-        return supported
+        is_charge = isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
+
+        if not is_charge:
+            if not self.use_accelerated_solver:
+                raise SetupError(
+                    "'use_accelerated_solver=False' is only valid for charge simulations; "
+                    "heat and conduction simulations always run on the GPU accelerated solver."
+                )
+            return False
+
+        if not self.use_accelerated_solver:
+            accelerated_only = self._accelerated_only_features()
+            if accelerated_only:
+                raise SetupError(
+                    f"{', '.join(accelerated_only)} is supported only by the GPU accelerated "
+                    "charge solver. Use 'use_accelerated_solver=True' (the default)."
+                )
+            return False
+
+        return True
 
     def _useHeatSourceFromConductionSim(self) -> bool:
         """Returns True if 'HeatFromElectricSource' has been defined."""
