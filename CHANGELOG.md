@@ -9,6 +9,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.12.0.dev0] - 2026-05-29
+
+### Added
+
+- Added `CornerFinderSpec.corner_rounding_collapse_extent` so `LayerRefinementSpec` can recover sharp corners that pass the legacy angle threshold from small rounded or chamfered imported geometry.
+- Added `ImpedanceSpec` to support complex-valued `LumpedPort` impedance. The `impedance` field now accepts either a plain real number (e.g. ``50``) or an `ImpedanceSpec(impedance=..., frequency=...)` for complex-valued loads. A complex impedance ``Z = R + jX`` is mapped to a series RL or RC load at the given measurement frequency, enabling reactive terminations in S-parameter simulations. Purely reactive loads (``Re(Z) = 0``) are not supported; ``Re(Z)`` must be strictly positive to ensure a stable FDTD pole.
+- Added a dedicated PyTorch wrapper plugin documentation page under ``api/plugins/pytorch``.
+- Added autograd support for `ClipOperation` geometry derivatives, including union, difference, intersection, and symmetric_difference.
+- Added the `tidy3d mcp` command for running the Tidy3D MCP server from the active Tidy3D environment.
+- Added `Palik_NoLoss` material-fitter refits for the low-loss Palik ranges of GaAs, Ge, SiO2, and cSi, and `Palik_LowLoss` variants for the previous Palik fits of GaAs, Ge, InP, SiO2, and cSi.
+- Added per-interface physical residual diagnostics for EME: incident-normalized squared tangential E/H field residuals, corresponding non-PML-aperture residuals, and the flux-weighted power conservation defect, stored on ``EMESimulationData.diagnostics`` when ``EMESimulation.eme_diagnostics=True``.
+- Added a `progress` keyword (default `True`) to `EMESimulation.compute_overlaps`, `EMESimulation.propagate_from_overlaps`, and `EMESimulation.propagate` that shows a per-phase `rich` progress bar on the logging console; pass `progress=False` to silence it.
+- Accelerated charge solver support for the Masetti mobility model.
+- `DeviceCharacteristics.dc_convergence` (new `SteadyConvergenceData`) flags per-bias Newton convergence and exposes the per-iteration residual trace, so callers can mask the I-V/C-V curves by the converged biases and inspect at which iteration each bias crossed the tolerance.
+- Added support for explicit payment type, priority, and vGPU allocation settings when submitting component modeler batch tasks.
+
+### Changed
+
+- `WavePort` and `TerminalWavePort` mesh refinement now interprets `num_grid_cells` as the cell count along the *largest* transverse dimension (the smaller dimension is aspect-ratio-scaled), with the default raised from 5 to 12. Two grid-snapping points are also emitted at opposite corners of the port plane.
+- Changed the default autograd `minimum_spacing_fraction` from 0.01 to 0.001; set it back to 0.01 in your config to keep previous spacing behavior.
+- `UniformUnstructuredGrid.min_edges_per_circumference` and `min_edges_per_side` now accept `0`, which skips the corresponding local mesh-size contribution. A deprecation warning is emitted when either field is left at its default: the default will change to `0` in the next release. Set the fields explicitly to preserve the current behavior.
+- Changed grid validation to raise a units error when `UniformGrid.dl` or generated `AutoGrid` / `QuasiUniformGrid` cell sizes are below 1e-6 um.
+- Improved memory usage and runtime for autograd local far-field projections in the 3D paired approximate path used by Cartesian and k-space monitors with ``far_field_approx=True``.
+- Reduced peak memory usage when differentiating exact local field projections (`far_field_approx=False`).
+- Increased default `ChargeToleranceSpec.max_iters` from `30` to `120`; set it explicitly to keep the previous behavior.
+- `HeatChargeSimulation.use_accelerated_solver=False` (selecting the CPU charge solver) is now validated at construction and raises a `ValidationError` on `use_accelerated_solver` for configurations the CPU solver cannot run: heat and conduction simulations (which always run on the GPU accelerated solver) and charge simulations using GPU-accelerated-only features such as `MasettiMobility` or SSAC `at_voltages` bias-point selection. The flag now defaults to `True` (was `Optional` defaulting to `None`) and continues to use the GPU accelerated charge solver.
+
+### Fixed
+
+- Suppressed the `Simulation` structure-at-boundary warning for structures touching `Periodic` or `BlochBoundary` edges, while keeping the warning for other boundary types unless structure extrusion is enabled.
+- Improved auto-generated API documentation for classes with computed default values (e.g. ``NedeljkovicSorefMashanovich``), eliminating malformed Parameters sections and a long tail of other documentation build issues.
+- Raise a validation error when an automatically added PEC frame (around a mode source with ``PECFrame`` or an internal absorber) overlaps the absorbing-boundary extrusion clipping region on any boundary with ``extrude_structures=True``. To opt out on a side that legitimately needs the source / absorber to reach the boundary (e.g. a wave-port source that spans the lateral domain via symmetry), pass ``extrude_structures=False`` to the boundary — either through ``Boundary.pml`` / ``Boundary.stable_pml`` / ``Boundary.absorber`` (now exposed there) or by constructing ``Boundary(plus=td.PML(extrude_structures=False), minus=td.PML(extrude_structures=False))`` explicitly.
+- `TerminalComponentModeler.ports` and `ModalComponentModeler.ports` now use a discriminated union on the `type` field, so validation errors for a port dict are attributed to the correct port class instead of being scattered across every union branch.
+- Fixed `PolySlabSet` to preserve its internal ring order across `safe_update()` and other vertex-space updates while still exporting area-sorted structures.
+- Fixed mode solver picking the wrong sqrt root for lossless evanescent modes; direction is now resolved from time-averaged power flow with a passivity fallback.
+- Fixed device characteristic DataArrays to expose value units and voltage coordinate units when simulation data is loaded.
+- Fixed `EMESimulation.plot_3d()` to clip infinite structures to the simulation bounds.
+- EME interface matching now uses the full solved modal basis as test rows, except modes with numerically unusable self-overlap, so high mode counts no longer slowly degrade S-matrix accuracy. Only the propagation trial basis is capped by ``EMEModeSweep.num_modes`` or ``EMEModeSpec.sort_spec.keep_modes``; modes flagged increasing (``Im(n_eff) < -EMEModeSpec.increasing_mode_tolerance``) remain available as test rows. The default increasing-mode tolerance now ignores roundoff-level negative imaginary effective indices in lossless cases. The per-cell ``EMEModeSpec.num_modes`` cap is raised from 100 to 1000 for convergence studies; practical mode counts remain limited by interface memory and dense interface/stacking runtime.
+- Fixed edge singularity correction for geometry groups and difference boolean operations in conformal meshing.
+- Fixed RF/modeler diverged runs to report a clear task status error instead of trying to download missing aggregate data.
+
+### Removed
+
+- Removed deprecated `Scene.plot_heat_conductivity()`, `Scene.plot_structures_heat_conductivity()`, and `Scene.heat_conductivity_bounds()`; use `plot_heat_charge_property(property="heat_conductivity")`, `plot_structures_heat_charge_property(property="heat_conductivity")`, and `heat_charge_property_bounds(property="heat_conductivity")`.
+- Removed deprecated `AbstractSimulation.plot_structures_heat_conductivity()` and `HeatChargeSimulation.plot_heat_conductivity()`; use `scene.plot_structures_heat_charge_property(property="heat_conductivity")` and `plot_property(property="heat_conductivity")`.
+- Removed the deprecated legacy config API and legacy config migration paths.
+- Removed `TopologyDesignRegion.params_uniform()`, `params_random`, `params_zeros`, `params_half`, `params_ones`, `AbstractOptimizer.initialize_result(params0)`, and `AbstractOptimizer.run(..., params0=...)`. For direct parameter arrays, replace the `TopologyDesignRegion.params_*` helpers with NumPy arrays using `region.params_shape`, such as `np.full(region.params_shape, value)`, `np.random.random(region.params_shape)`, `np.zeros(region.params_shape)`, `0.5 * np.ones(region.params_shape)`, or `np.ones(region.params_shape)`. For optimizer starting parameters previously passed as `params0`, configure the design region before constructing or updating the enclosing design and optimizer; use `CustomInitializationSpec(params=params0)` to preserve an existing array, or `RandomInitializationSpec(seed=...)` for reproducible random starts.
+- Removed deprecated `SimulationData.plot_field(field_name="int")`, `SimulationData.plot_field(..., freq=...)`, and `SimulationData.plot_field(..., time=...)`; use `field_name="E", val="abs^2"`, `plot_field(..., f=...)`, and `plot_field(..., t=...)`.
+- Removed deprecated `to_field_monitors()` method on terminal-based scattering-matrix ports (e.g. `LumpedPort`, `WavePort`); use `to_monitors()` instead.
+
+### Planned Deprecation
+
+- `Palik_Lossless` is deprecated as a material-library variant name; material-library lookup now warns and returns `Palik_LowLoss`, while `Palik_NoLoss` provides zero-loss Palik fits where supported by low-loss source ranges.
+
 ## [2.11.2] - 2026-05-03
 
 ### Added
@@ -2124,6 +2178,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.12.0.dev0]: https://github.com/flexcompute/tidy3d/compare/v2.11.2...v2.12.0.dev0
 [2.11.2]: https://github.com/flexcompute/tidy3d/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...v2.11.0
