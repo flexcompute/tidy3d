@@ -478,15 +478,20 @@
         "attrs": {},
         "tolerance_settings": {
             "attrs": {},
-            "abs_tol": 1000000.0,
-            "rel_tol": 0.0001,
+            "abs_tol": 10000000000.0,
+            "rel_tol": 1e-10,
             "max_iters": 400,
             "ramp_up_iters": 1,
+            "max_pseudo_steps": 60,
+            "cfl_number": 1000000000.0,
+            "cfl_min": null,
+            "preconditioner_iterations": 50,
             "type": "ChargeToleranceSpec"
         },
         "convergence_dv": 0.1,
         "fermi_dirac": false,
         "type": "IsothermalSteadyChargeDCAnalysis",
         "temperature": 300.0
-    }
+    },
+    "use_accelerated_solver": true
 }

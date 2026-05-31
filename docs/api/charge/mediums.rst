@@ -3,6 +3,11 @@
 Charge Mediums
 -------------------------------
 
+The electrical behaviour assigned to a structure's ``medium.charge``. Conductors
+and insulators set contacts and dielectric regions; the semiconductor medium
+carries the doping, mobility, recombination and band models that the
+drift-diffusion solver uses.
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
@@ -14,16 +19,25 @@ Charge Mediums
 Mobility
 ^^^^^^^^^^^^^^
 
+Carrier mobility models assigned to ``SemiconductorMedium.mobility_n`` and
+``mobility_p``.
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
 
    ConstantMobilityModel
    CaugheyThomasMobility
+   MasettiMobility
 
+.. note::
+   ``MasettiMobility`` is supported only on the accelerated solver.
 
 Generation Recombination
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Carrier generation and recombination models contributing to the
+drift-diffusion source terms.
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -41,6 +55,8 @@ Generation Recombination
 Doping
 ^^^^^^
 
+Spatial dopant distributions applied to a semiconductor medium.
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
@@ -51,7 +67,9 @@ Doping
 
 
 Bandgap
-^^^^^^^^
+^^^^^^^
+
+Bandgap-narrowing models for heavily doped semiconductors.
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -61,7 +79,9 @@ Bandgap
 
 
 Effective Density Of States (DOS)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Effective density-of-states models for the conduction and valence bands.
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -75,6 +95,8 @@ Effective Density Of States (DOS)
 Energy Bandgap
 ^^^^^^^^^^^^^^
 
+Temperature dependence of the semiconductor energy bandgap.
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
@@ -84,6 +106,9 @@ Energy Bandgap
 
 Charge Carrier Properties
 ------------------------------------
+
+Models describing how the optical properties of a medium change with the local
+carrier concentration.
 
 .. autosummary::
    :toctree: ../_autosummary/

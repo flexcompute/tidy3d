@@ -18,13 +18,15 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     Example
     -------
     >>> import tidy3d as td
-    >>> charge_settings = td.ChargeToleranceSpec(abs_tol=1e8, rel_tol=1e-10, max_iters=30)
+    >>> charge_settings = td.ChargeToleranceSpec()
     """
 
     abs_tol: PositiveFloat = Field(
         default=1e10,
         title="Absolute tolerance.",
-        description="Absolute tolerance used as stop criteria when converging towards a solution.",
+        description="Absolute tolerance used as stop criteria when converging towards a solution. "
+        "This is honored by the legacy solver only; on the accelerated (default) solver, "
+        "``rel_tol`` is the effective convergence criterion.",
     )
 
     rel_tol: PositiveFloat = Field(

@@ -343,7 +343,7 @@ class HeatChargeSimulation(AbstractSimulation):
     ...     ),
     ...     boundary_spec=[bc_v1, bc_v2],
     ...     analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
-    ...         tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=3e3, max_iters=400),
+    ...         tolerance_settings=td.ChargeToleranceSpec(),
     ...         convergence_dv=10),
     ...     )
 

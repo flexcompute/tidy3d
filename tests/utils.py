@@ -1126,8 +1126,7 @@ FULL_CHARGE = td.HeatChargeSimulation(
         convergence_dv=0.1,
         fermi_dirac=False,
         tolerance_settings=td.ChargeToleranceSpec(
-            rel_tol=1e-4,
-            abs_tol=1e6,
+            rel_tol=1e-10,
             max_iters=400,
         ),
     ),

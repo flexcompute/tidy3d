@@ -956,7 +956,7 @@ def test_freqs_validation():
         center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage", unstructured=False
     )
 
-    charge_tolerance = td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
+    charge_tolerance = td.ChargeToleranceSpec()
     freqs_input = [1e3, 1e4, 1e5]
     isothermal_spec = td.IsothermalSSACAnalysis(
         temperature=300,
@@ -2030,7 +2030,7 @@ class TestCharge:
     # Define charge settings as fixtures within the class
     @pytest.fixture(scope="class")
     def charge_tolerance(self):
-        return td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
+        return td.ChargeToleranceSpec()
 
     def test_charge_simulation(
         self,
