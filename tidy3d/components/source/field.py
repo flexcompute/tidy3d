@@ -158,7 +158,10 @@ class BroadbandSource(Source, ABC):
         "field. For 'chebyshev', a Chebyshev interpolation is used with 'num_freqs' terms "
         "(max 20). For 'pole_residue', the mode solver samples at 'num_freqs' uniform "
         "frequencies and fits ceil((num_freqs - 1) / 3) poles; higher values provide denser "
-        "sampling and more poles for the fit (max 50).",
+        "sampling and more poles for the fit (max 50). "
+        "On ``TFSF`` sources this field is only honored for the constant-in-plane-k "
+        "angular spec (``FixedInPlaneKSpec``); the fixed-angle path (``FixedAngleSpec``) "
+        "derives its own frequency grid from ``run_time`` and the source pulse offset.",
         ge=1,
         le=50,
     )
@@ -721,7 +724,22 @@ class FixedInPlaneKSpec(AbstractAngularSpec):
 
 class FixedAngleSpec(AbstractAngularSpec):
     """Plane wave is injected such that its propagation direction is frequency independent.
-    When using this option boundary conditions in tangential directions must be set to periodic.
+
+    Notes
+    -----
+
+        This spec has *different* physical implementations depending on the source type:
+
+        - On a :class:`PlaneWave`, ``Periodic`` boundary conditions must be used
+          in the transverse directions. Suited to infinite plane-wave illumination
+          of a periodic structure where the user wants the angle held fixed across
+          the source spectrum.
+
+        - On a :class:`TFSF`, the spec injects a frequency-independent oblique
+          plane-wave incidence into an isolated scatterer; ``BlochBoundary`` and
+          ``Periodic`` transverse boundaries are not allowed. Combining a
+          fixed-angle :class:`PlaneWave` and a fixed-angle :class:`TFSF` in the
+          same simulation is also not allowed.
     """
 
 
@@ -777,8 +795,11 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     )
 
     @cached_property
-    def _is_fixed_angle(self) -> bool:
-        """Whether the plane wave is at a fixed non-zero angle."""
+    def _is_periodic_fixed_angle(self) -> bool:
+        """Whether this is a periodic fixed-angle source — i.e. a
+        :class:`PlaneWave` with :class:`FixedAngleSpec` and non-zero
+        ``angle_theta``. At ``angle_theta=0`` it is equivalent to a
+        regular plane wave."""
         return isinstance(self.angular_spec, FixedAngleSpec) and self.angle_theta != 0.0
 
     @cached_property
@@ -787,7 +808,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         if self.num_freqs == 1:
             return np.array([self.source_time._freq0])
         freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
-        if not self._is_fixed_angle:
+        if not self._is_periodic_fixed_angle:
             # For frequency-dependent angles (constat in-plane k), truncate minimum frequency at
             # the critical frequency of glancing incidence
             f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
@@ -798,7 +819,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     def _validate_source_frequency_range(self) -> Self:
         """Error if a broadband plane wave with constant in-plane k is defined such that
         the source frequency range is entirely below ``f_crit * CRITICAL_FREQUENCY_FACTOR."""
-        if self._is_fixed_angle or self.num_freqs == 1:
+        if self._is_periodic_fixed_angle or self.num_freqs == 1:
             return self
         _freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
         f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
@@ -1427,6 +1448,21 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         TFSF setup is detected. In some cases, however, the accuracy may be only weakly affected, and the warnings
         can be ignored.
 
+        For best cancellation, the grid should also be uniform *across* the TFSF box faces — not only
+        inside the box. A common pitfall is to use a :class:`MeshOverrideStructure` whose boundary
+        coincides with the TFSF box, which places a grid-resolution transition exactly at the source
+        plane (and, for angled incidence, at the side faces, which also inject the wave). This can
+        introduce a smooth frequency-dependent amplitude error in the cancellation, larger at shorter
+        wavelengths. To avoid it, extend the override box (or any other source of grid non-uniformity)
+        a few cells beyond the TFSF box in all directions; for oblique incidence the recommendation
+        applies to all three axes, since the side faces also contribute to the injection.
+
+        For oblique incidence, two angular specifications are available, mirroring :class:`PlaneWave`:
+        :class:`FixedInPlaneKSpec` (default; in-plane wavevector held fixed across the source bandwidth,
+        propagation direction is frequency-dependent and Bloch boundaries are required tangentially) and
+        :class:`FixedAngleSpec` (propagation direction held fixed across the source bandwidth; the TFSF
+        case forbids ``BlochBoundary`` and ``Periodic`` transverse boundaries).
+
     See Also
     --------
 
@@ -1434,6 +1470,14 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
         * `Nanoparticle Scattering <../../notebooks/PlasmonicNanoparticle.html>`_: To force a uniform grid in the TFSF region and avoid the warnings, a mesh override structure can be used as illustrated here.
     """
+
+    angular_spec: FixedInPlaneKSpec | FixedAngleSpec = Field(
+        default_factory=FixedInPlaneKSpec,
+        title="Angular Dependence Specification",
+        description="Specification of the TFSF plane-wave propagation-direction dependence on "
+        "wavelength.",
+        discriminator=TYPE_TAG_STR,
+    )
 
     num_freqs: int = Field(
         1,
@@ -1450,6 +1494,13 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         title="Broadband Method",
         description="TFSF only supports the Chebyshev broadband method.",
     )
+
+    @cached_property
+    def _is_periodic_fixed_angle(self) -> bool:
+        """TFSF is not a periodic fixed-angle source — the predicate
+        gates the periodic fixed-angle path (used only by a fixed-angle
+        :class:`PlaneWave`)."""
+        return False
 
     injection_axis: Axis = Field(
         title="Injection Axis",

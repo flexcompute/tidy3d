@@ -1983,7 +1983,7 @@ def test_diffraction_monitor_fixed_angle_source_setup():
         ),
     )
 
-    assert sim._is_fixed_angle
+    assert sim._is_periodic_fixed_angle
 
 
 def test_diffraction_monitor_fixed_angle_no_spurious_warning():
@@ -2478,7 +2478,7 @@ def test_tfsf_boundaries():
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.periodic(),
             y=td.Boundary.periodic(),
-            z=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
         ),
         run_time=1e-12,
         sources=(source,),
@@ -4276,7 +4276,7 @@ def test_fixed_angle_sim():
         run_time=10 / fwidth,
     )
 
-    assert sim._is_fixed_angle
+    assert sim._is_periodic_fixed_angle
 
     with pytest.raises(ValidationError):
         _ = sim.updated_copy(

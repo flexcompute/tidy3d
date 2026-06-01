@@ -813,7 +813,7 @@ def test_fixed_angle_source():
         angular_spec=td.FixedInPlaneKSpec(),
     )
 
-    assert not plane_wave._is_fixed_angle
+    assert not plane_wave._is_periodic_fixed_angle
 
     plane_wave = td.PlaneWave(
         size=(0, td.inf, td.inf),
@@ -825,7 +825,7 @@ def test_fixed_angle_source():
         angular_spec=td.FixedAngleSpec(),
     )
 
-    assert plane_wave._is_fixed_angle
+    assert plane_wave._is_periodic_fixed_angle
 
     plane_wave = td.PlaneWave(
         size=(0, td.inf, td.inf),
@@ -837,7 +837,536 @@ def test_fixed_angle_source():
         angular_spec=td.FixedAngleSpec(),
     )
 
-    assert not plane_wave._is_fixed_angle
+    assert not plane_wave._is_periodic_fixed_angle
+
+
+def test_fixed_angle_tfsf_source():
+    """TFSF accepts ``angular_spec`` like PlaneWave. ``_is_periodic_fixed_angle``
+    is always False on TFSF — the predicate is only true for a fixed-angle
+    :class:`PlaneWave` with non-zero theta."""
+    g = td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0)
+
+    tfsf = td.TFSF(
+        size=(1, 1, 1),
+        direction="+",
+        injection_axis=2,
+        angle_theta=np.pi / 6,
+        angle_phi=np.pi / 4,
+        pol_angle=np.pi / 5,
+        source_time=g,
+        angular_spec=td.FixedInPlaneKSpec(),
+    )
+    assert not tfsf._is_periodic_fixed_angle
+    assert isinstance(tfsf.angular_spec, td.FixedInPlaneKSpec)
+
+    tfsf_fixed_angle = tfsf.updated_copy(angular_spec=td.FixedAngleSpec())
+    assert not tfsf_fixed_angle._is_periodic_fixed_angle
+    assert isinstance(tfsf_fixed_angle.angular_spec, td.FixedAngleSpec)
+
+
+def test_fixed_angle_tfsf_requires_absorbing_transverse():
+    """A fixed-angle TFSF must use absorbing (PML/StablePML/Absorber/ABC)
+    transverse boundaries, not Bloch or Periodic — fixed-angle TFSF
+    models an isolated scatterer, so periodic/Bloch transverse BCs are
+    physically inconsistent with the assumed background."""
+    g = td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0)
+    tfsf = td.TFSF(
+        size=(1, 1, 1),
+        direction="+",
+        injection_axis=2,
+        angle_theta=np.pi / 6,
+        source_time=g,
+        angular_spec=td.FixedAngleSpec(),
+    )
+
+    # Bloch on tangential axes is rejected.
+    with pytest.raises(ValidationError, match="Fixed-angle TFSF"):
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.bloch_from_source(source=tfsf, domain_size=2, axis=0),
+                y=td.Boundary.bloch_from_source(source=tfsf, domain_size=2, axis=1),
+                z=td.Boundary.pml(),
+            ),
+        )
+
+    # Periodic on tangential axes is also rejected.
+    with pytest.raises(ValidationError, match="Fixed-angle TFSF"):
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.pml(),
+            ),
+        )
+
+    # PML on tangential axes is allowed.
+    _ = td.Simulation(
+        size=(2, 2, 2),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[tfsf],
+        normalize_index=None,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        ),
+    )
+
+
+def test_fixed_angle_tfsf_rejects_glancing_angle_theta():
+    """Fixed-angle TFSF rejects ``angle_theta`` close to ±π/2 (where the
+    ``1/sqrt(cos θ)`` source-amplitude normalization is singular)."""
+    g = td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0)
+
+    def _sim(angle_theta: float) -> td.Simulation:
+        tfsf = td.TFSF(
+            size=(1, 1, 1),
+            direction="+",
+            injection_axis=2,
+            angle_theta=angle_theta,
+            source_time=g,
+            angular_spec=td.FixedAngleSpec(),
+        )
+        return td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(), y=td.Boundary.pml(), z=td.Boundary.pml()
+            ),
+        )
+
+    # Glancing positive theta is rejected.
+    with pytest.raises(ValidationError, match="glancing"):
+        _ = _sim(np.pi / 2)
+    with pytest.raises(ValidationError, match="glancing"):
+        _ = _sim(np.pi / 2 - 0.05)  # inside the GLANCING_CUTOFF
+    # Glancing negative theta is rejected (symmetric).
+    with pytest.raises(ValidationError, match="glancing"):
+        _ = _sim(-np.pi / 2 + 0.05)
+    # Sufficiently below glancing is allowed (covers both signs).
+    _ = _sim(np.pi / 3)
+    _ = _sim(-np.pi / 3)
+    _ = _sim(0.0)
+
+
+def test_tfsf_rejects_periodic_or_bloch_on_injection_axis():
+    """Periodic / Bloch boundaries on a TFSF source's injection axis are
+    physically inconsistent (the wave would re-enter the simulation
+    through the opposite face) — rejected for any TFSF, both fixed-angle
+    and constant-in-plane-k."""
+    g = td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0)
+    for angular_spec in (td.FixedInPlaneKSpec(), td.FixedAngleSpec()):
+        tfsf = td.TFSF(
+            size=(1, 1, 1),
+            direction="+",
+            injection_axis=2,
+            angle_theta=0.0,
+            source_time=g,
+            angular_spec=angular_spec,
+        )
+        # Periodic on injection axis: rejected.
+        with pytest.raises(ValidationError, match="injection axis"):
+            _ = td.Simulation(
+                size=(2, 2, 2),
+                run_time=1e-12,
+                grid_spec=td.GridSpec.uniform(dl=0.1),
+                sources=[tfsf],
+                normalize_index=None,
+                boundary_spec=td.BoundarySpec(
+                    x=td.Boundary.pml(), y=td.Boundary.pml(), z=td.Boundary.periodic()
+                ),
+            )
+        # Bloch on injection axis: also rejected. (`bloch_from_source`
+        # itself errors with "Bloch axis must be orthogonal to injection
+        # axis"; construct the Bloch BC directly to test the validator.)
+        with pytest.raises(ValidationError, match="injection axis"):
+            _ = td.Simulation(
+                size=(2, 2, 2),
+                run_time=1e-12,
+                grid_spec=td.GridSpec.uniform(dl=0.1),
+                sources=[tfsf],
+                normalize_index=None,
+                boundary_spec=td.BoundarySpec(
+                    x=td.Boundary.pml(),
+                    y=td.Boundary.pml(),
+                    z=td.Boundary(
+                        plus=td.BlochBoundary(bloch_vec=0.5),
+                        minus=td.BlochBoundary(bloch_vec=0.5),
+                    ),
+                ),
+            )
+
+
+def test_fixed_angle_tfsf_rejects_fixed_angle_planewave():
+    """A fixed-angle PlaneWave must be the only source in the
+    simulation, so combining it with a fixed-angle TFSF must be
+    rejected. The two sources also have incompatible transverse BC
+    requirements (fixed-angle TFSF wants non-Bloch; fixed-angle
+    PlaneWave wants Bloch matching the angle), so any BC choice trips
+    at least one of the two validators; this test only asserts that
+    rejection happens regardless of which fires first."""
+    g = td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0)
+    tfsf = td.TFSF(
+        size=(1, 1, 1),
+        direction="+",
+        injection_axis=2,
+        angle_theta=np.pi / 6,
+        source_time=g,
+        angular_spec=td.FixedAngleSpec(),
+    )
+    pw = td.PlaneWave(
+        size=(td.inf, td.inf, 0),
+        center=(0, 0, -0.8),
+        direction="+",
+        angle_theta=np.pi / 6,
+        source_time=g,
+        angular_spec=td.FixedAngleSpec(),
+    )
+
+    with pytest.raises(ValidationError):
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[tfsf, pw],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.pml(),
+                z=td.Boundary.pml(),
+            ),
+        )
+
+
+def _make_fixed_angle_tfsf(**kwargs):
+    """Helper: a 1×1×1 fixed-angle TFSF source with default oblique
+    incidence and a default GaussianPulse, overridable via kwargs."""
+    defaults = {
+        "size": (1.0, 1.0, 1.0),
+        "center": (0, 0, 0),
+        "direction": "+",
+        "injection_axis": 2,
+        "angle_theta": np.pi / 6,
+        "angle_phi": 0.0,
+        "pol_angle": np.pi / 2,
+        "source_time": td.GaussianPulse(freq0=2e14, fwidth=0.4e14),
+        "angular_spec": td.FixedAngleSpec(),
+    }
+    defaults.update(kwargs)
+    return td.TFSF(**defaults)
+
+
+def _make_fixed_angle_sim(sources, structures=(), **kwargs):
+    """Helper: a 1.5×1.5×3 simulation with PML on all sides, suitable
+    for a fixed-angle TFSF 1×1×1 box centered at the origin."""
+    defaults = {
+        "size": (1.5, 1.5, 3),
+        "run_time": 1e-12,
+        "grid_spec": td.GridSpec.uniform(dl=0.05),
+        "sources": list(sources),
+        "structures": list(structures),
+        "normalize_index": None,
+        "boundary_spec": td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        ),
+    }
+    defaults.update(kwargs)
+    return td.Simulation(**defaults)
+
+
+def test_fixed_angle_tfsf_requires_two_cells_on_injection_axis():
+    """Fixed-angle TFSF needs at least 2 simulation-domain cells along
+    the injection axis. The validator errors loc-aware at construction
+    time."""
+    # Pick a sim z extent so the injection-axis (z) physical domain
+    # holds exactly 1 cell at dl=0.05 (so the box+source fit within
+    # the resulting 1-cell column).
+    tfsf = _make_fixed_angle_tfsf(size=(1.0, 1.0, 0.04))
+    with pytest.raises(ValidationError, match="at least 2 grid cells"):
+        td.Simulation(
+            size=(1.5, 1.5, 0.05),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.05),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+        )
+
+
+@pytest.mark.parametrize("side", ["-", "+"])
+def test_fixed_angle_tfsf_rejects_non_semi_infinite_injection_axis(side):
+    """Fixed-angle TFSF requires the region between each box face and
+    the simulation edge along the injection axis to be a single medium
+    (semi-infinite space). A slab whose edge lies between the box face
+    and the simulation edge breaks that and is rejected. The
+    constant-in-plane-k ``FixedInPlaneKSpec`` TFSF accepts the same
+    setup."""
+    # Box at z ∈ [-0.5, 0.5]. Slab on the chosen side lies between
+    # the box face and the sim edge: introduces a vacuum→slab
+    # interface in what's supposed to be semi-infinite space.
+    if side == "-":
+        slab_center, slab_extent = -1.0, 0.4  # slab at z ∈ [-1.2, -0.8]
+    else:
+        slab_center, slab_extent = +1.0, 0.4  # slab at z ∈ [+0.8, +1.2]
+    slab = td.Structure(
+        geometry=td.Box(center=(0, 0, slab_center), size=(td.inf, td.inf, slab_extent)),
+        medium=td.Medium(permittivity=4.0),
+    )
+    fixed_tfsf = _make_fixed_angle_tfsf()
+    with pytest.raises(ValidationError, match="semi-infinite"):
+        _make_fixed_angle_sim([fixed_tfsf], structures=[slab])
+    # Legacy spec accepts the same layered setup.
+    legacy_tfsf = _make_fixed_angle_tfsf(angular_spec=td.FixedInPlaneKSpec())
+    sim = _make_fixed_angle_sim([legacy_tfsf], structures=[slab])
+    assert sim is not None
+
+
+def test_fixed_angle_tfsf_accepts_layered_extending_to_pml():
+    """A slab that fills the full sim z extent (``size_z=td.inf``) is
+    one medium from each box face out to the PML — accepted."""
+    slab = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(td.inf, td.inf, td.inf)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    tfsf = _make_fixed_angle_tfsf()
+    sim = _make_fixed_angle_sim([tfsf], structures=[slab])
+    assert sim is not None
+
+
+def test_fixed_angle_tfsf_accepts_2d_periodic_oop():
+    """2D fixed-angle TFSF: a transverse axis with ``sim.size[axis] == 0``
+    is the out-of-plane axis and conventionally uses Periodic. The
+    validator exempts such axes from the absorbing-BC rule because the
+    0-width direction is a projection, not a periodic-structure
+    assumption."""
+    # Tidy3D requires TFSF.size to be volumetric (no 0 components);
+    # the 2D-ness comes from the simulation's `size[1]=0`.
+    tfsf = _make_fixed_angle_tfsf(angle_phi=0.0)
+    sim = td.Simulation(
+        size=(1.5, 0, 3),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        sources=[tfsf],
+        normalize_index=None,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
+    )
+    assert sim is not None
+
+
+def test_fixed_angle_tfsf_2d_rejects_angle_along_oop_axis():
+    """2D fixed-angle TFSF: the wave must have no k-component along the
+    0-size axis. φ=π/4 with y as the 2D axis gives ``sin(θ)·sin(φ)``
+    projected along y — nonzero, so the validator should reject."""
+    tfsf = _make_fixed_angle_tfsf(angle_phi=np.pi / 4)
+    with pytest.raises(ValidationError, match="0-size axis"):
+        td.Simulation(
+            size=(1.5, 0, 3),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.05),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.pml(),
+            ),
+        )
+
+
+def test_fixed_angle_tfsf_2d_accepts_in_plane_angle():
+    """Same 2D setup as the rejection test, but with φ=0 so the
+    k-vector lies entirely in the in-plane (xz) plane — accepted."""
+    tfsf = _make_fixed_angle_tfsf(angle_phi=0.0)
+    sim = td.Simulation(
+        size=(1.5, 0, 3),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        sources=[tfsf],
+        normalize_index=None,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
+    )
+    assert sim is not None
+
+
+@pytest.mark.parametrize(
+    "angle_phi, expect_accepted",
+    [
+        # Regression for the pop_axis-vs-cyclic plane_dirs convention. For
+        # ``injection_axis=1`` they differ — pop_axis gives ``(0, 2)``,
+        # cyclic ``((1+1)%3, (1+2)%3) = (2, 0)``. With ``sim.size[0] = 0``
+        # (2D in x), φ=0 puts the entire transverse k along x — the 0-size
+        # axis — and must be REJECTED. The cyclic convention would mis-map
+        # the φ=0 projection onto z and accept this case.
+        (0.0, False),
+        # φ=π/2 puts the transverse k along z (the volumetric axis), so x
+        # has zero projection and the case is ACCEPTED. Cyclic would
+        # mis-map this projection onto x and reject.
+        (np.pi / 2, True),
+    ],
+)
+def test_fixed_angle_tfsf_2d_axis1_uses_pop_axis_plane_dirs(angle_phi, expect_accepted):
+    """The 2D validator's ``(angle_phi → tan_dir)`` mapping must use
+    ``pop_axis`` to match ``Source._dir_vector``; for ``injection_axis=1``
+    this differs from the cyclic ``((axis+1)%3, (axis+2)%3)`` permutation."""
+    tfsf = _make_fixed_angle_tfsf(
+        injection_axis=1,
+        angle_theta=np.pi / 4,
+        angle_phi=angle_phi,
+    )
+    kwargs = {
+        "size": (0, 1.5, 3),
+        "run_time": 1e-12,
+        "grid_spec": td.GridSpec.uniform(dl=0.05),
+        "sources": [tfsf],
+        "normalize_index": None,
+        "boundary_spec": td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        ),
+    }
+    if expect_accepted:
+        sim = td.Simulation(**kwargs)
+        assert sim is not None
+    else:
+        with pytest.raises(ValidationError, match="0-size axis"):
+            td.Simulation(**kwargs)
+
+
+def test_fixed_angle_tfsf_rejects_continuous_wave():
+    """``ContinuousWave`` has unbounded time support — never decays by
+    ``run_time`` — so the fixed-angle Fourier-series synthesis would
+    alias its steady-state back to t=0. Validator rejects."""
+    cw_source = _make_fixed_angle_tfsf(
+        source_time=td.ContinuousWave(freq0=2e14, fwidth=0.4e14),
+    )
+    with pytest.raises(ValidationError, match="decay"):
+        _make_fixed_angle_sim([cw_source])
+
+
+@pytest.mark.parametrize(
+    "angular_spec",
+    [td.FixedInPlaneKSpec(), td.FixedAngleSpec()],
+)
+def test_tfsf_rejects_anisotropic_source_plane(angular_spec):
+    """Both TFSF angular specs reject ``AnisotropicMedium`` /
+    ``FullyAnisotropicMedium`` on the injection plane. Validator fires
+    at simulation construction."""
+    aniso = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2.0),
+        yy=td.Medium(permittivity=2.5),
+        zz=td.Medium(permittivity=3.0),
+    )
+    aniso_layer = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(td.inf, td.inf, td.inf)),
+        medium=aniso,
+    )
+    tfsf = _make_fixed_angle_tfsf(angular_spec=angular_spec)
+    with pytest.raises(ValidationError, match="anisotropic"):
+        _make_fixed_angle_sim([tfsf], structures=[aniso_layer])
+
+
+def test_fixed_angle_tfsf_rejects_sidewall_surface_bc():
+    """Fixed-angle TFSF rejects ``LossyMetalMedium`` / ``PECMedium`` /
+    ``PMCMedium`` structures that intersect its sidewalls. The
+    constant-in-plane-k ``FixedInPlaneKSpec`` TFSF accepts the same
+    setup. Check fires at ``validate_pre_upload``."""
+    metal = td.LossyMetalMedium(conductivity=10, frequency_range=(1e14, 4e14))
+    layer = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0.2)),
+        medium=metal,
+    )
+    tfsf = _make_fixed_angle_tfsf()
+    sim = _make_fixed_angle_sim([tfsf], structures=[layer])
+    with pytest.raises(ValidationError, match="LossyMetalMedium"):
+        sim.validate_pre_upload()
+    # The constant-in-plane-k spec passes the same sidewall check.
+    legacy_tfsf = _make_fixed_angle_tfsf(angular_spec=td.FixedInPlaneKSpec())
+    legacy_sim = _make_fixed_angle_sim([legacy_tfsf], structures=[layer])
+    legacy_sim._validate_tfsf_structure_intersections()
+
+
+def test_fixed_angle_tfsf_normal_incidence_warns():
+    """θ=0 with ``FixedAngleSpec`` emits a warning suggesting the
+    legacy ``FixedInPlaneKSpec`` (Bloch TFSF) is equivalent and faster."""
+    tfsf = _make_fixed_angle_tfsf(angle_theta=0.0)
+    with AssertLogStr("WARNING", contains_str="angle_theta=0"):
+        sim = _make_fixed_angle_sim([tfsf])
+    assert sim is not None
+
+
+def test_fixed_angle_tfsf_long_run_time_warns():
+    """Long ``run_time`` + wide ``fwidth`` with ``FixedAngleSpec`` emits
+    a warning that the O(run_time²) fixed-angle cost may dominate the
+    FDTD update cost. Threshold is ``run_time·fwidth > 500``."""
+    tfsf = _make_fixed_angle_tfsf()
+    # With fwidth=0.4e14, run_time > ~12.5 ps triggers the threshold.
+    # Pick 100 ps to be well above.
+    with AssertLogStr("WARNING", contains_str="run_time ** 2"):
+        sim = td.Simulation(
+            size=(1.5, 1.5, 3),
+            run_time=1e-10,
+            grid_spec=td.GridSpec.uniform(dl=0.05),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.pml(),
+                z=td.Boundary.pml(),
+            ),
+        )
+    assert sim is not None
+
+
+def test_fixed_angle_tfsf_rejects_nonuniform_transverse_grid():
+    """Non-uniform transverse grid inside the TFSF box is rejected —
+    fixed-angle TFSF requires uniform transverse spacing."""
+    tfsf = _make_fixed_angle_tfsf()
+    fine_x = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.4, td.inf, td.inf)),
+        dl=(0.025, None, None),
+    )
+    with pytest.raises(ValidationError, match="uniform transverse grid"):
+        td.Simulation(
+            size=(1.5, 1.5, 3),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(
+                wavelength=0.5,
+                min_steps_per_wvl=10,
+                override_structures=[fine_x],
+            ),
+            sources=[tfsf],
+            normalize_index=None,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.pml(),
+                z=td.Boundary.pml(),
+            ),
+        )
 
 
 def test_plane_wave_critical_frequency_error_loc():

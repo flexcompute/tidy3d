@@ -25,7 +25,7 @@ from pydantic import (
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.constants import C_0, SECOND, fp_eps, inf
+from tidy3d.constants import C_0, GLANCING_CUTOFF, SECOND, fp_eps, inf
 from tidy3d.exceptions import (
     AdjointError,
     SetupError,
@@ -90,6 +90,7 @@ from .medium import (
     Medium2D,
     MediumType3D,
     PECMedium,
+    PMCMedium,
 )
 from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from .monitor import (
@@ -127,7 +128,7 @@ from .source.field import (
     PlaneWave,
 )
 from .source.frame import PECFrame
-from .source.time import ContinuousWave, CustomSourceTime
+from .source.time import ContinuousWave, CustomSourceTime, Pulse
 from .source.utils import SourceType
 from .structure import Structure
 from .subpixel_spec import SubpixelSpec
@@ -137,6 +138,7 @@ from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
     call_wrapped_validator,
+    is_close_to_glancing_angle,
     named_obj_descr,
     validate_field_projection_monitors_2d,
     validate_mode_objects_symmetry,
@@ -3309,6 +3311,12 @@ class Simulation(AbstractYeeGridSimulation):
         self._bloch_boundaries_diff_mnt()
         self._tfsf_boundaries()
         self._tfsf_with_symmetry()
+        self._warn_fixed_angle_tfsf_normal_incidence()
+        self._validate_fixed_angle_tfsf_angle_theta()
+        self._validate_fixed_angle_tfsf_source_time_type()
+        self._validate_fixed_angle_tfsf_semi_infinite_injection_axis()
+        self._warn_fixed_angle_tfsf_long_run_time()
+        self._validate_fixed_angle_tfsf_source_time_localization()
         self._check_fixed_angle_components()
         self._validate_frequency_mode_abc()
         self._validate_relax_courant_compatibility()
@@ -3584,8 +3592,77 @@ class Simulation(AbstractYeeGridSimulation):
                     src_idx,
                 )
 
+            # Periodic / Bloch boundaries along the injection axis are
+            # physically inconsistent with TFSF — the wave reaches the
+            # boundary and gets re-injected, breaking the assumption
+            # that the SF region is a pure scattered field.
+            inj_boundary = boundaries[norm_dir]
+            bad_inj = [bnd for bnd in inj_boundary if isinstance(bnd, (BlochBoundary, Periodic))]
+            if bad_inj:
+                self._raise_validation_error_at_loc(
+                    f"The TFSF source at index '{src_idx}' cannot use 'BlochBoundary' or "
+                    f"'Periodic' on its injection axis '{['x', 'y', 'z'][norm_dir]}'; got "
+                    f"'{type(bad_inj[0]).__name__}'.",
+                    "sources",
+                    src_idx,
+                )
+
             for tan_dir in tan_dirs:
                 boundary = boundaries[tan_dir]
+
+                # Fixed-angle TFSF forbids ``BlochBoundary`` and ``Periodic``
+                # transverse boundaries (both imply an infinite-extent or
+                # periodic structure, which contradicts the isolated-scatterer
+                # model this path is designed for). The constant-in-plane-k
+                # TFSF (the default ``FixedInPlaneKSpec``) is what to use for
+                # periodic structures. 2D simulations: a transverse axis with
+                # ``sim.size[axis] == 0`` is the out-of-plane axis,
+                # conventionally Periodic and carrying no physical width — it
+                # is exempt from this rule.
+                if isinstance(source.angular_spec, FixedAngleSpec) and self.size[tan_dir] > 0:
+                    bad = [bnd for bnd in boundary if isinstance(bnd, (BlochBoundary, Periodic))]
+                    if bad:
+                        self._raise_validation_error_at_loc(
+                            "Fixed-angle TFSF forbids 'BlochBoundary' and 'Periodic' transverse "
+                            f"boundaries; got '{type(bad[0]).__name__}' on dimension "
+                            f"'{['x', 'y', 'z'][tan_dir]}'. Fixed-angle TFSF models an isolated "
+                            "scatterer — for periodic structures with Bloch boundaries, use "
+                            "'FixedInPlaneKSpec' (angle exact only at the central frequency).",
+                            "sources",
+                            src_idx,
+                        )
+
+                # 2D simulations exempt the 0-size transverse axis from
+                # the absorbing-BC rule (the conventional out-of-plane
+                # ``Periodic`` axis carries no physical width), but the
+                # wave must still have no k-component along that axis —
+                # otherwise the ``Periodic`` BC + 0-size cell is
+                # physically inconsistent. ``BlochBoundary`` on the
+                # 0-width axis is already rejected upstream by
+                # ``_check_zero_dim_domain`` (Bloch's vector definition
+                # is incompatible with zero domain size), so no extra
+                # rejection is needed here.
+                if isinstance(source.angular_spec, FixedAngleSpec) and self.size[tan_dir] == 0:
+                    # ``Source._dir_vector`` is the wave's unit propagation
+                    # vector in lab frame; its ``tan_dir`` component is the
+                    # k-projection that must be ≈ 0 for the ``Periodic`` /
+                    # 0-size axis to be physically consistent. The 1e-12
+                    # tolerance is well below any user-meaningful angle (and
+                    # well above floating-point noise in (θ, φ)).
+                    k_proj = abs(float(source._dir_vector[tan_dir]))
+                    if k_proj > 1e-12:
+                        self._raise_validation_error_at_loc(
+                            "Fixed-angle TFSF in 2D requires the wave's "
+                            f"k-vector to have no component along the 0-size "
+                            f"axis '{['x', 'y', 'z'][tan_dir]}', but the "
+                            f"current (angle_theta, angle_phi, injection_axis) "
+                            f"give a projection of {k_proj:.3e}. Set angle_phi "
+                            "so the in-plane component points along the "
+                            "physical 2D plane (or use angle_theta=0 for "
+                            "normal incidence).",
+                            "sources",
+                            src_idx,
+                        )
 
                 # crossing may be allowed for periodic or Bloch boundaries, but not others
                 if (
@@ -3617,6 +3694,217 @@ class Simulation(AbstractYeeGridSimulation):
 
         return self
 
+    def _warn_fixed_angle_tfsf_normal_incidence(self) -> Self:
+        """Warn if a fixed-angle TFSF is used at normal incidence (θ=0).
+        At θ=0 the fixed-angle TFSF path adds setup and per-step cost
+        without any physical benefit — the default ``FixedInPlaneKSpec``
+        (Bloch TFSF) is exactly equivalent and faster."""
+        for src_idx, source in enumerate(self.sources):
+            if (
+                isinstance(source, TFSF)
+                and isinstance(source.angular_spec, FixedAngleSpec)
+                and float(source.angle_theta) == 0.0
+            ):
+                log.warning(
+                    f"TFSF source at index '{src_idx}' uses 'FixedAngleSpec' with "
+                    "angle_theta=0. At normal incidence the default "
+                    "'FixedInPlaneKSpec' (Bloch TFSF) is physically equivalent and "
+                    "runs faster. Consider switching unless you specifically need "
+                    "the fixed-angle path.",
+                    log_once=True,
+                )
+        return self
+
+    def _validate_fixed_angle_tfsf_angle_theta(self) -> Self:
+        """Fixed-angle TFSF source-amplitude normalization includes a
+        ``1/sqrt(cos(angle_theta))`` factor that is singular at
+        ``angle_theta = ±π/2`` and imaginary beyond, producing
+        ``inf``/``NaN`` injections. Reject ``angle_theta`` within
+        :data:`tidy3d.constants.GLANCING_CUTOFF` of any odd multiple of
+        ``π/2``."""
+        for src_idx, source in enumerate(self.sources):
+            if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
+                continue
+            if is_close_to_glancing_angle(float(source.angle_theta), GLANCING_CUTOFF):
+                cutoff_deg = float(np.rad2deg(GLANCING_CUTOFF))
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle TFSF requires the source's propagation angle to be more "
+                    f"than ~{cutoff_deg:.1f}° away from glancing (i.e. |angle_theta| ≤ "
+                    f"π/2 − {GLANCING_CUTOFF:g} rad); got "
+                    f"angle_theta = {float(source.angle_theta):.4f} rad.",
+                    "sources",
+                    src_idx,
+                )
+        return self
+
+    def _validate_fixed_angle_tfsf_source_time_type(self) -> Self:
+        """Fixed-angle TFSF needs a ``Pulse`` source time with an
+        analytic ``amp_freq`` (uses ``fwidth`` and ``offset_time`` for
+        the bandwidth and offset, and the analytic frequency spectrum
+        for normalization). Reject other ``SourceTime`` subclasses,
+        and explicitly reject ``CustomSourceTime`` (a ``Pulse``
+        subclass but without an analytic ``amp_freq``).
+        """
+        for src_idx, source in enumerate(self.sources):
+            if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
+                continue
+            if isinstance(source.source_time, CustomSourceTime):
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle TFSF does not support 'CustomSourceTime'; an analytic "
+                    "frequency-domain envelope is required. Use 'GaussianPulse' (or "
+                    "another analytic 'Pulse' subclass) instead.",
+                    "sources",
+                    src_idx,
+                )
+            if not isinstance(source.source_time, Pulse):
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle TFSF requires a 'Pulse' source time (e.g. "
+                    f"'GaussianPulse'); got '{source.source_time.type}'.",
+                    "sources",
+                    src_idx,
+                )
+        return self
+
+    def _validate_fixed_angle_tfsf_semi_infinite_injection_axis(self) -> Self:
+        """Fixed-angle TFSF assumes its top and bottom (injection-axis)
+        faces sit in semi-infinite spaces along the injection axis:
+        on each side, the region between the box face and the
+        simulation edge must be a single medium. Reject otherwise.
+        """
+        # Include the simulation background as a virtual structure so
+        # ``intersecting_media`` catches vacuum/structure mixtures.
+        structure_bg = Structure(
+            geometry=Box(size=self.size, center=self.center),
+            medium=self.medium,
+        )
+        total_structures = [structure_bg, *list(self.structures or [])]
+        for src_idx, source in enumerate(self.sources):
+            if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
+                continue
+            axis = source.injection_axis
+            sim_lo, sim_hi = self.bounds[0][axis], self.bounds[1][axis]
+            box_lo, box_hi = source.bounds[0][axis], source.bounds[1][axis]
+            for side_label, z_far, z_near in (
+                ("-", sim_lo, box_lo),
+                ("+", box_hi, sim_hi),
+            ):
+                # Probe a column at the source's transverse extent,
+                # spanning from the box face out to the sim edge along
+                # the injection axis. Skip if the box face touches the
+                # sim edge (already caught by ``_tfsf_boundaries``).
+                if z_near - z_far <= 0:
+                    continue
+                probe_center = list(source.center)
+                probe_center[axis] = 0.5 * (z_far + z_near)
+                probe_size = list(source.size)
+                probe_size[axis] = z_near - z_far
+                probe = Box(center=tuple(probe_center), size=tuple(probe_size))
+                # Best-effort check: ``Scene.intersecting_media`` on a
+                # volumetric ``Box`` only recurses on its six surfaces,
+                # so a finite inclusion fully enclosed inside the
+                # probe (no surface contact) can slip through. A
+                # genuinely volume-aware test on a setup with up to
+                # ~10⁶ structures (e.g., a metalens) is too costly to
+                # run at validation time.
+                mediums = Scene.intersecting_media(probe, total_structures)
+                if len(mediums) > 1:
+                    self._raise_validation_error_at_loc(
+                        f"Fixed-angle TFSF source at index {src_idx} requires the region "
+                        f"between its '{side_label}' injection-axis box face and the "
+                        f"simulation edge along '{'xyz'[axis]}' to be a single medium "
+                        f"(semi-infinite space); got {len(mediums)} distinct media. Either "
+                        "extend the structures so they fill the full simulation extent "
+                        "along the injection axis (e.g. ``size=td.inf``), or move them "
+                        "fully inside the TFSF box.",
+                        "sources",
+                        src_idx,
+                    )
+        return self
+
+    def _validate_fixed_angle_tfsf_source_time_localization(self) -> Self:
+        """Fixed-angle TFSF requires the source pulse to have decayed by
+        the end of the simulation. Reject if ``|amp_time(run_time)| >
+        1e-4 · peak``, where peak is taken over a dense sample of the run
+        window (anchored at the pulse-center ``offset_time`` so a long
+        ``run_time`` with a short pulse doesn't skip the pulse peak).
+        Catches ``ContinuousWave`` (steady-state at ``run_time``) and
+        ``CustomSourceTime`` with non-decaying ends.
+
+        We do *not* check the source value at ``t = 0`` — a
+        ``GaussianPulse(offset=N)`` has analytic value ``exp(-N²/2) ·
+        peak`` at t=0, which is reproduced faithfully even when small
+        but non-zero. Users who want a cleaner ramp-up should increase
+        ``offset``.
+        """
+        EPS_REL = 1e-4
+        for src_idx, source in enumerate(self.sources):
+            if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
+                continue
+            st = source.source_time
+            run_time = float(self.run_time)
+            # Anchor the dense sample at `offset_time` so long-`run_time`
+            # sims with a short pulse (run_time >> twidth) don't skip the
+            # pulse peak entirely and report a spurious "peak ≈ 0".
+            t_dense = np.unique(
+                np.concatenate(
+                    [
+                        np.linspace(0.0, run_time, 256),
+                        np.array([float(st.offset_time)]),
+                    ]
+                )
+            )
+            amps = np.abs(np.asarray(st.amp_time(t_dense)))
+            peak = float(amps.max())
+            if peak <= 0:
+                continue
+            a_end = float(np.abs(np.atleast_1d(np.asarray(st.amp_time(run_time)))[0]))
+            if a_end / peak > EPS_REL:
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle TFSF requires 'source_time' to have decayed "
+                    "by the end of the simulation. Got |amp_time(run_time)|/peak = "
+                    f"{a_end / peak:.2e} > {EPS_REL:.0e}. Use a longer "
+                    "'run_time' so the pulse tail fits inside, or a more "
+                    "localized source_time (e.g. 'GaussianPulse' instead "
+                    "of 'ContinuousWave').",
+                    "sources",
+                    src_idx,
+                )
+        return self
+
+    def _warn_fixed_angle_tfsf_long_run_time(self) -> Self:
+        """Warn if a fixed-angle TFSF source is used with a long
+        ``run_time`` / wide ``fwidth``. The fixed-angle TFSF path has
+        cost that scales as **`run_time ** 2`**: at long ``run_time`` the
+        source's per-step cost grows linearly with ``run_time``, on
+        top of the linear growth in the number of time steps. For
+        long sims this can put the simulation in a regime where the
+        TFSF source is more expensive than the FDTD time-stepping.
+        We warn the user so they can shorten ``run_time`` if their
+        field decay allows, or narrow ``source_time.fwidth`` if the
+        bandwidth is wider than needed."""
+        # Heuristic threshold on the dimensionless product
+        # `run_time · fwidth`. Empirically chosen so the warning
+        # fires roughly when the fixed-angle TFSF cost becomes
+        # comparable to the FDTD update cost.
+        RUN_TIME_FWIDTH_WARN_THRESHOLD = 500.0
+        for src_idx, source in enumerate(self.sources):
+            if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
+                continue
+            run_time = float(self.run_time)
+            fwidth = float(source.source_time.fwidth)
+            if run_time * fwidth > RUN_TIME_FWIDTH_WARN_THRESHOLD:
+                log.warning(
+                    f"TFSF source at index '{src_idx}' uses 'FixedAngleSpec' with "
+                    f"'run_time' ({run_time:.2e} s) and 'source_time.fwidth' "
+                    f"({fwidth:.2e} Hz) in a regime where the fixed-angle TFSF "
+                    "cost scales as `run_time ** 2` and can become comparable to or "
+                    "larger than the FDTD time-stepping cost. Consider reducing "
+                    "'run_time' if the field decay allows, or narrowing "
+                    "'source_time.fwidth' if the bandwidth is wider than needed.",
+                    log_once=True,
+                )
+        return self
+
     def _tfsf_with_symmetry(self) -> Self:
         """Error if a TFSF source is applied with symmetry"""
         for source_ind, source in enumerate(self.sources):
@@ -3627,21 +3915,33 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @staticmethod
-    def _get_fixed_angle_sources(sources: tuple[SourceType, ...]) -> tuple[SourceType, ...]:
-        """Get list of plane wave sources with ``FixedAngleSpec``."""
+    def _get_periodic_fixed_angle_sources(
+        sources: tuple[SourceType, ...],
+    ) -> tuple[SourceType, ...]:
+        """Periodic fixed-angle :class:`PlaneWave` sources.
+
+        ``TFSF`` sources with ``FixedAngleSpec`` are intentionally
+        excluded — only a fixed-angle :class:`PlaneWave` is a periodic
+        fixed-angle source, and ``_check_fixed_angle_components``
+        prohibits combining the two.
+        """
 
         return [
-            source for source in sources if isinstance(source, PlaneWave) and source._is_fixed_angle
+            source
+            for source in sources
+            if isinstance(source, PlaneWave) and source._is_periodic_fixed_angle
         ]
 
     def _check_fixed_angle_components(self) -> Self:
         """Error if a fixed-angle plane wave is combined with other sources
         or fully anisotropic mediums or gain mediums."""
 
-        fixed_angle_sources = self._get_fixed_angle_sources(self.sources)
+        fixed_angle_sources = self._get_periodic_fixed_angle_sources(self.sources)
 
         if len(fixed_angle_sources) > 0:
-            if len(fixed_angle_sources) > 1:
+            # A fixed-angle PlaneWave must be the only source — no
+            # other sources of any type.
+            if len(self.sources) > 1:
                 self._raise_validation_error_at_loc(
                     "A fixed-angle plane wave source cannot be combined with other sources.",
                     "sources",
@@ -4613,6 +4913,26 @@ class Simulation(AbstractYeeGridSimulation):
         # for each plane wave in the sources list
         with log as consolidated_logger:
             for source_id, source in enumerate(val):
+                # TFSF sources are checked at their injection plane:
+                # neither angular spec supports anisotropic source
+                # media.
+                if isinstance(source, TFSF):
+                    inj_size = list(source.size)
+                    inj_size[source.injection_axis] = 0.0
+                    media_probe = Box(center=source.injection_plane_center, size=tuple(inj_size))
+                    src_mediums = Scene.intersecting_media(media_probe, total_structures)
+                    if any(
+                        isinstance(m, (AnisotropicMedium, FullyAnisotropicMedium))
+                        for m in src_mediums
+                    ):
+                        self._raise_validation_error_at_loc(
+                            "An anisotropic medium is detected on the injection plane of "
+                            f"a {source.type} source. Injection of {source.type} into "
+                            "anisotropic media is not currently supported — anisotropic "
+                            "structures fully inside the TFSF box are fine.",
+                            "sources",
+                            source_id,
+                        )
                 if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
                     mediums = Scene.intersecting_media(source, total_structures)
                     # make sure there is no more than one medium in the returned list
@@ -4650,7 +4970,7 @@ class Simulation(AbstractYeeGridSimulation):
                             custom_loc=["sources", source_id],
                         )
 
-                    if isinstance(source, PlaneWave) and source._is_fixed_angle:
+                    if isinstance(source, PlaneWave) and source._is_periodic_fixed_angle:
                         is_lossless_dieletric = (
                             isinstance(src_medium, Medium) and src_medium.conductivity == 0
                         )
@@ -4807,6 +5127,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_no_structures_pml()
         self._validate_no_structures_close_to_pml()
         self._validate_pec_frame_not_in_pml_extrusion()
+        self._validate_tfsf_has_grid_cells()
         self._validate_tfsf_nonuniform_grid()
         self._validate_tfsf_aux_sources()
         self._validate_nonlinear_specs()
@@ -5155,12 +5476,53 @@ class Simulation(AbstractYeeGridSimulation):
                             loc,
                         )
 
+    def _validate_tfsf_has_grid_cells(self) -> None:
+        """Each TFSF source must contain at least one grid center on every
+        axis. Fixed-angle TFSF additionally needs at least two cells along
+        the injection axis inside the simulation's physical domain."""
+        for source_ind, source in enumerate(self.sources):
+            if not isinstance(source, TFSF):
+                continue
+            centers = self.grid.centers.to_list
+            tfsf_bounds = source.bounds
+            sim_bounds = self.bounds
+            for ind in range(3):
+                n_in = sum(
+                    1
+                    for center in centers[ind]
+                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
+                )
+                if n_in == 0:
+                    self._raise_validation_error_at_loc(
+                        f"TFSF source at index {source_ind} has no grid cells along the "
+                        f"'{'xyz'[ind]}' axis within its box. The source size or center is "
+                        f"too small relative to the grid spacing, or the box falls outside "
+                        f"the simulation domain.",
+                        "sources",
+                        source_ind,
+                    )
+            if isinstance(source.angular_spec, FixedAngleSpec):
+                inj = source.injection_axis
+                n_inj_phys = sum(
+                    1 for c in centers[inj] if sim_bounds[0][inj] <= c <= sim_bounds[1][inj]
+                )
+                if n_inj_phys < 2:
+                    self._raise_validation_error_at_loc(
+                        f"Fixed-angle TFSF source at index {source_ind} needs at least 2 "
+                        f"grid cells along its injection axis '{'xyz'[inj]}' inside the "
+                        f"simulation's physical domain (got {n_inj_phys}). Increase the "
+                        f"physical-domain extent along that axis, or refine the grid.",
+                        "sources",
+                        source_ind,
+                    )
+
     def _validate_tfsf_nonuniform_grid(self) -> None:
-        """Warn if the grid is nonuniform along the directions tangential to the injection plane,
-        inside the TFSF box.
+        """Warn (or error) if the grid is nonuniform along the directions tangential to the
+        injection plane, inside the TFSF box. A fixed-angle TFSF source requires a uniform
+        transverse grid and errors out; other TFSF sources only see degraded incident-field
+        cancellation, so we warn.
         """
-        # if the grid is uniform in all directions, there's no need to proceed
-        if not (self.grid_spec.snapped_grid_used or self.grid_spec.custom_grid_used):
+        if not any(isinstance(source, TFSF) for source in self.sources):
             return
 
         with log as consolidated_logger:
@@ -5168,6 +5530,7 @@ class Simulation(AbstractYeeGridSimulation):
                 if not isinstance(source, TFSF):
                     continue
 
+                fixed_angle = isinstance(source.angular_spec, FixedAngleSpec)
                 centers = self.grid.centers.to_list
                 sizes = self.grid.sizes.to_list
                 tfsf_bounds = source.bounds
@@ -5186,15 +5549,27 @@ class Simulation(AbstractYeeGridSimulation):
 
                     # check if all the grid sizes are sufficiently unequal
                     if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
-                        consolidated_logger.warning(
-                            f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
-                            "to sub-optimal cancellation of the incident field in the "
-                            "scattered-field region for the total-field scattered-field (TFSF) "
-                            f"source '{source.name}'. For best results, we recommended ensuring a "
-                            "uniform grid in both directions tangential to the TFSF injection "
-                            f"axis, '{'xyz'[source.injection_axis]}'.",
-                            custom_loc=["sources", source_ind],
-                        )
+                        if fixed_angle:
+                            self._raise_validation_error_at_loc(
+                                f"Fixed-angle TFSF requires a uniform transverse grid inside the "
+                                f"TFSF box, but the grid is nonuniform along the '{'xyz'[ind]}' "
+                                f"axis within the source region. Add a 'MeshOverrideStructure' "
+                                f"covering the TFSF box with a uniform 'dl' on the non-injection "
+                                f"axes to force uniform spacing, or remove the non-uniformity "
+                                f"from the structures intersecting the source.",
+                                "sources",
+                                source_ind,
+                            )
+                        else:
+                            consolidated_logger.warning(
+                                f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
+                                "to sub-optimal cancellation of the incident field in the "
+                                "scattered-field region for the total-field scattered-field (TFSF) "
+                                f"source '{source.name}'. For best results, we recommended ensuring a "
+                                "uniform grid in both directions tangential to the TFSF injection "
+                                f"axis, '{'xyz'[source.injection_axis]}'.",
+                                custom_loc=["sources", source_ind],
+                            )
 
     def _aux_tfsf_source(self, source: TFSF) -> PlaneWave:
         """Create the auxiliary plane wave source for a give TFSF source."""
@@ -5226,11 +5601,53 @@ class Simulation(AbstractYeeGridSimulation):
                 "dimension, or decrease the source size."
             )
 
-        # Note: broadband injection for TFSF not currently supported
+        # Pre-compensate the source-time so the unit-amplitude
+        # reference lands at the injection plane (the box face), not
+        # at the aux source plane that sits ``|offset|`` along the
+        # propagation direction. For lossless source-side media this
+        # is purely a phase shift; for lossy media it also pre-
+        # amplifies by ``exp(+Im(kz)·|offset|)`` to undo the decay
+        # over ``|offset|``. The medium at the injection plane is
+        # queried stacking-aware (a structure overlapping the source
+        # plane changes the local ``n``); fall back to ``self.medium``
+        # if multiple media are visible there.
+        source_time = source.source_time
+        injection_plane_size = list(source.size)
+        injection_plane_size[source.injection_axis] = 0.0
+        injection_plane_probe = Box(
+            center=tuple(source.injection_plane_center),
+            size=tuple(injection_plane_size),
+        )
+        injection_bg = Structure(
+            geometry=Box(size=self.size, center=self.center), medium=self.medium
+        )
+        plane_mediums = Scene.intersecting_media(
+            injection_plane_probe, [injection_bg, *list(self.structures or [])]
+        )
+        injection_medium = next(iter(plane_mediums)) if len(plane_mediums) == 1 else self.medium
+        try:
+            f0 = float(source_time._freq0)
+            n_complex = complex(injection_medium.background_index_from_freqs([f0])[0])
+        except (AttributeError, NotImplementedError):
+            n_complex = None
+        if n_complex is not None:
+            kz_continuum_at_f0 = (
+                (2.0 * np.pi * f0 / C_0) * n_complex * float(np.cos(source.angle_theta))
+            )
+            compensation = complex(np.exp(-1j * kz_continuum_at_f0 * abs(offset)))
+            amp_factor = float(np.abs(compensation))
+            phase_shift = float(np.angle(compensation))
+            if not (amp_factor == 1.0 and phase_shift == 0.0):
+                source_time = source_time.updated_copy(
+                    amplitude=amp_factor * source_time.amplitude,
+                    phase=source_time.phase + phase_shift,
+                )
+
+        # Note: broadband injection for TFSF not currently supported.
         return PlaneWave(
             size=source_size,
             center=source_center,
-            source_time=source.source_time,
+            source_time=source_time,
             angle_theta=source.angle_theta,
             angle_phi=source.angle_phi,
             pol_angle=source.pol_angle,
@@ -5573,7 +5990,7 @@ class Simulation(AbstractYeeGridSimulation):
         pre-upload rather than at the time of definition. Also errors if any side wall
         intersects with a custom medium or a fully anisotropic media.
         """
-        for source in self.sources:
+        for source_idx, source in enumerate(self.sources):
             if not isinstance(source, TFSF):
                 continue
             # get all TFSF surfaces
@@ -5601,6 +6018,23 @@ class Simulation(AbstractYeeGridSimulation):
                         raise SetupError(
                             f"The surfaces of TFSF source '{source.name}' must not intersect any "
                             "structures containing a 'CustomMedium' or a 'FullyAnisotropicMedium'."
+                        )
+
+                    # Surface-BC media (``LossyMetalMedium``, ``PECMedium``, ``PMCMedium``)
+                    # are only rejected at sidewalls of a fixed-angle TFSF source; the
+                    # constant-in-plane-k TFSF supports them. Move the structure fully
+                    # inside the box, or switch the source to ``FixedInPlaneKSpec``.
+                    if isinstance(source.angular_spec, FixedAngleSpec) and any(
+                        isinstance(struct.medium, (LossyMetalMedium, PECMedium, PMCMedium))
+                        for struct in intersecting_structs
+                    ):
+                        self._raise_validation_error_at_loc(
+                            f"Fixed-angle TFSF source '{source.name}' cannot have its sidewalls "
+                            "intersect a 'LossyMetalMedium', 'PECMedium', or 'PMCMedium'. Move the "
+                            "structure fully inside the TFSF box, or use 'FixedInPlaneKSpec' "
+                            "instead.",
+                            "sources",
+                            source_idx,
                         )
 
                     # if no structures intersect, just add a phantom associated with the simulation
@@ -5841,11 +6275,12 @@ class Simulation(AbstractYeeGridSimulation):
     @cached_property
     def _fixed_angle_sources(self) -> tuple[SourceType, ...]:
         """List of plane wave sources with ``FixedAngleSpec``."""
-        return self._get_fixed_angle_sources(self.sources)
+        return self._get_periodic_fixed_angle_sources(self.sources)
 
     @cached_property
-    def _is_fixed_angle(self) -> bool:
-        """Whether the simulation contains fixed angle sources."""
+    def _is_periodic_fixed_angle(self) -> bool:
+        """Whether the simulation contains a periodic fixed-angle source —
+        i.e. a fixed-angle :class:`PlaneWave` with non-zero ``angle_theta``."""
         return len(self._fixed_angle_sources) > 0
 
     # candidate for removal in 3.0
@@ -6215,7 +6650,7 @@ class Simulation(AbstractYeeGridSimulation):
     @cached_property
     def _dt_fixed_angle_reduction_factor(self) -> float:
         """Reduction in time step due to plane wave source with ``FixedAngleSpec``."""
-        if self._is_fixed_angle:
+        if self._is_periodic_fixed_angle:
             theta = self._fixed_angle_sources[0].angle_theta
             return (
                 FIXED_ANGLE_DT_SAFETY_FACTOR

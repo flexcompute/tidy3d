@@ -19049,6 +19049,27 @@
           "default": 0.0,
           "type": "number"
         },
+        "angular_spec": {
+          "default": {
+            "attrs": {},
+            "type": "FixedInPlaneKSpec"
+          },
+          "discriminator": {
+            "mapping": {
+              "FixedAngleSpec": "#/$defs/FixedAngleSpec",
+              "FixedInPlaneKSpec": "#/$defs/FixedInPlaneKSpec"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FixedAngleSpec"
+            },
+            {
+              "$ref": "#/$defs/FixedInPlaneKSpec"
+            }
+          ]
+        },
         "attrs": {
           "additionalProperties": true,
           "default": {},
