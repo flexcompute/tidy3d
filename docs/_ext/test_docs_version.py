@@ -11,8 +11,6 @@ from docs_version import normalize_docs_version
 def test_normalize_docs_version_accepts_public_release_tags():
     assert normalize_docs_version("v2.9.0") == "v2.9.0"
     assert normalize_docs_version("refs/tags/v2.9.0rc1") == "v2.9.0rc1"
-    assert normalize_docs_version("v2.12.0.dev0") == "v2.12.0.dev0"
-    assert normalize_docs_version("refs/tags/v2.12.0.dev0") == "v2.12.0.dev0"
 
 
 def test_normalize_docs_version_maps_branch_style_values_to_public_slugs():

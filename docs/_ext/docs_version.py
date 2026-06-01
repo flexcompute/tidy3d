@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import re
 
-_PUBLIC_DOCS_VERSION_TAG_RE = re.compile(
-    r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)((rc|\.dev)[0-9]+)?$"
-)
+_PUBLIC_DOCS_VERSION_TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(rc[0-9]+)?$")
 
 
 def _strip_docs_version_ref(version_value: str) -> str:
