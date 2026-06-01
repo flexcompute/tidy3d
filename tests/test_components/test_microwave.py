@@ -29,6 +29,9 @@ from tidy3d.components.microwave.path_integrals.factory import (
     make_path_integrals_for_terminal,
     make_voltage_integral,
 )
+from tidy3d.components.microwave.path_integrals.integrals.base import (
+    AxisAlignedPathIntegral,
+)
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import (
     ModePlaneAnalyzer,
 )
@@ -58,6 +61,13 @@ F0 = (FSTART + FSTOP) / 2
 FWIDTH = FSTOP - FSTART
 FS = np.linspace(FSTART, FSTOP, 3)
 FIELD_MONITOR = td.FieldMonitor(size=MON_SIZE, fields=FIELDS, name="strip_field", freqs=FS)
+# Dedicated non-colocated monitor for the coax fixture: Ex/Ey live on their native
+# Yee positions (cell-centered along the field's polarization axis) rather than the
+# colocated cell-aligned grid, so the synthetic fixture matches the half-cell sampling
+# that a real mode solver produces near PEC interfaces.
+COAX_FIELD_MONITOR = td.FieldMonitor(
+    size=MON_SIZE, fields=FIELDS, name="coax_field", freqs=FS, colocate=False
+)
 STRIP_WIDTH = 1.5
 STRIP_HEIGHT = 0.5
 COAX_R1 = 0.04
@@ -68,6 +78,7 @@ SIM_Z = td.Simulation(
     grid_spec=td.GridSpec.uniform(dl=0.04),
     monitors=[
         FIELD_MONITOR,
+        COAX_FIELD_MONITOR,
         td.FieldMonitor(center=(0, 0, 0), size=(1, 1, 1), freqs=FS, name="field", colocate=False),
         td.FieldMonitor(
             center=(0, 0, 0), size=(1, 1, 1), freqs=FS, fields=["Ex", "Hx"], name="ExHx"
@@ -133,7 +144,13 @@ def make_stripline_scalar_field_data_array(grid_key: str):
 
 
 def make_coaxial_field_data_array(grid_key: str):
-    """Populate FIELD_MONITOR with a coaxial transmission line mode."""
+    """Populate COAX_FIELD_MONITOR with a coaxial transmission line mode.
+
+    Uses a ``colocate=False`` monitor so Ex / Ey live on their native Yee positions
+    (cell-centered along the field's polarization axis). That matches the half-cell
+    sampling a real mode solver produces — no sample lands exactly on the PEC face,
+    so endpoint extrapolation in :class:`AxisAlignedPathIntegral` does the right thing.
+    """
 
     # Get a normalized electric field that represents the electric field within a coaxial cable transmission line.
     def compute_coax_radial_electric(rin, rout, x, y, is_x):
@@ -153,7 +170,7 @@ def make_coaxial_field_data_array(grid_key: str):
             Exy = np.where(r >= rout, 0, Exy)
         return Exy
 
-    XS, YS, ZS = get_spatial_coords_dict(SIM_Z, FIELD_MONITOR, grid_key).values()
+    XS, YS, ZS = get_spatial_coords_dict(SIM_Z, COAX_FIELD_MONITOR, grid_key).values()
     XGRID, YGRID = np.meshgrid(XS, YS, indexing="ij")
     XGRID = XGRID.reshape((len(XS), len(YS), 1, 1))
     YGRID = YGRID.reshape((len(XS), len(YS), 1, 1))
@@ -192,14 +209,14 @@ def make_field_data():
 
 def make_coax_field_data():
     return td.FieldData(
-        monitor=FIELD_MONITOR,
+        monitor=COAX_FIELD_MONITOR,
         Ex=make_coaxial_field_data_array("Ex"),
         Ey=make_coaxial_field_data_array("Ey"),
         Hx=make_coaxial_field_data_array("Hx"),
         Hy=make_coaxial_field_data_array("Hy"),
         symmetry=SIM_Z.symmetry,
         symmetry_center=SIM_Z.center,
-        grid_expanded=SIM_Z.discretize_monitor(FIELD_MONITOR),
+        grid_expanded=SIM_Z.discretize_monitor(COAX_FIELD_MONITOR),
     )
 
 
@@ -1882,6 +1899,72 @@ def test_voltage_integral_toggles():
         sign="-",
     )
     _ = voltage_integral.compute_voltage(SIM_Z_DATA["field"])
+
+
+@pytest.mark.parametrize("extrapolate, expected", [(False, 7.5), (True, 10.0)])
+def test_axis_aligned_path_integral_extrapolate_endpoints(extrapolate, expected):
+    """Test that ``extrapolate_to_endpoints`` works correctly: a profile that is
+    zero on the boundaries and uniform 5 inside integrates to 7.5 without it and
+    10.0 with it (interior value carried to the endpoints)."""
+    z = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
+    ez = np.array([0.0, 5.0, 5.0, 5.0, 0.0])
+    field = td.ScalarFieldDataArray(
+        np.broadcast_to(ez[None, None, :, None], (1, 1, z.size, 1)).astype(complex),
+        coords={"x": [0.0], "y": [0.0], "z": z, "f": [1e9]},
+    )
+    integral = AxisAlignedPathIntegral(
+        center=(0, 0, 1.0),
+        size=(0, 0, 2.0),
+        snap_path_to_grid=False,
+        extrapolate_to_endpoints=extrapolate,
+    )
+    result = complex(integral.compute_integral(field).values.item())
+    assert isclose(result.real, expected, abs_tol=1e-12)
+
+
+def test_axis_aligned_path_integral_extrapolate_endpoints_boundary_tolerance():
+    """Coordinates within floating-point tolerance of the bounds are treated as
+    boundary samples (extrapolated), not dragged into the interior integral.
+
+    This mimics the Yee half-cell artifact observed at PEC interfaces in real
+    mode-solver data: a sample landing within float64 precision of the boundary
+    carries a half-cell-averaged value rather than a true interior field, and
+    must be re-extrapolated to avoid biasing the integral."""
+    eps = 1e-8  # within fp_eps of the bounds; logically on the endpoints
+    z = np.array([9.0 + eps, 9.5, 10.0, 10.5, 11.0 - eps])
+    ez = np.array([0.0, 5.0, 5.0, 5.0, 0.0])
+    field = td.ScalarFieldDataArray(
+        np.broadcast_to(ez[None, None, :, None], (1, 1, z.size, 1)).astype(complex),
+        coords={"x": [0.0], "y": [0.0], "z": z, "f": [1e9]},
+    )
+    integral = AxisAlignedPathIntegral(
+        center=(0, 0, 10.0),
+        size=(0, 0, 2.0),
+        snap_path_to_grid=False,
+        extrapolate_to_endpoints=True,
+    )
+    result = complex(integral.compute_integral(field).values.item())
+    assert isclose(result.real, 10.0, abs_tol=1e-6)
+
+
+def test_axis_aligned_path_integral_extrapolate_endpoints_no_interior_samples():
+    """When every sample sits within tolerance of the bounds there is nothing to
+    extrapolate from; a clear ``DataError`` is raised instead of an opaque failure."""
+    eps = 1e-8  # both samples within fp_eps of the bounds
+    z = np.array([9.0 + eps, 11.0 - eps])
+    ez = np.array([5.0, 5.0])
+    field = td.ScalarFieldDataArray(
+        np.broadcast_to(ez[None, None, :, None], (1, 1, z.size, 1)).astype(complex),
+        coords={"x": [0.0], "y": [0.0], "z": z, "f": [1e9]},
+    )
+    integral = AxisAlignedPathIntegral(
+        center=(0, 0, 10.0),
+        size=(0, 0, 2.0),
+        snap_path_to_grid=False,
+        extrapolate_to_endpoints=True,
+    )
+    with pytest.raises(DataError, match="no field samples strictly inside"):
+        integral.compute_integral(field)
 
 
 def test_current_integral_toggles():
