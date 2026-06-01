@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag to create or publish, for example v2.11.1"
+        description: "Release tag to create or publish, for example v2.11.1, v2.11.1rc1, or v2.12.0.dev0"
         required: true
         type: string
       target_ref:
@@ -55,10 +55,10 @@ jobs:
       - name: validate-release-tag
         run: |
           set -euo pipefail
-          tag_regex='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$'
+          tag_regex='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.dev[0-9]+)?$'
           if [[ ! "$RELEASE_TAG" =~ $tag_regex ]]; then
             echo "Invalid release tag: $RELEASE_TAG"
-            echo "Expected format: v{major}.{minor}.{patch}[rc{num}]"
+            echo "Expected format: v{major}.{minor}.{patch}[rc{num}|.dev{num}]"
             exit 1
           fi
 
