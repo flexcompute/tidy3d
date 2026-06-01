@@ -2295,7 +2295,7 @@
                 -3.0
             ],
             "size": [
-                2.5,
+                0.5,
                 2.5,
                 0.5
             ],
@@ -2315,7 +2315,11 @@
             "angle_theta": 0.5235987755982988,
             "angle_phi": 0.6283185307179586,
             "pol_angle": 0.0,
-            "injection_axis": 2,
+            "angular_spec": {
+                "attrs": {},
+                "type": "FixedInPlaneKSpec"
+            },
+            "injection_axis": 0,
             "use_colocated_integration": true
         },
         {
@@ -3519,7 +3523,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.12.0.dev0",
+    "version": "2.12.0.dev1",
     "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "lumped_elements": [

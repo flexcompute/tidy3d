@@ -2923,7 +2923,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.12.0.dev0",
+    "version": "2.12.0.dev1",
     "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "lumped_elements": [
