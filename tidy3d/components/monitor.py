@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 from pydantic import (
@@ -27,6 +27,8 @@ from .autograd.parallel_adjoint_bases import (
 )
 from .base import Tidy3dBaseModel, cached_property
 from .base_sim.monitor import AbstractMonitor
+from .data.data_array import PointDataArray
+from .data.point_cloud import canonicalize_point_cloud_points
 from .diffraction import (
     DIFFRACTION_POLARIZATIONS,
     bloch_vec_at_freq,
@@ -74,6 +76,7 @@ BYTES_REAL = 4
 BYTES_COMPLEX = 8
 WARN_NUM_FREQS = 2000
 WARN_NUM_MODES = 100
+MAX_POINT_CLOUD_FIELD_MONITOR_POINTS = 10_000_000
 
 # Field projection windowing factor that determines field decay at the edges of surface field
 # projection monitors. A value of 15 leads to a decay of < 1e-3x in field amplitude.
@@ -847,6 +850,160 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
             monitor_index=monitor_index,
             data_path_prefix=("data", monitor_index),
         )
+
+
+class PointCloudFieldMonitor(FreqMonitor):
+    """:class:`~tidy3d.Monitor` that records electromagnetic fields at arbitrary points.
+
+    The monitor stores field components indexed by point and frequency. Point coordinates are
+    supplied as a :class:`.PointDataArray` with dimensions ``("index", "axis")`` and shape
+    ``(num_points, 3)``. Point-cloud fields are sampled from native field values, equivalent to
+    point :class:`FieldMonitor` objects with ``colocate=False``.
+
+    Example
+    -------
+    >>> points = PointDataArray(
+    ...     [[0.0, 0.0, 0.0], [0.1, 0.2, 0.3]],
+    ...     coords={"index": [0, 1], "axis": [0, 1, 2]},
+    ... )
+    >>> monitor = PointCloudFieldMonitor(
+    ...     points=points,
+    ...     fields=["Ex", "Hy"],
+    ...     freqs=[200e12],
+    ...     name="point_cloud",
+    ... )
+    """
+
+    _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
+
+    center: Coordinate = Field(
+        (0.0, 0.0, 0.0),
+        title="Derived Center",
+        description="Bounding-box center derived from the point cloud coordinates.",
+        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
+    )
+
+    size: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
+        (0.0, 0.0, 0.0),
+        title="Derived Size",
+        description="Bounding-box size derived from the point cloud coordinates.",
+        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
+    )
+
+    points: PointDataArray = Field(
+        ...,
+        title="Points",
+        description="Point coordinates at which fields are recorded. The array must have "
+        "dimensions ``('index', 'axis')`` and shape ``(num_points, 3)``.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
+    fields: tuple[EMField, ...] = Field(
+        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        title="Field Components",
+        description="Collection of field components to store in the monitor.",
+    )
+
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
+        (1, 1, 1),
+        title="Spatial Interval",
+        description="Point-cloud field monitors do not support spatial downsampling.",
+    )
+
+    colocate: Literal[False] = Field(
+        False,
+        title="Colocate Fields",
+        description="Point-cloud field monitors always store fields sampled from native Yee-grid "
+        "field values and do not support field colocation.",
+    )
+
+    use_colocated_integration: Literal[False] = Field(
+        False,
+        title="Use Colocated Integration",
+        description="Point-cloud field monitors do not support colocated integration.",
+    )
+
+    @field_validator("points")
+    @classmethod
+    def _validate_points(cls, val: PointDataArray) -> PointDataArray:
+        """Validate point-cloud coordinates and assign canonical coordinates when omitted."""
+        return canonicalize_point_cloud_points(
+            val,
+            empty_error="Point-cloud monitors require at least one point.",
+            max_num_points=MAX_POINT_CLOUD_FIELD_MONITOR_POINTS,
+            require_real=True,
+            require_finite=True,
+            cast_to_float=True,
+        )
+
+    @field_validator("fields")
+    @classmethod
+    def _validate_unique_fields(cls, val: tuple[EMField, ...]) -> tuple[EMField, ...]:
+        """Reject duplicate point-cloud field components before sparse reconstruction."""
+        if len(set(val)) != len(val):
+            raise ValueError("Point-cloud field monitor components must be unique.")
+        return val
+
+    @staticmethod
+    def _geometry_from_points(
+        points: PointDataArray,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        """Compute inherited box geometry from point-cloud bounds."""
+        point_values = np.asarray(points.values, dtype=float)
+        rmin = point_values.min(axis=0)
+        rmax = point_values.max(axis=0)
+        center = tuple(float(val) for val in (rmin + rmax) / 2)
+        size = tuple(float(val) for val in rmax - rmin)
+        return center, size
+
+    @model_validator(mode="after")
+    def _derive_geometry_from_points(self) -> Self:
+        """Keep inherited box geometry consistent with the point-cloud bounds."""
+
+        center, size = self._geometry_from_points(self.points)
+        for field_name, derived_value in (("center", center), ("size", size)):
+            if field_name in self.model_fields_set and not np.allclose(
+                getattr(self, field_name), derived_value
+            ):
+                log.warning(
+                    f"PointCloudFieldMonitor '{self.name}' derives '{field_name}' from "
+                    f"'points'; the supplied '{field_name}' value will be ignored.",
+                    custom_loc=[field_name],
+                )
+
+        # ``center`` and ``size`` are inherited box-monitor fields, but for point-cloud monitors
+        # they are derived metadata used by existing monitor bounds paths, not user-controlled
+        # inputs. Normal validation keeps them synchronized; ``validate=False`` callers accept
+        # the usual risk that derived fields may become stale.
+        object.__setattr__(self, "center", center)
+        object.__setattr__(self, "size", size)
+        return self
+
+    @property
+    def num_points(self) -> int:
+        """Number of points sampled by this monitor."""
+        return int(self.points.sizes["index"])
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of point-cloud samples."""
+        del num_cells, tmesh
+        points_size = np.asarray(self.points.values).nbytes
+        fields_size = BYTES_COMPLEX * self.num_points * len(self.freqs) * len(self.fields)
+        return points_size + fields_size
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        del tmesh
+        if len(self.fields) == 0:
+            return 0
+
+        field_components_factor = 0
+        if any(comp[0] == "E" for comp in self.fields):
+            field_components_factor += 3
+        if any(comp[0] == "H" for comp in self.fields):
+            field_components_factor += 3
+
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * field_components_factor
 
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):

@@ -62,6 +62,7 @@ from .boundary import (
     StablePML,
 )
 from .data.data_array import FreqDataArray, IndexedDataArray
+from .data.point_cloud import point_cloud_sampled_cells_upper_bound
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .diffraction import diffraction_monitor_storage_size, diffraction_order_grid_size
@@ -110,6 +111,7 @@ from .monitor import (
     MediumMonitor,
     ModeMonitor,
     PermittivityMonitor,
+    PointCloudFieldMonitor,
     SurfaceIntegrationMonitor,
     TimeMonitor,
 )
@@ -140,6 +142,7 @@ from .validators import (
     call_wrapped_validator,
     is_close_to_glancing_angle,
     named_obj_descr,
+    points_outside_bounds,
     validate_field_projection_monitors_2d,
     validate_mode_objects_symmetry,
 )
@@ -552,6 +555,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     def _monitor_num_cells(self, monitor: Monitor) -> int:
         """Total number of cells included in monitor based on simulation grid."""
+
+        if isinstance(monitor, PointCloudFieldMonitor):
+            return point_cloud_sampled_cells_upper_bound(
+                num_cells=self.grid.num_cells,
+                symmetry=self.symmetry,
+                num_points=monitor.num_points,
+                num_fields=len(monitor.fields),
+            )
 
         def num_cells_in_monitor(monitor: Monitor) -> int:
             """Get the number of measurement cells in a monitor given the simulation grid and
@@ -3323,6 +3334,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_absorber_in_zero_dims()
         self._warn_monitor_mediums_frequency_range()
         self._warn_monitor_simulation_frequency_range()
+        self._validate_point_cloud_monitor_points_in_bounds()
         self._projection_monitors_boundaries()
         self._diffraction_monitor_boundaries()
         self._projection_monitors_homogeneous()
@@ -4277,6 +4289,34 @@ class Simulation(AbstractYeeGridSimulation):
                         "(Hz) as defined by the sources.",
                         custom_loc=["monitors", monitor_index, "freqs"],
                     )
+        return self
+
+    def _validate_point_cloud_monitor_points_in_bounds(self) -> Self:
+        """Error if any point-cloud monitor point lies outside the simulation domain."""
+
+        if not self.monitors:
+            return self
+
+        bounds = np.asarray(self.bounds, dtype=float)
+        strict_inequality = np.asarray([size != 0 for size in self.size], dtype=bool)
+        for monitor_ind, monitor in enumerate(self.monitors):
+            if not isinstance(monitor, PointCloudFieldMonitor):
+                continue
+
+            points = np.asarray(monitor.points.values, dtype=float)
+            outside = points_outside_bounds(points, bounds, strict_inequality)
+            if np.any(outside):
+                first_index = int(np.nonzero(outside)[0][0])
+                num_outside = int(np.count_nonzero(outside))
+                self._raise_validation_error_at_loc(
+                    f"Point-cloud monitor '{monitor.name}' has {num_outside} point(s) outside "
+                    "the simulation domain. The first outside point has index "
+                    f"{first_index} and coordinates {points[first_index].tolist()}.",
+                    "monitors",
+                    monitor_ind,
+                    "points",
+                )
+
         return self
 
     def _diffraction_monitor_boundaries(self) -> Self:
@@ -5814,6 +5854,8 @@ class Simulation(AbstractYeeGridSimulation):
             num_cells = self._monitor_num_cells(monitor)
             # intermediate storage needed, in GB
             solver_data = monitor._storage_size_solver(num_cells=num_cells, tmesh=self.tmesh) / 1e9
+            if isinstance(monitor, PointCloudFieldMonitor) and self.precision == "double":
+                solver_data *= 2
             if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
                 raise SetupError(
                     f"Estimated internal storage of monitor '{monitor.name}' is "
@@ -5971,6 +6013,9 @@ class Simulation(AbstractYeeGridSimulation):
             else:
                 num_cells = self._monitor_num_cells(monitor)
                 storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
+                if isinstance(monitor, PointCloudFieldMonitor) and self.precision == "double":
+                    points_size = np.asarray(monitor.points.values).nbytes
+                    storage_size = points_size + 2 * (storage_size - points_size)
             data_size[monitor.name] = storage_size
         return data_size
 

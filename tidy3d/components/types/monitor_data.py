@@ -18,6 +18,7 @@ from tidy3d.components.data.monitor_data import (
     ModeData,
     ModeSolverData,
     PermittivityData,
+    PointCloudFieldData,
     SurfaceFieldData,
     SurfaceFieldTimeData,
 )
@@ -44,6 +45,7 @@ MonitorDataTypes = (
     FieldOverlapData,
     MicrowaveModeData,
     MicrowaveModeSolverData,
+    PointCloudFieldData,
     SurfaceFieldData,
     SurfaceFieldTimeData,
 )
@@ -65,6 +67,7 @@ MonitorDataType = (
     | FieldOverlapData
     | MicrowaveModeData
     | MicrowaveModeSolverData
+    | PointCloudFieldData
     | SurfaceFieldData
     | SurfaceFieldTimeData
 )

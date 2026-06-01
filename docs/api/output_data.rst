@@ -49,6 +49,7 @@ List of Monitor Data Types
    :template: module.rst
 
    FieldData
+   PointCloudFieldData
    FieldTimeData
    ModeSolverData
    PermittivityData
@@ -77,6 +78,7 @@ List of Dataset Types
    SpatialDataArray
    PermittivityDataset
    ScalarFieldDataArray
+   PointCloudFieldDataset
    ScalarModeFieldDataArray
    ScalarFieldTimeDataArray
    components.data.data_array.FreqDataArray

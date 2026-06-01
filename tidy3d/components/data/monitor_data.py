@@ -56,6 +56,7 @@ from tidy3d.components.monitor import (
     ModeMonitor,
     ModeSolverMonitor,
     PermittivityMonitor,
+    PointCloudFieldMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
 )
@@ -106,7 +107,9 @@ from .dataset import (
     MediumDataset,
     ModeSolverDataset,
     PermittivityDataset,
+    PointCloudFieldDataset,
 )
+from .em_fields import frequency_normalized_field_components
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -1842,12 +1845,10 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> FieldDataset:
         """Return copy of self after normalization is applied using source spectrum function."""
-        fields_norm = {}
-        for field_name, field_data in self.field_components.items():
-            src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
-
-        return self.copy(deep=False, update=fields_norm)
+        return self.copy(
+            deep=False,
+            update=frequency_normalized_field_components(self.field_components, source_spectrum_fn),
+        )
 
     def to_source(
         self, source_time: SourceTimeType, center: Coordinate, size: Size = None, **kwargs: Any
@@ -1939,6 +1940,64 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             sources.append(custom_source)
 
         return sources
+
+
+class PointCloudFieldData(MonitorData, PointCloudFieldDataset):
+    """
+    Data associated with a :class:`.PointCloudFieldMonitor`: scalar components of E and H
+    fields at point-cloud coordinates.
+
+    Example
+    -------
+    >>> from tidy3d import IndexedFreqDataArray, PointCloudFieldMonitor, PointDataArray
+    >>> points = PointDataArray(
+    ...     [[0.0, 0.0, 0.0], [0.1, 0.2, 0.3]],
+    ...     coords={"index": [0, 1], "axis": [0, 1, 2]},
+    ... )
+    >>> field = IndexedFreqDataArray(
+    ...     np.ones((2, 1)) + 0j,
+    ...     coords={"index": [0, 1], "f": [200e12]},
+    ... )
+    >>> monitor = PointCloudFieldMonitor(points=points, freqs=[200e12], fields=["Ex"], name="pc")
+    >>> data = PointCloudFieldData(monitor=monitor, points=points, Ex=field)
+    """
+
+    monitor: PointCloudFieldMonitor = Field(
+        ..., title="Monitor", description="Frequency-domain point-cloud field monitor."
+    )
+
+    _contains_monitor_fields = enforce_monitor_fields_present()
+
+    @model_validator(mode="after")
+    def _frequencies_match_monitor(self) -> Self:
+        """Ensure stored field frequency coordinates match the associated monitor."""
+        monitor_freqs = np.asarray(self.monitor.freqs)
+        for field_name, field_data in self.field_components.items():
+            field_freqs = np.asarray(field_data.coords["f"].values)
+            if not np.array_equal(field_freqs, monitor_freqs):
+                self._raise_validation_error_at_loc(
+                    f"Field component '{field_name}' has frequency coordinates that do not "
+                    "match the associated point-cloud field monitor frequencies.",
+                    field_name,
+                )
+        return self
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> PointCloudFieldData:
+        """Return copy of self after normalization is applied using source spectrum function."""
+        return self.copy(
+            deep=False,
+            update=frequency_normalized_field_components(self.field_components, source_spectrum_fn),
+        )
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Reject adjoint use until a batched point-cloud adjoint source is available."""
+        del fwidth
+        if not dataset_names:
+            return []
+
+        raise Tidy3dNotImplementedError(
+            "Adjoint objectives depending on PointCloudFieldData are currently unsupported."
+        )
 
 
 class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):

@@ -37,9 +37,12 @@ Field
    :template: module.rst
 
    FieldMonitor
+   PointCloudFieldMonitor
    FieldTimeMonitor
 
-The ``FieldMonitor`` records the EM field components within a spatial region at specified frequency point(s). The ``FieldTimeMonitor`` does the same, except at specified time intervals instead of frequency.
+The ``FieldMonitor`` records the EM field components within a spatial region at specified frequency point(s). The ``PointCloudFieldMonitor`` records frequency-domain EM field components at arbitrary point coordinates. The ``FieldTimeMonitor`` does the same as ``FieldMonitor``, except at specified time intervals instead of frequency.
+
+Point-cloud field data is indexed by point rather than by structured ``x`` / ``y`` / ``z`` grid coordinates, so structured-grid plotting helpers such as ``SimulationData.plot_field()`` do not support ``PointCloudFieldData``.
 
 .. code-block:: python
 
@@ -48,6 +51,17 @@ The ``FieldMonitor`` records the EM field components within a spatial region at 
        center=(0,0,0),
        size=(10,10,0),
        name='My field monitor',
+       freqs=[f0],
+   )
+
+   # define a point-cloud field monitor at arbitrary coordinates
+   my_point_cloud_monitor = PointCloudFieldMonitor(
+       points=PointDataArray(
+           [[0.0, 0.0, 0.0], [0.1, 0.2, 0.3]],
+           coords={"index": [0, 1], "axis": [0, 1, 2]},
+       ),
+       fields=["Ex", "Hy"],
+       name='My point-cloud monitor',
        freqs=[f0],
    )
 

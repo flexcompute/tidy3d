@@ -30,6 +30,8 @@ def test_simulation_default_factory_defaults_are_exported():
 
     assert "title" not in schema["properties"]["medium"]
     assert "description" not in schema["properties"]["medium"]
+    point_cloud_center = schema["$defs"]["PointCloudFieldMonitor"]["properties"]["center"]
+    assert "doc_hidden" not in point_cloud_center
 
 
 def test_field_monitor_apodization_default_is_exported():

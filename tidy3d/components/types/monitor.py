@@ -20,6 +20,7 @@ from tidy3d.components.monitor import (
     ModeMonitor,
     ModeSolverMonitor,
     PermittivityMonitor,
+    PointCloudFieldMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
 )
@@ -44,6 +45,7 @@ MonitorType = (
     | MicrowaveModeSolverMonitor
     | GaussianOverlapMonitor
     | AstigmaticGaussianOverlapMonitor
+    | PointCloudFieldMonitor
     | SurfaceFieldMonitor
     | SurfaceFieldTimeMonitor
 )

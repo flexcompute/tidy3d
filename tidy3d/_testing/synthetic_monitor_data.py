@@ -165,6 +165,18 @@ class SyntheticMonitorDataFactory:
             **field_cmps,
         )
 
+    def make_point_cloud_field_data(
+        self, monitor: td.PointCloudFieldMonitor
+    ) -> td.PointCloudFieldData:
+        field_cmps = {}
+        coords = {"index": np.asarray(monitor.points.coords["index"]), "f": list(monitor.freqs)}
+        for field_name in monitor.fields:
+            field_cmps[field_name] = self._make_data(
+                coords=coords, data_array_type=td.IndexedFreqDataArray, is_complex=True
+            )
+
+        return td.PointCloudFieldData(monitor=monitor, points=monitor.points, **field_cmps)
+
     def make_field_time_data(self, monitor: td.FieldTimeMonitor) -> td.FieldTimeData:
         field_cmps = {}
         grid = self.simulation.discretize_monitor(monitor)
@@ -569,6 +581,7 @@ class SyntheticMonitorDataFactory:
     def make_monitor_data(self, monitor: td.Monitor) -> MonitorDataTypes:
         monitor_maker_map = {
             td.FieldMonitor: self.make_field_data,
+            td.PointCloudFieldMonitor: self.make_point_cloud_field_data,
             td.FieldTimeMonitor: self.make_field_time_data,
             td.ModeSolverMonitor: self.make_mode_solver_data,
             td.MicrowaveModeSolverMonitor: self.make_microwave_mode_solver_data,

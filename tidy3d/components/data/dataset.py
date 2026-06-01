@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, get_args
 
 import numpy as np
 import xarray as xr
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import xyz
@@ -20,8 +20,10 @@ from .data_array import (
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     GroupIndexDataArray,
+    IndexedFreqDataArray,
     ModeDispersionDataArray,
     ModeIndexDataArray,
+    PointDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldCylindricalDataArray,
@@ -30,6 +32,7 @@ from .data_array import (
     TriangleMeshDataArray,
     _TracedDataset,
 )
+from .em_fields import em_field_symmetry_eigenvalues
 from .unstructured.surface import TriangularSurfaceDataset
 from .zbf import ZBFData
 
@@ -379,15 +382,7 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
     @property
     def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
-
-        return {
-            "Ex": lambda dim: -1 if (dim == 0) else +1,
-            "Ey": lambda dim: -1 if (dim == 1) else +1,
-            "Ez": lambda dim: -1 if (dim == 2) else +1,
-            "Hx": lambda dim: +1 if (dim == 0) else -1,
-            "Hy": lambda dim: +1 if (dim == 1) else -1,
-            "Hz": lambda dim: +1 if (dim == 2) else -1,
-        }
+        return em_field_symmetry_eigenvalues()
 
 
 class FieldDataset(ElectromagneticFieldDataset):
@@ -520,6 +515,101 @@ class FieldDataset(ElectromagneticFieldDataset):
                 f"E{dim2}": Edim2,
             }
         )
+
+
+class PointCloudFieldDataset(AbstractFieldDataset):
+    """Dataset storing electromagnetic field components at point-cloud coordinates.
+
+    Field components are scalar data arrays indexed by ``("index", "f")``. The ``points`` array
+    maps each ``index`` to its Cartesian coordinate.
+    """
+
+    points: PointDataArray = Field(
+        ...,
+        title="Points",
+        description="Point coordinates associated with the indexed field data.",
+    )
+
+    Ex: IndexedFreqDataArray | None = Field(
+        None,
+        title="Ex",
+        description="Point-cloud x-component of the electric field.",
+    )
+    Ey: IndexedFreqDataArray | None = Field(
+        None,
+        title="Ey",
+        description="Point-cloud y-component of the electric field.",
+    )
+    Ez: IndexedFreqDataArray | None = Field(
+        None,
+        title="Ez",
+        description="Point-cloud z-component of the electric field.",
+    )
+    Hx: IndexedFreqDataArray | None = Field(
+        None,
+        title="Hx",
+        description="Point-cloud x-component of the magnetic field.",
+    )
+    Hy: IndexedFreqDataArray | None = Field(
+        None,
+        title="Hy",
+        description="Point-cloud y-component of the magnetic field.",
+    )
+    Hz: IndexedFreqDataArray | None = Field(
+        None,
+        title="Hz",
+        description="Point-cloud z-component of the magnetic field.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        fields = {
+            "Ex": self.Ex,
+            "Ey": self.Ey,
+            "Ez": self.Ez,
+            "Hx": self.Hx,
+            "Hy": self.Hy,
+            "Hz": self.Hz,
+        }
+        return {field_name: field for field_name, field in fields.items() if field is not None}
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Point-cloud data is not sampled on named Yee-grid locations."""
+        raise DataError("Point-cloud field data does not have structured Yee-grid locations.")
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
+        """Maps field components to their (positive) symmetry eigenvalues."""
+        return em_field_symmetry_eigenvalues()
+
+    @model_validator(mode="after")
+    def _validate_field_indices(self) -> Self:
+        """Ensure point-indexed field data is aligned with the point cloud."""
+
+        num_points = self.points.sizes["index"]
+        point_index = np.asarray(self.points.coords["index"])
+        for field_name, field_data in self.field_components.items():
+            if field_data.sizes["index"] != num_points:
+                self._raise_validation_error_at_loc(
+                    f"Field component '{field_name}' has {field_data.sizes['index']} points, "
+                    f"but 'points' contains {num_points} points.",
+                    field_name,
+                )
+
+            if not np.array_equal(np.asarray(field_data.coords["index"]), point_index):
+                self._raise_validation_error_at_loc(
+                    f"Field component '{field_name}' has index coordinates that do not match "
+                    "the point-cloud index coordinates.",
+                    field_name,
+                )
+
+        return self
+
+    def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
+        """Point-cloud field data is already sampled at requested points and cannot be colocated."""
+        raise DataError("PointCloudFieldDataset data cannot be colocated on a structured grid.")
 
 
 class FieldTimeDataset(ElectromagneticFieldDataset):
@@ -741,15 +831,7 @@ class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
     @property
     def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
-
-        return {
-            "Ex": lambda dim: -1 if (dim == 0) else +1,
-            "Ey": lambda dim: -1 if (dim == 1) else +1,
-            "Ez": lambda dim: -1 if (dim == 2) else +1,
-            "Hx": lambda dim: +1 if (dim == 0) else -1,
-            "Hy": lambda dim: +1 if (dim == 1) else -1,
-            "Hz": lambda dim: +1 if (dim == 2) else -1,
-        }
+        return em_field_symmetry_eigenvalues()
 
 
 class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
@@ -827,19 +909,6 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
         description="Dispersion parameter for the mode.",
         json_schema_extra={"units": PICOSECOND_PER_NANOMETER_PER_KILOMETER},
     )
-
-    @property
-    def field_components(self) -> dict[str, DataArray]:
-        """Maps the field components to their associated data."""
-        fields = {
-            "Ex": self.Ex,
-            "Ey": self.Ey,
-            "Ez": self.Ez,
-            "Hx": self.Hx,
-            "Hy": self.Hy,
-            "Hz": self.Hz,
-        }
-        return {field_name: field for field_name, field in fields.items() if field is not None}
 
     @property
     def n_eff(self) -> ModeIndexDataArray:

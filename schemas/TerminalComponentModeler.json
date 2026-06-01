@@ -15949,6 +15949,154 @@
       ],
       "type": "object"
     },
+    "PointCloudFieldMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "$ref": "#/$defs/ApodizationSpec",
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "colocate": {
+          "const": false,
+          "default": false,
+          "type": "boolean"
+        },
+        "fields": {
+          "default": [
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
+          ],
+          "items": {
+            "enum": [
+              "Ex",
+              "Ey",
+              "Ez",
+              "Hx",
+              "Hy",
+              "Hz"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freqs": {
+          "type": "ArrayLike",
+          "x-array-dtype": "<f8",
+          "x-array-forbid_nan": true,
+          "x-array-ndim": 1,
+          "x-array-scalar_to_1d": true,
+          "x-array-shape": null,
+          "x-array-strict": false
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "points": {
+          "type": "string"
+        },
+        "size": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "type": {
+          "const": "PointCloudFieldMonitor",
+          "default": "PointCloudFieldMonitor",
+          "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": false,
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "points"
+      ],
+      "type": "object"
+    },
     "PointDipole": {
       "additionalProperties": false,
       "properties": {
@@ -17520,6 +17668,7 @@
                 "ModeMonitor": "#/$defs/ModeMonitor",
                 "ModeSolverMonitor": "#/$defs/ModeSolverMonitor",
                 "PermittivityMonitor": "#/$defs/PermittivityMonitor",
+                "PointCloudFieldMonitor": "#/$defs/PointCloudFieldMonitor",
                 "SurfaceFieldMonitor": "#/$defs/SurfaceFieldMonitor",
                 "SurfaceFieldTimeMonitor": "#/$defs/SurfaceFieldTimeMonitor"
               },
@@ -17579,6 +17728,9 @@
               },
               {
                 "$ref": "#/$defs/PermittivityMonitor"
+              },
+              {
+                "$ref": "#/$defs/PointCloudFieldMonitor"
               },
               {
                 "$ref": "#/$defs/SurfaceFieldMonitor"

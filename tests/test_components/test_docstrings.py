@@ -47,3 +47,11 @@ def test_docstring_updated_after_model_rebuild() -> None:
     doc = td.ClipOperation.__doc__ or ""
     assert "discriminated_union" not in doc
     assert "Union[" in doc
+
+
+def test_docstring_hidden_fields() -> None:
+    """Fields marked as hidden should be omitted from generated docs."""
+    doc = td.PointCloudFieldMonitor.generate_docstring()
+    assert "points : " in doc
+    assert "center : " not in doc
+    assert "size : " not in doc

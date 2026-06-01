@@ -233,6 +233,7 @@ from .components.data.dataset import (
     MediumDataset,
     ModeSolverDataset,
     PermittivityDataset,
+    PointCloudFieldDataset,
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
@@ -251,6 +252,7 @@ from .components.data.monitor_data import (
     ModeData,
     ModeSolverData,
     PermittivityData,
+    PointCloudFieldData,
     SurfaceFieldData,
     SurfaceFieldTimeData,
 )
@@ -418,6 +420,7 @@ from .components.monitor import (
     ModeSolverMonitor,
     Monitor,
     PermittivityMonitor,
+    PointCloudFieldMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
 )
@@ -847,6 +850,9 @@ __all__ = [
     "PerturbationPoleResidue",
     "PlaneWave",
     "PlaneWaveBeamProfile",
+    "PointCloudFieldData",
+    "PointCloudFieldDataset",
+    "PointCloudFieldMonitor",
     "PointDataArray",
     "PointDipole",
     "PolarizedAveraging",

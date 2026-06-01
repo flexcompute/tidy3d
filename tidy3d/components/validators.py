@@ -76,6 +76,25 @@ def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
     return descr
 
 
+def points_outside_bounds(
+    points: NDArray, bounds: NDArray, strict_inequality: Sequence[bool]
+) -> NDArray:
+    """Return a mask for points outside axis-aligned bounds."""
+    points = np.asarray(points, dtype=float)
+    bounds = np.asarray(bounds, dtype=float)
+    outside_lower = np.zeros(points.shape[0], dtype=bool)
+    outside_upper = np.zeros(points.shape[0], dtype=bool)
+    for axis, strict in enumerate(strict_inequality):
+        if strict:
+            outside_lower |= points[:, axis] <= bounds[0, axis]
+            outside_upper |= points[:, axis] >= bounds[1, axis]
+        else:
+            outside_lower |= points[:, axis] < bounds[0, axis]
+            outside_upper |= points[:, axis] > bounds[1, axis]
+
+    return outside_lower | outside_upper
+
+
 def call_wrapped_validator(
     factory: Callable[..., Any], instance: Any, *args: Any, **kwargs: Any
 ) -> Any:
@@ -364,6 +383,8 @@ def assert_objects_in_sim_bounds(
 
         with log as consolidated_logger:
             for position_index, geometric_object in enumerate(val):
+                if getattr(geometric_object, "_skip_sim_bounds_intersection_validation", False):
+                    continue
                 if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
                     obj_descr = named_obj_descr(geometric_object, field_name, position_index)
                     message = f"{obj_descr} is outside of the simulation domain."

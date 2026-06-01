@@ -9,7 +9,7 @@ import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, assert_single_value_error_loc
 
 
 def test_stop_start():
@@ -271,6 +271,218 @@ def test_monitor_colocate():
         colocate=False,
     )
     assert monitor.colocate is False
+
+
+def test_point_cloud_field_monitor(monkeypatch):
+    """Test point-cloud field monitor validation and storage estimates."""
+
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.4, 0.6]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Ex", "Hy"),
+        freqs=[1e12, 2e12],
+        name="pc",
+    )
+
+    assert monitor.num_points == 2
+    assert monitor.colocate is False
+    assert monitor.use_colocated_integration is False
+    assert np.allclose(monitor.center, (0.1, 0.2, 0.3))
+    assert np.allclose(monitor.size, (0.2, 0.4, 0.6))
+    assert monitor.storage_size(num_cells=1000, tmesh=[]) == 8 * 2 * 3 + 8 * 2 * 2 * 2
+    assert monitor._storage_size_solver(num_cells=1000, tmesh=[]) == 8 * 1000 * 2 * 6
+    assert not monitor.supports_parallel_adjoint()
+
+    with AssertLogLevel(None):
+        monitor_geometry_matches = td.PointCloudFieldMonitor(
+            points=points,
+            center=monitor.center,
+            size=monitor.size,
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_geometry_matches",
+        )
+    assert np.allclose(monitor_geometry_matches.center, monitor.center)
+    assert np.allclose(monitor_geometry_matches.size, monitor.size)
+
+    with AssertLogLevel("WARNING"):
+        monitor_geometry_ignored = td.PointCloudFieldMonitor(
+            points=points,
+            center=(1, 0, 0),
+            size=(1, 1, 1),
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_geometry_ignored",
+        )
+    assert np.allclose(monitor_geometry_ignored.center, monitor.center)
+    assert np.allclose(monitor_geometry_ignored.size, monitor.size)
+
+    updated_points = td.PointDataArray(
+        [[0.1, 0.1, 0.1], [0.3, 0.5, 0.7]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    updated_monitor = monitor.updated_copy(points=updated_points)
+    assert updated_monitor.points.equals(updated_points)
+    assert np.allclose(updated_monitor.center, (0.2, 0.3, 0.4))
+    assert np.allclose(updated_monitor.size, (0.2, 0.4, 0.6))
+
+    invalid_updated_points = td.PointDataArray(
+        [[np.nan, 0.0, 0.0]],
+        coords={"index": [0], "axis": [0, 1, 2]},
+    )
+    with pytest.raises(pd.ValidationError, match="finite") as excinfo:
+        monitor.updated_copy(points=invalid_updated_points)
+    assert_single_value_error_loc(excinfo, ("points",))
+
+    with pytest.raises(pd.ValidationError, match="unique") as excinfo:
+        td.PointCloudFieldMonitor(
+            points=points,
+            fields=("Ex", "Ex"),
+            freqs=[1e12],
+            name="pc_duplicate_fields",
+        )
+    assert_single_value_error_loc(excinfo, ("fields",))
+
+    with pytest.raises(pd.ValidationError):
+        td.PointCloudFieldMonitor(
+            points=points,
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_colocate",
+            colocate=True,
+        )
+
+    monitor_from_labeled_points = td.PointCloudFieldMonitor(
+        points=td.PointDataArray(
+            [[0.0, 0.0, 0.0]],
+            coords={"index": [10], "axis": ["x", "y", "z"]},
+        ),
+        fields=("Ex",),
+        freqs=[1e12],
+        name="pc_labeled_points",
+    )
+    assert np.array_equal(monitor_from_labeled_points.points.index, [0])
+    assert np.array_equal(monitor_from_labeled_points.points.axis, [0, 1, 2])
+
+    monitor_from_permuted_labeled_points = td.PointCloudFieldMonitor(
+        points=td.PointDataArray(
+            [[2.0, 1.0, 3.0]],
+            coords={"index": [10], "axis": ["y", "x", "z"]},
+        ),
+        fields=("Ex",),
+        freqs=[1e12],
+        name="pc_permuted_labeled_points",
+    )
+    assert np.allclose(
+        monitor_from_permuted_labeled_points.points.values,
+        [[1.0, 2.0, 3.0]],
+    )
+    assert np.array_equal(monitor_from_permuted_labeled_points.points.axis, [0, 1, 2])
+
+    with pytest.raises(pd.ValidationError, match="exactly three"):
+        td.PointCloudFieldMonitor(
+            points=td.PointDataArray(
+                [[0.0, 0.0]],
+                coords={"index": [0], "axis": [0, 1]},
+            ),
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_bad_axis_size",
+        )
+
+    with pytest.raises(pd.ValidationError, match="axis"):
+        td.PointCloudFieldMonitor(
+            points=td.PointDataArray(
+                [[0.0, 0.0, 0.0]],
+                coords={"index": [0], "axis": ["x", "x", "z"]},
+            ),
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_bad_axis_labels",
+        )
+
+    import tidy3d.components.monitor as monitor_module
+
+    assert monitor_module.MAX_POINT_CLOUD_FIELD_MONITOR_POINTS == 10_000_000
+
+    monkeypatch.setattr(monitor_module, "MAX_POINT_CLOUD_FIELD_MONITOR_POINTS", 1)
+    with pytest.raises(pd.ValidationError):
+        td.PointCloudFieldMonitor(points=points, fields=("Ex",), freqs=[1e12], name="pc_too_many")
+
+
+def test_point_cloud_field_monitor_simulation_bounds():
+    """Point-cloud monitors require every point to be inside the simulation domain."""
+
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.2, 0.2]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    monitor = td.PointCloudFieldMonitor(points=points, fields=("Ex",), freqs=[1e12], name="pc")
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(0.1),
+        run_time=1e-12,
+        monitors=[monitor],
+    )
+    assert sim.monitors_data_size["pc"] == 8 * 2 * 3 + 8 * 2 * 1 * 1
+    assert sim.updated_copy(precision="double").monitors_data_size["pc"] == (
+        8 * 2 * 3 + 16 * 2 * 1 * 1
+    )
+
+    outside_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.6, 0.0, 0.0]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    outside_monitor = td.PointCloudFieldMonitor(
+        points=outside_points, fields=("Ex",), freqs=[1e12], name="pc_outside"
+    )
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(0.1),
+            run_time=1e-12,
+            monitors=[outside_monitor],
+        )
+    assert_single_value_error_loc(excinfo, ("monitors", 0, "points"))
+
+    boundary_point = (0.5, 0.0, 0.0)
+    field_monitor = td.FieldMonitor(
+        center=boundary_point,
+        size=(0, 0, 0),
+        fields=("Ex",),
+        freqs=[1e12],
+        name="field_boundary",
+    )
+    boundary_points = td.PointDataArray(
+        [boundary_point],
+        coords={"index": [0], "axis": [0, 1, 2]},
+    )
+    point_cloud_monitor = td.PointCloudFieldMonitor(
+        points=boundary_points,
+        fields=("Ex",),
+        freqs=[1e12],
+        name="pc_boundary",
+    )
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(0.1),
+            run_time=1e-12,
+            monitors=[field_monitor],
+        )
+    assert_single_value_error_loc(excinfo, ("monitors", 0))
+
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(0.1),
+            run_time=1e-12,
+            monitors=[point_cloud_monitor],
+        )
+    assert_single_value_error_loc(excinfo, ("monitors", 0, "points"))
 
 
 @pytest.mark.parametrize(

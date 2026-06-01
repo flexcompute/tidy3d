@@ -39,7 +39,7 @@ from tidy3d.exceptions import AdjointError, DataError, SetupError, Tidy3dKeyErro
 from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
-from .monitor_data import AbstractFieldData, FieldTimeData
+from .monitor_data import AbstractFieldData, FieldTimeData, PointCloudFieldData
 from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
@@ -157,9 +157,24 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         original :class:`.Simulation`. This data can be accessed directly using the name given to the monitors initially.
     """
 
+    @staticmethod
+    def _raise_if_point_cloud_field_data(monitor_data: MonitorDataType, operation: str) -> None:
+        """Reject structured field helpers for indexed point-cloud field data."""
+        if not isinstance(monitor_data, PointCloudFieldData):
+            return
+
+        raise DataError(
+            f"'{operation}' is not supported for PointCloudFieldData because point-cloud "
+            "fields are indexed by 'index' rather than structured 'x', 'y', and 'z' "
+            "coordinates. Access point-cloud fields directly, for example "
+            f"sim_data['{monitor_data.monitor.name}'].Ex, and use "
+            f"sim_data['{monitor_data.monitor.name}'].points for the corresponding coordinates."
+        )
+
     def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
         """Load monitor and raise exception if not a field monitor."""
         mon_data = self[monitor_name]
+        self._raise_if_point_cloud_field_data(mon_data, "load_field_monitor")
         if not isinstance(mon_data, AbstractFieldData):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
@@ -759,6 +774,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        self._raise_if_point_cloud_field_data(field_monitor_data, "plot_field")
+
         # get the DataArray corresponding to the monitor_name and field_name
         if field_name in ("E", "H") or field_name[0] == "S":
             # Derived fields

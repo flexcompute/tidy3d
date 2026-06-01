@@ -4,7 +4,7 @@ Generate Tidy3D JSON Schemas (docs-free, deterministic).
 This utility exports JSON Schemas for key Tidy3D models and writes them into
 the repository `schemas/` directory, with two strict guarantees:
 
-- Documentation-free: remove all "title", "description", and "units" fields at every level.
+- Documentation-free: remove all "title", "description", "units", and "doc_hidden" fields at every level.
 - Default-preserving: materialize zero-argument `default_factory` values into exported defaults.
 - Canonicalized: deterministically sort keys and certain lists for stable output
   across Python versions.
@@ -133,7 +133,11 @@ def _stable_sort_key_for_schema_item(item: Any) -> str:
     """
     try:
         if isinstance(item, dict):
-            item = {k: v for k, v in item.items() if k not in {"title", "description", "units"}}
+            item = {
+                k: v
+                for k, v in item.items()
+                if k not in {"title", "description", "units", "doc_hidden"}
+            }
         return json.dumps(item, sort_keys=True, separators=(",", ":"))
     except Exception:
         return str(item)
@@ -143,7 +147,7 @@ def _canonicalize(obj: Any) -> Any:
     """Recursively canonicalize a schema object for deterministic, docs-free output.
 
     Rules:
-    - Drop all "description", "title", and "units" keys everywhere.
+    - Drop all "description", "title", "units", and "doc_hidden" keys everywhere.
     - Sort all dict keys recursively.
     - Sort arrays that are order-insensitive: "required", "enum", and "type" (when list).
     - For "anyOf"/"oneOf"/"allOf", sort entries by a stable key after canonicalization.
@@ -152,7 +156,7 @@ def _canonicalize(obj: Any) -> Any:
         # Canonicalize nested values and drop doc keys
         canon: dict[str, Any] = {}
         for k, v in obj.items():
-            if k in {"description", "title", "units"}:
+            if k in {"description", "title", "units", "doc_hidden"}:
                 continue  # drop docs
             canon[k] = _canonicalize(v)
 

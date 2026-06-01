@@ -38,9 +38,9 @@ from tidy3d.components.data.utils import _dot_numpy, _outer_dot_numpy
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.constants import UnitScaling
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, Tidy3dNotImplementedError
 
-from ..utils import AssertLogLevel, run_emulated
+from ..utils import AssertLogLevel, assert_single_value_error_loc, run_emulated
 from .test_data_arrays import (
     AUX_FIELD_TIME_MONITOR,
     DIFFRACTION_MONITOR,
@@ -151,6 +151,133 @@ def test_run_emulated_stabilizes_underflowing_source_normalization():
     values = sim_data["field"].Ex.values
 
     assert np.all(np.isfinite(values))
+
+
+def make_point_cloud_field_data():
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.1, -0.1]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    freqs = [1e14, 2e14]
+    field = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64) * (1.0 + 1.0j),
+        coords={"index": [0, 1], "f": freqs},
+    )
+    monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Ex", "Hy"),
+        freqs=freqs,
+        name="point_cloud",
+    )
+    return td.PointCloudFieldData(monitor=monitor, points=points, Ex=field, Hy=2 * field)
+
+
+def test_point_cloud_field_data(tmp_path):
+    """Test point-cloud field data validation, normalization, and HDF5 loading."""
+
+    data = make_point_cloud_field_data()
+    assert set(data.field_components) == {"Ex", "Hy"}
+
+    def source_spectrum(freq):
+        return 2.0 * np.ones_like(freq)
+
+    normalized_data = data.normalize(source_spectrum)
+    assert isinstance(normalized_data, td.PointCloudFieldData)
+    assert normalized_data.Ex.dtype == data.Ex.dtype
+    assert np.allclose(normalized_data.Ex.values, data.Ex.values / 2.0)
+
+    bad_index_field = td.IndexedFreqDataArray(
+        np.ones((1, 2), dtype=np.complex64),
+        coords={"index": [0], "f": data.monitor.freqs},
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudFieldData(
+            monitor=data.monitor,
+            points=data.points,
+            Ex=bad_index_field,
+            Hy=data.Hy,
+        )
+    assert_single_value_error_loc(excinfo, ("Ex",))
+
+    mismatched_index_field = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64),
+        coords={"index": [2, 3], "f": data.monitor.freqs},
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudFieldData(
+            monitor=data.monitor,
+            points=data.points,
+            Ex=mismatched_index_field,
+            Hy=data.Hy,
+        )
+    assert_single_value_error_loc(excinfo, ("Ex",))
+
+    bad_freq_field = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64),
+        coords={"index": [0, 1], "f": [3e14, 4e14]},
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudFieldData(
+            monitor=data.monitor,
+            points=data.points,
+            Ex=bad_freq_field,
+            Hy=data.Hy,
+        )
+    assert_single_value_error_loc(excinfo, ("Ex",))
+
+    with pytest.raises(ValidationError):
+        td.PointCloudFieldData(
+            monitor=data.monitor,
+            points=data.points,
+            Ex=data.Ex,
+        )
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(0.1),
+        run_time=1e-12,
+        monitors=[data.monitor],
+    )
+    sim_data = td.SimulationData(simulation=sim, data=(data,))
+    path = tmp_path / "point_cloud_field_data.hdf5"
+    sim_data.to_file(path)
+    loaded_data = td.SimulationData.mnt_data_from_file(path, mnt_name="point_cloud")
+    assert loaded_data == data
+
+
+def test_point_cloud_field_data_preserves_labeled_indices():
+    """Point-cloud field data preserves caller-provided point and field index labels."""
+
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.1, -0.1]],
+        coords={"index": [10, 20], "axis": [0, 1, 2]},
+    )
+    freqs = [1e14, 2e14]
+    field = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64),
+        coords={"index": [10, 20], "f": freqs},
+    )
+    monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Ex",),
+        freqs=freqs,
+        name="point_cloud_labeled",
+    )
+
+    data = td.PointCloudFieldData(monitor=monitor, points=points, Ex=field)
+
+    assert np.array_equal(data.points.coords["index"], [10, 20])
+    assert np.array_equal(data.Ex.coords["index"], [10, 20])
+
+
+def test_point_cloud_field_data_adjoint_unsupported():
+    """Point-cloud data should explicitly reject adjoint objectives in v1."""
+
+    data = make_point_cloud_field_data()
+
+    assert data._make_adjoint_sources(dataset_names=[], fwidth=1e12) == []
+    with pytest.raises(Tidy3dNotImplementedError, match="PointCloudFieldData"):
+        data._make_adjoint_sources(dataset_names=["Ex"], fwidth=1e12)
 
 
 def make_field_data(symmetry: bool = True):

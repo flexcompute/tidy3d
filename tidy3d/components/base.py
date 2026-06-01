@@ -2000,6 +2000,9 @@ class Tidy3dBaseModel(BaseModel):
                 continue
             if field_name == "attrs" and not include_attrs:
                 continue
+            extra = getattr(field, "json_schema_extra", None)
+            if isinstance(extra, dict) and extra.get("doc_hidden"):
+                continue
 
             # type
             ann = getattr(field, "annotation", None)
@@ -2041,7 +2044,6 @@ class Tidy3dBaseModel(BaseModel):
 
             # units
             units = None
-            extra = getattr(field, "json_schema_extra", None)
             if isinstance(extra, dict):
                 units = extra.get("units")
             if units is None and hasattr(field, "metadata"):

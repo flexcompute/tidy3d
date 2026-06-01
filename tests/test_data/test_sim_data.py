@@ -32,6 +32,7 @@ from .test_monitor_data import (
     make_mode_data_with_fields,
     make_mode_solver_data,
     make_permittivity_data,
+    make_point_cloud_field_data,
 )
 
 # monitor data instances
@@ -548,6 +549,29 @@ def test_loading_non_field_data():
     sim_data = make_sim_data()
     with pytest.raises(DataError):
         sim_data.load_field_monitor("flux")
+
+
+def test_point_cloud_field_data_rejected_by_structured_field_helpers():
+    point_cloud_data = make_point_cloud_field_data()
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(0.1),
+        run_time=1e-12,
+        monitors=[point_cloud_data.monitor],
+    )
+    sim_data = SimulationData(simulation=sim, data=(point_cloud_data,))
+
+    match = (
+        "PointCloudFieldData.*indexed by 'index'.*"
+        r"sim_data\['point_cloud'\]\.Ex.*"
+        r"sim_data\['point_cloud'\]\.points"
+    )
+    with pytest.raises(DataError, match=match):
+        sim_data.load_field_monitor("point_cloud")
+    with pytest.raises(DataError, match=match):
+        sim_data.plot_field("point_cloud", "Ex", f=1e14)
+    with pytest.raises(DataError, match=match):
+        sim_data.plot_field_monitor_data(point_cloud_data, "Ex", f=1e14)
 
 
 def test_replace_values_dict():
