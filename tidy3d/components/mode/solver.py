@@ -860,9 +860,33 @@ class EigSolver(Tidy3dBaseModel):
         """
         import scipy.sparse.linalg as spl
 
-        values, vectors = spl.eigs(
-            mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init, M=M
-        )
+        def solve_with_scipy() -> tuple[ArrayComplex, ArrayComplex]:
+            return spl.eigs(mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init, M=M)
+
+        # The explicit SuperLU ordering is a fast path for real single-precision matrices;
+        # double or complex cases benchmark better on SciPy's default shift-invert path.
+        if np.dtype(mat.dtype) != np.dtype(np.float32):
+            return solve_with_scipy()
+
+        import scipy.sparse as sp
+
+        try:
+            shifted_mat = mat - guess_value * (
+                sp.eye(mat.shape[0], dtype=mat.dtype, format="csr") if M is None else M
+            )
+            lu = spl.splu(shifted_mat.tocsc(), permc_spec="MMD_AT_PLUS_A")
+            op_inv = spl.LinearOperator(mat.shape, matvec=lu.solve, dtype=mat.dtype)
+            values, vectors = spl.eigs(
+                mat,
+                k=num_modes,
+                sigma=guess_value,
+                tol=TOL_EIGS,
+                v0=vec_init,
+                M=M,
+                OPinv=op_inv,
+            )
+        except (RuntimeError, ValueError, spl.ArpackError, spl.ArpackNoConvergence):
+            values, vectors = solve_with_scipy()
 
         # for i, eig_i in enumerate(values):
         #     vec = vectors[:, i]

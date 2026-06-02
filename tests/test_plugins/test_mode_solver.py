@@ -16,7 +16,7 @@ from tidy3d import config as td_config
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.derivatives import create_d_matrices, create_sfactor_b, create_sfactor_f
-from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver
+from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, TOL_EIGS, EigSolver
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError, SetupError, ValidationError
@@ -1202,6 +1202,229 @@ def make_test_mode_solver(freqs: list[float] | None = None, plane: td.Box = PLAN
         direction="-",
         colocate=False,
     )
+
+
+def test_solver_eigs_uses_custom_lu_only_for_real_single_precision(monkeypatch):
+    """Custom SuperLU ordering is limited to real single-precision matrices."""
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spl
+
+    splu_calls = []
+    eigs_uses_opinv = []
+
+    class MockLU:
+        def solve(self, vector):
+            return vector
+
+    def mock_splu(*args, **kwargs):
+        splu_calls.append(kwargs)
+        return MockLU()
+
+    def mock_eigs(mat, k, sigma, tol, v0, M=None, OPinv=None):
+        eigs_uses_opinv.append(OPinv is not None)
+        return np.array([sigma], dtype=np.complex64), np.ones((mat.shape[0], k), dtype=np.complex64)
+
+    monkeypatch.setattr(spl, "splu", mock_splu)
+    monkeypatch.setattr(spl, "eigs", mock_eigs)
+
+    mat_real_single = sp.eye(4, dtype=np.float32, format="csr")
+    vec_real_single = np.ones(4, dtype=np.float32)
+    EigSolver.solver_eigs(
+        mat_real_single,
+        num_modes=1,
+        vec_init=vec_real_single,
+        guess_value=np.float32(1.0),
+    )
+    assert splu_calls == [{"permc_spec": "MMD_AT_PLUS_A"}]
+    assert eigs_uses_opinv == [True]
+
+    splu_calls.clear()
+    eigs_uses_opinv.clear()
+    mat_complex_single = sp.eye(4, dtype=np.complex64, format="csr")
+    vec_complex_single = np.ones(4, dtype=np.complex64)
+    EigSolver.solver_eigs(
+        mat_complex_single,
+        num_modes=1,
+        vec_init=vec_complex_single,
+        guess_value=np.complex64(1.0),
+    )
+    assert splu_calls == []
+    assert eigs_uses_opinv == [False]
+
+    mat_real_double = sp.eye(4, dtype=np.float64, format="csr")
+    vec_real_double = np.ones(4, dtype=np.float64)
+    EigSolver.solver_eigs(
+        mat_real_double,
+        num_modes=1,
+        vec_init=vec_real_double,
+        guess_value=np.float64(1.0),
+    )
+    assert splu_calls == []
+    assert eigs_uses_opinv == [False, False]
+
+
+def test_solver_eigs_falls_back_when_custom_lu_fails(monkeypatch):
+    """Custom SuperLU failures should fall back to SciPy's default shift-invert path."""
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spl
+
+    splu_calls = []
+    eigs_opinv = []
+
+    def mock_splu(*args, **kwargs):
+        splu_calls.append(kwargs)
+        raise RuntimeError("custom lu failed")
+
+    def mock_eigs(mat, k, sigma, tol, v0, M=None, OPinv=None):
+        eigs_opinv.append(OPinv)
+        return np.array([sigma], dtype=np.complex64), np.ones((mat.shape[0], k), dtype=np.complex64)
+
+    monkeypatch.setattr(spl, "splu", mock_splu)
+    monkeypatch.setattr(spl, "eigs", mock_eigs)
+
+    mat = sp.eye(4, dtype=np.float32, format="csr")
+    vec_init = np.ones(4, dtype=np.float32)
+    values, vectors = EigSolver.solver_eigs(
+        mat,
+        num_modes=1,
+        vec_init=vec_init,
+        guess_value=np.float32(1.0),
+    )
+
+    assert splu_calls == [{"permc_spec": "MMD_AT_PLUS_A"}]
+    assert eigs_opinv == [None]
+    assert values.dtype == np.complex64
+    assert vectors.dtype == np.complex64
+
+
+def test_single_precision_pml_mode_solver_uses_complex_matrix(monkeypatch):
+    """Single-precision mode solves with PML should produce a complex matrix."""
+    mode_solver = make_test_mode_solver(freqs=[td.C_0 / 1.0])
+    mode_solver = mode_solver.updated_copy(
+        mode_spec=mode_solver.mode_spec.updated_copy(precision="single")
+    )
+    captured = {}
+
+    def mock_solver_eigs(
+        cls,
+        mat,
+        num_modes,
+        vec_init,
+        guess_value=1.0,
+        M=None,
+        **kwargs,
+    ):
+        captured["mat_dtype"] = np.dtype(mat.dtype)
+        captured["has_imag_data"] = bool(np.any(np.imag(mat.data) != 0))
+        raise RuntimeError("stop after routing")
+
+    monkeypatch.setattr(EigSolver, "solver_eigs", classmethod(mock_solver_eigs))
+
+    with pytest.raises(RuntimeError, match="stop after routing"):
+        mode_solver.solve()
+
+    assert captured["mat_dtype"] == np.dtype(np.complex64)
+    assert captured["has_imag_data"] is True
+
+
+def make_single_no_pml_mode_solver(medium=None):
+    """Make a single-precision mode solver without mode PML."""
+    if medium is None:
+        medium = td.Medium(permittivity=4.0)
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(1.5, 100, 1)),
+                medium=medium,
+            ),
+        ),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=(SRC,),
+    )
+    return ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=td.ModeSpec(
+            num_modes=1,
+            target_neff=2.0,
+            precision="single",
+            num_pml=(0, 0),
+            group_index_step=False,
+        ),
+        freqs=[td.C_0 / 1.0],
+        direction="+",
+        colocate=False,
+    )
+
+
+def test_single_precision_lossless_no_pml_mode_solver_uses_real_single_matrix(monkeypatch):
+    """Lossless single-precision mode solves without mode PML should produce a float32 matrix."""
+    mode_solver = make_single_no_pml_mode_solver()
+    captured = {}
+
+    def mock_solver_eigs(
+        cls,
+        mat,
+        num_modes,
+        vec_init,
+        guess_value=1.0,
+        M=None,
+        **kwargs,
+    ):
+        captured["mat_dtype"] = np.dtype(mat.dtype)
+        captured["has_imag_data"] = bool(np.any(np.imag(mat.data) != 0))
+        raise RuntimeError("stop after routing")
+
+    monkeypatch.setattr(EigSolver, "solver_eigs", classmethod(mock_solver_eigs))
+
+    with pytest.raises(RuntimeError, match="stop after routing"):
+        mode_solver.solve()
+
+    assert captured["mat_dtype"] == np.dtype(np.float32)
+    assert captured["has_imag_data"] is False
+
+
+def test_single_precision_lossless_no_pml_fast_path_matches_scipy(monkeypatch):
+    """Fast path preserves outputs for a representative lossless no-PML mode solve."""
+    fast_data = make_single_no_pml_mode_solver().solve()
+
+    def solver_eigs_without_fast_path(
+        cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs
+    ):
+        import scipy.sparse.linalg as spl
+
+        return spl.eigs(mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init, M=M)
+
+    monkeypatch.setattr(EigSolver, "solver_eigs", classmethod(solver_eigs_without_fast_path))
+
+    scipy_data = make_single_no_pml_mode_solver().solve()
+
+    assert np.allclose(fast_data.n_eff.values, scipy_data.n_eff.values, rtol=2e-5, atol=3e-5)
+    overlap = fast_data.dot(scipy_data).isel(f=0, mode_index=0).values.item()
+    assert abs(overlap) > 1 - 2e-2
+
+
+def test_single_precision_lossy_no_pml_mode_solver_skips_custom_lu(monkeypatch):
+    """Lossy single-precision mode solves should stay off the custom LU path."""
+    import scipy.sparse.linalg as spl
+
+    custom_splu_calls = []
+    original_splu = spl.splu
+
+    def recording_splu(*args, **kwargs):
+        if kwargs.get("permc_spec") == "MMD_AT_PLUS_A":
+            custom_splu_calls.append(kwargs)
+        return original_splu(*args, **kwargs)
+
+    monkeypatch.setattr(spl, "splu", recording_splu)
+
+    make_single_no_pml_mode_solver(medium=WG_MEDIUM).solve()
+
+    assert custom_splu_calls == []
 
 
 def test_mode_solver_plot_field_components():
