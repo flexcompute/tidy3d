@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
@@ -115,6 +116,50 @@ def test_pec_frame_matches_mode_solver_pec_boundaries():
         assert frame_box.bounds[1][ax] == pec_box.bounds[1][ax], (
             f"PEC frame max on axis {ax} ({frame_box.bounds[1][ax]}) "
             f"does not match mode solver PEC ({pec_box.bounds[1][ax]})"
+        )
+
+
+def test_pec_frame_covers_grid_aligned_absorber():
+    """The PEC frame of an InternalAbsorber fully encloses the absorber on every tangential axis.
+
+    When the transverse boundary of an InternalAbsorber coincides exactly with a grid-cell
+    boundary, the automatically added PEC frame must reach at least as far as the absorber on
+    every tangential axis. A frame that falls short leaves absorber cells unshielded and can
+    corrupt the simulation result.
+    """
+    # Uniform grid dl=0.1 → boundaries at multiples of 0.1.
+    # Absorber transverse size 2.0 centered at origin → bounds at ±1.0, exactly on grid boundaries.
+    absorber = td.InternalAbsorber(
+        center=(0, 0, 0),
+        size=(2.0, 2.0, 0),
+        direction="+",
+        boundary_spec=td.ModeABCBoundary(
+            plane=td.Box(center=(0, 0, 0), size=(2.0, 2.0, 0)), freq_spec=td.C_0 / 1.0
+        ),
+    )
+    sim = td.Simulation(
+        center=(0, 0, 0),
+        size=(4, 4, 4),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+        internal_absorbers=[absorber],
+    )
+
+    frame_box, axis, _ = sim._pec_frame_box(absorber)
+    coords = sim.grid.boundaries.to_list
+    _, tangential_axes = td.Box.pop_axis([0, 1, 2], axis)
+    for ax in tangential_axes:
+        frame_min_ind = int(np.searchsorted(coords[ax], frame_box.bounds[0][ax]))
+        frame_max_ind = int(np.searchsorted(coords[ax], frame_box.bounds[1][ax]))
+        absorber_min_ind = int(np.searchsorted(coords[ax], absorber.bounds[0][ax]))
+        absorber_max_ind = int(np.searchsorted(coords[ax], absorber.bounds[1][ax]))
+        assert frame_min_ind == absorber_min_ind, (
+            f"PEC frame min index on axis {ax} ({frame_min_ind}) "
+            f"!= absorber min index ({absorber_min_ind})"
+        )
+        assert frame_max_ind == absorber_max_ind, (
+            f"PEC frame max index on axis {ax} ({frame_max_ind}) "
+            f"!= absorber max index ({absorber_max_ind})"
         )
 
 
