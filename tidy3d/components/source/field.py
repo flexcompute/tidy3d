@@ -740,6 +740,14 @@ class FixedAngleSpec(AbstractAngularSpec):
           ``Periodic`` transverse boundaries are not allowed. Combining a
           fixed-angle :class:`PlaneWave` and a fixed-angle :class:`TFSF` in the
           same simulation is also not allowed.
+
+          .. note::
+
+              Fixed-angle :class:`TFSF` may be more sensitive than other
+              source types to dispersive media in the layered background
+              that extend into the transverse :class:`PML` boundaries. If
+              the field decay is not reached in such a setup, switching
+              the transverse boundaries to :class:`Absorber` is preferred.
     """
 
 

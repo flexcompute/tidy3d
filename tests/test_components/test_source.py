@@ -1260,12 +1260,42 @@ def test_fixed_angle_tfsf_2d_axis1_uses_pop_axis_plane_dirs(angle_phi, expect_ac
 def test_fixed_angle_tfsf_rejects_continuous_wave():
     """``ContinuousWave`` has unbounded time support — never decays by
     ``run_time`` — so the fixed-angle Fourier-series synthesis would
-    alias its steady-state back to t=0. Validator rejects."""
+    alias its steady-state back to t=0. Validator rejects.
+
+    The rejection must be the same actionable, source-localized error
+    whether ``run_time`` is a scalar or a ``RunTimeSpec``: the localization
+    validator short-circuits non-decaying source times before evaluating
+    ``_run_time`` (which is itself undefined for a ``RunTimeSpec`` when no
+    source decays)."""
     cw_source = _make_fixed_angle_tfsf(
         source_time=td.ContinuousWave(freq0=2e14, fwidth=0.4e14),
     )
-    with pytest.raises(ValidationError, match="decay"):
+    # The actionable error is source-localized at ``sources[0]``. Asserting
+    # the loc (not just a "decay" substring) distinguishes it from the
+    # generic ``RunTimeSpec`` "could not compute source contributions"
+    # setup error, whose message also happens to contain "decaying".
+    with pytest.raises(ValidationError) as excinfo:
         _make_fixed_angle_sim([cw_source])
+    assert_single_value_error_loc(excinfo, ("sources", 0), "unbounded")
+    # Same source-localized error with a RunTimeSpec — the localization
+    # validator short-circuits the non-decaying source before evaluating
+    # ``_run_time`` (which would otherwise raise the generic, non-localized
+    # RunTimeSpec error first).
+    with pytest.raises(ValidationError) as excinfo_spec:
+        _make_fixed_angle_sim([cw_source], run_time=td.RunTimeSpec(quality_factor=2.0))
+    assert_single_value_error_loc(excinfo_spec, ("sources", 0), "unbounded")
+
+
+def test_fixed_angle_tfsf_accepts_run_time_spec():
+    """Regression: the fixed-angle TFSF validators/warnings must use the
+    evaluated ``Simulation._run_time`` rather than ``float(self.run_time)``,
+    which raises ``TypeError`` when ``run_time`` is a :class:`RunTimeSpec`.
+    Construction with a ``RunTimeSpec`` must succeed (and the evaluated
+    run time must be a finite positive float)."""
+    tfsf = _make_fixed_angle_tfsf()
+    sim = _make_fixed_angle_sim([tfsf], run_time=td.RunTimeSpec(quality_factor=3.0))
+    assert isinstance(sim.run_time, td.RunTimeSpec)
+    assert np.isfinite(sim._run_time) and sim._run_time > 0.0
 
 
 @pytest.mark.parametrize(

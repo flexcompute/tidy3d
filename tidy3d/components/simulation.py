@@ -3326,8 +3326,12 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_fixed_angle_tfsf_angle_theta()
         self._validate_fixed_angle_tfsf_source_time_type()
         self._validate_fixed_angle_tfsf_semi_infinite_injection_axis()
-        self._warn_fixed_angle_tfsf_long_run_time()
+        # Localization rejects non-decaying source times (and is evaluated
+        # before the long-run-time warning, which accesses ``self._run_time``;
+        # that evaluation is only well-defined once the sources are known to
+        # decay — see ``_validate_fixed_angle_tfsf_source_time_localization``).
         self._validate_fixed_angle_tfsf_source_time_localization()
+        self._warn_fixed_angle_tfsf_long_run_time()
         self._check_fixed_angle_components()
         self._validate_frequency_mode_abc()
         self._validate_relax_courant_compatibility()
@@ -3853,7 +3857,24 @@ class Simulation(AbstractYeeGridSimulation):
             if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
                 continue
             st = source.source_time
-            run_time = float(self.run_time)
+            # A source time with unbounded support (no finite ``end_time``,
+            # e.g. ``ContinuousWave``) can never satisfy the decay
+            # requirement. Reject it here with the actionable, source-localized
+            # error *before* evaluating ``self._run_time`` — for a
+            # ``RunTimeSpec`` that evaluation would otherwise raise the generic
+            # "could not compute source contributions" error first, making the
+            # failure mode depend on how ``run_time`` is represented.
+            if st.end_time() is None:
+                self._raise_validation_error_at_loc(
+                    "Fixed-angle TFSF requires 'source_time' to have decayed by "
+                    f"the end of the simulation, but '{st.type}' has unbounded "
+                    "time support. Use a localized source (e.g. 'GaussianPulse').",
+                    "sources",
+                    src_idx,
+                )
+            # Use the evaluated run time so a ``RunTimeSpec`` (not a plain
+            # float) is handled instead of raising ``TypeError`` here.
+            run_time = self._run_time
             # Anchor the dense sample at `offset_time` so long-`run_time`
             # sims with a short pulse (run_time >> twidth) don't skip the
             # pulse peak entirely and report a spurious "peak ≈ 0".
@@ -3902,7 +3923,9 @@ class Simulation(AbstractYeeGridSimulation):
         for src_idx, source in enumerate(self.sources):
             if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
                 continue
-            run_time = float(self.run_time)
+            # Use the evaluated run time so a ``RunTimeSpec`` (not a plain
+            # float) is handled instead of raising ``TypeError`` here.
+            run_time = self._run_time
             fwidth = float(source.source_time.fwidth)
             if run_time * fwidth > RUN_TIME_FWIDTH_WARN_THRESHOLD:
                 log.warning(
