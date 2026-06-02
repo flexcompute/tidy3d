@@ -180,6 +180,11 @@ html_theme_options = {
     "use_download_button": True,
     "pygment_light_style": "colorful",
     "pygment_dark_style": "material",
+    # Keep search in the primary sidebar only; inherited navbar search is a duplicate.
+    "navbar_start": [],
+    "navbar_center": [],
+    "navbar_end": [],
+    "navbar_persistent": [],
 }
 latex_engine = "xelatex"
 language = "en"
