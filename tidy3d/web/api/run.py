@@ -150,12 +150,14 @@ def run(
     progress_callback_download : Optional[Callable[[float], None]] = None
         Callback invoked with byte counts during download (single-run path only).
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.solver_version`` instead; external users should leave unset.
     worker_group : Optional[str] = None
-        Worker group to target. If ``None``, uses ``td.config.run.worker_group``.
+        Deprecated direct argument for worker group targeting, for internal use only. Internal
+        workflows should set ``td.config.run.worker_group`` instead; external users should leave
+        unset.
     simulation_type : Optional[str] = None
-        Simulation type label passed through to the runners. If ``None``, uses
-        ``td.config.run.simulation_type``.
+        Internal simulation type label; external users should leave unset.
     parent_tasks : Optional[List[str]] = None
         Parent task IDs, if any.
     local_gradient : Optional[bool] = None
@@ -168,7 +170,8 @@ def run(
     reduce_simulation : {"auto", True, False} = "auto"
         Whether to reduce structures to the simulation domain (mode solver only).
     pay_type : Optional[Union[PayType, str]] = None
-        Payment method selection. If ``None``, uses ``td.config.run.pay_type``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.pay_type`` instead; external users should leave unset.
     priority : Optional[int] = None
         Queue priority for vGPU (1 = lowest, 10 = highest).
     max_workers : Optional[int] = None
@@ -202,9 +205,10 @@ def run(
     - For each simulation, a mode-solver compatibility patch is applied so that
       the returned data exposes expected convenience attributes.
     - ``progress_callback_*`` are only used in the single-run code path.
-    - Passing run options directly is deprecated. Set defaults via
-      ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
-      passed here override the config for this call.
+    - Passing ``solver_version``, ``worker_group``, ``pay_type``, ``priority``,
+      and vGPU options directly is deprecated. Set defaults via ``td.config.run``
+      and ``td.config.vgpu`` instead. Non-``None`` values passed here override
+      the config for this call.
 
     Raises
     ------

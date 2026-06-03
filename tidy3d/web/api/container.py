@@ -306,8 +306,8 @@ class Job(WebContainer):
     solver_version: str | None = Field(
         None,
         title="Solver Version",
-        description="Custom solver version to use, "
-        "otherwise uses default for the current front end version.",
+        description="Deprecated direct option for internal use only. Internal workflows should set "
+        "``td.config.run.solver_version`` instead; external users should leave unset.",
     )
 
     verbose: bool = Field(
@@ -319,7 +319,7 @@ class Job(WebContainer):
     simulation_type: BatchCategoryType | None = Field(
         None,
         title="Simulation Type",
-        description="Type of simulation, used internally only.",
+        description="Internal simulation type label; external users should leave unset.",
     )
 
     parent_tasks: tuple[TaskId, ...] | None = Field(
@@ -346,7 +346,8 @@ class Job(WebContainer):
     pay_type: PayType | None = Field(
         None,
         title="Payment Type",
-        description="Specify the payment method.",
+        description="Deprecated direct option for internal use only. Internal workflows should set "
+        "``td.config.run.pay_type`` instead; external users should leave unset.",
     )
 
     lazy: bool = Field(
@@ -1019,8 +1020,8 @@ class Batch(WebContainer):
     solver_version: str | None = Field(
         None,
         title="Solver Version",
-        description="Custom solver version to use, "
-        "otherwise uses default for the current front end version.",
+        description="Deprecated direct option for internal use only. Internal workflows should set "
+        "``td.config.run.solver_version`` instead; external users should leave unset.",
     )
 
     callback_url: str | None = Field(
@@ -1034,7 +1035,7 @@ class Batch(WebContainer):
     simulation_type: BatchCategoryType | None = Field(
         None,
         title="Simulation Type",
-        description="Type of each simulation in the batch, used internally only.",
+        description="Internal simulation type label; external users should leave unset.",
     )
 
     parent_tasks: dict[str, tuple[TaskId, ...]] | None = Field(
@@ -1062,7 +1063,8 @@ class Batch(WebContainer):
     pay_type: PayType | None = Field(
         None,
         title="Payment Type",
-        description="Specify the payment method.",
+        description="Deprecated direct option for internal use only. Internal workflows should set "
+        "``td.config.run.pay_type`` instead; external users should leave unset.",
     )
 
     jobs_cached: dict[TaskName, Job] | None = Field(

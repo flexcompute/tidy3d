@@ -318,16 +318,18 @@ def run_custom(
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : Optional[str] = None
-        Type of simulation being uploaded. If ``None``, uses
-        ``td.config.run.simulation_type``.
+        Internal simulation type label; external users should leave unset.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
     solver_version : Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.solver_version`` instead; external users should leave unset.
     worker_group : Optional[str] = None
-        Worker group to target. If ``None``, uses ``td.config.run.worker_group``.
+        Deprecated direct argument for worker group targeting, for internal use only. Internal
+        workflows should set ``td.config.run.worker_group`` instead; external users should leave
+        unset.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculation locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -339,7 +341,8 @@ def run_custom(
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type : Optional[Union[PayType, str]] = None
-        Payment method. If ``None``, uses ``td.config.run.pay_type``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.pay_type`` instead; external users should leave unset.
     priority : Optional[int] = None
         Task priority for vGPU queue (1=lowest, 10=highest).
     lazy: Optional[bool] = None
@@ -385,9 +388,10 @@ def run_custom(
         simulation to the server without running it, you can use the :meth:`tidy3d.web.api.webapi.monitor`,
         :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
         display the progress of your simulation(s).
-        Passing run options directly is deprecated. Set defaults via
-        ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
-        passed here override the config for this call.
+        Passing ``solver_version``, ``worker_group``, ``pay_type``, ``priority``,
+        and vGPU options directly is deprecated. Set defaults via ``td.config.run``
+        and ``td.config.vgpu`` instead. Non-``None`` values passed here override
+        the config for this call.
 
     Examples
     --------
@@ -612,10 +616,10 @@ def run_async_custom(
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : Optional[str] = None
-        Type of simulation being uploaded. If ``None``, uses
-        ``td.config.run.simulation_type``.
+        Internal simulation type label; external users should leave unset.
     solver_version: Optional[str] = None
-        Target solver version. If ``None``, uses ``td.config.run.solver_version``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.solver_version`` instead; external users should leave unset.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculations locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -625,7 +629,8 @@ def run_async_custom(
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type : Optional[Union[PayType, str]] = None
-        Payment method. If ``None``, uses ``td.config.run.pay_type``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.pay_type`` instead; external users should leave unset.
     priority: Optional[int] = None
         Queue priority for vGPU simulations (1=lowest, 10=highest).
     lazy: Optional[bool] = None
@@ -676,9 +681,10 @@ def run_async_custom(
 
     Notes
     -----
-    Passing run options directly is deprecated. Set defaults via
-    ``td.config.run`` and ``td.config.vgpu`` instead. Non-``None`` values
-    passed here override the config for this call.
+    Passing ``solver_version``, ``pay_type``, ``priority``, and vGPU options
+    directly is deprecated. Set defaults via ``td.config.run`` and
+    ``td.config.vgpu`` instead. Non-``None`` values passed here override the
+    config for this call.
     """
     # validate priority if specified
     if priority is not None and (priority < 1 or priority > 10):

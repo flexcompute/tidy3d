@@ -374,31 +374,32 @@ class RunConfig(ConfigSection):
     solver_version: str | None = Field(
         None,
         title="Solver version",
-        description="Default solver version to use for web runs.",
+        description="Internal usage only. Default solver version to use for web runs.",
     )
 
     worker_group: str | None = Field(
         None,
         title="Worker group",
-        description="Default worker group to use for web runs.",
+        description="Internal usage only. Default worker group to use for web runs.",
     )
 
     simulation_type: str = Field(
         "tidy3d",
         title="Simulation type",
-        description="Default simulation type label for uploaded tasks.",
+        description="Internal usage only. Default simulation type label for uploaded tasks.",
     )
 
     additional_payload: dict[str, Any] | None = Field(
         None,
         title="Additional payload",
-        description="Additional submit payload serialized to JSON and sent under 'additionalPayload'.",
+        description="Internal usage only. Additional submit payload serialized to JSON and sent "
+        "under 'additionalPayload'.",
     )
 
     pay_type: str = Field(
         "AUTO",
         title="Payment type",
-        description="Default payment type for web runs.",
+        description="Internal usage only. Default payment type for web runs.",
     )
 
     @field_validator("pay_type", mode="before")

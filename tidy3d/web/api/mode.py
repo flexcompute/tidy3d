@@ -93,7 +93,8 @@ def run(
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
     pay_type : Optional[Union[PayType, str]] = None
-        Payment method. If ``None``, uses ``td.config.run.pay_type``.
+        Deprecated direct argument for internal use only. Internal workflows should set
+        ``td.config.run.pay_type`` instead; external users should leave unset.
     Returns
     -------
     :class:`.ModeSolverData`
