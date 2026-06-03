@@ -25,6 +25,7 @@ from pydantic import (
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.types.base import discriminated_union
+from tidy3d.config import config
 from tidy3d.constants import C_0, GLANCING_CUTOFF, SECOND, fp_eps, inf
 from tidy3d.exceptions import (
     AdjointError,
@@ -254,7 +255,7 @@ def validate_boundaries_for_zero_dims(
             if size_dim == 0:
                 axis = axis_names[dim]
                 num_absorbing_bdries = sum(
-                    isinstance(bnd, (AbsorberSpec, ABCBoundary, ModeABCBoundary))
+                    isinstance(bnd, AbsorberSpec | ABCBoundary | ModeABCBoundary)
                     for bnd in boundary
                 )
                 num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
@@ -469,9 +470,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundary_types = [[None, None], [None, None], [None, None]]
         for dim, boundary in enumerate(self.boundary_spec.to_list):
             for side, edge in enumerate(boundary):
-                if isinstance(edge, (PECBoundary, PMCBoundary)):
+                if isinstance(edge, PECBoundary | PMCBoundary):
                     boundary_types[dim][side] = "pec/pmc"
-                elif isinstance(edge, (Periodic, BlochBoundary)):
+                elif isinstance(edge, Periodic | BlochBoundary):
                     boundary_types[dim][side] = "periodic"
         return boundary_types
 
@@ -1512,7 +1513,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 plot_params = plot_params_pmc.copy(deep=True)
             elif isinstance(boundary_edge, BlochBoundary):
                 plot_params = plot_params_bloch.copy(deep=True)
-            elif isinstance(boundary_edge, (ABCBoundary, ModeABCBoundary)):
+            elif isinstance(boundary_edge, ABCBoundary | ModeABCBoundary):
                 plot_params = plot_params_abc.copy(deep=True)
             else:
                 plot_params = PlotParams(alpha=0)
@@ -1696,7 +1697,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundary with another PEC/PMC plane upon initialization."""
         periodic = []
         for bcs_1d in self.boundary_spec.to_list:
-            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
+            periodic.append(all(isinstance(bcs, Periodic | BlochBoundary) for bcs in bcs_1d))
         return periodic
 
     @cached_property
@@ -1712,7 +1713,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         for idx_i, boundary1d in enumerate(self.boundary_spec.to_list):
             for idx_j, boundary in enumerate(boundary1d):
-                if isinstance(boundary, (PML, StablePML, Absorber)):
+                if isinstance(boundary, PML | StablePML | Absorber):
                     num_layers[idx_i][idx_j] = boundary.num_layers
 
         return num_layers
@@ -2309,7 +2310,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         if remove_outside_custom_mediums:
             # check for special treatment in case of PML
             if any(
-                any(isinstance(edge, (PML, StablePML, Absorber)) for edge in boundary)
+                any(isinstance(edge, PML | StablePML | Absorber) for edge in boundary)
                 for boundary in boundary_spec.to_list
             ):
                 # if we need to cut out outside custom medium we have to be careful about PML/Absorber
@@ -3377,7 +3378,7 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for i, structure in enumerate(self.structures):
                 static_geometry = structure.geometry.to_static()
-                if isinstance(structure.medium, (Medium2D, AnisotropicMediumFromMedium2D)):
+                if isinstance(structure.medium, Medium2D | AnisotropicMediumFromMedium2D):
                     if any(
                         len(geom.zero_dims) == 1 and geom.zero_dims[0] == collapsed_axis
                         for geom in flatten_groups(static_geometry)
@@ -3499,7 +3500,7 @@ class Simulation(AbstractYeeGridSimulation):
                             source_ind,
                         )
                 else:
-                    num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                    num_bloch = sum(isinstance(bnd, Periodic | BlochBoundary) for bnd in boundary)
                     if num_bloch > 0:
                         self._check_bloch_vec(
                             source=source,
@@ -3539,7 +3540,7 @@ class Simulation(AbstractYeeGridSimulation):
                 boundary = boundaries[tan_dir]
 
                 # check the Bloch boundary + angled plane wave case
-                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                num_bloch = sum(isinstance(bnd, Periodic | BlochBoundary) for bnd in boundary)
                 if num_bloch > 0:
                     self._check_bloch_vec(
                         source=source,
@@ -3613,7 +3614,7 @@ class Simulation(AbstractYeeGridSimulation):
             # boundary and gets re-injected, breaking the assumption
             # that the SF region is a pure scattered field.
             inj_boundary = boundaries[norm_dir]
-            bad_inj = [bnd for bnd in inj_boundary if isinstance(bnd, (BlochBoundary, Periodic))]
+            bad_inj = [bnd for bnd in inj_boundary if isinstance(bnd, BlochBoundary | Periodic)]
             if bad_inj:
                 self._raise_validation_error_at_loc(
                     f"The TFSF source at index '{src_idx}' cannot use 'BlochBoundary' or "
@@ -3636,7 +3637,7 @@ class Simulation(AbstractYeeGridSimulation):
                 # conventionally Periodic and carrying no physical width — it
                 # is exempt from this rule.
                 if isinstance(source.angular_spec, FixedAngleSpec) and self.size[tan_dir] > 0:
-                    bad = [bnd for bnd in boundary if isinstance(bnd, (BlochBoundary, Periodic))]
+                    bad = [bnd for bnd in boundary if isinstance(bnd, BlochBoundary | Periodic)]
                     if bad:
                         self._raise_validation_error_at_loc(
                             "Fixed-angle TFSF forbids 'BlochBoundary' and 'Periodic' transverse "
@@ -3687,7 +3688,7 @@ class Simulation(AbstractYeeGridSimulation):
                 ):
                     # if the boundary is Bloch periodic, crossing is allowed, but check that the
                     # Bloch vector has been correctly set, similar to the check for plane waves
-                    num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                    num_bloch = sum(isinstance(bnd, Periodic | BlochBoundary) for bnd in boundary)
                     if num_bloch == 2:
                         self._check_bloch_vec(
                             source=source,
@@ -4067,14 +4068,14 @@ class Simulation(AbstractYeeGridSimulation):
 
         if boundary_spec is not None:
             x_boundary = boundary_spec.x
-            if isinstance(x_boundary.plus, (Periodic, BlochBoundary)) or isinstance(
-                x_boundary.minus, (Periodic, BlochBoundary)
+            if isinstance(x_boundary.plus, Periodic | BlochBoundary) or isinstance(
+                x_boundary.minus, Periodic | BlochBoundary
             ):
                 incompatible.append("Periodic or Bloch boundary condition along x.")
             for axis_name in ("x", "y", "z"):
                 axis_boundary = boundary_spec[axis_name]
-                if isinstance(axis_boundary.plus, (ABCBoundary, ModeABCBoundary)) or isinstance(
-                    axis_boundary.minus, (ABCBoundary, ModeABCBoundary)
+                if isinstance(axis_boundary.plus, ABCBoundary | ModeABCBoundary) or isinstance(
+                    axis_boundary.minus, ABCBoundary | ModeABCBoundary
                 ):
                     incompatible.append(f"ABC or ModeABC boundary condition along {axis_name}.")
 
@@ -4178,7 +4179,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for i, structure in enumerate(val):
-                if isinstance(structure.medium, (Medium2D, AnisotropicMediumFromMedium2D)):
+                if isinstance(structure.medium, Medium2D | AnisotropicMediumFromMedium2D):
                     continue
                 for geom in flatten_groups(structure.geometry):
                     zero_dims = geom.zero_dims
@@ -4358,7 +4359,7 @@ class Simulation(AbstractYeeGridSimulation):
                 ]
                 # make sure the transverse boundaries are either periodic or Bloch
                 for boundary in boundaries:
-                    if not isinstance(boundary, (Periodic, BlochBoundary)):
+                    if not isinstance(boundary, Periodic | BlochBoundary):
                         self._raise_validation_error_at_loc(
                             f"The 'DiffractionMonitor' {monitor.name} requires periodic "
                             f"or Bloch boundaries along dimensions {n_x} and {n_y}.",
@@ -4388,7 +4389,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for monitor_ind, monitor in enumerate(val):
-                if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
+                if isinstance(monitor, AbstractFieldProjectionMonitor | DiffractionMonitor):
                     mediums = self._call_with_validation_loc(
                         ["monitors", monitor_ind],
                         self._projection_monitor_mediums_in_bounds,
@@ -4591,7 +4592,7 @@ class Simulation(AbstractYeeGridSimulation):
                             "Boundary must be homogeneous. Make sure custom medium is uniform on the boundary.",
                         )
 
-                    if isinstance(list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)):
+                    if isinstance(list(mediums)[0], AnisotropicMedium | FullyAnisotropicMedium):
                         self._raise_validation_error_at_loc(
                             "An anisotropic medium is detected on an 'ABCBoundary'. "
                             "Boundary medium must be homogeneous and isotropic.",
@@ -4797,7 +4798,7 @@ class Simulation(AbstractYeeGridSimulation):
         structures = self.structures
         medium = self.medium
         for monitor_ind, monitor in enumerate(monitors):
-            if isinstance(monitor, (DiffractionMonitor, DirectivityMonitor)):
+            if isinstance(monitor, DiffractionMonitor | DirectivityMonitor):
                 medium_set = Scene.intersecting_media(monitor, structures)
                 medium = medium_set.pop() if medium_set else medium
                 freqs = np.array(monitor.freqs)
@@ -4985,7 +4986,7 @@ class Simulation(AbstractYeeGridSimulation):
                     media_probe = Box(center=source.injection_plane_center, size=tuple(inj_size))
                     src_mediums = Scene.intersecting_media(media_probe, total_structures)
                     if any(
-                        isinstance(m, (AnisotropicMedium, FullyAnisotropicMedium))
+                        isinstance(m, AnisotropicMedium | FullyAnisotropicMedium)
                         for m in src_mediums
                     ):
                         self._raise_validation_error_at_loc(
@@ -4996,7 +4997,7 @@ class Simulation(AbstractYeeGridSimulation):
                             "sources",
                             source_id,
                         )
-                if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
+                if isinstance(source, PlaneWave | GaussianBeam | AstigmaticGaussianBeam):
                     mediums = Scene.intersecting_media(source, total_structures)
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
@@ -5016,7 +5017,7 @@ class Simulation(AbstractYeeGridSimulation):
                             source_id,
                         )
                     src_medium = list(mediums)[0]
-                    if isinstance(src_medium, (AnisotropicMedium, FullyAnisotropicMedium)):
+                    if isinstance(src_medium, AnisotropicMedium | FullyAnisotropicMedium):
                         self._raise_validation_error_at_loc(
                             f"An anisotropic medium is detected on plane intersecting a {source.type} "
                             f"source. Injection of {source.type} into anisotropic media currently is "
@@ -5048,7 +5049,7 @@ class Simulation(AbstractYeeGridSimulation):
 
                     # check if broadband angled gaussian beam frequency variation is too fast
                     if (
-                        isinstance(source, (GaussianBeam, AstigmaticGaussianBeam))
+                        isinstance(source, GaussianBeam | AstigmaticGaussianBeam)
                         and np.abs(source.angle_theta) > 0
                         and source.num_freqs > 1
                     ):
@@ -5161,7 +5162,7 @@ class Simulation(AbstractYeeGridSimulation):
         """Warn when a source's use_colocated_integration doesn't match monitor settings."""
         with log as consolidated_logger:
             for src_idx, source in enumerate(self.sources):
-                if not isinstance(source, (PlanarSource, TFSF)):
+                if not isinstance(source, PlanarSource | TFSF):
                     continue
                 # CustomFieldSource doesn't use flux-based normalization (flux=1),
                 # so use_colocated_integration has no effect.
@@ -5169,7 +5170,7 @@ class Simulation(AbstractYeeGridSimulation):
                     continue
                 src_colocated = source.use_colocated_integration
                 for monitor in self.monitors:
-                    if not isinstance(monitor, (AbstractFieldMonitor, AbstractOverlapMonitor)):
+                    if not isinstance(monitor, AbstractFieldMonitor | AbstractOverlapMonitor):
                         continue
                     # Skip internally generated adjoint monitors (colocate=False by design)
                     if monitor.name.startswith("adjoint_"):
@@ -5468,7 +5469,7 @@ class Simulation(AbstractYeeGridSimulation):
                         )
                         for axis, axis_idx, sim_val, struct_val, boundary in zipped:
                             # The test is required only for PML and stable PML
-                            if not isinstance(boundary[side_idx], (PML, StablePML)):
+                            if not isinstance(boundary[side_idx], PML | StablePML):
                                 continue
                             # Min side: struct_val > sim_val, Max side: struct_val < sim_val
                             if (
@@ -5802,6 +5803,9 @@ class Simulation(AbstractYeeGridSimulation):
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
 
+        if config.simulation.skip_size_checks:
+            return
+
         num_domain_cells_excluding_pml = self._num_non_pml_cells()
         if num_domain_cells_excluding_pml < WARN_SIM_DOMAIN_CELLS_EXCLUDING_PML:
             log.warning(
@@ -5849,6 +5853,9 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_monitor_size(self) -> None:
         """Ensures the monitors aren't storing too much data before simulation is uploaded."""
+
+        if config.simulation.skip_size_checks:
+            return
 
         total_size_gb = 0
         with log as consolidated_logger:
@@ -5957,9 +5964,12 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_time_monitors_num_steps(self) -> None:
         """Raise an error if non-0D time monitors have too many time steps."""
+        if config.simulation.skip_size_checks:
+            return
+
         for monitor in self.monitors:
             if (
-                not isinstance(monitor, (FieldTimeMonitor, AuxFieldTimeMonitor))
+                not isinstance(monitor, FieldTimeMonitor | AuxFieldTimeMonitor)
                 or len(monitor.zero_dims) == 3
             ):
                 continue
@@ -6008,7 +6018,7 @@ class Simulation(AbstractYeeGridSimulation):
         fail to instantiate.
         """
         for monitor in self.monitors:
-            if not isinstance(monitor, (MicrowaveModeMonitor, MicrowaveModeSolverMonitor)):
+            if not isinstance(monitor, MicrowaveModeMonitor | MicrowaveModeSolverMonitor):
                 continue
 
             monitor.mode_spec._validate_auto_impedance_setup(
@@ -6080,7 +6090,7 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
                     if any(
-                        isinstance(struct.medium, (AbstractCustomMedium, FullyAnisotropicMedium))
+                        isinstance(struct.medium, AbstractCustomMedium | FullyAnisotropicMedium)
                         for struct in intersecting_structs
                     ):
                         raise SetupError(
@@ -6093,7 +6103,7 @@ class Simulation(AbstractYeeGridSimulation):
                     # constant-in-plane-k TFSF supports them. Move the structure fully
                     # inside the box, or switch the source to ``FixedInPlaneKSpec``.
                     if isinstance(source.angular_spec, FixedAngleSpec) and any(
-                        isinstance(struct.medium, (LossyMetalMedium, PECMedium, PMCMedium))
+                        isinstance(struct.medium, LossyMetalMedium | PECMedium | PMCMedium)
                         for struct in intersecting_structs
                     ):
                         self._raise_validation_error_at_loc(
@@ -6936,7 +6946,7 @@ class Simulation(AbstractYeeGridSimulation):
                 monitor.frequency_range[1]
                 for monitor in self.monitors
                 if isinstance(monitor, FreqMonitor)
-                and not isinstance(monitor, (PermittivityMonitor, MediumMonitor))
+                and not isinstance(monitor, PermittivityMonitor | MediumMonitor)
             ),
             default=0.0,
         )

@@ -35,6 +35,7 @@ from tidy3d.components.validators import (
     validate_freqs_not_empty,
 )
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.config import config
 from tidy3d.constants import C_0, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import NoOpProgress, Progress, get_logging_console, log
@@ -1036,6 +1037,9 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_sweep_spec_size(self) -> None:
         """Make sure sweep spec is not too large."""
+        if config.simulation.skip_size_checks:
+            return
+
         if self.sweep_spec is None:
             return
         num_sweep = self.sweep_spec.num_sweep
@@ -1562,6 +1566,9 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
+        if config.simulation.skip_size_checks:
+            return
+
         num_freqs = len(self.freqs)
         if num_freqs > MAX_NUM_FREQS:
             raise SetupError(
@@ -1587,6 +1594,9 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_monitor_size(self) -> None:
         """Ensures the monitors aren't storing too much data before simulation is uploaded."""
+
+        if config.simulation.skip_size_checks:
+            return
 
         total_size_gb = 0
         with log as consolidated_logger:
@@ -1653,6 +1663,8 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_modes_size(self) -> None:
         """Warn if mode sources or monitors have a large number of points."""
+        if config.simulation.skip_size_checks:
+            return
 
         def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list) -> None:
             """Warn if a mode component has a large number of points."""

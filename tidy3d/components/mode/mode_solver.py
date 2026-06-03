@@ -85,6 +85,7 @@ from tidy3d.components.validators import (
     validate_freqs_not_empty,
 )
 from tidy3d.components.viz import make_ax, plot_params_pml
+from tidy3d.config import config
 from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -437,7 +438,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Whether ``medium`` is supported by angled-plane structure rotation."""
         is_uniform_isotropic = isinstance(medium, get_args(IsotropicUniformMediumType))
         is_rotation_invariant_anisotropic = isinstance(
-            medium, (AnisotropicMedium, FullyAnisotropicMedium)
+            medium, AnisotropicMedium | FullyAnisotropicMedium
         ) and medium_is_rotation_invariant(
             medium=medium, rotation_matrix=rotation_matrix, freqs=freqs
         )
@@ -3526,6 +3527,9 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _validate_modes_size(self) -> None:
         """Make sure that the total size of the modes fields is not too large."""
+        if config.simulation.skip_size_checks:
+            return
+
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
         num_cells = self.simulation._monitor_num_cells(monitor)
         # size in GB
@@ -3595,7 +3599,7 @@ class ModeSolver(Tidy3dBaseModel):
         for axis in "xyz":
             bcomp = bspec[axis]
             for bside, sign in zip([bcomp.plus, bcomp.minus], "+-"):
-                if isinstance(bside, (PML, StablePML, Absorber)):
+                if isinstance(bside, PML | StablePML | Absorber):
                     new_bspec_dict[axis + sign] = PECBoundary()
                 else:
                     new_bspec_dict[axis + sign] = bside

@@ -10,6 +10,7 @@ from rich.console import Console
 
 import tidy3d as td
 from tidy3d.components.data.data_array import EMETraceMetricDataArray
+from tidy3d.components.eme import simulation as eme_simulation
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import LogHandler, log
 
@@ -97,6 +98,34 @@ def make_eme_sim():
 @pytest.fixture(name="eme_base_sim")
 def fixture_eme_base_sim():
     return make_eme_sim()
+
+
+def test_skip_size_checks_bypasses_eme_upload_size_limits(monkeypatch):
+    sim = make_eme_sim().updated_copy(monitors=())
+    max_num_freqs = eme_simulation.MAX_NUM_FREQS
+    max_num_sweep = eme_simulation.MAX_NUM_SWEEP
+
+    monkeypatch.setattr(eme_simulation, "MAX_NUM_FREQS", 0)
+    with pytest.raises(SetupError, match="frequencies"):
+        sim.validate_pre_upload()
+
+    sweep_sim = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1.0]))
+    monkeypatch.setattr(eme_simulation, "MAX_NUM_SWEEP", 0)
+    with pytest.raises(SetupError, match="sweep_spec"):
+        sweep_sim.validate_pre_upload()
+
+    monkeypatch.setattr(eme_simulation, "MAX_NUM_FREQS", max_num_freqs)
+    monkeypatch.setattr(eme_simulation, "MAX_NUM_SWEEP", max_num_sweep)
+    monkeypatch.setattr(eme_simulation, "MAX_MODE_NUM_CELLS", 0)
+    with pytest.raises(SetupError, match="transverse directions"):
+        sim.validate_pre_upload()
+
+    monkeypatch.setattr(eme_simulation, "MAX_NUM_FREQS", 0)
+    monkeypatch.setattr(eme_simulation, "MAX_NUM_SWEEP", 0)
+    with td.config as scoped_config:
+        scoped_config.simulation.skip_size_checks = True
+        sim.validate_pre_upload()
+        sweep_sim.validate_pre_upload()
 
 
 def _matched_lorentz_media_yy_zz(freq0: float) -> tuple[td.Lorentz, td.Lorentz]:

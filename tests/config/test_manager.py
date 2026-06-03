@@ -16,6 +16,11 @@ def test_default_web_settings(config_manager):
     assert web.ssl_verify is True
 
 
+def test_simulation_size_check_defaults(config_manager):
+    simulation = config_manager.get_section("simulation")
+    assert simulation.skip_size_checks is False
+
+
 def test_update_section_runtime_overlay(config_manager):
     config_manager.update_section("logging", level="DEBUG", suppression=False)
     logging_section = config_manager.get_section("logging")
@@ -147,6 +152,7 @@ def test_as_dict_includes_defaults(config_manager):
     assert "run" in data
     assert data["run"]["pay_type"] == "AUTO"
     assert "simulation" in data
+    assert data["simulation"]["skip_size_checks"] is False
 
 
 def test_set_default_profile(config_manager):

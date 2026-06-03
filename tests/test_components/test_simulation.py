@@ -798,11 +798,30 @@ def test_validate_size_run_time(monkeypatch):
         s._validate_size()
 
 
+def test_validate_size_grid_cells(monkeypatch):
+    monkeypatch.setattr(simulation, "MAX_GRID_CELLS", 1)
+    with pytest.raises(SetupError, match="computational cells"):
+        SIM._validate_size()
+
+
 def test_validate_size_spatial_and_time(monkeypatch):
     monkeypatch.setattr(simulation, "MAX_CELLS_TIMES_STEPS", 1)
-    with pytest.raises(SetupError):
-        s = SIM.copy(update={"run_time": 1e-12})
+    s = SIM.copy(update={"run_time": 1e-12})
+    with pytest.raises(SetupError, match="grid cells \\* time steps"):
         s._validate_size()
+
+
+def test_skip_size_checks(monkeypatch):
+    monkeypatch.setattr(simulation, "MAX_GRID_CELLS", 1)
+    monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", 1 / 2**30)
+
+    with td.config as scoped_config:
+        scoped_config.simulation.skip_size_checks = True
+        SIM._validate_size()
+        s = SIM.copy(
+            update={"monitors": (td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)}
+        )
+        s._validate_monitor_size()
 
 
 def test_validate_size_min_cells_excluding_pml(monkeypatch):
@@ -838,6 +857,12 @@ def test_validate_mnt_size(monkeypatch):
         s = SIM.copy(
             update={"monitors": (td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)}
         )
+        s._validate_monitor_size()
+
+    # error for internal solver monitor size
+    monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", float("inf"))
+    monkeypatch.setattr(simulation, "MAX_MONITOR_INTERNAL_DATA_SIZE_GB", 1 / 2**30)
+    with pytest.raises(SetupError):
         s._validate_monitor_size()
 
 
@@ -2856,6 +2881,10 @@ def test_error_max_time_monitor_steps():
         sim = sim.updated_copy(monitors=(monitor,))
         sim.validate_pre_upload()
 
+    with td.config as scoped_config:
+        scoped_config.simulation.skip_size_checks = True
+        sim.validate_pre_upload()
+
     # setting a large enough interval should again not error
     monitor = monitor.updated_copy(interval=20)
     sim = sim.updated_copy(monitors=(monitor,))
@@ -3529,7 +3558,7 @@ def test_sim_subsection_common():
         if region_xy.intersects(mnt)
         and getattr(mnt, "far_field_approx", True)  # unsupported in 2d
         and not isinstance(
-            mnt, (td.FieldProjectionCartesianMonitor, td.FieldProjectionKSpaceMonitor)
+            mnt, td.FieldProjectionCartesianMonitor | td.FieldProjectionKSpaceMonitor
         )
     )
     sim_red = SIM_FULL_FIELD_PROJECTION.subsection(

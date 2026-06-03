@@ -10,6 +10,7 @@ import pytest
 from matplotlib import pyplot as plt
 
 import tidy3d as td
+from tidy3d.components.mode import mode_solver as mode_solver_module
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
 
@@ -472,6 +473,18 @@ def get_mode_sim():
         monitors=(permittivity_monitor,),
     )
     return sim
+
+
+def test_skip_size_checks_bypasses_mode_sim_upload_size_limit(monkeypatch):
+    sim = get_mode_sim()
+
+    monkeypatch.setattr(mode_solver_module, "MAX_MODES_DATA_SIZE_GB", 0)
+    with pytest.raises(SetupError, match="Mode solver"):
+        sim.validate_pre_upload()
+
+    with td.config as scoped_config:
+        scoped_config.simulation.skip_size_checks = True
+        sim.validate_pre_upload()
 
 
 def test_mode_sim():

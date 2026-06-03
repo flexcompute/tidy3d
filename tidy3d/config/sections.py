@@ -124,6 +124,17 @@ class SimulationConfig(ConfigSection):
         ),
     )
 
+    skip_size_checks: bool = Field(
+        False,
+        title="Skip size checks",
+        description=(
+            "Skip client-side simulation and monitor size checks before upload. "
+            "This is not intended to be changed by cloud users, and cloud servers still reject "
+            "simulations that violate the default cloud limits."
+        ),
+        json_schema_extra={"persist": True},
+    )
+
 
 @register_section("microwave")
 class MicrowaveConfig(ConfigSection):
