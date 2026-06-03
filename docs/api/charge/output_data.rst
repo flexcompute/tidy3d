@@ -46,6 +46,7 @@ Monitor Data
    SteadyCapacitanceData
    SteadyElectricFieldData
    SteadyCurrentDensityData
+   SteadyChargeResidualData
 
 Device Data
 ^^^^^^^^^^^^

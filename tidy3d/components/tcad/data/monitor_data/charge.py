@@ -18,6 +18,7 @@ from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridD
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
@@ -402,6 +403,66 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
                 )
 
         return self
+
+
+class SteadyChargeResidualData(HeatChargeMonitorData):
+    """Stores per-node residual snapshots from a Charge simulation.
+
+    Notes
+    -----
+        ``residual_potential``, ``residual_electrons``, ``residual_holes`` (and
+        ``residual_temperature`` when the thermal solver is active) are the
+        per-node signed residual components of each governing equation.  They are
+        dimensionless and on the same scale as the simulation's convergence
+        tolerance, so the nodes with the largest magnitude (approaching or
+        exceeding that tolerance) are where the solution least satisfies the
+        equations (the least-converged regions).
+    """
+
+    monitor: SteadyChargeResidualMonitor = Field(
+        title="Residual monitor",
+        description="Per-node residual monitor associated with a Charge simulation.",
+    )
+
+    residual_potential: UnstructuredFieldType = Field(
+        title="Potential residual",
+        description="Signed residual of the Poisson equation :math:`R_\\psi`.",
+        json_schema_extra={"units": "dimensionless"},
+    )
+
+    residual_electrons: UnstructuredFieldType = Field(
+        title="Electron continuity residual",
+        description="Signed residual of the electron continuity (carrier conservation) "
+        "equation :math:`R_n`.",
+        json_schema_extra={"units": "dimensionless"},
+    )
+
+    residual_holes: UnstructuredFieldType = Field(
+        title="Hole continuity residual",
+        description="Signed residual of the hole continuity (carrier conservation) "
+        "equation :math:`R_p`.",
+        json_schema_extra={"units": "dimensionless"},
+    )
+
+    residual_temperature: UnstructuredFieldType | None = Field(
+        None,
+        title="Thermal residual",
+        description="Signed residual of the heat equation :math:`R_T`. "
+        "Present only when the thermal solver is active.",
+        json_schema_extra={"units": "dimensionless"},
+    )
+
+    @property
+    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
+        """Maps the field components to their associated data."""
+        components: dict[str, UnstructuredFieldType | None] = {
+            "residual_potential": self.residual_potential,
+            "residual_electrons": self.residual_electrons,
+            "residual_holes": self.residual_holes,
+        }
+        if self.residual_temperature is not None:
+            components["residual_temperature"] = self.residual_temperature
+        return components
 
 
 class SteadyCurrentDensityData(HeatChargeMonitorData):

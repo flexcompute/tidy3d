@@ -118,3 +118,34 @@ class SteadyCurrentDensityMonitor(HeatChargeMonitor):
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
+
+
+class SteadyChargeResidualMonitor(HeatChargeMonitor):
+    """
+    Per-node residual monitor for Charge simulations (debug tool).
+
+    Notes
+    -----
+    Records the per-node signed residual of each governing equation:
+    :math:`R_\\psi` (Poisson), :math:`R_n` (electron continuity), :math:`R_p`
+    (hole continuity), and :math:`R_T` (heat) when the thermal solver is active.
+    The electron and hole continuity equations express carrier conservation.
+    The values are dimensionless and on the same scale as the simulation's
+    convergence tolerance, so the nodes with the largest :math:`|R|` (those
+    approaching or exceeding that tolerance) are where the solution least
+    satisfies the equations (the least-converged regions). Available only
+    through the accelerated solver.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> residual_monitor = td.SteadyChargeResidualMonitor(
+    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="residual_z0",
+    ... )
+    """
+
+    unstructured: Literal[True] = Field(
+        True,
+        title="Unstructured Grid",
+        description="Return data on the original unstructured grid.",
+    )

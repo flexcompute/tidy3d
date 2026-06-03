@@ -26,3 +26,4 @@ outputs and do not satisfy this requirement on their own.
    SteadyCurrentDensityMonitor
    SteadyElectricFieldMonitor
    SteadyEnergyBandMonitor
+   SteadyChargeResidualMonitor

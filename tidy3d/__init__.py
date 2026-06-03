@@ -82,6 +82,7 @@ from tidy3d.components.tcad.data.sim_data import (
 )
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
+    SteadyChargeResidualData,
     SteadyCurrentDensityData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
@@ -100,6 +101,7 @@ from tidy3d.components.tcad.grid import (
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
@@ -896,6 +898,8 @@ __all__ = [
     "SteadyCapacitanceData",
     "SteadyCapacitanceMonitor",
     "SteadyChargeDCAnalysis",
+    "SteadyChargeResidualData",
+    "SteadyChargeResidualMonitor",
     "SteadyConvergenceData",
     "SteadyCurrentDensityData",
     "SteadyCurrentDensityMonitor",

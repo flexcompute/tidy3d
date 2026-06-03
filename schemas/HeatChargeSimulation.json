@@ -9048,6 +9048,79 @@
       },
       "type": "object"
     },
+    "SteadyChargeResidualMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "conformal": {
+          "default": false,
+          "type": "boolean"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "type": {
+          "const": "SteadyChargeResidualMonitor",
+          "default": "SteadyChargeResidualMonitor",
+          "type": "string"
+        },
+        "unstructured": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
     "SteadyCurrentDensityMonitor": {
       "additionalProperties": false,
       "properties": {
@@ -10884,6 +10957,7 @@
         "discriminator": {
           "mapping": {
             "SteadyCapacitanceMonitor": "#/$defs/SteadyCapacitanceMonitor",
+            "SteadyChargeResidualMonitor": "#/$defs/SteadyChargeResidualMonitor",
             "SteadyCurrentDensityMonitor": "#/$defs/SteadyCurrentDensityMonitor",
             "SteadyElectricFieldMonitor": "#/$defs/SteadyElectricFieldMonitor",
             "SteadyEnergyBandMonitor": "#/$defs/SteadyEnergyBandMonitor",
@@ -10896,6 +10970,9 @@
         "oneOf": [
           {
             "$ref": "#/$defs/SteadyCapacitanceMonitor"
+          },
+          {
+            "$ref": "#/$defs/SteadyChargeResidualMonitor"
           },
           {
             "$ref": "#/$defs/SteadyCurrentDensityMonitor"

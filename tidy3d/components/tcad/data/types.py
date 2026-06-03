@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tidy3d.components.tcad.data.monitor_data.charge import (
     SteadyCapacitanceData,
+    SteadyChargeResidualData,
     SteadyCurrentDensityData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
@@ -20,4 +21,5 @@ TCADMonitorDataType = (
     | SteadyEnergyBandData
     | SteadyCapacitanceData
     | SteadyCurrentDensityData
+    | SteadyChargeResidualData
 )

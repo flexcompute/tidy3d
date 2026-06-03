@@ -138,3 +138,4 @@ names the offending feature:
 
 - ``MasettiMobility``
 - SSAC ``at_voltages`` bias-point selection
+- ``SteadyChargeResidualMonitor`` (per-node residual debug monitor)

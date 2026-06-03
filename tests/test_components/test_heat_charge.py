@@ -1899,6 +1899,135 @@ def test_conduction_sim_monitor_error_loc(conduction_simulation):
     assert_single_value_error_loc(excinfo, ("monitors",), "SteadyPotentialMonitor")
 
 
+def test_residual_monitor_requires_charge(heat_simulation):
+    """SteadyChargeResidualMonitor cannot be used in a heat-only simulation."""
+    monitors = [
+        *heat_simulation.monitors,
+        td.SteadyChargeResidualMonitor(size=(td.inf, td.inf, td.inf), name="residual_global"),
+    ]
+    residual_index = len(monitors) - 1
+    with pytest.raises(ValidationError) as excinfo:
+        _ = heat_simulation.updated_copy(monitors=tuple(monitors))
+    assert_single_value_error_loc(
+        excinfo, ("monitors", residual_index), "SteadyChargeResidualMonitor"
+    )
+
+
+def _build_residual_charge_sim():
+    """Minimal charge simulation hosting a SteadyChargeResidualMonitor."""
+    silicon = CHARGE_SIMULATION.intrinsic_Si
+    metal = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    return td.HeatChargeSimulation(
+        size=(4, 4, 4),
+        center=(0, 0, 0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+                medium=silicon,
+                name="silicon",
+            ),
+            td.Structure(
+                geometry=td.Box(center=(-1, 0, 0), size=(1, 2, 2)),
+                medium=metal,
+                name="left",
+            ),
+            td.Structure(
+                geometry=td.Box(center=(1, 0, 0), size=(1, 2, 2)),
+                medium=metal,
+                name="right",
+            ),
+        ],
+        monitors=[
+            td.SteadyChargeResidualMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="residual",
+                unstructured=True,
+            )
+        ],
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["left", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["right", "silicon"]),
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0.1])),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
+    )
+
+
+def test_residual_monitor_requires_accelerated_solver():
+    """SteadyChargeResidualMonitor is rejected when use_accelerated_solver=False."""
+    sim = _build_residual_charge_sim()
+    # Sanity: default sim (use_accelerated_solver=None) accepts the monitor.
+    assert any(isinstance(m, td.SteadyChargeResidualMonitor) for m in sim.monitors)
+
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim.updated_copy(use_accelerated_solver=False)
+    assert_single_value_error_loc(excinfo, ("monitors", 0), "use_accelerated_solver")
+
+
+def _build_residual_data_with_grid(symmetry):
+    """SteadyChargeResidualData populated with TriangularGridDataset fields, no thermal residual."""
+    tri_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+    tri_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    def _tri_grid(values_name):
+        return td.TriangularGridDataset(
+            normal_axis=2,
+            normal_pos=0,
+            points=tri_points,
+            cells=tri_cells,
+            values=td.IndexedDataArray([1.0, 2.0, 3.0, 4.0], dims=("index",), name=values_name),
+        )
+
+    monitor = td.SteadyChargeResidualMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, td.inf),
+        name="residual",
+        unstructured=True,
+    )
+    return td.SteadyChargeResidualData(
+        monitor=monitor,
+        residual_potential=_tri_grid("R_psi"),
+        residual_electrons=_tri_grid("R_n"),
+        residual_holes=_tri_grid("R_p"),
+        residual_temperature=None,
+        symmetry=symmetry,
+    )
+
+
+def test_residual_data_isothermal_no_warning():
+    """Isothermal residual data (no thermal residual) does not warn about a missing field."""
+    with AssertLogLevel(None):
+        data = _build_residual_data_with_grid(symmetry=(0, 0, 0))
+    # field_components must omit the thermal residual entirely when it is absent.
+    assert "residual_temperature" not in data.field_components
+
+
+def test_residual_data_symmetry_expansion_isothermal():
+    """symmetry_expanded_copy works when the thermal residual is absent under symmetry."""
+    data = _build_residual_data_with_grid(symmetry=(1, 0, 0))
+    expanded = data.symmetry_expanded_copy
+    assert expanded is not None
+    # The expanded copy still carries no thermal residual data.
+    assert expanded.residual_temperature is None
+
+
 def test_conduction_sim_voltage_array_error_loc(conduction_simulation):
     boundary_spec = list(conduction_simulation.boundary_spec)
     for ind, bc in enumerate(boundary_spec):

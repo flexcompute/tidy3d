@@ -52,6 +52,7 @@ from tidy3d.components.tcad.grid import (
 from tidy3d.components.tcad.mobility import MasettiMobility
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
@@ -116,6 +117,7 @@ ChargeMonitorTypes = (
     SteadyFreeCarrierMonitor,
     SteadyCapacitanceMonitor,
     SteadyCurrentDensityMonitor,
+    SteadyChargeResidualMonitor,
 )
 
 AnalysisSpecType = ElectricalAnalysisType | UnsteadyHeatAnalysis
@@ -534,6 +536,7 @@ class HeatChargeSimulation(AbstractSimulation):
             ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
         )
         simulation_types = self._check_simulation_types()
+        self._call_with_validation_loc(("monitors",), self._validate_residual_monitor_requirements)
         if TCADAnalysisTypes.CHARGE in simulation_types:
             self._call_with_validation_loc(
                 ("boundary_spec",), self._check_charge_simulation_voltage_bcs
@@ -883,7 +886,7 @@ class HeatChargeSimulation(AbstractSimulation):
         if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in self.monitors):
             raise SetupError(
                 "Charge simulations require the definition of, at least, one of these monitors: "
-                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor]' "
+                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor, SteadyChargeResidualMonitor]' "
                 "but none have been defined."
             )
         # NOTE: in Charge we're only supporting unstructured monitors.
@@ -895,6 +898,31 @@ class HeatChargeSimulation(AbstractSimulation):
                         "Currently, Charge simulations support only unstructured monitors. Please set "
                         f"monitor '{mnt.name}' to 'unstructured = True'."
                     )
+        return self
+
+    def _validate_residual_monitor_requirements(self) -> Self:
+        """SteadyChargeResidualMonitor requires charge analysis and the accelerated solver."""
+        simulation_types = self._check_simulation_types()
+        charge_configured = TCADAnalysisTypes.CHARGE in simulation_types
+        for idx, mnt in enumerate(self.monitors):
+            if not isinstance(mnt, SteadyChargeResidualMonitor):
+                continue
+            if not charge_configured:
+                self._raise_validation_error_at_loc(
+                    "'SteadyChargeResidualMonitor' is only available when a charge analysis "
+                    "is configured (the simulation must include voltage BCs and a "
+                    "'SteadyChargeDCAnalysis' or derivative analysis spec).",
+                    "monitors",
+                    idx,
+                )
+            if self.use_accelerated_solver is False:
+                self._raise_validation_error_at_loc(
+                    f"'SteadyChargeResidualMonitor' (monitor '{mnt.name}') is only available "
+                    "through the accelerated charge solver, but 'use_accelerated_solver=False' "
+                    "was set. Remove the monitor or use the accelerated solver (the default).",
+                    "monitors",
+                    idx,
+                )
         return self
 
     def _check_charge_simulation_semiconductors(self) -> Self:
@@ -2127,6 +2155,18 @@ class HeatChargeSimulation(AbstractSimulation):
             simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         return simulation_types
+
+    @property
+    def _thermal_solver_active(self) -> bool:
+        """Whether a coupled thermal solve runs alongside the charge analysis.
+
+        Returns ``True`` for non-isothermal :class:`SteadyChargeDCAnalysis` and
+        ``False`` for :class:`IsothermalSteadyChargeDCAnalysis`. Determines
+        whether the thermal residual ``residual_temperature`` is reported.
+        """
+        return isinstance(self.analysis_spec, SteadyChargeDCAnalysis) and not isinstance(
+            self.analysis_spec, IsothermalSteadyChargeDCAnalysis
+        )
 
     def _accelerated_only_features(self) -> list[str]:
         """Configured features that only the accelerated charge solver supports.

@@ -34,6 +34,7 @@ from tidy3d.components.tcad.mobility import (
 )
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
@@ -68,6 +69,7 @@ HeatChargeMonitorType = (
     | SteadyElectricFieldMonitor
     | SteadyCapacitanceMonitor
     | SteadyCurrentDensityMonitor
+    | SteadyChargeResidualMonitor
 )
 HeatChargeSourceType = HeatSource | HeatFromElectricSource | UniformHeatSource
 HeatChargeBCType = TemperatureBC | HeatFluxBC | ConvectionBC | VoltageBC | CurrentBC | InsulatingBC
