@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.12.0.dev1] - 2026-06-04
+
+### Added
+
+- `TFSF` source now exposes an `angular_spec` field (`FixedInPlaneKSpec` or `FixedAngleSpec`) mirroring `PlaneWave`, enabling fixed-angle (frequency-independent propagation direction) TFSF setups for isolated scatterers. Fixed-angle TFSF rejects `Periodic` and `BlochBoundary` transverse boundaries and is intended to be used with absorbing (`PML`/`Absorber`/`StablePML`) transverse boundaries; 2D simulations may keep the conventional `Periodic` on the zero-width out-of-plane axis as long as the wave's k-vector has no component along it.
+- Added ``PointCloudFieldMonitor`` and ``PointCloudFieldData`` for frequency-domain E/H field sampling at custom point-cloud coordinates. ``PointCloudFieldData`` is indexed by point, so structured-grid field plotting helpers such as ``SimulationData.plot_field()`` do not support it.
+- Added `SteadyChargeResidualMonitor`, a debug-grade Charge-simulation monitor that records the per-node signed residual of each governing equation (`residual_potential` for the Poisson equation, `residual_electrons` for the electron continuity equation, `residual_holes` for the hole continuity equation, plus `residual_temperature` for the heat equation when the thermal solver is active). The values are dimensionless and on the same scale as the simulation's convergence tolerance, so the nodes with the largest magnitude are where the solution least satisfies the equations, helping locate the least-converged regions. Available only through the accelerated solver.
+- Added the dipole emission study plugin, including `DipoleEmissionMonitor`, core `DipoleEmissionData` monitor outputs, plugin `DipoleEmissionStudyData` results, `SphericalAngleDataArray`, compact stored `radiation_intensity` outputs, study-level derived `radiation_intensity_transfer` properties, optional position- and axis-dependent integration weights, and optional selected-position radiation-intensity samples.
+
+### Changed
+
+- `TFSF` now rejects `Periodic` and `BlochBoundary` along its injection axis at simulation construction time. The wave reaching such a boundary would be re-injected into the scattered-field region, breaking the TFSF formulation; previously this misconfiguration was accepted and produced silently incorrect results.
+- EME overlap and flux calculations now use the Yee-staggered integration convention used by mode normalization. This improves modal orthogonality and interface S-matrix reciprocity. EME scattering matrices may differ slightly from earlier versions, with the difference decreasing at higher grid resolution. `EMESimulationData.smatrix_in_basis`, the local-solver `EMESimulation.smatrix_in_basis`, and `EMESimulationData.field_in_basis` re-express the scattering matrix (or field) in this same Yee convention by default (matching how it was computed), switching to colocated integration when a target basis stores its fields colocated (`colocate=True`) or sits on a different grid than the port modes, where native-Yee integration is impossible; if such a target cannot provide colocated integration (e.g. a `colocate=False` `EMEModeSolverMonitor`), the call raises rather than silently mixing conventions. Note that `EMEModeSolverMonitor` — the usual way to provide a target basis — and field monitors default to `colocate=True`, so monitor-based rebasing uses the colocated path unless `colocate=False` is set on the target monitor. A target basis's own `use_colocated_integration` is not honored — the rebasing convention is otherwise fixed by the (Yee) port modes.
+- Improved runtime and memory usage for local single-precision mode solver runs with lossless materials and `num_pml=(0, 0)`.
+
+### Fixed
+
+- `TFSF` injection in a lossy source-side medium now normalises the user-specified unit amplitude at the injection plane (the TFSF box face) for both the legacy constant-in-plane-k path and the new fixed-angle path; previously the legacy aux PlaneWave's unit reference sat two cells outside the box, so the wave reaching the box face was decayed by `exp(-Im(kz)·2·dz)` in lossy media.
+- `EMESimulationData.smatrix_in_basis`, `EMESimulation.smatrix_in_basis`, and `EMESimulationData.field_in_basis` now correctly handle modal bases that are not orthonormal in their overlap inner product — non-orthogonal combinations of port modes, modes on a different grid, or a custom field such as a Gaussian beam — and are exact for the same-modes round-trip. As a result, existing calls generally return a (corrected) different result; pass `skip_gram_normalization=True` to skip the normalization and recover the previous behavior, which is exact only when the bases are already orthonormal in this overlap convention. Incomplete mode or field data now raises `SetupError` rather than returning an incorrect S-matrix or field. `EMESimulationData.field_in_basis` rebases through the same trial-basis port modes as `smatrix_in_basis` (those kept on the S-matrix diagonal), so increasing-/`ModeSortSpec`-filtered and sweep-truncated modes are dropped consistently instead of leaking into the rebased field or being mis-rejected as incomplete data.
+- Endpoint extrapolation in `AxisAlignedPathIntegral` and `AxisAlignedVoltageIntegral` (`extrapolate_to_endpoints=True`) no longer silently returns the un-extrapolated value with xarray >= 2025.11.
+- Fixed a divergence issue in WavePort simulations where port edges are exactly aligned to the simulation grid.
+- Updated CHARGE documentation to reflect the accelerated solver, including convergence and tolerance guidance.
+
 ## [2.12.0.dev0] - 2026-05-29
 
 ### Added
@@ -2178,6 +2201,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.12.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.12.0.dev0...v2.12.0.dev1
 [2.12.0.dev0]: https://github.com/flexcompute/tidy3d/compare/v2.11.2...v2.12.0.dev0
 [2.11.2]: https://github.com/flexcompute/tidy3d/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0...v2.11.1
