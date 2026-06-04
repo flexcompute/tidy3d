@@ -172,7 +172,9 @@ def test_eme_internal_mode_solves_use_corrected_solver_grid(eme_base_sim, num_pm
     mode_solver = sim.mode_simulations[0]._mode_solver
 
     assert mode_solver.conjugated_dot_product is True
-    assert mode_solver.use_colocated_integration is True
+    # EME integrates overlaps/flux on the native Yee grid (discrete biorthogonality),
+    # so the internal mode solves declare Yee integration, not colocated.
+    assert mode_solver.use_colocated_integration is False
     expected_bounds = mode_solver._compute_solver_field_bounds(
         grid=mode_solver.simulation.grid,
         plane=mode_solver.plane,
@@ -183,8 +185,186 @@ def test_eme_internal_mode_solves_use_corrected_solver_grid(eme_base_sim, num_pm
     assert mode_solver._solver_field_bounds == expected_bounds
     assert mode_solver.to_mode_solver_monitor(name="test").attrs == {}
     assert sim.mode_solver_monitors[0].conjugated_dot_product is True
-    assert sim.mode_solver_monitors[0].use_colocated_integration is True
+    assert sim.mode_solver_monitors[0].use_colocated_integration is False
     assert sim.mode_solver_monitors[0].attrs == {}
+
+
+def test_smatrix_in_basis_convention_resolution():
+    """The basis change uses one integration convention = the port (S-matrix)
+    convention, defaulting to Yee, and falls back to colocated only when a target
+    basis is stored colocated (Yee integration then impossible). A new basis's own
+    ``use_colocated_integration`` is not honored -- the rebasing inner product is
+    fixed by the S-matrix, not the target basis's preference. On a one-sided rebase
+    only the rebased port contributes; the untouched port's convention is ignored
+    (it is unused in the basis change), matching the extras kernel."""
+    from tidy3d.components.eme.data.sim_data import _rebasing_colocated
+
+    class _Mon:
+        def __init__(self, colocate, uci):
+            self.colocate = colocate
+            self.use_colocated_integration = uci
+
+    class _M:
+        def __init__(self, colocate, uci):
+            self.monitor = _Mon(colocate, uci)
+
+    port_yee = _M(colocate=False, uci=False)  # EME port modes
+    # EME default: Yee port + Yee-stored new basis -> Yee.
+    assert not _rebasing_colocated(port_yee, port_yee, _M(False, False), _M(False, False))
+    # A colocated-stored target basis forces colocated (unavoidable).
+    assert _rebasing_colocated(port_yee, port_yee, _M(True, True), None)
+    # Colocated port (S-matrix) convention -> colocated.
+    assert _rebasing_colocated(_M(False, True), port_yee, _M(False, False), None)
+    # A Yee-stored new basis with uci=True stays Yee -- its uci is not honored.
+    assert not _rebasing_colocated(port_yee, port_yee, _M(False, True), None)
+    # One-sided rebase: a colocated *untouched* port must NOT force colocated.
+    # Only port 2 (Yee) is rebased here, so the result stays Yee despite port 1
+    # being colocated; symmetric for the other side.
+    assert not _rebasing_colocated(_M(False, True), port_yee, None, _M(False, False))
+    assert not _rebasing_colocated(port_yee, _M(True, True), _M(False, False), None)
+    # The rebased side's colocated port is still honored on a one-sided rebase.
+    assert _rebasing_colocated(_M(False, True), port_yee, _M(False, False), None)
+
+
+def test_field_in_basis_port_expansion_coeffs_gram_correction():
+    """`field_in_basis` Gram-corrects the port->new overlap into expansion
+    coefficients ``d = O @ G_port^{-1}`` (a raw overlap ``O`` assumes orthonormal port
+    modes). Verifies the helper against a direct per-frequency inverse, that it reduces
+    to ``O`` when the port Gram is identity, and that a dropped (NaN) port column is
+    excluded from the inverse and left NaN."""
+    import xarray as xr
+
+    from tidy3d.components.eme.data.sim_data import _port_expansion_coeffs
+
+    rng = np.random.default_rng(0)
+    nf, n_new, n_port = 2, 3, 4
+
+    def _da(arr, n1):
+        return xr.DataArray(
+            arr,
+            dims=["f", "mode_index_0", "mode_index_1"],
+            coords={
+                "f": [1e14, 2e14],
+                "mode_index_0": np.arange(arr.shape[1]),
+                "mode_index_1": np.arange(n1),
+            },
+        )
+
+    ovl = rng.standard_normal((nf, n_new, n_port)) + 1j * rng.standard_normal((nf, n_new, n_port))
+    A = rng.standard_normal((nf, n_port, n_port)) + 1j * rng.standard_normal((nf, n_port, n_port))
+    g_port = A + A.transpose(0, 2, 1) + 4.0 * np.eye(n_port)[None]  # symmetric, invertible per freq
+
+    coeffs = _port_expansion_coeffs(_da(ovl, n_port), _da(g_port, n_port)).to_numpy()
+    np.testing.assert_allclose(
+        coeffs, np.einsum("fac,fcb->fab", ovl, np.linalg.inv(g_port)), atol=1e-10
+    )
+
+    # Identity port Gram -> reduces to the raw overlap.
+    eye = np.broadcast_to(np.eye(n_port), (nf, n_port, n_port)).astype(complex)
+    coeffs_id = _port_expansion_coeffs(_da(ovl, n_port), _da(eye, n_port)).to_numpy()
+    np.testing.assert_allclose(coeffs_id, ovl, atol=1e-12)
+
+    # Dropped (NaN) port column -> excluded from the inverse, left NaN; kept block exact.
+    ovl_drop = ovl.copy()
+    ovl_drop[:, :, 1] = np.nan
+    keep = [0, 2, 3]
+    coeffs_drop = _port_expansion_coeffs(_da(ovl_drop, n_port), _da(g_port, n_port)).to_numpy()
+    assert np.all(np.isnan(coeffs_drop[:, :, 1]))
+    np.testing.assert_allclose(
+        coeffs_drop[:, :, keep],
+        np.einsum("fac,fcb->fab", ovl_drop[:, :, keep], np.linalg.inv(g_port[:, keep][:, :, keep])),
+        atol=1e-10,
+    )
+
+
+def test_trial_basis_mode_inds_drops_nan_diagonal():
+    """``field_in_basis`` rebases through ``smatrix_in_basis``'s trial basis: a port
+    mode with a NaN S-matrix diagonal (sweep-truncated, or increasing-/ModeSortSpec-
+    filtered) is dropped and the rest kept -- per sweep, sliced to the rebased
+    frequencies, and robustly when ``sweep_index`` is an unlabeled axis (where a naive
+    ``np.where`` on the 2D diagonal would return the sweep axis as all-zero indices)."""
+    import xarray as xr
+
+    from tidy3d.components.eme.data.sim_data import _trial_basis_mode_inds
+
+    n = 5
+    ff = [1e14, 2e14]
+    eye = np.broadcast_to(np.eye(n), (2, n, n)).astype(complex)
+    mode_coords = {"mode_index_out": np.arange(n), "mode_index_in": np.arange(n)}
+    dims = ["f", "mode_index_out", "mode_index_in"]
+    coords = {"f": ff, **mode_coords}
+
+    def _block(arr, dims, coords):
+        return xr.DataArray(arr, dims=dims, coords=coords)
+
+    # all diagonals finite -> every mode kept
+    assert _trial_basis_mode_inds(_block(eye, dims, coords), 0, ff) == [0, 1, 2, 3, 4]
+
+    # NaN the diagonal of mode 2 -> dropped, the rest kept
+    dropped = eye.copy()
+    dropped[:, 2, 2] = np.nan
+    assert _trial_basis_mode_inds(_block(dropped, dims, coords), 0, ff) == [0, 1, 3, 4]
+
+    # frequency subset: a mode dropped only at a frequency outside the rebased subset
+    # stays kept (the block is sliced to f first, like smatrix_in_basis)
+    freq_dep = eye.copy()
+    freq_dep[1, 3, 3] = np.nan  # mode 3 NaN only at f=2e14
+    assert _trial_basis_mode_inds(_block(freq_dep, dims, coords), 0, ff) == [0, 1, 2, 4]
+    assert _trial_basis_mode_inds(_block(freq_dep, dims, coords), 0, [1e14]) == [0, 1, 2, 3, 4]
+
+    # unlabeled sweep_index axis (a dim without a coordinate): the mode positions must
+    # still come through rather than the sweep axis
+    sweep_dims = ["f", "sweep_index", "mode_index_out", "mode_index_in"]
+    got = _trial_basis_mode_inds(_block(dropped[:, None], sweep_dims, coords), 0, ff)
+    assert got == [0, 1, 3, 4]
+
+    # labeled multi-sweep: the requested sweep's kept set is selected
+    multi = np.broadcast_to(np.eye(n), (2, 2, n, n)).astype(complex).copy()
+    multi[:, 0, 3, 3] = np.nan  # sweep 0 drops mode 3
+    multi[:, 1, 4, 4] = np.nan  # sweep 1 drops mode 4
+    sweep_coords = {"f": ff, "sweep_index": [0, 1], **mode_coords}
+    assert _trial_basis_mode_inds(_block(multi, sweep_dims, sweep_coords), 0, ff) == [0, 1, 2, 4]
+    assert _trial_basis_mode_inds(_block(multi, sweep_dims, sweep_coords), 1, ff) == [0, 1, 2, 3]
+
+    # unlabeled MULTI-sweep (sweep dim, no coordinate): each sweep is still selected by
+    # position rather than collapsed over all sweeps (regression for "Unlabeled sweep
+    # drops wrong modes" -- collapsing would drop both modes 3 and 4 for every sweep).
+    multi_unlabeled = _block(multi, sweep_dims, coords)
+    assert _trial_basis_mode_inds(multi_unlabeled, 0, ff) == [0, 1, 2, 4]
+    assert _trial_basis_mode_inds(multi_unlabeled, 1, ff) == [0, 1, 2, 3]
+
+
+def test_eme_mode_data_flux_no_use_colocated_integration():
+    """``EMEModeSolverData`` carries an ``EMEModeSolverMonitor``, which has no
+    ``use_colocated_integration`` field, so the flux helpers must fall back to the
+    monitor's ``colocate`` convention rather than raising ``AttributeError`` on that
+    field. (The multi-cell fixture then fails the normal 2D tangential-field check,
+    which is unrelated to the fallback being exercised.)"""
+    data = _get_eme_mode_solver_data()
+    assert not hasattr(data.monitor, "use_colocated_integration")
+    try:
+        _ = data.complex_flux
+    except AttributeError as e:
+        assert "use_colocated_integration" not in str(e)
+    except Exception:
+        pass  # downstream errors (e.g. multi-cell data is not 2D) are unrelated
+
+
+def test_force_integration_convention_raises_when_unforceable():
+    """A monitor without ``use_colocated_integration`` (e.g. ``EMEModeSolverMonitor``)
+    can't be forced to colocated when stored Yee (``colocate=False``); the basis change
+    raises a clear ``SetupError`` instead of silently mixing conventions (the
+    colocate=False EME-monitor-on-a-different-grid case), rather than no-op'ing on Yee."""
+    from tidy3d.components.eme.data.sim_data import _force_integration_convention
+
+    data = _get_eme_mode_solver_data()
+    assert not hasattr(data.monitor, "use_colocated_integration")
+    yee = data.updated_copy(monitor=data.monitor.updated_copy(colocate=False), validate=False)
+    # required convention matches the `colocate` storage -> no-op
+    assert _force_integration_convention(yee, colocated=False) is yee
+    # required colocated, only Yee storage and no flag to force it -> raise
+    with pytest.raises(SetupError):
+        _force_integration_convention(yee, colocated=True)
 
 
 def test_eme_grid():
@@ -2210,14 +2390,41 @@ def _get_eme_port_modes(num_sweep=0):
     return mode_data.updated_copy(n_complex=n_complex, **kwargs)
 
 
+def _with_finite_fields(mode_data):
+    """Replace NaN-padded field values in mode data with finite values.
+
+    The shared synthetic field fixtures NaN-pad some modes' fields (e.g. sweep
+    0, mode 1) that the S-matrix nonetheless treats as kept. A kept mode with a
+    non-finite field makes the basis-change self-Gram non-finite, which
+    ``smatrix_in_basis`` (correctly) rejects with a ``SetupError``. Tests that
+    exercise the basis change itself -- rather than that non-finite-Gram guard
+    -- use finite mode data so the kept modes are well-defined.
+    """
+    fields_no_nan = {}
+    for name, field in mode_data.field_components.items():
+        arr = field.to_numpy().copy()
+        nan_mask = np.isnan(arr)
+        if nan_mask.any():
+            arr[nan_mask] = 1.0 + 1.0j
+        fields_no_nan[name] = field.copy(data=arr)
+    return mode_data.updated_copy(**fields_no_nan)
+
+
+def _get_eme_port_modes_finite(num_sweep=0):
+    """``_get_eme_port_modes`` with NaN-padded fields replaced by finite values."""
+    return _with_finite_fields(_get_eme_port_modes(num_sweep=num_sweep))
+
+
 @pytest.mark.slow
 def test_eme_sim_data():
     sim = make_eme_sim()
     mode_monitor_data = _get_eme_mode_solver_data()
     coeff_monitor_data = _get_eme_coeff_data()
     field_monitor_data = _get_eme_field_data()
-    modes_in_data = _get_mode_solver_data(modes_out=False, num_modes=3)
-    modes_out_data = _get_mode_solver_data(modes_out=True, num_modes=2)
+    # Finite new-basis modes: the synthetic fixture NaN-pads a kept mode's
+    # field, which would trip the non-finite-Gram guard in 'smatrix_in_basis'.
+    modes_in_data = _with_finite_fields(_get_mode_solver_data(modes_out=False, num_modes=3))
+    modes_out_data = _with_finite_fields(_get_mode_solver_data(modes_out=True, num_modes=2))
     data = [
         mode_monitor_data,
         coeff_monitor_data,
@@ -2225,7 +2432,7 @@ def test_eme_sim_data():
         modes_in_data,
         modes_out_data,
     ]
-    port_modes = _get_eme_port_modes()
+    port_modes = _get_eme_port_modes_finite()
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5)
 
     sim_data = td.EMESimulationData(simulation=sim, data=data, smatrix=smatrix, port_modes_raw=None)
@@ -2298,12 +2505,38 @@ def test_eme_sim_data():
         )
 
     # test field in basis
-    field_in_basis = sim_data.field_in_basis(field=sim_data["field"], port_index=0)
+    field = sim_data["field"]
+    # The shared field fixture NaN-pads a kept mode (sweep 0, mode 1); use finite fields
+    # so the basis change runs (the all-NaN case is exercised as a raise below).
+    field_finite = _with_finite_fields(field)
+    field_in_basis = sim_data.field_in_basis(field=field, port_index=0)
     assert "mode_index" in field_in_basis.Ex.coords
-    field_in_basis = sim_data.field_in_basis(field=sim_data["field"], modes=modes_in0, port_index=0)
+    field_in_basis = sim_data.field_in_basis(field=field_finite, modes=modes_in0, port_index=0)
     assert "mode_index" not in field_in_basis.Ex.coords
-    field_in_basis = sim_data.field_in_basis(field=sim_data["field"], modes=modes_in0, port_index=1)
+    field_in_basis = sim_data.field_in_basis(field=field_finite, modes=modes_in0, port_index=1)
     assert "mode_index" not in field_in_basis.Ex.coords
+    # An active trial-basis mode whose field slice is all NaN is incomplete data and
+    # raises (the fixture's kept-but-NaN-field mode), not a silent drop.
+    with pytest.raises(SetupError):
+        sim_data.field_in_basis(field=field, modes=modes_in0, port_index=0)
+    # Field data missing trial-basis modes (fewer recorded than the port basis) raises a
+    # clear SetupError, not a raw IndexError when indexing the field array by keep_inds.
+    field_one_mode = field_finite.updated_copy(
+        validate=False,
+        **{key: fc.isel(mode_index=[0]) for key, fc in field_finite.field_components.items()},
+    )
+    with pytest.raises(SetupError):
+        _ = sim_data.field_in_basis(field=field_one_mode, modes=modes_in0, port_index=0)
+    # skip_gram_normalization opt-out is wired through the field_in_basis path.
+    field_in_basis_skip = sim_data.field_in_basis(
+        field=field_finite, modes=modes_in0, port_index=0, skip_gram_normalization=True
+    )
+    assert "mode_index" not in field_in_basis_skip.Ex.coords
+    # Incomplete target data (non-finite fields) raises rather than silently dropping a
+    # present mode's contribution -- matching smatrix_in_basis and the changelog.
+    modes_in0_incomplete = modes_in0.updated_copy(Ex=modes_in0.Ex * np.nan)
+    with pytest.raises(SetupError):
+        sim_data.field_in_basis(field=field_finite, modes=modes_in0_incomplete, port_index=0)
 
     # test plotting
     _ = sim_data.plot_field(
@@ -2473,7 +2706,7 @@ def test_eme_sim_data():
 
     # test freq sweep smatrix_in_basis
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=np.linspace(1, 2, 10)))
-    port_modes = _get_eme_port_modes(num_sweep=10)
+    port_modes = _get_eme_port_modes_finite(num_sweep=10)
     sim_data = td.EMESimulationData(
         simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
     )
@@ -2516,12 +2749,13 @@ def test_eme_sim_data():
     field_monitor_data = _get_eme_field_data(num_sweep=10)
     data[2] = field_monitor_data
     sim_data = sim_data.updated_copy(data=tuple(data))
+    field_finite = _with_finite_fields(sim_data["field"])
     field_in_basis = sim_data.field_in_basis(field=sim_data["field"], port_index=0)
     assert len(field_in_basis.Ex.sweep_index) == 10
     assert "mode_index" in field_in_basis.Ex.coords
-    field_in_basis = sim_data.field_in_basis(field=sim_data["field"], modes=modes_in0, port_index=0)
+    field_in_basis = sim_data.field_in_basis(field=field_finite, modes=modes_in0, port_index=0)
     assert "mode_index" not in field_in_basis.Ex.coords
-    field_in_basis = sim_data.field_in_basis(field=sim_data["field"], modes=modes_in0, port_index=1)
+    field_in_basis = sim_data.field_in_basis(field=field_finite, modes=modes_in0, port_index=1)
     assert "mode_index" not in field_in_basis.Ex.coords
 
 
@@ -2814,6 +3048,110 @@ def test_smatrix_in_basis_allows_truncated_mode_sweep_port_axes():
     assert result.S12.shape == (len(freqs), 1, 4, 4)
     np.testing.assert_array_equal(result.S11.mode_index_in.values, [0, 1, 2, 3])
     np.testing.assert_array_equal(result.S22.mode_index_in.values, [0, 1, 2, 3])
+
+
+def test_eme_simulation_smatrix_in_basis_honors_skip_gram_normalization():
+    """`EMESimulation.smatrix_in_basis` (the local entry point) honors
+    `skip_gram_normalization`, mirroring the data-path regression: the opt-out
+    skips the Gram normalization and changes the rebased S-matrix (for a basis
+    that is not orthonormal in the overlap convention). Guards that the flag is
+    actually wired through the local path and both paths produce finite output."""
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=3)
+    port_modes1 = _local_eme_basis_modes(sim, 0, "modes_in")
+    port_modes2 = _local_eme_basis_modes(sim, 1, "modes_out")
+    freqs = list(sim.freqs)
+    rng = np.random.default_rng(0)
+
+    def _blk():
+        data = rng.standard_normal((len(freqs), 3, 3)) + 1j * rng.standard_normal(
+            (len(freqs), 3, 3)
+        )
+        return _mda(data, sim.freqs, 3, 3)
+
+    smatrix = td.EMESMatrixDataset(S11=_blk(), S12=_blk(), S21=_blk(), S22=_blk())
+    ports = (port_modes1, port_modes2)
+
+    default = sim.smatrix_in_basis(smatrix, ports, modes1=port_modes1, modes2=port_modes2)
+    skipped = sim.smatrix_in_basis(
+        smatrix, ports, modes1=port_modes1, modes2=port_modes2, skip_gram_normalization=True
+    )
+    blocks = ("S11", "S12", "S21", "S22")
+    for blk in blocks:
+        d = getattr(default, blk).values
+        s = getattr(skipped, blk).values
+        assert d.shape == s.shape
+        assert np.all(np.isfinite(d)) and np.all(np.isfinite(s))
+    # The opt-out actually takes effect on the local path (Gram normalization changed).
+    max_diff = max(
+        float(np.max(np.abs(getattr(default, blk).values - getattr(skipped, blk).values)))
+        for blk in blocks
+    )
+    assert max_diff > 1e-6, "skip_gram_normalization should change the local-path result"
+
+
+def test_eme_simulation_smatrix_in_basis_one_sided_modesimulationdata_port():
+    """A one-sided local rebase (only ``modes1`` given) leaves the port-2 entry
+    untouched -- and the common call pattern passes it as a ``ModeSimulationData``,
+    which has no ``monitor``. The convention forcing must skip that unused side
+    rather than reach for ``.monitor`` and raise. Guards the one-sided local path:
+    no crash, finite output, the untouched S22 block passes through unchanged, and
+    the rebased result does not depend on the untouched port's type."""
+    from tidy3d.components.mode.data.sim_data import ModeSimulationData
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme", quiet=True)
+    except Tidy3dImportError as exc:
+        pytest.skip(f"tidy3d-extras local EME is unavailable: {exc}")
+
+    sim = make_local_eme_sim(num_cells=2, num_modes=3)
+    port_modes1 = _local_eme_basis_modes(sim, 0, "modes_in", num_modes=3)
+    port_modes2 = _local_eme_basis_modes(sim, 1, "modes_out", num_modes=3)
+    # Wrap the port-2 modes as a ModeSimulationData (the realistic per-cell type,
+    # which carries no `.monitor`) for the untouched side.
+    port_modes2_sim_data = ModeSimulationData(
+        simulation=td.ModeSimulation.from_simulation(
+            simulation=sim,
+            plane=sim.eme_grid.mode_planes[1],
+            mode_spec=td.ModeSpec(num_modes=3),
+            freqs=list(sim.freqs),
+        ),
+        modes_raw=port_modes2,
+    )
+    assert not hasattr(port_modes2_sim_data, "monitor")
+
+    freqs = list(sim.freqs)
+    rng = np.random.default_rng(0)
+
+    def _blk():
+        data = rng.standard_normal((len(freqs), 3, 3)) + 1j * rng.standard_normal(
+            (len(freqs), 3, 3)
+        )
+        return _mda(data, sim.freqs, 3, 3)
+
+    smatrix = td.EMESMatrixDataset(S11=_blk(), S12=_blk(), S21=_blk(), S22=_blk())
+
+    # One-sided rebase: rebase port 1 only; port 2 (ModeSimulationData) is untouched.
+    result = sim.smatrix_in_basis(smatrix, (port_modes1, port_modes2_sim_data), modes1=port_modes1)
+    blocks = ("S11", "S12", "S21", "S22")
+    for blk in blocks:
+        assert np.all(np.isfinite(getattr(result, blk).values))
+    # Port-2 self-block is not rebased -> passes through unchanged.
+    assert np.allclose(result.S22.values, smatrix.S22.values)
+    # The port-1 self-block is actually rebased (the change of basis took effect).
+    assert not np.allclose(result.S11.values, smatrix.S11.values)
+    # The untouched port's *type* must not leak into the rebased result: passing the
+    # raw ModeSolverData instead of the ModeSimulationData yields the same answer.
+    result_raw_port = sim.smatrix_in_basis(smatrix, (port_modes1, port_modes2), modes1=port_modes1)
+    for blk in blocks:
+        assert np.allclose(getattr(result, blk).values, getattr(result_raw_port, blk).values)
 
 
 def make_local_eme_sim(
@@ -3168,7 +3506,17 @@ def _assert_smatrix_in_basis_matches_outer_dot_oracle(
     modes1,
     modes2,
 ):
-    """Check local smatrix_in_basis against the public overlap contraction formula."""
+    """Check local smatrix_in_basis against the general Gram-inverse contraction.
+
+    The contract is
+
+        S_new[a, b] = G_new_a^{-1} . O_a . S_old[a, b] . G_port_b^{-T} . O_b^T
+
+    where ``O_a = <new_a | port_a>``, ``G_new_a = <new_a | new_a>``, and
+    ``G_port_a = <port_a | port_a>`` -- all in the bidirectional
+    non-conjugated ``outer_dot`` inner product. Reduces to the previous
+    ``O S O^T`` form when both bases happen to be biorthonormal.
+    """
     port_cell_1 = sim.eme_grid_spec.virtual_cell_indices[0]
     port_cell_2 = sim.eme_grid_spec.virtual_cell_indices[-1]
     port_modes1 = sim.stage_cell_modes(port_modes[0], cell_index=port_cell_1).modes
@@ -3180,15 +3528,56 @@ def _assert_smatrix_in_basis_matches_outer_dot_oracle(
     O1 = _overlap_block(modes1, port_modes1, freqs, mi1)
     O2 = _overlap_block(modes2, port_modes2, freqs, mi2)
 
+    def _self_gram_block(modes, freqs_, mode_index):
+        """Self-Gram of ``modes`` over ``mode_index`` at ``freqs_`` via outer_dot."""
+        g = modes.outer_dot(modes, conjugate=False).sel(f=freqs_)
+        if "mode_index_0" not in g.dims:
+            g = g.expand_dims(dim={"mode_index_0": [0]}, axis=1)
+        if "mode_index_1" not in g.dims:
+            g = g.expand_dims(dim={"mode_index_1": [0]}, axis=2)
+        if mode_index is not None:
+            g = g.sel(mode_index_1=list(mode_index)).sel(mode_index_0=list(mode_index))
+        return g.transpose("f", "mode_index_0", "mode_index_1").to_numpy()
+
+    mi1_new = modes1.field_components[list(modes1.field_components)[0]].coords.get("mode_index")
+    mi2_new = modes2.field_components[list(modes2.field_components)[0]].coords.get("mode_index")
+    mi1_new_vals = None if mi1_new is None else mi1_new.values
+    mi2_new_vals = None if mi2_new is None else mi2_new.values
+    G_new1 = _self_gram_block(modes1, freqs, mi1_new_vals)
+    G_new2 = _self_gram_block(modes2, freqs, mi2_new_vals)
+    G_port1 = _self_gram_block(port_modes1, freqs, mi1)
+    G_port2 = _self_gram_block(port_modes2, freqs, mi2)
+
+    def _inv_stack(g):
+        out = np.empty_like(g)
+        for fi in range(g.shape[0]):
+            try:
+                out[fi] = np.linalg.inv(g[fi])
+            except np.linalg.LinAlgError:
+                out[fi] = np.linalg.pinv(g[fi])
+        return out
+
+    G_new1_inv = _inv_stack(G_new1)
+    G_new2_inv = _inv_stack(G_new2)
+    G_port1_inv = _inv_stack(G_port1)
+    G_port2_inv = _inv_stack(G_port2)
+
+    # L_a = G_new_a^{-1} O_a, Rt_b = G_port_b^{-1} O_b^T (G_port symmetric so
+    # G_port^{-T} = G_port^{-1}); the block contraction is L_a . S_ab . Rt_b.
+    L1 = np.einsum("fab,fbp->fap", G_new1_inv, O1)
+    L2 = np.einsum("fab,fbp->fap", G_new2_inv, O2)
+    Rt1 = np.einsum("fab,fcb->fac", G_port1_inv, O1)
+    Rt2 = np.einsum("fab,fcb->fac", G_port2_inv, O2)
+
     S11 = _smatrix_block_with_sweep(smatrix.S11)
     S12 = _smatrix_block_with_sweep(smatrix.S12)
     S21 = _smatrix_block_with_sweep(smatrix.S21)
     S22 = _smatrix_block_with_sweep(smatrix.S22)
 
-    expected11 = np.einsum("fap,fspq,fbq->fsab", O1, S11, O1)
-    expected12 = np.einsum("fap,fspq,fbq->fsab", O1, S12, O2)
-    expected21 = np.einsum("fap,fspq,fbq->fsab", O2, S21, O1)
-    expected22 = np.einsum("fap,fspq,fbq->fsab", O2, S22, O2)
+    expected11 = np.einsum("fap,fspq,fqb->fsab", L1, S11, Rt1)
+    expected12 = np.einsum("fap,fspq,fqb->fsab", L1, S12, Rt2)
+    expected21 = np.einsum("fap,fspq,fqb->fsab", L2, S21, Rt1)
+    expected22 = np.einsum("fap,fspq,fqb->fsab", L2, S22, Rt2)
 
     np.testing.assert_allclose(
         _smatrix_block_with_sweep(actual.S11), expected11, rtol=1e-10, atol=1e-12
@@ -3857,11 +4246,15 @@ def test_eme_sim_data_smatrix_in_basis_preserves_pass_through_ragged_axis():
         S21=_updated_smatrix_array(smatrix.S21, S21_values),
         S22=_updated_smatrix_array(smatrix.S22, S22_values),
     )
+    # Finite port-mode fields: the NaN-padded *S-matrix* axes are what this
+    # test exercises; the fixture's NaN-padded kept-mode field is unrelated and
+    # would otherwise trip the non-finite-Gram guard.
+    port_modes_raw = _get_eme_port_modes_finite(num_sweep=2)
     sim_data = td.EMESimulationData(
         simulation=sim,
         data=[],
         smatrix=smatrix,
-        port_modes_raw=_get_eme_port_modes(num_sweep=2),
+        port_modes_raw=port_modes_raw,
     )
 
     rebased = sim_data.smatrix_in_basis(modes1=_get_mode_solver_data(num_modes=1))
@@ -3916,11 +4309,15 @@ def test_eme_sim_data_smatrix_in_basis_partial_ragged_matches_oracle():
         S21=smatrix.S21.copy(data=S21_values),
         S22=smatrix.S22.copy(data=S22_values),
     )
+    # Use finite port-mode fields: the synthetic fixture NaN-pads a kept
+    # mode's field, which is unrelated to the ragged-sweep S-diagonal
+    # pattern under test and would otherwise trip the non-finite-Gram guard.
+    port_modes_raw = _get_eme_port_modes_finite(num_sweep=2)
     sim_data = td.EMESimulationData(
         simulation=sim,
         data=[],
         smatrix=smatrix,
-        port_modes_raw=_get_eme_port_modes(num_sweep=2),
+        port_modes_raw=port_modes_raw,
     )
     modes1 = _get_mode_solver_data(num_modes=1)
 
@@ -3928,9 +4325,15 @@ def test_eme_sim_data_smatrix_in_basis_partial_ragged_matches_oracle():
     mode_spec1 = modes1.monitor.mode_spec
     interp_spec1 = mode_spec1.interp_spec if mode_spec1 is not None else None
     freqs = rebased.S11.f.values
-    port_modes1 = sim_data.port_modes_list_sweep[0][0]
 
     for sweep_index in rebased.S11.sweep_index.values:
+        # Port modes only vary across sweeps when the sweep type changes
+        # the modes (e.g. EMEPeriodicitySweep). EMEModeSweep does not,
+        # so port_modes_list_sweep has a single entry. For sweep types
+        # that do vary modes, this pulls the sweep-specific basis as the
+        # review follow-up suggested.
+        port_modes_index = sweep_index if sim_data.simulation._sweep_modes else 0
+        port_modes1 = sim_data.port_modes_list_sweep[port_modes_index][0]
         S11 = smatrix.S11.sel(f=freqs, sweep_index=sweep_index)
         S12 = smatrix.S12.sel(f=freqs, sweep_index=sweep_index)
         S21 = smatrix.S21.sel(f=freqs, sweep_index=sweep_index)
@@ -3949,29 +4352,81 @@ def test_eme_sim_data_smatrix_in_basis_partial_ragged_matches_oracle():
             O1 = modes1._interp_dataarray_in_freq(O1, freqs=freqs, method=interp_spec1.method)
         O1 = O1.sel(f=freqs, mode_index_1=keep_mode_inds1)
 
-        O1out = O1.rename(mode_index_0="mode_index_out", mode_index_1="mode_index_out_old")
-        O1in = O1.rename(mode_index_0="mode_index_in", mode_index_1="mode_index_in_old")
-        expected11 = (
-            O1out.dot(
-                S11.rename(
-                    mode_index_in="mode_index_in_old",
-                    mode_index_out="mode_index_out_old",
-                ),
-                dim="mode_index_out_old",
+        # New contract: S_new[a, b] = G_new_a^{-1} . O_a . S_old . G_port_b^{-T} . O_b^T.
+        # Build G_new and G_port over active port-1 modes only (port 2 is
+        # pass-through here -- no basis change requested).
+        G_new1 = modes1.outer_dot(modes1, conjugate=False)
+        if interp_spec1 is not None:
+            G_new1 = modes1._interp_dataarray_in_freq(
+                G_new1, freqs=freqs, method=interp_spec1.method
             )
-            .dot(O1in, dim="mode_index_in_old")
-            .transpose("f", "mode_index_out", "mode_index_in")
+        G_new1 = G_new1.sel(f=freqs).to_numpy()
+        G_port1 = (
+            port_modes1.outer_dot(port_modes1, conjugate=False)
+            .sel(f=freqs, mode_index_0=keep_mode_inds1, mode_index_1=keep_mode_inds1)
+            .to_numpy()
         )
-        expected12 = O1out.dot(
-            S12.rename(mode_index_out="mode_index_out_old"),
-            dim="mode_index_out_old",
-        ).transpose("f", "mode_index_out", "mode_index_in")
-        expected21 = (
-            S21.rename(mode_index_in="mode_index_in_old")
-            .dot(O1in, dim="mode_index_in_old")
-            .transpose("f", "mode_index_out", "mode_index_in")
-        )
-        expected22 = S22.transpose("f", "mode_index_out", "mode_index_in")
+
+        # Deliberately more tolerant than the real ``_per_freq_inverse``, which
+        # *raises* on non-finite Gram entries (it does inv -> pinv only). Synthetic
+        # fixtures can place NaN in the Gram, so this oracle zeros non-finite
+        # entries and falls back inv -> pinv -> identity. The implementation only
+        # ever sees finite active-mode Grams (NaN-padded dropped modes are excluded
+        # upstream), so the two agree on the active modes compared below.
+        def _robust_per_freq_inverse(g):
+            g_clean = np.where(np.isfinite(g), g, 0.0).astype(g.dtype)
+            n = g_clean.shape[-1]
+            out = np.empty_like(g_clean)
+            for fi in range(g_clean.shape[0]):
+                try:
+                    out[fi] = np.linalg.inv(g_clean[fi])
+                except np.linalg.LinAlgError:
+                    try:
+                        out[fi] = np.linalg.pinv(g_clean[fi])
+                    except np.linalg.LinAlgError:
+                        out[fi] = np.eye(n, dtype=g_clean.dtype)
+            return out
+
+        G_new1_inv = _robust_per_freq_inverse(G_new1)
+        G_port1_inv = _robust_per_freq_inverse(G_port1)
+        O1_np = O1.transpose("f", "mode_index_0", "mode_index_1").to_numpy()
+        # Left factor for OUT port 1: G_new^{-1} O, shape (nf, n_new, n_port_active).
+        L1 = np.einsum("fab,fbp->fap", G_new1_inv, O1_np)
+        # Right-side full chain for IN port 1: G_port^{-T} O^T (since G_port is
+        # symmetric, this equals (O @ G_port^{-1})^T); store transposed for
+        # convenient block einsum below. Shape (nf, n_port_active, n_new).
+        Rt1 = np.einsum("fab,fcb->fac", G_port1_inv, O1_np)
+
+        S11_np = S11.transpose("f", "mode_index_out", "mode_index_in").to_numpy()
+        S12_np = S12.transpose("f", "mode_index_out", "mode_index_in").to_numpy()
+        S21_np = S21.transpose("f", "mode_index_out", "mode_index_in").to_numpy()
+        S22_np = S22.transpose("f", "mode_index_out", "mode_index_in").to_numpy()
+
+        # S_new[a, b] = L_a . S_ab . Rt_b for OUT a, IN b.
+        # Port 2 has no basis change here, so its in/out factors are absent.
+        expected11_np = np.einsum("fap,fpq,fqb->fab", L1, S11_np, Rt1)
+        expected12_np = np.einsum("fap,fpq->faq", L1, S12_np)
+        expected21_np = np.einsum("frq,fqb->frb", S21_np, Rt1)
+        expected22_np = S22_np
+
+        out_mode_index_1 = rebased.S11.mode_index_out.values
+        in_mode_index_1 = rebased.S11.mode_index_in.values
+        out_mode_index_2 = rebased.S22.mode_index_out.values
+        in_mode_index_2 = rebased.S22.mode_index_in.values
+
+        def _as_da(arr, out_idx, in_idx):
+            import xarray as _xr
+
+            return _xr.DataArray(
+                arr,
+                coords={"f": freqs, "mode_index_out": out_idx, "mode_index_in": in_idx},
+                dims=("f", "mode_index_out", "mode_index_in"),
+            )
+
+        expected11 = _as_da(expected11_np, out_mode_index_1, in_mode_index_1)
+        expected12 = _as_da(expected12_np, out_mode_index_1, in_mode_index_2)
+        expected21 = _as_da(expected21_np, out_mode_index_2, in_mode_index_1)
+        expected22 = _as_da(expected22_np, out_mode_index_2, in_mode_index_2)
 
         np.testing.assert_allclose(
             rebased.S11.sel(sweep_index=sweep_index)
@@ -4009,6 +4464,171 @@ def test_eme_sim_data_smatrix_in_basis_partial_ragged_matches_oracle():
             atol=1e-12,
             equal_nan=True,
         )
+
+
+def _randomize_fields(mode_data, seed):
+    """Replace field components with seeded non-zero values.
+
+    The shared synthetic mode fixtures carry identically zero field data, so their
+    ``outer_dot`` overlaps and self-Grams vanish and any basis change collapses to
+    ``0 == 0``. Non-degenerate fields make the overlaps full-rank, so the
+    contraction (and the Gram inverse) is genuinely exercised."""
+    rng = np.random.default_rng(seed)
+    randomized = {
+        name: field.copy(
+            data=rng.standard_normal(field.shape) + 1j * rng.standard_normal(field.shape)
+        )
+        for name, field in mode_data.field_components.items()
+    }
+    return mode_data.updated_copy(**randomized)
+
+
+def test_eme_sim_data_smatrix_in_basis_skip_gram_reproduces_legacy_contraction():
+    """Non-vacuous public-path oracle for both contractions: with
+    ``skip_gram_normalization=True`` the pure-Python ``smatrix_in_basis`` is the
+    legacy ``O S O^T``; by default it is ``G_new^{-1} O S G_port^{-1} O^T``. The two
+    differ for a non-orthonormal basis. Guards the public path against drift
+    independently of the core ``tidy3d_extras`` coverage."""
+    sim = make_eme_sim().updated_copy(monitors=[])
+    smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5)
+    # Inject non-degenerate fields on both the port basis and the new basis (the
+    # shared fixtures are zero-field, which would make the contraction vacuous).
+    port_modes_raw = _randomize_fields(_get_eme_port_modes_finite(), seed=1)
+    sim_data = td.EMESimulationData(
+        simulation=sim, data=[], smatrix=smatrix, port_modes_raw=port_modes_raw
+    )
+    modes1 = _randomize_fields(_get_mode_solver_data(modes_out=False, num_modes=3), seed=2)
+
+    corrected = sim_data.smatrix_in_basis(modes1=modes1)
+    raw = sim_data.smatrix_in_basis(modes1=modes1, skip_gram_normalization=True)
+
+    # Form the overlap and self-Grams exactly as the implementation does (same
+    # per-basis frequency-interpolation), so the only thing under test is the
+    # contraction. Port 2 is pass-through here, so only the S11 block is rebased.
+    freqs = corrected.S11.f.values
+    port_modes1 = sim_data.port_modes_list_sweep[0][0]
+    interp1 = modes1.monitor.mode_spec.interp_spec
+    p_interp1 = getattr(port_modes1.monitor.mode_spec, "interp_spec", None)
+
+    def _interp_np(modes, da, interp):
+        if interp is not None:
+            da = modes._interp_dataarray_in_freq(da, freqs=freqs, method=interp.method)
+        return da.sel(f=freqs).transpose("f", "mode_index_0", "mode_index_1").to_numpy()
+
+    O1 = _interp_np(modes1, modes1.outer_dot(port_modes1, conjugate=False), interp1)
+    G_new1 = _interp_np(modes1, modes1.outer_dot(modes1, conjugate=False), interp1)
+    G_port1 = _interp_np(
+        port_modes1, port_modes1.outer_dot(port_modes1, conjugate=False), p_interp1
+    )
+    S11 = (
+        smatrix.S11.sel(f=freqs, sweep_index=0)
+        .transpose("f", "mode_index_out", "mode_index_in")
+        .to_numpy()
+    )
+
+    def _S11(dataset):
+        return (
+            dataset.S11.sel(sweep_index=0)
+            .transpose("f", "mode_index_out", "mode_index_in")
+            .to_numpy()
+        )
+
+    # skip_gram_normalization=True -> plain legacy contraction O S O^T.
+    np.testing.assert_allclose(
+        _S11(raw), np.einsum("fap,fpq,fcq->fac", O1, S11, O1), rtol=1e-9, atol=1e-12
+    )
+    # Default -> G_new^{-1} O S G_port^{-1} O^T (Grams symmetric -> ^{-T} = ^{-1}).
+    # Plain inv here: a singular Gram would send the impl to its pinv fallback and
+    # break this match, so the assertion also confirms the bases are non-degenerate.
+    left = np.einsum("fij,fjp->fip", np.linalg.inv(G_new1), O1)
+    right = np.einsum("fqr,fcr->fqc", np.linalg.inv(G_port1), O1)
+    np.testing.assert_allclose(
+        _S11(corrected), np.einsum("fip,fpq,fqc->fic", left, S11, right), rtol=1e-9, atol=1e-12
+    )
+    # The opt-out is not a no-op: the two contractions differ for this basis.
+    assert not np.allclose(_S11(raw), _S11(corrected))
+
+
+def test_eme_sim_data_smatrix_in_basis_raises_on_non_finite_gram():
+    """``EMESimulationData.smatrix_in_basis`` must raise ``SetupError`` when
+    the basis-change Gram or overlap has non-finite entries -- on both the
+    default (Gram-normalized) and ``skip_gram_normalization=True`` paths.
+
+    Locks in the contract that the public path fails explicitly rather than
+    silently propagating NaN to produce an all-NaN S-matrix. The opt-out skips
+    the Gram inverse, so the overlap finiteness check is what guards it there.
+    Uses the shared synthetic ``_get_eme_port_modes`` fixture as-is -- it
+    intentionally NaN-pads some port-mode fields, which makes both the overlap
+    and the port self-Gram non-finite for any sweep that keeps those modes.
+    """
+    sim = make_eme_sim().updated_copy(sweep_spec=td.EMEModeSweep(num_modes=[2, 5]), monitors=[])
+    smatrix_template = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=2)
+
+    def _deterministic_block(block, offset):
+        values = offset + np.arange(block.size, dtype=float).reshape(block.shape)
+        return block.copy(data=values + 1j * (values + 0.25))
+
+    smatrix = td.EMESMatrixDataset(
+        S11=_deterministic_block(smatrix_template.S11, 100),
+        S12=_deterministic_block(smatrix_template.S12, 200),
+        S21=_deterministic_block(smatrix_template.S21, 300),
+        S22=_deterministic_block(smatrix_template.S22, 400),
+    )
+    sim_data = td.EMESimulationData(
+        simulation=sim,
+        data=[],
+        smatrix=smatrix,
+        port_modes_raw=_get_eme_port_modes(num_sweep=2),
+    )
+    modes1 = _get_mode_solver_data(num_modes=1)
+
+    from tidy3d.exceptions import SetupError
+
+    with pytest.raises(SetupError, match="non-finite"):
+        sim_data.smatrix_in_basis(modes1=modes1)
+
+    # The 'skip_gram_normalization' opt-out must not revive the silent-NaN
+    # path: the overlap finiteness check fires even though the Gram inverse
+    # (the other non-finite gate) is skipped.
+    with pytest.raises(SetupError, match="non-finite"):
+        sim_data.smatrix_in_basis(modes1=modes1, skip_gram_normalization=True)
+
+
+def test_eme_sim_data_smatrix_in_basis_masks_nan_padded_dropped_port_modes():
+    """A *dropped* port mode (NaN S-matrix diagonal) whose fields are also NaN-padded
+    is masked out of the overlap finiteness check, so the public ``smatrix_in_basis``
+    does NOT raise -- the client-side mirror of the extras regression. (Active
+    non-finite data still raises; see ``..._raises_on_non_finite_gram``.) The shared
+    fixture NaN-pads port mode 1, so dropping mode 1 exercises the masked path while
+    the remaining (finite) port modes are kept."""
+    sim = make_eme_sim().updated_copy(sweep_spec=td.EMEModeSweep(num_modes=[2, 5]), monitors=[])
+    template = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=2)
+    nan = complex(np.nan, np.nan)
+
+    def _block_drop_mode1(block, offset):
+        values = offset + np.arange(block.size, dtype=float).reshape(block.shape)
+        data = (values + 1j * (values + 0.25)).astype(complex)
+        data[:, :, 1, :] = nan  # drop mode 1 on the output axis
+        data[:, :, :, 1] = nan  # and the input axis (NaN S-diagonal drop sentinel)
+        return block.copy(data=data)
+
+    smatrix = td.EMESMatrixDataset(
+        S11=_block_drop_mode1(template.S11, 100),
+        S12=_block_drop_mode1(template.S12, 200),
+        S21=_block_drop_mode1(template.S21, 300),
+        S22=_block_drop_mode1(template.S22, 400),
+    )
+    sim_data = td.EMESimulationData(
+        simulation=sim,
+        data=[],
+        smatrix=smatrix,
+        port_modes_raw=_get_eme_port_modes(num_sweep=2),  # NaN-pads port mode 1
+    )
+    modes1 = _get_mode_solver_data(num_modes=1)
+    # Must NOT raise: the dropped (NaN-padded) mode 1 is masked out of the guard on
+    # both the default and skip-Gram paths.
+    sim_data.smatrix_in_basis(modes1=modes1)
+    sim_data.smatrix_in_basis(modes1=modes1, skip_gram_normalization=True)
 
 
 @pytest.mark.numerical

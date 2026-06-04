@@ -874,6 +874,10 @@ class EMESimulation(AbstractYeeGridSimulation):
                 freqs=freqs,
                 mode_spec=mode_specs[i],
                 colocate=False,
+                # EME integrates overlaps/flux on the native Yee grid; declare it so
+                # consumers that honor `use_colocated_integration` (smatrix_in_basis,
+                # the staging convention) default to Yee rather than colocated.
+                use_colocated_integration=False,
             )
             monitors.append(monitor)
         return monitors
@@ -2286,6 +2290,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                     freqs=list(self.freqs),
                     direction="+",
                     colocate=False,
+                    use_colocated_integration=False,
                 )
             )
 
@@ -3019,6 +3024,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ],
         modes1: ElectromagneticFieldData | ModeSolverData | ModeSimulationData | None = None,
         modes2: ElectromagneticFieldData | ModeSolverData | ModeSimulationData | None = None,
+        skip_gram_normalization: bool = False,
     ) -> EMESMatrixDataset:
         """Express a locally propagated S-matrix in another modal basis.
 
@@ -3038,6 +3044,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         modes1, modes2 : :class:`.ElectromagneticFieldData`, :class:`.ModeSolverData`, or
             :class:`.ModeSimulationData`, optional
             New modal bases at port 1 and port 2.
+        skip_gram_normalization : bool = False
+            If ``False`` (default), normalize the change of basis so it is
+            correct even for bases that are not orthonormal (linear combinations
+            of port modes, modes on a different grid, or custom fields). If
+            ``True``, skip the Gram normalization and use the plain overlap
+            contraction; this is correct only when the port and new bases each
+            have identity self-overlap in this method's overlap convention, and
+            otherwise merely recovers the pre-normalization behavior (which may
+            be incorrect).
 
         Returns
         -------
@@ -3126,4 +3141,5 @@ class EMESimulation(AbstractYeeGridSimulation):
             port_modes2=port_modes2_for_overlap,
             new_modes1=_unwrap_new(modes1, "modes1"),
             new_modes2=_unwrap_new(modes2, "modes2"),
+            skip_gram_normalization=skip_gram_normalization,
         )

@@ -944,7 +944,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def _compute_complex_flux(self) -> FluxDataArray | FreqModeDataArray:
         """Compute complex flux."""
 
-        if self.monitor.use_colocated_integration:
+        if getattr(self.monitor, "use_colocated_integration", self.monitor.colocate):
             fields = self._colocated_tangential_fields
             dS = self._diff_area.to_numpy()
             dS_numpy = (dS, dS)
@@ -1219,9 +1219,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             In the non-conjugated definition, modes are orthogonal, but the interpretation of the
             dot product as power carried by a given mode is no longer valid.
         """
-        use_colocated = (
-            self.monitor.use_colocated_integration or field_data.monitor.use_colocated_integration
-        )
+        use_colocated = getattr(
+            self.monitor, "use_colocated_integration", self.monitor.colocate
+        ) or getattr(field_data.monitor, "use_colocated_integration", field_data.monitor.colocate)
         if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
@@ -1473,9 +1473,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
             raise DataError("Tangential dimensions must match between the two monitors.")
 
-        use_colocated = (
-            self.monitor.use_colocated_integration or field_data.monitor.use_colocated_integration
-        )
+        use_colocated = getattr(
+            self.monitor, "use_colocated_integration", self.monitor.colocate
+        ) or getattr(field_data.monitor, "use_colocated_integration", field_data.monitor.colocate)
         if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
@@ -2050,7 +2050,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         dim1, dim2 = self._tangential_dims
         tangential_dims = self._tangential_dims
 
-        if self.monitor.use_colocated_integration:
+        if getattr(self.monitor, "use_colocated_integration", self.monitor.colocate):
             fields = self._colocated_tangential_fields
             dS = self._diff_area.to_numpy()
             dS_numpy = (dS, dS)
