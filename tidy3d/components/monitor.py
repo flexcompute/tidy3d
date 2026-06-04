@@ -9,6 +9,7 @@ import numpy as np
 from pydantic import (
     Field,
     NonNegativeFloat,
+    NonNegativeInt,
     PositiveFloat,
     PositiveInt,
     field_validator,
@@ -43,6 +44,8 @@ from .medium import MediumType
 from .microwave.base import MicrowaveBaseModel
 from .mode_spec import ModeSpec
 from .types import (
+    ArrayFloat1D,
+    ArrayFloat2D,
     AuxField,
     Axis,
     BoxSurface,
@@ -70,13 +73,15 @@ if TYPE_CHECKING:
 
     from .autograd.parallel_adjoint_bases import DiffractionAdjointBasis, ParallelAdjointBasis
     from .simulation import Simulation
-    from .types import ArrayFloat1D, Ax, Bound, FreqBound, Size
+    from .types import Ax, Bound, FreqBound, Size
 
 BYTES_REAL = 4
 BYTES_COMPLEX = 8
 WARN_NUM_FREQS = 2000
 WARN_NUM_MODES = 100
 MAX_POINT_CLOUD_FIELD_MONITOR_POINTS = 10_000_000
+DIPOLE_EMISSION_FIELD_COMPONENTS = ("Ex", "Ey", "Ez")
+DIPOLE_EMISSION_DIPOLE_AXES = ("x", "y", "z")
 
 # Field projection windowing factor that determines field decay at the edges of surface field
 # projection monitors. A value of 15 leads to a decay of < 1e-3x in field amplitude.
@@ -917,12 +922,6 @@ class PointCloudFieldMonitor(FreqMonitor):
         "field values and do not support field colocation.",
     )
 
-    use_colocated_integration: Literal[False] = Field(
-        False,
-        title="Use Colocated Integration",
-        description="Point-cloud field monitors do not support colocated integration.",
-    )
-
     @field_validator("points")
     @classmethod
     def _validate_points(cls, val: PointDataArray) -> PointDataArray:
@@ -934,6 +933,7 @@ class PointCloudFieldMonitor(FreqMonitor):
             require_real=True,
             require_finite=True,
             cast_to_float=True,
+            preserve_index=True,
         )
 
     @field_validator("fields")
@@ -1004,6 +1004,96 @@ class PointCloudFieldMonitor(FreqMonitor):
             field_components_factor += 3
 
         return BYTES_COMPLEX * num_cells * len(self.freqs) * field_components_factor
+
+
+class DipoleEmissionMonitor(PointCloudFieldMonitor):
+    """:class:`~tidy3d.Monitor` for dipole-emission radiation intensity.
+
+    This monitor samples the reciprocal electric field at candidate dipole
+    positions and stores the angular radiation intensity for x-, y-, and
+    z-oriented electric dipoles. By default, the result is summed over all
+    sampled positions using ``position_weights``. Use ``store_position_indexes``
+    to additionally retain radiation intensity at selected individual positions.
+
+    A simulation containing this monitor must contain exactly one
+    :class:`.TFSF` source, and every sampled point must lie inside the TFSF box.
+    The TFSF source defines the reciprocal plane-wave direction and
+    normalization used to reduce the sampled fields.
+
+    This monitor is typically created automatically by
+    :class:`tidy3d.plugins.dipole_emission.DipoleEmissionStudy`.
+    """
+
+    fields: tuple[Literal["Ex"], Literal["Ey"], Literal["Ez"]] = Field(
+        DIPOLE_EMISSION_FIELD_COMPONENTS,
+        title="Field Components",
+        description="Electric-field components used to evaluate Cartesian dipole orientations.",
+        json_schema_extra={"doc_hidden": True},
+    )
+
+    position_weights: ArrayFloat1D | ArrayFloat2D = Field(
+        ...,
+        title="Position Weights",
+        description=(
+            "Nonnegative weights used when summing radiation intensity over sampled dipole "
+            "positions. Provide one weight per point, or one weight per point and Cartesian "
+            "dipole axis."
+        ),
+    )
+
+    store_position_indexes: tuple[NonNegativeInt, ...] = Field(
+        (),
+        title="Stored Position Indexes",
+        description=(
+            "Zero-based indexes into ``points`` for positions whose individual radiation "
+            "intensity should be stored in addition to the summed result."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_dipole_emission_metadata(self) -> Self:
+        """Validate reduction metadata dimensions."""
+        position_weights = np.asarray(self.position_weights, dtype=float)
+        if position_weights.shape not in ((self.num_points,), np.asarray(self.points.values).shape):
+            self._raise_validation_error_at_loc(
+                "'position_weights' must have one value per point or match the shape of 'points'.",
+                "position_weights",
+            )
+        if not np.all(np.isfinite(position_weights)) or np.any(position_weights < 0):
+            self._raise_validation_error_at_loc(
+                "'position_weights' must contain finite nonnegative values.",
+                "position_weights",
+            )
+
+        if len(set(self.store_position_indexes)) != len(self.store_position_indexes):
+            self._raise_validation_error_at_loc(
+                "'store_position_indexes' must not contain duplicates.",
+                "store_position_indexes",
+            )
+        if self.store_position_indexes and max(self.store_position_indexes) >= self.num_points:
+            self._raise_validation_error_at_loc(
+                "'store_position_indexes' entries must be valid point indexes.",
+                "store_position_indexes",
+            )
+
+        return self
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of reduced dipole-emission data downloaded from this monitor."""
+        del num_cells, tmesh
+        num_position_sets = 1 + len(self.store_position_indexes)
+        return BYTES_REAL * num_position_sets * len(DIPOLE_EMISSION_DIPOLE_AXES) * len(self.freqs)
+
+    @property
+    def _to_solver_monitor(self) -> PointCloudFieldMonitor:
+        """Monitor definition used by the solver to record reciprocal electric fields."""
+        return PointCloudFieldMonitor(
+            points=self.points,
+            fields=self.fields,
+            freqs=self.freqs,
+            apodization=self.apodization,
+            name=self.name,
+        )
 
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):

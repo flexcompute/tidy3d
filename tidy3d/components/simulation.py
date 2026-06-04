@@ -102,6 +102,7 @@ from .monitor import (
     AbstractOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
+    DipoleEmissionMonitor,
     DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
@@ -164,6 +165,7 @@ from .viz import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from os import PathLike
+    from typing import NoReturn
 
     from numpy.typing import NDArray
 
@@ -190,6 +192,12 @@ if TYPE_CHECKING:
         InterpMethod,
         Shapely,
     )
+
+
+def _raise_setup_error(message: str) -> NoReturn:
+    """Raise a setup error from helper paths used outside post-init validation."""
+    raise SetupError(message)
+
 
 try:
     gdstk_available = True
@@ -3340,6 +3348,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_monitor_mediums_frequency_range()
         self._warn_monitor_simulation_frequency_range()
         self._validate_point_cloud_monitor_points_in_bounds()
+        self._validate_dipole_emission_monitor_sources()
         self._projection_monitors_boundaries()
         self._diffraction_monitor_boundaries()
         self._projection_monitors_homogeneous()
@@ -4342,6 +4351,136 @@ class Simulation(AbstractYeeGridSimulation):
                 )
 
         return self
+
+    def _validate_dipole_emission_monitor_sources(self) -> Self:
+        """Error if dipole-emission monitors are not paired with the single TFSF source."""
+
+        if not self.monitors:
+            return self
+
+        dipole_emission_monitors = tuple(
+            (monitor_ind, monitor)
+            for monitor_ind, monitor in enumerate(self.monitors)
+            if isinstance(monitor, DipoleEmissionMonitor)
+        )
+        if not dipole_emission_monitors:
+            return self
+
+        if len(self.sources) != 1 or not isinstance(self.sources[0], TFSF):
+            self._raise_validation_error_at_loc(
+                "A simulation containing a DipoleEmissionMonitor must contain exactly one "
+                "source, and that source must be a TFSF source.",
+                "sources",
+            )
+        source = self.sources[0]
+
+        if not isinstance(source.angular_spec, FixedAngleSpec):
+            self._raise_validation_error_at_loc(
+                "DipoleEmissionMonitor requires a TFSF source with FixedAngleSpec.",
+                "sources",
+                0,
+                "angular_spec",
+            )
+
+        cos_theta = float(np.cos(source.angle_theta))
+        if not np.isfinite(cos_theta) or cos_theta <= 0:
+            self._raise_validation_error_at_loc(
+                "DipoleEmissionMonitor requires a TFSF source with positive cos(angle_theta).",
+                "sources",
+                0,
+                "angle_theta",
+            )
+
+        for monitor_ind, monitor in enumerate(self.monitors):
+            if not isinstance(monitor, DipoleEmissionMonitor):
+                continue
+
+            self._dipole_emission_background_index(
+                source,
+                monitor.freqs,
+                validation_loc=("monitors", monitor_ind),
+            )
+
+            points = np.asarray(monitor.points.values, dtype=float)
+            bounds = np.asarray(source.bounds, dtype=float)
+            strict_inequality = np.asarray([size != 0 for size in source.size], dtype=bool)
+            outside = points_outside_bounds(points, bounds, strict_inequality)
+            if np.any(outside):
+                first_index = int(np.nonzero(outside)[0][0])
+                num_outside = int(np.count_nonzero(outside))
+                self._raise_validation_error_at_loc(
+                    f"Dipole-emission monitor '{monitor.name}' has {num_outside} point(s) "
+                    f"outside TFSF source '{source.name}'. The first outside point has index "
+                    f"{first_index} and coordinates {points[first_index].tolist()}.",
+                    "monitors",
+                    monitor_ind,
+                    "points",
+                )
+
+        return self
+
+    def _dipole_emission_tfsf_source(self) -> TFSF:
+        """Return the single TFSF source associated with a dipole-emission monitor."""
+        if len(self.sources) != 1 or not isinstance(self.sources[0], TFSF):
+            raise SetupError(
+                "DipoleEmissionMonitor postprocessing requires a simulation with exactly "
+                "one source, and that source must be a TFSF source."
+            )
+        return self.sources[0]
+
+    @staticmethod
+    def _dipole_emission_tfsf_injection_plane(source: TFSF) -> Box:
+        """Planar TFSF injection face used as the dipole-emission collection side."""
+        injection_plane_size = list(source.size)
+        injection_plane_size[source.injection_axis] = 0.0
+        return Box(center=tuple(source.injection_plane_center), size=tuple(injection_plane_size))
+
+    def _dipole_emission_tfsf_injection_medium(
+        self,
+        source: TFSF,
+        validation_loc: tuple[Any, ...] | None = None,
+    ) -> AbstractMedium:
+        """Return the single medium intersecting the TFSF injection face."""
+        injection_plane = self._dipole_emission_tfsf_injection_plane(source)
+        simulation_background = Structure(
+            geometry=Box(size=self.size, center=self.center),
+            medium=self.medium,
+        )
+        plane_media = Scene.intersecting_media(
+            injection_plane, [simulation_background, *list(self.structures or [])]
+        )
+        if len(plane_media) != 1:
+            message = (
+                "DipoleEmissionMonitor requires a homogeneous medium on the TFSF injection "
+                f"plane; found {len(plane_media)} media."
+            )
+            if validation_loc is not None:
+                self._raise_validation_error_at_loc(message, *validation_loc)
+            _raise_setup_error(message)
+        return next(iter(plane_media))
+
+    def _dipole_emission_background_index(
+        self,
+        source: TFSF,
+        freqs: ArrayFloat1D,
+        validation_loc: tuple[Any, ...] | None = None,
+    ) -> float:
+        """Validate and return the real nondispersive index on the TFSF injection side."""
+        medium = self._dipole_emission_tfsf_injection_medium(source, validation_loc)
+        background_n = np.asarray(medium.background_index_from_freqs(freqs), dtype=complex)
+        if not np.allclose(background_n.imag, 0.0):
+            message = "DipoleEmissionMonitor requires real TFSF injection-side refractive index."
+            if validation_loc is not None:
+                self._raise_validation_error_at_loc(message, *validation_loc)
+            _raise_setup_error(message)
+        if not np.allclose(background_n.real, background_n.real[0], rtol=1e-12, atol=0.0):
+            message = (
+                "DipoleEmissionMonitor requires nondispersive TFSF injection-side refractive index."
+            )
+            if validation_loc is not None:
+                self._raise_validation_error_at_loc(message, *validation_loc)
+            _raise_setup_error(message)
+        return float(background_n.real[0])
 
     def _diffraction_monitor_boundaries(self) -> Self:
         """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
@@ -5796,9 +5935,15 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
         self._validate_microwave_mode_specs()
+        self._validate_dipole_emission_monitor_license()
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
+
+    def _validate_dipole_emission_monitor_license(self) -> None:
+        """Check license for server-reduced dipole-emission monitor data."""
+        if any(isinstance(monitor, DipoleEmissionMonitor) for monitor in self.monitors):
+            check_tidy3d_extras_licensed_feature("dipole_emission")
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -6046,9 +6191,15 @@ class Simulation(AbstractYeeGridSimulation):
             else:
                 num_cells = self._monitor_num_cells(monitor)
                 storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
-                if isinstance(monitor, PointCloudFieldMonitor) and self.precision == "double":
-                    points_size = np.asarray(monitor.points.values).nbytes
-                    storage_size = points_size + 2 * (storage_size - points_size)
+            if isinstance(monitor, DipoleEmissionMonitor) and self.precision == "double":
+                storage_size *= 2
+            elif (
+                isinstance(monitor, PointCloudFieldMonitor)
+                and not isinstance(monitor, DipoleEmissionMonitor)
+                and self.precision == "double"
+            ):
+                points_size = np.asarray(monitor.points.values).nbytes
+                storage_size = points_size + 2 * (storage_size - points_size)
             data_size[monitor.name] = storage_size
         return data_size
 

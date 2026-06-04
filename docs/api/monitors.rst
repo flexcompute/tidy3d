@@ -38,9 +38,17 @@ Field
 
    FieldMonitor
    PointCloudFieldMonitor
+   DipoleEmissionMonitor
    FieldTimeMonitor
 
-The ``FieldMonitor`` records the EM field components within a spatial region at specified frequency point(s). The ``PointCloudFieldMonitor`` records frequency-domain EM field components at arbitrary point coordinates. The ``FieldTimeMonitor`` does the same as ``FieldMonitor``, except at specified time intervals instead of frequency.
+The ``FieldMonitor`` records the EM field components within a spatial region at
+specified frequency point(s). The ``PointCloudFieldMonitor`` records
+frequency-domain EM field components at arbitrary point coordinates. The
+``DipoleEmissionMonitor`` records reduced dipole-emission radiation intensity at
+point-cloud positions and is typically created by the
+:doc:`dipole emission plugin <plugins/dipole_emission>`. The
+``FieldTimeMonitor`` does the same as ``FieldMonitor``, except at specified time
+intervals instead of frequency.
 
 Point-cloud field data is indexed by point rather than by structured ``x`` / ``y`` / ``z`` grid coordinates, so structured-grid plotting helpers such as ``SimulationData.plot_field()`` do not support ``PointCloudFieldData``.
 

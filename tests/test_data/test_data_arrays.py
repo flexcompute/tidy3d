@@ -9,9 +9,11 @@ import numpy
 import pytest
 import xarray.testing as xrt
 from autograd.test_util import check_grads
+from pydantic import TypeAdapter, ValidationError
 
 import tidy3d as td
 from tidy3d.components.autograd.utils import hasbox
+from tidy3d.components.data.data_array import DATA_ARRAY_MAP
 from tidy3d.components.data.monitor_data import ElectromagneticFieldData
 from tidy3d.components.data.utils import static_dataarray_for_plot
 from tidy3d.exceptions import DataError
@@ -411,6 +413,17 @@ def make_surface_normal_data_array():
     return td.TriangularSurfaceDataset(points=points, cells=cells, values=normal_values)
 
 
+def make_dipole_emission_data_array():
+    """Create dipole emission data array for testing."""
+    coords = {
+        "dipole_axis": ["x", "y", "z"],
+        "f": FREQS,
+    }
+    shape = tuple(len(coords[dim]) for dim in td.DipoleEmissionDataArray._dims)
+    values = np.random.random(shape)
+    return td.DipoleEmissionDataArray(values, coords=coords)
+
+
 """ Test that they work """
 
 
@@ -426,6 +439,82 @@ def test_scalar_field_time_data_array():
         data = make_scalar_field_time_data_array(grid_key)
         data = data.interp(t=1e-13)
         _ = data.isel(y=2)
+
+
+def test_dipole_emission_data_array():
+    data = TypeAdapter(td.DipoleEmissionDataArray).validate_python(
+        make_dipole_emission_data_array()
+    )
+
+    assert data.dims == ("dipole_axis", "f")
+    assert data.attrs["long_name"] == "angular radiation intensity per dipole moment squared"
+    assert data.attrs["units"] == "W/(sr * (C*um)^2)"
+    assert data.coords["dipole_axis"].attrs["long_name"] == "dipole orientation axis"
+
+    assert DATA_ARRAY_MAP["DipoleEmissionDataArray"] is td.DipoleEmissionDataArray
+
+
+def test_dipole_emission_position_data_array():
+    coords = {
+        "index": [0, 1],
+        "dipole_axis": ["x", "y", "z"],
+        "f": FREQS,
+    }
+    values = np.random.random(
+        tuple(len(coords[dim]) for dim in td.DipoleEmissionPositionDataArray._dims)
+    )
+    data = TypeAdapter(td.DipoleEmissionPositionDataArray).validate_python(
+        td.DipoleEmissionPositionDataArray(values, coords=coords)
+    )
+
+    assert data.dims == ("index", "dipole_axis", "f")
+    assert data.attrs["long_name"].startswith("position-resolved")
+    assert DATA_ARRAY_MAP["DipoleEmissionPositionDataArray"] is td.DipoleEmissionPositionDataArray
+
+
+def test_spherical_angle_data_array():
+    coords = {"index": [0, 1], "spherical_coordinate": ["theta", "phi"]}
+    data = TypeAdapter(td.SphericalAngleDataArray).validate_python(
+        td.SphericalAngleDataArray([[0.0, 0.1], [0.2, 0.3]], coords=coords)
+    )
+    bare_data = TypeAdapter(td.SphericalAngleDataArray).validate_python(
+        td.SphericalAngleDataArray([[0.0, 0.1], [0.2, 0.3]])
+    )
+
+    assert data.dims == ("index", "spherical_coordinate")
+    assert data.attrs["long_name"] == "spherical angles"
+    assert data.attrs["units"] == "rad"
+    assert data.coords["spherical_coordinate"].attrs["long_name"] == "spherical coordinate"
+    assert bare_data.dims == ("index", "spherical_coordinate")
+    assert bare_data.coords["index"].values.tolist() == [0, 1]
+    assert bare_data.coords["spherical_coordinate"].values.tolist() == ["theta", "phi"]
+    assert DATA_ARRAY_MAP["SphericalAngleDataArray"] is td.SphericalAngleDataArray
+
+    with pytest.raises(ValidationError, match="Wrong dims"):
+        TypeAdapter(td.SphericalAngleDataArray).validate_python([[0.0, 0.1]])
+
+    with pytest.raises(ValidationError, match=r"spherical_coordinate=\('theta', 'phi'\)"):
+        TypeAdapter(td.SphericalAngleDataArray).validate_python(
+            td.SphericalAngleDataArray(
+                [[0.1, 0.0]],
+                coords={"index": [0], "spherical_coordinate": ["phi", "theta"]},
+            )
+        )
+
+
+def test_point_data_array_direct_constructor_defaults():
+    data = TypeAdapter(td.PointDataArray).validate_python(
+        td.PointDataArray([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]])
+    )
+    complex_data = td.PointDataArray((1 + 1j) * np.ones((2, 3)), dims=("index", "axis"))
+
+    assert data.dims == ("index", "axis")
+    assert data.coords["index"].values.tolist() == [0, 1]
+    assert data.coords["axis"].values.tolist() == [0, 1, 2]
+    assert np.iscomplexobj(complex_data.values)
+
+    with pytest.raises(ValidationError, match="Wrong dims"):
+        TypeAdapter(td.PointDataArray).validate_python([[0.0, 0.0, 0.0]])
 
 
 def test_scalar_mode_field_data_array():

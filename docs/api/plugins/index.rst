@@ -8,6 +8,7 @@ Plugins
    dispersion
    polyslab
    smatrix
+   dipole_emission
    resonance
    autograd
    pytorch

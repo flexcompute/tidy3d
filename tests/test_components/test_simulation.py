@@ -4463,6 +4463,33 @@ def test_frequency_mode_abc_validation_error_loc():
     assert_single_value_error_loc(excinfo, ("sources",), "needs specification of frequency")
 
 
+def test_dipole_emission_monitor_requires_fixed_angle_tfsf():
+    monitor = td.DipoleEmissionMonitor(
+        points=td.PointDataArray([[0.0, 0.0, 0.0]]),
+        position_weights=[1.0],
+        freqs=[2e14],
+        name="emission",
+    )
+    source = td.TFSF(
+        center=(0.0, 0.0, 0.0),
+        size=(1.0, 1.0, 1.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        direction="+",
+        injection_axis=2,
+        name="tfsf",
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        _ = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            run_time=1e-12,
+            sources=(source,),
+            monitors=(monitor,),
+        )
+    assert_single_value_error_loc(excinfo, ("sources", 0, "angular_spec"), "FixedAngleSpec")
+
+
 def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
     """Test volumetric equivalent of lumped elements."""
     grid_dl = 0.1

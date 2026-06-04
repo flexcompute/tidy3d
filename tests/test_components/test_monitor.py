@@ -289,12 +289,48 @@ def test_point_cloud_field_monitor(monkeypatch):
 
     assert monitor.num_points == 2
     assert monitor.colocate is False
-    assert monitor.use_colocated_integration is False
     assert np.allclose(monitor.center, (0.1, 0.2, 0.3))
     assert np.allclose(monitor.size, (0.2, 0.4, 0.6))
     assert monitor.storage_size(num_cells=1000, tmesh=[]) == 8 * 2 * 3 + 8 * 2 * 2 * 2
     assert monitor._storage_size_solver(num_cells=1000, tmesh=[]) == 8 * 1000 * 2 * 6
     assert not monitor.supports_parallel_adjoint()
+
+    monitor_from_bare_points = td.PointCloudFieldMonitor(
+        points=td.PointDataArray([[0.0, 0.0, 0.0]]),
+        fields=("Ex",),
+        freqs=[1e12],
+        name="pc_bare_points",
+    )
+    assert monitor_from_bare_points.points.dims == ("index", "axis")
+    assert np.array_equal(monitor_from_bare_points.points.index, [0])
+
+    monitor_from_labeled_points = td.PointCloudFieldMonitor(
+        points=td.PointDataArray(
+            [[0.0, 0.0, 0.0], [0.2, 0.4, 0.6]],
+            coords={"index": [10, 11], "axis": [0, 1, 2]},
+        ),
+        fields=("Ex",),
+        freqs=[1e12],
+        name="pc_labeled_points",
+    )
+    assert monitor_from_labeled_points.points.coords["index"].values.tolist() == [10, 11]
+    assert np.array_equal(monitor_from_bare_points.points.axis, [0, 1, 2])
+
+    with pytest.raises(pd.ValidationError):
+        td.PointCloudFieldMonitor(
+            points=[[0.0, 0.0, 0.0]],
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_raw_points",
+        )
+
+    with pytest.raises(pd.ValidationError):
+        td.PointCloudFieldMonitor(
+            points=td.PointDataArray([[0.0, 0.0, 0.0]], dims=("u", "v")),
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_bad_dims",
+        )
 
     with AssertLogLevel(None):
         monitor_geometry_matches = td.PointCloudFieldMonitor(
@@ -364,23 +400,19 @@ def test_point_cloud_field_monitor(monkeypatch):
         freqs=[1e12],
         name="pc_labeled_points",
     )
-    assert np.array_equal(monitor_from_labeled_points.points.index, [0])
+    assert np.array_equal(monitor_from_labeled_points.points.index, [10])
     assert np.array_equal(monitor_from_labeled_points.points.axis, [0, 1, 2])
 
-    monitor_from_permuted_labeled_points = td.PointCloudFieldMonitor(
-        points=td.PointDataArray(
-            [[2.0, 1.0, 3.0]],
-            coords={"index": [10], "axis": ["y", "x", "z"]},
-        ),
-        fields=("Ex",),
-        freqs=[1e12],
-        name="pc_permuted_labeled_points",
-    )
-    assert np.allclose(
-        monitor_from_permuted_labeled_points.points.values,
-        [[1.0, 2.0, 3.0]],
-    )
-    assert np.array_equal(monitor_from_permuted_labeled_points.points.axis, [0, 1, 2])
+    with pytest.raises(pd.ValidationError, match="ordered"):
+        td.PointCloudFieldMonitor(
+            points=td.PointDataArray(
+                [[2.0, 1.0, 3.0]],
+                coords={"index": [10], "axis": ["y", "x", "z"]},
+            ),
+            fields=("Ex",),
+            freqs=[1e12],
+            name="pc_permuted_labeled_points",
+        )
 
     with pytest.raises(pd.ValidationError, match="exactly three"):
         td.PointCloudFieldMonitor(

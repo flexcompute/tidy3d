@@ -131,6 +131,11 @@ RADIAN = "rad"
 SI unit of angle.
 """
 
+STERADIAN = "sr"
+"""
+SI unit of solid angle.
+"""
+
 CONDUCTIVITY = "S/um"
 """
 Siemens per micrometer.
@@ -191,6 +196,11 @@ Unit per centimeter cube.
 WATT = "W"
 """
 SI unit of power.
+"""
+
+COULOMB = "C"
+"""
+SI unit of electric charge.
 """
 
 VOLT = "V"

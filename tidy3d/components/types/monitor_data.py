@@ -5,6 +5,7 @@ from __future__ import annotations
 from tidy3d.components.data.monitor_data import (
     AuxFieldTimeData,
     DiffractionData,
+    DipoleEmissionData,
     DirectivityData,
     FieldData,
     FieldOverlapData,
@@ -41,6 +42,7 @@ MonitorDataTypes = (
     FieldProjectionCartesianData,
     FieldProjectionAngleData,
     DiffractionData,
+    DipoleEmissionData,
     DirectivityData,
     FieldOverlapData,
     MicrowaveModeData,
@@ -63,6 +65,7 @@ MonitorDataType = (
     | FieldProjectionCartesianData
     | FieldProjectionAngleData
     | DiffractionData
+    | DipoleEmissionData
     | DirectivityData
     | FieldOverlapData
     | MicrowaveModeData

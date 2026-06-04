@@ -7,6 +7,7 @@ from tidy3d.components.monitor import (
     AstigmaticGaussianOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
+    DipoleEmissionMonitor,
     DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
@@ -45,6 +46,7 @@ MonitorType = (
     | MicrowaveModeSolverMonitor
     | GaussianOverlapMonitor
     | AstigmaticGaussianOverlapMonitor
+    | DipoleEmissionMonitor
     | PointCloudFieldMonitor
     | SurfaceFieldMonitor
     | SurfaceFieldTimeMonitor

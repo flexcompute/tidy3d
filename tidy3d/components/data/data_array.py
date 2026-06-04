@@ -23,12 +23,14 @@ from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tid
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.constants import (
     AMP,
+    COULOMB,
     HERTZ,
     MICROMETER,
     OHM,
     PICOSECOND_PER_NANOMETER_PER_KILOMETER,
     RADIAN,
     SECOND,
+    STERADIAN,
     VOLT,
     WATT,
 )
@@ -49,6 +51,8 @@ if TYPE_CHECKING:
     from tidy3d.components.types.base import Coordinate
 
 # maps the dimension names to their attributes
+DIPOLE_EMISSION_INTENSITY_UNITS = f"{WATT}/({STERADIAN} * ({COULOMB}*{MICROMETER})^2)"
+
 DIM_ATTRS = {
     "x": {"units": MICROMETER, "long_name": "x position"},
     "y": {"units": MICROMETER, "long_name": "y position"},
@@ -78,6 +82,10 @@ DIM_ATTRS = {
     "face_index": {"long_name": "face index"},
     "vertex_index": {"long_name": "vertex index"},
     "axis": {"long_name": "axis"},
+    "dipole_axis": {"long_name": "dipole orientation axis"},
+    "polarization": {"long_name": "emission polarization"},
+    "angle": {"long_name": "emission angle index"},
+    "spherical_coordinate": {"long_name": "spherical coordinate"},
 }
 
 
@@ -143,6 +151,11 @@ class DataArray(xr.DataArray):
         super().__init__(data, *args, **kwargs)
 
     @classmethod
+    def _constructor_kwargs_for_pydantic(cls) -> dict[str, Any]:
+        """Additional constructor kwargs used only by pydantic parsing."""
+        return {}
+
+    @classmethod
     def __get_pydantic_core_schema__(
         cls, source_type: Any, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
@@ -160,7 +173,7 @@ class DataArray(xr.DataArray):
                 )
 
             try:
-                instance = cls(value)
+                instance = cls(value, **cls._constructor_kwargs_for_pydantic())
                 if not isinstance(instance, cls):
                     raise TypeError(
                         f"Constructor for {cls.__name__} returned unexpected type {type(instance)}"
@@ -1429,6 +1442,114 @@ class FieldProjectionKSpaceDataArray(DataArray):
     _data_attrs = {"long_name": "radiation vectors"}
 
 
+class SphericalAngleDataArray(DataArray):
+    """Spherical angles as indexed ``(theta, phi)`` pairs.
+
+    The ``spherical_coordinate`` coordinate is ordered as ``("theta", "phi")`` and
+    values are in radians.
+
+    Example
+    -------
+    >>> index = np.arange(2)
+    >>> spherical_coordinate = ["theta", "phi"]
+    >>> coords = dict(index=index, spherical_coordinate=spherical_coordinate)
+    >>> values = np.array([[0.0, 0.0], [0.1, 1.2]])
+    >>> data = SphericalAngleDataArray(values, coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("index", "spherical_coordinate")
+    _data_attrs = {
+        "long_name": "spherical angles",
+        "units": RADIAN,
+    }
+
+    def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
+        skip_canonicalization = kwargs.pop("_skip_bare_canonicalization", False)
+        if (
+            not skip_canonicalization
+            and not args
+            and "coords" not in kwargs
+            and "dims" not in kwargs
+        ):
+            shape = np.shape(data)
+            if (
+                len(shape) == 2
+                and shape[1] == 2
+                and not isinstance(data, xr.Variable | xr.DataArray)
+            ):
+                kwargs["dims"] = ("index", "spherical_coordinate")
+                kwargs["coords"] = {
+                    "index": np.arange(shape[0]),
+                    "spherical_coordinate": ["theta", "phi"],
+                }
+        super().__init__(data, *args, **kwargs)
+
+    @classmethod
+    def _constructor_kwargs_for_pydantic(cls) -> dict[str, Any]:
+        """Keep model parsing strict while direct user construction is ergonomic.
+
+        Direct ``SphericalAngleDataArray([[theta, phi], ...])`` construction can
+        infer the standard dimensions and coordinates. Pydantic validation of
+        model fields should not do this inference, because raw lists embedded in
+        model payloads would otherwise bypass the usual serialized DataArray
+        shape.
+        """
+        return {"_skip_bare_canonicalization": True}
+
+    @classmethod
+    def _validate_dims(cls, val: Self) -> Self:
+        """Require explicit ``(theta, phi)`` spherical coordinate ordering."""
+        val = super()._validate_dims(val)
+        spherical_coords = tuple(str(coord) for coord in val.coords["spherical_coordinate"].values)
+        if spherical_coords != ("theta", "phi"):
+            raise ValueError(
+                "SphericalAngleDataArray requires spherical_coordinate=('theta', 'phi')."
+            )
+        return val
+
+
+class DipoleEmissionDataArray(DataArray):
+    """Radiation intensity stored by a single dipole-emission monitor.
+
+    Example
+    -------
+    >>> dipole_axis = ["x", "y", "z"]
+    >>> f = np.linspace(1e14, 2e14, 3)
+    >>> coords = dict(dipole_axis=dipole_axis, f=f)
+    >>> values = np.random.random((len(dipole_axis), len(f)))
+    >>> data = DipoleEmissionDataArray(values, coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("dipole_axis", "f")
+    _data_attrs = {
+        "long_name": "angular radiation intensity per dipole moment squared",
+        "units": DIPOLE_EMISSION_INTENSITY_UNITS,
+    }
+
+
+class DipoleEmissionPositionDataArray(DataArray):
+    """Position samples stored by a single dipole-emission monitor.
+
+    Example
+    -------
+    >>> index = np.arange(2)
+    >>> dipole_axis = ["x", "y", "z"]
+    >>> f = np.linspace(1e14, 2e14, 3)
+    >>> coords = dict(index=index, dipole_axis=dipole_axis, f=f)
+    >>> values = np.random.random((len(index), len(dipole_axis), len(f)))
+    >>> data = DipoleEmissionPositionDataArray(values, coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("index", "dipole_axis", "f")
+    _data_attrs = {
+        "long_name": "position-resolved angular radiation intensity per dipole moment squared",
+        "units": DIPOLE_EMISSION_INTENSITY_UNITS,
+    }
+
+
 class DiffractionDataArray(DataArray):
     """Diffraction power amplitudes as a function of diffraction orders and frequency.
 
@@ -1759,6 +1880,29 @@ class PointDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("index", "axis")
+
+    def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
+        skip_canonicalization = kwargs.pop("_skip_bare_canonicalization", False)
+        if (
+            not skip_canonicalization
+            and not args
+            and "coords" not in kwargs
+            and "dims" not in kwargs
+        ):
+            shape = np.shape(data)
+            if (
+                len(shape) == 2
+                and shape[1] == 3
+                and not isinstance(data, xr.Variable | xr.DataArray)
+            ):
+                kwargs["dims"] = ("index", "axis")
+                kwargs["coords"] = {"index": np.arange(shape[0]), "axis": np.arange(3)}
+        super().__init__(data, *args, **kwargs)
+
+    @classmethod
+    def _constructor_kwargs_for_pydantic(cls) -> dict[str, Any]:
+        """Keep pydantic parsing strict for raw lists and arrays."""
+        return {"_skip_bare_canonicalization": True}
 
 
 class CellDataArray(DataArray):
@@ -2357,6 +2501,9 @@ DATA_ARRAY_TYPES = [
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
     FieldProjectionKSpaceDataArray,
+    SphericalAngleDataArray,
+    DipoleEmissionDataArray,
+    DipoleEmissionPositionDataArray,
     DiffractionDataArray,
     ModeDataArray,
     TerminalDataArray,

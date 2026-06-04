@@ -6068,6 +6068,187 @@
       ],
       "type": "object"
     },
+    "DipoleEmissionMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "$ref": "#/$defs/ApodizationSpec",
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "colocate": {
+          "const": false,
+          "default": false,
+          "type": "boolean"
+        },
+        "fields": {
+          "default": [
+            "Ex",
+            "Ey",
+            "Ez"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "Ex",
+              "type": "string"
+            },
+            {
+              "const": "Ey",
+              "type": "string"
+            },
+            {
+              "const": "Ez",
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        "freqs": {
+          "type": "ArrayLike",
+          "x-array-dtype": "<f8",
+          "x-array-forbid_nan": true,
+          "x-array-ndim": 1,
+          "x-array-scalar_to_1d": true,
+          "x-array-shape": null,
+          "x-array-strict": false
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "points": {
+          "type": "string"
+        },
+        "position_weights": {
+          "anyOf": [
+            {
+              "type": "ArrayLike",
+              "x-array-dtype": "<f8",
+              "x-array-forbid_nan": true,
+              "x-array-ndim": 1,
+              "x-array-scalar_to_1d": true,
+              "x-array-shape": null,
+              "x-array-strict": false
+            },
+            {
+              "type": "ArrayLike",
+              "x-array-dtype": "<f8",
+              "x-array-forbid_nan": true,
+              "x-array-ndim": 2,
+              "x-array-scalar_to_1d": false,
+              "x-array-shape": null,
+              "x-array-strict": false
+            }
+          ]
+        },
+        "size": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "store_position_indexes": {
+          "default": [],
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "DipoleEmissionMonitor",
+          "default": "DipoleEmissionMonitor",
+          "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "points",
+        "position_weights"
+      ],
+      "type": "object"
+    },
     "DirectivityMonitor": {
       "additionalProperties": false,
       "properties": {
@@ -15622,8 +15803,8 @@
           "type": "string"
         },
         "use_colocated_integration": {
-          "const": false,
-          "default": false,
+          "const": true,
+          "default": true,
           "type": "boolean"
         }
       },
@@ -19188,6 +19369,7 @@
             "AstigmaticGaussianOverlapMonitor": "#/$defs/AstigmaticGaussianOverlapMonitor",
             "AuxFieldTimeMonitor": "#/$defs/AuxFieldTimeMonitor",
             "DiffractionMonitor": "#/$defs/DiffractionMonitor",
+            "DipoleEmissionMonitor": "#/$defs/DipoleEmissionMonitor",
             "DirectivityMonitor": "#/$defs/DirectivityMonitor",
             "FieldMonitor": "#/$defs/FieldMonitor",
             "FieldProjectionAngleMonitor": "#/$defs/FieldProjectionAngleMonitor",
@@ -19218,6 +19400,9 @@
           },
           {
             "$ref": "#/$defs/DiffractionMonitor"
+          },
+          {
+            "$ref": "#/$defs/DipoleEmissionMonitor"
           },
           {
             "$ref": "#/$defs/DirectivityMonitor"

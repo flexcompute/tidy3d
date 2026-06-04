@@ -63,6 +63,7 @@ Units
    constants.MICROMETER
    constants.NANOMETER
    constants.RADIAN
+   constants.STERADIAN
    constants.CONDUCTIVITY
    constants.PERMITTIVITY
    constants.PML_SIGMA
@@ -73,6 +74,7 @@ Units
    constants.CMCUBE
    constants.PERCMCUBE
    constants.WATT
+   constants.COULOMB
    constants.VOLT
    constants.THERMAL_CONDUCTIVITY
    constants.SPECIFIC_HEAT_CAPACITY

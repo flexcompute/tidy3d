@@ -42,6 +42,7 @@ from tidy3d.components.monitor import (
     AstigmaticGaussianOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
+    DipoleEmissionMonitor,
     DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
@@ -82,6 +83,8 @@ from tidy3d.log import log
 from .data_array import (
     DataArray,
     DiffractionDataArray,
+    DipoleEmissionDataArray,
+    DipoleEmissionPositionDataArray,
     EMEFreqModeDataArray,
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -1998,6 +2001,54 @@ class PointCloudFieldData(MonitorData, PointCloudFieldDataset):
         raise Tidy3dNotImplementedError(
             "Adjoint objectives depending on PointCloudFieldData are currently unsupported."
         )
+
+
+class DipoleEmissionData(MonitorData):
+    """Data associated with a :class:`.DipoleEmissionMonitor`.
+
+    The default arrays are summed over all sampled dipole positions using the
+    monitor position- and axis-dependent ``position_weights``. Optional
+    position-resolved arrays are present only when ``store_position_indexes`` is
+    nonempty.
+    """
+
+    monitor: DipoleEmissionMonitor = Field(
+        ..., title="Monitor", description="Dipole-emission monitor."
+    )
+
+    radiation_intensity: DipoleEmissionDataArray = Field(
+        ...,
+        title="Radiation Intensity",
+        description=(
+            "Radiated angular power density per squared electric dipole moment "
+            "with dipole moment expressed in C*um."
+        ),
+    )
+
+    radiation_intensity_at_positions: DipoleEmissionPositionDataArray | None = Field(
+        None,
+        title="Position-Resolved Radiation Intensity",
+        description="Radiation intensity at selected stored position indexes.",
+    )
+
+    @model_validator(mode="after")
+    def _frequencies_match_monitor(self) -> Self:
+        """Ensure stored frequency coordinates match the associated monitor."""
+        monitor_freqs = np.asarray(self.monitor.freqs)
+        arrays = {
+            "radiation_intensity": self.radiation_intensity,
+            "radiation_intensity_at_positions": self.radiation_intensity_at_positions,
+        }
+        for array_name, array in arrays.items():
+            if array is None:
+                continue
+            freqs = np.asarray(array.coords["f"].values)
+            if not np.array_equal(freqs, monitor_freqs):
+                self._raise_validation_error_at_loc(
+                    "Radiation-intensity frequency coordinates must match the monitor.",
+                    array_name,
+                )
+        return self
 
 
 class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):

@@ -35,24 +35,22 @@ def canonicalize_point_cloud_points(
     require_real: bool = False,
     require_finite: bool = False,
     cast_to_float: bool = False,
+    coordinate_name: str = "Point-cloud coordinates",
+    preserve_index: bool = False,
 ) -> PointDataArray:
     """Validate and canonicalize point-cloud coordinate arrays."""
 
     if points.sizes.get("axis") != 3:
         raise ValueError(
-            "Point-cloud coordinates must have exactly three entries along the 'axis' dimension."
+            f"{coordinate_name} must have exactly three entries along the 'axis' dimension."
         )
 
     if "axis" in points.coords:
         axis_indices = [_axis_label_to_index(label) for label in points.coords["axis"].values]
-        if set(axis_indices) != {0, 1, 2}:
+        if axis_indices != [0, 1, 2]:
             raise ValueError(
-                "Point-cloud coordinate 'axis' labels must be a permutation of "
-                "(0, 1, 2) or ('x', 'y', 'z')."
+                f"{coordinate_name} 'axis' labels must be ordered as (0, 1, 2) or ('x', 'y', 'z')."
             )
-        axis_order = [axis_indices.index(axis) for axis in range(3)]
-        if axis_order != [0, 1, 2]:
-            points = points.isel(axis=axis_order)
 
     num_points = points.sizes.get("index", 0)
     if num_points == 0:
@@ -64,24 +62,29 @@ def canonicalize_point_cloud_points(
     if require_real or require_finite or cast_to_float:
         values = np.asarray(points.values)
         if require_real and np.iscomplexobj(values):
-            raise ValueError("Point-cloud coordinates must be real-valued.")
+            raise ValueError(f"{coordinate_name} must be real-valued.")
 
         if require_finite:
             try:
                 values_are_finite = np.isfinite(values)
             except TypeError as exc:
                 raise ValueError(
-                    "Point-cloud coordinates must be finite real numbers. "
+                    f"{coordinate_name} must be finite real numbers. "
                     f"Failed to test finiteness: {exc}"
                 ) from exc
 
             if not np.all(values_are_finite):
-                raise ValueError("Point-cloud coordinates must be finite real numbers.")
+                raise ValueError(f"{coordinate_name} must be finite real numbers.")
 
         if cast_to_float:
             points = points.astype(float, copy=False)
 
-    points = points.assign_coords(index=np.arange(num_points), axis=np.arange(3))
+    index_coords = (
+        np.asarray(points.coords["index"].values)
+        if preserve_index and "index" in points.coords
+        else np.arange(num_points)
+    )
+    points = points.assign_coords(index=index_coords, axis=np.arange(3))
     return PointDataArray(points)
 
 

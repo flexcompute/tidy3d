@@ -50,6 +50,7 @@ List of Monitor Data Types
 
    FieldData
    PointCloudFieldData
+   DipoleEmissionData
    FieldTimeData
    ModeSolverData
    PermittivityData
@@ -78,6 +79,9 @@ List of Dataset Types
    SpatialDataArray
    PermittivityDataset
    ScalarFieldDataArray
+   SphericalAngleDataArray
+   DipoleEmissionDataArray
+   DipoleEmissionPositionDataArray
    PointCloudFieldDataset
    ScalarModeFieldDataArray
    ScalarFieldTimeDataArray

@@ -53,6 +53,7 @@ Currently, ``tidy3d-extras`` provides the following features:
 - ``BroadbandPulse`` source time for injecting significant energy across a wide custom frequency range.
 - Computation of voltage and current transformation matrices for transmission line terminals. Requires an **RF license**.
 - Vector fitting of array-valued frequency-domain data via ``_vector_fit``.
+- Local reduction of dipole-emission study data into angular radiation intensity.
 
 By default, these features are automatically enabled if the ``tidy3d-extras``
 package is installed. The following functions benefit from local subpixel
