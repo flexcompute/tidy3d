@@ -1,25 +1,58 @@
 # test autograd and compares to numerically computed finite difference gradients
 from __future__ import annotations
 
-import operator
+from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import TypeAlias
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from autograd.numpy.numpy_boxes import ArrayBox
+from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.types.base import Size
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_fd_adjoint_gradient_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+
+EvalFnResult: TypeAlias = float | ArrayBox
+EvalFn: TypeAlias = Callable[[SimulationData], EvalFnResult]
+
+
+class ModeDataPolyslabCaseIdentity(BaseModel):
+    """Semantic identity for one mode-data PolySlab numerical case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    geometry_size_wvl: Size
+    polyslab_permittivity: float
+
+
+class ModeDataPolyslabTestParameters(ModeDataPolyslabCaseIdentity):
+    """Full parameter bundle for one mode-data PolySlab test invocation."""
+
+    test_number: int
+
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_mode_polyslab_test"
 
 NUM_MODE_MONITOR_FREQUENCIES = 4
 
@@ -269,7 +302,7 @@ adj_wvls_um = [1.5, 2.0, 10 * 1.55, 10 * 2.0]
 geometry_sizes_wvl = [(3.0, 3.0, MODE_LAYER_HEIGHT_WVL)]
 polyslab_indices = np.linspace(SUBSTRATE_INDEX, WG_INDEX, 5)
 
-mode_data_test_parameters = []
+mode_data_test_parameters: list[ModeDataPolyslabTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -281,63 +314,41 @@ for idx in range(len(mesh_wvls_um)):
             polyslab_permittivity = polyslab_index**2
 
             mode_data_test_parameters.append(
-                {
-                    "mesh_wvl_um": mesh_wvl_um,
-                    "adj_wvl_um": adj_wvl_um,
-                    "geometry_size_wvl": geometry_size_wvl,
-                    "polyslab_permittivity": polyslab_permittivity,
-                    "test_number": test_number,
-                }
+                ModeDataPolyslabTestParameters(
+                    mesh_wvl_um=mesh_wvl_um,
+                    adj_wvl_um=adj_wvl_um,
+                    geometry_size_wvl=geometry_size_wvl,
+                    polyslab_permittivity=polyslab_permittivity,
+                    test_number=test_number,
+                )
             )
 
             test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("mode_data_test_parameters", mode_data_test_parameters)
-def test_finite_difference_mode_data_polyslab(
-    mode_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test a variety of autograd permittivity gradients for ModeData in combination with polyslab by"""
-    """comparing them to numerical finite difference."""
+def _case_identity(
+    mode_data_test_parameters: ModeDataPolyslabTestParameters,
+) -> ModeDataPolyslabCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return case_identity_from_parameters(ModeDataPolyslabCaseIdentity, mode_data_test_parameters)
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
 
-    test_number = mode_data_test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        geometry_size_wvl,
-        polyslab_permittivity,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "geometry_size_wvl",
-        "polyslab_permittivity",
-        "test_number",
-    )(mode_data_test_parameters)
-
-    adj_freq = td.C_0 / adj_wvl_um
-
-    dim_x_um = geometry_size_wvl[0] * mesh_wvl_um * 2
-    dim_y_um = geometry_size_wvl[1] * mesh_wvl_um * 2
-    thickness_um = geometry_size_wvl[2] * mesh_wvl_um
-
-    dim_x = 1 + int(dim_x_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    dim_y = 1 + int(dim_y_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    Nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-
-    sim_geometry = get_sim_geometry(mesh_wvl_um)
+def _collect_mode_data_polyslab_evaluation_data(
+    mode_data_test_parameters: ModeDataPolyslabTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: str | Path,
+) -> EvaluationData:
+    """Collect the compact evaluation dataset needed for later offline re-evaluation."""
+    mesh_wvl_um = mode_data_test_parameters.mesh_wvl_um
+    adj_wvl_um = mode_data_test_parameters.adj_wvl_um
+    geometry_size_wvl = mode_data_test_parameters.geometry_size_wvl
+    polyslab_permittivity = mode_data_test_parameters.polyslab_permittivity
+    test_number = mode_data_test_parameters.test_number
 
     box_for_override = td.Box(
         center=(0, 0, 0),
         size=(np.inf, np.inf, MODE_LAYER_HEIGHT_WVL * mesh_wvl_um + mesh_wvl_um),
     )
-
-    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
-    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     # Weights for creating a random objective function over multiple frequencies by
     # summing their contributions by random weights. This helps verify gradient errors
@@ -346,14 +357,14 @@ def test_finite_difference_mode_data_polyslab(
     monitor_bottom_weights = rng.random(NUM_MODE_MONITOR_FREQUENCIES)
     frequency_selection_mask = np.arange(0, NUM_MODE_MONITOR_FREQUENCIES)
 
-    # sometimes, test what happens when we only use one of the frequencies from the mode monitors
-    # to catch handling of different frequencies being present in the forward and adjoint monitors
+    # Sometimes, test what happens when we only use one of the frequencies from the mode monitors
+    # to catch handling of different frequencies being present in the forward and adjoint monitors.
     if rng.random() > 0.5:
         frequency_selection_mask = rng.integers(1, NUM_MODE_MONITOR_FREQUENCIES)
         monitor_top_weights = monitor_top_weights[frequency_selection_mask]
         monitor_bottom_weights = monitor_bottom_weights[frequency_selection_mask]
 
-    def eval_fn(sim_data):
+    def eval_fn(sim_data: SimulationData) -> EvalFnResult:
         return np.sum(
             monitor_top_weights
             * np.abs(
@@ -376,110 +387,178 @@ def test_finite_difference_mode_data_polyslab(
 
     polyslab_height_um = POLYSLAB_HEIGHT_WVL * adj_wvl_um
 
-    objective = create_objective_function(
-        lambda mesh_wvl_um=mesh_wvl_um,
-        adj_wvl_um=adj_wvl_um,
-        geometry_size_wvl=geometry_size_wvl,
-        polyslab_permittivity=polyslab_permittivity,
-        box_for_override=box_for_override: make_base_sim(
-            mesh_wvl_um=mesh_wvl_um,
+    with TemporaryDirectory(prefix=f"test{test_number}_", dir=numerical_case_dir) as sim_path_dir:
+        objective = create_objective_function(
+            lambda mesh_wvl_um=mesh_wvl_um,
             adj_wvl_um=adj_wvl_um,
             geometry_size_wvl=geometry_size_wvl,
-            box_for_override=box_for_override,
+            polyslab_permittivity=polyslab_permittivity,
+            box_for_override=box_for_override: make_base_sim(
+                mesh_wvl_um=mesh_wvl_um,
+                adj_wvl_um=adj_wvl_um,
+                geometry_size_wvl=geometry_size_wvl,
+                box_for_override=box_for_override,
+            ),
+            eval_fn,
+            sim_path_dir=sim_path_dir,
+            mode_layer_height_um=MODE_LAYER_HEIGHT_WVL * mesh_wvl_um,
+            polyslab_height_um=polyslab_height_um,
+            polyslab_permittivity=polyslab_permittivity,
+        )
+
+        obj_val_and_grad = ag.value_and_grad(objective)
+
+        # Empirical step size from earlier mode-data finite-difference experiments.
+        fd_step = 0.2 * adj_wvl_um
+
+        all_vertex = []
+        pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
+
+        angles = np.linspace(0, 2 * np.pi, NUM_VERTICES + 1)[0:-1]
+        vertex_centers_x = 1.1 * mesh_wvl_um * np.cos(angles)
+        vertex_centers_y = 0.8 * mesh_wvl_um * np.sin(angles)
+
+        _obj, adj_grad = obj_val_and_grad([list(vertex_centers_x) + list(vertex_centers_y)])
+
+        for fd_idx in range(NUM_FINITE_DIFFERENCE):
+            # Create random perturbation of vertices to check against the adjoint gradient.
+            random_pattern = rng.random(2 * NUM_VERTICES) - 0.5
+            random_pattern = gaussian_filter(random_pattern, sigma=1)
+            random_pattern /= np.linalg.norm(random_pattern)
+
+            pattern_dot_adj_gradient[fd_idx] = np.sum(random_pattern * adj_grad)
+
+            vertex_centers_up_x = vertex_centers_x + random_pattern[0:NUM_VERTICES] * fd_step
+            vertex_centers_up_y = vertex_centers_y + random_pattern[NUM_VERTICES:] * fd_step
+
+            vertex_centers_down_x = vertex_centers_x - random_pattern[0:NUM_VERTICES] * fd_step
+            vertex_centers_down_y = vertex_centers_y - random_pattern[NUM_VERTICES:] * fd_step
+
+            all_vertex.append(list(vertex_centers_up_x) + list(vertex_centers_up_y))
+            all_vertex.append(list(vertex_centers_down_x) + list(vertex_centers_down_y))
+
+        all_obj = objective(all_vertex)
+
+        fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
+        for fd_idx in range(NUM_FINITE_DIFFERENCE):
+            obj_up_location = 2 * fd_idx
+            obj_down_location = 2 * fd_idx + 1
+            fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (
+                2 * fd_step
+            )
+
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+        "fd_step": fd_step,
+        "monitor_top_weights": np.asarray(monitor_top_weights),
+        "monitor_bottom_weights": np.asarray(monitor_bottom_weights),
+        "frequency_selection_mask": np.asarray(frequency_selection_mask),
+        "vertex_centers_x": vertex_centers_x,
+        "vertex_centers_y": vertex_centers_y,
+    }
+
+
+def _evaluate_mode_data_polyslab_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> MetricGroups:
+    """Evaluate a saved-or-fresh mode-data PolySlab dataset into RFC-style metrics."""
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"]),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"]),
+        relative_rms_threshold=RMS_THRESHOLD,
+    )
+
+
+def _print_mode_data_polyslab_summary(
+    mode_data_test_parameters: ModeDataPolyslabTestParameters,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print a compact case summary for fresh and eval-only runs."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    print("\n" * 3)
+    print("-" * 20)
+    print(f"Numerical test #{mode_data_test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{mode_data_test_parameters.mesh_wvl_um}, "
+        f"{mode_data_test_parameters.adj_wvl_um}"
+    )
+    print(f"Geometry size: {mode_data_test_parameters.geometry_size_wvl}")
+    print(f"PolySlab permittivity: {mode_data_test_parameters.polyslab_permittivity}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
+    print("-" * 20)
+    print("\n" * 3)
+
+
+def _plot_mode_data_polyslab_comparison(evaluation_data: EvaluationData) -> None:
+    """Plot the saved FD and adjoint comparison arrays when interactive plotting is enabled."""
+    plt.plot(evaluation_data["adj_grad_projected"], color="g", linewidth=2.0, label="Adjoint")
+    plt.plot(
+        evaluation_data["fd_grad"],
+        color="b",
+        linewidth=1.5,
+        linestyle="--",
+        label="Finite difference",
+    )
+    plt.title("Gradient:")
+    plt.xlabel("Sample number")
+    plt.ylabel("Gradient value")
+    plt.legend()
+    plt.show()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "mode_data_test_parameters",
+    mode_data_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params)),
+)
+def test_finite_difference_mode_data_polyslab(
+    request: pytest.FixtureRequest,
+    mode_data_test_parameters: ModeDataPolyslabTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Test a variety of autograd permittivity gradients for ModeData in combination with polyslab by"""
+    """comparing them to numerical finite difference."""
+    case_identity = _case_identity(mode_data_test_parameters)
+
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_mode_data_polyslab_evaluation_data(
+            mode_data_test_parameters, rng, numerical_case_dir
         ),
-        eval_fn,
-        sim_path_dir=str(sim_path_dir),
-        mode_layer_height_um=MODE_LAYER_HEIGHT_WVL * mesh_wvl_um,
-        polyslab_height_um=polyslab_height_um,
-        polyslab_permittivity=polyslab_permittivity,
     )
 
-    obj_val_and_grad = ag.value_and_grad(objective)
-
-    # Empirically chosen step size for these tests to get good finite difference gradients.
-    # In the future, can be replaced by checking convergence of finite difference gradient with
-    # chosen step size.
-    fd_step = (
-        0.2 * adj_wvl_um
-    )  # 0.5 * mesh_wvl_um#0.1 * mesh_wvl_um# 0.3 * mesh_wvl_um#0.2 * mesh_wvl_um
-
-    all_vertex = []
-    pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
-
-    angles = np.linspace(0, 2 * np.pi, NUM_VERTICES + 1)[0:-1]
-    vertex_centers_x = 1.1 * mesh_wvl_um * np.cos(angles)
-    vertex_centers_y = 0.8 * mesh_wvl_um * np.sin(angles)
-
-    _obj, adj_grad = obj_val_and_grad([list(vertex_centers_x) + list(vertex_centers_y)])
-
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        # Create random perturbation of vertices to check against the computed adjoint gradient.
-        random_pattern = rng.random(2 * NUM_VERTICES) - 0.5
-        random_pattern = gaussian_filter(random_pattern, sigma=1)
-        random_pattern /= np.linalg.norm(random_pattern)
-
-        pattern_dot_adj_gradient[fd_idx] = np.sum(random_pattern * adj_grad)
-
-        vertex_centers_up_x = vertex_centers_x + random_pattern[0:NUM_VERTICES] * fd_step
-        vertex_centers_up_y = vertex_centers_y + random_pattern[NUM_VERTICES:] * fd_step
-
-        vertex_centers_down_x = vertex_centers_x - random_pattern[0:NUM_VERTICES] * fd_step
-        vertex_centers_down_y = vertex_centers_y - random_pattern[NUM_VERTICES:] * fd_step
-
-        all_vertex.append(list(vertex_centers_up_x) + list(vertex_centers_up_y))
-        all_vertex.append(list(vertex_centers_down_x) + list(vertex_centers_down_y))
-
-    all_obj = objective(all_vertex)
-
-    fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        obj_up_location = 2 * fd_idx
-        obj_down_location = 2 * fd_idx + 1
-
-        fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
-
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_mode_data_polyslab_evaluation_data(evaluation_data)
     )
-
-    print("\n" * 3)
-    print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Geometry size: {geometry_size_wvl}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
-    print("-" * 20)
-    print("\n" * 3)
-
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
-
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
-
-    try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
-
-    test_number += 1
+    _print_mode_data_polyslab_summary(
+        mode_data_test_parameters,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0)
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
-        plt.title("Gradient:")
-        plt.legend(["Adjoint", "Finite difference"])
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.legend()
-        plt.show()
+        _plot_mode_data_polyslab_comparison(evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

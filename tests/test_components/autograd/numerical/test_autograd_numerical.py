@@ -1,11 +1,10 @@
 # test autograd and compares to numerically computed finite difference gradients
 from __future__ import annotations
 
-import operator
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, TypeAlias, TypedDict
+from typing import Any, TypeAlias
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -22,28 +21,17 @@ from tidy3d.components.types.base import Size
 
 from .numerical_test_helpers import (
     EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
     case_identity_id,
+    evaluate_fd_adjoint_gradient_agreement,
     finalize_result,
-    load_evaluation_data,
-    write_evaluation_data,
+    load_or_collect_evaluation_data,
 )
-from .result_models import Metric
 
 EvalFnResult: TypeAlias = float | ArrayBox
 EvalFn: TypeAlias = Callable[[SimulationData], EvalFnResult]
-Diagnostics: TypeAlias = dict[str, float]
-MetricGroups: TypeAlias = tuple[list[Metric], list[Metric], Diagnostics]
-
-
-class FieldDataTestParameters(TypedDict):
-    mesh_wvl_um: float
-    adj_wvl_um: float
-    monitor_size_wvl: Size
-    monitor_bg_index: float
-    eval_fn: EvalFn
-    eval_fn_name: str
-    cm_interp_method: str
-    test_number: int
 
 
 class FieldDataCaseIdentity(BaseModel):
@@ -55,6 +43,13 @@ class FieldDataCaseIdentity(BaseModel):
     monitor_bg_index: float
     eval_fn_name: str
     cm_interp_method: str
+
+
+class FieldDataTestParameters(FieldDataCaseIdentity):
+    """Full parameter bundle for one field-data test invocation."""
+
+    eval_fn: EvalFn
+    test_number: int
 
 
 PLOT_FD_ADJ_COMPARISON = False
@@ -268,16 +263,16 @@ for idx in range(len(mesh_wvls_um)):
             for eval_fn_idx, eval_fn in enumerate(eval_fns):
                 for cm_interp_method in cm_interp_methods:
                     field_data_test_parameters.append(
-                        {
-                            "mesh_wvl_um": mesh_wvl_um,
-                            "adj_wvl_um": adj_wvl_um,
-                            "monitor_size_wvl": monitor_size_wvl,
-                            "monitor_bg_index": monitor_bg_index,
-                            "eval_fn": eval_fn,
-                            "eval_fn_name": eval_fn_names[eval_fn_idx],
-                            "cm_interp_method": cm_interp_method,
-                            "test_number": test_number,
-                        }
+                        FieldDataTestParameters(
+                            mesh_wvl_um=mesh_wvl_um,
+                            adj_wvl_um=adj_wvl_um,
+                            monitor_size_wvl=monitor_size_wvl,
+                            monitor_bg_index=monitor_bg_index,
+                            eval_fn=eval_fn,
+                            eval_fn_name=eval_fn_names[eval_fn_idx],
+                            cm_interp_method=cm_interp_method,
+                            test_number=test_number,
+                        )
                     )
 
                     test_number += 1
@@ -285,14 +280,7 @@ for idx in range(len(mesh_wvls_um)):
 
 def _case_identity(field_data_test_parameters: FieldDataTestParameters) -> FieldDataCaseIdentity:
     """Build the semantic case identity used for eval-only replay validation."""
-    return FieldDataCaseIdentity(
-        mesh_wvl_um=field_data_test_parameters["mesh_wvl_um"],
-        adj_wvl_um=field_data_test_parameters["adj_wvl_um"],
-        monitor_size_wvl=field_data_test_parameters["monitor_size_wvl"],
-        monitor_bg_index=field_data_test_parameters["monitor_bg_index"],
-        eval_fn_name=field_data_test_parameters["eval_fn_name"],
-        cm_interp_method=field_data_test_parameters["cm_interp_method"],
-    )
+    return case_identity_from_parameters(FieldDataCaseIdentity, field_data_test_parameters)
 
 
 def _collect_field_data_evaluation_data(
@@ -301,25 +289,13 @@ def _collect_field_data_evaluation_data(
     numerical_case_dir: str | Path,
 ) -> EvaluationData:
     """Collect the compact evaluation dataset needed for later offline re-evaluation."""
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_size_wvl,
-        monitor_bg_index,
-        eval_fn,
-        _eval_fn_name,
-        cm_interp_method,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_size_wvl",
-        "monitor_bg_index",
-        "eval_fn",
-        "eval_fn_name",
-        "cm_interp_method",
-        "test_number",
-    )(field_data_test_parameters)
+    mesh_wvl_um = field_data_test_parameters.mesh_wvl_um
+    adj_wvl_um = field_data_test_parameters.adj_wvl_um
+    monitor_size_wvl = field_data_test_parameters.monitor_size_wvl
+    monitor_bg_index = field_data_test_parameters.monitor_bg_index
+    eval_fn = field_data_test_parameters.eval_fn
+    cm_interp_method = field_data_test_parameters.cm_interp_method
+    test_number = field_data_test_parameters.test_number
 
     dim_um = mesh_wvl_um
     thickness_um = 0.5 * mesh_wvl_um
@@ -393,40 +369,16 @@ def _evaluate_field_data_evaluation_data(
     evaluation_data: EvaluationData,
 ) -> MetricGroups:
     """Evaluate a saved-or-fresh field-data dataset into RFC-style metrics."""
-    fd_grad = np.asarray(evaluation_data["fd_grad"])
-    adj_grad_projected = np.asarray(evaluation_data["adj_grad_projected"])
-    rms_error = float(np.linalg.norm(fd_grad - adj_grad_projected))
-    fd_mag = float(np.linalg.norm(fd_grad))
-    adj_mag = float(np.linalg.norm(adj_grad_projected))
-    percentage_error = float(
-        100.0
-        * np.mean(
-            np.abs(fd_grad - adj_grad_projected) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
-        )
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"]),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"]),
+        relative_rms_threshold=RMS_THRESHOLD,
     )
-    expected = RMS_THRESHOLD * fd_mag
-
-    regression_metrics = [
-        Metric(
-            name="rms_error",
-            observed=float(rms_error),
-            expected=float(expected),
-            comparator="lt",
-        )
-    ]
-    observation_metrics: list[Metric] = []
-    diagnostics = {
-        "rms_error": rms_error,
-        "fd_mag": fd_mag,
-        "adj_mag": adj_mag,
-        "percentage_error": percentage_error,
-    }
-    return regression_metrics, observation_metrics, diagnostics
 
 
 def _print_field_data_summary(
     field_data_test_parameters: FieldDataTestParameters,
-    diagnostics: Diagnostics,
+    diagnostics: GradientComparisonDiagnostics,
     *,
     eval_only: bool,
 ) -> None:
@@ -434,16 +386,16 @@ def _print_field_data_summary(
     mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{field_data_test_parameters['test_number']}")
+    print(f"Numerical test #{field_data_test_parameters.test_number}")
     print(f"Evaluation mode: {mode_label}")
     print(
         "Mesh and adjoint wavelengths: "
-        f"{field_data_test_parameters['mesh_wvl_um']}, {field_data_test_parameters['adj_wvl_um']}"
+        f"{field_data_test_parameters.mesh_wvl_um}, {field_data_test_parameters.adj_wvl_um}"
     )
-    print(f"Monitor size: {field_data_test_parameters['monitor_size_wvl']}")
-    print(f"Background index for monitor: {field_data_test_parameters['monitor_bg_index']}")
-    print(f"Eval function: {field_data_test_parameters['eval_fn_name']}")
-    print(f"Custom medium interpolation method: {field_data_test_parameters['cm_interp_method']}")
+    print(f"Monitor size: {field_data_test_parameters.monitor_size_wvl}")
+    print(f"Background index for monitor: {field_data_test_parameters.monitor_bg_index}")
+    print(f"Eval function: {field_data_test_parameters.eval_fn_name}")
+    print(f"Custom medium interpolation method: {field_data_test_parameters.cm_interp_method}")
     print(f"RMS Error: {diagnostics['rms_error']}")
     print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
     print(f"Percentage Error: {diagnostics['percentage_error']}")
@@ -486,19 +438,14 @@ def test_finite_difference_field_data(
     """comparing them to numerical finite difference."""
     case_identity = _case_identity(field_data_test_parameters)
 
-    if numerical_eval_only:
-        try:
-            evaluation_data = load_evaluation_data(numerical_case_dir, case_identity)
-        except FileNotFoundError as exc:
-            pytest.fail(
-                "Eval-only mode requires a saved evaluation dataset. "
-                f"Run this case once without `--numerical-eval-only` first. Missing: {exc.filename}"
-            )
-    else:
-        evaluation_data = _collect_field_data_evaluation_data(
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_field_data_evaluation_data(
             field_data_test_parameters, rng, numerical_case_dir
-        )
-        write_evaluation_data(numerical_case_dir, evaluation_data, case_identity)
+        ),
+    )
 
     regression_metrics, observation_metrics, diagnostics = _evaluate_field_data_evaluation_data(
         evaluation_data
@@ -511,7 +458,7 @@ def test_finite_difference_field_data(
 
     if PLOT_FD_ADJ_COMPARISON:
         _plot_field_data_comparison(
-            evaluation_data, eval_fn_name=field_data_test_parameters["eval_fn_name"]
+            evaluation_data, eval_fn_name=field_data_test_parameters.eval_fn_name
         )
 
     result_record = finalize_result(

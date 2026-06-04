@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import TypeAlias
+from typing import TypeAlias, TypeVar
 
 import numpy as np
 import pytest
@@ -15,6 +16,9 @@ EVALUATION_DATA_FILENAME = "evaluation_data.npz"
 RESULT_FILENAME = "result.json"
 EvaluationDataValue: TypeAlias = np.ndarray | np.generic | float | int | bool | complex
 EvaluationData: TypeAlias = dict[str, EvaluationDataValue]
+GradientComparisonDiagnostics: TypeAlias = dict[str, float]
+MetricGroups: TypeAlias = tuple[list[Metric], list[Metric], GradientComparisonDiagnostics]
+CaseIdentityT = TypeVar("CaseIdentityT", bound=BaseModel)
 CASE_IDENTITY_JSON_KEY = "__case_identity_json__"
 
 
@@ -29,6 +33,15 @@ def case_identity_id(case_identity: BaseModel, prefix: str = "case", digest_len:
     case_identity_json = _canonicalize_case_identity(case_identity)
     digest = hashlib.sha256(case_identity_json.encode("utf-8")).hexdigest()[:digest_len]
     return f"{prefix}-{digest}" if prefix else digest
+
+
+def case_identity_from_parameters(
+    case_identity_type: type[CaseIdentityT],
+    parameters: BaseModel,
+) -> CaseIdentityT:
+    """Project a full parameter model down to its semantic case identity fields."""
+    identity_fields = set(case_identity_type.model_fields)
+    return case_identity_type.model_validate(parameters.model_dump(include=identity_fields))
 
 
 def write_evaluation_data(
@@ -74,6 +87,67 @@ def load_evaluation_data(
             for name in evaluation_data.files
             if name != CASE_IDENTITY_JSON_KEY
         }
+
+
+def load_or_collect_evaluation_data(
+    *,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    case_identity: BaseModel,
+    collect_evaluation_data: Callable[[], EvaluationData],
+) -> EvaluationData:
+    """Load saved evaluation data in eval-only mode, otherwise collect and save it."""
+    if numerical_eval_only:
+        try:
+            return load_evaluation_data(numerical_case_dir, case_identity)
+        except FileNotFoundError as exc:
+            pytest.fail(
+                "Eval-only mode requires a saved evaluation dataset. "
+                f"Run this case once without `--numerical-eval-only` first. Missing: {exc.filename}"
+            )
+
+    evaluation_data = collect_evaluation_data()
+    write_evaluation_data(numerical_case_dir, evaluation_data, case_identity)
+    return evaluation_data
+
+
+def evaluate_fd_adjoint_gradient_agreement(
+    fd_grad: np.ndarray,
+    adj_grad_projected: np.ndarray,
+    *,
+    relative_rms_threshold: float,
+    metric_name: str = "rms_error",
+) -> MetricGroups:
+    """Evaluate finite-difference and projected adjoint gradient agreement metrics."""
+    fd_grad = np.asarray(fd_grad)
+    adj_grad_projected = np.asarray(adj_grad_projected)
+    rms_error = float(np.linalg.norm(fd_grad - adj_grad_projected))
+    fd_mag = float(np.linalg.norm(fd_grad))
+    adj_mag = float(np.linalg.norm(adj_grad_projected))
+    percentage_error = float(
+        100.0
+        * np.mean(
+            np.abs(fd_grad - adj_grad_projected) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+        )
+    )
+    expected = relative_rms_threshold * fd_mag
+
+    regression_metrics = [
+        Metric(
+            name=metric_name,
+            observed=rms_error,
+            expected=float(expected),
+            comparator="lt",
+        )
+    ]
+    observation_metrics: list[Metric] = []
+    diagnostics = {
+        "rms_error": rms_error,
+        "fd_mag": fd_mag,
+        "adj_mag": adj_mag,
+        "percentage_error": percentage_error,
+    }
+    return regression_metrics, observation_metrics, diagnostics
 
 
 def finalize_result(
