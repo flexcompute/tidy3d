@@ -3182,6 +3182,12 @@
           "default": {},
           "type": "object"
         },
+        "axis_aligned_angle_threshold": {
+          "default": 0.017453292519943295,
+          "exclusiveMaximum": 0.7853981633974483,
+          "minimum": 0,
+          "type": "number"
+        },
         "concave_resolution": {
           "anyOf": [
             {
@@ -10111,6 +10117,7 @@
           "default": {
             "angle_threshold": 0.7853981633974483,
             "attrs": {},
+            "axis_aligned_angle_threshold": 0.017453292519943295,
             "concave_resolution": null,
             "convex_resolution": null,
             "corner_rounding_collapse_extent": null,
@@ -10150,9 +10157,36 @@
           "minimum": 0,
           "type": "integer"
         },
+        "in_plane_edge_refinement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GridRefinement"
+            },
+            {
+              "const": "mirror_corner",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "mirror_corner"
+        },
         "interior_disjoint_geometries": {
           "default": true,
           "type": "boolean"
+        },
+        "min_grids_per_geometry": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 2
         },
         "min_steps_along_axis": {
           "anyOf": [

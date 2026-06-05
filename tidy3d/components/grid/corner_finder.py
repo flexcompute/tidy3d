@@ -24,6 +24,8 @@ if TYPE_CHECKING:
     from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 
 CORNER_ANGLE_THRESOLD = 0.25 * np.pi
+# Default tolerance for treating an in-plane segment as axis-aligned (~1 degree, in radians).
+AXIS_ALIGNED_ANGLE_THRESHOLD = np.pi / 180.0
 # For shapely circular shapes discretization.
 N_SHAPELY_QUAD_SEGS = 8
 # whether to clean tiny features that sometimes occurs in shapely operations
@@ -78,6 +80,16 @@ class CornerFinderSpec(Tidy3dBaseModel):
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
     )
 
+    axis_aligned_angle_threshold: float = Field(
+        AXIS_ALIGNED_ANGLE_THRESHOLD,
+        title="Axis-Alignment Angle Threshold For Edge Refinement",
+        description="An in-plane edge is treated as axis-aligned "
+        "when its direction is within this angle of the nearest in-plane axis. "
+        "Given in radians, like ``angle_threshold``.",
+        ge=0,
+        lt=np.pi / 4,
+    )
+
     corner_rounding_collapse_extent: PositiveFloat | None = Field(
         None,
         title="Corner Rounding Collapse Extent",
@@ -118,6 +130,58 @@ class CornerFinderSpec(Tidy3dBaseModel):
                 self.mixed_resolution is None,
             )
         )
+
+    def _segment_axis_aligned(self, segment_vectors: ArrayFloat2D) -> NDArray[np.bool_]:
+        """Per-segment mask: ``True`` where a segment lies within ``axis_aligned_angle_threshold``
+        of an in-plane axis.
+
+        Degenerate (zero-length) segments should not reach here.
+        """
+        threshold = self.axis_aligned_angle_threshold
+        # angle from the nearer in-plane axis, in [0, pi/2]
+        angle_from_x = np.arctan2(np.abs(segment_vectors[:, 1]), np.abs(segment_vectors[:, 0]))
+        return (angle_from_x <= threshold) | (angle_from_x >= np.pi / 2 - threshold)
+
+    @staticmethod
+    def _group_unaligned_segments(
+        axis_aligned_mask: NDArray[np.bool_],
+    ) -> list[NDArray[np.intp]]:
+        """Group maximal runs of consecutive axis-unaligned segments, wrapping the ring closure.
+
+        Returns arrays of segment indices in walk order. A ring with no axis-aligned segment is a
+        single run over the whole ring; a ring that is entirely axis-aligned yields no runs.
+        """
+        num_segments = len(axis_aligned_mask)
+        if np.all(axis_aligned_mask):
+            return []
+        if not np.any(axis_aligned_mask):
+            return [np.arange(num_segments)]
+        # Rotate the walk to start at an axis-aligned segment so no run spans the array boundary;
+        # a run can still wrap the ring-closure index once mapped back to the original numbering.
+        start = int(np.argmax(axis_aligned_mask))
+        walk_pos = np.flatnonzero(~np.roll(axis_aligned_mask, -start))
+        breaks = np.flatnonzero(np.diff(walk_pos) > 1) + 1
+        return [(start + run) % num_segments for run in np.split(walk_pos, breaks)]
+
+    def _axis_unaligned_runs(self, vertices: ArrayFloat2D) -> list[ArrayFloat2D]:
+        """In-plane vertices of each maximal axis-unaligned run on one polygon ring.
+
+        ``vertices`` is the open ring (no repeated closing vertex). Each returned array holds the
+        vertices spanned by one run of consecutive axis-unaligned segments (run length + 1
+        vertices).
+        """
+        vertices = np.asarray(vertices, dtype=float)
+        num_vertices = len(vertices)
+        if num_vertices < 2:
+            return []
+        segment_vectors = np.roll(vertices, axis=0, shift=-1) - vertices
+        axis_aligned_mask = self._segment_axis_aligned(segment_vectors)
+        runs = []
+        for segment_inds in self._group_unaligned_segments(axis_aligned_mask):
+            # the run's vertices are its segments' tails plus the head of the next segment
+            vertex_inds = (segment_inds[0] + np.arange(len(segment_inds) + 1)) % num_vertices
+            runs.append(vertices[vertex_inds])
+        return runs
 
     @classmethod
     def _merged_pec_on_plane(
@@ -183,6 +247,16 @@ class CornerFinderSpec(Tidy3dBaseModel):
         )
 
         return merged_geos
+
+    def _polygons_from_merged_geos(self, merged_geos: list[tuple[Any, Shapely]]) -> list[Shapely]:
+        """Disjoint polygons from a merged-geometry list, keeping only those whose material
+        matches ``medium``. Zero-area shapes (lines and points) are dropped."""
+        polygons = []
+        for mat, shapes in merged_geos:
+            if self.medium != "all" and mat.is_pec != (self.medium == "metal"):
+                continue
+            polygons.extend(ClipOperation.to_polygon_list(shapes))
+        return polygons
 
     def _corners_and_convexity(
         self,

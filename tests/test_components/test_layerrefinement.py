@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import shapely
 from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.grid.corner_finder import CornerFinderSpec
-from tidy3d.components.grid.grid_spec import GridRefinement, LayerRefinementSpec
+from tidy3d.components.grid.grid import Coords, Grid
+from tidy3d.components.grid.grid_spec import GAP_MESHING_TOL, GridRefinement, LayerRefinementSpec
 
 CORNER_FINDER = CornerFinderSpec()
 GRID_REFINEMENT = GridRefinement()
@@ -465,13 +467,481 @@ def test_2dcorner_finder_does_not_detect_shallow_rounded_bend_below_angle_thresh
     )
 
 
+def test_polygons_from_merged_geos_filters_by_medium():
+    """``_polygons_from_merged_geos`` keeps disjoint polygons matching ``CornerFinderSpec.medium``.
+
+    Lossy metal counts as metal alongside PEC; ``medium="metal"`` drops dielectric while
+    ``medium="all"`` keeps it.
+    """
+    pec_left = td.Structure(geometry=td.Box(center=(-3, 0, 0), size=(1, 1, 2)), medium=td.PEC)
+    pec_right = td.Structure(geometry=td.Box(center=(3, 0, 0), size=(1, 1, 2)), medium=td.PEC)
+    lossy = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 1, 2)),
+        medium=td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 2e14)),
+    )
+    dielectric = td.Structure(
+        geometry=td.Box(center=(0, 4, 0), size=(1, 1, 2)), medium=td.Medium(permittivity=4)
+    )
+
+    merged = CornerFinderSpec._merged_pec_on_plane(
+        normal_axis=2,
+        coord=0,
+        structure_list=[pec_left, pec_right, lossy, dielectric],
+        interior_disjoint_geometries=True,
+    )
+
+    # medium="metal": three disjoint metal regions (two PEC + one lossy metal); dielectric excluded
+    metal_polygons = CornerFinderSpec(medium="metal")._polygons_from_merged_geos(merged)
+    assert len(metal_polygons) == 3
+    centroids_x = sorted(poly.centroid.x for poly in metal_polygons)
+    assert np.allclose(centroids_x, [-3, 0, 3], atol=1e-6)
+
+    # medium="all": the dielectric region is kept too
+    assert len(CornerFinderSpec(medium="all")._polygons_from_merged_geos(merged)) == 4
+
+
+# --- in-plane edge refinement -------------------------------------------------
+
+
+def test_corner_finder_axis_aligned_angle_threshold_field():
+    """``axis_aligned_angle_threshold`` rejects values outside ``[0, pi/4)``."""
+    with pytest.raises(ValidationError):
+        CornerFinderSpec(axis_aligned_angle_threshold=np.pi / 4)
+    with pytest.raises(ValidationError):
+        CornerFinderSpec(axis_aligned_angle_threshold=-1e-3)
+
+
+def test_in_plane_edge_refinement_effective_spec():
+    """``_edge_refinement`` resolves ``mirror_corner``/``None``/explicit spec correctly."""
+    base = LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2))
+    # mirror_corner resolves to corner_refinement
+    assert base._edge_refinement == base.corner_refinement
+    # None disables edge refinement
+    assert base.updated_copy(in_plane_edge_refinement=None)._edge_refinement is None
+    # explicit GridRefinement is used as-is
+    explicit = GridRefinement(dl=0.01, num_cells=4)
+    assert base.updated_copy(in_plane_edge_refinement=explicit)._edge_refinement == explicit
+    # mirror_corner with no corner_refinement to mirror -> off
+    assert base.updated_copy(corner_refinement=None)._edge_refinement is None
+    # corner_finder off disables edge refinement even with an explicit edge spec
+    assert (
+        base.updated_copy(corner_finder=None, in_plane_edge_refinement=explicit)._edge_refinement
+        is None
+    )
+
+
+def test_axis_unaligned_run_grouping():
+    """Maximal runs of axis-unaligned segments are grouped; axis-aligned segments break runs."""
+    layer = LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2))
+
+    # axis-aligned square: every segment is aligned -> no unaligned runs
+    assert layer.corner_finder._axis_unaligned_runs([(0, 0), (4, 0), (4, 4), (0, 4)]) == []
+
+    # 45-degree diamond: every segment is slanted -> a single run spanning the ring
+    runs = layer.corner_finder._axis_unaligned_runs([(0, 1), (1, 0), (0, -1), (-1, 0)])
+    assert len(runs) == 1
+    assert np.isclose(runs[0][:, 0].min(), -1) and np.isclose(runs[0][:, 0].max(), 1)
+
+    # one slanted edge between axis-aligned edges -> a single run over that edge's vertices
+    runs = layer.corner_finder._axis_unaligned_runs([(0, 0), (4, 0), (4, 4), (2, 5), (0, 4)])
+    assert len(runs) == 1
+    assert np.isclose(runs[0][:, 1].min(), 4) and np.isclose(runs[0][:, 1].max(), 5)
+
+    # arrowhead: a run straddling the ring-closure index (the dip at (2,-1)) is one run, not two
+    runs = layer.corner_finder._axis_unaligned_runs([(0, 0), (2, -1), (4, 0), (4, 4), (0, 4)])
+    assert len(runs) == 1
+    assert np.isclose(runs[0][:, 1].min(), -1)
+
+
+def test_axis_aligned_angle_threshold_tunes_edge_classification():
+    """The tunable threshold decides how close to an axis a segment counts as aligned."""
+    h = 4 * np.tan(np.deg2rad(0.5))  # bottom edge tilted 0.5deg off the x-axis
+    shape = [(0, 0), (4, h), (4, 4), (0, 4)]
+
+    coarse = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=CornerFinderSpec(axis_aligned_angle_threshold=np.deg2rad(1.0)),
+    )
+    assert len(coarse.corner_finder._axis_unaligned_runs(shape)) == 0  # 0.5deg < 1deg -> aligned
+
+    fine = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=CornerFinderSpec(axis_aligned_angle_threshold=np.deg2rad(0.1)),
+    )
+    assert len(fine.corner_finder._axis_unaligned_runs(shape)) == 1  # 0.5deg > 0.1deg -> slanted
+
+
+_EDGE_SIM_BOUNDS = [[-td.inf] * 3, [td.inf] * 3]
+_EDGE_BOUNDARY_TYPES = [[None] * 2] * 3
+
+
+def _pec_polyslab_structure(vertices):
+    """A z-normal PEC PolySlab structure from in-plane vertices."""
+    poly = td.PolySlab(vertices=vertices, axis=2, slab_bounds=[-1, 1])
+    return td.Structure(geometry=poly, medium=td.PEC)
+
+
+def _diamond_structure():
+    """45-degree rotated square: every in-plane edge is slanted."""
+    return _pec_polyslab_structure([(0, 1), (1, 0), (0, -1), (-1, 0)])
+
+
+def _inplane_overrides(layer, structure, grid_size_in_vacuum=1.0):
+    """In-plane (normal-axis dl=None) override structures emitted by a layer."""
+    overrides = layer.generate_override_structures(
+        grid_size_in_vacuum=grid_size_in_vacuum,
+        structure_list=[structure],
+        sim_bounds=_EDGE_SIM_BOUNDS,
+        boundary_type=_EDGE_BOUNDARY_TYPES,
+    )
+    return [o for o in overrides if o.dl[2] is None]
+
+
+def test_edge_refinement_requires_corner_finder():
+    """Edge refinement is off when ``corner_finder`` is ``None``, regardless of the edge spec."""
+    layer = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=None,
+        in_plane_edge_refinement=GridRefinement(dl=0.05, num_cells=3),
+    )
+    assert layer._edge_refinement is None
+    assert _inplane_overrides(layer, _diamond_structure()) == []
+
+
+def test_edge_refinement_override_on_slanted_polygon():
+    """A slanted polygon's edges drive one padded override at the edge grid size."""
+    edge_refinement = GridRefinement(dl=0.05, num_cells=3)
+    layer = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_refinement=None,  # corner overrides resolve to the edge grid size and union in
+        in_plane_edge_refinement=edge_refinement,
+    )
+    inplane = _inplane_overrides(layer, _diamond_structure())
+    assert len(inplane) == 1
+    override = inplane[0]
+    assert not override.shadow
+    assert np.isclose(override.dl[0], edge_refinement.dl)
+    assert np.isclose(override.dl[1], edge_refinement.dl)
+    margin = edge_refinement.num_cells * edge_refinement.dl
+    # diamond bbox is [-1, 1] x [-1, 1], grown by num_cells * dl per axis
+    assert np.isclose(override.geometry.size[0], 2 + margin)
+    assert np.isclose(override.geometry.size[1], 2 + margin)
+
+
+def test_suggested_dl_min_includes_edge_refinement():
+    """``suggested_dl_min`` accounts for the effective edge grid size (finer of corner/edge)."""
+    layer = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_refinement=GridRefinement(dl=0.2),
+        in_plane_edge_refinement=GridRefinement(dl=0.05),
+    )
+    dl_min = layer.suggested_dl_min(
+        grid_size_in_vacuum=1.0,
+        structures=[],
+        sim_bounds=_EDGE_SIM_BOUNDS,
+        boundary_type=_EDGE_BOUNDARY_TYPES,
+    )
+    assert np.isclose(dl_min, 0.05)
+
+
+# --- union of overlapping override structures ---------------------------------
+
+
+def test_same_dl_overrides_union_by_overlap():
+    """Same-grid-size overrides merge per connected component: overlapping -> one box, disjoint -> separate."""
+    # overlapping: a diamond's 4 corner + 1 edge overrides are all at the same dl and touch -> one bbox
+    corner_refinement = GridRefinement(dl=0.1)
+    overlapping = LayerRefinementSpec(
+        axis=2, size=(td.inf, td.inf, 2), corner_refinement=corner_refinement
+    )
+    inplane = _inplane_overrides(overlapping, _diamond_structure())
+    assert len(inplane) == 1
+    assert np.isclose(inplane[0].dl[0], corner_refinement.dl)
+    assert np.isclose(inplane[0].dl[1], corner_refinement.dl)
+    # union bbox is the grown diamond edge run (mirrored from corner_refinement)
+    margin = corner_refinement.num_cells * corner_refinement.dl
+    assert np.isclose(inplane[0].geometry.size[0], 2 + margin)
+
+    # disjoint: two far-apart squares (edge off) keep all 8 tiny corner boxes as separate components
+    disjoint = LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), in_plane_edge_refinement=None)
+    left = _pec_polyslab_structure([(-22, -2), (-18, -2), (-18, 2), (-22, 2)])
+    right = _pec_polyslab_structure([(18, -2), (22, -2), (22, 2), (18, 2)])
+    overrides = disjoint.generate_override_structures(
+        grid_size_in_vacuum=1.0,
+        structure_list=[left, right],
+        sim_bounds=_EDGE_SIM_BOUNDS,
+        boundary_type=_EDGE_BOUNDARY_TYPES,
+    )
+    assert len([o for o in overrides if o.dl[2] is None]) == 8
+
+
+def test_same_dl_overrides_union_iterates_over_bbox_collapse():
+    """Collapsing a component to its bbox can overlap boxes it never touched directly, so the
+    union must iterate to a fixpoint, not stop after one connected-components pass.
+
+    A truncated-corner hexagon has two long diagonal edges whose runs span opposite halves and
+    overlap near the center: their bounding boxes merge into one whole-shape box that then overlaps
+    the two right-angle corner boxes (which touch neither diagonal run). A single pass leaves three
+    overlapping boxes; the iterated union merges all of them into one.
+    """
+    corner_refinement = GridRefinement(dl=0.1)
+    layer = LayerRefinementSpec(
+        axis=2, size=(td.inf, td.inf, 2), corner_refinement=corner_refinement
+    )
+    hexagon = _pec_polyslab_structure(
+        [(-10, -10), (-1, -10), (10, 1), (10, 10), (1, 10), (-10, -1)]
+    )
+    inplane = _inplane_overrides(layer, hexagon)
+    # one box, not the three a single connected-components pass would leave
+    assert len(inplane) == 1
+    # it spans the whole hexagon footprint (20) grown by the corner margin on each merged side
+    margin = corner_refinement.num_cells * corner_refinement.dl
+    assert np.isclose(inplane[0].geometry.size[0], 20 + margin)
+    assert np.isclose(inplane[0].geometry.size[1], 20 + margin)
+
+
+def test_different_dl_overrides_kept_separate():
+    """Corner and edge overrides at different grid sizes are not merged across grid sizes."""
+    layer = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_refinement=GridRefinement(dl=0.05, num_cells=3),  # corner finer than edge
+        in_plane_edge_refinement=GridRefinement(dl=0.2, num_cells=3),
+    )
+    inplane = _inplane_overrides(layer, _diamond_structure())
+    corner_boxes = [o for o in inplane if np.isclose(o.dl[0], 0.05)]
+    edge_boxes = [o for o in inplane if np.isclose(o.dl[0], 0.2)]
+    # both grid sizes survive; nothing merged across grid sizes
+    assert len(corner_boxes) == 4  # four disjoint corner boxes (do not overlap each other)
+    assert len(edge_boxes) == 1  # one slanted-edge run spanning the diamond
+    assert len(inplane) == 5
+
+
+# --- small-geometry resolution (min_grids_per_geometry) -----------------------
+#
+# Small-geometry resolution is a post-mesh *measurement* pass: it counts
+# cells of the constructed grid across each disjoint metal geometry and refines only the axes that
+# fall below ``min_grids_per_geometry``. It is not a pre-mesh override source, so it does not enter
+# ``generate_override_structures`` / the override union, nor the static ``suggested_dl_min`` bound.
+
+
+def _small_geometry_layer(**kwargs):
+    """A layer that isolates small-geometry resolution (no corner snapping/refinement, no edges).
+
+    Small-geometry resolution requires ``corner_finder``, so keep it but turn off every other
+    consumer (snapping, corner refinement, edge refinement).
+    """
+    defaults = {
+        "axis": 2,
+        "size": (td.inf, td.inf, 2),
+        "corner_finder": CornerFinderSpec(),
+        "corner_snapping": False,
+        "corner_refinement": None,
+        "in_plane_edge_refinement": None,
+        "min_grids_per_geometry": 2,
+    }
+    defaults.update(kwargs)
+    return LayerRefinementSpec(**defaults)
+
+
+def _uniform_inplane_grid(dl=1.0, span=5.0):
+    """A z-normal grid with uniform in-plane spacing ``dl`` over ``[-span, span]``.
+
+    Grid boundaries sit on integer multiples of ``dl``, so a measurement pass counts them
+    deterministically against a geometry's bounding box.
+    """
+    coords = np.arange(-span, span + dl / 2, dl)
+    return Grid(boundaries=Coords(x=coords, y=coords, z=np.array([-1.0, 1.0])))
+
+
+def _pec_merged_geos(bbox):
+    """A single-PEC-box merged-geometry list from ``(umin, vmin, umax, vmax)``."""
+    return [(td.PEC, shapely.box(*bbox))]
+
+
+def test_min_grids_per_geometry_field():
+    """``min_grids_per_geometry`` must be positive, and ``None`` disables it."""
+    LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_grids_per_geometry=None)
+    with pytest.raises(ValidationError):
+        LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_grids_per_geometry=0)
+    with pytest.raises(ValidationError):
+        LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_grids_per_geometry=-1)
+
+
+@pytest.mark.parametrize(
+    "bbox, expected_dl",
+    [
+        # uniform dl=1 grid with boundaries on the integers; an axis is refined to extent/2 iff it
+        # fully contains fewer than min_grids_per_geometry (=2) cells, i.e. fewer than 3 grid
+        # boundaries fall in the bbox along it (cells contained = boundaries in bbox - 1).
+        ((0, 0, 0.1, 0.1), (0.05, 0.05)),  # tiny: 1 boundary -> 0 cells per axis -> both refined
+        ((0, 0, 0.1, 4.0), (0.05, None)),  # thin trace: x 0 cells, y 4 cells -> narrow x only
+        ((0, 0, 1.0, 1.0), (0.5, 0.5)),  # 2 boundaries -> 1 cell per axis (< 2) -> refined to 1.0/2
+        ((0, 0, 2.0, 2.0), (None, None)),  # 3 boundaries -> 2 cells per axis (>= 2) -> resolved
+        ((0, 0, 4.0, 4.0), (None, None)),  # large: 5 boundaries -> 4 cells per axis -> resolved
+    ],
+)
+def test_small_geometry_measurement_per_axis(bbox, expected_dl):
+    """A geometry's in-plane axis is refined to ``extent/min_grids`` iff the constructed grid fully
+    contains fewer than ``min_grids`` cells across it; resolved axes/geometries are left untouched."""
+    grid = _uniform_inplane_grid(dl=1.0)
+    overrides, dl_min = _small_geometry_layer()._small_geometry_measurement_overrides(
+        grid, _pec_merged_geos(bbox)
+    )
+    if all(dl is None for dl in expected_dl):
+        assert overrides == [] and dl_min == td.inf
+        return
+    assert len(overrides) == 1
+    override = overrides[0]
+    assert not override.shadow and override.priority == -1
+    assert override.dl[2] is None  # normal axis untouched
+    umin, vmin, umax, vmax = bbox
+    assert np.isclose(override.geometry.size[0], umax - umin)  # override spans the geometry bbox
+    assert np.isclose(override.geometry.size[1], vmax - vmin)
+    for axis2d, expected in enumerate(expected_dl):
+        if expected is None:
+            assert override.dl[axis2d] is None
+        else:
+            assert np.isclose(override.dl[axis2d], expected)
+    assert np.isclose(dl_min, min(dl for dl in expected_dl if dl is not None))
+
+
+def test_small_geometry_skips_near_zero_extent():
+    """A near-zero in-plane extent (e.g. a Shapely sliver) is skipped rather than refined to a
+    vanishing ``dl``; a genuinely under-resolved axis on the same geometry is still refined."""
+    grid = _uniform_inplane_grid(dl=1.0)
+    # x extent below GAP_MESHING_TOL -> skipped; y spans 1 cell (< min_grids=2) -> refined to 0.5
+    bbox = (0.0, 0.0, GAP_MESHING_TOL / 10, 1.0)
+    overrides, dl_min = _small_geometry_layer()._small_geometry_measurement_overrides(
+        grid, _pec_merged_geos(bbox)
+    )
+    assert len(overrides) == 1
+    override = overrides[0]
+    assert override.dl[0] is None  # sliver x axis skipped, not refined to extent/min_grids
+    assert np.isclose(override.dl[1], 0.5)  # under-resolved y axis still refined
+    assert np.isclose(dl_min, 0.5)
+
+
+def test_small_geometry_requires_corner_finder():
+    """Small-geometry resolution is off when ``corner_finder`` is ``None``."""
+    grid = _uniform_inplane_grid(dl=1.0)
+    layer = _small_geometry_layer(corner_finder=None)
+    overrides, dl_min = layer._small_geometry_measurement_overrides(
+        grid, _pec_merged_geos((0, 0, 0.1, 0.1))
+    )
+    assert overrides == [] and dl_min == td.inf
+
+
+def test_min_grids_per_geometry_resolves_small_via_in_grid():
+    """End-to-end: the measurement pass refines a small under-resolved via to >= min_grids cells."""
+    via = _pec_polyslab_structure([(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1)])
+    layer = _small_geometry_layer()
+
+    def build(min_grids):
+        return td.Simulation(
+            size=(4, 4, 2),
+            grid_spec=td.GridSpec.auto(
+                wavelength=2.0,
+                layer_refinement_specs=[layer.updated_copy(min_grids_per_geometry=min_grids)],
+            ),
+            run_time=1e-13,
+            structures=[via],
+        )
+
+    def cells_across(sim, axis2d):
+        centers = np.asarray(sim.grid.centers.to_list[axis2d])
+        return int(np.sum((centers >= 0) & (centers <= 0.1)))
+
+    sim_on = build(2)
+    sim_off = build(None)
+    assert cells_across(sim_on, 0) >= 2 and cells_across(sim_on, 1) >= 2
+    # without the feature the via is under-resolved, so turning it on strictly adds cells
+    assert cells_across(sim_on, 0) > cells_across(sim_off, 0)
+
+
+def test_small_geometry_rebuild_keeps_internal_overrides_on_none_path():
+    """The post-mesh small-geometry rebuild must keep the layer corner/edge overrides even when the
+    caller passes ``internal_override_structures=None`` (the ``make_grid`` default), so the grid
+    matches the one built from explicitly supplied overrides instead of dropping in-plane
+    refinement and applying only the small-geometry boxes."""
+    sim_structure = td.Structure(geometry=td.Box(size=(8, 8, 2)), medium=td.Medium())
+    # a small under-resolved via triggers the rebuild; a separate metal block contributes corner
+    # overrides that visibly change the grid, so dropping them would change the result
+    via = _pec_polyslab_structure([(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1)])
+    block = _pec_polyslab_structure([(-3, -3), (-1, -3), (-1, -1), (-3, -1)])
+    structures = [sim_structure, via, block]
+    layer = LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=CornerFinderSpec(),
+        corner_snapping=False,
+        corner_refinement=GridRefinement(dl=0.05, num_cells=2),
+        min_grids_per_geometry=2,
+    )
+    grid_spec = td.GridSpec.auto(wavelength=2.0, layer_refinement_specs=[layer])
+    build_kwargs = {
+        "structures": structures,
+        "symmetry": (0, 0, 0),
+        "periodic": (False, False, False),
+        "sources": [],
+        "num_pml_layers": ((0, 0), (0, 0), (0, 0)),
+    }
+    boundary_types = [[None, None]] * 3
+    internal_overrides = grid_spec.internal_override_structures(
+        structures, grid_spec.get_wavelength([]), sim_structure.geometry.bounds, (), boundary_types
+    )
+    grid_explicit, _ = grid_spec._make_grid_and_snapping_lines(
+        internal_override_structures=internal_overrides, **build_kwargs
+    )
+    grid_none, _ = grid_spec._make_grid_and_snapping_lines(
+        internal_override_structures=None, **build_kwargs
+    )
+    assert grid_none == grid_explicit
+
+
+def test_from_layer_bounds_new_inplane_fields():
+    """``from_layer_bounds`` plumbs both new in-plane fields."""
+    spec = GridRefinement(dl=0.05)
+    layer = LayerRefinementSpec.from_layer_bounds(
+        axis=2, bounds=(0, 1), in_plane_edge_refinement=spec, min_grids_per_geometry=4
+    )
+    assert layer.in_plane_edge_refinement == spec
+    assert layer.min_grids_per_geometry == 4
+
+
+def test_from_bounds_and_structures_new_inplane_fields():
+    """``from_bounds`` and ``from_structures`` plumb both new in-plane fields."""
+    spec = GridRefinement(dl=0.05)
+    via = _pec_polyslab_structure([(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1)])
+    explicit = (
+        LayerRefinementSpec.from_bounds(
+            rmin=(0, 0, 0),
+            rmax=(1, 1, 1),
+            in_plane_edge_refinement=spec,
+            min_grids_per_geometry=4,
+        ),
+        LayerRefinementSpec.from_structures(
+            structures=[via], in_plane_edge_refinement=spec, min_grids_per_geometry=4
+        ),
+    )
+    for layer in explicit:
+        assert layer.in_plane_edge_refinement == spec
+        assert layer.min_grids_per_geometry == 4
+
+
 def test_gridrefinement():
     """Test GradRefinement is working as expected."""
 
     # generate override structures for z-axis
     center = [None, None, 0]
+    size = (0, 0, 0)  # refine around a point
     grid_size_in_vaccum = 1
-    structure = GRID_REFINEMENT.override_structure(center, grid_size_in_vaccum, True)
+    structure = GRID_REFINEMENT.override_structure(center, size, grid_size_in_vaccum, True)
     assert not structure.shadow
     for axis in range(2):
         assert structure.dl[axis] is None
@@ -483,7 +953,7 @@ def test_gridrefinement():
     # explicitly define step size in refinement region that is smaller than that of refinement_factor
     dl = 1
     grid_refinement = GRID_REFINEMENT.updated_copy(dl=dl)
-    structure = grid_refinement.override_structure(center, grid_size_in_vaccum, True)
+    structure = grid_refinement.override_structure(center, size, grid_size_in_vaccum, True)
     for axis in range(2):
         assert structure.dl[axis] is None
         assert structure.geometry.size[axis] == td.inf
@@ -596,9 +1066,18 @@ def test_layerrefinement_detect_rounded_corner():
         sim_bounds=sim_bounds,
         boundary_type=boundary_types,
     )
-    assert any(
-        np.allclose(override.geometry.center[:2], (0.0, 0.0)) for override in override_structures
-    )
+
+    def _covers_origin(override):
+        """Whether the override's in-plane footprint covers the collapsed corner at (0, 0)."""
+        center, size = override.geometry.center, override.geometry.size
+        return all(
+            abs(center[axis]) <= size[axis] / 2 or np.isclose(abs(center[axis]), size[axis] / 2)
+            for axis in range(2)
+        )
+
+    # the collapsed corner region is refined; with edge refinement + union the covering override
+    # is a bounding box that need not be centered exactly on the corner
+    assert any(_covers_origin(override) for override in override_structures)
 
 
 def test_grid_spec_with_layers():
@@ -1431,6 +1910,9 @@ def test_gap_meshing_tiny_nearly_parallel():
                     axis=1,
                     size=(td.inf, 0.2, td.inf),
                     corner_finder=None,
+                    # isolate gap meshing: disable the default-on in-plane edge refinement, which
+                    # would otherwise refine the slanted PolySlab edges of this structure
+                    in_plane_edge_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
@@ -1479,6 +1961,9 @@ def test_gap_meshing_dl_min_warning():
         dl_min_from_gap_width=True,
         corner_snapping=False,
         corner_refinement=None,
+        # isolate the gap-width warning: disable the default-on small-geometry resolution, which
+        # would otherwise refine these deliberately small strips and change the lateral grid size
+        min_grids_per_geometry=None,
     )
 
     grid_spec = td.GridSpec.auto(
