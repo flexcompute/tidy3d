@@ -11119,7 +11119,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2.12.0.dev1",
+      "default": "2.12.0.dev2",
       "type": "string"
     }
   },
