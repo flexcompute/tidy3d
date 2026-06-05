@@ -88,6 +88,14 @@ class ChargeConductorMedium(AbstractChargeMedium):
         json_schema_extra={"units": CONDUCTIVITY},
     )
 
+    work_function: PositiveFloat | None = Field(
+        None,
+        title="Work function",
+        description="Metal work function :math:`W` [eV]. Required on the metal "
+        "side of a Schottky contact.",
+        json_schema_extra={"units": ELECTRON_VOLT},
+    )
+
 
 class SemiconductorMedium(AbstractChargeMedium):
     """
@@ -251,6 +259,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         - Isothermal by default at T=300K; self-heating available through analysis spec
         - Steady-state DC and small-signal AC analyses supported
         - Dopants are considered to be fully ionized
+        - Schottky contacts available via ``VoltageBC(model="schottky_mott")``; see :class:`.VoltageBC`.
 
     Note
     ----
@@ -281,6 +290,28 @@ class SemiconductorMedium(AbstractChargeMedium):
         title="Band-gap energy",
         description=":math:`E_g` Band-gap energy",
         json_schema_extra={"units": ELECTRON_VOLT},
+    )
+
+    electron_affinity: PositiveFloat | None = Field(
+        None,
+        title="Electron affinity",
+        description=":math:`\\chi` Electron affinity [eV]. Required on the "
+        "semiconductor side of a Schottky contact.",
+        json_schema_extra={"units": ELECTRON_VOLT},
+    )
+
+    richardson_electron: PositiveFloat | None = Field(
+        None,
+        title="Electron Richardson constant",
+        description=":math:`A^*_n` Electron Richardson constant "
+        "[A/(cm^2 K^2)]. Required on the semiconductor side of a Schottky contact.",
+    )
+
+    richardson_hole: PositiveFloat | None = Field(
+        None,
+        title="Hole Richardson constant",
+        description=":math:`A^*_p` Hole Richardson constant [A/(cm^2 K^2)]. "
+        "Required on the semiconductor side of a Schottky contact.",
     )
 
     mobility_n: MobilityModelType = Field(

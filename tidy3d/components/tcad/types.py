@@ -7,7 +7,11 @@ from tidy3d.components.tcad.bandgap_energy import (
     ConstantEnergyBandGap,
     VarshniEnergyBandGap,
 )
-from tidy3d.components.tcad.boundary.charge import CurrentBC, InsulatingBC, VoltageBC
+from tidy3d.components.tcad.boundary.charge import (
+    CurrentBC,
+    InsulatingBC,
+    VoltageBC,
+)
 from tidy3d.components.tcad.boundary.heat import (
     ConvectionBC,
     HeatFluxBC,

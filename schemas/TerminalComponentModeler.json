@@ -2364,6 +2364,18 @@
             }
           ],
           "default": null
+        },
+        "work_function": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -17294,6 +17306,18 @@
           ],
           "default": null
         },
+        "electron_affinity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "frequency_range": {
           "anyOf": [
             {
@@ -17425,6 +17449,30 @@
           "default": 1.0,
           "minimum": 1.0,
           "type": "number"
+        },
+        "richardson_electron": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "richardson_hole": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "type": {
           "const": "SemiconductorMedium",

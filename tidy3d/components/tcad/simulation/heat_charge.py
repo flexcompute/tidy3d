@@ -546,6 +546,10 @@ class HeatChargeSimulation(AbstractSimulation):
                 ("structures",), self._check_charge_simulation_semiconductors
             )
             self._call_with_validation_loc(("structures",), self._check_masetti_mobility_models)
+            # Schottky contacts apply only to charge simulations, so validate
+            # their supported modes inside the charge guard; heat-only and
+            # conduction-only simulations skip this check.
+            self._call_with_validation_loc(("boundary_spec",), self._check_schottky_supported_modes)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
@@ -876,8 +880,9 @@ class HeatChargeSimulation(AbstractSimulation):
                 voltage_bcs = voltage_bcs + 1
         if voltage_bcs < 2:
             raise SetupError(
-                "Defining a Charge simulation requires the definition of 'VoltageBC' boundaries. "
-                f"So far {voltage_bcs} 'VoltageBC' have been set."
+                "Defining a Charge simulation requires at least two voltage contact boundaries. "
+                "Use 'VoltageBC' (Schottky contacts opt in via model=\"schottky_mott\"). "
+                f"So far {voltage_bcs} voltage contact boundaries have been set."
             )
         return self
 
@@ -934,6 +939,51 @@ class HeatChargeSimulation(AbstractSimulation):
             raise SetupError(
                 f"{TCADAnalysisTypes.CHARGE} simulations require the definition of at least one semiconductor medium."
             )
+        return self
+
+    @staticmethod
+    def _bc_is_schottky(bc_spec: Any) -> bool:
+        """``True`` when this boundary requests Schottky physics."""
+        condition = bc_spec.condition
+        return isinstance(condition, VoltageBC) and condition.model == "schottky_mott"
+
+    def _check_schottky_supported_modes(self) -> Self:
+        """Reject Schottky configurations outside the validated solver model."""
+        has_schottky = any(self._bc_is_schottky(bc) for bc in self.boundary_spec)
+        if not has_schottky:
+            return self
+
+        if getattr(self.analysis_spec, "fermi_dirac", False):
+            raise SetupError(
+                "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") currently "
+                "use Boltzmann thermionic carrier targets. Set 'fermi_dirac=False' "
+                "until Fermi-Dirac Schottky contacts are implemented and validated."
+            )
+        if self.use_accelerated_solver is False:
+            self._raise_validation_error_at_loc(
+                "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") are "
+                "implemented only by the accelerated charge solver, but "
+                "'use_accelerated_solver=False' selects the legacy solver. "
+                'Either set model="ohmic" or set '
+                "'use_accelerated_solver=True'.",
+                "use_accelerated_solver",
+                log_error=False,
+            )
+        for index, bc_spec in enumerate(self.boundary_spec):
+            if not self._bc_is_schottky(bc_spec):
+                continue
+            if isinstance(bc_spec.placement, (StructureSimulationBoundary, SimulationBoundary)):
+                self._raise_validation_error_at_loc(
+                    "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") "
+                    f"cannot be placed on '{type(bc_spec.placement).__name__}': the "
+                    "metal-semiconductor contact cannot be identified there. Place "
+                    "the condition on the metal structure's 'StructureBoundary' or "
+                    "on a 'StructureStructureInterface' between the metal and "
+                    "semiconductor structures.",
+                    "boundary_spec",
+                    index,
+                    log_error=False,
+                )
         return self
 
     def _not_all_neumann(self) -> Self:
@@ -2234,7 +2284,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     raise SetupError(
                         f"MasettiMobility high-doping asymptote for {carrier} mobility "
                         f"is non-positive at {temperature} K "
-                        "('mu_0 * (T/300)**exp_0 - mu_1' <= 0); the GPU evaluator would "
+                        "('mu_0 * (T/300)**exp_0 - mu_1' <= 0); the accelerated evaluator would "
                         "silently clamp mobility to zero at high doping. Reduce 'mu_1', "
                         "increase 'mu_0', or use a lower isothermal temperature."
                     )

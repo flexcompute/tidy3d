@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from tidy3d.components.spice.sources.types import CurrentSourceType, VoltageSourceType
 from tidy3d.components.tcad.boundary.abstract import HeatChargeBC
 from tidy3d.constants import CURRENT_DENSITY, VOLT
+
+ContactModelType = Literal["ohmic", "schottky_mott"]
 
 
 class VoltageBC(HeatChargeBC):
@@ -21,6 +25,18 @@ class VoltageBC(HeatChargeBC):
         In this case, a solution for each of these voltages will
         be computed.
 
+        A Schottky contact can be enabled by setting ``model="schottky_mott"``,
+        which uses the Schottky-Mott rule together with Richardson-Dushman
+        thermionic emission. The default ``model="ohmic"`` keeps the ohmic
+        contact behavior.
+
+        Place a Schottky contact on the metal structure's
+        :class:`.StructureBoundary` (the contact may span semiconductor and
+        insulator faces of the metal, e.g. under an oxide cladding) or on a
+        :class:`.StructureStructureInterface` between the metal and the
+        semiconductor. A single Schottky contact must touch exactly one
+        semiconductor medium.
+
     Example
     -------
     >>> import tidy3d as td
@@ -32,6 +48,17 @@ class VoltageBC(HeatChargeBC):
         title="Voltage",
         description="Electric potential to be applied at the specified boundary.",
         json_schema_extra={"units": VOLT},
+    )
+
+    model: ContactModelType = Field(
+        "ohmic",
+        title="Contact model",
+        description='Contact model. ``"ohmic"`` (default) is the ohmic '
+        'contact path. ``"schottky_mott"`` enables the Schottky-Mott + '
+        "Richardson-Dushman thermionic contact and requires ``work_function`` "
+        "on the adjacent :class:`.ChargeConductorMedium` plus "
+        "``electron_affinity``, ``richardson_electron``, ``richardson_hole`` on "
+        "the adjacent :class:`.SemiconductorMedium`.",
     )
 
 

@@ -40,6 +40,19 @@ their excitation from the SPICE source classes documented on the
    CurrentBC
    InsulatingBC
 
+.. note::
+   Schottky contacts are opt-in on :class:`VoltageBC` via
+   ``model="schottky_mott"``. The Schottky-Mott barrier
+   :math:`\phi_{Bn} = W - \chi`, :math:`\phi_{Bp} = E_g - \phi_{Bn}` is
+   built from per-medium material properties: ``work_function`` on the
+   adjacent :class:`ChargeConductorMedium`, and ``electron_affinity``,
+   ``richardson_electron``, ``richardson_hole`` on the adjacent
+   :class:`SemiconductorMedium`. The default ``model="ohmic"`` is
+   the standard ohmic contact. Schottky contacts are supported only by
+   the accelerated charge solver
+   (``use_accelerated_solver=True``, ``fermi_dirac=False``) and compose
+   with DC sweeps and small-signal AC analyses.
+
 Placement
 ^^^^^^^^^^^^^^^^^
 

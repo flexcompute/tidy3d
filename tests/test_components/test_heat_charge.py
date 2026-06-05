@@ -1874,6 +1874,138 @@ def test_masetti_requires_accelerated_solver():
         )
 
 
+def _make_schottky_charge_sim(
+    *,
+    schottky_source=None,
+    schottky_placement=None,
+    analysis_spec=None,
+    use_accelerated_solver=None,
+    work_function: float = 4.72,
+    electron_affinity: float = 4.05,
+) -> td.HeatChargeSimulation:
+    """Create a minimal metal/Si/metal charge sim with one Schottky contact."""
+
+    metal_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1, work_function=work_function),
+        name="metal_schottky",
+    )
+    silicon_medium = CHARGE_SIMULATION.intrinsic_Si.updated_copy(
+        charge=CHARGE_SIMULATION.intrinsic_Si.charge.updated_copy(
+            electron_affinity=electron_affinity,
+            richardson_electron=112.0,
+            richardson_hole=32.0,
+        )
+    )
+    structures = [
+        td.Structure(
+            geometry=td.Box(center=(-1, 0, 0), size=(1, 1, 1)),
+            medium=metal_medium,
+            name="cathode",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+            medium=silicon_medium,
+            name="silicon",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(1, 0, 0), size=(1, 1, 1)),
+            medium=metal_medium,
+            name="anode",
+        ),
+    ]
+    if schottky_source is None:
+        schottky_source = td.DCVoltageSource(voltage=[0.0, 0.05])
+    if schottky_placement is None:
+        schottky_placement = td.StructureStructureInterface(structures=["anode", "silicon"])
+    if analysis_spec is None:
+        analysis_spec = td.IsothermalSteadyChargeDCAnalysis(temperature=300, fermi_dirac=False)
+    # 'use_accelerated_solver' is a strict bool field; only forward it when set
+    # explicitly so the default (True) applies otherwise (None is not a valid bool).
+    extra_kwargs = (
+        {} if use_accelerated_solver is None else {"use_accelerated_solver": use_accelerated_solver}
+    )
+    return td.HeatChargeSimulation(
+        size=(4, 2, 2),
+        center=(0, 0, 0),
+        structures=structures,
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=schottky_placement,
+                condition=td.VoltageBC(
+                    source=schottky_source,
+                    model="schottky_mott",
+                ),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.2),
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="voltage",
+                unstructured=True,
+            )
+        ],
+        analysis_spec=analysis_spec,
+        **extra_kwargs,
+    )
+
+
+def test_schottky_requires_accelerated_solver():
+    sim = _make_schottky_charge_sim()
+    assert sim._resolve_use_accelerated_solver is True
+
+    with pytest.raises(ValidationError) as excinfo:
+        _make_schottky_charge_sim(use_accelerated_solver=False)
+    assert_single_value_error_loc(excinfo, ("use_accelerated_solver",), "legacy solver")
+
+
+def test_schottky_accepts_ssac():
+    """Schottky contacts now support SSAC for Mott-Schottky 1/C^2 extraction."""
+    sim = _make_schottky_charge_sim(
+        schottky_source=td.SSACVoltageSource(voltage=[0.0, 0.05], amplitude=1e-3),
+        analysis_spec=td.IsothermalSSACAnalysis(temperature=300, freqs=[1e3]),
+    )
+    assert sim is not None
+
+
+def test_schottky_rejects_fermi_dirac_until_validated():
+    with pytest.raises(ValidationError) as excinfo:
+        _make_schottky_charge_sim(
+            analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
+                temperature=300,
+                fermi_dirac=True,
+            ),
+        )
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "fermi_dirac=False")
+
+
+def test_schottky_accepts_structure_boundary_placement():
+    """A Schottky contact placed on the metal structure's boundary validates."""
+    sim = _make_schottky_charge_sim(schottky_placement=td.StructureBoundary(structure="anode"))
+    assert sim is not None
+
+
+@pytest.mark.parametrize(
+    "placement",
+    [
+        td.StructureSimulationBoundary(structure="anode"),
+        td.SimulationBoundary(),
+    ],
+    ids=["structure_simulation_boundary", "simulation_boundary"],
+)
+def test_schottky_rejects_unresolvable_placements(placement):
+    """Placements that cannot identify the metal-semiconductor contact raise."""
+    with pytest.raises(ValidationError) as excinfo:
+        _make_schottky_charge_sim(schottky_placement=placement)
+    assert_single_value_error_loc(excinfo, ("boundary_spec", 0), "StructureBoundary")
+
+
 def test_charge_simulation_voltage_bc_error_loc(heat_simulation):
     with pytest.raises(ValidationError) as excinfo:
         _ = heat_simulation.updated_copy(
