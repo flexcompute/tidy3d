@@ -2180,6 +2180,117 @@ def test_eme_normalize_coeff_dataset():
         _ = coeffs_normalized.normalized_copy
 
 
+def test_eme_normalize_coeff_dataset_signed_zero_flux():
+    freq = td.C_0
+    cells = np.arange(3)
+    ports = [0]
+    modes = np.arange(2)
+    coeff_coords = {
+        "f": [freq],
+        "sweep_index": [0],
+        "eme_port_index": ports,
+        "eme_cell_index": cells,
+        "mode_index_out": modes,
+        "mode_index_in": modes,
+    }
+    coeff_shape = (1, 1, len(ports), len(cells), len(modes), len(modes))
+    coeff_data = np.ones(coeff_shape, dtype=complex)
+    A = td.EMECoefficientDataArray(coeff_data, coords=coeff_coords).drop_vars("sweep_index")
+    B = td.EMECoefficientDataArray(2 * coeff_data, coords=coeff_coords).drop_vars("sweep_index")
+    flux = td.EMEFluxDataArray(
+        np.array([[[[4.0, -9.0], [16.0, 25.0], [0.0, 36.0]]]]),
+        coords={
+            "f": [freq],
+            "sweep_index": [0],
+            "eme_cell_index": cells,
+            "mode_index": modes,
+        },
+    ).drop_vars("sweep_index")
+    smatrix_coords = {
+        "f": [freq],
+        "sweep_index": [0],
+        "eme_cell_index": cells[:-1],
+        "mode_index_out": modes,
+        "mode_index_in": modes,
+    }
+    smatrix_shape = (1, 1, len(cells) - 1, len(modes), len(modes))
+
+    def smatrix(value):
+        return td.EMEInterfaceSMatrixDataArray(
+            value * np.ones(smatrix_shape, dtype=complex), coords=smatrix_coords
+        ).drop_vars("sweep_index")
+
+    interface_smatrices = td.EMEInterfaceSMatrixDataset(
+        S11=smatrix(1),
+        S12=smatrix(2),
+        S21=smatrix(3),
+        S22=smatrix(4),
+    )
+
+    normalized = td.EMECoefficientDataset(
+        A=A, B=B, flux=flux, interface_smatrices=interface_smatrices
+    ).normalized_copy
+
+    scale = np.array([[2.0, 3.0], [4.0, 5.0], [1.0, 6.0]])
+    expected_coeffs = np.repeat(scale[:, :, None], len(modes), axis=2)
+    np.testing.assert_allclose(normalized.A.values.squeeze(), expected_coeffs)
+    np.testing.assert_allclose(normalized.B.values.squeeze(), 2 * expected_coeffs)
+
+    def expected_smatrix(value, scale_out, scale_in):
+        return value * scale_out[:, None] / scale_in[None, :]
+
+    for smatrix_name, cases in {
+        "S11": [(1, 0, 0), (1, 1, 1)],
+        "S12": [(2, 0, 1), (2, 1, 2)],
+        "S21": [(3, 1, 0), (3, 2, 1)],
+        "S22": [(4, 1, 1), (4, 2, 2)],
+    }.items():
+        expected = np.stack(
+            [expected_smatrix(value, scale[out], scale[inc]) for value, out, inc in cases]
+        )
+        actual = getattr(normalized.interface_smatrices, smatrix_name).values.squeeze()
+        np.testing.assert_allclose(actual, expected)
+    assert normalized.flux is None
+
+    mismatched_smatrices = interface_smatrices.updated_copy(
+        S11=interface_smatrices.S11.assign_coords(eme_cell_index=[1, 2])
+    )
+    mismatched_coeffs = td.EMECoefficientDataset(
+        flux=flux, interface_smatrices=mismatched_smatrices
+    )
+    with pytest.raises(ValidationError, match="identical 'eme_cell_index'"):
+        _ = mismatched_coeffs.normalized_copy
+
+    virtual_cell_coeffs = td.EMECoefficientDataset(A=A, flux=flux.isel(eme_cell_index=slice(0, 2)))
+    with pytest.raises(ValidationError, match="virtual-cell"):
+        _ = virtual_cell_coeffs.normalized_copy
+
+    sparse_flux = flux.assign_coords(eme_cell_index=[0, 2, 4])
+    sparse_smatrices = interface_smatrices.updated_copy(
+        S11=interface_smatrices.S11.assign_coords(eme_cell_index=[0, 2]),
+        S12=interface_smatrices.S12.assign_coords(eme_cell_index=[0, 2]),
+        S21=interface_smatrices.S21.assign_coords(eme_cell_index=[0, 2]),
+        S22=interface_smatrices.S22.assign_coords(eme_cell_index=[0, 2]),
+    )
+    sparse_coeffs = td.EMECoefficientDataset(flux=sparse_flux, interface_smatrices=sparse_smatrices)
+    with pytest.raises(ValidationError, match="required by the interfaces"):
+        _ = sparse_coeffs.normalized_copy
+
+    downsampled_monitor = td.EMECoefficientMonitor(
+        size=(td.inf, td.inf, td.inf),
+        name="coeffs_downsampled",
+        fields=("flux", "interface_smatrices"),
+        eme_cell_interval_space=2,
+    )
+    downsampled_data = td.EMECoefficientData(
+        monitor=downsampled_monitor,
+        flux=sparse_flux,
+        interface_smatrices=sparse_smatrices,
+    )
+    with pytest.raises(ValidationError, match="downsampled EMECoefficientMonitor"):
+        _ = downsampled_data.normalized_copy
+
+
 def test_eme_coeff_data_array():
     _ = _get_eme_coeff_data_array()
     _ = _get_eme_coeff_data_array(num_sweep=3)

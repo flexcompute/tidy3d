@@ -198,11 +198,13 @@ class EMECoefficientDataset(Dataset):
     def normalized_copy(self) -> EMECoefficientDataset:
         """Return a flux-normalized copy of this dataset.
 
-        The ``A`` and ``B`` coefficients as well as the ``interface_smatrices``
-        are multiplied by the square root of the mode flux, so that the
-        forward and backward power of each mode are given directly by
-        ``|A|^2`` and ``|B|^2``, respectively, without additional
-        normalization by flux.
+        The ``A`` and ``B`` coefficients as well as all four
+        ``interface_smatrices`` blocks are normalized using the square root of
+        the absolute real mode flux, so that the forward and backward power of
+        each mode are given directly by ``|A|^2`` and ``|B|^2``, respectively,
+        without additional normalization by flux. Zero-flux modes are left
+        unscaled. Interface S-matrix normalization requires flux for both
+        adjacent EME cells.
 
         Returns
         -------
@@ -216,26 +218,65 @@ class EMECoefficientDataset(Dataset):
                 "so normalization cannot be performed."
             )
         fields = {"A": self.A, "B": self.B}
-        flux_out = self.flux.rename(mode_index="mode_index_out")
+        power_flux = np.abs(np.real(self.flux))
+        scale = np.sqrt(power_flux)
+        scale = scale.where(scale != 0, 1)
+        flux_cell_indices = np.asarray(scale.eme_cell_index.values)
         for key, field in fields.items():
             if field is not None:
-                fields[key] = field * np.sqrt(flux_out)
+                field_cell_indices = np.asarray(field.eme_cell_index.values)
+                missing_cell_indices = np.setdiff1d(field_cell_indices, flux_cell_indices)
+                if len(missing_cell_indices) > 0:
+                    missing = ", ".join(str(cell_index) for cell_index in missing_cell_indices)
+                    raise ValidationError(
+                        f"Cannot flux-normalize {key} because the 'flux' field is missing "
+                        f"EME cell indices used by {key}: {missing}. For repeated-grid "
+                        "EMECoefficientMonitor data, 'normalized_copy' cannot remap "
+                        "physical-cell flux onto virtual-cell A/B rows without the "
+                        "simulation's virtual-cell mapping; manually expand/remap flux to "
+                        "the same 'eme_cell_index' coordinates before normalizing."
+                    )
+                scale_field = scale.sel(eme_cell_index=field_cell_indices)
+                fields[key] = field * scale_field.rename(mode_index="mode_index_out")
         if self.interface_smatrices is not None:
-            num_cells = len(self.flux.eme_cell_index)
-            flux1 = self.flux.isel(eme_cell_index=np.arange(num_cells - 1))
-            flux2 = self.flux.isel(eme_cell_index=np.arange(1, num_cells))
-            flux2 = flux2.assign_coords(eme_cell_index=np.arange(num_cells - 1))
-            interface_S12 = self.interface_smatrices.S12
-            flux_out = flux1.rename(mode_index="mode_index_out")
-            flux_in = flux2.rename(mode_index="mode_index_in")
-            interface_S12 = interface_S12 * np.sqrt(flux_out / flux_in)
-            interface_S21 = self.interface_smatrices.S21
-            flux_out = flux2.rename(mode_index="mode_index_out")
-            flux_in = flux1.rename(mode_index="mode_index_in")
-            interface_S21 = interface_S21 * np.sqrt(flux_out / flux_in)
+            interface_smatrices = self.interface_smatrices
+            interface_cell_indices = np.asarray(interface_smatrices.S12.eme_cell_index.values)
+            for key, smatrix in {
+                "S11": interface_smatrices.S11,
+                "S21": interface_smatrices.S21,
+                "S22": interface_smatrices.S22,
+            }.items():
+                if not np.array_equal(smatrix.eme_cell_index.values, interface_cell_indices):
+                    raise ValidationError(
+                        "Cannot flux-normalize interface_smatrices because all S-matrix "
+                        "blocks must have identical 'eme_cell_index' coordinates; "
+                        f"{key} differs from S12."
+                    )
+            right_cell_indices = interface_cell_indices + 1
+            required_cell_indices = np.union1d(interface_cell_indices, right_cell_indices)
+            missing_cell_indices = np.setdiff1d(required_cell_indices, flux_cell_indices)
+            if len(missing_cell_indices) > 0:
+                missing = ", ".join(str(cell_index) for cell_index in missing_cell_indices)
+                raise ValidationError(
+                    "Cannot flux-normalize interface_smatrices because the 'flux' field is "
+                    f"missing EME cell indices required by the interfaces: {missing}. "
+                    "For downsampled EMECoefficientMonitor data, use "
+                    "'eme_cell_interval_space=1' when requesting normalized interface "
+                    "S matrices, or provide flux for both cells adjacent to each interface."
+                )
+            scale1 = scale.sel(eme_cell_index=interface_cell_indices)
+            scale2 = scale.sel(eme_cell_index=right_cell_indices)
+            scale2 = scale2.assign_coords(eme_cell_index=interface_cell_indices)
+            scale1_out = scale1.rename(mode_index="mode_index_out")
+            scale1_in = scale1.rename(mode_index="mode_index_in")
+            scale2_out = scale2.rename(mode_index="mode_index_out")
+            scale2_in = scale2.rename(mode_index="mode_index_in")
 
-            fields["interface_smatrices"] = self.interface_smatrices.updated_copy(
-                S12=interface_S12, S21=interface_S21
+            fields["interface_smatrices"] = interface_smatrices.updated_copy(
+                S11=interface_smatrices.S11 * scale1_out / scale1_in,
+                S12=interface_smatrices.S12 * scale1_out / scale2_in,
+                S21=interface_smatrices.S21 * scale2_out / scale1_in,
+                S22=interface_smatrices.S22 * scale2_out / scale2_in,
             )
         # for safety to prevent normalizing twice
         fields["flux"] = None
