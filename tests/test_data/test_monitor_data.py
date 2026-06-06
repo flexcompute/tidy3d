@@ -610,6 +610,91 @@ def test_field_data_to_source():
     _ = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
 
 
+def test_mode_adjoint_sources_match_scalar_construction():
+    """Mode adjoint source construction skips zeros without changing source values."""
+
+    data = make_mode_data()
+    values = data.amps.values.copy()
+    values[0, 0, 0] = 0.0
+    values[1, 2, 3] = 0.0
+    amps = td.ModeAmpsDataArray(values, coords=data.amps.coords)
+    data = data.updated_copy(amps=amps)
+
+    expected = []
+    for freq in amps.coords["f"]:
+        for direction in amps.coords["direction"]:
+            for mode_index in amps.coords["mode_index"]:
+                amp_single = amps.sel(f=freq, direction=direction, mode_index=mode_index)
+                if abs(data.get_amplitude(amp_single)) == 0.0:
+                    continue
+                expected.append(data._adjoint_source_amp(amp=amp_single, fwidth=2e13))
+
+    assert data._make_adjoint_sources_amps(fwidth=2e13) == expected
+
+
+def test_field_overlap_adjoint_sources_match_scalar_construction():
+    """Gaussian overlap adjoint source construction skips zeros and NaNs."""
+
+    data = make_field_overlap_data()
+    values = data.amps.values.copy()
+    values[0, 0, 0] = 0.0
+    values[1, 1, 2] = np.nan
+    amps = td.ModeAmpsDataArray(values, coords=data.amps.coords)
+    data = data.updated_copy(amps=amps)
+
+    expected = []
+    for freq in amps.coords["f"]:
+        for direction in amps.coords["direction"]:
+            for mode_index in amps.coords["mode_index"]:
+                amp_single = amps.sel(f=freq, direction=direction, mode_index=mode_index)
+                amp_complex = data.get_amplitude(amp_single)
+                if (abs(amp_complex) == 0.0) or np.isnan(amp_complex):
+                    continue
+                expected.append(data._adjoint_source_amp(amp=amp_single, fwidth=2e13))
+
+    assert data._make_adjoint_sources_amps(fwidth=2e13) == expected
+
+
+def test_diffraction_adjoint_sources_match_scalar_construction():
+    """Diffraction adjoint source construction reuses cached angles without changing sources."""
+
+    data = make_diffraction_data().updated_copy(medium=td.Sellmeier(coeffs=[(0.8, 0.4)]))
+    freqs = data.Etheta.coords["f"].values
+    assert data.medium.eps_model(float(freqs[0])) != data.medium.eps_model(float(freqs[-1]))
+
+    etheta_values = data.Etheta.values.copy()
+    ephi_values = data.Ephi.values.copy()
+    etheta_values[0, 0, 0] = 0.0
+    etheta_values[1, 1, 1] = np.nan
+    ephi_values[2, 2, 2] = 0.0
+    ephi_values[0, 1, 3] = np.nan
+    data = data.updated_copy(
+        Etheta=td.DiffractionDataArray(etheta_values, coords=data.Etheta.coords),
+        Ephi=td.DiffractionDataArray(ephi_values, coords=data.Ephi.coords),
+    )
+
+    amps = data.amps
+    expected = []
+    for freq in amps.coords["f"]:
+        for polarization in amps.coords["polarization"]:
+            for order_x in amps.coords["orders_x"]:
+                for order_y in amps.coords["orders_y"]:
+                    amp_single = amps.sel(
+                        f=freq,
+                        polarization=polarization,
+                        orders_x=order_x,
+                        orders_y=order_y,
+                    )
+                    amp_complex = data.get_amplitude(amp_single)
+                    if (abs(amp_complex) == 0.0) or np.isnan(amp_complex):
+                        continue
+                    adjoint_source = data.adjoint_source_amp(amp=amp_single, fwidth=2e13)
+                    if adjoint_source is not None:
+                        expected.append(adjoint_source)
+
+    assert data._make_adjoint_sources_amps(fwidth=2e13) == expected
+
+
 def test_field_time_data():
     data = make_field_time_data_2d()
     for field in FIELD_TIME_MONITOR.fields:

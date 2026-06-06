@@ -296,6 +296,30 @@ def diffraction_source_from_data(
     angle_theta = float(theta_data.sel(**angle_sel_kwargs))
     angle_phi = float(phi_data.sel(**angle_sel_kwargs))
 
+    bck_eps = diff_data.medium.eps_model(freq)
+    return diffraction_source_from_angles(
+        monitor=monitor,
+        freq=freq,
+        angle_theta=angle_theta,
+        angle_phi=angle_phi,
+        polarization=polarization,
+        coefficient=coefficient,
+        fwidth=fwidth,
+        bck_eps=bck_eps,
+    )
+
+
+def diffraction_source_from_angles(
+    monitor: DiffractionMonitor,
+    freq: float,
+    angle_theta: float,
+    angle_phi: float,
+    polarization: DiffractionPolarization,
+    coefficient: complex,
+    fwidth: float,
+    bck_eps: complex,
+) -> PlaneWave | None:
+    """Build a diffraction adjoint source from precomputed propagation angles."""
     if np.isnan(angle_theta):
         return None
 
@@ -304,7 +328,6 @@ def diffraction_source_from_data(
         raise ValueError(f"Something went wrong, given pol='{pol_str}' in adjoint source.")
 
     pol_angle = 0.0 if pol_str == "p" else np.pi / 2
-    bck_eps = diff_data.medium.eps_model(freq)
     return _diffraction_plane_wave(
         monitor=monitor,
         freq=freq,

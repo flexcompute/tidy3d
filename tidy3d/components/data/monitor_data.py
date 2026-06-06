@@ -7,7 +7,7 @@ import warnings
 from abc import ABC
 from collections.abc import Callable
 from math import isclose
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 import autograd.numpy as np
 import xarray as xr
@@ -15,7 +15,9 @@ from pydantic import Field, model_validator
 
 from tidy3d.components.autograd.source_factory import (
     current_component_data_array,
+    diffraction_source_from_angles,
     diffraction_source_from_data,
+    gaussian_source_from_monitor,
     mode_source_from_monitor,
 )
 from tidy3d.components.autograd.source_factory import (
@@ -114,7 +116,60 @@ from .dataset import (
 )
 from .em_fields import frequency_normalized_field_components
 
+SourceT = TypeVar("SourceT")
+DataArrayCoordValue = float | int | str
+DataArrayEntry = tuple[tuple[int, ...], tuple[DataArrayCoordValue, ...], complex]
+
+
+def _values_in_dim_order(data_array: DataArray, dim_order: tuple[str, ...]) -> np.ndarray:
+    """Return data values with axes ordered by ``dim_order``."""
+    data_dims = tuple(data_array.dims)
+    if set(data_dims) != set(dim_order) or len(data_dims) != len(dim_order):
+        raise DataError(f"Expected data dimensions {dim_order}, got {data_dims}.")
+
+    axis_order = tuple(data_dims.index(dim) for dim in dim_order)
+    return np.transpose(data_array.values, axes=axis_order)
+
+
+def _iter_nonzero_data_array_entries(
+    data_array: DataArray,
+    dim_order: tuple[str, ...],
+    *,
+    skip_nan: bool,
+) -> Iterator[DataArrayEntry]:
+    """Iterate nonzero entries with indices and coords ordered by ``dim_order``."""
+    values = _values_in_dim_order(data_array, dim_order)
+    is_valid = values != 0.0
+    if skip_nan:
+        is_valid = is_valid & ~np.isnan(values)
+
+    coords = tuple(data_array.coords[dim].values for dim in dim_order)
+    for index in zip(*np.nonzero(is_valid)):
+        coord_values = tuple(
+            dim_coords[axis_index] for dim_coords, axis_index in zip(coords, index)
+        )
+        yield index, coord_values, complex(values[index])
+
+
+def _make_adjoint_sources_from_modal_amps(
+    amps: DataArray,
+    source_from_amp: Callable[[float, str, int, complex], SourceT],
+    *,
+    skip_nan: bool,
+) -> list[SourceT]:
+    """Build sources for nonzero ``(f, direction, mode_index)`` amplitudes."""
+    return [
+        source_from_amp(freq, direction, mode_index, amp_complex)
+        for _, (freq, direction, mode_index), amp_complex in _iter_nonzero_data_array_entries(
+            amps,
+            ("f", "direction", "mode_index"),
+            skip_nan=skip_nan,
+        )
+    ]
+
+
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from os import PathLike
     from typing import Literal, SupportsComplex
 
@@ -2524,21 +2579,23 @@ class FieldOverlapData(AbstractOverlapData):
 
     def _make_adjoint_sources_amps(self, fwidth: float) -> list[Source]:
         """Generate adjoint sources for ``FieldOverlapData.amps``."""
-        coords = self.amps.coords
-        adjoint_sources = []
 
-        for freq in coords["f"]:
-            for direction in coords["direction"]:
-                for mode_index in coords["mode_index"]:
-                    amp_single = self.amps.sel(f=freq, direction=direction, mode_index=mode_index)
+        def source_from_amp(
+            freq: float, direction: str, _mode_index: int, coefficient: complex
+        ) -> Source:
+            return gaussian_source_from_monitor(
+                monitor=self.monitor,
+                freq=freq,
+                direction=direction,
+                coefficient=coefficient,
+                fwidth=fwidth,
+            )
 
-                    amp_complex = self.get_amplitude(amp_single)
-                    if (abs(amp_complex) == 0.0) or np.isnan(amp_complex):
-                        continue
-
-                    adjoint_sources.append(self._adjoint_source_amp(amp=amp_single, fwidth=fwidth))
-
-        return adjoint_sources
+        return _make_adjoint_sources_from_modal_amps(
+            self.amps,
+            source_from_amp,
+            skip_nan=True,
+        )
 
     def _adjoint_source_amp(self, amp: DataArray, fwidth: float) -> Source:
         """Generate an adjoint Gaussian-like source for a single overlap amplitude."""
@@ -2547,7 +2604,6 @@ class FieldOverlapData(AbstractOverlapData):
         direction = coords["direction"]
 
         amp_complex = self.get_amplitude(amp)
-        from tidy3d.components.autograd.source_factory import gaussian_source_from_monitor
 
         return gaussian_source_from_monitor(
             monitor=self.monitor,
@@ -3131,23 +3187,23 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
     def _make_adjoint_sources_amps(self, fwidth: float) -> list[ModeSource]:
         """Generate adjoint sources for ``ModeMonitorData.amps``."""
 
-        coords = self.amps.coords
+        def source_from_amp(
+            freq: float, direction: str, mode_index: int, coefficient: complex
+        ) -> ModeSource:
+            return mode_source_from_monitor(
+                monitor=self.monitor,
+                freq=freq,
+                direction=direction,
+                mode_index=mode_index,
+                coefficient=coefficient,
+                fwidth=fwidth,
+            )
 
-        adjoint_sources = []
-
-        # TODO: speed up with ufunc?
-        for freq in coords["f"]:
-            for direction in coords["direction"]:
-                for mode_index in coords["mode_index"]:
-                    amp_single = self.amps.sel(f=freq, direction=direction, mode_index=mode_index)
-
-                    if abs(self.get_amplitude(amp_single)) == 0.0:
-                        continue
-
-                    adjoint_source = self._adjoint_source_amp(amp=amp_single, fwidth=fwidth)
-                    adjoint_sources.append(adjoint_source)
-
-        return adjoint_sources
+        return _make_adjoint_sources_from_modal_amps(
+            self.amps,
+            source_from_amp,
+            skip_nan=False,
+        )
 
     def _adjoint_source_amp(self, amp: DataArray, fwidth: float) -> ModeSource:
         """Generate an adjoint ``ModeSource`` for a single amplitude."""
@@ -4948,32 +5004,35 @@ class DiffractionData(AbstractFieldProjectionData):
         """Make adjoint sources for outputs that depend on DiffractionData.`amps`."""
 
         amps = self.amps
-        coords = amps.coords
-
+        theta_data, phi_data = self.angles
+        theta_values = _values_in_dim_order(theta_data, ("orders_x", "orders_y", "f"))
+        phi_values = _values_in_dim_order(phi_data, ("orders_x", "orders_y", "f"))
+        bck_eps_values = tuple(
+            self.medium.eps_model(float(freq)) for freq in amps.coords["f"].values
+        )
         adjoint_sources = []
 
-        # TODO: speed up with ufunc?
-        # loop over all coordinates in the diffraction amplitudes
-        for freq in coords["f"]:
-            for pol in coords["polarization"]:
-                for order_x in coords["orders_x"]:
-                    for order_y in coords["orders_y"]:
-                        amp_single = amps.sel(
-                            f=freq,
-                            polarization=pol,
-                            orders_x=order_x,
-                            orders_y=order_y,
-                        )
-
-                        # ignore any amplitudes of 0.0 or nan
-                        amp_complex = self.get_amplitude(amp_single)
-                        if (abs(amp_complex) == 0.0) or np.isnan(amp_complex):
-                            continue
-
-                        # compute a plane wave for this amplitude (if propagating / not None)
-                        adjoint_source = self.adjoint_source_amp(amp=amp_single, fwidth=fwidth)
-                        if adjoint_source is not None:
-                            adjoint_sources.append(adjoint_source)
+        for (
+            (freq_index, _, order_x_index, order_y_index),
+            (freq, pol, _, _),
+            amp_complex,
+        ) in _iter_nonzero_data_array_entries(
+            amps,
+            ("f", "polarization", "orders_x", "orders_y"),
+            skip_nan=True,
+        ):
+            adjoint_source = diffraction_source_from_angles(
+                monitor=self.monitor,
+                freq=freq,
+                angle_theta=theta_values[order_x_index, order_y_index, freq_index],
+                angle_phi=phi_values[order_x_index, order_y_index, freq_index],
+                polarization=pol,
+                coefficient=amp_complex,
+                fwidth=fwidth,
+                bck_eps=bck_eps_values[freq_index],
+            )
+            if adjoint_source is not None:
+                adjoint_sources.append(adjoint_source)
 
         return adjoint_sources
 
