@@ -46,6 +46,53 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Axis
 
 
+CSI_GREEN2008_VARIANT = "Green2008"
+CSI_PALIK_LOWLOSS_VARIANT = "Palik_LowLoss"
+CSI_PALIK_LOSSY_VARIANT = "Palik_Lossy"
+
+
+def _variant_name(variant: str, rst: bool = False) -> str:
+    """Format a material variant name for warning text or generated docs."""
+    if rst:
+        return f"``'{variant}'``"
+    return f"'{variant}'"
+
+
+def _material_variant_access(material: str, variant: str, rst: bool = False) -> str:
+    """Format a material-library variant lookup for warning text or generated docs."""
+    access = f"material_library['{material}']['{variant}']"
+    if rst:
+        return f"``{access}``"
+    return access
+
+
+def csi_default_migration_message(rst: bool = False, include_suppression: bool = False) -> str:
+    """Migration guidance for the crystalline silicon default-variant change."""
+    unit = r":math:`{\mu}m`" if rst else "um"
+    green2008 = _variant_name(CSI_GREEN2008_VARIANT, rst)
+    palik_lowloss = _variant_name(CSI_PALIK_LOWLOSS_VARIANT, rst)
+    palik_lossy = _variant_name(CSI_PALIK_LOSSY_VARIANT, rst)
+    explicit_lowloss = _material_variant_access("cSi", CSI_PALIK_LOWLOSS_VARIANT, rst)
+    explicit_green2008 = _material_variant_access("cSi", CSI_GREEN2008_VARIANT, rst)
+
+    message = (
+        f"The default variant for crystalline silicon changed from {green2008} "
+        f"to {palik_lowloss}, which uses the fitted Palik model with small loss. "
+        f"Use {green2008} explicitly to preserve pre-change results, including "
+        f"the 1.2 to 1.45 {unit} overlap where both variants are valid. "
+        f"{palik_lowloss} is valid from 1.2 to 250 {unit}. "
+        f"Use {green2008} for pre-change results from 0.25 to 1.2 {unit}. "
+        f"{palik_lossy} is also available from 0.1 to 1.4 {unit} when the lossy "
+        f"Palik model is desired."
+    )
+    if include_suppression:
+        message += (
+            " To suppress this warning, request a variant explicitly, "
+            f"for example {explicit_lowloss} or {explicit_green2008}."
+        )
+    return message
+
+
 def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
     """Write the material library to a .json file."""
     mat_lib_dict = {
@@ -153,7 +200,17 @@ class MaterialItem(Tidy3dBaseModel):
                 "previously named 'Palik_Lossless'. Use 'Palik_NoLoss' for a zero-loss "
                 "Palik model."
             )
+        if self._uses_migrated_csi_default:
+            log.warning(csi_default_migration_message(include_suppression=True))
         return self.variants[self.default].medium
+
+    @property
+    def _uses_migrated_csi_default(self) -> bool:
+        """Whether this item matches the migrated built-in cSi default."""
+        library = globals().get("material_library")
+        return (
+            library is not None and self is library.get("cSi") and self.default == "Palik_LowLoss"
+        )
 
     def __str__(self) -> str:
         return summarize_material_item(self)
@@ -2222,7 +2279,7 @@ cSi_PalikLowLoss = VariantItem(
 
 cSi_MultiPhysics = VariantItem(
     medium=MultiPhysicsMedium(
-        optical=cSi_Green2008.medium,
+        optical=cSi_PalikLowLoss.medium,
         charge=SemiconductorMedium(
             permittivity=11.7,
             N_c=ConstantEffectiveDOS(N=2.86e19),
@@ -2261,9 +2318,7 @@ cSi_MultiPhysics = VariantItem(
             ),
         ),
     ),
-    reference=[material_refs["Green2008"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
-    "main/Si/Green-2008.yml",
+    reference=[material_refs["Palik_LowLoss"]],
 )
 
 
@@ -2731,7 +2786,7 @@ material_library = MaterialLibrary(
                 "Green2008_Lossless": cSi_Green2008Lossless,
                 "Si_MultiPhysics": cSi_MultiPhysics,
             },
-            default="Green2008",
+            default="Palik_LowLoss",
         )
     ),
     LiNbO3=MaterialItemUniaxial(

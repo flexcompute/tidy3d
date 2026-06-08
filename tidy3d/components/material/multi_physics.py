@@ -33,7 +33,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
 
     >>> import tidy3d as td
     >>> default_multiphysics_Si = td.MultiPhysicsMedium(
-    ...     optical=td.material_library['cSi']['Green2008'],
+    ...     optical=td.material_library['cSi']['Palik_LowLoss'],
     ...     charge=td.SemiconductorMedium(
     ...         N_c=td.ConstantEffectiveDOS(N=2.86e19),
     ...         N_v=td.ConstantEffectiveDOS(N=3.1e19),

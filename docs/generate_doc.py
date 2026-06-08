@@ -11,11 +11,37 @@ from tidy3d.material_library.material_library import (
     MaterialItem,
     MaterialItem2D,
     MaterialItemUniaxial,
+    csi_default_migration_message,
 )
 from tidy3d.plugins.microwave import rf_material_library as rf_lib
 from tidy3d.plugins.microwave.rf_material_library import MaterialItemFreqRange
 
 LOW_LOSS_THRESHOLD = 2e-5
+
+MATERIAL_LIBRARY_NOTES = {
+    "cSi": f".. note::\n\n   {csi_default_migration_message(rst=True)}\n\n",
+}
+
+PREFERRED_VARIANT_ORDER = {
+    "SiO2": ("Palik_NoLoss",),
+}
+
+
+def _variant_sort_key(material_abbr: str, variant_item: tuple[str, object]) -> tuple[int, int, str]:
+    """Sort variants alphabetically, with selected recommended variants first."""
+    variant_name = variant_item[0]
+    preferred_variants = PREFERRED_VARIANT_ORDER.get(material_abbr, ())
+    if variant_name in preferred_variants:
+        return (0, preferred_variants.index(variant_name), variant_name.lower())
+    return (1, 0, variant_name.lower())
+
+
+def _variant_name_for_medium(mat: MaterialItem, medium: object) -> str | None:
+    """Return the first variant name whose medium matches ``medium``."""
+    for variant_name, variant in mat.variants.items():
+        if variant.medium == medium:
+            return variant_name
+    return None
 
 
 def generate_material_library_doc():
@@ -90,8 +116,8 @@ def generate_material_library_doc():
                     width[col] = len(name[col]) + 2
 
                 for varname, var in sorted(
-                    mat.variants.items(), key=lambda item: item[0].lower()
-                ):  # iterate variants sorted by variant name
+                    mat.variants.items(), key=lambda item: _variant_sort_key(abbr, item)
+                ):
                     # Initialize row
                     row = {}
 
@@ -113,6 +139,9 @@ def generate_material_library_doc():
                         row["model"] = ":class:`AnisotropicMedium`"
                     elif isinstance(medium, MultiPhysicsMedium):
                         row["model"] = ":class:`MultiPhysicsMedium`"
+                        optical_variant = _variant_name_for_medium(mat, medium.optical)
+                        if optical_variant is not None:
+                            row["model"] += f" (optical: ``'{optical_variant}'``)"
                     elif isinstance(mat, MaterialItem):
                         # Pole number
                         row["model"] = str(len(medium.poles)) + "-pole"
@@ -209,6 +238,9 @@ def generate_material_library_doc():
                     )
                 f.write(divider)
                 f.write("\n")
+
+                if abbr in MATERIAL_LIBRARY_NOTES:
+                    f.write(MATERIAL_LIBRARY_NOTES[abbr])
 
                 # Write code example
                 if len(code_string) != 0:

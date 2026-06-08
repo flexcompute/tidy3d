@@ -22,13 +22,67 @@ from ..utils import AssertLogLevel
 def test_warning_default_variant_switching():
     """Issue warning for switching default medium variant."""
 
-    # no warning for most materials with no default change
-    with AssertLogLevel(None):
-        _ = td.material_library["cSi"].medium
-
     # issue warning for SiO2
     with AssertLogLevel("WARNING"):
         _ = td.material_library["SiO2"].medium
+
+    # issue warning for cSi
+    with AssertLogLevel("WARNING", contains_str="preserve pre-change results"):
+        assert td.material_library["cSi"].medium == td.material_library["cSi"]["Palik_LowLoss"]
+
+    # no warning when the cSi variant is explicitly selected
+    with AssertLogLevel(None):
+        _ = td.material_library["cSi"]["Palik_LowLoss"]
+    with AssertLogLevel(None):
+        _ = td.material_library["cSi"]["Green2008"]
+
+    # no warning when a copied cSi item no longer uses the migrated default
+    with AssertLogLevel(None):
+        assert (
+            td.material_library["cSi"].updated_copy(default="Green2008").medium
+            == td.material_library["cSi"]["Green2008"]
+        )
+    with AssertLogLevel(None):
+        assert (
+            td.material_library["cSi"].copy().medium == td.material_library["cSi"]["Palik_LowLoss"]
+        )
+
+    custom_csi = MaterialItem(
+        name="Silicon (Crystalline)",
+        variants={
+            "Green2008": VariantItem(
+                medium=td.PoleResidue(name="custom_Green2008"),
+                reference=[ReferenceData(doi="etc.com", journal="paper", url="www")],
+            ),
+            "Palik_LowLoss": VariantItem(
+                medium=td.PoleResidue(name="custom_PalikLowLoss"),
+                reference=[ReferenceData(doi="etc.com", journal="paper", url="www")],
+            ),
+        },
+        default="Palik_LowLoss",
+    )
+    with AssertLogLevel(None):
+        _ = custom_csi.medium
+
+    custom_csi_reusing_builtin_variants = MaterialItem(
+        name="Silicon (Crystalline)",
+        variants={
+            "Green2008": td.material_library["cSi"].variants["Green2008"],
+            "Palik_LowLoss": td.material_library["cSi"].variants["Palik_LowLoss"],
+        },
+        default="Palik_LowLoss",
+    )
+    with AssertLogLevel(None):
+        _ = custom_csi_reusing_builtin_variants.medium
+
+
+def test_csi_multiphysics_uses_default_optical_model():
+    """Use the same optical medium for cSi MultiPhysics and the cSi default."""
+    multiphysics_medium = td.material_library["cSi"].variants["Si_MultiPhysics"].medium
+    csi_default = td.material_library["cSi"].default
+
+    assert csi_default == "Palik_LowLoss"
+    assert multiphysics_medium.optical == td.material_library["cSi"][csi_default]
 
 
 def test_VariantItem():

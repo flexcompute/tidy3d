@@ -384,18 +384,22 @@ Silicon (Crystalline) ("cSi")
 .. table::
    :widths: auto
 
-   ========================= ========================== =========================== ============================================================================================================
-   Variant                   Valid for                  Model Info                  Reference                                                                                                   
-   ========================= ========================== =========================== ============================================================================================================
-   ``'Green2008'`` (default) 0.25 - 1.45 :math:`{\mu}m` 5-pole, lossy               [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
-   ``'Green2008_Lossless'``  1.2 - 1.45 :math:`{\mu}m`  1-pole, lossless            [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
-   ``'Li1993_293K'``         1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless            [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__    
-   ``'Palik_NoLoss'``        1.2 - 6.0 :math:`{\mu}m`   1-pole, lossless            [3]
-   ``'Palik_LowLoss'``       1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss            [3]
-   ``'Palik_Lossy'``         0.1 - 1.4 :math:`{\mu}m`   5-pole, lossy               [3]                                                                                                         
-   ``'SalzbergVilla1957'``   1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless            [4][5] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Salzberg.yml>`__
-   ``'Si_MultiPhysics'``     0.25 - 1.45 :math:`{\mu}m` :class:`MultiPhysicsMedium` [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
-   ========================= ========================== =========================== ============================================================================================================
+   ============================= ========================== ========================================================== ============================================================================================================
+   Variant                       Valid for                  Model Info                                                 Reference
+   ============================= ========================== ========================================================== ============================================================================================================
+   ``'Green2008'``               0.25 - 1.45 :math:`{\mu}m` 5-pole, lossy                                              [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__
+   ``'Green2008_Lossless'``      1.2 - 1.45 :math:`{\mu}m`  1-pole, lossless                                           [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__
+   ``'Li1993_293K'``             1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless                                           [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__
+   ``'Palik_NoLoss'``            1.2 - 6.0 :math:`{\mu}m`   1-pole, lossless                                           [3]
+   ``'Palik_LowLoss'`` (default) 1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss                                           [3]
+   ``'Palik_Lossy'``             0.1 - 1.4 :math:`{\mu}m`   5-pole, lossy                                              [3]
+   ``'SalzbergVilla1957'``       1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless                                           [4][5] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Salzberg.yml>`__
+   ``'Si_MultiPhysics'``         1.2 - 250.0 :math:`{\mu}m` :class:`MultiPhysicsMedium` (optical: ``'Palik_LowLoss'``) [3]
+   ============================= ========================== ========================================================== ============================================================================================================
+
+.. note::
+
+   The default variant for crystalline silicon changed from ``'Green2008'`` to ``'Palik_LowLoss'``, which uses the fitted Palik model with small loss. Use ``'Green2008'`` explicitly to preserve pre-change results, including the 1.2 to 1.45 :math:`{\mu}m` overlap where both variants are valid. ``'Palik_LowLoss'`` is valid from 1.2 to 250 :math:`{\mu}m`. Use ``'Green2008'`` for pre-change results from 0.25 to 1.2 :math:`{\mu}m`. ``'Palik_Lossy'`` is also available from 0.1 to 1.4 :math:`{\mu}m` when the lossy Palik model is desired.
 
 Examples:
 
@@ -1137,17 +1141,17 @@ Silicon Dioxide ("SiO2")
    ================================= ========================== ================ ===========
    Variant                           Valid for                  Model Info       Reference
    ================================= ========================== ================ ===========
-   ``'Horiba'``                      0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy    [1]
-   ``'Palik_NoLoss'``                0.55 - 5.0 :math:`{\mu}m`  2-pole, lossless [2]
-   ``'Palik_LowLoss'`` (default)     0.15 - 5.0 :math:`{\mu}m`  2-pole, low loss [2]
-   ``'Palik_Lossy'``                 4.0 - 250.0 :math:`{\mu}m` 5-pole, lossy    [2]
+   ``'Palik_NoLoss'``                0.55 - 5.0 :math:`{\mu}m`  2-pole, lossless [1]
+   ``'Horiba'``                      0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy    [2]
+   ``'Palik_LowLoss'`` (default)     0.15 - 5.0 :math:`{\mu}m`  2-pole, low loss [1]
+   ``'Palik_Lossy'``                 4.0 - 250.0 :math:`{\mu}m` 5-pole, lossy    [1]
    ================================= ========================== ================ ===========
 
 Examples:
 
->>> medium = material_library['SiO2']['Horiba']
-
 >>> medium = material_library['SiO2']['Palik_NoLoss']
+
+>>> medium = material_library['SiO2']['Horiba']
 
 >>> medium = material_library['SiO2']['Palik_LowLoss']
 
@@ -1155,8 +1159,8 @@ Examples:
 
 References:
 
-#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 #. \E. D. Palik. Handbook of Optical Constants of Solids, Academic Press (1998) `[doi] <https://doi.org/10.1016/B978-0-08-055630-7.50001-8>`__
+#. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
 Silicon Oxynitride ("SiON")
 ===========================
