@@ -22,6 +22,10 @@ from pydantic import (
     ValidationError as PydanticValidationError,
 )
 
+from tidy3d.components.autograd.flux_monitor import (
+    build_flux_monitor_adjoint_layout,
+    is_flux_adjoint_helper_name,
+)
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.types.base import discriminated_union
@@ -5312,7 +5316,9 @@ class Simulation(AbstractYeeGridSimulation):
                     if not isinstance(monitor, AbstractFieldMonitor | AbstractOverlapMonitor):
                         continue
                     # Skip internally generated adjoint monitors (colocate=False by design)
-                    if monitor.name.startswith("adjoint_"):
+                    if monitor.name.startswith("adjoint_") or self._is_flux_adjoint_helper_monitor(
+                        monitor
+                    ):
                         continue
                     if monitor.use_colocated_integration != src_colocated:
                         consolidated_logger.warning(
@@ -6009,10 +6015,16 @@ class Simulation(AbstractYeeGridSimulation):
                 monitor_size_gb = monitor_size / 1e9
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
-                        f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
+                        f"Estimated storage of {self._monitor_validation_label(monitor_name)} "
+                        f"is {monitor_size_gb:1.2f}GB. "
                         "Consider making it smaller, using fewer frequencies, or spatial or "
                         "temporal downsampling using 'interval_space' and 'interval', respectively.",
-                        custom_loc=["monitors", monitor_ind],
+                        custom_loc=[
+                            "monitors",
+                            self._monitor_validation_index(
+                                monitor_name=monitor_name, fallback_index=monitor_ind
+                            ),
+                        ],
                     )
 
                 total_size_gb += monitor_size_gb
@@ -6025,19 +6037,23 @@ class Simulation(AbstractYeeGridSimulation):
 
         # Some monitors store much less data than what is needed internally. Make sure that the
         # internal storage also does not exceed the limit.
-        for monitor in self.monitors:
+        for monitor_ind, monitor in enumerate(self.monitors):
             num_cells = self._monitor_num_cells(monitor)
             # intermediate storage needed, in GB
             solver_data = monitor._storage_size_solver(num_cells=num_cells, tmesh=self.tmesh) / 1e9
             if isinstance(monitor, PointCloudFieldMonitor) and self.precision == "double":
                 solver_data *= 2
             if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
-                raise SetupError(
-                    f"Estimated internal storage of monitor '{monitor.name}' is "
+                self._raise_validation_error_at_loc(
+                    f"Estimated internal storage of {self._monitor_validation_label(monitor)} is "
                     f"{solver_data:1.2f}GB, which is larger than the maximum allowed "
                     f"{MAX_MONITOR_INTERNAL_DATA_SIZE_GB:.2f}GB. Consider making it smaller, "
                     "using fewer frequencies, or spatial or temporal downsampling using "
-                    "'interval_space' and 'interval', respectively."
+                    "'interval_space' and 'interval', respectively.",
+                    "monitors",
+                    self._monitor_validation_index(
+                        monitor_name=monitor.name, fallback_index=monitor_ind
+                    ),
                 )
 
     def _validate_modes_size(self) -> None:
@@ -6146,17 +6162,52 @@ class Simulation(AbstractYeeGridSimulation):
         )
         sci_fmin, sci_fmax = self._scientific_notation(freq_min, freq_max)
 
-        for monitor in self.monitors:
+        for monitor_ind, monitor in enumerate(self.monitors):
             if not isinstance(monitor, FreqMonitor):
                 continue
 
             freqs = np.array(monitor.freqs)
             if freqs.min() < freq_min or freqs.max() > freq_max:
-                raise SetupError(
-                    f"Frequency monitor '{monitor.name}' contains frequencies "
+                self._raise_validation_error_at_loc(
+                    f"Frequency {self._monitor_validation_label(monitor)} contains frequencies "
                     f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
-                    "(Hz) as defined by the sources."
+                    "(Hz) as defined by the sources.",
+                    "monitors",
+                    self._monitor_validation_index(
+                        monitor_name=monitor.name, fallback_index=monitor_ind
+                    ),
+                    "freqs",
                 )
+
+    @cached_property
+    def _flux_adjoint_helper_parent_names(self) -> dict[str, str]:
+        """Map internal flux-adjoint helper monitor names to user FluxMonitor names."""
+        layout, _ = build_flux_monitor_adjoint_layout(self.monitors)
+        return {
+            helper_name: helper_spec.flux_monitor_name
+            for helper_spec in layout.flux_helpers
+            for helper_name in helper_spec.helper_monitor_names
+        }
+
+    def _is_flux_adjoint_helper_monitor(self, monitor: Any) -> bool:
+        """Return ``True`` for an internal flux-adjoint helper monitor."""
+        return is_flux_adjoint_helper_name(monitor.name)
+
+    def _monitor_validation_label(self, monitor: Any | str) -> str:
+        """User-facing monitor label for validation warnings and errors."""
+        monitor_name = monitor if isinstance(monitor, str) else monitor.name
+        parent_name = self._flux_adjoint_helper_parent_names.get(monitor_name)
+        if parent_name is not None:
+            return f"hidden adjoint field helper for FluxMonitor '{parent_name}'"
+        return f"monitor '{monitor_name}'"
+
+    def _monitor_validation_index(self, *, monitor_name: str, fallback_index: int) -> int:
+        """User-facing monitor index for validation warnings."""
+        loc_name = self._flux_adjoint_helper_parent_names.get(monitor_name, monitor_name)
+        for monitor_index, monitor in enumerate(self.monitors):
+            if monitor.name == loc_name:
+                return monitor_index
+        return fallback_index
 
     def _validate_microwave_mode_specs(self) -> None:
         """Raise error if any microwave mode specifications with ``AutoImpedanceSpec`` will
@@ -6324,8 +6375,11 @@ class Simulation(AbstractYeeGridSimulation):
     def _with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
+        _, flux_helper_monitors = build_flux_monitor_adjoint_layout(self.monitors)
         mnts_fld, mnts_eps = self._make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
-        monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
+        monitors = (
+            list(self.monitors) + list(flux_helper_monitors) + list(mnts_fld) + list(mnts_eps)
+        )
         return self.copy(update={"monitors": monitors})
 
     def _make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
@@ -6407,9 +6461,12 @@ class Simulation(AbstractYeeGridSimulation):
 
         freqs = set()
         for mnt in self.monitors:
-            # since we cannot differentiate through the FluxMonitor, we can ignore
-            # the frequencies it is tracking
-            if isinstance(mnt, FreqMonitor) and not isinstance(mnt, FluxMonitor):
+            # Flux monitors need hidden field helpers to be differentiable.
+            if isinstance(mnt, FluxMonitor):
+                if mnt.enable_adjoint:
+                    freqs.update(mnt.freqs)
+                continue
+            if isinstance(mnt, FreqMonitor):
                 freqs.update(mnt.freqs)
         freqs = sorted(freqs)
         return freqs

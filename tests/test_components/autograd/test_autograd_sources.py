@@ -1377,8 +1377,8 @@ def test_split_adjoint_data_logs_mixed_source_structure_counts(monkeypatch):
         "adj_eps_data",
     ]
     assert any(
-        "1 monitors, 1 adjoint field monitors, 1 source adjoint monitors, 1 adjoint eps monitors."
-        in msg
+        "1 monitors, 0 flux adjoint field monitors, 1 adjoint field monitors, "
+        "1 source adjoint monitors, 1 adjoint eps monitors." in msg
         for msg in messages
     )
 

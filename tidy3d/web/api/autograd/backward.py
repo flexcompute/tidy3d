@@ -23,6 +23,7 @@ from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel
 
+from .flux_monitor import expand_flux_monitor_vjps
 from .utils import E_to_D, filter_vjp_map, get_derivative_maps, scale_field_data
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.geometry.utils import GeometryType
+    from tidy3d.components.monitor import Monitor
 
     from .context import AdjointPostprocessInputs
     from .types import DerivativeView, NumericalStructureConfig
@@ -41,6 +43,15 @@ if TYPE_CHECKING:
 ADJOINT_MEMORY_MULTIPLIER = 6.0
 # Baseline factor for the always-live forward/adjoint field and permittivity datasets.
 ADJOINT_MEMORY_BASELINE_MULTIPLIER = 2.0
+
+
+def make_adjoint_monitors(
+    simulation: td.Simulation,
+    sim_fields_keys: list[tuple],
+) -> list[Monitor]:
+    """Return the structure adjoint monitors used by adjoint simulations."""
+    monitors_fld, monitors_eps = simulation._make_adjoint_monitors(sim_fields_keys)
+    return [*monitors_fld, *monitors_eps]
 
 
 def _resolve_freq_chunk_size(
@@ -71,6 +82,7 @@ def setup_adj(
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
     already_filtered: bool = False,
+    sim_data_fwd: td.SimulationData | None = None,
 ) -> list[td.Simulation]:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
@@ -83,9 +95,15 @@ def setup_adj(
     if not data_fields_vjp:
         return []
 
+    data_fields_vjp, sim_data_for_adj = expand_flux_monitor_vjps(
+        data_fields_vjp=data_fields_vjp,
+        sim_data_orig=sim_data_orig,
+        sim_data_fwd=sim_data_fwd,
+    )
+
     # start with the full simulation data structure and either zero out the fields
     # that have no tracer data for them or insert the tracer data
-    full_sim_data_dict = sim_data_orig._strip_traced_fields(
+    full_sim_data_dict = sim_data_for_adj._strip_traced_fields(
         include_untraced_data_arrays=True, starting_paths=(("data",),)
     )
     for path, value in full_sim_data_dict.items():
@@ -95,15 +113,12 @@ def setup_adj(
             full_sim_data_dict[path] = 0 * value
 
     # insert the raw VJP data into the .data of the original SimulationData
-    sim_data_vjp = sim_data_orig._insert_traced_fields(field_mapping=full_sim_data_dict)
+    sim_data_vjp = sim_data_for_adj._insert_traced_fields(field_mapping=full_sim_data_dict)
 
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
 
-    num_monitors = len(sim_data_orig.simulation.monitors)
-    adjoint_monitors = sim_data_orig.simulation._with_adjoint_monitors(sim_fields_keys).monitors[
-        num_monitors:
-    ]
+    adjoint_monitors = make_adjoint_monitors(sim_data_orig.simulation, sim_fields_keys)
 
     sims_adj = sim_data_vjp._make_adjoint_sims(
         data_vjp_paths=data_vjp_paths,

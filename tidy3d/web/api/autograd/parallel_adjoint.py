@@ -25,7 +25,7 @@ from tidy3d.components.data.monitor_data import AbstractFieldData, FieldData
 from tidy3d.components.data.sim_data import AdjointSourceInfo, make_adjoint_simulation
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.config import config
-from tidy3d.web.api.autograd.backward import postprocess_adj
+from tidy3d.web.api.autograd.backward import make_adjoint_monitors, postprocess_adj
 from tidy3d.web.api.autograd.context import (
     AdjointPostprocessInputs,
     ParallelAdjointState,
@@ -335,8 +335,7 @@ def prepare_parallel_adjoint(
     if not basis_specs:
         td.log.warning("Parallel adjoint disabled because no eligible monitor outputs were found.")
         return None
-    num_monitors = len(simulation.monitors)
-    adjoint_monitors = simulation._with_adjoint_monitors(sim_fields_keys).monitors[num_monitors:]
+    adjoint_monitors = make_adjoint_monitors(simulation, sim_fields_keys)
 
     basis_sources: list[tuple[ParallelAdjointBasis, SourceType]] = []
     for basis in basis_specs:

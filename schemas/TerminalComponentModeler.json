@@ -8522,6 +8522,10 @@
           "default": true,
           "type": "boolean"
         },
+        "enable_adjoint": {
+          "default": false,
+          "type": "boolean"
+        },
         "exclude_surfaces": {
           "anyOf": [
             {

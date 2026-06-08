@@ -437,7 +437,7 @@ def test_validate_monitor_simulation_frequency_range():
     )
     s._validate_freq_monitors_freq_range()
 
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError) as excinfo:
         mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[5e10])
         s = td.Simulation(
             size=(1, 1, 1),
@@ -447,8 +447,11 @@ def test_validate_monitor_simulation_frequency_range():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
         s._validate_freq_monitors_freq_range()
+    assert_single_value_error_loc(
+        excinfo, ("monitors", 0, "freqs"), "outside of the simulation frequency range"
+    )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError) as excinfo:
         mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[5e13])
         s = td.Simulation(
             size=(1, 1, 1),
@@ -458,6 +461,9 @@ def test_validate_monitor_simulation_frequency_range():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
         s._validate_freq_monitors_freq_range()
+    assert_single_value_error_loc(
+        excinfo, ("monitors", 0, "freqs"), "outside of the simulation frequency range"
+    )
 
 
 def test_validate_bloch_with_symmetry():
@@ -862,8 +868,9 @@ def test_validate_mnt_size(monkeypatch):
     # error for internal solver monitor size
     monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", float("inf"))
     monkeypatch.setattr(simulation, "MAX_MONITOR_INTERNAL_DATA_SIZE_GB", 1 / 2**30)
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError) as excinfo:
         s._validate_monitor_size()
+    assert_single_value_error_loc(excinfo, ("monitors", 0), "Estimated internal storage")
 
 
 # def test_max_geometry_validation():
@@ -2849,9 +2856,12 @@ def test_error_large_monitors(monitor):
     sim_small = sim_large.updated_copy(size=(4.0, 0, 4.0))
     sim_small.validate_pre_upload()
 
-    # large sim should error
-    with pytest.raises(SetupError):
+    # large sim should error. Internal-storage monitor limits are loc-aware validation errors;
+    # other pre-upload size checks still raise SetupError.
+    with pytest.raises((SetupError, ValidationError)) as excinfo:
         sim_large.validate_pre_upload()
+    if isinstance(excinfo.value, ValidationError):
+        assert_single_value_error_loc(excinfo, ("monitors", 0), "Estimated internal storage")
 
 
 def test_error_max_time_monitor_steps():

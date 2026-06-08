@@ -1363,6 +1363,55 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     * `THz integrated demultiplexer/filter based on a ring resonator <../../notebooks/THzDemultiplexerFilter.html>`_
     """
 
+    enable_adjoint: bool = Field(
+        False,
+        title="Enable Adjoint",
+        description="Enable adjoint differentiation for this flux monitor. When ``True``, "
+        "autograd forward runs store hidden tangential field data on this monitor's "
+        "integration surface(s) for all requested frequencies. This can increase task "
+        "storage, memory use, and local download size. Defaults to ``False`` to avoid "
+        "this cost for observational flux monitors.",
+    )
+
+    @staticmethod
+    def _adjoint_tangential_field_components(surface: SurfaceIntegrationMonitor) -> tuple[str, ...]:
+        """Field components needed for adjoint flux reconstruction on a planar surface."""
+        tangential_dims = ["x", "y", "z"]
+        tangential_dims.pop(surface.zero_dims[0])
+        return tuple(field + dim for field in ("E", "H") for dim in tangential_dims)
+
+    def _make_adjoint_field_monitor(
+        self,
+        *,
+        surface: SurfaceIntegrationMonitor,
+        name: str,
+    ) -> FieldMonitor:
+        """Hidden field monitor used to reconstruct this flux monitor in autograd."""
+        return FieldMonitor(
+            center=surface.center,
+            size=surface.size,
+            freqs=self.freqs,
+            apodization=self.apodization,
+            fields=self._adjoint_tangential_field_components(surface),
+            name=name,
+            colocate=True,
+            use_colocated_integration=True,
+        )
+
+    @model_validator(mode="after")
+    def _validate_adjoint_surfaces_exist(self) -> Self:
+        """Adjoint tracking requires at least one surface for hidden field storage."""
+        if self.enable_adjoint and not self.integration_surfaces:
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    f"FluxMonitor '{self.name}' has 'enable_adjoint=True' but no "
+                    "integration surfaces. Remove at least one entry from 'exclude_surfaces' "
+                    "or set 'enable_adjoint=False' for this monitor."
+                ),
+                "exclude_surfaces",
+            )
+        return self
+
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 real number per frequency
@@ -1938,6 +1987,11 @@ class DirectivityMonitor(MicrowaveBaseModel, FieldProjectionAngleMonitor, FluxMo
     ...     phi=np.linspace(0, 2*np.pi, 20),
     ... )
     """
+
+    # DirectivityMonitor inherits FluxMonitor for backend flux bookkeeping, but
+    # DirectivityData.flux is not wired into the flux-adjoint bridge. Keep this
+    # as a ClassVar so Pydantic does not expose a no-op public field/schema entry.
+    enable_adjoint: ClassVar[bool] = False
 
     far_field_approx: Literal[True] = Field(
         True,

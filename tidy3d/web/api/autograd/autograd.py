@@ -21,6 +21,7 @@ from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 
 from . import backward, engine, forward, hooks, io_utils, strategy
+from .constants import FLUX_MONITOR_ADJOINT_DOCS
 from .context import (
     AdjointTaskBatch,
     AdjointTaskContext,
@@ -140,6 +141,37 @@ def validate_numerical_structure_parameters(
             )
 
 
+def _untracked_flux_monitor_names(simulation: td.Simulation) -> list[str]:
+    """Exact ``FluxMonitor`` names that are present but not opted into adjoint tracking."""
+    return [
+        monitor.name
+        for monitor in simulation.monitors
+        if type(monitor) is td.FluxMonitor and not monitor.enable_adjoint
+    ]
+
+
+def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
+    """Validate that an autograd run has differentiable frequency-domain monitor data."""
+
+    # if no frequency-domain data (e.g. only field time monitors), raise an error
+    if simulation._freqs_adjoint:
+        return
+
+    untracked_flux_monitor_names = _untracked_flux_monitor_names(simulation)
+    if untracked_flux_monitor_names:
+        raise AdjointError(
+            "No differentiable frequency-domain data found in simulation, but found traced "
+            "simulation inputs. FluxMonitor(s) "
+            f"{', '.join(untracked_flux_monitor_names)} are not tracked for adjoint by "
+            "default. Set 'enable_adjoint=True' to differentiate their flux in an "
+            f"autograd run. See {FLUX_MONITOR_ADJOINT_DOCS}."
+        )
+    raise AdjointError(
+        "No frequency-domain data found in simulation, but found traced simulation inputs. "
+        "For an autograd run, you must have at least one frequency-domain monitor."
+    )
+
+
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
     """Check whether a supplied Simulation can use the autograd path."""
     if not isinstance(simulation, td.Simulation):
@@ -152,12 +184,7 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
     if not traced_fields:
         return False
 
-    # if no frequency-domain data (e.g. only field time monitors), raise an error
-    if not simulation._freqs_adjoint:
-        raise AdjointError(
-            "No frequency-domain data found in simulation, but found traced structures. "
-            "For an autograd run, you must have at least one frequency-domain monitor."
-        )
+    _validate_autograd_frequency_monitors(simulation)
 
     # if too many structures, raise an error
     structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
@@ -1146,6 +1173,9 @@ def setup_run(
 
         sim_fields_map = builtins.dict(sim_fields_dict)
 
+    if sim_fields_map:
+        _validate_autograd_frequency_monitors(sim_prepared)
+
     return SetupRunResult(
         sim_fields=sim_fields_map,
         simulation=sim_prepared,
@@ -1336,6 +1366,7 @@ def setup_adj(
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
     already_filtered: bool = False,
+    sim_data_fwd: td.SimulationData | None = None,
 ) -> list[td.Simulation]:
     """Construct adjoint simulations (delegated)."""
     return backward.setup_adj(
@@ -1344,6 +1375,7 @@ def setup_adj(
         sim_fields_keys=sim_fields_keys,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         already_filtered=already_filtered,
+        sim_data_fwd=sim_data_fwd,
     )
 
 

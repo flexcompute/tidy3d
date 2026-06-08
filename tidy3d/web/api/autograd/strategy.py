@@ -17,8 +17,11 @@ from tidy3d.web.api import webapi
 
 from . import hooks
 from .backward import postprocess_adj, setup_adj
+from .constants import FLUX_MONITOR_ADJOINT_DOCS
 from .context import AdjointPostprocessInputs, PreparedAdjointBatch
+from .flux_monitor import requires_flux_monitor_helpers, untracked_flux_monitor_vjp_names
 from .forward import postprocess_fwd, setup_fwd
+from .io_utils import get_autograd_flux_forward_data
 from .parallel_adjoint import (
     _populate_parallel_adjoint_bases,
     _warn_parallel_adjoint_fallback,
@@ -81,6 +84,11 @@ def _prepare_adjoints_from_vjp(
     max_num_adjoint_per_fwd = task_context.max_num_adjoint_per_fwd
     parallel_info = task_context.parallel_info
     task_name = task_context.task_name
+    sim_data_fwd = (
+        task_context.sim_data_fwd
+        if task_context.sim_data_fwd is not None
+        else task_context.context.simulation_data_forward
+    )
 
     data_fields_vjp_static = filter_vjp_map(data_fields_vjp)
     if not data_fields_vjp_static:
@@ -101,12 +109,40 @@ def _prepare_adjoints_from_vjp(
         accumulate_field_map(vjp_traced_fields, vjp_parallel)
         data_fields_vjp_for_adj = filter_vjp_map(data_fields_vjp_for_adj)
 
+    if sim_data_fwd is None and requires_flux_monitor_helpers(
+        data_fields_vjp_for_adj, sim_data_orig
+    ):
+        untracked_flux_names = untracked_flux_monitor_vjp_names(
+            data_fields_vjp_for_adj, sim_data_orig
+        )
+        if untracked_flux_names:
+            raise td.exceptions.AdjointError(
+                f"Task '{task_name}' differentiates FluxMonitor(s) "
+                f"{', '.join(untracked_flux_names)}, but they are not enabled for adjoint. "
+                "Set 'enable_adjoint=True' on those FluxMonitor objects and rerun the "
+                f"forward simulation. See {FLUX_MONITOR_ADJOINT_DOCS}."
+            )
+        if task_context.forward_task_id is None:
+            raise td.exceptions.AdjointError(
+                f"Task '{task_name}' differentiates a FluxMonitor, but hidden forward field data "
+                "is not available for client-side adjoint source construction. Set "
+                "'enable_adjoint=True' on the FluxMonitor before rerunning the forward "
+                f"simulation. See {FLUX_MONITOR_ADJOINT_DOCS}."
+            )
+        td.log.info("Downloading hidden forward data for FluxMonitor adjoint source construction.")
+        sim_data_fwd = get_autograd_flux_forward_data(
+            task_context.forward_task_id,
+            verbose=False,
+        )
+        task_context.context.simulation_data_forward = sim_data_fwd
+
     sims_adj = setup_adj(
         data_fields_vjp=data_fields_vjp_for_adj,
         sim_data_orig=sim_data_orig,
         sim_fields_keys=sim_fields_keys,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         already_filtered=True,
+        sim_data_fwd=sim_data_fwd,
     )
     if data_fields_vjp_for_adj and not sims_adj:
         if parallel_info is not None:
@@ -563,7 +599,7 @@ class RemoteClientSourceStrategy(GradientStrategy):
         sim_combined = setup_fwd(
             sim_fields=task_context.sim_fields,
             sim_original=task_context.sim_original,
-            local_gradient=False,
+            local_gradient=True,
         )
         remote_sim = task_context.sim_original.updated_copy(
             simulation_type="autograd_fwd", deep=False
@@ -590,6 +626,7 @@ class RemoteClientSourceStrategy(GradientStrategy):
         run_kwargs: dict[str, Any],
     ) -> AutogradFieldMap:
         sim_combined, remote_sim = self._prepare_remote_forward_task(task_context)
+        sim_combined.validate_pre_upload()
         restored_path, task_id_fwd = webapi.restore_simulation_if_cached(
             simulation=remote_sim,
             path=run_kwargs.get("path", None),
@@ -597,7 +634,6 @@ class RemoteClientSourceStrategy(GradientStrategy):
             verbose=run_kwargs.get("verbose", True),
         )
         if restored_path is None or task_id_fwd is None:
-            sim_combined.validate_pre_upload()
             run_kwargs_local = dict(run_kwargs)
             run_kwargs_local["simulation_type"] = "autograd_fwd"
             run_kwargs_local["sim_fields_keys"] = task_context.sim_fields_keys

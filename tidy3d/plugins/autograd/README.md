@@ -186,13 +186,13 @@ Tidy3D's AD framework supports a wide range of design scenarios.
 | `GaussianOverlapMonitor` / `AstigmaticGaussianOverlapMonitor` → `FieldOverlapData` | `.amps` | Differentiate overlap amplitudes used by Gaussian ports. |
 | `DiffractionMonitor` → `DiffractionData` | `.amps` | Capture gradients of diffraction efficiencies / orders. |
 | `FieldMonitor` / `PermittivityMonitor` → `FieldData`, `PermittivityData` | field components, permittivity components, `FieldData.flux` | Use these to build custom objectives (power, overlap, material penalties). |
+| `FluxMonitor` → `FluxData` | `.flux` when `enable_adjoint=True` | Opt in only for flux monitors used by the objective; this stores hidden surface field data for all requested frequencies during autograd forward runs. Keep the frequency list minimal because these frequencies also enter the forward adjoint-monitor frequency set, so structure-adjoint field and permittivity monitors may track them too. |
 | `SimulationData` helpers | `get_intensity(field_monitor_name)`, `get_poynting_vector(field_monitor_name)` | Convenience wrappers remain differentiable because they operate on traced monitor data. |
 
 #### Requires Local Post-processing
 
 | Data target | Status |
 | :--- | :--- |
-| `FluxMonitor` (`FluxData`) | Not directly differentiable. Record the enclosing `FieldMonitor` and integrate the Poynting vector yourself. |
 | Field projection monitors (`FieldProjectionAngleData`, `FieldProjectionCartesianData`, `FieldProjectionKSpaceData`) | Not supported for adjoint. Store the near fields and run `FieldProjector.from_near_field_monitors` locally to form far-field gradients. |
 
 ## Runtime Controls and Gradient Flow
@@ -277,7 +277,7 @@ To ensure robust and efficient optimizations, please consider the following guid
 ### Don'ts
 
 *   **Don't Use In-place Operations**: Avoid in-place assignment (`x[i] = val`) or operators (`x += 1`) on arrays tracked by `autograd`.
-*   **Don't Differentiate `FluxMonitor`**: `FluxMonitor` data is not directly differentiable. To optimize flux, you must use a `FieldMonitor` and compute the flux from the field data.
+*   **Don't expect default `FluxMonitor` tracing**: `FluxMonitor.enable_adjoint` defaults to `False` to avoid hidden field storage for observational monitors. Set `enable_adjoint=True` on any `FluxMonitor` whose `.flux` enters the objective, and keep its frequency list minimal. Each requested frequency stores hidden forward surface-field data for the flux helper and also enters the forward adjoint-monitor frequency set, so structure-adjoint field and permittivity monitors may track it too.
 *   **Don't Differentiate Server-Side Projections**: Far-field gradients must be computed locally using `FieldProjector` on downloaded `FieldMonitor` data.
 
 ### Current Limitations

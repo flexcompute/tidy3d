@@ -3922,11 +3922,12 @@ class FluxData(MonitorData):
 
         raise NotImplementedError(
             "Could not formulate adjoint source for 'FluxMonitor' output. To compute derivatives "
-            "with respect to flux data, please use a 'FieldMonitor' and call '.flux' on the "
-            "resulting 'FieldData' object. Using 'FluxMonitor' directly is not supported as "
-            "the full field information is required to construct the adjoint source for this "
-            "problem. The 'FluxData' does not contain the information necessary for gradient "
-            "computation."
+            "with respect to flux data, hidden field data must be stored during the autograd "
+            "forward run. Set 'FluxMonitor.enable_adjoint=True' and rerun the forward "
+            "simulation, or use a 'FieldMonitor' and call '.flux' on the resulting "
+            "'FieldData' object. See "
+            "https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/"
+            "tidy3d.FluxMonitor.html."
         )
 
     def normalize(self, source_spectrum_fn: Callable[[DataArray], NDArray]) -> FluxData:

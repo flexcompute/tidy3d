@@ -17,6 +17,7 @@ import numpy as np
 import xarray as xr
 from pydantic import Field
 
+from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import (
     _LAZY_PROXY_UNHANDLED,
@@ -1295,6 +1296,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         num_mnts_source_adj = sum(
             name.startswith("source_adjoint_") for name in expected_adjoint_names
         )
+        num_mnts_flux_adj = sum(
+            is_flux_adjoint_helper_name(name) for name in expected_adjoint_names
+        )
 
         monitor_data_names = [mnt_data.monitor.name for mnt_data in self.data]
 
@@ -1319,7 +1323,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         expected_known_order = [name for name in expected_all_names if name in monitor_data_names]
 
         log.info(
-            f" -> {num_mnts_original} monitors, {num_mnts_fld} adjoint field monitors, "
+            f" -> {num_mnts_original} monitors, {num_mnts_flux_adj} flux adjoint field monitors, "
+            f"{num_mnts_fld} adjoint field monitors, "
             f"{num_mnts_source_adj} source adjoint monitors, {num_mnts_eps} adjoint eps monitors."
         )
 

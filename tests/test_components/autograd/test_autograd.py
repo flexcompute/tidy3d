@@ -39,9 +39,13 @@ from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd import hooks
+from tidy3d.web.api.autograd import io_utils as autograd_io_utils
 from tidy3d.web.api.autograd import strategy as autograd_strategy
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom, verify_custom_vjp
-from tidy3d.web.api.autograd.context import AdjointPostprocessInputs, AutogradContext
+from tidy3d.web.api.autograd.context import (
+    AdjointPostprocessInputs,
+    AutogradContext,
+)
 from tidy3d.web.api.autograd.types import CustomVJPConfig, DerivativeView, NumericalStructureConfig
 
 from ...utils import (
@@ -264,9 +268,20 @@ def use_emulated_run(monkeypatch):
             else:
                 return run_emulated(simulation, task_name=task_name), task_name_fwd
 
+        def emulated_get_autograd_flux_forward_data(task_id_fwd, verbose):
+            """Return hidden flux helper data that remote runs download from the parent task."""
+            return autograd_io_utils.flux_monitor_forward_data(
+                cache[task_id_fwd]["context"].simulation_data_forward
+            )
+
         def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
-            task_name_fwd = "".join(task_name.partition("_adjoint")[:-2])
+            parent_tasks = run_kwargs.get("parent_tasks", {})
+            task_name_fwd = (
+                parent_tasks[task_name][0]
+                if task_name in parent_tasks
+                else "".join(task_name.partition("_adjoint")[:-2])
+            )
 
             # run the adjoint sim
             sim_data_adj = run_emulated(simulation, task_name="task_name")
@@ -353,6 +368,11 @@ def use_emulated_run(monkeypatch):
         monkeypatch.setattr(hooks, "_run_tidy3d", emulated_run_fwd)
         monkeypatch.setattr(hooks, "_run_async_tidy3d", emulated_run_async_fwd)
         monkeypatch.setattr(hooks, "_run_async_tidy3d_bwd", emulated_run_async_bwd)
+        monkeypatch.setattr(
+            autograd_strategy,
+            "get_autograd_flux_forward_data",
+            emulated_get_autograd_flux_forward_data,
+        )
 
         _run_was_emulated[0] = True
         return emulated_run_fwd, emulated_run_bwd
@@ -4383,25 +4403,27 @@ def test_gaussian_overlap_multifreq_grouped_to_one_adjoint_source(use_emulated_r
     assert grouped_info.sources[0].num_freqs == 3
 
 
-def test_error_flux(use_emulated_run):
-    """Make sure proper error raised if differentiating w.r.t. FluxData."""
+def test_setup_adj_wrapper_forwards_flux_helper_data(monkeypatch):
+    """Ensure the compatibility wrapper passes hidden forward data through."""
+    sentinel_sim_data_orig = typing.cast(td.SimulationData, object())
+    sentinel_sim_data_fwd = typing.cast(td.SimulationData, object())
+    captured = {}
 
-    def objective(params):
-        structure_traced = make_structures(params)["medium"]
-        sim = SIM_BASE.updated_copy(
-            structures=(structure_traced,),
-            monitors=(
-                td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux"),
-                td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
-            ),
-        )
-        data = run(sim, task_name="flux_error")
-        return anp.sum(data["flux"].flux.values)
+    def setup_adj_capture(**kwargs):
+        captured.update(kwargs)
+        return []
 
-    with pytest.raises(
-        NotImplementedError, match=r"Could not formulate adjoint source for 'FluxMonitor' output"
-    ):
-        g = ag.grad(objective)(params0)
+    monkeypatch.setattr(autograd_module.backward, "setup_adj", setup_adj_capture)
+
+    autograd_module.setup_adj(
+        data_fields_vjp={},
+        sim_data_orig=sentinel_sim_data_orig,
+        sim_fields_keys=[],
+        max_num_adjoint_per_fwd=1,
+        sim_data_fwd=sentinel_sim_data_fwd,
+    )
+
+    assert captured["sim_data_fwd"] is sentinel_sim_data_fwd
 
 
 def test_error_gaussian_overlap_unsupported_dataset_name_raises_not_implemented():
@@ -4682,40 +4704,6 @@ def test_polyslab_rotated_grad(polyslab: td.PolySlab, theta: float, axis: int) -
             rotated_grad(theta, axis)
     else:
         check_grads(lambda theta: rotated_grad(theta, axis), modes=["rev"])(theta)
-
-
-def test_flux_monitor_freq_exclusion(use_emulated_run):
-    """Checks if we are excluding flux monitor frequencies from the adjoint frequencies since
-    we cannot differentiate through flux data."""
-
-    monitors_just_field = (
-        td.FieldMonitor(
-            size=(1, 1, 0),
-            center=(0, 0, 0),
-            freqs=[FREQ0],
-            name="field",
-        ),
-    )
-
-    monitors_with_flux = (
-        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
-        td.FluxMonitor(
-            size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0 - FWIDTH, FREQ0 + FWIDTH], name="flux"
-        ),
-    )
-
-    def objective_with_monitors(monitors):
-        def objective(params):
-            structure_traced = make_structures(params)["medium"]
-            sim = SIM_BASE.updated_copy(structures=(structure_traced,), monitors=monitors)
-            data = run(sim, task_name="adjoint_freq_test")
-            assert data.simulation._freqs_adjoint == [FREQ0]
-            return anp.sum(data["field"].flux.values)
-
-        return objective
-
-    grad_no_flux_monitors = ag.grad(objective_with_monitors(monitors_just_field))(params0)
-    grad_with_flux_monitors = ag.grad(objective_with_monitors(monitors_with_flux))(params0)
 
 
 def test_dispersive_no_inf(use_emulated_run):
