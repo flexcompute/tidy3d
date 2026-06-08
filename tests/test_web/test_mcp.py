@@ -4,13 +4,73 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
+import os
+import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
 
 from tidy3d.web.mcp import _dispatcher, python_env, screenshots, viewer
 from tidy3d.web.mcp import server as mcp_server
+
+
+@contextlib.contextmanager
+def _run_streamable_http_server(
+    upstream,
+    *,
+    port: int,
+    path: str = "/mcp",
+    received_headers: list[dict[str, str]] | None = None,
+):
+    import uvicorn
+
+    upstream_app = upstream.http_app(transport="streamable-http", path=path)
+    app = upstream_app
+    if received_headers is not None:
+
+        async def capture_headers(scope, receive, send):
+            if scope["type"] == "http":
+                received_headers.append(
+                    {
+                        key.decode("latin-1"): value.decode("latin-1")
+                        for key, value in scope["headers"]
+                    }
+                )
+            await upstream_app(scope, receive, send)
+
+        app = capture_headers
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=port,
+            lifespan="on",
+            log_level="warning",
+        )
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 10
+    while not server.started and thread.is_alive() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if not server.started:
+        pytest.fail("FastMCP streamable HTTP test server did not start")
+
+    try:
+        if path == "/":
+            yield f"http://127.0.0.1:{port}/"
+        else:
+            yield f"http://127.0.0.1:{port}{path}"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+        if thread.is_alive():
+            pytest.fail("FastMCP streamable HTTP test server did not stop")
 
 
 def test_dispatcher_normalizes_bridge_env_var(monkeypatch):
@@ -251,6 +311,212 @@ def test_run_mcp_server_registers_viewer_tools_without_bridge(monkeypatch):
     assert proxy.ran is True
 
 
+def test_run_mcp_server_smoke_uses_real_fastmcp_proxy(monkeypatch):
+    from fastmcp import Client
+    from fastmcp.server.providers.proxy import FastMCPProxy, ProxyProvider
+
+    run_calls = []
+
+    async def no_remote_tool(_self, _name, version=None):
+        return None
+
+    async def no_remote_tools(_self):
+        return []
+
+    def fake_run(self, *, show_banner):
+        async def client_discovery_and_call():
+            async with Client(self) as client:
+                tools = await client.list_tools()
+                result = await client.call_tool("detect_python_environment", {"resource": None})
+            return tools, result
+
+        tools, result = asyncio.run(client_discovery_and_call())
+        run_calls.append((self, show_banner, tools, result))
+
+    monkeypatch.setattr(ProxyProvider, "get_tool", no_remote_tool)
+    monkeypatch.setattr(ProxyProvider, "list_tools", no_remote_tools)
+    monkeypatch.setattr(FastMCPProxy, "run", fake_run)
+    monkeypatch.setattr(_dispatcher, "_BRIDGE_URL", None)
+    monkeypatch.setattr(mcp_server, "configured_api_key", lambda: "api-key")
+    monkeypatch.setattr(
+        python_env,
+        "detect_python_environment_payload",
+        lambda resource=None: {
+            "pythonExec": "/env/bin/python",
+            "envManager": "venv",
+            "projectManager": "uv",
+            "detectionSource": "workspace",
+        },
+    )
+    monkeypatch.delenv(mcp_server.REMOTE_MCP_URL_ENV, raising=False)
+    monkeypatch.setenv("TIDY3D_MCP_USER_AGENT", "tidy3d-test")
+
+    mcp_server.run_mcp_server(viewer_bridge=":5123")
+
+    assert len(run_calls) == 1
+    proxy, show_banner, tools, result = run_calls[0]
+    assert isinstance(proxy, FastMCPProxy)
+    assert show_banner is False
+    assert {tool.name for tool in tools} == {
+        "detect_python_environment",
+        "validate_simulation",
+        "rotate_viewer",
+        "capture",
+        "show_structures",
+    }
+    assert result.structured_content == {
+        "pythonExec": "/env/bin/python",
+        "envManager": "venv",
+        "projectManager": "uv",
+        "detectionSource": "workspace",
+    }
+    assert result.content[0].text == (
+        "interpreter: /env/bin/python; env manager: venv; project manager: uv (source=workspace)"
+    )
+
+
+def test_create_remote_proxy_smoke_invokes_proxied_fastmcp_tool(free_tcp_port):
+    from fastmcp import Client, FastMCP
+
+    upstream = FastMCP("Upstream")
+
+    @upstream.tool
+    async def upstream_status() -> dict[str, str]:
+        return {"status": "ok"}
+
+    received_headers = []
+    with _run_streamable_http_server(
+        upstream, port=free_tcp_port, received_headers=received_headers
+    ) as mcp_url:
+        remote = mcp_server._create_remote_proxy(
+            api_key="api-key",
+            mcp_url=mcp_url,
+            user_agent="tidy3d-test",
+        )
+
+        async def client_discovery_and_call():
+            async with Client(remote.proxy) as client:
+                tools = await client.list_tools()
+                result = await client.call_tool("upstream_status", {})
+            return tools, result
+
+        tools, result = asyncio.run(client_discovery_and_call())
+
+    assert {tool.name for tool in tools} == {"upstream_status"}
+    assert result.structured_content == {"status": "ok"}
+    assert any(headers.get("user-agent") == "tidy3d-test" for headers in received_headers)
+    assert any(headers.get("authorization") == "Bearer api-key" for headers in received_headers)
+
+
+@pytest.mark.parametrize("url_has_trailing_slash", [False, True])
+def test_create_remote_proxy_smoke_invokes_root_mounted_fastmcp_tool(
+    free_tcp_port, url_has_trailing_slash
+):
+    from fastmcp import Client, FastMCP
+
+    upstream = FastMCP("RootMountedUpstream")
+
+    @upstream.tool
+    async def root_status() -> dict[str, str]:
+        return {"status": "root-ok"}
+
+    with _run_streamable_http_server(upstream, port=free_tcp_port, path="/") as root_url:
+        mcp_url = root_url if url_has_trailing_slash else root_url.rstrip("/")
+        remote = mcp_server._create_remote_proxy(
+            api_key="api-key",
+            mcp_url=mcp_url,
+            user_agent="tidy3d-test",
+        )
+
+        async def client_discovery_and_call():
+            async with Client(remote.proxy) as client:
+                tools = await client.list_tools()
+                result = await client.call_tool("root_status", {})
+            return tools, result
+
+        tools, result = asyncio.run(client_discovery_and_call())
+
+    assert {tool.name for tool in tools} == {"root_status"}
+    assert result.structured_content == {"status": "root-ok"}
+
+
+def test_mcp_stdio_server_smoke_uses_real_startup_path(free_tcp_port, tmp_path):
+    from fastmcp import Client, FastMCP
+    from fastmcp.client.transports import StdioTransport
+
+    upstream = FastMCP("Upstream")
+
+    @upstream.tool
+    async def upstream_status() -> dict[str, str]:
+        return {"status": "ok"}
+
+    with _run_streamable_http_server(upstream, port=free_tcp_port) as mcp_url:
+        env = os.environ.copy()
+        env.update(
+            {
+                "SIMCLOUD_APIKEY": "api-key",
+                mcp_server.REMOTE_MCP_URL_ENV: mcp_url,
+                "TIDY3D_MCP_USER_AGENT": "tidy3d-test",
+            }
+        )
+        env.pop("TIDY3D_VIEWER_BRIDGE_URL", None)
+        transport = StdioTransport(
+            command=sys.executable,
+            args=["-m", "tidy3d.web.mcp.server"],
+            env=env,
+            cwd=str(Path.cwd()),
+            keep_alive=False,
+            log_file=tmp_path / "mcp-server.log",
+        )
+
+        async def client_discovery_and_call():
+            async with Client(transport) as client:
+                tools = await client.list_tools()
+                result = await client.call_tool("upstream_status", {})
+            return tools, result
+
+        tools, result = asyncio.run(client_discovery_and_call())
+
+    assert {tool.name for tool in tools} == {
+        "capture",
+        "detect_python_environment",
+        "rotate_viewer",
+        "show_structures",
+        "upstream_status",
+        "validate_simulation",
+    }
+    assert result.structured_content == {"status": "ok"}
+
+
+def test_default_remote_mcp_url_matches_hosted_flexagent_root():
+    from urllib.parse import urlsplit
+
+    parsed = urlsplit(mcp_server.DEFAULT_REMOTE_MCP_URL)
+
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "flexagent.simulation.cloud"
+    assert parsed.path == "/"
+    assert parsed.query == ""
+
+
+def test_run_mcp_server_uses_checked_in_default_remote_url(monkeypatch):
+    proxy = _FakeProxy()
+    calls = []
+
+    def fake_create_remote_proxy(**kwargs):
+        calls.append(kwargs)
+        return mcp_server.RemoteProxy(proxy=proxy, tool_factory=_FakeToolFactory())
+
+    monkeypatch.delenv(mcp_server.REMOTE_MCP_URL_ENV, raising=False)
+    monkeypatch.setattr(mcp_server, "_create_remote_proxy", fake_create_remote_proxy)
+    monkeypatch.setattr(mcp_server, "_resolve_api_key", lambda: "api-key")
+    monkeypatch.setattr(mcp_server, "_resolve_requested_bridge", lambda explicit: None)
+
+    mcp_server.run_mcp_server()
+
+    assert calls[0]["mcp_url"] == mcp_server.DEFAULT_REMOTE_MCP_URL
+
+
 def test_run_mcp_server_rejects_invalid_explicit_viewer_bridge(monkeypatch):
     monkeypatch.setattr(
         mcp_server,
@@ -285,14 +551,92 @@ def test_run_mcp_server_uses_namespaced_remote_url_env(monkeypatch):
         return mcp_server.RemoteProxy(proxy=proxy, tool_factory=_FakeToolFactory())
 
     monkeypatch.setenv("REMOTE_MCP_URL", "https://ignored.example/")
-    monkeypatch.setenv("TIDY3D_MCP_REMOTE_URL", "https://remote.example/")
+    monkeypatch.setenv("TIDY3D_MCP_REMOTE_URL", "https://remote.example/mcp")
     monkeypatch.setattr(mcp_server, "_create_remote_proxy", fake_create_remote_proxy)
     monkeypatch.setattr(mcp_server, "_resolve_api_key", lambda: "api-key")
     monkeypatch.setattr(mcp_server, "_resolve_requested_bridge", lambda explicit: None)
 
     mcp_server.run_mcp_server()
 
-    assert calls[0]["mcp_url"] == "https://remote.example/"
+    assert calls[0]["mcp_url"] == "https://remote.example/mcp"
+
+
+@pytest.mark.parametrize(
+    "hosted_url",
+    [
+        "https://flexagent.simulation.cloud",
+        "https://flexagent.simulation.cloud/",
+    ],
+)
+def test_run_mcp_server_preserves_hosted_remote_url_env(monkeypatch, hosted_url):
+    proxy = _FakeProxy()
+    calls = []
+
+    def fake_create_remote_proxy(**kwargs):
+        calls.append(kwargs)
+        return mcp_server.RemoteProxy(proxy=proxy, tool_factory=_FakeToolFactory())
+
+    monkeypatch.setenv(mcp_server.REMOTE_MCP_URL_ENV, hosted_url)
+    monkeypatch.setattr(mcp_server, "_create_remote_proxy", fake_create_remote_proxy)
+    monkeypatch.setattr(mcp_server, "_resolve_api_key", lambda: "api-key")
+    monkeypatch.setattr(mcp_server, "_resolve_requested_bridge", lambda explicit: None)
+
+    mcp_server.run_mcp_server()
+
+    assert calls[0]["mcp_url"] == hosted_url
+
+
+@pytest.mark.parametrize(
+    "remote_url",
+    [
+        "https://internal.example",
+        "https://internal.example/",
+        "https://internal.example/mcp",
+        "https://internal.example/mcp/",
+    ],
+)
+def test_run_mcp_server_preserves_custom_remote_url_env_exactly(monkeypatch, remote_url):
+    proxy = _FakeProxy()
+    calls = []
+
+    def fake_create_remote_proxy(**kwargs):
+        calls.append(kwargs)
+        return mcp_server.RemoteProxy(proxy=proxy, tool_factory=_FakeToolFactory())
+
+    monkeypatch.setenv(mcp_server.REMOTE_MCP_URL_ENV, remote_url)
+    monkeypatch.setattr(mcp_server, "_create_remote_proxy", fake_create_remote_proxy)
+    monkeypatch.setattr(mcp_server, "_resolve_api_key", lambda: "api-key")
+    monkeypatch.setattr(mcp_server, "_resolve_requested_bridge", lambda explicit: None)
+
+    mcp_server.run_mcp_server()
+
+    assert calls[0]["mcp_url"] == remote_url
+
+
+@pytest.mark.parametrize(
+    "remote_url",
+    [
+        "/mcp",
+        "internal.example/mcp",
+        "ftp://host.example/mcp",
+    ],
+)
+def test_run_mcp_server_rejects_non_http_or_relative_remote_url_env(monkeypatch, remote_url):
+    monkeypatch.setenv(mcp_server.REMOTE_MCP_URL_ENV, remote_url)
+    monkeypatch.setattr(
+        mcp_server,
+        "_create_remote_proxy",
+        lambda **_kwargs: pytest.fail("proxy should not be created with invalid remote URL"),
+    )
+    monkeypatch.setattr(mcp_server, "_resolve_api_key", lambda: "api-key")
+    monkeypatch.setattr(mcp_server, "_resolve_requested_bridge", lambda explicit: None)
+
+    with pytest.raises(RuntimeError, match="root-mounted endpoint") as exc_info:
+        mcp_server.run_mcp_server()
+
+    message = str(exc_info.value)
+    assert mcp_server.REMOTE_MCP_URL_SETTING in message
+    assert mcp_server.REMOTE_MCP_URL_ENV in message
 
 
 def test_resolve_api_key_uses_tidy3d_configuration(monkeypatch):

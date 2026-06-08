@@ -303,7 +303,10 @@ Configuration Settings
 
 - ``tidy3d.viewerBridge.port`` (default: ``0``) – Local bridge port (0 = auto-select)
 - ``tidy3d.viewerBridge.bindAddress`` (default: ``127.0.0.1``) – Bind interface
-- ``tidy3d.mcp.remoteUrl`` (advanced) – Base URL for MCP service
+- ``tidy3d.mcp.remoteUrl`` (advanced) – Absolute MCP endpoint URL (for example, ``https://host.example/mcp`` for path-mounted deployments, or ``https://flexagent.simulation.cloud/`` for the hosted root-mounted FlexAgent endpoint)
+
+  Existing custom ``tidy3d.mcp.remoteUrl`` values for path-mounted deployments must include the exact MCP endpoint path, such as ``https://host.example/mcp``. Root-mounted deployments may continue to use the host URL, such as ``https://host.example`` or ``https://host.example/``.
+
 - ``tidy3d.mcp.runCommand`` (advanced) – Custom MCP server launch command
 - ``tidy3d.mcp.enableViewer`` (default: ``true``) – Enable viewer tooling in MCP
 

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 DEFAULT_REMOTE_MCP_URL = "https://flexagent.simulation.cloud/"
 REMOTE_MCP_URL_ENV = "TIDY3D_MCP_REMOTE_URL"
+REMOTE_MCP_URL_SETTING = "tidy3d.mcp.remoteUrl"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; tidy3d-mcp)"
 
 
@@ -47,17 +48,16 @@ class RemoteProxy:
 def _create_remote_proxy(*, api_key: str, mcp_url: str, user_agent: str) -> RemoteProxy:
     """Create the FastMCP proxy, importing FastMCP only on the server path."""
 
-    from fastmcp import FastMCP
     from fastmcp.client.auth import BearerAuth
     from fastmcp.client.transports import StreamableHttpTransport
-    from fastmcp.server.proxy import ProxyClient
+    from fastmcp.server import create_proxy
     from fastmcp.tools import Tool
 
     transport = StreamableHttpTransport(
         mcp_url, headers={"User-Agent": user_agent}, auth=BearerAuth(token=api_key)
     )
     return RemoteProxy(
-        proxy=FastMCP.as_proxy(ProxyClient(transport), name="Tidy3D"),
+        proxy=create_proxy(transport, name="Tidy3D"),
         tool_factory=Tool,
     )
 
@@ -100,6 +100,25 @@ def _resolve_api_key() -> str:
     raise RuntimeError("API key required. Set SIMCLOUD_APIKEY or run `tidy3d configure`.")
 
 
+def _normalize_remote_mcp_url(mcp_url: str) -> str:
+    """Validate that FastMCP receives the exact configured endpoint URL."""
+    from urllib.parse import urlsplit
+
+    candidate = mcp_url.strip()
+    if not candidate:
+        raise RuntimeError(f"{REMOTE_MCP_URL_SETTING} / {REMOTE_MCP_URL_ENV} cannot be empty")
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError(
+            f"Invalid {REMOTE_MCP_URL_SETTING} / {REMOTE_MCP_URL_ENV} value: {candidate}: "
+            "expected an absolute HTTP(S) URL including the exact MCP endpoint path, "
+            "for example `https://host.example/mcp`, or a root-mounted endpoint such as "
+            "`https://host.example/`."
+        )
+    return candidate
+
+
 def run_mcp_server(
     *,
     viewer_bridge: str | None = None,
@@ -109,7 +128,7 @@ def run_mcp_server(
     resolved_api_key = _resolve_api_key()
     configure_dispatcher(_resolve_requested_bridge(viewer_bridge))
 
-    mcp_url = os.getenv(REMOTE_MCP_URL_ENV, DEFAULT_REMOTE_MCP_URL)
+    mcp_url = _normalize_remote_mcp_url(os.getenv(REMOTE_MCP_URL_ENV, DEFAULT_REMOTE_MCP_URL))
     user_agent = os.getenv("TIDY3D_MCP_USER_AGENT", "").strip() or DEFAULT_USER_AGENT
     remote = _create_remote_proxy(
         api_key=resolved_api_key,
