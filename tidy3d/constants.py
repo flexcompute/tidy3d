@@ -288,6 +288,11 @@ VELOCITY_SI = "m/s"
 SI unit of velocity
 """
 
+VELOCITY = "um/s"
+"""
+Micrometers per second.
+"""
+
 ACCELERATION = "um/s^2"
 """
 Acceleration unit.

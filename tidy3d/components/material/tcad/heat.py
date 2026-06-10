@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC
+from math import isfinite
 from typing import TYPE_CHECKING
 
-from pydantic import Field, NonNegativeFloat, PositiveFloat
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import Coordinate
 from tidy3d.constants import (
     DENSITY,
     DYNAMIC_VISCOSITY,
@@ -15,6 +17,7 @@ from tidy3d.constants import (
     SPECIFIC_HEAT_CAPACITY,
     THERMAL_CONDUCTIVITY,
     THERMAL_EXPANSIVITY,
+    VELOCITY,
 )
 
 if TYPE_CHECKING:
@@ -179,25 +182,69 @@ class SolidMedium(AbstractHeatMedium):
         json_schema_extra={"units": DENSITY},
     )
 
+    velocity: Coordinate | None = Field(
+        None,
+        title="Advection velocity",
+        description="Constant advection velocity ``(vx, vy, vz)`` of the solid medium in units "
+        f"of {VELOCITY}. When set to a nonzero value, the heat solver adds a convective "
+        "transport term ``rho * cp * V . grad(T)`` for structures using this medium; both "
+        "``capacity`` and ``density`` must then be provided, since the ``rho * cp`` coefficient "
+        "is ``capacity * density``. Leave as ``None`` (the default) for pure conduction. Note: a "
+        "velocity with a nonzero component normal to an interface between two touching solids is "
+        "only supported when ``rho * cp * V . n`` matches across the face; a normal-flux jump at "
+        "such an interface is ill-posed and unsupported (velocities tangential to the interface "
+        "are fine).",
+        json_schema_extra={"units": VELOCITY},
+    )
+
+    @model_validator(mode="after")
+    def _check_velocity_requires_capacity_and_density(self) -> Self:
+        """Velocity components must be finite, since the solver consumes them as a
+        real advection speed. A nonzero ``velocity`` also enables convective transport,
+        whose ``rho * cp`` coefficient is ``capacity * density``; require both so the
+        solver receives a positive coefficient instead of an unset-property sentinel."""
+        if self.velocity is not None:
+            if any(not isfinite(v) for v in self.velocity):
+                self._raise_validation_error_at_loc(
+                    "'velocity' components must be finite numbers.",
+                    "velocity",
+                )
+            if any(v != 0.0 for v in self.velocity) and (
+                self.capacity is None or self.density is None
+            ):
+                self._raise_validation_error_at_loc(
+                    "A nonzero 'velocity' enables convective heat transport, which requires "
+                    "both 'capacity' and 'density' to be set (the convection coefficient is "
+                    "'capacity * density'). Please provide both.",
+                    "velocity",
+                )
+        return self
+
     @classmethod
     def from_si_units(
         cls,
         conductivity: PositiveFloat,
         capacity: PositiveFloat | None = None,
         density: PositiveFloat | None = None,
+        velocity: Coordinate | None = None,
     ) -> Self:
         """Create a SolidMedium using SI units"""
         new_conductivity = conductivity * 1e-6  # Convert from W/(m*K) to W/(um*K)
         new_capacity = capacity
         new_density = density
+        new_velocity = velocity
 
         if density is not None:
             new_density = density * 1e-18
+
+        if velocity is not None:
+            new_velocity = tuple(v * 1e6 for v in velocity)  # Convert from m/s to um/s
 
         return cls(
             capacity=new_capacity,
             conductivity=new_conductivity,
             density=new_density,
+            velocity=new_velocity,
         )
 
 

@@ -28,7 +28,7 @@ from tidy3d import (
 )
 from tidy3d.exceptions import DataError
 
-from ..utils import AssertLogLevel, cartesian_to_unstructured
+from ..utils import AssertLogLevel, assert_single_value_error_loc, cartesian_to_unstructured
 
 
 def make_heat_mediums():
@@ -60,14 +60,30 @@ def test_heat_medium():
     with pytest.raises(ValidationError):
         _ = solid_medium.heat_spec.updated_copy(conductivity=-1)
 
-    # check we can create solid medium from  SI units
-    solid_from_si = td.SolidMedium.from_si_units(
-        conductivity=1,
-        capacity=1,
-        density=1,
-    )
-    assert solid_from_si.conductivity == 1e-6
-    assert solid_from_si.density == 1e-18
+    # advection velocity defaults to None (pure conduction)
+    assert solid_medium.heat_spec.velocity is None
+
+    # velocity can be set as a 3-vector (tidy3d units, um/s); tuple, list, and
+    # np.ndarray inputs all normalize to the same tuple
+    for vel in [(1.0, 0.0, -2.0), [1.0, 0.0, -2.0], np.array([1.0, 0.0, -2.0])]:
+        moving_solid = solid_medium.heat_spec.updated_copy(velocity=vel)
+        assert moving_solid.velocity == (1.0, 0.0, -2.0)
+
+    # check we can create solid medium from  SI units; list/array inputs normalize too
+    for vel in [(1.0, 0.0, -2.0), [1.0, 0.0, -2.0], np.array([1.0, 0.0, -2.0])]:
+        solid_from_si = td.SolidMedium.from_si_units(
+            conductivity=1,
+            capacity=1,
+            density=1,
+            velocity=vel,
+        )
+        assert solid_from_si.conductivity == 1e-6
+        assert solid_from_si.density == 1e-18
+        # m/s -> um/s
+        assert solid_from_si.velocity == (1e6, 0.0, -2e6)
+
+    # velocity is optional in from_si_units (defaults to None)
+    assert td.SolidMedium.from_si_units(conductivity=1).velocity is None
 
     assert solid_from_si == solid_from_si.heat
 
@@ -79,6 +95,43 @@ def test_heat_medium():
 
     with pytest.raises(ValueError):
         _ = solid_from_si.optical
+
+
+def test_solid_medium_velocity_requires_capacity_and_density():
+    """A nonzero advection velocity requires both capacity and density (the
+    convection coefficient rho*cp = capacity*density must be well defined)."""
+    # nonzero velocity without density -> error anchored at 'velocity'
+    with pytest.raises(ValidationError) as excinfo:
+        td.SolidMedium(conductivity=3, capacity=1, velocity=(1.0, 0.0, 0.0))
+    assert_single_value_error_loc(excinfo, ("velocity",))
+
+    # nonzero velocity without capacity -> error
+    with pytest.raises(ValidationError) as excinfo:
+        td.SolidMedium(conductivity=3, density=1, velocity=(1.0, 0.0, 0.0))
+    assert_single_value_error_loc(excinfo, ("velocity",))
+
+    # with both set, a nonzero velocity is accepted
+    medium = td.SolidMedium(conductivity=3, capacity=1, density=1, velocity=(1.0, 0.0, 0.0))
+    assert medium.velocity == (1.0, 0.0, 0.0)
+
+    # a zero velocity does not trigger the requirement (pure conduction)
+    zero_vel = td.SolidMedium(conductivity=3, velocity=(0.0, 0.0, 0.0))
+    assert zero_vel.velocity == (0.0, 0.0, 0.0)
+
+    # the error loc is anchored at 'velocity' regardless of list/array input form
+    for vel in [[1.0, 0.0, 0.0], np.array([1.0, 0.0, 0.0])]:
+        with pytest.raises(ValidationError) as excinfo:
+            td.SolidMedium(conductivity=3, capacity=1, velocity=vel)
+        assert_single_value_error_loc(excinfo, ("velocity",))
+
+
+def test_solid_medium_velocity_must_be_finite():
+    """Non-finite velocity components are rejected (the solver consumes velocity as a
+    real advection speed)."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValidationError) as excinfo:
+            td.SolidMedium(conductivity=3, capacity=1, density=1, velocity=(bad, 0.0, 0.0))
+        assert_single_value_error_loc(excinfo, ("velocity",))
 
 
 def make_heat_structures():
