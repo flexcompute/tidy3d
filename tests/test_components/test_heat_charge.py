@@ -1858,20 +1858,131 @@ def test_masetti_requires_accelerated_solver():
         _ = sim.updated_copy(use_accelerated_solver=False)
     assert_single_value_error_loc(excinfo, ("use_accelerated_solver",), "MasettiMobility")
 
-    with pytest.raises(ValidationError, match="high-doping asymptote"):
+    with pytest.raises(ValidationError, match="high-doping asymptote") as excinfo:
         _ = sim.updated_copy(analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=500))
+    assert_single_value_error_loc(excinfo, ("structures", 0), "high-doping asymptote")
 
     mixed_charge = silicon_charge.updated_copy(
         mobility_p=CHARGE_SIMULATION.intrinsic_Si.charge.mobility_p
     )
     mixed_silicon = silicon.updated_copy(charge=mixed_charge)
-    with pytest.raises(ValidationError, match="both electron and hole"):
+    with pytest.raises(ValidationError, match="both electron and hole") as excinfo:
         _ = sim.updated_copy(
             structures=[
                 sim.structures[0].updated_copy(medium=mixed_silicon),
                 *sim.structures[1:],
             ]
         )
+    assert_single_value_error_loc(excinfo, ("structures", 0), "both electron and hole")
+
+    # Regression for Masetti on the background medium: the validator now
+    # raises at-loc, so a bad Masetti on `self.medium` must surface at
+    # ("medium",) rather than being misattributed to ("structures",).
+    sim_bg = sim.updated_copy(
+        medium=silicon,
+        structures=[
+            sim.structures[0].updated_copy(medium=CHARGE_SIMULATION.intrinsic_Si),
+            *sim.structures[1:],
+        ],
+    )
+    with pytest.raises(ValidationError, match="high-doping asymptote") as excinfo:
+        _ = sim_bg.updated_copy(analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=500))
+    assert_single_value_error_loc(excinfo, ("medium",), "high-doping asymptote")
+
+
+def test_palankovski_quay_requires_accelerated_solver():
+    """PalankovskiQuayApproxCarrierLifetime is available only through the GPU charge solver."""
+    pq = td.PalankovskiQuayApproxCarrierLifetime(tau_max=1e-5, N_ref=1e16, gamma=1.0, alpha_T=-1.5)
+    silicon_charge = CHARGE_SIMULATION.intrinsic_Si.charge.updated_copy(
+        R=[td.ShockleyReedHallRecombination(tau_n=pq, tau_p=pq)],
+    )
+    silicon = CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=silicon_charge)
+    metal = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    sim = td.HeatChargeSimulation(
+        size=(4, 4, 4),
+        center=(0, 0, 0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+                medium=silicon,
+                name="silicon",
+            ),
+            td.Structure(
+                geometry=td.Box(center=(-1, 0, 0), size=(1, 2, 2)),
+                medium=metal,
+                name="left",
+            ),
+            td.Structure(
+                geometry=td.Box(center=(1, 0, 0), size=(1, 2, 2)),
+                medium=metal,
+                name="right",
+            ),
+        ],
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="potential",
+                unstructured=True,
+            )
+        ],
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["left", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["right", "silicon"]),
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0.1])),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
+    )
+
+    assert sim._resolve_use_accelerated_solver is True
+    with pytest.raises(ValidationError, match="PalankovskiQuayApproxCarrierLifetime"):
+        _ = sim.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver
+
+    # Regression for the case where Structure.medium is a raw SemiconductorMedium
+    # (not wrapped in MultiPhysicsMedium). The previous traversal walked only
+    # `.medium.charge`, silently missing the PQ here and letting an invalid
+    # `use_accelerated_solver=False` config slip through to runtime.
+    sim_raw = sim.updated_copy(
+        structures=[
+            sim.structures[0].updated_copy(medium=silicon_charge),
+            *sim.structures[1:],
+        ],
+    )
+    with pytest.raises(ValidationError, match="PalankovskiQuayApproxCarrierLifetime") as excinfo:
+        _ = sim_raw.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver
+    assert_single_value_error_loc(
+        excinfo, ("use_accelerated_solver",), "PalankovskiQuayApproxCarrierLifetime"
+    )
+
+    # Regression for the case where the simulation's background medium carries
+    # the PQ lifetime (mesher composes `sim.medium` into `simulation_structure`
+    # alongside `structures`). The "silicon" structure is swapped to a non-PQ
+    # semiconductor (satisfying the "≥1 semiconductor in structures" validator)
+    # so the only PQ in the sim lives on `self.medium`. The previous traversal
+    # walked only `structure.medium`, missing `self.medium` entirely and
+    # letting an invalid `use_accelerated_solver=False` config slip through.
+    sim_bg = sim.updated_copy(
+        medium=silicon,
+        structures=[
+            sim.structures[0].updated_copy(medium=CHARGE_SIMULATION.intrinsic_Si),
+            *sim.structures[1:],
+        ],
+    )
+    with pytest.raises(ValidationError, match="PalankovskiQuayApproxCarrierLifetime") as excinfo:
+        _ = sim_bg.updated_copy(use_accelerated_solver=False)._resolve_use_accelerated_solver
+    assert_single_value_error_loc(
+        excinfo, ("use_accelerated_solver",), "PalankovskiQuayApproxCarrierLifetime"
+    )
 
 
 def _make_schottky_charge_sim(
@@ -2487,20 +2598,18 @@ def test_semiconductor_medium():
     fossum = td.FossumCarrierLifetime(
         tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1
     )
-    R = [
-        AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
-        td.RadiativeRecombination(r_const=1.6e-14),
-        td.ShockleyReedHallRecombination(
-            tau_n=3.3e-6,
-            tau_p=4e-6,
-        ),
-        td.ShockleyReedHallRecombination(
-            tau_n=fossum,
-            tau_p=fossum,
-        ),
-    ]
-    # try the different recombination models
-    _ = intrinsic_Si.updated_copy(R=R)
+    pq = td.PalankovskiQuayApproxCarrierLifetime(tau_max=1e-5, N_ref=1e16, gamma=1.0, alpha_T=-1.5)
+    # Try the different recombination models. Only a single SRH model is allowed
+    # per medium (see SemiconductorMedium.R), so exercise each SRH lifetime form
+    # (constant float, Fossum, Palankovski-Quay) in its own recombination list.
+    for tau_n, tau_p in ((3.3e-6, 4e-6), (fossum, fossum), (pq, pq)):
+        _ = intrinsic_Si.updated_copy(
+            R=[
+                AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+                td.RadiativeRecombination(r_const=1.6e-14),
+                td.ShockleyReedHallRecombination(tau_n=tau_n, tau_p=tau_p),
+            ]
+        )
 
     # Try band gap narrowing model
     _ = intrinsic_Si.updated_copy(
@@ -3135,6 +3244,26 @@ def test_fossum():
         )
 
 
+def test_palankovski_quay():
+    """Check that the Palankovski-Quay approximate lifetime model round-trips."""
+
+    pq = td.PalankovskiQuayApproxCarrierLifetime(tau_max=1e-5, N_ref=1e16, gamma=1.0, alpha_T=-1.5)
+    pq_restored = td.PalankovskiQuayApproxCarrierLifetime.parse_raw(pq.json())
+    assert pq_restored.tau_max == pq.tau_max
+    assert pq_restored.N_ref == pq.N_ref
+    assert pq_restored.gamma == pq.gamma
+    assert pq_restored.alpha_T == pq.alpha_T
+
+    # Defaults for gamma and alpha_T match the book.
+    pq_default = td.PalankovskiQuayApproxCarrierLifetime(tau_max=1e-5, N_ref=1e16)
+    assert pq_default.gamma == 1.0
+    assert pq_default.alpha_T == -1.5
+
+    # Can be plugged into ShockleyReedHallRecombination on either or both carriers.
+    _ = td.ShockleyReedHallRecombination(tau_n=pq, tau_p=pq)
+    _ = td.ShockleyReedHallRecombination(tau_n=pq, tau_p=4e-6)
+
+
 @pytest.mark.parametrize("symmetry", [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0)])
 def test_symmetry_capacitance(symmetry):
     """Check that symmetry_expanded_copy works as expected"""
@@ -3359,6 +3488,11 @@ def test_generation_recombination():
         tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1
     )
 
+    # make sure we can build Palankovski-Quay
+    tau_pq = td.PalankovskiQuayApproxCarrierLifetime(
+        tau_max=1e-5, N_ref=1e16, gamma=1.0, alpha_T=-1.5
+    )
+
     # make sure we can build AugerRecombination
     _ = td.AugerRecombination(
         c_n=2.8e-31,
@@ -3377,6 +3511,11 @@ def test_generation_recombination():
     _ = td.ShockleyReedHallRecombination(
         tau_n=tau_fossum,
         tau_p=tau_fossum,
+    )
+
+    _ = td.ShockleyReedHallRecombination(
+        tau_n=tau_pq,
+        tau_p=tau_pq,
     )
 
     # make sure we can build a HurkxDirectBandToBandTunneling

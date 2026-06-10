@@ -129,7 +129,94 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
         return self
 
 
-CarrierLifetimeType = FossumCarrierLifetime
+class PalankovskiQuayApproxCarrierLifetime(Tidy3dBaseModel):
+    """
+    Doping- and temperature-dependent SRH carrier lifetime, Palankovski–Quay
+    empirical (Scharfetter-style) approximation.
+
+    Notes
+    -----
+
+        This model expresses the Shockley-Read-Hall carrier lifetime as a
+        function of absolute temperature :math:`T` and total ionized dopant
+        concentration :math:`N = N_D + N_A`:
+
+        .. math::
+
+            \\tau(N, T) = \\tau_{max}\\, \\left(\\frac{N}{N_{ref}}\\right)^{-\\gamma}\\, \\left(\\frac{300}{T}\\right)^{-\\alpha_T}
+
+        This is the empirical Scharfetter-style form (Palankovski & Quay
+        [1]_, eqs. 3.157/3.158) combined with the temperature factor of
+        eqs. 3.160/3.161. The book fixes the temperature exponent at
+        :math:`(300/T)^{3/2}` (i.e. :math:`\\alpha_T = -3/2`); the parameter
+        is exposed here so users can override it. Material-specific values
+        for :math:`\\tau_{max}`, :math:`N_{ref}`, and :math:`\\gamma` are
+        tabulated for Si, SiGe, GaAs, InGaAs, and InAlAs in Table 3.38 of
+        the reference.
+
+        The trap-assisted band-to-band tunneling enhancement
+        :math:`1/(1+r_\\nu)` and the surface-recombination term
+        :math:`s_\\nu/y` from the book's full physics-based form are not
+        included in this approximation.
+
+        For numerical stability — the unclamped form diverges as
+        :math:`N \\to 0`, which is unphysical (:math:`\\tau_{max}` is the
+        intrinsic-region upper bound) and would produce NaN in the SRH
+        Jacobian — the backend evaluator floors :math:`N` at :math:`N_{ref}`
+        before applying the doping factor. The formula above therefore
+        applies verbatim for :math:`N \\ge N_{ref}`; for :math:`N < N_{ref}`
+        the lifetime saturates at
+        :math:`\\tau_{max}\\,(300/T)^{-\\alpha_T}`.
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.PalankovskiQuayApproxCarrierLifetime(
+        ...   tau_max=1e-5,
+        ...   N_ref=1e16,
+        ...   gamma=1.0,
+        ...   alpha_T=-1.5,
+        ... )
+
+    References
+    ----------
+
+        .. [1] Palankovski, Vassil, and Rüdiger Quay. Analysis and
+               simulation of heterostructure devices. Springer Science &
+               Business Media, 2004.
+
+    """
+
+    tau_max: PositiveFloat = Field(
+        title="Reference lifetime",
+        description="Reference lifetime :math:`\\tau_{max}` from the "
+        "Palankovski-Quay empirical form (book Table 3.38).",
+        json_schema_extra={"units": SECOND},
+    )
+
+    N_ref: PositiveFloat = Field(
+        title="Reference doping concentration",
+        description="Reference doping concentration :math:`N_{ref}` in the "
+        "Scharfetter doping-dependence factor.",
+        json_schema_extra={"units": PERCMCUBE},
+    )
+
+    gamma: float = Field(
+        1.0,
+        title="Doping exponent",
+        description="Dimensionless exponent :math:`\\gamma` of the doping-dependence factor.",
+    )
+
+    alpha_T: float = Field(
+        -1.5,
+        title="Temperature exponent",
+        description="Dimensionless temperature exponent :math:`\\alpha_T`. "
+        "The Palankovski-Quay model fixes this at :math:`-3/2`; users may "
+        "override it.",
+    )
+
+
+CarrierLifetimeType = FossumCarrierLifetime | PalankovskiQuayApproxCarrierLifetime
 
 
 class AugerRecombination(Tidy3dBaseModel):

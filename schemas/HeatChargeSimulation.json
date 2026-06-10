@@ -7002,6 +7002,42 @@
       },
       "type": "object"
     },
+    "PalankovskiQuayApproxCarrierLifetime": {
+      "additionalProperties": false,
+      "properties": {
+        "N_ref": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "alpha_T": {
+          "default": -1.5,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "gamma": {
+          "default": 1.0,
+          "type": "number"
+        },
+        "tau_max": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "PalankovskiQuayApproxCarrierLifetime",
+          "default": "PalankovskiQuayApproxCarrierLifetime",
+          "type": "string"
+        }
+      },
+      "required": [
+        "N_ref",
+        "tau_max"
+      ],
+      "type": "object"
+    },
     "ParameterPerturbation": {
       "additionalProperties": false,
       "properties": {
@@ -8642,6 +8678,9 @@
               "$ref": "#/$defs/FossumCarrierLifetime"
             },
             {
+              "$ref": "#/$defs/PalankovskiQuayApproxCarrierLifetime"
+            },
+            {
               "exclusiveMinimum": 0,
               "type": "number"
             }
@@ -8651,6 +8690,9 @@
           "anyOf": [
             {
               "$ref": "#/$defs/FossumCarrierLifetime"
+            },
+            {
+              "$ref": "#/$defs/PalankovskiQuayApproxCarrierLifetime"
             },
             {
               "exclusiveMinimum": 0,

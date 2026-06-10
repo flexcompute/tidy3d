@@ -91,7 +91,10 @@ from tidy3d.components.tcad.data.types import (
     TemperatureData,
 )
 from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, GaussianDoping
-from tidy3d.components.tcad.generation_recombination import FossumCarrierLifetime
+from tidy3d.components.tcad.generation_recombination import (
+    FossumCarrierLifetime,
+    PalankovskiQuayApproxCarrierLifetime,
+)
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
     GridRefinementLine,
@@ -851,6 +854,7 @@ __all__ = [
     "PMCMedium",
     "PMLParams",
     "PMLTypes",
+    "PalankovskiQuayApproxCarrierLifetime",
     "ParameterPerturbation",
     "Periodic",
     "PermittivityData",

@@ -44,6 +44,10 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
+from tidy3d.components.tcad.generation_recombination import (
+    PalankovskiQuayApproxCarrierLifetime,
+    ShockleyReedHallRecombination,
+)
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
     UniformUnstructuredGrid,
@@ -89,7 +93,7 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
     from typing import Literal
 
     from pydantic import FiniteFloat
@@ -2227,19 +2231,50 @@ class HeatChargeSimulation(AbstractSimulation):
         configuration is fully supported by the CPU charge solver.
         """
         features = []
-        for structure in self.structures:
-            charge = getattr(structure.medium, "charge", None)
-            if isinstance(charge, SemiconductorMedium) and (
-                isinstance(charge.mobility_n, MasettiMobility)
-                or isinstance(charge.mobility_p, MasettiMobility)
+        for _loc, charge in self._iter_semiconductor_charge_media():
+            if isinstance(charge.mobility_n, MasettiMobility) or isinstance(
+                charge.mobility_p, MasettiMobility
             ):
                 features.append("MasettiMobility")
                 break
+
+        if self._uses_gpu_only_lifetime_model():
+            features.append("PalankovskiQuayApproxCarrierLifetime")
 
         if self._ssac_uses_bias_point_selection():
             features.append("SSAC 'at_voltages' bias-point selection")
 
         return features
+
+    def _iter_semiconductor_charge_media(
+        self,
+    ) -> Iterator[tuple[tuple[Any, ...], SemiconductorMedium]]:
+        """Yield ``(loc, charge)`` for every ``SemiconductorMedium`` in the simulation.
+
+        Walks both the background ``self.medium`` and each ``Structure.medium``,
+        which the mesher composes together into ``simulation_structure``. Each
+        slot may be a raw :class:`SemiconductorMedium` or a
+        :class:`MultiPhysicsMedium` that carries one as ``.charge``; slots with
+        neither (insulators, conductors, fluids) are skipped. ``loc`` is the
+        Pydantic field path of the source — ``("medium",)`` for the background,
+        ``("structures", i)`` for a structure — so validators can raise
+        loc-aware errors that point at the right field. Centralising both the
+        traversal and the loc avoids the bugs where iterating only over
+        ``.medium.charge`` (or only over ``structures``) silently misses
+        raw-semiconductor or background-medium configurations, and lets every
+        validator that uses this helper get the right loc for free.
+        """
+        sources: list[tuple[tuple[Any, ...], Any]] = [(("medium",), self.medium)]
+        sources.extend(
+            (("structures", i), structure.medium) for i, structure in enumerate(self.structures)
+        )
+        for loc, medium in sources:
+            if isinstance(medium, SemiconductorMedium):
+                yield loc, medium
+            else:
+                charge = getattr(medium, "charge", None)
+                if isinstance(charge, SemiconductorMedium):
+                    yield loc, charge
 
     def _ssac_uses_bias_point_selection(self) -> bool:
         """Whether SSAC selects specific bias points via ``at_voltages``.
@@ -2253,21 +2288,35 @@ class HeatChargeSimulation(AbstractSimulation):
             and self.analysis_spec.at_voltages is not None
         )
 
+    def _uses_gpu_only_lifetime_model(self) -> bool:
+        """Whether the simulation uses an SRH lifetime model unavailable in the CPU charge solver."""
+        for _loc, charge in self._iter_semiconductor_charge_media():
+            for model in charge.R:
+                if not isinstance(model, ShockleyReedHallRecombination):
+                    continue
+                for tau in (model.tau_n, model.tau_p):
+                    if isinstance(tau, PalankovskiQuayApproxCarrierLifetime):
+                        return True
+        return False
+
     def _check_masetti_mobility_models(self) -> Self:
-        """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0."""
+        """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0.
+
+        Raises directly at the offending charge medium's loc (``("medium",)``
+        or ``("structures", i)``) so the user is pointed at the exact field to
+        fix; the iteration helper yields the loc alongside each charge spec.
+        """
         temperature = getattr(self.analysis_spec, "temperature", None)
-        for structure in self.structures:
-            charge = getattr(structure.medium, "charge", None)
-            if not isinstance(charge, SemiconductorMedium):
-                continue
+        for loc, charge in self._iter_semiconductor_charge_media():
             n_is_masetti = isinstance(charge.mobility_n, MasettiMobility)
             p_is_masetti = isinstance(charge.mobility_p, MasettiMobility)
             if n_is_masetti != p_is_masetti:
-                raise SetupError(
+                self._raise_validation_error_at_loc(
                     "MasettiMobility must be used for both electron and hole mobility "
                     "models in a semiconductor medium. Mixing MasettiMobility with "
                     "another mobility family is not supported by the accelerated "
-                    "charge solver."
+                    "charge solver.",
+                    *loc,
                 )
             if temperature is None:
                 continue
@@ -2281,12 +2330,13 @@ class HeatChargeSimulation(AbstractSimulation):
                     mobility.mu_0 * (temperature / 300.0) ** mobility.exp_0 - mobility.mu_1
                 )
                 if high_doping_limit <= 0.0:
-                    raise SetupError(
+                    self._raise_validation_error_at_loc(
                         f"MasettiMobility high-doping asymptote for {carrier} mobility "
                         f"is non-positive at {temperature} K "
                         "('mu_0 * (T/300)**exp_0 - mu_1' <= 0); the accelerated evaluator would "
                         "silently clamp mobility to zero at high doping. Reduce 'mu_1', "
-                        "increase 'mu_0', or use a lower isothermal temperature."
+                        "increase 'mu_0', or use a lower isothermal temperature.",
+                        *loc,
                     )
         return self
 

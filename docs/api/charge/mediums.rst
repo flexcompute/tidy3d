@@ -47,9 +47,14 @@ drift-diffusion source terms.
    RadiativeRecombination
    ShockleyReedHallRecombination
    FossumCarrierLifetime
+   PalankovskiQuayApproxCarrierLifetime
    DistributedGeneration
    HurkxDirectBandToBandTunneling
    SelberherrImpactIonization
+
+.. note::
+   At most one ``ShockleyReedHallRecombination`` model may be specified per
+   medium; if several are provided only the last one is used.
 
 
 Doping

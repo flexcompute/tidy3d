@@ -327,7 +327,9 @@ class SemiconductorMedium(AbstractChargeMedium):
     R: tuple[RecombinationModelType, ...] = Field(
         (),
         title="Generation-Recombination models",
-        description="Array containing the R models to be applied to the material.",
+        description="Array containing the R models to be applied to the material. "
+        "At most one Shockley-Read-Hall (:class:`.ShockleyReedHallRecombination`) model "
+        "may be specified per medium; if several are provided only the last one is used.",
     )
 
     delta_E_g: BandGapNarrowingModelType | None = Field(
