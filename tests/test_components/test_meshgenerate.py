@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import tidy3d as td
-from tidy3d.components.grid.mesher import GradedMesher
+from tidy3d.components.grid.mesher import UNSHADOWED_INTERVAL_SNAP_FACTOR, GradedMesher
 from tidy3d.constants import fp_eps
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured
@@ -863,43 +863,104 @@ def test_override_unshadowed():
 
 
 def test_override_unshadowed_snapping():
-    """Test that an unshadowed override structure won't snap to grid if it doesn't reduce grid size in the overriding
-    region.
+    """Test how a refining unshadowed override structure places grid interval boundaries: it reuses
+    a nearby existing boundary (no new interval) when its bbox edge is within
+    ``UNSHADOWED_INTERVAL_SNAP_FACTOR`` times its grid size of one, and adds a boundary otherwise.
+    The widening is skipped when it would leave the override spanning no interval -- both edges
+    snapping to the same boundary, or the two edges collapsing onto each other inside a coarse gap --
+    so a narrow override still splits and keeps its refinement.
     """
 
-    sim = td.Simulation(
-        size=(3, 3, 6),
-        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
-        run_time=1e-13,
-        structures=[
-            BOX1,
-        ],
-    )
+    # one material box gives interval boundaries at x = +-0.5; baseline grid size there is 0.1
+    domain = td.Structure(geometry=td.Box(size=(3, 3, 3)), medium=td.Medium())
+    material = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=4))
 
-    # override structure takes no effect (including bounding box snapping) if its grid size is
-    # larger than the existing ones in the overriding region.
-    override_structure = td.MeshOverrideStructure(
-        geometry=td.Box(size=(1, 1, 1)),
-        dl=[0.2, 0.2, 0.2],
+    def parse(structures):
+        coords, max_steps = MESHER.parse_structures(
+            axis=0,
+            structures=structures,
+            wavelength=2.0,
+            min_steps_per_wvl=10,
+            dl_min=0.0,
+            dl_max=td.inf,
+        )
+        return np.array(coords), np.array(max_steps)
+
+    def step_at(coords, steps, x):
+        """Max grid step of the interval containing ``x`` (``steps[i]`` spans [coords[i], coords[i+1]])."""
+        return steps[np.searchsorted(coords, x) - 1]
+
+    baseline, baseline_steps = parse([domain, material])
+    assert np.any(np.isclose(baseline, 0.5))
+    # baseline grid step in the material region [-0.5, 0.5]
+    assert np.isclose(step_at(baseline, baseline_steps, 0.0), 0.1)
+
+    dl = 0.05  # refines the material region (baseline 0.1 there)
+    snap_distance = UNSHADOWED_INTERVAL_SNAP_FACTOR * dl
+
+    # edges within snap_distance of the existing +-0.5 boundaries: the override lowers the grid size
+    # of the overlapped interval without introducing new grid lines.
+    edge_near = 0.5 + 0.5 * snap_distance
+    override_near = td.MeshOverrideStructure(
+        geometry=td.Box(size=(2 * edge_near,) * 3), dl=[dl] * 3, shadow=False
+    )
+    coords_near, steps_near = parse([domain, material, override_near])
+    assert np.allclose(coords_near, baseline)
+    assert not np.any(np.isclose(coords_near, edge_near))
+    assert not np.any(np.isclose(coords_near, -edge_near))
+    # the override lowers the material-region step to its dl without adding a line (not dropped)
+    assert np.isclose(step_at(coords_near, steps_near, 0.0), dl)
+
+    # edges farther than snap_distance from any existing boundary: a new grid line is added at each.
+    edge_far = 0.5 + 2 * snap_distance
+    override_far = td.MeshOverrideStructure(
+        geometry=td.Box(size=(2 * edge_far,) * 3), dl=[dl] * 3, shadow=False
+    )
+    coords_far, _ = parse([domain, material, override_far])
+    assert np.any(np.isclose(coords_far, edge_far))
+    assert np.any(np.isclose(coords_far, -edge_far))
+
+    # both edges within snap_distance of the *same* boundary: snapping would collapse the override
+    # onto that boundary and drop it, so instead it splits and a grid line is added at each edge.
+    boundary = 0.5
+    # within snap_distance, but far enough not to be dropped as too small
+    offset = 0.8 * snap_distance
+    override_straddle = td.MeshOverrideStructure(
+        geometry=td.Box(center=(boundary, 0, 0), size=(2 * offset, 1, 1)), dl=[dl] * 3, shadow=False
+    )
+    coords_straddle, _ = parse([domain, material, override_straddle])
+    assert np.any(np.isclose(coords_straddle, boundary - offset))
+    assert np.any(np.isclose(coords_straddle, boundary + offset))
+
+    # both edges far from any existing boundary but within snap_distance of each other: the override
+    # sits in the coarse [0.5, 1.5] interval, far from either boundary, with an extent smaller than
+    # snap_distance, so inserting one edge would make the other snap onto it and the override would be
+    # dropped. Instead it splits and adds a grid line at each edge.
+    gap_center = 1.0
+    gap_half_extent = 0.75 * dl  # extent 1.5 * dl: below snap_distance (2 * dl) but over one cell
+    override_gap = td.MeshOverrideStructure(
+        geometry=td.Box(center=(gap_center, 0, 0), size=(2 * gap_half_extent, 1, 1)),
+        dl=[dl] * 3,
         shadow=False,
     )
-    sim_shadow = sim.updated_copy(
-        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
-    )
-    assert sim_shadow.num_cells == sim.num_cells
-    assert not any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
+    coords_gap, _ = parse([domain, material, override_gap])
+    assert np.any(np.isclose(coords_gap, gap_center - gap_half_extent))
+    assert np.any(np.isclose(coords_gap, gap_center + gap_half_extent))
 
-    # override structure takes effect if its grid size is smaller
-    override_structure = td.MeshOverrideStructure(
-        geometry=td.Box(size=(1, 1, 1)),
-        dl=[0.07, 0.07, 0.07],
+    # one edge within snap_distance of a boundary (snaps, no new line), the other far (splits): only
+    # the far edge adds a grid line.
+    edge_snap = 0.5 + 0.5 * snap_distance
+    edge_split = 0.5 + 4 * snap_distance
+    override_mixed = td.MeshOverrideStructure(
+        geometry=td.Box(
+            center=((edge_snap + edge_split) / 2, 0, 0), size=(edge_split - edge_snap, 1, 1)
+        ),
+        dl=[dl] * 3,
         shadow=False,
     )
-    sim_shadow = sim.updated_copy(
-        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
-    )
-    assert sim_shadow.num_cells > sim.num_cells
-    assert any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
+    coords_mixed, _ = parse([domain, material, override_mixed])
+    assert not np.any(np.isclose(coords_mixed, edge_snap))
+    assert np.any(np.isclose(coords_mixed, edge_split))
 
 
 def test_override_unshadowed_edge_cases():

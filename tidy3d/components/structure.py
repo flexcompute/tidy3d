@@ -1076,8 +1076,9 @@ class MeshOverrideStructure(AbstractStructure):
         title="Grid Size Choice In Structure Overlapping Region",
         description="In structure intersection region, grid size is decided by the latter added "
         "structure in the structure list when ``shadow=True``; or the structure of smaller grid size "
-        "when ``shadow=False``. If ``shadow=False``, and the structure doesn't refine the mesh, grid snapping to "
-        "the bounding box of the structure is disabled.",
+        "when ``shadow=False``. A ``shadow=False`` structure lowers the grid size in the regions it "
+        "overlaps, reusing a nearby existing grid line at its bounding box where possible instead of "
+        "always adding a new one.",
     )
 
     drop_outside_sim: bool = Field(

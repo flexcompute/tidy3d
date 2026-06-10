@@ -35,6 +35,12 @@ _ROOTS_TOL = 1e-10
 # ``is_close`` check will deem that the second point is too close.
 MIN_STEP_SCALE = 0.9999
 
+# An unshadowed (``shadow=False``) mesh override snaps its bounding-box edge to an existing grid
+# interval boundary — lowering ``dl`` in the overlapped interval(s) instead of inserting a new
+# interval — when the edge is within this factor times the override's own target grid size of that
+# boundary. Beyond it, a new interval boundary is inserted so the refinement stays local.
+UNSHADOWED_INTERVAL_SNAP_FACTOR = 2
+
 
 class Mesher(Tidy3dBaseModel, ABC):
     """Abstract class for automatic meshing."""
@@ -242,7 +248,9 @@ class GradedMesher(Mesher):
         #    structures, the grid size of the overlapped region is determined by the last enforced structure.
         # 2) unshadowed structures don't override other structures based on the structure list order,
         #    but by grid size; additionally, unshadowed structures won't add new intervals if they
-        #    don't reduce grid size in the intervals.
+        #    don't reduce grid size in the intervals, or if their bounds are within
+        #    ``UNSHADOWED_INTERVAL_SNAP_FACTOR`` times their grid size of an existing interval
+        #    boundary (they lower the grid size of the overlapped intervals instead).
         #  We take two steps to implement the feature:
         # 1) reorder structure list so that enforce = True structures are shifted to
         #    the end of the last, and unshadowed structures to the begining (but after simulation structure).
@@ -405,10 +413,17 @@ class GradedMesher(Mesher):
     ) -> dict[str, list]:
         """Figure out where to place the bounding box coordinates of current structure.
         For both the left and the right bounds of the structure along the meshing direction,
-        we check if they are not too close to an already existing coordinate, if the
-        structure is not completely covered by another structure at that location, and if
-        the structure is unshadowed and it refines grid size,
-        Only then we add that boundary to the list of interval coordinates.
+        we check if they are not too close to an already existing coordinate, and if the
+        structure is not completely covered by another structure at that location. Only then we
+        add that boundary to the list of interval coordinates.
+        For an unshadowed structure that refines grid size, the "too close" tolerance is widened
+        to ``UNSHADOWED_INTERVAL_SNAP_FACTOR`` times its target grid size: a bound within that
+        distance of an existing interval boundary snaps to it (no new interval) and the structure
+        only lowers the grid size of the overlapped intervals; a bound farther than that still
+        adds a new interval boundary so the refinement stays local. The widening is skipped when it
+        would leave the structure spanning no interval (both bounds snapping to the same boundary, or
+        the two bounds collapsing onto each other), so it splits and keeps its refinement instead. An
+        unshadowed structure that does not refine grid size in an interval adds no boundary there.
         We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
         been added to the interval coords at the start.
         We also compute ``indmin`` and ``indmax`` indexes into the list of intervals, such that
@@ -447,15 +462,56 @@ class GradedMesher(Mesher):
         structs = intervals["structs"]
         cached_min_steps = intervals["min_steps"]
 
+        bound_left, bound_right = str_bbox[0, 2], str_bbox[1, 2]
+        # Interval index of the left bbox edge (it sits in interval ``indmin - 1``); reused by the
+        # snap-tolerance check and the left-bound insertion below. ``indmax`` is not hoisted the same
+        # way because inserting the left bound shifts it, so it is recomputed in the right-bound block.
+        indmin = bisect.bisect_left(coords, bound_left)
+
         min_step_check = MIN_STEP_SCALE * min_step
+        # An unshadowed override snaps its bbox edges to existing interval boundaries (no new
+        # interval, just lower ``dl`` in the overlapped intervals) when within this distance;
+        # otherwise it splits. The exception is when wide snapping would leave the override
+        # spanning no interval (so it gets dropped as too small): then it keeps the default
+        # tolerance and splits instead, preserving its refinement. ``snap_atol`` is always
+        # >= ``min_step_check``, so this never tightens the tolerance.
+        snap_atol = min_step_check
+        if unshadowed:
+            wide_atol = UNSHADOWED_INTERVAL_SNAP_FACTOR * structure_steps[str_ind]
+            # Right edge's interval index on the current coords (recomputed in the right-bound block
+            # after a possible left-bound insert; here we need its pre-insert value).
+            ind_right = bisect.bisect_right(coords, bound_right) - 1
+            # Interval boundary each edge would snap to (left edge prefers its lower neighbor, right
+            # edge its upper neighbor, matching the insertion branches below); ``None`` if the edge
+            # is too far and would instead split.
+            if self.is_close(bound_left, coords, indmin - 1, wide_atol):
+                left_snap = indmin - 1
+            elif self.is_close(bound_left, coords, indmin, wide_atol):
+                left_snap = indmin
+            else:
+                left_snap = None
+            if self.is_close(bound_right, coords, ind_right + 1, wide_atol):
+                right_snap = ind_right + 1
+            elif self.is_close(bound_right, coords, ind_right, wide_atol):
+                right_snap = ind_right
+            else:
+                right_snap = None
+            # Wide snapping must not collapse the override to zero width, which happens when (1) both
+            # edges snap to the same existing boundary, or (2) neither edge is near an existing
+            # boundary but the two edges are within ``wide_atol`` of each other, so inserting the left
+            # edge makes the right edge snap onto it. In either case fall back to the default tolerance
+            # so the override splits and keeps its refinement.
+            snaps_to_single_boundary = left_snap is not None and left_snap == right_snap
+            edges_collapse_onto_each_other = (
+                left_snap is None and right_snap is None and bound_right - bound_left <= wide_atol
+            )
+            if not (snaps_to_single_boundary or edges_collapse_onto_each_other):
+                snap_atol = wide_atol
 
         # Left structure bound
-        bound_coord = str_bbox[0, 2]
-        # coordinate is in interval index ``indmin - 1``
-        indmin = bisect.bisect_left(coords, bound_coord)
-        is_close_l = self.is_close(bound_coord, coords, indmin - 1, min_step_check)
-        is_close_r = self.is_close(bound_coord, coords, indmin, min_step_check)
-        is_contained = self.is_contained(bound_coord, bbox_contained_2d)
+        is_close_l = self.is_close(bound_left, coords, indmin - 1, snap_atol)
+        is_close_r = self.is_close(bound_left, coords, indmin, snap_atol)
+        is_contained = self.is_contained(bound_left, bbox_contained_2d)
 
         # special treatment to unshadowed structure
         skip_unshadowed = False
@@ -474,7 +530,7 @@ class GradedMesher(Mesher):
             indmin -= 1
         elif not is_close_r and not is_contained and str_ind > 0:
             # Add current structure bounding box coordinates
-            coords.insert(indmin, bound_coord)
+            coords.insert(indmin, bound_left)
             # Copy the structure containment list to the newly created interval
             struct_list = structs[max(0, indmin - 1)]
             structs.insert(indmin, struct_list.copy())
@@ -482,12 +538,12 @@ class GradedMesher(Mesher):
             cached_min_steps.insert(indmin, cached_min_steps[max(0, indmin - 1)])
 
         # Right structure bound
-        bound_coord = str_bbox[1, 2]
-        # coordinate is in interval index ``indmax``
-        indmax = bisect.bisect_right(coords, bound_coord) - 1
-        is_close_l = self.is_close(bound_coord, coords, indmax, min_step_check)
-        is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step_check)
-        is_contained = self.is_contained(bound_coord, bbox_contained_2d)
+        # coordinate is in interval index ``indmax`` (recomputed: a left-bound insert above can
+        # shift ``coords``, so the pre-insert ``ind_right`` from the snap check no longer applies)
+        indmax = bisect.bisect_right(coords, bound_right) - 1
+        is_close_l = self.is_close(bound_right, coords, indmax, snap_atol)
+        is_close_r = self.is_close(bound_right, coords, indmax + 1, snap_atol)
+        is_contained = self.is_contained(bound_right, bbox_contained_2d)
 
         # special treatment to unshadowed structure
         skip_unshadowed = False
@@ -505,7 +561,7 @@ class GradedMesher(Mesher):
         elif not is_close_l and not is_contained and str_ind > 0:
             indmax += 1
             # Add current structure bounding box coordinates
-            coords.insert(indmax, bound_coord)
+            coords.insert(indmax, bound_right)
             # Copy the structure containment list to the newly created interval
             struct_list = structs[min(indmax - 1, len(structs) - 1)]
             structs.insert(indmax, struct_list.copy())
