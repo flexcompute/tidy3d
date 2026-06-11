@@ -957,12 +957,6 @@ class HeatChargeSimulation(AbstractSimulation):
         if not has_schottky:
             return self
 
-        if getattr(self.analysis_spec, "fermi_dirac", False):
-            raise SetupError(
-                "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") currently "
-                "use Boltzmann thermionic carrier targets. Set 'fermi_dirac=False' "
-                "until Fermi-Dirac Schottky contacts are implemented and validated."
-            )
         if self.use_accelerated_solver is False:
             self._raise_validation_error_at_loc(
                 "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") are "

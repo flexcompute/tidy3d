@@ -2085,15 +2085,42 @@ def test_schottky_accepts_ssac():
     assert sim is not None
 
 
-def test_schottky_rejects_fermi_dirac_until_validated():
-    with pytest.raises(ValidationError) as excinfo:
-        _make_schottky_charge_sim(
-            analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
-                temperature=300,
-                fermi_dirac=True,
-            ),
-        )
-    assert_single_value_error_loc(excinfo, ("boundary_spec",), "fermi_dirac=False")
+def test_schottky_accepts_fermi_dirac():
+    """Schottky contacts validate with Fermi-Dirac carrier statistics."""
+    sim = _make_schottky_charge_sim(
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
+            temperature=300,
+            fermi_dirac=True,
+        ),
+    )
+    assert sim is not None
+
+
+def test_schottky_accepts_ssac_with_fermi_dirac():
+    """Schottky contacts validate with SSAC and Fermi-Dirac statistics combined."""
+    sim = _make_schottky_charge_sim(
+        schottky_source=td.SSACVoltageSource(voltage=[0.0, 0.05], amplitude=1e-3),
+        analysis_spec=td.IsothermalSSACAnalysis(
+            temperature=300,
+            freqs=[1e3],
+            fermi_dirac=True,
+        ),
+    )
+    assert sim is not None
+
+
+def test_schottky_accepts_fermi_dirac_raw_specs():
+    """Schottky + Fermi-Dirac validates on the non-isothermal analysis specs too."""
+    sim = _make_schottky_charge_sim(
+        analysis_spec=td.SteadyChargeDCAnalysis(fermi_dirac=True),
+    )
+    assert sim is not None
+
+    sim = _make_schottky_charge_sim(
+        schottky_source=td.SSACVoltageSource(voltage=[0.0, 0.05], amplitude=1e-3),
+        analysis_spec=td.SSACAnalysis(freqs=[1e3], fermi_dirac=True),
+    )
+    assert sim is not None
 
 
 def test_schottky_accepts_structure_boundary_placement():

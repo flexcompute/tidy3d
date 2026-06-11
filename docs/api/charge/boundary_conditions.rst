@@ -49,9 +49,9 @@ their excitation from the SPICE source classes documented on the
    ``richardson_electron``, ``richardson_hole`` on the adjacent
    :class:`SemiconductorMedium`. The default ``model="ohmic"`` is
    the standard ohmic contact. Schottky contacts are supported only by
-   the accelerated charge solver
-   (``use_accelerated_solver=True``, ``fermi_dirac=False``) and compose
-   with DC sweeps and small-signal AC analyses.
+   the accelerated charge solver (``use_accelerated_solver=True``) and
+   compose with DC sweeps, small-signal AC analyses, and Fermi-Dirac
+   carrier statistics (``fermi_dirac=True``).
 
 Placement
 ^^^^^^^^^^^^^^^^^
