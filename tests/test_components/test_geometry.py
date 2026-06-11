@@ -43,7 +43,7 @@ from tidy3d.components.geometry.utils_2d import _is_sliver_polygon, subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, assert_single_value_error_loc
 
 GEO = td.Box(size=(1, 1, 1))
 GEO_INF = td.Box(size=(1, 1, td.inf))
@@ -855,6 +855,79 @@ def test_winding_reversal_adjusts_bulges():
     # For reversal: bulges_new = -np.roll(bulges[::-1], -1)
     expected_bulges = -np.roll(bulges_cw[::-1], -1)
     np.testing.assert_allclose(canon_bulges, expected_bulges)
+
+
+def test_collinear_chord_bulge_polygon_constructs():
+    """Collinear chord vertices with arcs enclosing a finite area form a valid polygon."""
+    # upper half-disk (r=1): two straight segments along the flat edge plus a semicircle
+    vertices = [(0, 0), (1, 0), (2, 0)]
+    bulges = [0, 0, 1]
+    polyslab = td.PolySlab(vertices=vertices, bulges=bulges, axis=2, slab_bounds=(-0.5, 0.5))
+
+    expected_area = np.pi / 2
+    discretized = shapely.Polygon(polyslab._discretized_reference_polygon)
+    assert np.isclose(discretized.area, expected_area, rtol=1e-3)
+    assert np.allclose(polyslab.bounds, ((0, 0, -0.5), (2, 1, 0.5)))
+
+
+def test_collinear_chord_winding_canonicalization():
+    """Winding for collinear chord vertices follows the bulge-aware signed area."""
+    vertices = np.array([(0, 0), (1, 0), (2, 0)], dtype=float)
+    bulges_ccw = np.array([0.0, 0.0, 1.0])
+
+    # CCW input (positive bulge-aware signed area) is kept as is
+    canon_verts, canon_bulges = td.PolySlab._canonicalize_vertices_and_bulges(vertices, bulges_ccw)
+    np.testing.assert_allclose(canon_verts, vertices)
+    np.testing.assert_allclose(canon_bulges, bulges_ccw)
+    assert td.PolySlab._signed_area_with_bulges(canon_verts, canon_bulges) > 0
+
+    # mirrored arc traverses the same shape CW; reversed with bulges permuted/sign-flipped
+    bulges_cw = -bulges_ccw
+    canon_verts, canon_bulges = td.PolySlab._canonicalize_vertices_and_bulges(vertices, bulges_cw)
+    np.testing.assert_allclose(canon_verts, vertices[::-1])
+    np.testing.assert_allclose(canon_bulges, -np.roll(bulges_cw[::-1], -1))
+    assert td.PolySlab._signed_area_with_bulges(canon_verts, canon_bulges) > 0
+
+
+def test_degenerate_bulge_polygon_rejected():
+    """Arc contour retracing itself encloses no area and must be rejected."""
+    # out along two lower semicircles, back along the same two semicircles
+    vertices = [(0, 0), (1, 0), (2, 0), (1, 0)]
+    bulges = [1, 1, -1, -1]
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.PolySlab(vertices=vertices, bulges=bulges, axis=2, slab_bounds=(-0.5, 0.5))
+    assert_single_value_error_loc(excinfo, ("vertices",), message_contains="almost collapses")
+
+
+def test_degenerate_polygon_rejected_at_vertices_loc():
+    """Chord-polygon degeneracy and self-intersection errors anchor to 'vertices'."""
+    collinear_vertices = [(0, 0), (1, 0), (2, 0)]
+    for bulges in (None, [0, 0, 0]):
+        with pytest.raises(pd.ValidationError) as excinfo:
+            td.PolySlab(vertices=collinear_vertices, bulges=bulges, axis=2, slab_bounds=(-0.5, 0.5))
+        assert_single_value_error_loc(excinfo, ("vertices",), message_contains="almost collapses")
+
+    bowtie_vertices = ((0, 0), (1, 1), (0, 1), (1, 0))
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.PolySlab(vertices=bowtie_vertices, axis=2, slab_bounds=(-0.5, 0.5))
+    assert_single_value_error_loc(excinfo, ("vertices",), message_contains="self-intersecting")
+
+
+def test_self_intersection_error_loc_with_arcs():
+    """Self-intersection errors anchor to the field whose values cause the intersection."""
+    # crossing chord segments: the vertex order is the problem, not the bulge values
+    bowtie_vertices = ((0, 0), (1, 1), (0, 1), (1, 0))
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.PolySlab(
+            vertices=bowtie_vertices, bulges=[0.1, 0, 0, 0], axis=2, slab_bounds=(-0.5, 0.5)
+        )
+    assert_single_value_error_loc(excinfo, ("vertices",), message_contains="self-intersecting")
+
+    # valid square whose inward arc sweeps across the other edges
+    square_vertices = ((0, 0), (1, 0), (1, 1), (0, 1))
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.PolySlab(vertices=square_vertices, bulges=[-2, 0, 0, 0], axis=2, slab_bounds=(-0.5, 0.5))
+    assert_single_value_error_loc(excinfo, ("bulges",), message_contains="bulge values")
 
 
 def test_adjoint_error_with_bulges():

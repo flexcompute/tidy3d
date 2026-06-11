@@ -519,24 +519,12 @@ class PolySlab(base.Planar):
     @field_validator("vertices")
     @classmethod
     def correct_shape(cls, val: ArrayFloat2D) -> ArrayFloat2D:
-        """Makes sure vertices size is correct.  Make sure no intersecting edges."""
+        """Makes sure vertices size is correct."""
         # overall shape of vertices
         if val.shape[1] != 2:
             raise SetupError(
                 "PolySlab.vertices must be a 2 dimensional array shaped (N, 2). "
                 f"Given array with shape of {val.shape}."
-            )
-        # make sure no polygon splitting, islands, 0 area
-        poly_heal = shapely.make_valid(cls.make_shapely_polygon(val))
-        if poly_heal.area < _MIN_POLYGON_AREA:
-            raise SetupError("The polygon almost collapses to a 1D curve.")
-
-        if not poly_heal.geom_type == "Polygon" or len(poly_heal.interiors) > 0:
-            raise SetupError(
-                "Polygon is self-intersecting, resulting in "
-                "polygon splitting or generation of holes/islands. "
-                "A general treatment to self-intersecting polygon will be available "
-                "in future releases."
             )
         return val
 
@@ -598,6 +586,42 @@ class PolySlab(base.Planar):
         return self
 
     @model_validator(mode="after")
+    def _validate_polygon_not_degenerate_or_self_intersecting(self: Self) -> Self:
+        """Polygon must enclose a finite area and not be self-intersecting."""
+        vertices = get_static(self.vertices)
+
+        if self.bulges is None or np.allclose(self.bulges, 0) or vertices.shape[0] < 3:
+            # make sure no polygon splitting, islands, 0 area
+            poly_heal = shapely.make_valid(self.make_shapely_polygon(vertices))
+            if poly_heal.area < _MIN_POLYGON_AREA:
+                self._raise_validation_error_at_loc(
+                    SetupError("The polygon almost collapses to a 1D curve."),
+                    "vertices",
+                )
+            if not poly_heal.geom_type == "Polygon" or len(poly_heal.interiors) > 0:
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        "Polygon is self-intersecting, resulting in "
+                        "polygon splitting or generation of holes/islands. "
+                        "A general treatment to self-intersecting polygon will be available "
+                        "in future releases."
+                    ),
+                    "vertices",
+                )
+            return self
+
+        # with arc segments, the chord polygon can be degenerate (e.g. collinear
+        # vertices) while the arc contour encloses a finite area; gate on the
+        # bulge-aware signed area instead. Self-intersection of the arc contour
+        # is checked in '_validate_no_self_intersection_with_arcs'.
+        if abs(PolySlab._signed_area_with_bulges(vertices, self.bulges)) < _MIN_POLYGON_AREA:
+            self._raise_validation_error_at_loc(
+                SetupError("The polygon almost collapses to a 1D curve."),
+                "vertices",
+            )
+        return self
+
+    @model_validator(mode="after")
     def _vertical_sidewall_no_dilation_with_arc(self: Self) -> Self:
         """In the presence of arc segments, for now sidwall is limited to vertical, and no dilation allowed."""
         if self.bulges is None:
@@ -642,6 +666,21 @@ class PolySlab(base.Planar):
         # Check if the resulting polygon is valid
         poly = shapely.Polygon(discretized)
         if not poly.is_valid or not poly.is_simple:
+            # when the straight-edge polygon is itself self-intersecting, the
+            # vertex order -- not the bulge values -- is the actionable input
+            chord_heal = shapely.make_valid(self.make_shapely_polygon(self.vertices))
+            if chord_heal.area >= _MIN_POLYGON_AREA and (
+                chord_heal.geom_type != "Polygon" or len(chord_heal.interiors) > 0
+            ):
+                self._raise_validation_error_at_loc(
+                    SetupError(
+                        "Polygon is self-intersecting, resulting in "
+                        "polygon splitting or generation of holes/islands. "
+                        "A general treatment to self-intersecting polygon will be available "
+                        "in future releases."
+                    ),
+                    "vertices",
+                )
             self._raise_validation_error_at_loc(
                 SetupError(
                     "Polygon with arc segments is self-intersecting. "
@@ -1052,8 +1091,9 @@ class PolySlab(base.Planar):
             vertices = vertices[has_nonzero_length]
             bulges = bulges[has_nonzero_length]
 
-        # Check winding and reverse if CW
-        if PolySlab._area(vertices) < 0:
+        # Check winding and reverse if CW; arc segments contribute to the signed
+        # area so winding stays well-defined even for collinear chord vertices
+        if PolySlab._signed_area_with_bulges(vertices, bulges) < 0:
             vertices = vertices[::-1]
             bulges = -np.roll(bulges[::-1], -1)
 
@@ -1737,6 +1777,28 @@ class PolySlab(base.Planar):
         term1 = xs * ys_shift
         term2 = ys * xs_shift
         return np.sum(term1 - term2) * 0.5
+
+    @staticmethod
+    def _signed_area_with_bulges(vertices: NDArray, bulges: ArrayFloat1D) -> float:
+        """Compute the signed polygon area including arc segment contributions.
+
+        Parameters
+        ----------
+        vertices : np.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+        bulges : ArrayFloat1D
+            Shape (N,) bulge values for each edge.
+
+        Returns
+        -------
+        float
+            Signed polygon area (positive for CCW orientation).
+        """
+        area = PolySlab._area(vertices)
+        bulge_data = _PolyBulgeUtil._compute_bulge_data(vertices, bulges)
+        if np.any(bulge_data["arc_mask"]):
+            area += _PolyBulgeUtil._arc_segment_area(bulge_data)
+        return area
 
     @staticmethod
     def _perimeter(vertices: NDArray) -> float:
