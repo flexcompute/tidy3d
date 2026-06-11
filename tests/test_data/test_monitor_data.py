@@ -1996,6 +1996,74 @@ def test_diff_area_elements(colocate, sim_2d):
         )
 
 
+@pytest.mark.parametrize("boundary", [td.Periodic(), td.PML()])
+@pytest.mark.parametrize("monitor_size", [(0, 2.0, 3.0), (0, 2.5, 3.5), (0, td.inf, td.inf)])
+@pytest.mark.parametrize("time_domain", [False, True])
+def test_noncolocated_flux_area_size_invariant(time_domain, monitor_size, boundary):
+    """The non-colocated flux integration area must equal the colocated area regardless of
+    monitor size, including monitors that reach or exceed the simulation domain. An
+    ``inf``/oversized monitor must not over-count the area (an extra halo cell, or spurious edge
+    cells beyond the grid); the finite oversized size exercises the clamp branch, ``inf`` the
+    enclosing-boundary branch. The invariant is independent of boundary condition: under
+    periodic/Bloch an area error skews the flux because the fields at the domain edge are
+    non-zero, while under PML it would be hidden in the flux by the absorbed (~zero) fields there
+    -- so the area itself is asserted. The area is independent of field values, so zero fields
+    suffice."""
+    sim = td.Simulation(
+        size=(4.0, 2.0, 3.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(0.1),
+        sources=[
+            td.PointDipole(
+                source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
+                polarization="Ez",
+                center=(0.1, 0, 0),
+            )
+        ],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=boundary),
+    )
+    common = {
+        "size": monitor_size,
+        "center": (0, 0, 0),
+        "name": "flux_nc",
+        "colocate": False,
+        "use_colocated_integration": False,
+    }
+    if time_domain:
+        monitor = td.FieldTimeMonitor(**common)
+        array_type, var_coords = td.ScalarFieldTimeDataArray, {"t": [0.0]}
+        data_type = FieldTimeData
+    else:
+        monitor = td.FieldMonitor(**common, freqs=[1e14])
+        array_type, var_coords = td.ScalarFieldDataArray, {"f": [1e14]}
+        data_type = FieldData
+    grid = sim.discretize_monitor(monitor)
+
+    def make_field_array(field_name):
+        x, y, z = grid[field_name].to_list
+        data = np.zeros((len(x), len(y), len(z), 1), dtype=float if time_domain else complex)
+        return array_type(data, coords={"x": x, "y": y, "z": z, **var_coords})
+
+    field_data = data_type(
+        monitor=monitor,
+        Ex=make_field_array("Ex"),
+        Ey=make_field_array("Ey"),
+        Ez=make_field_array("Ez"),
+        Hx=make_field_array("Hx"),
+        Hy=make_field_array("Hy"),
+        Hz=make_field_array("Hz"),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=grid,
+    )
+
+    # The colocated diff-area is size-invariant and is the reference for one period.
+    colocated_area = float(field_data._diff_area.sum())
+    # Every staggered non-colocated area must integrate the same single period.
+    for component in field_data._diff_area_at_yee_positions(truncate_to_monitor_bounds=True):
+        np.testing.assert_allclose(float(component.sum()), colocated_area, rtol=1e-9)
+
+
 # ---------------------------------------------------------------------------
 # Helpers for dot / outer_dot broadcasting and consistency tests
 # ---------------------------------------------------------------------------

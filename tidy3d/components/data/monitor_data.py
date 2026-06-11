@@ -584,9 +584,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         Parameters
         ----------
         truncate_to_monitor_bounds : bool = False
-            If True, clamp integration region to monitor bounds (for flux calculations).
-            If False, use grid_expanded bounds enclosing field data (for dot/outer_dot).
-            When monitor bounds are np.inf, always uses grid_expanded fallback.
+            If True (flux), clamp the integration region to the monitor bounds, further clamped to
+            the halo-free colocation grid extent so the integral covers exactly one period
+            regardless of monitor size, including ``size=inf``.
+            If False (dot/outer_dot), integrate the full grid_expanded extent enclosing the field
+            data.
 
         Returns
         -------
@@ -606,9 +608,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         cell_sizes = {}
         dual_sizes = {}
-        # Use full grid boundaries (not colocation_boundaries) for finding integration limits.
-        # This is needed because colocation_boundaries drops first/last for non-colocated monitors,
-        # but the actual field data may extend to those edges.
+        # Field data lives at the grid_expanded positions, which extend one interpolation/halo
+        # cell beyond the simulation grid, so the per-cell coordinates below are built from the
+        # full grid_expanded boundaries. The integration *limits* are set per branch: the flux
+        # path clamps them back to the halo-free colocation extent, while dot/outer_dot integrate
+        # the full enclosing extent.
         full_bounds = self.grid_expanded.boundaries.to_dict
 
         for axis in plane_inds:
@@ -634,20 +638,22 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
             # Determine integration bounds
             if truncate_to_monitor_bounds:
-                # Use monitor bounds, handling inf by finding grid boundary outside field data
-                if np.isinf(mnt_min):
-                    integration_min = self._find_enclosing_boundary(
-                        field_data_centers[0], full_boundaries, "lower"
-                    )
-                else:
-                    integration_min = mnt_min
-
-                if np.isinf(mnt_max):
-                    integration_max = self._find_enclosing_boundary(
-                        field_data_centers[-1], full_boundaries, "upper"
-                    )
-                else:
-                    integration_max = mnt_max
+                # Clamp the monitor bounds to the colocation (halo-free) grid extent -- the same
+                # extent the colocated ``_diff_area`` integrates -- so the flux covers exactly one
+                # period and stays size-invariant, matching the colocated result by construction.
+                # Without this, a monitor reaching or exceeding the domain under periodic/Bloch
+                # over-counts (an extra halo cell for ``size=inf``, or large spurious edge cells
+                # for a monitor wider than the domain).
+                #
+                # This flux branch is reached only when ``use_colocated_integration`` is False,
+                # which ``validate_colocated_integration`` requires to coincide with
+                # ``colocate=False``; ``colocation_boundaries`` then drops the halo symmetrically.
+                # If that contract changes, revisit this clamp.
+                domain_bounds = self.colocation_boundaries.to_dict[dim]
+                domain_min = float(domain_bounds[0])
+                domain_max = float(domain_bounds[-1])
+                integration_min = domain_min if np.isinf(mnt_min) else max(mnt_min, domain_min)
+                integration_max = domain_max if np.isinf(mnt_max) else min(mnt_max, domain_max)
             else:
                 # Use grid_expanded bounds that enclose all field data
                 integration_min = self._find_enclosing_boundary(
