@@ -41,7 +41,7 @@ from tidy3d.components.geometry.utils import (
 )
 from tidy3d.components.geometry.utils_2d import _is_sliver_polygon, subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
-from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
@@ -2145,10 +2145,72 @@ def test_snap_box_to_grid_strict_behaviors():
     assert margin_expanded.size[0] >= expanded_box.size[0]
 
 
+def _signed_triangle_area(vertices, triangle):
+    a, b, c = vertices[list(triangle)]
+    return 0.5 * ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+
+
+def _assert_triangulation_covers_polygon(vertices, triangles):
+    triangle_polygons = [Polygon(vertices[list(triangle)]) for triangle in triangles]
+    union = shapely.union_all(triangle_polygons)
+    assert union.symmetric_difference(Polygon(vertices)).area == pytest.approx(0, abs=1e-14)
+
+
+def _assert_valid_triangulation(vertices, triangles):
+    assert len(triangles) == len(vertices) - 2
+    triangle_areas = [_signed_triangle_area(vertices, triangle) for triangle in triangles]
+    assert all(area > 0 for area in triangle_areas)
+    assert sum(triangle_areas) == pytest.approx(Polygon(vertices).area, abs=1e-14)
+    _assert_triangulation_covers_polygon(vertices, triangles)
+
+
+def test_triangulation_with_convex_polygon():
+    vertices = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+
+    triangles = td.components.geometry.triangulation.triangulate(vertices)
+
+    _assert_valid_triangulation(vertices, triangles)
+
+
+def test_triangulation_with_clockwise_polygon():
+    vertices = np.array([[0, 1], [1, 1], [1, 0], [0, 0]])
+
+    triangles = td.components.geometry.triangulation.triangulate(vertices)
+
+    _assert_valid_triangulation(vertices, triangles)
+
+
+def test_triangulation_with_concave_polygon():
+    vertices = np.array([[0, 0], [2, 0], [2, 1], [1, 0.4], [0, 1]])
+
+    triangles = td.components.geometry.triangulation.triangulate(vertices)
+
+    _assert_valid_triangulation(vertices, triangles)
+
+
 def test_triangulation_with_collinear_vertices():
     xr = np.linspace(0, 1, 6)
     a = np.array([[x, -0.5] for x in xr] + [[x, 0.5] for x in xr[::-1]])
-    assert len(td.components.geometry.triangulation.triangulate(a)) == 10
+
+    triangles = td.components.geometry.triangulation.triangulate(a)
+
+    _assert_valid_triangulation(a, triangles)
+
+
+@pytest.mark.parametrize(
+    ("vertices", "reason"),
+    [
+        (np.array([[0, 0], [1, 0], [1, 0], [0, 1]]), "Polygon has repeated vertices."),
+        (np.array([[0, 0], [1, 1], [0, 1], [1, 0]]), "Polygon is invalid."),
+    ],
+)
+def test_triangulation_error_includes_reason(vertices, reason):
+    with pytest.raises(Tidy3dError) as exc_info:
+        td.components.geometry.triangulation.triangulate(vertices)
+
+    message = str(exc_info.value)
+    assert "Impossible to triangulate polygon." in message
+    assert f"Reason: {reason}" in message
 
 
 def test_triangle_mesh_from_height():
