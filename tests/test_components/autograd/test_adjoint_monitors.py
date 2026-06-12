@@ -199,7 +199,8 @@ def test_adjoint_monitors_3d_use_geometry_bounding_box(geometry):
     assert monitors_eps[0].center == pytest.approx(tuple(expected_box.center))
 
 
-def test_flux_monitor_adjoint_helpers_are_internal_and_opt_in():
+@pytest.mark.parametrize("use_colocated_integration", [True, False])
+def test_flux_monitor_adjoint_helpers_are_internal_and_opt_in(use_colocated_integration):
     structure = td.Structure(geometry=td.Box(size=(1.0, 1.0, 1.0)), medium=td.Medium())
     flux_monitor = td.FluxMonitor(
         center=(0, 0, 0),
@@ -209,6 +210,7 @@ def test_flux_monitor_adjoint_helpers_are_internal_and_opt_in():
         exclude_surfaces=("z-",),
         apodization=td.ApodizationSpec(start=1e-15, end=2e-15, width=1e-16),
         enable_adjoint=True,
+        use_colocated_integration=use_colocated_integration,
     )
     sim = _make_3d_simulation(structure).updated_copy(monitors=(flux_monitor,))
 
@@ -222,6 +224,13 @@ def test_flux_monitor_adjoint_helpers_are_internal_and_opt_in():
     assert len(helper_monitors) == 5
     assert all(isinstance(monitor, td.FieldMonitor) for monitor in helper_monitors)
     assert all(monitor.apodization == flux_monitor.apodization for monitor in helper_monitors)
+    # helpers follow the parent's integration scheme so the differentiated frontend flux
+    # functional matches the stored solver flux
+    assert all(monitor.colocate == use_colocated_integration for monitor in helper_monitors)
+    assert all(
+        monitor.use_colocated_integration == use_colocated_integration
+        for monitor in helper_monitors
+    )
     for surface, helper_monitor in zip(
         flux_monitor.integration_surfaces, helper_monitors, strict=True
     ):

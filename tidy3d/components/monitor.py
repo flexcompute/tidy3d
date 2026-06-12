@@ -192,8 +192,8 @@ class Monitor(AbstractMonitor):
         True,
         title="Use Colocated Integration",
         description="Whether to use colocated fields for flux, dot products, and overlap "
-        "integrals. Hard-coded to ``True`` for most monitor types. Can be toggled on field "
-        "and overlap monitors.",
+        "integrals. Hard-coded to ``True`` for most monitor types. Can be toggled on field, "
+        "overlap, and flux monitors.",
     )
 
     @property
@@ -1256,6 +1256,32 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     """Abstract class for monitors that perform surface integrals during the solver run, as in
     flux and near to far transformations."""
 
+    use_colocated_integration: bool = Field(
+        True,
+        title="Use Colocated Integration",
+        description="Selects the surface-integration scheme. If ``True`` (default), the integral "
+        "is computed from fields colocated to the grid cell boundaries (primal nodes). If "
+        "``False``, it is computed directly on the native Yee-staggered grid: the tangential "
+        "field components stay at their tangential positions.",
+    )
+
+    colocate: bool = Field(
+        True,
+        title="Colocate Fields",
+        description="Governed by ``use_colocated_integration`` and not set independently for "
+        "surface-integration monitors: it mirrors that value, so the solver records colocated "
+        "fields exactly when the integration is colocated.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _colocate_follows_integration(cls, data: Any) -> Any:
+        """``colocate`` is derived from ``use_colocated_integration`` for surface-integration
+        monitors (it is not a user knob), giving every consumer a single source of truth."""
+        if isinstance(data, dict):
+            data = {**data, "colocate": data.get("use_colocated_integration", True)}
+        return data
+
     normal_dir: Direction | None = Field(
         None,
         title="Normal Vector Orientation",
@@ -1386,7 +1412,9 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
         surface: SurfaceIntegrationMonitor,
         name: str,
     ) -> FieldMonitor:
-        """Hidden field monitor used to reconstruct this flux monitor in autograd."""
+        """Hidden field monitor used to reconstruct this flux monitor in autograd. It follows
+        the parent's integration scheme so the differentiated frontend flux functional matches
+        the stored solver flux."""
         return FieldMonitor(
             center=surface.center,
             size=surface.size,
@@ -1394,8 +1422,8 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
             apodization=self.apodization,
             fields=self._adjoint_tangential_field_components(surface),
             name=name,
-            colocate=True,
-            use_colocated_integration=True,
+            colocate=self.use_colocated_integration,
+            use_colocated_integration=self.use_colocated_integration,
         )
 
     @model_validator(mode="after")
@@ -1652,6 +1680,22 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     """:class:`~tidy3d.Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them to a given set of observation points.
     """
+
+    colocate: Literal[True] = Field(
+        True,
+        title="Colocate Fields",
+        description="Field projection evaluates the equivalent surface currents from fields "
+        "colocated to the grid boundaries (i.e. primal grid nodes), so colocation cannot be "
+        "disabled for field-projection monitors.",
+    )
+
+    use_colocated_integration: Literal[True] = Field(
+        True,
+        title="Use Colocated Integration",
+        description="Field projection always integrates colocated surface currents; the "
+        "native-Yee surface integration is not yet supported for field-projection monitors. "
+        "The inherited validator derives ``colocate=True`` from this.",
+    )
 
     custom_origin: Coordinate | None = Field(
         None,

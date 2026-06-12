@@ -807,3 +807,29 @@ def test_use_colocated_integration_requires_colocate_false():
             colocate=True,
             use_colocated_integration=False,
         )
+
+
+@pytest.mark.parametrize("cls", [td.FluxMonitor, td.FluxTimeMonitor])
+def test_surface_integration_colocated_switch(cls):
+    """For surface-integration monitors ``use_colocated_integration`` is the only user knob;
+    ``colocate`` is not set independently but mirrors it (the solver records colocated fields
+    exactly when the integration is colocated). This guards the public API client-side."""
+    kwargs = dict(size=(1, 1, 0), name="m", **({"freqs": [1e14]} if cls is td.FluxMonitor else {}))
+
+    # default: colocated integration -> colocate follows it
+    m = cls(**kwargs)
+    assert m.use_colocated_integration is True
+    assert m.colocate is True
+
+    # the switch: staggered integration -> colocate follows to False
+    m_nc = cls(**kwargs, use_colocated_integration=False)
+    assert m_nc.use_colocated_integration is False
+    assert m_nc.colocate is False
+    assert type(m_nc).parse_raw(m_nc.json()) == m_nc  # round-trips through serialization
+
+    # colocate is not a user knob: an explicit value is ignored and follows the switch
+    assert cls(**kwargs, colocate=False).colocate is True
+    assert cls(**kwargs, use_colocated_integration=False, colocate=True).colocate is False
+
+    # updated_copy of the switch re-derives colocate
+    assert m.updated_copy(use_colocated_integration=False).colocate is False

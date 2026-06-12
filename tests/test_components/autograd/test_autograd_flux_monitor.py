@@ -35,7 +35,7 @@ pytestmark = pytest.mark.usefixtures("use_emulated_run")
 def _field_monitors_for_flux_monitor(
     flux_monitor: td.FluxMonitor,
 ) -> tuple[tuple[td.FieldMonitor, ...], tuple[int, ...]]:
-    """FieldMonitor.flux monitors equivalent to one FluxMonitor."""
+    """FieldMonitor.flux monitors equivalent to one FluxMonitor (same integration scheme)."""
     surfaces = flux_monitor.integration_surfaces
     signs = tuple(1 if surface.normal_dir == "+" else -1 for surface in surfaces)
     field_monitors = tuple(
@@ -44,8 +44,8 @@ def _field_monitors_for_flux_monitor(
             center=surface.center,
             freqs=flux_monitor.freqs,
             name=f"field_{surface_index}",
-            colocate=True,
-            use_colocated_integration=True,
+            colocate=flux_monitor.use_colocated_integration,
+            use_colocated_integration=flux_monitor.use_colocated_integration,
         )
         for surface_index, surface in enumerate(surfaces)
     )
@@ -141,9 +141,15 @@ def _run_with_numerical_structure(
         ),
     ],
 )
-def test_flux_monitor_adjoint_matches_field_monitor_flux(case_name, flux_monitor):
-    """Make sure FluxMonitor adjoints match the established FieldMonitor.flux path."""
+@pytest.mark.parametrize("use_colocated_integration", [True, False])
+def test_flux_monitor_adjoint_matches_field_monitor_flux(
+    case_name, flux_monitor, use_colocated_integration
+):
+    """Make sure FluxMonitor adjoints match the established FieldMonitor.flux path, for both
+    the colocated and the staggered integration scheme (the hidden helpers follow the parent's
+    scheme, so the differentiated functional is the same one in both objectives)."""
 
+    flux_monitor = flux_monitor.updated_copy(use_colocated_integration=use_colocated_integration)
     field_monitors, field_signs = _field_monitors_for_flux_monitor(flux_monitor)
     sim_base = _simulation_for_flux_monitor(flux_monitor)
 
@@ -176,8 +182,10 @@ def test_flux_monitor_adjoint_matches_field_monitor_flux(case_name, flux_monitor
     npt.assert_allclose(flux_grad, field_grad, rtol=1e-12, atol=1e-12)
 
 
-def test_flux_monitor_remote_adjoint_matches_field_monitor_flux():
-    """Make sure remote FluxMonitor adjoints match the FieldMonitor.flux path."""
+@pytest.mark.parametrize("use_colocated_integration", [True, False])
+def test_flux_monitor_remote_adjoint_matches_field_monitor_flux(use_colocated_integration):
+    """Make sure remote FluxMonitor adjoints match the FieldMonitor.flux path, for both
+    integration schemes."""
 
     flux_monitor = td.FluxMonitor(
         size=(1, 1, 0),
@@ -185,14 +193,15 @@ def test_flux_monitor_remote_adjoint_matches_field_monitor_flux():
         freqs=[FREQ0],
         name="flux",
         enable_adjoint=True,
+        use_colocated_integration=use_colocated_integration,
     )
     field_monitor = td.FieldMonitor(
         size=flux_monitor.size,
         center=flux_monitor.center,
         freqs=flux_monitor.freqs,
         name="field",
-        colocate=True,
-        use_colocated_integration=True,
+        colocate=use_colocated_integration,
+        use_colocated_integration=use_colocated_integration,
     )
 
     def make_objective(monitor_name):

@@ -39,6 +39,7 @@ from tidy3d.components.data.utils import (
 from tidy3d.components.diffraction import diffraction_amplitude_norm
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords, Grid
+from tidy3d.components.grid.yee_areas import colocated_widths_1d, yee_primal_dual_widths_1d
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
     AstigmaticGaussianOverlapMonitor,
@@ -543,32 +544,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         return tangential_dims
 
-    def _find_enclosing_boundary(
-        self, field_coord: float, boundaries: np.ndarray, side: str
-    ) -> float:
-        """Find the grid boundary just outside a field coordinate.
-
-        Parameters
-        ----------
-        field_coord : float
-            The field coordinate to find enclosing boundary for.
-        boundaries : np.ndarray
-            Array of grid boundaries from grid_expanded.
-        side : str
-            "lower" to find boundary below/at, "upper" to find boundary above/at.
-
-        Returns
-        -------
-        float
-            The grid boundary just outside the field coordinate.
-        """
-        if side == "lower":
-            idx = np.searchsorted(boundaries, field_coord, side="right") - 1
-            return boundaries[max(0, idx)]
-        else:  # "upper"
-            idx = np.searchsorted(boundaries, field_coord, side="left")
-            return boundaries[min(len(boundaries) - 1, idx)]
-
     def _diff_area_at_yee_positions(
         self, truncate_to_monitor_bounds: bool = False
     ) -> tuple[DataArray, DataArray, DataArray, DataArray]:
@@ -609,71 +584,31 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         cell_sizes = {}
         dual_sizes = {}
         # Field data lives at the grid_expanded positions, which extend one interpolation/halo
-        # cell beyond the simulation grid, so the per-cell coordinates below are built from the
-        # full grid_expanded boundaries. The integration *limits* are set per branch: the flux
-        # path clamps them back to the halo-free colocation extent, while dot/outer_dot integrate
-        # the full enclosing extent.
+        # cell beyond the simulation grid. The per-axis widths come from the shared Yee-width
+        # helper; the 1D-degenerate (single-cell) collapse to unit width is handled inside it.
         full_bounds = self.grid_expanded.boundaries.to_dict
 
         for axis in plane_inds:
             dim = dims[axis]
-            # Use full grid boundaries, dropping last boundary
-            grid_boundaries = full_bounds[dim][:-1]
-
-            # Do not apply the spurious dl along a dimension where the simulation is 2D.
-            # Instead, we just set the boundaries such that the cell size along the zero dimension is 1,
-            # such that quantities like flux will come out in units of W / um.
-            if grid_boundaries.size == 1:
-                dual_sizes[dim] = np.array([1.0])
-                cell_sizes[dim] = np.array([1.0])
-                continue
-
-            mnt_min = mnt_bounds[0, axis]
-            mnt_max = mnt_bounds[1, axis]
-
-            # Compute field data coordinates from grid_expanded boundaries
-            full_boundaries = full_bounds[dim]
-            field_data_centers = (full_boundaries[:-1] + full_boundaries[1:]) / 2
-            field_data_boundaries = full_boundaries[:-1]
-
-            # Determine integration bounds
             if truncate_to_monitor_bounds:
-                # Clamp the monitor bounds to the colocation (halo-free) grid extent -- the same
-                # extent the colocated ``_diff_area`` integrates -- so the flux covers exactly one
-                # period and stays size-invariant, matching the colocated result by construction.
-                # Without this, a monitor reaching or exceeding the domain under periodic/Bloch
-                # over-counts (an extra halo cell for ``size=inf``, or large spurious edge cells
-                # for a monitor wider than the domain).
-                #
-                # This flux branch is reached only when ``use_colocated_integration`` is False,
-                # which ``validate_colocated_integration`` requires to coincide with
-                # ``colocate=False``; ``colocation_boundaries`` then drops the halo symmetrically.
-                # If that contract changes, revisit this clamp.
+                # Flux: clamp the monitor bounds to the colocation (halo-free) grid extent -- the
+                # same extent the colocated ``_diff_area`` integrates -- so the flux covers
+                # exactly one period and stays size-invariant, matching the colocated result by
+                # construction. All truncate=True callers operate on staggered field data
+                # (``monitor.colocate`` is ``False``), so ``colocation_boundaries`` drops the
+                # halo symmetrically; revisit this clamp if a ``colocate=True`` caller appears.
                 domain_bounds = self.colocation_boundaries.to_dict[dim]
-                domain_min = float(domain_bounds[0])
-                domain_max = float(domain_bounds[-1])
-                integration_min = domain_min if np.isinf(mnt_min) else max(mnt_min, domain_min)
-                integration_max = domain_max if np.isinf(mnt_max) else min(mnt_max, domain_max)
+                bounds_kwargs = {
+                    "mnt_min": mnt_bounds[0, axis],
+                    "mnt_max": mnt_bounds[1, axis],
+                    "valid_bounds": (float(domain_bounds[0]), float(domain_bounds[-1])),
+                }
             else:
-                # Use grid_expanded bounds that enclose all field data
-                integration_min = self._find_enclosing_boundary(
-                    field_data_centers[0], full_boundaries, "lower"
-                )
-                integration_max = self._find_enclosing_boundary(
-                    field_data_centers[-1], full_boundaries, "upper"
-                )
-
-            # Build coordinate arrays for size calculation
-            centers = np.concatenate([[integration_min], field_data_centers])
-            boundaries = np.concatenate([field_data_boundaries, [integration_max]])
-
-            # Dual sizes: distances between cell centers, clamped
-            dual_coords = np.clip(centers, integration_min, integration_max)
-            dual_sizes[dim] = dual_coords[1:] - dual_coords[:-1]
-
-            # Cell/primal sizes: distances between boundaries, clamped
-            cell_coords = np.clip(boundaries, integration_min, integration_max)
-            cell_sizes[dim] = cell_coords[1:] - cell_coords[:-1]
+                # dot/outer_dot: integrate the full grid_expanded extent enclosing the data.
+                bounds_kwargs = {}
+            cell_sizes[dim], dual_sizes[dim] = yee_primal_dual_widths_1d(
+                full_bounds[dim], **bounds_kwargs
+            )
 
         dim1 = self._tangential_dims[0]
         dim2 = self._tangential_dims[1]
@@ -780,39 +715,22 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """For a 2D monitor data, return the area of each cell in the plane, for use in numerical
         integrations. This assumes that data is colocated to grid boundaries, and uses the
         difference in the surrounding grid centers to compute the area.
+
+        Truncating the cells to the monitor bounds implicitly makes extra pixels which may be
+        present have size 0, so they are not included in the integration; for pixels intersected
+        by the monitor edge, the size is truncated to the part covered by the monitor. Together
+        with integrand values defined at cell boundaries, this realizes the trapezoidal rule with
+        the first and last values interpolated to the exact monitor start/end location, provided
+        the integrand is zero outside of the monitor geometry -- usually the case for flux and
+        dot computations.
         """
-
-        # Monitor values are interpolated to bounds
         bounds = self._plane_grid_boundaries
-        # Coords to compute cell sizes around the interpolation locations
-        coords = [bs.copy() for bs in self._plane_grid_centers]
-
-        # Append the first and last boundary
         _, plane_inds = self.monitor.pop_axis([0, 1, 2], self.monitor.size.index(0.0))
-        coords[0] = np.array([bounds[0][0], *coords[0].tolist(), bounds[0][-1]])
-        coords[1] = np.array([bounds[1][0], *coords[1].tolist(), bounds[1][-1]])
-
-        """Truncate coords to monitor boundaries. This implicitly makes extra pixels which may be
-        present have size 0 and so won't be included in the integration. For pixels intersected
-        by the monitor edge, the size is truncated to the part covered by the monitor. When using
-        the differential area sizes defined in this way together with integrand values
-        defined at cell boundaries, the integration is equivalent to trapezoidal rule with the first
-        and last values interpolated to the exact monitor start/end location, if the integrand
-        is zero outside of the monitor geometry. This should usually be the case for flux and dot
-        computations"""
         mnt_bounds = np.array(self.monitor.bounds)
         mnt_bounds = mnt_bounds[:, plane_inds].T
-        coords[0][np.argwhere(coords[0] < mnt_bounds[0, 0])] = mnt_bounds[0, 0]
-        coords[0][np.argwhere(coords[0] > mnt_bounds[0, 1])] = mnt_bounds[0, 1]
-        coords[1][np.argwhere(coords[1] < mnt_bounds[1, 0])] = mnt_bounds[1, 0]
-        coords[1][np.argwhere(coords[1] > mnt_bounds[1, 1])] = mnt_bounds[1, 1]
 
-        # Do not apply the spurious dl along a dimension where the simulation is 2D.
-        # Instead, we just set the boundaries such that the cell size along the zero dimension is 1,
-        # such that quantities like flux will come out in units of W / um.
-        sizes_dim0 = coords[0][1:] - coords[0][:-1] if bounds[0].size > 1 else [1.0]
-        sizes_dim1 = coords[1][1:] - coords[1][:-1] if bounds[1].size > 1 else [1.0]
-
+        sizes_dim0 = colocated_widths_1d(bounds[0], mnt_bounds[0, 0], mnt_bounds[0, 1])
+        sizes_dim1 = colocated_widths_1d(bounds[1], mnt_bounds[1, 0], mnt_bounds[1, 1])
         return DataArray(np.outer(sizes_dim0, sizes_dim1), dims=self._tangential_dims)
 
     def _tangential_corrected(self, fields: dict[str, DataArray]) -> dict[str, DataArray]:

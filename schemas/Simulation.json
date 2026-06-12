@@ -8306,7 +8306,6 @@
           "type": "array"
         },
         "colocate": {
-          "const": true,
           "default": true,
           "type": "boolean"
         },
@@ -8413,7 +8412,6 @@
           "type": "string"
         },
         "use_colocated_integration": {
-          "const": true,
           "default": true,
           "type": "boolean"
         }
@@ -8455,7 +8453,6 @@
           "type": "array"
         },
         "colocate": {
-          "const": true,
           "default": true,
           "type": "boolean"
         },
@@ -8578,7 +8575,6 @@
           "type": "string"
         },
         "use_colocated_integration": {
-          "const": true,
           "default": true,
           "type": "boolean"
         }
