@@ -2704,6 +2704,44 @@ def test_run_with_flexible_containers_offline_lazy(monkeypatch, tmp_path):
     assert data[1]["sim2"].simulation == sim2
 
 
+@pytest.mark.parametrize(
+    "container_kind",
+    [
+        pytest.param("dict", id="dict"),
+        pytest.param("list", id="list"),
+        pytest.param("tuple", id="tuple"),
+    ],
+)
+def test_upload_container_raises_helpful_error(container_kind):
+    simulation_container = {
+        "dict": {"a": make_sim()},
+        "list": [make_sim()],
+        "tuple": (make_sim(),),
+    }[container_kind]
+
+    with pytest.raises(
+        ValueError,
+        match=r"tidy3d\.web\.upload\(\).*single workflow object.*Batch.*web\.run",
+    ):
+        upload(simulation_container, task_name="demo", verbose=False)
+
+
+@pytest.mark.parametrize(
+    "task_id_container",
+    [
+        pytest.param({"a": TASK_ID}, id="dict"),
+        pytest.param([TASK_ID], id="list"),
+        pytest.param((TASK_ID,), id="tuple"),
+    ],
+)
+def test_load_task_id_container_raises_helpful_error(task_id_container):
+    with pytest.raises(
+        ValueError,
+        match=r"tidy3d\.web\.load\(\).*single task id.*Batch\.load.*once per task id",
+    ):
+        load(task_id_container, verbose=False)
+
+
 @responses.activate
 def test_batch_with_flexible_containers_offline(monkeypatch, tmp_path):
     sim1 = make_sim()

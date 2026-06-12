@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -116,6 +117,39 @@ def _resolve_output_path(path: PathLike | None, task_type: str | None) -> Path:
     """Resolve an explicit output path or a task-type-specific default filename."""
 
     return Path(path) if path is not None else Path(default_data_filename(task_type))
+
+
+def _is_web_container(value: object) -> bool:
+    """Return whether a value is a public web container shape."""
+    return isinstance(value, (list, tuple, Mapping))
+
+
+def _raise_if_upload_container(simulation: object) -> None:
+    """Raise a clear error for multi-workflow upload containers."""
+    if not _is_web_container(simulation):
+        return
+
+    raise ValueError(
+        "tidy3d.web.upload() accepts a single workflow object, but received a "
+        f"{type(simulation).__name__} container. For multiple workflows, use "
+        "tidy3d.web.Batch(simulations=...) and call batch.upload(); use "
+        "tidy3d.web.run(...) if you want the full upload/start/monitor/load flow "
+        "for a container."
+    )
+
+
+def _raise_if_load_container(task_id: object) -> None:
+    """Raise a clear error for task-id load containers."""
+    if not _is_web_container(task_id):
+        return
+
+    raise ValueError(
+        "tidy3d.web.load() accepts a single task id, or None to load an existing local "
+        f"file, but received a {type(task_id).__name__} container. Loading task-id "
+        "containers is not supported by this function because multi-task state is "
+        "managed by Batch. Use Batch.load(...) for batches, or call "
+        "tidy3d.web.load(...) once per task id."
+    )
 
 
 def _task_type_from_task(task: WebTask, task_type: str | None = None) -> str | None:
@@ -656,6 +690,8 @@ def upload(
         for this call.
 
     """
+    _raise_if_upload_container(simulation)
+
     console = get_logging_console() if verbose else None
 
     log_deprecated_run_args(
@@ -1348,6 +1384,8 @@ def load(
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
+    _raise_if_load_container(task_id)
+
     from_cache = task_id is None  # for readability
     resolved_path = Path(path) if path is not None else None
     task_type = None
