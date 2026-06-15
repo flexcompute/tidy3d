@@ -12,7 +12,7 @@ import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, AssertLogStr
 
 
 def test_log():
@@ -341,18 +341,48 @@ def test_assert_log_level():
     # log was captured
     with AssertLogLevel("WARNING", contains_str="ABC"):
         td.log.warning("ABC")
+    assert "assert_log_level" not in td.log.handlers
 
     # Test when log message doesn't contain expected string
     with pytest.raises(AssertionError), AssertLogLevel("WARNING", contains_str="DEF"):
         td.log.warning("ABC")
+    assert "assert_log_level" not in td.log.handlers
 
     # Test when log message is at incorrect level
     with pytest.raises(AssertionError), AssertLogLevel("WARNING", contains_str="ABC"):
         td.log.info("ABC")  # Should fail since INFO < WARNING
+    assert "assert_log_level" not in td.log.handlers
 
     # Test when log level is higher than expected
     with pytest.raises(AssertionError), AssertLogLevel("INFO"):
         td.log.warning("ABC")  # Should fail since WARNING > INFO
+    assert "assert_log_level" not in td.log.handlers
+
+
+def test_assert_log_str_cleans_up_after_failure():
+    """Test that AssertLogStr removes its handler after assertion failures."""
+
+    with pytest.raises(AssertionError), AssertLogStr("WARNING", contains_str="DEF"):
+        td.log.warning("ABC")
+    assert "assert_log_level" not in td.log.handlers
+
+
+def test_assert_log_rejects_handler_removal():
+    """Test that log assertion contexts fail if their handler is removed."""
+
+    with pytest.raises(RuntimeError, match="removed during context"):
+        with AssertLogLevel(None):
+            del td.log.handlers["assert_log_level"]
+    assert "assert_log_level" not in td.log.handlers
+
+
+def test_assert_log_rejects_handler_replacement():
+    """Test that log assertion contexts fail if their handler is replaced."""
+
+    with pytest.raises(RuntimeError, match="replaced during context"):
+        with AssertLogStr(None):
+            td.log.handlers["assert_log_level"] = object()
+    assert "assert_log_level" not in td.log.handlers
 
 
 def test_suppress_output():

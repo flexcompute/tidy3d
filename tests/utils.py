@@ -4,7 +4,7 @@ import dataclasses
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import trimesh
@@ -1368,6 +1368,7 @@ class AbstractAssertLog:
 
     log_level_expected: str | None
     contains_str: str = None
+    handler_key: ClassVar[str] = "assert_log_level"
 
     @property
     def records(self):
@@ -1382,8 +1383,17 @@ class AbstractAssertLog:
     def __enter__(self):
         # Create and register handler
         self.handler = AssertLogLevelHandler()
-        td.log.handlers["assert_log_level"] = self.handler
+        td.log.handlers[self.handler_key] = self.handler
         return self
+
+    def _remove_handler(self):
+        """Remove the handler registered by this context manager."""
+        try:
+            handler = td.log.handlers.pop(self.handler_key)
+        except KeyError as exc:
+            raise RuntimeError("AssertLog handler was removed during context.") from exc
+        if handler is not self.handler:
+            raise RuntimeError("AssertLog handler was replaced during context.")
 
 
 @dataclasses.dataclass
@@ -1391,14 +1401,14 @@ class AssertLogLevel(AbstractAssertLog):
     """Context manager to check log level for records logged within its context."""
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # Check the records and clean up
-        assert_log_level(
-            records=self.records,
-            log_level_expected=self.log_level_expected,
-            contains_str=self.contains_str,
-        )
-        # Remove handler
-        del td.log.handlers["assert_log_level"]
+        try:
+            assert_log_level(
+                records=self.records,
+                log_level_expected=self.log_level_expected,
+                contains_str=self.contains_str,
+            )
+        finally:
+            self._remove_handler()
 
 
 @dataclasses.dataclass
@@ -1408,15 +1418,15 @@ class AssertLogStr(AbstractAssertLog):
     excludes_str: str = None
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # Check the records and clean up
-        assert_str_in_log(
-            records=self.records,
-            log_level_test=self.log_level_expected,
-            excludes_str=self.excludes_str,
-            contains_str=self.contains_str,
-        )
-        # Remove handler
-        del td.log.handlers["assert_log_level"]
+        try:
+            assert_str_in_log(
+                records=self.records,
+                log_level_test=self.log_level_expected,
+                excludes_str=self.excludes_str,
+                contains_str=self.contains_str,
+            )
+        finally:
+            self._remove_handler()
 
 
 def get_test_root_dir():
