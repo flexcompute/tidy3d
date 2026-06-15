@@ -1,16 +1,29 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import autograd.numpy as anp
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from autograd import value_and_grad
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_id,
+    condition_metric,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 
 @pytest.fixture(autouse=True)
@@ -117,6 +130,31 @@ TEST_CASES = [
         "medium_type": "custom_anisotropic",
     },
 ]
+
+
+class MediumGradientCaseIdentity(BaseModel):
+    """Semantic identity for one medium-gradient numerical case."""
+
+    name: str
+    wavelength: float
+    permittivities: tuple[float, float, float]
+    objective_kind: str
+    monitor_size: tuple[float, float, float]
+    polarization: float
+    medium_type: str
+
+
+def _medium_case_identity(case) -> MediumGradientCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return MediumGradientCaseIdentity(
+        name=case["name"],
+        wavelength=case["wavelength"],
+        permittivities=case["permittivities"],
+        objective_kind=case["objective_kind"],
+        monitor_size=case["monitor_size"],
+        polarization=case["polarization"],
+        medium_type=case["medium_type"],
+    )
 
 
 def _scale_monitor_dim(dim: float, wavelength: float) -> float:
@@ -252,9 +290,12 @@ def _run_simulation(
     return _metric_value(case, sim_data[monitor_name], freq0)
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("case", TEST_CASES, ids=lambda c: c["name"])
-def test_medium_grads_match_fd(case, numerical_case_dir, tmp_path, _enable_local_cache):
+def _collect_medium_gradient_evaluation_data(
+    case,
+    numerical_case_dir: Path,
+    tmp_path: Path,
+) -> EvaluationData:
+    """Collect adjoint and finite-difference gradients for one medium case."""
     base_sim, monitor_name, freq0 = _build_base_sim(case)
     box_geom = _box_geometry(case)
     params0 = anp.array(case["permittivities"])
@@ -283,12 +324,17 @@ def test_medium_grads_match_fd(case, numerical_case_dir, tmp_path, _enable_local
         fd_sims[f"fd_plus_{axis}"] = _add_medium(case, base_sim, box_geom, base_params + delta)
         fd_sims[f"fd_minus_{axis}"] = _add_medium(case, base_sim, box_geom, base_params - delta)
 
-    fd_results = web.run_async(
-        fd_sims,
-        path_dir=str(numerical_case_dir / f"fd_batch_{case['name']}"),
-        local_gradient=False,
-        verbose=False,
-    )
+    if case["medium_type"] in ("custom", "custom_anisotropic"):
+        fd_results = web.Batch(simulations=fd_sims, verbose=False).run(
+            path_dir=str(numerical_case_dir / f"fd_batch_{case['name']}")
+        )
+    else:
+        fd_results = web.run_async(
+            fd_sims,
+            path_dir=str(numerical_case_dir / f"fd_batch_{case['name']}"),
+            local_gradient=False,
+            verbose=False,
+        )
 
     grad_fd = np.zeros_like(grad_adj)
     for axis in range(3):
@@ -296,23 +342,112 @@ def test_medium_grads_match_fd(case, numerical_case_dir, tmp_path, _enable_local
         minus = _metric_value(case, fd_results[f"fd_minus_{axis}"][monitor_name], freq0)
         grad_fd[axis] = (plus - minus) / (2.0 * FD_STEP)
 
-    angle_deg = _angle_deg(grad_adj, grad_fd)
+    return {
+        "grad_adj": np.asarray(grad_adj, dtype=float),
+        "grad_fd": np.asarray(grad_fd, dtype=float),
+    }
 
+
+def _evaluate_medium_gradient_evaluation_data(
+    case, evaluation_data: EvaluationData
+) -> MetricGroups:
+    """Evaluate saved-or-fresh medium-gradient data into RFC-style metrics."""
+    grad_adj = np.asarray(evaluation_data["grad_adj"], dtype=float)
+    grad_fd = np.asarray(evaluation_data["grad_fd"], dtype=float)
+    angle_deg = _angle_deg(grad_adj, grad_fd)
+    angle_tol = case.get("angle_tol_deg", ANGLE_TOL)
+    angle_passes = np.isnan(angle_deg) or angle_deg <= angle_tol
+
+    if np.isnan(angle_deg):
+        regression_metrics = [condition_metric("angle_deg_lte_or_nan", angle_passes)]
+    else:
+        regression_metrics = [
+            Metric(
+                name="angle_deg",
+                observed=float(angle_deg),
+                expected=float(angle_tol),
+                comparator="lte",
+            )
+        ]
+
+    diagnostics = {
+        "angle_deg": float(angle_deg),
+        "angle_tol": float(angle_tol),
+        "adj_mag": float(np.linalg.norm(grad_adj)),
+        "fd_mag": float(np.linalg.norm(grad_fd)),
+    }
+    return regression_metrics, [], diagnostics
+
+
+def _print_medium_gradient_summary(
+    case,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing medium-gradient comparison summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print(
-        f"[medium-grad-test:{case['name']}] adjoint={grad_adj}, "
-        f"finite-difference={grad_fd}, angle_deg={angle_deg:.3f}",
+        f"[medium-grad-test:{case['name']}] mode={mode_label}, "
+        f"adjoint={evaluation_data['grad_adj']}, "
+        f"finite-difference={evaluation_data['grad_fd']}, "
+        f"angle_deg={diagnostics['angle_deg']:.3f}",
         file=sys.stderr,
     )
 
-    angle_tol = case.get("angle_tol_deg", ANGLE_TOL)
-    assert angle_deg <= angle_tol or np.isnan(angle_deg), (
-        f"Gradient angle deviation {angle_deg:.3f} deg exceeds tolerance ({angle_tol}). "
-        f"adj={grad_adj}, fd={grad_fd}"
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case",
+    TEST_CASES,
+    ids=lambda case: case_identity_id(_medium_case_identity(case), prefix="medium"),
+)
+def test_medium_grads_match_fd(
+    request: pytest.FixtureRequest,
+    case,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    tmp_path: Path,
+    _enable_local_cache,
+):
+    case_identity = _medium_case_identity(case)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_medium_gradient_evaluation_data(
+            case, numerical_case_dir, tmp_path
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_medium_gradient_evaluation_data(case, evaluation_data)
+    )
+    _print_medium_gradient_summary(
+        case,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Gradient angle deviation exceeds tolerance; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
     )
 
 
 @pytest.mark.skip
-@pytest.mark.parametrize("case", TEST_CASES, ids=lambda c: c["name"])
+@pytest.mark.parametrize(
+    "case",
+    TEST_CASES,
+    ids=lambda case: case_identity_id(_medium_case_identity(case), prefix="medium"),
+)
 def test_medium_fd_step_sweep(case, numerical_case_dir, tmp_path, _enable_local_cache):
     base_sim, monitor_name, freq0 = _build_base_sim(case)
     box_geom = _box_geometry(case)
@@ -357,12 +492,17 @@ def test_medium_fd_step_sweep(case, numerical_case_dir, tmp_path, _enable_local_
                 base_params - delta,
             )
 
-    sweep_results = web.run_async(
-        sweep_runs,
-        path_dir=str(numerical_case_dir / f"fd_sweep_{case['name']}"),
-        local_gradient=False,
-        verbose=False,
-    )
+    if case["medium_type"] in ("custom", "custom_anisotropic"):
+        sweep_results = web.Batch(simulations=sweep_runs, verbose=False).run(
+            path_dir=str(numerical_case_dir / f"fd_sweep_{case['name']}")
+        )
+    else:
+        sweep_results = web.run_async(
+            sweep_runs,
+            path_dir=str(numerical_case_dir / f"fd_sweep_{case['name']}"),
+            local_gradient=False,
+            verbose=False,
+        )
 
     fd_sweep_matrix = np.zeros((len(sweep_steps), base_params.size), dtype=float)
     for step_idx, (step_label, step) in enumerate(zip(step_labels, sweep_steps)):

@@ -1,23 +1,31 @@
 # test GeometryGroup gradient consistency when there are no overlapping structures
 from __future__ import annotations
 
-import operator
+from pathlib import Path
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 
-PLOT_FD_ADJ_COMPARISON = True
-SAVE_FD_ADJ_DATA = True
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
+
+PLOT_FD_ADJ_COMPARISON = False
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_geometry_group_test"
 
 NUM_MODE_MONITOR_FREQUENCIES = 4
 
@@ -29,6 +37,19 @@ else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 MESH_FACTOR_DESIGN = 60.0
+
+
+class GeometryGroupCaseIdentity(BaseModel):
+    """Semantic identity for one GeometryGroup consistency numerical case."""
+
+    embedded_permittivity: float
+    simulation_background_permittivity: float
+
+
+class GeometryGroupTestParameters(GeometryGroupCaseIdentity):
+    """Full parameter bundle for one GeometryGroup consistency test invocation."""
+
+    test_number: int
 
 
 def angled_overlap_deg(v1, v2):
@@ -315,48 +336,42 @@ POLYSLAB_INDEX = 2.5
 embedded_permittivities = [1.0**2, 1.5**2]
 simulation_background_permittivites = [1.0**2, 1.75**2]
 
-geometry_group_test_parameters = []
+geometry_group_test_parameters: list[GeometryGroupTestParameters] = []
 
 test_number = 0
 for embedded_permittivity in embedded_permittivities:
     for simulation_background_permittivity in simulation_background_permittivites:
         geometry_group_test_parameters.append(
-            {
-                "embedded_permittivity": embedded_permittivity,
-                "simulation_background_permittivity": simulation_background_permittivity,
-                "test_number": test_number,
-            }
+            GeometryGroupTestParameters(
+                embedded_permittivity=embedded_permittivity,
+                simulation_background_permittivity=simulation_background_permittivity,
+                test_number=test_number,
+            )
         )
 
         test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("geometry_group_test_parameters", geometry_group_test_parameters)
-def test_finite_difference_mode_data_polyslab(
-    geometry_group_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test that GeometryGroup gradients are consistent with not using a GeometryGroup when there
-    are no overlapping structures."""
+def _case_identity(
+    test_parameters: GeometryGroupTestParameters,
+) -> GeometryGroupCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return case_identity_from_parameters(GeometryGroupCaseIdentity, test_parameters)
 
-    test_number = geometry_group_test_parameters["test_number"]
 
-    (
-        embedded_permittivity,
-        simulation_background_permittivity,
-        test_number,
-    ) = operator.itemgetter(
-        "embedded_permittivity",
-        "simulation_background_permittivity",
-        "test_number",
-    )(geometry_group_test_parameters)
-
+def _collect_geometry_group_evaluation_data(
+    test_parameters: GeometryGroupTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    """Collect compact gradients for the GeometryGroup consistency check."""
+    embedded_permittivity = test_parameters.embedded_permittivity
+    simulation_background_permittivity = test_parameters.simulation_background_permittivity
+    test_number = test_parameters.test_number
     adj_wvl_um = ADJ_WVL_UM
     mesh_wvl_um = MESH_WVL_UM
     geometry_size_wvl = (GEOMETRY_SIZE_WVL, GEOMETRY_SIZE_WVL, MODE_LAYER_HEIGHT_WVL)
     polyslab_permittivity = POLYSLAB_INDEX**2
-
-    sim_geometry = get_sim_geometry(mesh_wvl_um)
 
     box_for_override = td.Box(
         center=(0, 0, 0),
@@ -440,46 +455,74 @@ def test_finite_difference_mode_data_polyslab(
     adj_grad_no_geom_group = np.squeeze(np.array(adj_grad_no_geom_group))
     adj_grad_geom_group = np.squeeze(np.array(adj_grad_geom_group))
 
+    return {
+        "adj_grad_no_geom_group": adj_grad_no_geom_group,
+        "adj_grad_geom_group": adj_grad_geom_group,
+        "monitor_top_weights": np.asarray(monitor_top_weights),
+        "monitor_bottom_weights": np.asarray(monitor_bottom_weights),
+        "frequency_selection_mask": np.asarray(frequency_selection_mask),
+        "vertex_centers_x": vertex_centers_x,
+        "vertex_centers_y": vertex_centers_y,
+    }
+
+
+def _evaluate_geometry_group_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    """Evaluate saved-or-fresh GeometryGroup data into RFC-style metrics."""
+    adj_grad_no_geom_group = np.asarray(evaluation_data["adj_grad_no_geom_group"], dtype=float)
+    adj_grad_geom_group = np.asarray(evaluation_data["adj_grad_geom_group"], dtype=float)
     rms_error = np.linalg.norm(adj_grad_no_geom_group - adj_grad_geom_group)
     no_geom_group_mag = np.linalg.norm(adj_grad_no_geom_group)
     geom_group_mag = np.linalg.norm(adj_grad_geom_group)
-
     overlap_deg = angled_overlap_deg(adj_grad_no_geom_group, adj_grad_geom_group)
+    expected_rms_error = RMS_THRESHOLD * np.sqrt(no_geom_group_mag * geom_group_mag)
 
-    print("\n" * 3)
-    print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Background permittivity: {simulation_background_permittivity}")
-    print(f"Embedded permittivity: {embedded_permittivity}")
-    print(f"RMS Error: {rms_error}")
-    print(f"No Geom Group, Geom Group magnitudes: {no_geom_group_mag}, {geom_group_mag}")
-    print(f"Overlap (deg): {overlap_deg}")
-    print("-" * 20)
-    print("\n" * 3)
-
-    test_results = np.zeros((2, len(adj_grad_no_geom_group)))
-
-    test_results[0, :] = adj_grad_no_geom_group
-    test_results[1, :] = adj_grad_geom_group
-
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
-
-    try:
-        assert rms_error < RMS_THRESHOLD * np.sqrt(no_geom_group_mag * geom_group_mag), (
-            "RMS error magnitude too large"
+    regression_metrics = [
+        Metric(
+            name="rms_error",
+            observed=float(rms_error),
+            expected=float(expected_rms_error),
+            comparator="lt",
         )
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+    ]
+    diagnostics = {
+        "rms_error": float(rms_error),
+        "no_geom_group_mag": float(no_geom_group_mag),
+        "geom_group_mag": float(geom_group_mag),
+        "expected_rms_error": float(expected_rms_error),
+        "overlap_deg": float(overlap_deg),
+    }
+    return regression_metrics, [], diagnostics
 
-    test_number += 1
 
+def _print_geometry_group_summary(
+    test_parameters: GeometryGroupTestParameters,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing GeometryGroup comparison summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    print("\n" * 3)
+    print("-" * 20)
+    print(f"Numerical test #{test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(f"Background permittivity: {test_parameters.simulation_background_permittivity}")
+    print(f"Embedded permittivity: {test_parameters.embedded_permittivity}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(
+        "No Geom Group, Geom Group magnitudes: "
+        f"{diagnostics['no_geom_group_mag']}, {diagnostics['geom_group_mag']}"
+    )
+    print(f"Overlap (deg): {diagnostics['overlap_deg']}")
+    print("-" * 20)
+    print("\n" * 3)
+
+
+def _plot_geometry_group_comparison(evaluation_data: EvaluationData) -> None:
+    """Plot saved GeometryGroup and non-GeometryGroup gradients when enabled."""
     if PLOT_FD_ADJ_COMPARISON:
+        adj_grad_no_geom_group = np.asarray(evaluation_data["adj_grad_no_geom_group"], dtype=float)
+        adj_grad_geom_group = np.asarray(evaluation_data["adj_grad_geom_group"], dtype=float)
         plt.plot(adj_grad_no_geom_group, color="g", linewidth=2.0)
         plt.plot(adj_grad_geom_group, color="b", linewidth=1.5, linestyle="--")
         plt.title("Gradient:")
@@ -487,3 +530,51 @@ def test_finite_difference_mode_data_polyslab(
         plt.xlabel("Vertex")
         plt.ylabel("Gradient value")
         plt.show()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "geometry_group_test_parameters",
+    geometry_group_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="geometry-group"),
+)
+def test_finite_difference_mode_data_polyslab(
+    request: pytest.FixtureRequest,
+    geometry_group_test_parameters: GeometryGroupTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Test GeometryGroup gradient consistency when there are no overlapping structures."""
+    case_identity = _case_identity(geometry_group_test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_geometry_group_evaluation_data(
+            geometry_group_test_parameters,
+            rng,
+            numerical_case_dir,
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_geometry_group_evaluation_data(
+        evaluation_data
+    )
+    _print_geometry_group_summary(
+        geometry_group_test_parameters,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
+    _plot_geometry_group_comparison(evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

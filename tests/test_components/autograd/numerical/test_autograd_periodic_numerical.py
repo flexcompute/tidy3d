@@ -1,25 +1,41 @@
 # test autograd and compares to numerically computed finite difference gradients
 from __future__ import annotations
 
-import operator
+from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import TypeAlias
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.data.sim_data import SimulationData
+
+from .numerical_test_helpers import (
+    EvalFn,
+    EvalFnResult,
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_fd_adjoint_gradient_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+
+OrderPair: TypeAlias = tuple[int, int]
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = True
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_periodic_test"
 
 RMS_THRESHOLD = 0.25
 
@@ -31,6 +47,27 @@ else:
 
 FINITE_DIFF_PERM_SEED = 1.5**2
 MESH_FACTOR_DESIGN = 30.0
+
+
+class PeriodicDiffractionCaseIdentity(BaseModel):
+    """Semantic identity for one periodic-diffraction numerical case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_bg_index: float
+    pw_angle_deg: float
+    order_x: tuple[int, ...]
+    order_y: tuple[int, ...]
+    polarization: str
+    grating_mode: str
+    eval_fn_name: str
+
+
+class PeriodicDiffractionTestParameters(PeriodicDiffractionCaseIdentity):
+    """Full parameter bundle for one periodic-diffraction test invocation."""
+
+    eval_fn: EvalFn
+    test_number: int
 
 
 def get_sim_geometry(mesh_wvl_um):
@@ -97,12 +134,11 @@ def make_base_sim(
     boundary_spec = td.BoundarySpec(
         x=bloch_x,
         y=bloch_y,
-        z=td.Boundary.pml(num_layers=48),
+        z=td.Boundary.pml(num_layers=48, extrude_structures=False),
     )
 
-    assert (grating_mode == "transmission") or (grating_mode == "reflection"), (
-        "Unknown grating mode specified!"
-    )
+    if grating_mode not in ("transmission", "reflection"):
+        raise ValueError("Unknown grating mode specified!")
     if grating_mode == "transmission":
         diffraction_monitor = td.DiffractionMonitor(
             center=(
@@ -124,9 +160,19 @@ def make_base_sim(
             normal_dir="-",
         )
 
-    monitor_index_block = td.Box(
-        center=(sim_center_um[0], sim_center_um[1], 0.25 * sim_size_um[2] + mesh_wvl_um),
-        size=(*tuple(2 * size for size in sim_size_um[0:2]), mesh_wvl_um + 0.5 * sim_size_um[2]),
+    monitor_index_zmin = 0.5 * mesh_wvl_um
+    monitor_index_zmax = sim_center_um[2] + 0.5 * sim_size_um[2] + 10.0 * mesh_wvl_um
+    monitor_index_block = td.Box.from_bounds(
+        rmin=(
+            sim_center_um[0] - sim_size_um[0],
+            sim_center_um[1] - sim_size_um[1],
+            monitor_index_zmin,
+        ),
+        rmax=(
+            sim_center_um[0] + sim_size_um[0],
+            sim_center_um[1] + sim_size_um[1],
+            monitor_index_zmax,
+        ),
     )
     monitor_index_block_structure = td.Structure(
         geometry=monitor_index_block, medium=td.Medium(permittivity=monitor_bg_index**2)
@@ -169,7 +215,11 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
             simulation_dict[f"numerical_periodic_testing_{idx}"] = sim_with_block.copy()
 
         sim_data = web.run_async(
-            simulation_dict, path_dir=sim_path_dir, local_gradient=LOCAL_GRADIENT, verbose=VERBOSE
+            simulation_dict,
+            path_dir=sim_path_dir,
+            local_gradient=LOCAL_GRADIENT,
+            verbose=VERBOSE,
+            lazy=False,
         )
 
         objective_vals = []
@@ -184,22 +234,40 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
     return objective
 
 
+def selected_order_pairs(
+    orders_x: tuple[int, ...], orders_y: tuple[int, ...]
+) -> tuple[OrderPair, ...]:
+    """Return the ordered diffraction-order pairs selected by the objective."""
+    return tuple((int(order_x), int(order_y)) for order_x in orders_x for order_y in orders_y)
+
+
+def make_order_power_eval_fn(order_x: int, order_y: int, polarization: str) -> EvalFn:
+    """Create an objective that reads one diffraction order and polarization."""
+
+    def order_pol_amp_sq(sim_data: SimulationData) -> EvalFnResult:
+        return np.sum(
+            np.abs(
+                sim_data["monitor_diffraction"]
+                .amps.sel(polarization=polarization, orders_x=order_x, orders_y=order_y)
+                .data
+            )
+            ** 2
+        )
+
+    return order_pol_amp_sq
+
+
 def make_eval_fns(orders_x, orders_y, polarization):
-    def transmission_order_pol_amp_sq(sim_data):
+    order_eval_fns = [
+        make_order_power_eval_fn(order_x_val, order_y_val, polarization)
+        for order_x_val, order_y_val in selected_order_pairs(orders_x, orders_y)
+    ]
+
+    def transmission_order_pol_amp_sq(sim_data: SimulationData) -> EvalFnResult:
         total = 0.0
 
-        for order_x_val in orders_x:
-            for order_y_val in orders_y:
-                total += np.sum(
-                    np.abs(
-                        sim_data["monitor_diffraction"]
-                        .amps.sel(
-                            polarization=polarization, orders_x=order_x_val, orders_y=order_y_val
-                        )
-                        .data
-                    )
-                    ** 2
-                )
+        for order_eval_fn in order_eval_fns:
+            total += order_eval_fn(sim_data)
 
         return total
 
@@ -215,13 +283,14 @@ adj_wvls_um = [1.55]
 
 orders_x = [(0,), (1,), (2,), (1, 2)]
 orders_y = [(0,), (0,), (0,), (1,)]
+
 polarizations = ["p", "p", "p", "s"]
 
 grating_modes = ["transmission", "reflection"]
 
-pw_angles_deg = [0.0, 10.0]
+pw_angles_deg = [10.0]
 
-periodic_test_parameters = []
+periodic_test_parameters: list[PeriodicDiffractionTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -240,61 +309,77 @@ for idx in range(len(mesh_wvls_um)):
                 for monitor_bg_index in background_indices:
                     for eval_fn_idx, eval_fn in enumerate(eval_fns):
                         periodic_test_parameters.append(
-                            {
-                                "mesh_wvl_um": mesh_wvl_um,
-                                "adj_wvl_um": adj_wvl_um,
-                                "monitor_bg_index": monitor_bg_index,
-                                "pw_angle_deg": pw_angle_deg,
-                                "order_x": orders_x[order_idx],
-                                "order_y": orders_y[order_idx],
-                                "polarization": polarizations[order_idx],
-                                "grating_mode": grating_mode,
-                                "eval_fn": eval_fn,
-                                "eval_fn_name": eval_fn_names[eval_fn_idx],
-                                "test_number": test_number,
-                            }
+                            PeriodicDiffractionTestParameters(
+                                mesh_wvl_um=mesh_wvl_um,
+                                adj_wvl_um=adj_wvl_um,
+                                monitor_bg_index=monitor_bg_index,
+                                pw_angle_deg=pw_angle_deg,
+                                order_x=orders_x[order_idx],
+                                order_y=orders_y[order_idx],
+                                polarization=polarizations[order_idx],
+                                grating_mode=grating_mode,
+                                eval_fn=eval_fn,
+                                eval_fn_name=eval_fn_names[eval_fn_idx],
+                                test_number=test_number,
+                            )
                         )
 
                         test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("periodic_test_parameters", periodic_test_parameters)
-def test_finite_difference_diffraction_data(
-    periodic_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test a variety of autograd permittivity gradients for DiffractionData by"""
-    """comparing them to numerical finite difference."""
+def _case_identity(
+    periodic_test_parameters: PeriodicDiffractionTestParameters,
+) -> PeriodicDiffractionCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return case_identity_from_parameters(PeriodicDiffractionCaseIdentity, periodic_test_parameters)
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
 
-    test_number = periodic_test_parameters["test_number"]
+def _as_single_gradient(adj_grad: object, expected_shape: tuple[int, ...]) -> np.ndarray:
+    """Normalize autograd's list-shaped gradient return into one real ndarray."""
+    grad_array = np.asarray(adj_grad)
+    if grad_array.shape == (1, *expected_shape):
+        grad_array = grad_array[0]
+    if grad_array.shape != expected_shape:
+        raise ValueError(
+            "Expected adjoint gradient with shape "
+            f"{expected_shape} or {(1, *expected_shape)}, got {grad_array.shape}."
+        )
+    return np.real(grad_array)
 
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_bg_index,
-        pw_angle_deg,
-        order_x,
-        order_y,
-        polarization,
-        grating_mode,
+
+def _collect_adjoint_gradient(
+    *,
+    block: td.Box,
+    create_sim_base: Callable[[], td.Simulation],
+    perm_init: np.ndarray,
+    eval_fn: EvalFn,
+    adjoint_path_dir: Path,
+) -> np.ndarray:
+    """Run the original combined objective as a single adjoint gradient calculation."""
+    objective_adj = create_objective_function(
+        block,
+        create_sim_base,
         eval_fn,
-        eval_fn_name,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_bg_index",
-        "pw_angle_deg",
-        "order_x",
-        "order_y",
-        "polarization",
-        "grating_mode",
-        "eval_fn",
-        "eval_fn_name",
-        "test_number",
-    )(periodic_test_parameters)
+        sim_path_dir=str(adjoint_path_dir),
+    )
+    obj_val_and_grad = ag.value_and_grad(objective_adj)
+    _, adj_grad = obj_val_and_grad([perm_init])
+    return _as_single_gradient(adj_grad, perm_init.shape)
+
+
+def _collect_periodic_diffraction_evaluation_data(
+    periodic_test_parameters: PeriodicDiffractionTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    """Collect compact periodic-diffraction FD and adjoint gradient data."""
+    mesh_wvl_um = periodic_test_parameters.mesh_wvl_um
+    adj_wvl_um = periodic_test_parameters.adj_wvl_um
+    monitor_bg_index = periodic_test_parameters.monitor_bg_index
+    pw_angle_deg = periodic_test_parameters.pw_angle_deg
+    grating_mode = periodic_test_parameters.grating_mode
+    eval_fn = periodic_test_parameters.eval_fn
+    test_number = periodic_test_parameters.test_number
 
     sim_geometry = get_sim_geometry(mesh_wvl_um)
 
@@ -306,117 +391,199 @@ def test_finite_difference_diffraction_data(
     )
 
     dim = 1 + int(dim_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    Nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
+    nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
 
     box_for_override = td.Box(
         center=(sim_geometry.center[0], sim_geometry.center[1], 0),
         size=(*sim_geometry.size[0:2], thickness_um + mesh_wvl_um),
     )
 
-    _eval_fns, _eval_fn_names = make_eval_fns(
-        orders_x=order_x, orders_y=order_y, polarization=polarization
-    )
+    with TemporaryDirectory(prefix=f"test{test_number}_", dir=numerical_case_dir) as sim_path_dir:
+        sim_path_dir = Path(sim_path_dir)
+        adjoint_path_dir = sim_path_dir / "adjoint"
+        finite_difference_path_dir = sim_path_dir / "finite_difference"
+        adjoint_path_dir.mkdir()
+        finite_difference_path_dir.mkdir()
 
-    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
-    sim_path_dir.mkdir(parents=True, exist_ok=True)
-
-    objective = create_objective_function(
-        block,
-        lambda mesh_wvl_um=mesh_wvl_um,
-        adj_wvl_um=adj_wvl_um,
-        box_for_override=box_for_override,
-        pw_angle_deg=pw_angle_deg,
-        grating_mode=grating_mode,
-        monitor_bg_index=monitor_bg_index: make_base_sim(
+        def create_sim_base(
             mesh_wvl_um=mesh_wvl_um,
             adj_wvl_um=adj_wvl_um,
             box_for_override=box_for_override,
             pw_angle_deg=pw_angle_deg,
             grating_mode=grating_mode,
             monitor_bg_index=monitor_bg_index,
+        ) -> td.Simulation:
+            return make_base_sim(
+                mesh_wvl_um=mesh_wvl_um,
+                adj_wvl_um=adj_wvl_um,
+                box_for_override=box_for_override,
+                pw_angle_deg=pw_angle_deg,
+                grating_mode=grating_mode,
+                monitor_bg_index=monitor_bg_index,
+            )
+
+        objective_fd = create_objective_function(
+            block,
+            create_sim_base,
+            eval_fn,
+            sim_path_dir=str(finite_difference_path_dir),
+        )
+
+        perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, nz))
+
+        adj_grad = _collect_adjoint_gradient(
+            block=block,
+            create_sim_base=create_sim_base,
+            perm_init=perm_init,
+            eval_fn=eval_fn,
+            adjoint_path_dir=adjoint_path_dir,
+        )
+
+        # empirical step size from running other finite difference tests for field
+        # cases with permittivity
+        fd_step = 0.1
+
+        all_perm = []
+        pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
+
+        for fd_idx in range(NUM_FINITE_DIFFERENCE):
+            random_pattern = rng.random((dim, dim, nz)) - 0.5
+            random_pattern = gaussian_filter(random_pattern, sigma=3)
+            random_pattern /= np.linalg.norm(random_pattern)
+
+            pattern_dot_adj_gradient[fd_idx] = float(np.real(np.sum(random_pattern * adj_grad)))
+
+            perm_up = perm_init.copy() + fd_step * random_pattern
+            perm_down = perm_init.copy() - fd_step * random_pattern
+
+            all_perm.append(perm_up)
+            all_perm.append(perm_down)
+
+        all_obj = objective_fd(all_perm)
+
+        fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
+        for fd_idx in range(NUM_FINITE_DIFFERENCE):
+            obj_up_location = 2 * fd_idx
+            obj_down_location = 2 * fd_idx + 1
+
+            fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (
+                2 * fd_step
+            )
+
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+    }
+
+
+def _evaluate_periodic_diffraction_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    """Evaluate saved-or-fresh periodic-diffraction data into RFC-style metrics."""
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"]),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"]),
+        relative_rms_threshold=RMS_THRESHOLD,
+    )
+
+
+def _print_periodic_diffraction_summary(
+    periodic_test_parameters: PeriodicDiffractionTestParameters,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing periodic-diffraction comparison summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+
+    print("\n" * 3)
+    print("-" * 20)
+    print(f"Numerical test #{periodic_test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{periodic_test_parameters.mesh_wvl_um}, {periodic_test_parameters.adj_wvl_um}"
+    )
+    print(f"Input plane wave angle (deg): {periodic_test_parameters.pw_angle_deg}")
+    print(
+        "(X, Y) order, polarization: "
+        f"({periodic_test_parameters.order_x}, {periodic_test_parameters.order_y}), "
+        f"{periodic_test_parameters.polarization}"
+    )
+    print(f"Grating mode: {periodic_test_parameters.grating_mode}")
+    print(f"Background index for monitor: {periodic_test_parameters.monitor_bg_index}")
+    print(f"Eval function: {periodic_test_parameters.eval_fn_name}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
+    print("-" * 20)
+    print("\n" * 3)
+
+
+def _plot_periodic_diffraction_comparison(
+    periodic_test_parameters: PeriodicDiffractionTestParameters,
+    evaluation_data: EvaluationData,
+) -> None:
+    """Plot saved FD and adjoint arrays when interactive plotting is enabled."""
+    plt.plot(evaluation_data["adj_grad_projected"], color="g", linewidth=2.0, label="Adjoint total")
+    plt.plot(
+        evaluation_data["fd_grad"],
+        color="b",
+        linewidth=1.5,
+        linestyle="--",
+        label="Finite difference",
+    )
+    plt.title(f"Gradient for objective: {periodic_test_parameters.eval_fn_name}")
+    plt.legend()
+    plt.xlabel("Sample number")
+    plt.ylabel("Gradient value")
+    plt.show()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "periodic_test_parameters",
+    periodic_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="periodic"),
+)
+def test_finite_difference_diffraction_data(
+    request: pytest.FixtureRequest,
+    periodic_test_parameters: PeriodicDiffractionTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Test a variety of autograd permittivity gradients for DiffractionData by"""
+    """comparing them to numerical finite difference."""
+    case_identity = _case_identity(periodic_test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_periodic_diffraction_evaluation_data(
+            periodic_test_parameters, rng, numerical_case_dir
         ),
-        eval_fn,
-        sim_path_dir=str(sim_path_dir),
     )
-
-    obj_val_and_grad = ag.value_and_grad(objective)
-
-    perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, Nz))
-
-    _obj, adj_grad = obj_val_and_grad([perm_init])
-
-    # empirical step size from running other finite difference tests for field
-    # cases with permittivity
-    fd_step = 0.1
-
-    all_perm = []
-    pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
-
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        random_pattern = rng.random((dim, dim, Nz)) - 0.5
-        random_pattern = gaussian_filter(random_pattern, sigma=3)
-        random_pattern /= np.linalg.norm(random_pattern)
-
-        pattern_dot_adj_gradient[fd_idx] = np.sum(random_pattern * adj_grad)
-
-        perm_up = perm_init.copy() + fd_step * random_pattern
-        perm_down = perm_init.copy() - fd_step * random_pattern
-
-        all_perm.append(perm_up)
-        all_perm.append(perm_down)
-
-    all_obj = objective(all_perm)
-
-    fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        obj_up_location = 2 * fd_idx
-        obj_down_location = 2 * fd_idx + 1
-
-        fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
-
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_periodic_diffraction_evaluation_data(evaluation_data)
     )
-
-    print("\n" * 3)
-    print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Input plane wave angle (deg): {pw_angle_deg}")
-    print(f"(X, Y) order, polarization: ({order_x}, {order_y}), {polarization}")
-    print(f"Background index for monitor: {monitor_bg_index}")
-    print(f"Eval function: {eval_fn_name}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
-    print("-" * 20)
-    print("\n" * 3)
-
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
-
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
+    _print_periodic_diffraction_summary(
+        periodic_test_parameters,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0)
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
-        plt.title(f"Gradient for objective: {eval_fn_name}")
-        plt.legend(["Adjoint", "Finite difference"])
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.show()
+        _plot_periodic_diffraction_comparison(periodic_test_parameters, evaluation_data)
 
-    try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

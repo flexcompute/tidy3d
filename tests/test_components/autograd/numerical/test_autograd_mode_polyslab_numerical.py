@@ -1,16 +1,13 @@
 # test autograd and compares to numerically computed finite difference gradients
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TypeAlias
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
-from autograd.numpy.numpy_boxes import ArrayBox
 from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
@@ -20,6 +17,7 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.types.base import Size
 
 from .numerical_test_helpers import (
+    EvalFnResult,
     EvaluationData,
     GradientComparisonDiagnostics,
     MetricGroups,
@@ -29,9 +27,6 @@ from .numerical_test_helpers import (
     finalize_result,
     load_or_collect_evaluation_data,
 )
-
-EvalFnResult: TypeAlias = float | ArrayBox
-EvalFn: TypeAlias = Callable[[SimulationData], EvalFnResult]
 
 
 class ModeDataPolyslabCaseIdentity(BaseModel):

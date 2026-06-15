@@ -8,12 +8,18 @@ from typing import TypeAlias, TypeVar
 
 import numpy as np
 import pytest
+from autograd.numpy.numpy_boxes import ArrayBox
 from pydantic import BaseModel
+
+from tidy3d.components.base import make_json_compatible
+from tidy3d.components.data.sim_data import SimulationData
 
 from .result_models import Metric, NumericalResult
 
 EVALUATION_DATA_FILENAME = "evaluation_data.npz"
 RESULT_FILENAME = "result.json"
+EvalFnResult: TypeAlias = float | ArrayBox
+EvalFn: TypeAlias = Callable[[SimulationData], EvalFnResult]
 EvaluationDataValue: TypeAlias = np.ndarray | np.generic | float | int | bool | complex
 EvaluationData: TypeAlias = dict[str, EvaluationDataValue]
 GradientComparisonDiagnostics: TypeAlias = dict[str, float]
@@ -25,7 +31,15 @@ CASE_IDENTITY_JSON_KEY = "__case_identity_json__"
 def _canonicalize_case_identity(case_identity: BaseModel) -> str:
     """Serialize a pydantic case-identity payload into canonical JSON."""
     payload = case_identity.model_dump(mode="json")
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    case_identity_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    case_identity_json = make_json_compatible(case_identity_json)
+    json.loads(case_identity_json, parse_constant=_raise_non_strict_json_constant)
+    return case_identity_json
+
+
+def _raise_non_strict_json_constant(constant: str) -> None:
+    """Reject non-standard JSON constants not handled by ``make_json_compatible``."""
+    raise ValueError(f"Case identity contains non-standard JSON constant {constant!r}.")
 
 
 def case_identity_id(case_identity: BaseModel, prefix: str = "case", digest_len: int = 12) -> str:
@@ -146,6 +160,64 @@ def evaluate_fd_adjoint_gradient_agreement(
         "fd_mag": fd_mag,
         "adj_mag": adj_mag,
         "percentage_error": percentage_error,
+    }
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def condition_metric(name: str, condition: bool) -> Metric:
+    """Represent a boolean assertion as a regression metric."""
+    return Metric(
+        name=name,
+        observed=float(bool(condition)),
+        expected=1.0,
+        comparator="eq",
+    )
+
+
+def evaluate_allclose_agreement(
+    actual: np.ndarray,
+    desired: np.ndarray,
+    *,
+    rtol: float,
+    atol: float,
+    metric_name: str = "max_allclose_scaled_error",
+) -> MetricGroups:
+    """Evaluate NumPy ``assert_allclose``-style agreement as one scalar metric."""
+    actual = np.asarray(actual, dtype=float)
+    desired = np.asarray(desired, dtype=float)
+    abs_error = np.abs(actual - desired)
+    tolerance = atol + rtol * np.abs(desired)
+    scaled_error = np.divide(
+        abs_error,
+        tolerance,
+        out=np.full_like(abs_error, np.finfo(np.float64).max, dtype=float),
+        where=tolerance > 0,
+    )
+    scaled_error = np.where((tolerance <= 0) & (abs_error == 0), 0.0, scaled_error)
+
+    max_scaled_error = float(np.max(scaled_error)) if scaled_error.size else 0.0
+    max_abs_error = float(np.max(abs_error)) if abs_error.size else 0.0
+    max_allowed_abs_error = float(np.max(tolerance)) if tolerance.size else 0.0
+    rms_error = float(np.sqrt(np.mean(abs_error**2))) if abs_error.size else 0.0
+    reference_norm = float(np.linalg.norm(desired))
+    rms_error_normalized = rms_error / max(reference_norm, np.finfo(np.float64).eps)
+
+    regression_metrics = [
+        Metric(
+            name=metric_name,
+            observed=max_scaled_error,
+            expected=1.0,
+            comparator="lte",
+        )
+    ]
+    observation_metrics: list[Metric] = []
+    diagnostics = {
+        "max_allclose_scaled_error": max_scaled_error,
+        "max_abs_error": max_abs_error,
+        "max_allowed_abs_error": max_allowed_abs_error,
+        "rms_error": rms_error,
+        "reference_norm": reference_norm,
+        "rms_error_normalized": float(rms_error_normalized),
     }
     return regression_metrics, observation_metrics, diagnostics
 

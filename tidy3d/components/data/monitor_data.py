@@ -4939,7 +4939,7 @@ class DiffractionData(AbstractFieldProjectionData):
 
         for (
             (freq_index, _, order_x_index, order_y_index),
-            (freq, pol, _, _),
+            (freq, pol, order_x, order_y),
             amp_complex,
         ) in _iter_nonzero_data_array_entries(
             amps,
@@ -4949,6 +4949,8 @@ class DiffractionData(AbstractFieldProjectionData):
             adjoint_source = diffraction_source_from_angles(
                 monitor=self.monitor,
                 freq=freq,
+                order_x=int(order_x),
+                order_y=int(order_y),
                 angle_theta=theta_values[order_x_index, order_y_index, freq_index],
                 angle_phi=phi_values[order_x_index, order_y_index, freq_index],
                 polarization=pol,

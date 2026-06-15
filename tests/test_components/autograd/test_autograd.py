@@ -27,6 +27,10 @@ import tidy3d.web as web
 from tidy3d import Box, Geometry, GeometryGroup
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.field_map import FieldMap
+from tidy3d.components.autograd.source_factory import (
+    diffraction_source_from_data,
+    diffraction_source_from_simulation,
+)
 from tidy3d.components.autograd.utils import get_static, hasbox, is_tidy_box
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
@@ -3033,6 +3037,85 @@ def test_gaussian_broadband_source_num_freqs_selection():
     )
     assert isinstance(src_astig_wide, td.AstigmaticGaussianBeam)
     assert src_astig_wide.num_freqs == 3
+
+
+def test_diffraction_adjoint_source_num_freqs_for_nonzero_orders():
+    """Nonzero diffraction adjoint orders use single-frequency plane-wave injection."""
+
+    f0 = FREQ0
+    fwidth = 0.1 * f0
+    period = 3.5 * WVL
+    source = td.PlaneWave(
+        center=(0.0, 0.0, -WVL),
+        size=(td.inf, td.inf, 0.0),
+        source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth),
+        direction="+",
+        angle_theta=np.radians(10.0),
+        angle_phi=0.0,
+        pol_angle=np.pi / 2,
+    )
+    monitor = td.DiffractionMonitor(
+        center=(0.0, 0.0, WVL),
+        size=(td.inf, td.inf, 0.0),
+        freqs=[f0],
+        normal_dir="+",
+        name="diff",
+    )
+    sim = td.Simulation(
+        size=(period, period, 4.0 * WVL),
+        sources=[source],
+        monitors=[monitor],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.bloch_from_source(source=source, domain_size=period, axis=0),
+            y=td.Boundary.bloch_from_source(source=source, domain_size=period, axis=1),
+            z=td.Boundary.pml(),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=0.1 * WVL),
+    )
+
+    zero_order_source = diffraction_source_from_simulation(
+        sim, monitor, f0, 0, 0, "s", coefficient=1.0 + 0j, fwidth=fwidth
+    )
+    nonzero_order_source = diffraction_source_from_simulation(
+        sim, monitor, f0, 1, 0, "s", coefficient=1.0 + 0j, fwidth=fwidth
+    )
+
+    assert zero_order_source.num_freqs == 3
+    assert len(zero_order_source.frequency_grid) == 3
+    assert nonzero_order_source.num_freqs == 1
+    assert np.allclose(nonzero_order_source.frequency_grid, [f0])
+
+    raw_orders_x = [0, 1]
+    raw_orders_y = [0]
+    raw_coords = {"orders_x": raw_orders_x, "orders_y": raw_orders_y, "f": [f0]}
+    raw_values = np.ones((len(raw_orders_x), len(raw_orders_y), 1), dtype=complex)
+    raw_field = td.DiffractionDataArray(raw_values, coords=raw_coords)
+    diff_data = td.DiffractionData(
+        monitor=monitor,
+        sim_size=(period, period),
+        bloch_vecs=(0.0, 0.0),
+        Etheta=raw_field,
+        Ephi=raw_field,
+        Er=raw_field,
+        Htheta=raw_field,
+        Hphi=raw_field,
+        Hr=raw_field,
+    )
+
+    zero_order_raw_source = diffraction_source_from_data(
+        diff_data, f0, 0, 0, "s", coefficient=1.0 + 0j, fwidth=fwidth
+    )
+    nonzero_order_raw_source = diffraction_source_from_data(
+        diff_data, f0, 1, 0, "s", coefficient=1.0 + 0j, fwidth=fwidth
+    )
+
+    assert zero_order_raw_source is not None
+    assert nonzero_order_raw_source is not None
+    assert zero_order_raw_source.num_freqs == 3
+    assert len(zero_order_raw_source.frequency_grid) == 3
+    assert nonzero_order_raw_source.num_freqs == 1
+    assert np.allclose(nonzero_order_raw_source.frequency_grid, [f0])
 
 
 def test_make_post_norm_amps_deduplicates_equal_frequencies():

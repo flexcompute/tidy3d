@@ -278,6 +278,7 @@ def diffraction_source_from_simulation(
         coefficient=coefficient,
         fwidth=fwidth,
         bck_eps=bck_eps,
+        num_freqs=_diffraction_adjoint_num_freqs(order_x, order_y),
     )
 
 
@@ -300,6 +301,8 @@ def diffraction_source_from_data(
     return diffraction_source_from_angles(
         monitor=monitor,
         freq=freq,
+        order_x=order_x,
+        order_y=order_y,
         angle_theta=angle_theta,
         angle_phi=angle_phi,
         polarization=polarization,
@@ -312,6 +315,8 @@ def diffraction_source_from_data(
 def diffraction_source_from_angles(
     monitor: DiffractionMonitor,
     freq: float,
+    order_x: int,
+    order_y: int,
     angle_theta: float,
     angle_phi: float,
     polarization: DiffractionPolarization,
@@ -337,7 +342,15 @@ def diffraction_source_from_angles(
         coefficient=coefficient,
         fwidth=fwidth,
         bck_eps=bck_eps,
+        num_freqs=_diffraction_adjoint_num_freqs(order_x, order_y),
     )
+
+
+def _diffraction_adjoint_num_freqs(order_x: int, order_y: int) -> int | None:
+    """Use center-frequency injection for nonzero diffraction adjoint orders."""
+    if int(order_x) == 0 and int(order_y) == 0:
+        return None
+    return 1
 
 
 def _diffraction_plane_wave(
@@ -349,6 +362,7 @@ def _diffraction_plane_wave(
     coefficient: complex,
     fwidth: float,
     bck_eps: complex,
+    num_freqs: int | None,
 ) -> PlaneWave:
     k0 = 2 * np.pi * freq / C_0
     grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
@@ -356,15 +370,19 @@ def _diffraction_plane_wave(
     src_amp = 1j * grad_const * coefficient * normal_factor
     src_angle_theta = normal_factor * angle_theta
 
-    return PlaneWave(
-        size=monitor.size,
-        center=monitor.center,
-        source_time=_adjoint_source_time(freq=freq, src_amp=src_amp, fwidth=fwidth),
-        direction=flip_direction(monitor.normal_dir),
-        angle_theta=src_angle_theta,
-        angle_phi=angle_phi,
-        pol_angle=pol_angle,
-    )
+    plane_wave_kwargs = {
+        "size": monitor.size,
+        "center": monitor.center,
+        "source_time": _adjoint_source_time(freq=freq, src_amp=src_amp, fwidth=fwidth),
+        "direction": flip_direction(monitor.normal_dir),
+        "angle_theta": src_angle_theta,
+        "angle_phi": angle_phi,
+        "pol_angle": pol_angle,
+    }
+    if num_freqs is not None:
+        plane_wave_kwargs["num_freqs"] = num_freqs
+
+    return PlaneWave(**plane_wave_kwargs)
 
 
 def _adjoint_source_time(*, freq: float, src_amp: complex, fwidth: float) -> GaussianPulse:

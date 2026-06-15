@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import autograd as ag
 import numpy as np
 import pytest
+from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_id,
+    evaluate_fd_adjoint_gradient_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
 
 pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
@@ -27,6 +40,48 @@ WG_INDEX = 3.5
 POLYSLAB_INDEX = 2.6
 
 NUM_VERTICES_PER_POLY = 8
+
+
+class ModeClipOperationCaseIdentity(BaseModel):
+    """Semantic identity for one mode-data clip-operation case."""
+
+    clip_operation: str
+    geometry_case: int
+
+
+class NestedModeClipOperationCaseIdentity(BaseModel):
+    """Semantic identity for one nested mode-data clip-operation case."""
+
+    inner_clip_operation: str
+    outer_clip_operation: str
+    geometry_case: int
+
+
+mode_clip_operation_cases = [
+    ModeClipOperationCaseIdentity(clip_operation=clip_operation, geometry_case=geometry_case)
+    for clip_operation, geometry_case in [
+        ("union", 0),
+        ("union", 1),
+        ("difference", 0),
+        ("difference", 1),
+        ("intersection", 0),
+        ("intersection", 1),
+        ("symmetric_difference", 0),
+        ("symmetric_difference", 1),
+    ]
+]
+
+nested_mode_clip_operation_cases = [
+    NestedModeClipOperationCaseIdentity(
+        inner_clip_operation=inner_clip_operation,
+        outer_clip_operation=outer_clip_operation,
+        geometry_case=geometry_case,
+    )
+    for inner_clip_operation, outer_clip_operation, geometry_case in [
+        ("union", "intersection", 0),
+        ("difference", "symmetric_difference", 1),
+    ]
+]
 
 
 def get_sim_geometry(mesh_wvl_um: float) -> td.Box:
@@ -325,24 +380,14 @@ def _initial_vertices_nested(mesh_wvl_um: float, geometry_case: int = 0) -> np.n
     )
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize(
-    ("clip_operation", "geometry_case"),
-    [
-        ("union", 0),
-        ("union", 1),
-        ("difference", 0),
-        ("difference", 1),
-        ("intersection", 0),
-        ("intersection", 1),
-        ("symmetric_difference", 0),
-        ("symmetric_difference", 1),
-    ],
-)
-def test_finite_difference_mode_data_clip_operation(
-    clip_operation, geometry_case, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
+def _collect_mode_clip_operation_evaluation_data(
+    case_identity: ModeClipOperationCaseIdentity,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
     """Compare autograd and finite-difference directional derivatives for clip operations."""
+    clip_operation = case_identity.clip_operation
+    geometry_case = case_identity.geometry_case
     mesh_wvl_um = 1.55
     adj_wvl_um = 1.5
     geometry_size_wvl = (3.0, 3.0, MODE_LAYER_HEIGHT_WVL)
@@ -405,11 +450,6 @@ def test_finite_difference_mode_data_clip_operation(
     vertices0 = _initial_vertices(mesh_wvl_um=mesh_wvl_um, geometry_case=geometry_case)
     _, adj_grad = obj_val_and_grad([vertices0.tolist()])
     adj_grad = np.asarray(adj_grad).reshape(-1)
-    n = NUM_VERTICES_PER_POLY
-    gradients_vertices_1_x = adj_grad[0:n]
-    gradients_vertices_1_y = adj_grad[n : 2 * n]
-    gradients_vertices_2_x = adj_grad[2 * n : 3 * n]
-    gradients_vertices_2_y = adj_grad[3 * n : 4 * n]
 
     pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
     all_vertex = []
@@ -430,46 +470,116 @@ def test_finite_difference_mode_data_clip_operation(
         obj_down_location = 2 * fd_idx + 1
         fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
     percentage_error = 100.0 * np.mean(
         np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
     )
 
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+        "adj_grad": adj_grad,
+        "percentage_error": percentage_error,
+    }
+
+
+def _evaluate_mode_clip_operation_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    """Evaluate saved-or-fresh mode clip-operation data into RFC-style metrics."""
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"]),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"]),
+        relative_rms_threshold=RMS_THRESHOLD,
+    )
+
+
+def _print_mode_clip_operation_summary(
+    case_identity: ModeClipOperationCaseIdentity,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing simple clip-operation gradient summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
+    fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
+    pattern_dot_adj_gradient = np.asarray(evaluation_data["adj_grad_projected"], dtype=float)
+    n = NUM_VERTICES_PER_POLY
+    gradients_vertices_1_x = adj_grad[0:n]
+    gradients_vertices_1_y = adj_grad[n : 2 * n]
+    gradients_vertices_2_x = adj_grad[2 * n : 3 * n]
+    gradients_vertices_2_y = adj_grad[3 * n : 4 * n]
+
     print("\n" + "-" * 20)
-    print(f"Clip operation: {clip_operation} (case {geometry_case})")
+    print(
+        f"Clip operation: {case_identity.clip_operation} "
+        f"(case {case_identity.geometry_case}, {mode_label})"
+    )
     print(f"Autograd gradients (poly1 x): {gradients_vertices_1_x}")
     print(f"Autograd gradients (poly1 y): {gradients_vertices_1_y}")
     print(f"Autograd gradients (poly2 x): {gradients_vertices_2_x}")
     print(f"Autograd gradients (poly2 y): {gradients_vertices_2_y}")
     print(f"Finite difference directional gradients: {fd_grad}")
     print(f"Autograd directional gradients: {pattern_dot_adj_gradient}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
     print("-" * 20 + "\n")
-
-    assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
 
 
 @pytest.mark.numerical
 @pytest.mark.parametrize(
-    ("inner_clip_operation", "outer_clip_operation", "geometry_case"),
-    [
-        ("union", "intersection", 0),
-        ("difference", "symmetric_difference", 1),
-    ],
+    "case_identity",
+    mode_clip_operation_cases,
+    ids=lambda params: case_identity_id(params, prefix="mode-clip"),
 )
-def test_finite_difference_mode_data_nested_clip_operation(
-    inner_clip_operation,
-    outer_clip_operation,
-    geometry_case,
-    rng,
-    numerical_case_dir,
-    redirect_stdout_to_stderr,
-):
+def test_finite_difference_mode_data_clip_operation(
+    request: pytest.FixtureRequest,
+    case_identity: ModeClipOperationCaseIdentity,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Compare autograd and finite-difference directional derivatives for clip operations."""
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_mode_clip_operation_evaluation_data(
+            case_identity, rng, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_mode_clip_operation_evaluation_data(evaluation_data)
+    )
+    _print_mode_clip_operation_summary(
+        case_identity,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )
+
+
+def _collect_nested_mode_clip_operation_evaluation_data(
+    case_identity: NestedModeClipOperationCaseIdentity,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
     """Print directional and per-vertex gradients for nested clip operations."""
+    inner_clip_operation = case_identity.inner_clip_operation
+    outer_clip_operation = case_identity.outer_clip_operation
+    geometry_case = case_identity.geometry_case
     mesh_wvl_um = 1.55
     adj_wvl_um = 1.5
     geometry_size_wvl = (3.0, 3.0, MODE_LAYER_HEIGHT_WVL)
@@ -570,14 +680,6 @@ def test_finite_difference_mode_data_nested_clip_operation(
     _, adj_grad = obj_val_and_grad([vertices0.tolist()])
     adj_grad = np.asarray(adj_grad).reshape(-1)
 
-    n = NUM_VERTICES_PER_POLY
-    gradients_vertices_1_x = adj_grad[0:n]
-    gradients_vertices_1_y = adj_grad[n : 2 * n]
-    gradients_vertices_2_x = adj_grad[2 * n : 3 * n]
-    gradients_vertices_2_y = adj_grad[3 * n : 4 * n]
-    gradients_vertices_3_x = adj_grad[4 * n : 5 * n]
-    gradients_vertices_3_y = adj_grad[5 * n : 6 * n]
-
     pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
     all_vertex = []
     for fd_idx in range(NUM_FINITE_DIFFERENCE):
@@ -593,16 +695,44 @@ def test_finite_difference_mode_data_nested_clip_operation(
     for fd_idx in range(NUM_FINITE_DIFFERENCE):
         fd_grad[fd_idx] = (all_obj[2 * fd_idx] - all_obj[2 * fd_idx + 1]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
     percentage_error = 100.0 * np.mean(
         np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
     )
 
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+        "adj_grad": adj_grad,
+        "percentage_error": percentage_error,
+    }
+
+
+def _print_nested_mode_clip_operation_summary(
+    case_identity: NestedModeClipOperationCaseIdentity,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing nested clip-operation gradient summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
+    fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
+    pattern_dot_adj_gradient = np.asarray(evaluation_data["adj_grad_projected"], dtype=float)
+    n = NUM_VERTICES_PER_POLY
+    gradients_vertices_1_x = adj_grad[0:n]
+    gradients_vertices_1_y = adj_grad[n : 2 * n]
+    gradients_vertices_2_x = adj_grad[2 * n : 3 * n]
+    gradients_vertices_2_y = adj_grad[3 * n : 4 * n]
+    gradients_vertices_3_x = adj_grad[4 * n : 5 * n]
+    gradients_vertices_3_y = adj_grad[5 * n : 6 * n]
+
     print("\n" + "-" * 20)
     print(
-        f"Nested clip operation: inner={inner_clip_operation}, outer={outer_clip_operation} (case {geometry_case})"
+        "Nested clip operation: "
+        f"inner={case_identity.inner_clip_operation}, "
+        f"outer={case_identity.outer_clip_operation} "
+        f"(case {case_identity.geometry_case}, {mode_label})"
     )
     print(f"Autograd gradients (poly1 x): {gradients_vertices_1_x}")
     print(f"Autograd gradients (poly1 y): {gradients_vertices_1_y}")
@@ -612,9 +742,52 @@ def test_finite_difference_mode_data_nested_clip_operation(
     print(f"Autograd gradients (poly3 y): {gradients_vertices_3_y}")
     print(f"Finite difference directional gradients: {fd_grad}")
     print(f"Autograd directional gradients: {pattern_dot_adj_gradient}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
     print("-" * 20 + "\n")
 
-    assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case_identity",
+    nested_mode_clip_operation_cases,
+    ids=lambda params: case_identity_id(params, prefix="nested-mode-clip"),
+)
+def test_finite_difference_mode_data_nested_clip_operation(
+    request: pytest.FixtureRequest,
+    case_identity: NestedModeClipOperationCaseIdentity,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Print directional and per-vertex gradients for nested clip operations."""
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_nested_mode_clip_operation_evaluation_data(
+            case_identity, rng, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_mode_clip_operation_evaluation_data(evaluation_data)
+    )
+    _print_nested_mode_clip_operation_summary(
+        case_identity,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

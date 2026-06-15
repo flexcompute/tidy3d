@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import autograd as ag
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.config import config
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_id,
+    evaluate_allclose_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
 
 pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
@@ -31,6 +44,34 @@ SECONDARY_RIGHT_FIXED_EDGE = 1.15 * ADJ_WVL_UM
 EDGE_INTERFACE_WIDTH = 0.35 * ADJ_WVL_UM
 EDGE_INTERFACE_PERMITTIVITY = 4.2**2
 DIFFERENCE_STRESS_OVERLAP_LEFT = -0.15 * ADJ_WVL_UM
+
+
+class ClipOperationConsistencyCaseIdentity(BaseModel):
+    """Semantic identity for one clip-operation consistency case."""
+
+    material_kind: str
+    clip_operation: str
+
+
+class DifferenceClipEdgeInterfaceCaseIdentity(BaseModel):
+    """Semantic identity for one difference edge-interface stress case."""
+
+    material_kind: str
+
+
+clip_operation_consistency_cases = [
+    ClipOperationConsistencyCaseIdentity(
+        material_kind=material_kind,
+        clip_operation=clip_operation,
+    )
+    for material_kind in ("dielectric", "pec")
+    for clip_operation in ("difference", "intersection", "symmetric_difference", "union")
+]
+
+difference_clip_edge_interface_cases = [
+    DifferenceClipEdgeInterfaceCaseIdentity(material_kind=material_kind)
+    for material_kind in ("dielectric", "pec")
+]
 
 
 def _make_box(xmin: float, xmax: float) -> td.Box:
@@ -207,21 +248,19 @@ def _evaluate_objective(
     return np.sum(np.abs(fields.Ex.data) ** 2) + 0.25 * np.sum(np.abs(fields.Ey.data) ** 2)
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("material_kind", ("dielectric", "pec"))
-@pytest.mark.parametrize(
-    "clip_operation",
-    ("difference", "intersection", "symmetric_difference", "union"),
-)
-def test_clip_operation_consistency(
-    material_kind,
-    clip_operation,
-    monkeypatch,
-    redirect_stdout_to_stderr,
-):
-    """Compare clip-operation gradients against equivalent explicit-geometry formulations."""
-    monkeypatch.setattr(config.adjoint, "default_wavelength_fraction", 0.01)
+def _gradient_rtol(material_kind: str) -> float:
+    """Return the existing relative gradient tolerance for a material case."""
+    if material_kind == "pec":
+        return RMS_NORMALIZED_THRESHOLD_PEC
+    return RMS_NORMALIZED_THRESHOLD
 
+
+def _collect_clip_operation_consistency_evaluation_data(
+    case_identity: ClipOperationConsistencyCaseIdentity,
+) -> EvaluationData:
+    """Compare clip-operation gradients against equivalent explicit-geometry formulations."""
+    material_kind = case_identity.material_kind
+    clip_operation = case_identity.clip_operation
     sim_base = _make_base_simulation(material_kind=material_kind)
     medium = _material_for_case(material_kind)
     edges0 = _initial_edges(clip_operation)
@@ -258,40 +297,119 @@ def test_clip_operation_consistency(
 
     clip_grad = np.asarray(clip_grad, dtype=float)
     equiv_grad = np.asarray(equiv_grad, dtype=float)
+    return {
+        "clip_value": float(clip_value),
+        "equiv_value": float(equiv_value),
+        "clip_grad": clip_grad,
+        "equiv_grad": equiv_grad,
+    }
+
+
+def _evaluate_clip_gradient_agreement(
+    evaluation_data: EvaluationData,
+    *,
+    material_kind: str,
+) -> MetricGroups:
+    """Evaluate clip/equivalent gradient agreement using the old allclose tolerances."""
+    clip_grad = np.asarray(evaluation_data["clip_grad"], dtype=float)
+    equiv_grad = np.asarray(evaluation_data["equiv_grad"], dtype=float)
+    regression_metrics, observation_metrics, diagnostics = evaluate_allclose_agreement(
+        actual=clip_grad,
+        desired=equiv_grad,
+        rtol=_gradient_rtol(material_kind),
+        atol=RMS_ABSOLUTE_THRESHOLD,
+        metric_name="gradient_allclose_scaled_error",
+    )
 
     rms_error = float(np.sqrt(np.mean((clip_grad - equiv_grad) ** 2)))
     grad_norm = float(np.linalg.norm(equiv_grad))
-    rms_normalized = rms_error / max(grad_norm, 1e-12)
+    diagnostics["rms_error"] = rms_error
+    diagnostics["grad_norm"] = grad_norm
+    diagnostics["rms_error_normalized"] = rms_error / max(grad_norm, 1e-12)
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def _print_clip_operation_consistency_summary(
+    case_identity: ClipOperationConsistencyCaseIdentity,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing clip-operation consistency summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    clip_grad = np.asarray(evaluation_data["clip_grad"], dtype=float)
+    equiv_grad = np.asarray(evaluation_data["equiv_grad"], dtype=float)
 
     print("\n" + "-" * 20)
-    print(f"material_kind: {material_kind}, clip_operation: {clip_operation}")
-    print(f"objective values (clip, equivalent): {clip_value}, {equiv_value}")
+    print(
+        f"material_kind: {case_identity.material_kind}, "
+        f"clip_operation: {case_identity.clip_operation}, mode: {mode_label}"
+    )
+    print(
+        "objective values (clip, equivalent): "
+        f"{evaluation_data['clip_value']}, {evaluation_data['equiv_value']}"
+    )
     print(f"gradients (clip): {clip_grad}")
     print(f"gradients (equivalent): {equiv_grad}")
-    print(f"rms_error: {rms_error}")
-    print(f"rms_error_normalized: {rms_normalized}")
+    print(f"rms_error: {diagnostics['rms_error']}")
+    print(f"rms_error_normalized: {diagnostics['rms_error_normalized']}")
     print("-" * 20 + "\n")
-
-    if material_kind == "pec":
-        np.testing.assert_allclose(
-            clip_grad, equiv_grad, rtol=RMS_NORMALIZED_THRESHOLD_PEC, atol=RMS_ABSOLUTE_THRESHOLD
-        )
-    else:
-        np.testing.assert_allclose(
-            clip_grad, equiv_grad, rtol=RMS_NORMALIZED_THRESHOLD, atol=RMS_ABSOLUTE_THRESHOLD
-        )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("material_kind", ("dielectric", "pec"))
-def test_difference_clip_edge_interface_masking(
-    material_kind,
-    monkeypatch,
-    redirect_stdout_to_stderr,
-):
-    """Stress-test difference gradients with an interface at the overestimated clip bound."""
+@pytest.mark.parametrize(
+    "case_identity",
+    clip_operation_consistency_cases,
+    ids=lambda params: case_identity_id(params, prefix="clip-consistency"),
+)
+def test_clip_operation_consistency(
+    request: pytest.FixtureRequest,
+    case_identity: ClipOperationConsistencyCaseIdentity,
+    monkeypatch: pytest.MonkeyPatch,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Compare clip-operation gradients against equivalent explicit-geometry formulations."""
     monkeypatch.setattr(config.adjoint, "default_wavelength_fraction", 0.01)
 
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_clip_operation_consistency_evaluation_data(
+            case_identity
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_clip_gradient_agreement(
+        evaluation_data,
+        material_kind=case_identity.material_kind,
+    )
+    _print_clip_operation_consistency_summary(
+        case_identity,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Clip-operation gradients do not match equivalent explicit geometry; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )
+
+
+def _collect_difference_clip_edge_interface_evaluation_data(
+    case_identity: DifferenceClipEdgeInterfaceCaseIdentity,
+) -> EvaluationData:
+    """Stress-test difference gradients with an interface at the overestimated clip bound."""
+    material_kind = case_identity.material_kind
     sim_base = _make_base_simulation(material_kind=material_kind)
     medium = _material_for_case(material_kind)
     edges0 = np.array([-0.9 * ADJ_WVL_UM, PRIMARY_RIGHT_FIXED_EDGE])
@@ -335,26 +453,87 @@ def test_difference_clip_edge_interface_masking(
 
     clip_grad = np.asarray(clip_grad, dtype=float)
     equiv_grad = np.asarray(equiv_grad, dtype=float)
+    return {
+        "clip_value": float(clip_value),
+        "equiv_value": float(equiv_value),
+        "clip_grad": clip_grad,
+        "equiv_grad": equiv_grad,
+    }
 
-    rms_error = float(np.sqrt(np.mean((clip_grad - equiv_grad) ** 2)))
-    grad_norm = float(np.linalg.norm(equiv_grad))
-    rms_normalized = rms_error / max(grad_norm, 1e-12)
+
+def _print_difference_clip_edge_interface_summary(
+    case_identity: DifferenceClipEdgeInterfaceCaseIdentity,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing edge-interface stress summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    clip_grad = np.asarray(evaluation_data["clip_grad"], dtype=float)
+    equiv_grad = np.asarray(evaluation_data["equiv_grad"], dtype=float)
 
     print("\n" + "-" * 20)
-    print(f"material_kind: {material_kind}, clip_operation: difference (edge-interface stress)")
-    print(f"objective values (clip, equivalent): {clip_value}, {equiv_value}")
+    print(
+        f"material_kind: {case_identity.material_kind}, "
+        f"clip_operation: difference (edge-interface stress), mode: {mode_label}"
+    )
+    print(
+        "objective values (clip, equivalent): "
+        f"{evaluation_data['clip_value']}, {evaluation_data['equiv_value']}"
+    )
     print(f"gradients (clip): {clip_grad}")
     print(f"gradients (equivalent): {equiv_grad}")
     print(f"right-edge component (clip, equivalent): {clip_grad[1]}, {equiv_grad[1]}")
-    print(f"rms_error: {rms_error}")
-    print(f"rms_error_normalized: {rms_normalized}")
+    print(f"rms_error: {diagnostics['rms_error']}")
+    print(f"rms_error_normalized: {diagnostics['rms_error_normalized']}")
     print("-" * 20 + "\n")
 
-    if material_kind == "pec":
-        np.testing.assert_allclose(
-            clip_grad, equiv_grad, rtol=RMS_NORMALIZED_THRESHOLD_PEC, atol=RMS_ABSOLUTE_THRESHOLD
-        )
-    else:
-        np.testing.assert_allclose(
-            clip_grad, equiv_grad, rtol=RMS_NORMALIZED_THRESHOLD, atol=RMS_ABSOLUTE_THRESHOLD
-        )
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case_identity",
+    difference_clip_edge_interface_cases,
+    ids=lambda params: case_identity_id(params, prefix="difference-edge-interface"),
+)
+def test_difference_clip_edge_interface_masking(
+    request: pytest.FixtureRequest,
+    case_identity: DifferenceClipEdgeInterfaceCaseIdentity,
+    monkeypatch: pytest.MonkeyPatch,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Stress-test difference gradients with an interface at the overestimated clip bound."""
+    monkeypatch.setattr(config.adjoint, "default_wavelength_fraction", 0.01)
+
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_difference_clip_edge_interface_evaluation_data(
+            case_identity
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_clip_gradient_agreement(
+        evaluation_data,
+        material_kind=case_identity.material_kind,
+    )
+    _print_difference_clip_edge_interface_summary(
+        case_identity,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Difference clip edge-interface gradients do not match equivalent explicit geometry; "
+            f"inspect {numerical_case_dir / 'evaluation_data.npz'} and "
+            f"{numerical_case_dir / 'result.json'}"
+        ),
+    )

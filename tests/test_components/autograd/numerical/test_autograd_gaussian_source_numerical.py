@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,9 +9,21 @@ import autograd as ag
 import autograd.numpy as anp
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    MetricGroups,
+    case_identity_id,
+    condition_metric,
+    evaluate_allclose_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric, NumericalResult
 
 
 @pytest.fixture(autouse=True)
@@ -68,13 +78,20 @@ class BeamParamCase:
         )
 
 
-SIM_RUN_TIME = 1e-12
-NUMERICAL_RESULTS_SUBDIR = "numerical_results"
-GAUSS_CASE_DATA_FILENAME = "gaussian_source_gradients_case_data.npz"
-GAUSS_CASE_METRICS_FILENAME = "gaussian_source_gradients_case_metrics.json"
-GAUSS_SUMMARY_NDJSON_FILENAME = "gaussian_source_gradients_summary.ndjson"
-GAUSS_SUMMARY_JSON_FILENAME = "gaussian_source_gradients_summary.json"
+class BeamGradientCaseIdentity(BaseModel):
+    """Semantic identity for one Gaussian-source gradient case."""
 
+    source_type: str
+    param_path: tuple[Any, ...]
+    base_value: float
+    delta: float
+    num_freqs: int
+    objective_mode: str
+    source_position_case: str
+    sim_bg_index: float
+
+
+SIM_RUN_TIME = 1e-12
 GAUSS_NORMAL_AXIS = 2
 GAUSS_BASE_FREQ0 = 2.1e14
 GAUSS_BASE_FWIDTH = 2.0e13
@@ -433,84 +450,6 @@ def _print_beam_case_summary(
     print("\n".join(case_lines), file=sys.stderr)
 
 
-def _beam_case_metrics_record(
-    case: BeamParamCase,
-    source: td.Source,
-    sim: td.Simulation,
-    metrics: GradientMetrics,
-    *,
-    sim_bg_index: float,
-    status: str,
-    assertion_error: str,
-) -> dict[str, Any]:
-    """Build a compact serializable metrics record for one beam-gradient test case."""
-    grad_adjoint = float(metrics.grad_adjoint[0])
-    grad_fd_half = float(metrics.grad_fd_half[0])
-    grad_fd_nominal = float(metrics.grad_fd[0])
-    grad_fd_double = float(metrics.grad_fd_double[0])
-    case_name = f"{case.case_name}_n{sim_bg_index:g}"
-    return {
-        "case_name": case_name,
-        "base_case_name": case.case_name,
-        "status": status,  # keep pass/fail context for summary parsing
-        "assertion_error": assertion_error,
-        "sim_bg_index": float(sim_bg_index),
-        "grad_adjoint": grad_adjoint,
-        "grad_fd_half": grad_fd_half,
-        "grad_fd_nominal": grad_fd_nominal,
-        "grad_fd_double": grad_fd_double,
-    }
-
-
-def _write_beam_case_artifacts(
-    numerical_case_dir: Path,
-    numerical_artifact_root: Path,
-    *,
-    metrics_record: dict[str, Any],
-    metrics: GradientMetrics,
-) -> None:
-    """Persist per-case FD/adjoint data and update summary files."""
-    results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    np.savez(
-        results_dir / GAUSS_CASE_DATA_FILENAME,
-        grad_adjoint=metrics.grad_adjoint,
-        grad_fd_half=metrics.grad_fd_half,
-        grad_fd_nominal=metrics.grad_fd,
-        grad_fd_double=metrics.grad_fd_double,
-    )
-    (results_dir / GAUSS_CASE_METRICS_FILENAME).write_text(
-        json.dumps(metrics_record, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-
-    summary_ndjson_path = numerical_artifact_root / GAUSS_SUMMARY_NDJSON_FILENAME
-    line = json.dumps(metrics_record, sort_keys=True) + "\n"
-    fd = os.open(summary_ndjson_path, os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o644)
-    try:
-        os.write(fd, line.encode("utf-8"))
-    finally:
-        os.close(fd)
-
-    all_records = []
-    with summary_ndjson_path.open("r", encoding="utf-8") as f:
-        for raw_line in f:
-            raw_line = raw_line.strip()
-            if not raw_line:
-                continue
-            try:
-                all_records.append(json.loads(raw_line))
-            except json.JSONDecodeError:
-                # Ignore a partial line if another process is appending concurrently.
-                continue
-    summary_json_path = numerical_artifact_root / GAUSS_SUMMARY_JSON_FILENAME
-    summary_json_path.write_text(
-        json.dumps(all_records, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-
-
 def _run_beam_param_gradient_case(
     tmp_path, case: BeamParamCase, sim_bg_index: float
 ) -> GradientMetrics:
@@ -616,72 +555,184 @@ def _run_beam_param_gradient_case(
     )
 
 
-def _assert_beam_fd_agreement(metrics: GradientMetrics, *, label: str) -> None:
-    assert metrics.angle_deg < GAUSS_ANGLE_LIMIT_DEG, label
-    assert np.isfinite(metrics.adjoint_norm), label
-    assert np.isfinite(metrics.fd_norm), label
-    np.testing.assert_allclose(
-        metrics.adjoint_norm,
-        metrics.fd_norm,
-        rtol=GAUSS_NORM_RTOL,
-        atol=GAUSS_NORM_ATOL,
-        err_msg=label,
+def _beam_case_identity(case: BeamParamCase, sim_bg_index: float) -> BeamGradientCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return BeamGradientCaseIdentity(
+        source_type=case.source_type,
+        param_path=case.param_path,
+        base_value=case.base_value,
+        delta=case.delta,
+        num_freqs=case.num_freqs,
+        objective_mode=case.objective_mode,
+        source_position_case=case.source_position_case,
+        sim_bg_index=sim_bg_index,
     )
-    # Require central-difference stability when the nominal FD estimate is
-    # large enough to define a meaningful relative error.
-    for rel_err in (metrics.fd_rel_half_vs_nominal, metrics.fd_rel_double_vs_nominal):
-        if np.isfinite(rel_err):
-            assert abs(rel_err) <= GAUSS_FD_STABILITY_REL_ERR_MAX, (
-                f"{label}: unstable FD estimate (rel_err={rel_err:.6g})"
+
+
+BEAM_GRADIENT_TEST_CASES = tuple(
+    (case, sim_bg_index) for case in BEAM_PARAM_CASES for sim_bg_index in GAUSS_SIM_BG_INDICES
+)
+BEAM_GRADIENT_TEST_IDS = tuple(
+    case_identity_id(_beam_case_identity(case, sim_bg_index), prefix="gaussian-source")
+    for case, sim_bg_index in BEAM_GRADIENT_TEST_CASES
+)
+
+
+def _collect_beam_gradient_evaluation_data(
+    tmp_path: Path,
+    case: BeamParamCase,
+    sim_bg_index: float,
+) -> EvaluationData:
+    """Collect compact Gaussian-source gradient data for eval-only replay."""
+    metrics = _run_beam_param_gradient_case(tmp_path, case, sim_bg_index)
+    return {
+        "grad_adjoint": metrics.grad_adjoint,
+        "grad_fd_half": metrics.grad_fd_half,
+        "grad_fd": metrics.grad_fd,
+        "grad_fd_double": metrics.grad_fd_double,
+        "fd_rel_half_vs_nominal": metrics.fd_rel_half_vs_nominal,
+        "fd_rel_double_vs_nominal": metrics.fd_rel_double_vs_nominal,
+        "angle_deg": metrics.angle_deg,
+        "adjoint_norm": metrics.adjoint_norm,
+        "fd_norm": metrics.fd_norm,
+    }
+
+
+def _beam_metrics_from_evaluation_data(evaluation_data: EvaluationData) -> GradientMetrics:
+    """Rehydrate the existing diagnostics dataclass from saved evaluation data."""
+    return GradientMetrics(
+        grad_adjoint=np.asarray(evaluation_data["grad_adjoint"], dtype=float),
+        grad_fd_half=np.asarray(evaluation_data["grad_fd_half"], dtype=float),
+        grad_fd=np.asarray(evaluation_data["grad_fd"], dtype=float),
+        grad_fd_double=np.asarray(evaluation_data["grad_fd_double"], dtype=float),
+        fd_rel_half_vs_nominal=float(evaluation_data["fd_rel_half_vs_nominal"]),
+        fd_rel_double_vs_nominal=float(evaluation_data["fd_rel_double_vs_nominal"]),
+        angle_deg=float(evaluation_data["angle_deg"]),
+        adjoint_norm=float(evaluation_data["adjoint_norm"]),
+        fd_norm=float(evaluation_data["fd_norm"]),
+    )
+
+
+def _evaluate_beam_gradient_metrics(metrics: GradientMetrics) -> MetricGroups:
+    """Evaluate Gaussian-source gradient diagnostics into RFC-style metrics."""
+    regression_metrics: list[Metric] = []
+
+    if np.isfinite(metrics.angle_deg):
+        regression_metrics.append(
+            Metric(
+                name="angle_deg",
+                observed=float(metrics.angle_deg),
+                expected=GAUSS_ANGLE_LIMIT_DEG,
+                comparator="lt",
             )
+        )
+    else:
+        regression_metrics.append(condition_metric("angle_deg_is_finite_and_lt_limit", False))
+
+    regression_metrics.extend(
+        [
+            condition_metric("adjoint_norm_is_finite", bool(np.isfinite(metrics.adjoint_norm))),
+            condition_metric("fd_norm_is_finite", bool(np.isfinite(metrics.fd_norm))),
+        ]
+    )
+
+    if np.isfinite(metrics.adjoint_norm) and np.isfinite(metrics.fd_norm):
+        norm_metrics, _observation_metrics, norm_diagnostics = evaluate_allclose_agreement(
+            actual=np.asarray([metrics.adjoint_norm]),
+            desired=np.asarray([metrics.fd_norm]),
+            rtol=GAUSS_NORM_RTOL,
+            atol=GAUSS_NORM_ATOL,
+            metric_name="norm_allclose_scaled_error",
+        )
+        regression_metrics.extend(norm_metrics)
+    else:
+        norm_diagnostics = {
+            "max_allclose_scaled_error": np.finfo(np.float64).max,
+            "max_abs_error": np.finfo(np.float64).max,
+        }
+        regression_metrics.append(condition_metric("norm_allclose", False))
+
+    for label, rel_err in (
+        ("half", metrics.fd_rel_half_vs_nominal),
+        ("double", metrics.fd_rel_double_vs_nominal),
+    ):
+        if np.isfinite(rel_err):
+            regression_metrics.append(
+                Metric(
+                    name=f"fd_rel_{label}_vs_nominal_abs",
+                    observed=float(abs(rel_err)),
+                    expected=GAUSS_FD_STABILITY_REL_ERR_MAX,
+                    comparator="lte",
+                )
+            )
+
+    diagnostics = {
+        "angle_deg": float(metrics.angle_deg),
+        "adjoint_norm": float(metrics.adjoint_norm),
+        "fd_norm": float(metrics.fd_norm),
+        "norm_allclose_scaled_error": float(norm_diagnostics["max_allclose_scaled_error"]),
+        "norm_abs_error": float(norm_diagnostics["max_abs_error"]),
+        "fd_rel_half_vs_nominal": float(metrics.fd_rel_half_vs_nominal),
+        "fd_rel_double_vs_nominal": float(metrics.fd_rel_double_vs_nominal),
+    }
+    return regression_metrics, [], diagnostics
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("case", BEAM_PARAM_CASES, ids=lambda case: case.case_name)
-@pytest.mark.parametrize("sim_bg_index", GAUSS_SIM_BG_INDICES, ids=lambda n: f"n{n:g}")
+@pytest.mark.parametrize(
+    ("case", "sim_bg_index"),
+    BEAM_GRADIENT_TEST_CASES,
+    ids=BEAM_GRADIENT_TEST_IDS,
+)
 def test_gaussian_beam_parameter_gradients_fd_vs_autograd(
+    request: pytest.FixtureRequest,
     _enable_local_cache,
-    tmp_path,
-    numerical_case_dir,
-    numerical_artifact_root,
-    case,
-    sim_bg_index,
-    redirect_stdout_to_stderr,
-):
+    tmp_path: Path,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    case: BeamParamCase,
+    sim_bg_index: float,
+    redirect_stdout_to_stderr: None,
+) -> None:
     """Finite-difference validation for Gaussian and astigmatic source parameter gradients."""
+    case_identity = _beam_case_identity(case, sim_bg_index)
     source_base = _make_gaussian_beam_source(case, case.base_value)
     sim_base = _make_beam_grad_sim(source_base, case.objective_mode, sim_bg_index)
-    metrics = _run_beam_param_gradient_case(tmp_path, case, sim_bg_index)
-    status = "PASS"
-    assertion_error = ""
-    try:
-        _assert_beam_fd_agreement(metrics, label=f"{case.case_name}_n{sim_bg_index:g}")
-    except AssertionError as exc:
-        status = "FAIL"
-        assertion_error = str(exc)
-        raise
-    finally:
-        metrics_record = _beam_case_metrics_record(
-            case,
-            source_base,
-            sim_base,
-            metrics,
-            sim_bg_index=sim_bg_index,
-            status=status,
-            assertion_error=assertion_error,
-        )
-        _write_beam_case_artifacts(
-            numerical_case_dir,
-            numerical_artifact_root,
-            metrics_record=metrics_record,
-            metrics=metrics,
-        )
-        _print_beam_case_summary(
-            case,
-            source_base,
-            sim_base,
-            metrics,
-            sim_bg_index=sim_bg_index,
-            status=status,
-            assertion_error=assertion_error,
-        )
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_beam_gradient_evaluation_data(
+            tmp_path, case, sim_bg_index
+        ),
+    )
+    metrics = _beam_metrics_from_evaluation_data(evaluation_data)
+    regression_metrics, observation_metrics, _diagnostics = _evaluate_beam_gradient_metrics(metrics)
+    result_record = NumericalResult.from_metrics(
+        pytest_nodeid=request.node.nodeid,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+    )
+    status = result_record.status.upper()
+    assertion_error = "" if result_record.passes() else "Gaussian source gradient metrics failed."
+
+    _print_beam_case_summary(
+        case,
+        source_base,
+        sim_base,
+        metrics,
+        sim_bg_index=sim_bg_index,
+        status=status,
+        assertion_error=assertion_error,
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Gaussian source gradient metrics failed; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

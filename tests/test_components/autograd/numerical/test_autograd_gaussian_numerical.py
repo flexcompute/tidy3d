@@ -1,25 +1,34 @@
 # test autograd and compares to numerically computed finite difference gradients
 from __future__ import annotations
 
-import operator
+from pathlib import Path
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
 
+from .numerical_test_helpers import (
+    EvalFn,
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_fd_adjoint_gradient_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = True
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_gaussian_test"
 
 RMS_THRESHOLD = 0.25
 
@@ -31,6 +40,28 @@ else:
 
 FINITE_DIFF_PERM_SEED = 2.5**2
 MESH_FACTOR_DESIGN = 30.0
+
+
+class GaussianOverlapCaseIdentity(BaseModel):
+    """Semantic identity for one Gaussian-overlap numerical case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_type: str
+    eval_fn_name: str
+    monitor_side: str
+    objective_direction: str
+    pol_angle: float
+    angle_theta: float
+    angle_phi: float
+    waist_distance_offset: float
+
+
+class GaussianOverlapTestParameters(GaussianOverlapCaseIdentity):
+    """Full parameter bundle for one Gaussian-overlap test invocation."""
+
+    eval_fn: EvalFn
+    test_number: int
 
 
 def get_sim_geometry(mesh_wvl_um):
@@ -175,7 +206,11 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir, 
             simulation_dict[f"numerical_gaussian_testing_{idx}"] = sim_with_block.copy()
 
         sim_data = web.run_async(
-            simulation_dict, path_dir=sim_path_dir, local_gradient=LOCAL_GRADIENT, verbose=VERBOSE
+            simulation_dict,
+            path_dir=sim_path_dir,
+            local_gradient=LOCAL_GRADIENT,
+            verbose=VERBOSE,
+            lazy=False,
         )
 
         objective_vals = []
@@ -223,7 +258,7 @@ monitor_type_cases = [
 ]
 waist_distance_offset_cases = [-1.0, 0.0, 1.0]
 
-field_data_test_parameters = []
+field_data_test_parameters: list[GaussianOverlapTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -239,61 +274,48 @@ for idx in range(len(mesh_wvls_um)):
                 for angle_case in angle_test_cases:
                     for waist_distance_offset in waist_distance_offset_cases:
                         field_data_test_parameters.append(
-                            {
-                                "mesh_wvl_um": mesh_wvl_um,
-                                "adj_wvl_um": adj_wvl_um,
-                                "monitor_type": monitor_type_case["monitor_type"],
-                                "eval_fn": eval_fn,
-                                "eval_fn_name": eval_fn_names[eval_fn_idx],
-                                "monitor_side": monitor_side_case["monitor_side"],
-                                "objective_direction": monitor_side_case["objective_direction"],
-                                "pol_angle": angle_case["pol_angle"],
-                                "angle_theta": angle_case["angle_theta"],
-                                "angle_phi": angle_case["angle_phi"],
-                                "waist_distance_offset": waist_distance_offset,
-                                "test_number": test_number,
-                            }
+                            GaussianOverlapTestParameters(
+                                mesh_wvl_um=mesh_wvl_um,
+                                adj_wvl_um=adj_wvl_um,
+                                monitor_type=monitor_type_case["monitor_type"],
+                                eval_fn=eval_fn,
+                                eval_fn_name=eval_fn_names[eval_fn_idx],
+                                monitor_side=monitor_side_case["monitor_side"],
+                                objective_direction=monitor_side_case["objective_direction"],
+                                pol_angle=angle_case["pol_angle"],
+                                angle_theta=angle_case["angle_theta"],
+                                angle_phi=angle_case["angle_phi"],
+                                waist_distance_offset=waist_distance_offset,
+                                test_number=test_number,
+                            )
                         )
 
                         test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("field_data_test_parameters", field_data_test_parameters)
-def test_finite_difference_gaussian_overlap_data(
-    field_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Compare autograd permittivity gradients against finite-difference for Gaussian overlap power."""
+def _case_identity(
+    field_data_test_parameters: GaussianOverlapTestParameters,
+) -> GaussianOverlapCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return case_identity_from_parameters(GaussianOverlapCaseIdentity, field_data_test_parameters)
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
 
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_type,
-        eval_fn,
-        eval_fn_name,
-        monitor_side,
-        objective_direction,
-        pol_angle,
-        angle_theta,
-        angle_phi,
-        waist_distance_offset,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_type",
-        "eval_fn",
-        "eval_fn_name",
-        "monitor_side",
-        "objective_direction",
-        "pol_angle",
-        "angle_theta",
-        "angle_phi",
-        "waist_distance_offset",
-        "test_number",
-    )(field_data_test_parameters)
+def _collect_gaussian_overlap_evaluation_data(
+    field_data_test_parameters: GaussianOverlapTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    """Collect compact Gaussian-overlap FD and adjoint gradient data."""
+    mesh_wvl_um = field_data_test_parameters.mesh_wvl_um
+    adj_wvl_um = field_data_test_parameters.adj_wvl_um
+    monitor_type = field_data_test_parameters.monitor_type
+    eval_fn = field_data_test_parameters.eval_fn
+    monitor_side = field_data_test_parameters.monitor_side
+    pol_angle = field_data_test_parameters.pol_angle
+    angle_theta = field_data_test_parameters.angle_theta
+    angle_phi = field_data_test_parameters.angle_phi
+    waist_distance_offset = field_data_test_parameters.waist_distance_offset
+    test_number = field_data_test_parameters.test_number
 
     dim_um = mesh_wvl_um
     thickness_um = 0.5 * mesh_wvl_um
@@ -314,7 +336,7 @@ def test_finite_difference_gaussian_overlap_data(
     freq0 = td.C_0 / adj_wvl_um
     for _ in range(test_number):
         # spin the rng so we get different randomness for each test
-        ignore_rng = rng.random(1)
+        _ = rng.random(1)
     monitor_freqs = random_monitor_freqs(rng=rng, freq0=freq0)
 
     objective = create_objective_function(
@@ -371,50 +393,127 @@ def test_finite_difference_gaussian_overlap_data(
         obj_down_location = 2 * fd_idx + 1
         fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+        "monitor_freqs": np.asarray(monitor_freqs, dtype=float),
+    }
+
+
+def _evaluate_gaussian_overlap_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    """Evaluate saved-or-fresh Gaussian-overlap data into RFC-style metrics."""
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"]),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"]),
+        relative_rms_threshold=RMS_THRESHOLD,
     )
 
+
+def _print_gaussian_overlap_summary(
+    field_data_test_parameters: GaussianOverlapTestParameters,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    """Print the existing Gaussian-overlap comparison summary."""
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    monitor_freqs = np.asarray(evaluation_data["monitor_freqs"], dtype=float)
+
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Monitor type: {monitor_type}")
-    print(f"Monitor side / objective direction: {monitor_side} / {objective_direction}")
-    print(f"Angles (pol, theta, phi): {pol_angle}, {angle_theta}, {angle_phi}")
-    print(f"Waist distance offset (wvl): {waist_distance_offset}")
-    print(f"Monitor frequencies ({len(monitor_freqs)}): {monitor_freqs}")
-    print(f"Eval function: {eval_fn_name}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
+    print(f"Numerical test #{field_data_test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{field_data_test_parameters.mesh_wvl_um}, {field_data_test_parameters.adj_wvl_um}"
+    )
+    print(f"Monitor type: {field_data_test_parameters.monitor_type}")
+    print(
+        "Monitor side / objective direction: "
+        f"{field_data_test_parameters.monitor_side} / "
+        f"{field_data_test_parameters.objective_direction}"
+    )
+    print(
+        "Angles (pol, theta, phi): "
+        f"{field_data_test_parameters.pol_angle}, "
+        f"{field_data_test_parameters.angle_theta}, "
+        f"{field_data_test_parameters.angle_phi}"
+    )
+    print(f"Waist distance offset (wvl): {field_data_test_parameters.waist_distance_offset}")
+    print(f"Monitor frequencies ({len(monitor_freqs)}): {monitor_freqs.tolist()}")
+    print(f"Eval function: {field_data_test_parameters.eval_fn_name}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
     print("-" * 20)
     print("\n" * 3)
+
+
+def _plot_gaussian_overlap_comparison(
+    field_data_test_parameters: GaussianOverlapTestParameters,
+    evaluation_data: EvaluationData,
+) -> None:
+    """Plot saved FD and adjoint arrays when interactive plotting is enabled."""
+    plt.plot(evaluation_data["adj_grad_projected"], color="g", linewidth=2.0, label="Adjoint")
+    plt.plot(
+        evaluation_data["fd_grad"],
+        color="b",
+        linewidth=1.5,
+        linestyle="--",
+        label="Finite difference",
+    )
+    plt.title(f"Gradient for objective: {field_data_test_parameters.eval_fn_name}")
+    plt.xlabel("Sample number")
+    plt.ylabel("Gradient value")
+    plt.legend()
+    plt.show()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "field_data_test_parameters",
+    field_data_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="gaussian-overlap"),
+)
+def test_finite_difference_gaussian_overlap_data(
+    request: pytest.FixtureRequest,
+    field_data_test_parameters: GaussianOverlapTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Compare autograd permittivity gradients against finite-difference for Gaussian overlap power."""
+    case_identity = _case_identity(field_data_test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_gaussian_overlap_evaluation_data(
+            field_data_test_parameters, rng, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_gaussian_overlap_evaluation_data(evaluation_data)
+    )
+    _print_gaussian_overlap_summary(
+        field_data_test_parameters,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0, label="Adjoint")
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--", label="Finite difference")
-        plt.title(f"Gradient for objective: {eval_fn_name}")
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.legend()
-        plt.show()
+        _plot_gaussian_overlap_comparison(field_data_test_parameters, evaluation_data)
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
-
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
-
-    try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )
