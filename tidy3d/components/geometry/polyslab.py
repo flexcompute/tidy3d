@@ -585,9 +585,9 @@ class PolySlab(base.Planar):
             )
         return self
 
-    @model_validator(mode="after")
-    def _validate_polygon_not_degenerate_or_self_intersecting(self: Self) -> Self:
-        """Polygon must enclose a finite area and not be self-intersecting."""
+    @cached_property
+    def _polygon_not_degenerate_or_self_intersecting(self) -> bool:
+        """Raise if the polygon encloses no area or is self-intersecting."""
         vertices = get_static(self.vertices)
 
         if self.bulges is None or np.allclose(self.bulges, 0) or vertices.shape[0] < 3:
@@ -608,7 +608,7 @@ class PolySlab(base.Planar):
                     ),
                     "vertices",
                 )
-            return self
+            return True
 
         # with arc segments, the chord polygon can be degenerate (e.g. collinear
         # vertices) while the arc contour encloses a finite area; gate on the
@@ -619,6 +619,17 @@ class PolySlab(base.Planar):
                 SetupError("The polygon almost collapses to a 1D curve."),
                 "vertices",
             )
+        return True
+
+    @model_validator(mode="after")
+    def _validate_polygon_not_degenerate_or_self_intersecting(self: Self) -> Self:
+        """Polygon must enclose a finite area and not be self-intersecting.
+
+        The check is cached on the instance so it runs once: embedding into a parent
+        model (e.g. 'GeometryGroup') revalidates the same instance and would otherwise
+        repeat the expensive shapely work for every embedding.
+        """
+        _ = self._polygon_not_degenerate_or_self_intersecting
         return self
 
     @model_validator(mode="after")
