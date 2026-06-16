@@ -4898,6 +4898,7 @@
               "HeatFluxBC": "#/$defs/HeatFluxBC",
               "InsulatingBC": "#/$defs/InsulatingBC",
               "TemperatureBC": "#/$defs/TemperatureBC",
+              "ThermalContactResistance": "#/$defs/ThermalContactResistance",
               "VoltageBC": "#/$defs/VoltageBC"
             },
             "propertyName": "type"
@@ -4917,6 +4918,9 @@
             },
             {
               "$ref": "#/$defs/TemperatureBC"
+            },
+            {
+              "$ref": "#/$defs/ThermalContactResistance"
             },
             {
               "$ref": "#/$defs/VoltageBC"
@@ -4980,6 +4984,7 @@
               "HeatFluxBC": "#/$defs/HeatFluxBC",
               "InsulatingBC": "#/$defs/InsulatingBC",
               "TemperatureBC": "#/$defs/TemperatureBC",
+              "ThermalContactResistance": "#/$defs/ThermalContactResistance",
               "VoltageBC": "#/$defs/VoltageBC"
             },
             "propertyName": "type"
@@ -4999,6 +5004,9 @@
             },
             {
               "$ref": "#/$defs/TemperatureBC"
+            },
+            {
+              "$ref": "#/$defs/ThermalContactResistance"
             },
             {
               "$ref": "#/$defs/VoltageBC"
@@ -10289,6 +10297,29 @@
         "cells",
         "points",
         "values"
+      ],
+      "type": "object"
+    },
+    "ThermalContactResistance": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "resistance": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "ThermalContactResistance",
+          "default": "ThermalContactResistance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resistance"
       ],
       "type": "object"
     },

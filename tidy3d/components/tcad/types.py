@@ -16,6 +16,7 @@ from tidy3d.components.tcad.boundary.heat import (
     ConvectionBC,
     HeatFluxBC,
     TemperatureBC,
+    ThermalContactResistance,
 )
 from tidy3d.components.tcad.effective_DOS import (
     ConstantEffectiveDOS,
@@ -76,4 +77,12 @@ HeatChargeMonitorType = (
     | SteadyChargeResidualMonitor
 )
 HeatChargeSourceType = HeatSource | HeatFromElectricSource | UniformHeatSource
-HeatChargeBCType = TemperatureBC | HeatFluxBC | ConvectionBC | VoltageBC | CurrentBC | InsulatingBC
+HeatChargeBCType = (
+    TemperatureBC
+    | HeatFluxBC
+    | ConvectionBC
+    | ThermalContactResistance
+    | VoltageBC
+    | CurrentBC
+    | InsulatingBC
+)

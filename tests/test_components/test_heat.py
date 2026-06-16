@@ -198,6 +198,84 @@ def test_heat_bcs():
         td.VerticalNaturalConvectionCoeffModel(medium=solid_medium.heat_spec, plate_length=1e5)
 
 
+def test_thermal_contact_resistance():
+    """Interfacial thermal resistance BC: units, SI conversion, value and placement checks."""
+    bc = td.ThermalContactResistance(resistance=3e3)
+    assert bc.resistance == 3e3
+
+    # SI input is in m^2*K/W; tidy3d-native units are K*um^2/W
+    bc_si = td.ThermalContactResistance.from_si_units(resistance=3e-9)
+    assert np.isclose(bc_si.resistance, 3e3)
+
+    for bad_resistance in (0, -1, np.inf, np.nan):
+        with pytest.raises(ValidationError):
+            _ = td.ThermalContactResistance(resistance=bad_resistance)
+
+    # placement validation: only material interfaces are allowed
+    solid = td.Medium(
+        heat_spec=td.SolidSpec(conductivity=1, capacity=1, density=1),
+        name="solid",
+    )
+    slab1 = td.Structure(
+        geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)), medium=solid, name="slab1"
+    )
+    slab2 = td.Structure(
+        geometry=td.Box(center=(0.5, 0, 0), size=(1, 1, 1)), medium=solid, name="slab2"
+    )
+
+    bc_anchor = td.HeatChargeBoundarySpec(
+        placement=StructureBoundary(structure="slab1"),
+        condition=TemperatureBC(temperature=300),
+    )
+    bc_interface = td.HeatChargeBoundarySpec(
+        placement=StructureStructureInterface(structures=["slab1", "slab2"]),
+        condition=bc,
+    )
+
+    sim = td.HeatChargeSimulation(
+        size=(3, 2, 2),
+        medium=td.Medium(heat_spec=td.FluidSpec(), name="fluid"),
+        structures=[slab1, slab2],
+        grid_spec=UniformUnstructuredGrid(dl=0.2),
+        boundary_spec=[bc_anchor, bc_interface],
+        monitors=[TemperatureMonitor(size=(3, 2, 2), name="temperature")],
+    )
+    assert isinstance(sim.boundary_spec[1].condition, td.ThermalContactResistance)
+
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim.updated_copy(
+            boundary_spec=[
+                bc_anchor,
+                td.HeatChargeBoundarySpec(placement=SimulationBoundary(), condition=bc),
+            ]
+        )
+    assert_single_value_error_loc(excinfo, ("boundary_spec", 1, "placement"))
+
+    # both sides of the interface must be solid heat regions: an interface that references
+    # a non-solid (fluid) side is rejected at construction, anchored to the placement loc
+    fluid_slab = td.Structure(
+        geometry=td.Box(center=(1.5, 0, 0), size=(1, 1, 1)),
+        medium=td.Medium(heat_spec=td.FluidSpec(), name="fluid_slab"),
+        name="fluid_slab",
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _ = sim.updated_copy(
+            structures=[slab1, slab2, fluid_slab],
+            boundary_spec=[
+                bc_anchor,
+                td.HeatChargeBoundarySpec(
+                    placement=StructureStructureInterface(structures=["slab2", "fluid_slab"]),
+                    condition=bc,
+                ),
+            ],
+        )
+    assert_single_value_error_loc(excinfo, ("boundary_spec", 1, "placement"))
+
+    # a simulation whose only heat BCs are resistances has no temperature anchor
+    with pytest.raises(ValidationError):
+        _ = sim.updated_copy(boundary_spec=[bc_interface])
+
+
 def make_heat_mnts():
     temp_mnt1 = TemperatureMonitor(size=(1.6, 2, 3), name="test")
     temp_mnt2 = TemperatureMonitor(size=(1.6, 2, 3), name="tet", unstructured=True)

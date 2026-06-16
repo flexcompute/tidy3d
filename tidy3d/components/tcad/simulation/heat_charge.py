@@ -73,6 +73,7 @@ from tidy3d.components.tcad.types import (
     HeatSource,
     InsulatingBC,
     TemperatureBC,
+    ThermalContactResistance,
     UniformHeatSource,
     VoltageBC,
 )
@@ -106,7 +107,7 @@ if TYPE_CHECKING:
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 
-HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC)
+HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC, ThermalContactResistance)
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
@@ -535,6 +536,9 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
         self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
         self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
+        self._call_with_validation_loc(
+            ("boundary_spec",), self._check_thermal_contact_resistance_placement
+        )
         self._call_with_validation_loc(("boundary_spec",), self._check_freqs_requires_ac_source)
         self._call_with_validation_loc(
             ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
@@ -736,6 +740,52 @@ class HeatChargeSimulation(AbstractSimulation):
             # Case 2: The fluid medium IS specified directly in the convection model.
             else:
                 check_fluid_medium_attr(natural_conv_model.medium)
+        return self
+
+    def _check_thermal_contact_resistance_placement(self) -> Self:
+        """Make sure 'ThermalContactResistance' conditions are placed on an interface
+        between two solid heat regions."""
+        # name -> medium / structure lookups (assumes '_names_exist_bcs' has already run)
+        media = {s.medium.name: s.medium for s in self.structures if s.medium.name}
+        if self.medium and self.medium.name:
+            media[self.medium.name] = self.medium
+        structures_map = {s.name: s for s in self.structures if s.name}
+
+        for i, bc in enumerate(self.boundary_spec):
+            if not isinstance(bc.condition, ThermalContactResistance):
+                continue
+            placement = bc.placement
+            if not isinstance(placement, (MediumMediumInterface, StructureStructureInterface)):
+                self._raise_validation_error_at_loc(
+                    "'ThermalContactResistance' represents an interfacial thermal resistance "
+                    "between two touching solids, so its 'placement' must be a "
+                    "'MediumMediumInterface' or a 'StructureStructureInterface', "
+                    f"but got '{type(placement).__name__}'.",
+                    "boundary_spec",
+                    i,
+                    "placement",
+                )
+
+            # Both sides must take part in the heat solve as solids; otherwise the interface
+            # is physically meaningless and would only fail later, at mesh time, with an
+            # opaque backend error.
+            if isinstance(placement, MediumMediumInterface):
+                side_media = [media.get(name) for name in placement.mediums]
+            else:
+                side_media = [
+                    structures_map[name].medium if name in structures_map else None
+                    for name in placement.structures
+                ]
+            for medium in side_media:
+                if medium is not None and not isinstance(medium.heat_spec, SolidMedium):
+                    self._raise_validation_error_at_loc(
+                        "'ThermalContactResistance' can only be placed on an interface "
+                        "between two solid materials: each side must define a solid heat "
+                        f"specification ('SolidSpec'), but medium '{medium.name}' does not.",
+                        "boundary_spec",
+                        i,
+                        "placement",
+                    )
         return self
 
     @field_validator("size")
@@ -987,7 +1037,7 @@ class HeatChargeSimulation(AbstractSimulation):
     def _not_all_neumann(self) -> Self:
         """Make sure not all BCs are of Neumann type"""
 
-        NeumannBCsHeat = (HeatFluxBC,)
+        NeumannBCsHeat = (HeatFluxBC, ThermalContactResistance)
         NeumannBCsCharge = (CurrentBC, InsulatingBC)
 
         simulation_types = self._check_simulation_types()
@@ -1632,7 +1682,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if isinstance(condition, (TemperatureBC, VoltageBC)):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_TEMPERATURE)
-        elif isinstance(condition, (HeatFluxBC, CurrentBC)):
+        elif isinstance(condition, (HeatFluxBC, CurrentBC, ThermalContactResistance)):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_FLUX)
         elif isinstance(condition, ConvectionBC):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_CONVECTION)

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
-from pydantic import Field, NonNegativeFloat, PositiveFloat
+from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.tcad.heat import FluidMedium
@@ -16,6 +17,7 @@ from tidy3d.constants import (
     HEAT_TRANSFER_COEFF,
     KELVIN,
     MICROMETER,
+    THERMAL_RESISTANCE,
 )
 
 if TYPE_CHECKING:
@@ -172,3 +174,61 @@ class ConvectionBC(HeatChargeBC):
         description="Heat transfer coefficient value.",
         json_schema_extra={"units": HEAT_TRANSFER_COEFF},
     )
+
+
+class ThermalContactResistance(HeatChargeBC):
+    """Interfacial thermal resistance (thermal contact / Kapitza resistance) between two
+    touching solids.
+
+    Notes
+    -----
+
+    The interface transmits the heat flux
+
+    .. math::
+
+        q'' = \\frac{1}{R} \\left( T_1 - T_2 \\right),
+
+    so the temperature is discontinuous across the interface: the temperature jump is
+    proportional to the heat flux crossing it. This models thin thermally-resistive
+    interfaces (imperfect bonding, grain boundaries, phonon mismatch between thin films)
+    without meshing them. This condition can only be placed on an interface between two
+    solids (:class:`StructureStructureInterface` or :class:`MediumMediumInterface`).
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> bc = td.ThermalContactResistance(resistance=3e3)  # K*um^2/W
+    >>> bc_si = td.ThermalContactResistance.from_si_units(resistance=3e-9)  # m^2*K/W
+    """
+
+    resistance: PositiveFloat = Field(
+        title="Interfacial Thermal Resistance",
+        description=f"Interfacial thermal resistance in units of {THERMAL_RESISTANCE}.",
+        json_schema_extra={"units": THERMAL_RESISTANCE},
+    )
+
+    @field_validator("resistance")
+    @classmethod
+    def _resistance_must_be_finite(cls, val: float) -> float:
+        """Reject non-finite resistance values."""
+        if not math.isfinite(val):
+            raise ValueError(
+                "'resistance' must be finite. To thermally decouple the two sides of an "
+                "interface, remove one of them from the heat simulation instead."
+            )
+        return val
+
+    @classmethod
+    def from_si_units(cls, resistance: PositiveFloat) -> Self:
+        """Create a :class:`ThermalContactResistance` using SI units.
+
+        Args:
+            resistance: Interfacial thermal resistance in [m^2*K/W].
+
+        Returns:
+            An instance of ThermalContactResistance with the value converted to Tidy3D's
+            internal unit system.
+        """
+        resistance_tidy = resistance * 1e12  # m^2*K/W -> K*um^2/W
+        return cls(resistance=resistance_tidy)

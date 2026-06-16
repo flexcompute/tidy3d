@@ -263,6 +263,11 @@ HEAT_TRANSFER_COEFF = "W/(um^2*K)"
 Watts per (square micrometer Kelvin).
 """
 
+THERMAL_RESISTANCE = "K*um^2/W"
+"""
+Kelvin square micrometer per Watt (interfacial thermal resistance).
+"""
+
 CURRENT_DENSITY = "A/um^2"
 """
 Amperes per square micrometer
