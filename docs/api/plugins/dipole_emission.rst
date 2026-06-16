@@ -15,21 +15,25 @@ The main result is ``radiation_intensity`` with dimensions
 ``("dipole_axis", "polarization", "angle", "f")``:
 
 * ``radiation_intensity`` is stored and includes the study ``source_time`` spectrum.
-* ``radiation_intensity_transfer`` is a derived property that divides out the
-  ``source_time`` spectrum and is often the more convenient structure response.
+* ``radiation_intensity_transfer(bulk_refractive_index)`` is a derived method that
+  normalizes by the total power the same dipoles would emit in a uniform medium at
+  the given refractive index, yielding the cavity transfer in ``1/sr``. Integrating
+  it over the study's collection solid angle gives the half-space radiative
+  contribution; for a bulk emitter a single study integrates to ``1/2`` (the full
+  radiative Purcell factor requires both collection half-spaces).
 
 Use ``store_position_indexes`` to additionally retain radiation intensity at
 selected individual positions. The stored optional array has dimensions
 ``("index", "dipole_axis", "polarization", "angle", "f")``, with a matching
-derived transfer property.
+derived transfer method.
 
 Both outputs are normalized per squared electric dipole moment, with dipole
 moment expressed in ``C*um``. The emitted field is linear in the dipole moment
 ``d``, so the radiated power scales as ``|d|**2``. Multiplying
 ``radiation_intensity`` by the physical ``|d|**2`` gives the corresponding
-angular power density in ``W/sr``. For
-``radiation_intensity_transfer``, which divides out the ``source_time`` spectrum,
-also apply the desired source spectrum when converting back to absolute power.
+angular power density in ``W/sr``. The transfer methods are normalized ratios:
+the ``source_time`` spectrum and the dipole-moment scaling cancel between the
+radiated and bulk emitted powers.
 If the dipole strength varies with position or orientation, include those
 relative ``|d|**2`` factors in ``position_weights``.
 
@@ -41,13 +45,17 @@ Use ``base_sim`` for the source-free optical environment and
 structure whose scattering response contributes to the collected radiation. The
 ``normal_axis`` and ``direction`` of the analysis region select the collection
 side. For example, ``normal_axis=2`` and ``direction="+"`` describes emission
-collected toward ``+z``.
+collected toward ``+z``. ``base_sim`` must be three-dimensional; the radiation
+intensity is a per-solid-angle quantity, so 2D simulations (a zero-size
+dimension) are rejected.
 
 Far-field directions are supplied as a :class:`SphericalAngleDataArray`, with
 ``theta`` and ``phi`` in radians. ``theta`` is measured away from the selected
 collection normal and must satisfy ``abs(theta) < pi/2``. The ``p``
 polarization lies in the plane formed by the observation direction and
-collection normal; ``s`` is orthogonal to that plane.
+collection normal; ``s`` is orthogonal to that plane. On the result, the
+per-direction angles are read from the ``DipoleEmissionStudyData.theta`` and
+``.phi`` properties; the data arrays carry only an integer ``angle`` index.
 
 .. code-block:: python
 

@@ -3333,6 +3333,11 @@ class Simulation(AbstractYeeGridSimulation):
         self._bloch_with_symmetry()
         self._plane_wave_boundaries()
         self._bloch_boundaries_diff_mnt()
+        # Before the generic TFSF-boundary checks: a dipole-emission monitor requires a
+        # 3D simulation, and reporting that directly is clearer than the TFSF-touches-
+        # boundary error a 2D domain would otherwise raise first. No-op without a
+        # DipoleEmissionMonitor.
+        self._validate_dipole_emission_monitor_sources()
         self._tfsf_boundaries()
         self._tfsf_with_symmetry()
         self._warn_fixed_angle_tfsf_normal_incidence()
@@ -3352,7 +3357,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_monitor_mediums_frequency_range()
         self._warn_monitor_simulation_frequency_range()
         self._validate_point_cloud_monitor_points_in_bounds()
-        self._validate_dipole_emission_monitor_sources()
         self._projection_monitors_boundaries()
         self._diffraction_monitor_boundaries()
         self._projection_monitors_homogeneous()
@@ -4369,6 +4373,14 @@ class Simulation(AbstractYeeGridSimulation):
         )
         if not dipole_emission_monitors:
             return self
+
+        if any(size == 0 for size in self.size):
+            self._raise_validation_error_at_loc(
+                "A simulation containing a DipoleEmissionMonitor must be three-dimensional. "
+                "The radiation intensity is a per-solid-angle quantity, so 2D simulations "
+                "(a zero-size dimension) are not supported.",
+                "size",
+            )
 
         if len(self.sources) != 1 or not isinstance(self.sources[0], TFSF):
             self._raise_validation_error_at_loc(

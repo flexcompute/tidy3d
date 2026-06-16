@@ -1064,6 +1064,11 @@ class DipoleEmissionMonitor(PointCloudFieldMonitor):
                 "'position_weights' must contain finite nonnegative values.",
                 "position_weights",
             )
+        if not np.any(position_weights > 0):
+            self._raise_validation_error_at_loc(
+                "'position_weights' must not be all zero (no emitters).",
+                "position_weights",
+            )
 
         if len(set(self.store_position_indexes)) != len(self.store_position_indexes):
             self._raise_validation_error_at_loc(

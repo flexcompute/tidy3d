@@ -22,7 +22,7 @@ from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis
 from tidy3d.components.types.time import SourceTimeType
 from tidy3d.components.validators import points_outside_bounds
-from tidy3d.constants import MICROMETER, RADIAN
+from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import check_tidy3d_extras_licensed_feature
@@ -168,8 +168,8 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         title="Source Time",
         description=(
             "Spectral envelope for the emission calculation. The envelope is included in "
-            "``radiation_intensity`` and divided out by the derived "
-            "``radiation_intensity_transfer`` property."
+            "``radiation_intensity`` and divided out by the "
+            "``radiation_intensity_transfer(...)`` method."
         ),
     )
 
@@ -325,6 +325,8 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             )
         if not np.all(np.isfinite(weights)) or np.any(weights < 0):
             raise ValidationError("'position_weights' must contain finite nonnegative values.")
+        if not np.any(weights > 0):
+            raise ValidationError("'position_weights' must not be all zero (no emitters).")
 
     def _validate_source_spectrum(self) -> None:
         """Validate source spectrum required by transfer normalization."""
@@ -468,21 +470,17 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         )
 
     def _result_coords(self) -> dict[str, Any]:
-        """Coordinates for compact study-level emission arrays."""
-        num_angles = self.angles.sizes["index"]
+        """Coordinates for compact study-level emission arrays.
+
+        The ``angle`` dimension carries only integer indices; the corresponding
+        ``(theta, phi)`` directions live solely in ``self.angles`` to avoid
+        duplicating angle metadata that the HDF5 round trip would not preserve.
+        """
         return {
             "dipole_axis": list(DIPOLE_EMISSION_DIPOLE_AXES),
             "polarization": list(self.polarizations),
-            "angle": np.arange(num_angles),
+            "angle": np.arange(self.angles.sizes["index"]),
             "f": self.freqs,
-            "theta": (
-                "angle",
-                self.angles.sel(spherical_coordinate="theta").values,
-            ),
-            "phi": (
-                "angle",
-                self.angles.sel(spherical_coordinate="phi").values,
-            ),
         }
 
     def _position_result_coords(self) -> dict[str, Any]:
@@ -491,17 +489,6 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         position_index_values = np.asarray(self.positions.coords["index"].values)
         coords["index"] = position_index_values[list(self.store_position_indexes)]
         return coords
-
-    @staticmethod
-    def _assign_angle_coordinate_attrs(*arrays: Any) -> None:
-        """Attach spherical-angle metadata to composed arrays."""
-        for result_array in arrays:
-            if result_array is None:
-                continue
-            result_array.coords["theta"].attrs.update(
-                {"units": RADIAN, "long_name": "elevation angle"}
-            )
-            result_array.coords["phi"].attrs.update({"units": RADIAN, "long_name": "azimuth angle"})
 
     def _monitor_data_from_batch_data(self, batch_data: Any) -> dict[tuple[int, Polarization], Any]:
         """Extract reduced dipole-emission monitor data from user-managed ``BatchData``."""
@@ -761,10 +748,6 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
                 dims=DipoleEmissionStudyPositionDataArray._dims,
                 coords=self._position_result_coords(),
             )
-        self._assign_angle_coordinate_attrs(
-            radiation_intensity,
-            radiation_intensity_at_positions,
-        )
         return DipoleEmissionStudyData(
             radiation_intensity=radiation_intensity,
             radiation_intensity_at_positions=radiation_intensity_at_positions,
@@ -832,8 +815,9 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         DipoleEmissionStudyData
             Serializable reduced emission data containing stored ``radiation_intensity`` with
             dimensions ``("dipole_axis", "polarization", "angle", "f")``.
-            ``radiation_intensity_transfer`` is exposed as ``radiation_intensity`` divided
-            by the study source spectrum. Position-resolved arrays are included only when
+            ``radiation_intensity_transfer(...)`` normalizes ``radiation_intensity`` by
+            the bulk emitted power at a provided reference refractive index.
+            Position-resolved arrays are included only when
             ``store_position_indexes`` is nonempty.
         """
         self._check_license()

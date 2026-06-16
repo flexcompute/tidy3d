@@ -8,8 +8,17 @@ from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.plugins.dipole_emission.study as study_module
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.plugins import dipole_emission
+
+
+def bulk_power(study: dipole_emission.DipoleEmissionStudy, index: float) -> np.ndarray:
+    """Independently computed bulk emitted power per squared dipole moment in C*um."""
+    omega = 2 * np.pi * np.asarray(study.freqs, dtype=float)
+    c_si = td.C_0 * 1e-6
+    mu_0 = 4e-7 * np.pi
+    pulse_spectrum_abs2 = np.asarray(study.pulse_spectrum_abs2, dtype=float)
+    return index * omega**4 * mu_0 / (12 * np.pi * c_si) * 1e-12 * pulse_spectrum_abs2
 
 
 def make_base_sim(**kwargs) -> td.Simulation:
@@ -89,10 +98,15 @@ def make_data_array(value: float = 1.0) -> dipole_emission.DipoleEmissionStudyDa
 
 def make_position_data_array(
     value: float = 1.0,
+    index=None,
 ) -> dipole_emission.DipoleEmissionStudyPositionDataArray:
-    """Create selected-position data array expected by DipoleEmissionStudyData."""
+    """Create selected-position data array expected by DipoleEmissionStudyData.
+
+    ``index`` defaults to ``[0]``; pass the position labels selected by the
+    study's ``store_position_indexes`` so the result-contract check passes.
+    """
     coords = {
-        "index": [0],
+        "index": [0] if index is None else list(index),
         "dipole_axis": ["x", "y", "z"],
         "polarization": ["p", "s"],
         "angle": [0, 1],
@@ -216,6 +230,14 @@ def test_study_spatial_inputs_are_validated():
         make_study(position_weights=[[1.0, 2.0], [3.0, 4.0]])
     with pytest.raises(ValidationError, match="nonnegative"):
         make_study(position_weights=[1.0, -1.0])
+    with pytest.raises(ValidationError, match="all zero") as exc_info:
+        make_study(position_weights=[0.0, 0.0])
+    assert exc_info.value.errors()[0]["loc"] == ("position_weights",)
+    with pytest.raises(ValidationError, match="all zero"):
+        make_study(position_weights=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    # a single zeroed position (not all) and a zeroed orientation column are allowed
+    make_study(position_weights=[1.0, 0.0])
+    make_study(position_weights=[[1.0, 2.0, 0.0], [4.0, 5.0, 0.0]])
     with pytest.raises(ValidationError, match="ordered"):
         make_study(
             positions=td.PointDataArray(
@@ -246,6 +268,19 @@ def test_study_rejects_sources_symmetry_and_reserved_monitor_names():
     with pytest.raises(ValidationError, match="reserved") as exc_info:
         make_study(base_sim=make_base_sim(monitors=(monitor,)))
     assert exc_info.value.errors()[0]["loc"] == ("base_sim", "monitors", 0, "name")
+
+
+def test_dipole_emission_simulation_rejects_2d():
+    # dipole emission is 3D-only (radiation_intensity is per-solid-angle). The guard
+    # lives on the Simulation side, so it fires when the study builds its simulations
+    # (and equally for a directly built Simulation + DipoleEmissionMonitor + TFSF).
+    study = make_study(
+        base_sim=make_base_sim(size=(4.0, 4.0, 0.0)),
+        positions=make_positions([[0.0, 0.0, 0.0], [0.2, 0.1, 0.0]]),
+    )
+    with pytest.raises(ValidationError, match="three-dimensional") as exc_info:
+        study.to_simulations()
+    assert exc_info.value.errors()[0]["loc"] == ("size",)
 
 
 def test_study_rejects_bad_positions_and_freqs():
@@ -499,6 +534,14 @@ def test_dipole_emission_monitor_validates_tfsf_pairing():
         monitor.updated_copy(position_weights=[1.0, 2.0, 3.0])
     assert exc_info.value.errors()[0]["loc"] == ("position_weights",)
 
+    with pytest.raises(ValidationError, match="all zero") as exc_info:
+        monitor.updated_copy(position_weights=[0.0, 0.0])
+    assert exc_info.value.errors()[0]["loc"] == ("position_weights",)
+
+    with pytest.raises(ValidationError, match="all zero") as exc_info:
+        monitor.updated_copy(position_weights=np.zeros((2, 3)))
+    assert exc_info.value.errors()[0]["loc"] == ("position_weights",)
+
     with pytest.raises(ValidationError, match="store_position_indexes") as exc_info:
         monitor.updated_copy(store_position_indexes=(0, 0))
     assert exc_info.value.errors()[0]["loc"] == ("store_position_indexes",)
@@ -543,23 +586,30 @@ def test_compose_stacks_reduced_monitor_data(monkeypatch):
     assert isinstance(data, dipole_emission.DipoleEmissionStudyData)
     assert data.radiation_intensity.dims == ("dipole_axis", "polarization", "angle", "f")
     assert data.radiation_intensity.dtype == np.float32
-    assert data.radiation_intensity_transfer.dtype == np.float32
+    transfer = data.radiation_intensity_transfer(bulk_refractive_index=1.85)
+    assert transfer.dtype == np.float32
+    # the transfer is a 1/sr ratio, not the intensity units carried by radiation_intensity
+    assert transfer.attrs["units"] == "1/sr"
+    assert "transfer" in transfer.attrs["long_name"]
+    assert data.radiation_intensity.attrs["units"] != transfer.attrs["units"]
     assert data.radiation_intensity.coords["dipole_axis"].values.tolist() == ["x", "y", "z"]
     assert data.radiation_intensity.coords["polarization"].values.tolist() == ["s", "p"]
     assert data.radiation_intensity.coords["angle"].values.tolist() == [0, 1]
-    np.testing.assert_allclose(data.radiation_intensity.coords["theta"].values, [0.0, 0.3])
-    np.testing.assert_allclose(data.radiation_intensity.coords["phi"].values, [0.2, 0.4])
-    assert data.radiation_intensity.coords["theta"].attrs["units"] == "rad"
-    assert data.radiation_intensity.coords["phi"].attrs["units"] == "rad"
+    # angle directions live on the study, exposed via theta/phi properties (not array coords)
+    assert "theta" not in data.radiation_intensity.coords
+    assert "phi" not in data.radiation_intensity.coords
+    np.testing.assert_allclose(data.theta, [0.0, 0.3])
+    np.testing.assert_allclose(data.phi, [0.2, 0.4])
     np.testing.assert_allclose(data.radiation_intensity.sel(polarization="s", angle=0), 1.0)
     np.testing.assert_allclose(data.radiation_intensity.sel(polarization="p", angle=0), 2.0)
     np.testing.assert_allclose(data.radiation_intensity.sel(polarization="s", angle=1), 3.0)
+    total_bulk_power = 2.0 * bulk_power(study, 1.85)
     np.testing.assert_allclose(
-        data.radiation_intensity_transfer.sel(polarization="p", angle=1),
-        np.full((3, len(study.freqs)), 4.0) / study.pulse_spectrum_abs2[None, :],
+        transfer.sel(polarization="p", angle=1),
+        np.full((3, len(study.freqs)), 4.0) / total_bulk_power[None, :],
+        rtol=1e-6,
     )
-    assert data.radiation_intensity_transfer.coords["theta"].attrs["units"] == "rad"
-    assert data.radiation_intensity_transfer.coords["phi"].attrs["units"] == "rad"
+    assert "theta" not in transfer.coords
     assert data.radiation_intensity_at_positions is None
 
 
@@ -576,9 +626,14 @@ def test_compose_stacks_selected_position_data(monkeypatch):
     data = study.compose(batch_data)
 
     assert data.radiation_intensity_at_positions is not None
-    assert data.radiation_intensity_transfer_at_positions is not None
+    transfer_at_positions = data.radiation_intensity_transfer_at_positions(
+        bulk_refractive_index=1.85
+    )
+    assert transfer_at_positions is not None
     assert data.radiation_intensity_at_positions.dtype == np.float32
-    assert data.radiation_intensity_transfer_at_positions.dtype == np.float32
+    assert transfer_at_positions.dtype == np.float32
+    assert transfer_at_positions.attrs["units"] == "1/sr"
+    assert "transfer" in transfer_at_positions.attrs["long_name"]
     assert data.radiation_intensity_at_positions.dims == (
         "index",
         "dipole_axis",
@@ -589,9 +644,10 @@ def test_compose_stacks_selected_position_data(monkeypatch):
     assert data.radiation_intensity_at_positions.coords["index"].values.tolist() == [11]
     np.testing.assert_allclose(data.radiation_intensity_at_positions.values, 10.0)
     np.testing.assert_allclose(
-        data.radiation_intensity_transfer_at_positions.values,
+        transfer_at_positions.values,
         np.full((1, 3, 1, 1, len(study.freqs)), 10.0)
-        / study.pulse_spectrum_abs2[None, None, None, None, :],
+        / bulk_power(study, 1.85)[None, None, None, None, :],
+        rtol=1e-6,
     )
 
 
@@ -606,7 +662,7 @@ def test_compose_preserves_double_precision_monitor_data(monkeypatch):
     data = study.compose(batch_data)
 
     assert data.radiation_intensity.dtype == np.float64
-    assert data.radiation_intensity_transfer.dtype == np.float64
+    assert data.radiation_intensity_transfer(bulk_refractive_index=1.85).dtype == np.float64
 
 
 def test_compose_ignores_diagnostic_monitors_in_batch_data(monkeypatch):
@@ -743,14 +799,25 @@ def test_dipole_emission_data_round_trips_hdf5(tmp_path):
     )
     assert loaded.radiation_intensity.dims == data.radiation_intensity.dims
     np.testing.assert_allclose(loaded.radiation_intensity.values, data.radiation_intensity.values)
+
+    # angle directions are not stored on the arrays (so the HDF5 round trip cannot
+    # drop them); they survive on the embedded study and are read via theta/phi
+    assert "theta" not in loaded.radiation_intensity.coords
+    np.testing.assert_allclose(loaded.theta, [0.1, 0.3])
+    np.testing.assert_allclose(loaded.phi, [0.2, 0.4])
+
+    # per-axis weights enter the position-summed transfer denominator
+    total_bulk_power_by_axis = np.array([5.0, 7.0, 9.0])[:, None] * bulk_power(study, 1.85)[None, :]
     np.testing.assert_allclose(
-        loaded.radiation_intensity_transfer.values,
-        data.radiation_intensity.values / study.pulse_spectrum_abs2[None, None, None, :],
+        loaded.radiation_intensity_transfer(bulk_refractive_index=1.85).values,
+        data.radiation_intensity.values / total_bulk_power_by_axis[:, None, None, :],
+        rtol=1e-6,
     )
     np.testing.assert_allclose(
-        loaded.radiation_intensity_transfer_at_positions.values,
+        loaded.radiation_intensity_transfer_at_positions(bulk_refractive_index=1.85).values,
         data.radiation_intensity_at_positions.values
-        / study.pulse_spectrum_abs2[None, None, None, None, :],
+        / bulk_power(study, 1.85)[None, None, None, None, :],
+        rtol=1e-6,
     )
     assert "radiation_intensity_transfer" not in loaded.model_dump()
     assert loaded.study.angles.dims == ("index", "spherical_coordinate")
@@ -857,3 +924,185 @@ def test_run_batch_uses_study_simulations_and_batch_api(monkeypatch, tmp_path):
     assert calls[0]["verbose"] is False
     assert calls[0]["solver_version"] == "solver-test"
     assert calls[1] == {"run_kwargs": {"path_dir": tmp_path, "priority": 3}}
+
+
+def test_transfer_per_position_bulk_index():
+    study = make_study(
+        angles=make_angles([(0.1, 0.2), (0.3, 0.4)]),
+        position_weights=[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+        store_position_indexes=(1,),
+    )
+    data = dipole_emission.DipoleEmissionStudyData(
+        radiation_intensity=make_data_array(6.0),
+        # store_position_indexes=(1,) selects position label 1
+        radiation_intensity_at_positions=make_position_data_array(3.0, index=[1]),
+        study=study,
+    )
+    # integrated transfer takes one index per sampled position (full set)
+    index = np.array([1.5, 2.0])
+    transfer = data.radiation_intensity_transfer(bulk_refractive_index=index)
+    # per-axis total bulk power: sum_i w_ia * n_i = [1*1.5 + 4*2, 2*1.5 + 5*2, 3*1.5 + 6*2]
+    total_index_by_axis = np.array([9.5, 13.0, 16.5])
+    expected = 6.0 / (total_index_by_axis[:, None] * bulk_power(study, 1.0)[None, :])
+    np.testing.assert_allclose(
+        transfer.values,
+        np.broadcast_to(expected[:, None, None, :], transfer.shape),
+        rtol=1e-6,
+    )
+
+    # per-position transfer takes one index per stored position (subset), aligned
+    # to the index coordinate of radiation_intensity_at_positions
+    index_at = np.array([2.5])
+    transfer_at_positions = data.radiation_intensity_transfer_at_positions(
+        bulk_refractive_index=index_at
+    )
+    expected_at = 3.0 / bulk_power(study, 2.5)
+    np.testing.assert_allclose(
+        transfer_at_positions.values,
+        np.broadcast_to(expected_at, transfer_at_positions.shape),
+        rtol=1e-6,
+    )
+
+    # a full-length index passed to the per-position method is rejected
+    with pytest.raises(DataError, match="one value per stored position"):
+        data.radiation_intensity_transfer_at_positions(bulk_refractive_index=index)
+
+    # plain Python list behaves identically to the ndarray form
+    transfer_list = data.radiation_intensity_transfer(bulk_refractive_index=[1.5, 2.0])
+    np.testing.assert_allclose(transfer_list.values, transfer.values, rtol=1e-6)
+    transfer_at_list = data.radiation_intensity_transfer_at_positions(bulk_refractive_index=[2.5])
+    np.testing.assert_allclose(transfer_at_list.values, transfer_at_positions.values, rtol=1e-6)
+
+
+def test_transfer_finite_for_float32_band_edges():
+    # band-edge frequencies where the source spectrum is ~1e-40: the old
+    # |S|^2-only normalization overflowed float32 to inf here
+    study = make_study(
+        angles=make_angles([(0.1, 0.2), (0.3, 0.4)]),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        freqs=[1.5e14, 2.0e14],
+    )
+    coords = {
+        "dipole_axis": ["x", "y", "z"],
+        "polarization": ["p", "s"],
+        "angle": [0, 1],
+        "f": study.freqs,
+    }
+    shape = tuple(len(coords[dim]) for dim in dipole_emission.DipoleEmissionStudyDataArray._dims)
+    intensity = dipole_emission.DipoleEmissionStudyDataArray(
+        np.full(shape, 1e10, dtype=np.float32),
+        dims=dipole_emission.DipoleEmissionStudyDataArray._dims,
+        coords=coords,
+    )
+    data = dipole_emission.DipoleEmissionStudyData(radiation_intensity=intensity, study=study)
+
+    transfer = data.radiation_intensity_transfer(bulk_refractive_index=1.85)
+
+    assert transfer.dtype == np.float32
+    assert np.all(np.isfinite(transfer.values))
+    np.testing.assert_allclose(
+        transfer.values,
+        np.full(shape, 1e10) / (2.0 * bulk_power(study, 1.85))[None, None, None, :],
+        rtol=1e-6,
+    )
+
+
+def test_transfer_invalid_bulk_index():
+    study = make_study(angles=make_angles([(0.1, 0.2), (0.3, 0.4)]))
+    data = dipole_emission.DipoleEmissionStudyData(
+        radiation_intensity=make_data_array(),
+        study=study,
+    )
+
+    with pytest.raises(DataError, match="finite positive"):
+        data.radiation_intensity_transfer(bulk_refractive_index=-1.85)
+    with pytest.raises(DataError, match="real values"):
+        data.radiation_intensity_transfer(bulk_refractive_index=np.array([1.5 + 0.1j, 1.6 + 0.2j]))
+    with pytest.raises(DataError, match="one value per sampled position"):
+        data.radiation_intensity_transfer(bulk_refractive_index=[1.0, 2.0, 3.0])
+
+
+def test_integrated_transfer_is_weighted_average_of_per_position():
+    # Big-picture invariant: with the same reference index, the integrated transfer
+    # equals the position_weights-weighted average of the per-position transfers,
+    # because radiation_intensity is the weighted sum sum_i w_i * I_i and both sides
+    # divide by the same P_bulk.
+    study = make_study(
+        angles=make_angles([(0.1, 0.2), (0.3, 0.4)]),
+        position_weights=[1.0, 3.0],
+        store_position_indexes=(0, 1),
+    )
+    pos_coords = {
+        "index": [0, 1],
+        "dipole_axis": ["x", "y", "z"],
+        "polarization": ["p", "s"],
+        "angle": [0, 1],
+        "f": study.freqs,
+    }
+    pos_shape = tuple(
+        len(pos_coords[d]) for d in dipole_emission.DipoleEmissionStudyPositionDataArray._dims
+    )
+    per_position = np.zeros(pos_shape)
+    per_position[0] = 2.0  # I_0
+    per_position[1] = 5.0  # I_1
+    rip = dipole_emission.DipoleEmissionStudyPositionDataArray(
+        per_position,
+        dims=dipole_emission.DipoleEmissionStudyPositionDataArray._dims,
+        coords=pos_coords,
+    )
+    weights = np.array([1.0, 3.0])
+    # radiation_intensity = weighted sum = 1*2 + 3*5 = 17 (constant over axis/pol/angle/f)
+    data = dipole_emission.DipoleEmissionStudyData(
+        radiation_intensity=make_data_array(float(weights @ np.array([2.0, 5.0]))),
+        radiation_intensity_at_positions=rip,
+        study=study,
+    )
+
+    n_em = 1.85
+    transfer = data.radiation_intensity_transfer(bulk_refractive_index=n_em)
+    transfer_at_positions = data.radiation_intensity_transfer_at_positions(
+        bulk_refractive_index=n_em
+    )
+
+    expected = (weights[:, None, None, None, None] * transfer_at_positions.values).sum(
+        axis=0
+    ) / weights.sum()
+    np.testing.assert_allclose(transfer.values, expected, rtol=1e-6)
+
+
+def test_data_rejects_inconsistent_angle_dimension():
+    # _validate_angle_dimension: the array's integer 'angle' axis must match study.angles
+    study = make_study(angles=make_angles([(0.1, 0.2), (0.3, 0.4)]))  # 2 angles
+    coords = {
+        "dipole_axis": ["x", "y", "z"],
+        "polarization": ["p", "s"],
+        "angle": [0, 1, 2],  # 3 angles -> inconsistent with study.angles (2)
+        "f": study.freqs,
+    }
+    shape = tuple(len(coords[dim]) for dim in dipole_emission.DipoleEmissionStudyDataArray._dims)
+    bad = dipole_emission.DipoleEmissionStudyDataArray(
+        np.zeros(shape),
+        dims=dipole_emission.DipoleEmissionStudyDataArray._dims,
+        coords=coords,
+    )
+    with pytest.raises(ValidationError, match="inconsistent with") as exc_info:
+        dipole_emission.DipoleEmissionStudyData(radiation_intensity=bad, study=study)
+    assert exc_info.value.errors()[0]["loc"] == ("radiation_intensity",)
+
+
+def test_data_rejects_inconsistent_position_index():
+    # _validate_stored_position_index: the position array's 'index' axis must carry
+    # the position labels selected by 'store_position_indexes' (what compose assigns)
+    study = make_study(
+        angles=make_angles([(0.1, 0.2), (0.3, 0.4)]),  # 2 angles (angle axis consistent)
+        store_position_indexes=(1,),  # selects position label 1 -> expects index [1]
+    )
+    # array carries index=[0] instead of the expected [1]
+    bad = make_position_data_array(index=[0])
+    with pytest.raises(ValidationError, match="store_position_indexes") as exc_info:
+        dipole_emission.DipoleEmissionStudyData(
+            radiation_intensity=make_data_array(),
+            radiation_intensity_at_positions=bad,
+            study=study,
+        )
+    assert exc_info.value.errors()[0]["loc"] == ("radiation_intensity_at_positions",)
