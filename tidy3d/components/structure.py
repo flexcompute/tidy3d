@@ -791,6 +791,7 @@ class Structure(AbstractStructure):
         gds_dtype: NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
         pixel_exact: bool = False,
+        gds_precision: PositiveFloat = 1e-3,
     ) -> None:
         """Export a structure's planar slice to a .gds file.
 
@@ -817,11 +818,14 @@ class Structure(AbstractStructure):
             Name of the cell created in the .gds file to store the geometry.
         pixel_exact : bool = False
             If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
+        gds_precision : float = 1e-3
+            Coordinate precision for the written GDS file in micrometers. The default matches
+            the gdstk default of ``1e-9`` meters.
         """
         try:
             import gdstk
 
-            library = gdstk.Library()
+            library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
         except ImportError as e:
             raise Tidy3dImportError(
                 format_chained_exception_message(

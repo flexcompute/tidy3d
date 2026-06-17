@@ -166,6 +166,8 @@ from .viz import (
     plot_sim_3d,
 )
 
+OpticalMediumExportKey = dict[str, Any] | None
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from os import PathLike
@@ -180,6 +182,7 @@ if TYPE_CHECKING:
     from .data.dataset import Dataset
     from .data.utils import CustomSpatialDataType
     from .grid.grid import Coords1D
+    from .material.types import StructureMediumType
     from .medium import MediumType
     from .monitor import Monitor
     from .source.field import ModeSource
@@ -6757,9 +6760,19 @@ class Simulation(AbstractYeeGridSimulation):
             bmin = (bmin[0], 0)
         clip = gdstk.rectangle(bmin, bmax)
 
-        polygons = []
+        optical_medium_export_key_cache: dict[
+            StructureMediumType | None, OpticalMediumExportKey
+        ] = {}
+        background_medium_key = self._optical_medium_export_key(
+            Structure._get_optical_medium(self.medium), optical_medium_export_key_cache
+        )
+
+        polygons_by_layer: dict[tuple[int, int], list] = {}
+        deferred_background_polygons_by_layer: dict[tuple[int, int], list] = {}
+        layer_has_filled_region: dict[tuple[int, int], bool] = {}
         for structure in self.scene.sorted_structures:
             gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
+            structure_polygons = []
             for polygon in structure.to_gdstk(
                 x=x,
                 y=y,
@@ -6772,13 +6785,108 @@ class Simulation(AbstractYeeGridSimulation):
             ):
                 pmin, pmax = polygon.bounding_box()
                 if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
-                    polygons.extend(
+                    structure_polygons.extend(
                         gdstk.boolean(clip, polygon, "and", layer=gds_layer, datatype=gds_dtype)
                     )
                 else:
-                    polygons.append(polygon)
+                    structure_polygons.append(polygon)
 
+            if not structure_polygons:
+                continue
+
+            layer_key = (gds_layer, gds_dtype)
+            layer_polygons = polygons_by_layer.get(layer_key, [])
+            if self._structure_exports_as_filled_region(
+                structure,
+                background_medium_key=background_medium_key,
+                optical_medium_export_key_cache=optical_medium_export_key_cache,
+            ):
+                if layer_polygons:
+                    polygons_by_layer[layer_key] = gdstk.boolean(
+                        layer_polygons,
+                        structure_polygons,
+                        "or",
+                        layer=gds_layer,
+                        datatype=gds_dtype,
+                    )
+                else:
+                    polygons_by_layer[layer_key] = structure_polygons
+                deferred_background_polygons_by_layer.pop(layer_key, None)
+                layer_has_filled_region[layer_key] = True
+            elif layer_has_filled_region.get(layer_key, False):
+                polygons_by_layer[layer_key] = gdstk.boolean(
+                    layer_polygons,
+                    structure_polygons,
+                    "not",
+                    layer=gds_layer,
+                    datatype=gds_dtype,
+                )
+            else:
+                deferred_polygons = deferred_background_polygons_by_layer.get(layer_key, [])
+                if deferred_polygons:
+                    deferred_background_polygons_by_layer[layer_key] = gdstk.boolean(
+                        deferred_polygons,
+                        structure_polygons,
+                        "or",
+                        layer=gds_layer,
+                        datatype=gds_dtype,
+                    )
+                else:
+                    deferred_background_polygons_by_layer[layer_key] = structure_polygons
+
+        for layer_key, deferred_polygons in deferred_background_polygons_by_layer.items():
+            if layer_has_filled_region.get(layer_key, False):
+                continue
+
+            gds_layer, gds_dtype = layer_key
+            layer_polygons = polygons_by_layer.get(layer_key, [])
+            if layer_polygons:
+                polygons_by_layer[layer_key] = gdstk.boolean(
+                    layer_polygons,
+                    deferred_polygons,
+                    "or",
+                    layer=gds_layer,
+                    datatype=gds_dtype,
+                )
+            else:
+                # Preserve legacy default-layer output for unmapped background structures when no
+                # filled region was accumulated on that layer.
+                polygons_by_layer[layer_key] = deferred_polygons
+
+        polygons = []
+        for layer_polygons in polygons_by_layer.values():
+            polygons.extend(layer_polygons)
         return polygons
+
+    @staticmethod
+    def _structure_exports_as_filled_region(
+        structure: Structure,
+        *,
+        background_medium_key: OpticalMediumExportKey,
+        optical_medium_export_key_cache: dict[StructureMediumType | None, OpticalMediumExportKey],
+    ) -> bool:
+        """Whether a structure should add or clear area on its export layer."""
+        return (
+            Simulation._optical_medium_export_key(
+                Structure._get_optical_medium(structure.medium), optical_medium_export_key_cache
+            )
+            != background_medium_key
+        )
+
+    @staticmethod
+    def _optical_medium_export_key(
+        medium: StructureMediumType | None,
+        cache: dict[StructureMediumType | None, OpticalMediumExportKey],
+    ) -> OpticalMediumExportKey:
+        """Normalized optical-medium key used for GDS export semantics."""
+        if medium in cache:
+            return cache[medium]
+        if medium is None:
+            cache[medium] = None
+            return None
+        exclude_fields = {"name", "attrs"}
+        cache[medium] = medium.model_dump(exclude=exclude_fields, round_trip=True)
+        return cache[medium]
 
     def to_gds(
         self,
@@ -6849,6 +6957,7 @@ class Simulation(AbstractYeeGridSimulation):
         | None = None,
         gds_cell_name: str = "MAIN",
         pixel_exact: bool = False,
+        gds_precision: PositiveFloat = 1e-3,
     ) -> None:
         """Append the simulation structures to a .gds cell.
 
@@ -6873,9 +6982,12 @@ class Simulation(AbstractYeeGridSimulation):
             Name of the cell created in the .gds file to store the geometry.
         pixel_exact : bool = False
             If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
+        gds_precision : float = 1e-3
+            Coordinate precision for the written GDS file in micrometers. The default matches
+            the gdstk default of ``1e-9`` meters.
         """
         if gdstk_available:
-            library = gdstk.Library()
+            library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
             reference = gdstk.Reference
             rotation = np.pi
         else:

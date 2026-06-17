@@ -8,6 +8,7 @@ import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import shapely
 from matplotlib.testing.compare import compare_images
 from pydantic import ValidationError
 
@@ -3493,6 +3494,268 @@ def test_to_gds(tmp_path):
     assert np.allclose(areas[(2, 1)], 0.5)
     assert np.allclose(areas[(1, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
     assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
+
+
+def test_to_gds_preserves_holes_without_layer_map(tmp_path):
+    """Vacuum (eps=1) holes must still cut when using the default threshold of 1."""
+    sim = td.Simulation(
+        size=(10.0, 10.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(4.0, 4.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=12.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=1.0),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_hole.gds")
+    sim.to_gds_file(fname, z=0.0)
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(0, 0)], 12.0)
+
+    geo = td.Geometry.from_gds(cell, axis=2, slab_bounds=(-0.5, 0.5), gds_layer=0)
+    union = shapely.union_all(geo.intersections_plane(z=0.0))
+    assert union.geom_type == "Polygon"
+    assert np.allclose(union.area, 12.0)
+    assert len(union.interiors) == 1
+
+
+def test_to_gds_preserves_holes_for_named_background_medium_copy(tmp_path):
+    sim = td.Simulation(
+        size=(10.0, 10.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(4.0, 4.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=12.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=1.0, name="etch"),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_named_background_hole.gds")
+    sim.to_gds_file(fname, z=0.0)
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(0, 0)], 12.0)
+
+    geo = td.Geometry.from_gds(cell, axis=2, slab_bounds=(-0.5, 0.5), gds_layer=0)
+    union = shapely.union_all(geo.intersections_plane(z=0.0))
+    assert union.geom_type == "Polygon"
+    assert np.allclose(union.area, 12.0)
+    assert len(union.interiors) == 1
+
+
+def test_to_gds_preserves_holes_for_attrs_only_background_medium_copy(tmp_path):
+    sim = td.Simulation(
+        size=(10.0, 10.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(4.0, 4.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=12.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=1.0, attrs={"tag": "etch"}),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_attrs_background_hole.gds")
+    sim.to_gds_file(fname, z=0.0)
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(0, 0)], 12.0)
+
+    geo = td.Geometry.from_gds(cell, axis=2, slab_bounds=(-0.5, 0.5), gds_layer=0)
+    union = shapely.union_all(geo.intersections_plane(z=0.0))
+    assert union.geom_type == "Polygon"
+    assert np.allclose(union.area, 12.0)
+    assert len(union.interiors) == 1
+
+
+def test_to_gds_keeps_unmapped_dispersive_structure_on_default_layer(tmp_path):
+    sim = td.Simulation(
+        size=(4.0, 4.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Drude(eps_inf=0.5, coeffs=[(1.0, 3.0)]),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_dispersive_default_layer.gds")
+    sim.to_gds_file(fname, z=0.0)
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(0, 0)], 4.0)
+
+
+def test_to_gds_file_pixel_exact_positional_backward_compatible(tmp_path):
+    nx, ny = 50, 50
+    arr = np.ones((nx, ny, 1))
+    arr[20:30, 20:30] = 2
+    x = np.linspace(-1, 1, nx)
+    y = np.linspace(-1, 1, ny)
+    z = np.asarray([0.0])
+    permittivity = td.SpatialDataArray(arr, coords={"x": x, "y": y, "z": z})
+
+    sim = td.Simulation(
+        size=(4.0, 4.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2, 2, 1)),
+                medium=td.CustomMedium(permittivity=permittivity),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation-exact-positional.gds")
+    sim.to_gds_file(fname, None, None, 0.0, 1.5, 3e14, None, "MAIN", True)
+
+    cell = gdstk.read_gds(fname).cells[0]
+    assert np.allclose(cell.bounding_box(), ((-0.2, -0.2), (0.2, 0.2)), atol=0.01)
+
+
+def test_to_gds_keeps_unmapped_background_structures_on_default_layer_with_partial_map(tmp_path):
+    high_index = td.Medium(permittivity=12.0)
+    sim = td.Simulation(
+        size=(10.0, 10.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(4.0, 4.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=high_index,
+            ),
+            td.Structure(
+                geometry=td.Box(size=(1.0, 1.0, 1.0), center=(-0.75, 0.0, 0.0)),
+                medium=td.Medium(permittivity=1.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(1.0, 1.0, 1.0), center=(0.75, 0.0, 0.0)),
+                medium=td.Medium(permittivity=1.0),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_partial_map_default_layer.gds")
+    sim.to_gds_file(fname, z=0.0, gds_layer_dtype_map={high_index: (2, 0)})
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(2, 0)], 16.0)
+    assert np.allclose(areas[(0, 0)], 2.0)
+
+
+def test_to_gds_preserves_mapped_background_holes_on_shared_layer(tmp_path):
+    high_index = td.Medium(permittivity=12.0)
+    background = td.Medium()
+    sim = td.Simulation(
+        size=(10.0, 10.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(4.0, 4.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=high_index,
+            ),
+            td.Structure(
+                geometry=td.Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=background,
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_mapped_background_shared_layer.gds")
+    sim.to_gds_file(
+        fname,
+        z=0.0,
+        gds_layer_dtype_map={high_index: (7, 0), background: (7, 0)},
+    )
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(7, 0)], 12.0)
+
+    geo = td.Geometry.from_gds(cell, axis=2, slab_bounds=(-0.5, 0.5), gds_layer=7)
+    union = shapely.union_all(geo.intersections_plane(z=0.0))
+    assert union.geom_type == "Polygon"
+    assert np.allclose(union.area, 12.0)
+    assert len(union.interiors) == 1
+
+
+def test_to_gds_ignores_unmapped_background_before_later_fill_on_default_layer(tmp_path):
+    sim = td.Simulation(
+        size=(10.0, 10.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(
+            td.Structure(
+                geometry=td.Box(size=(4.0, 4.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=1.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, 0.0)),
+                medium=td.Medium(permittivity=12.0),
+            ),
+        ),
+    )
+
+    fname = str(tmp_path / "simulation_background_before_fill_default_layer.gds")
+    sim.to_gds_file(fname, z=0.0)
+    cell = gdstk.read_gds(fname).cells[0]
+
+    areas = cell.area(True)
+    assert np.allclose(areas[(0, 0)], 4.0)
+
+
+def test_to_gds_precision(tmp_path):
+    gds_precision = 2.5e-4
+    sim = td.Simulation(
+        size=(2.0, 2.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(td.Structure(geometry=td.Box(size=(1.0, 1.0, 1.0)), medium=td.Medium()),),
+    )
+
+    fname = str(tmp_path / "simulation_precision.gds")
+    sim.to_gds_file(fname, z=0.0, gds_precision=gds_precision)
+
+    lib = gdstk.read_gds(fname)
+    assert np.isclose(lib.unit, 1e-6)
+    assert np.isclose(lib.precision, gds_precision * 1e-6)
 
 
 def test_sim_subsection_common():

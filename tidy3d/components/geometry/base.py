@@ -1377,6 +1377,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
+        merge_adjacent: bool = False,
     ) -> Geometry:
         """Import a ``gdstk.Cell`` and extrude it into a GeometryGroup.
 
@@ -1406,6 +1407,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             ``"middle"`` (polygons correspond to the center of the slab bounds), ``"bottom"``
             (minimal slab bound position), or ``"top"`` (maximal slab bound position). This value
             has no effect if ``sidewall_angle == 0``.
+        merge_adjacent : bool = False
+            Merge polygons that become fractured into multiple adjacent GDS polygons, for example
+            due to the GDS vertex limit. Enable to import those fragments as a single merged shape.
 
         Returns
         -------
@@ -1423,22 +1427,74 @@ class Geometry(Tidy3dBaseModel, ABC):
                 )
             raise Tidy3dImportError("Argument 'gds_cell' must be an instance of 'gdstk.Cell'.")
 
-        gds_loader_fn = Geometry.load_gds_vertices_gdstk
+        def iter_import_shapes(shape: Shapely) -> Iterable[Shapely]:
+            if shape.is_empty:
+                return
+            if shape.geom_type in {"MultiPolygon", "GeometryCollection"}:
+                for subshape in shape.geoms:
+                    yield from iter_import_shapes(subshape)
+            else:
+                yield shape
+
+        def cleaned_shape(vertices: NDArray, consolidated_logger: Any) -> Shapely | None:
+            shape = shapely.set_precision(shapely.Polygon(vertices).buffer(0), POLY_GRID_SIZE)
+            if shape.is_empty:
+                consolidated_logger.warning(
+                    "A GDS polygon collapsed during topology cleanup in "
+                    "'Geometry.from_gds()' and will be skipped."
+                )
+                return None
+            return shape
+
         geometries = []
         with log as consolidated_logger:
-            for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):
-                # buffer(0) is necessary to merge self-intersections
-                shape = shapely.set_precision(shapely.Polygon(vertices).buffer(0), POLY_GRID_SIZE)
+            gds_loader_fn = Geometry.load_gds_vertices_gdstk
+            all_vertices = gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale)
+
+            if merge_adjacent:
+                shapes = []
+                for vertices in all_vertices:
+                    shape = cleaned_shape(vertices, consolidated_logger)
+                    if shape is not None:
+                        shapes.append(shape)
+
+                if len(shapes) > 1:
+                    shapes = [shapely.set_precision(shapely.union_all(shapes), POLY_GRID_SIZE)]
+
+                import_shapes = (
+                    import_shape for shape in shapes for import_shape in iter_import_shapes(shape)
+                )
+            else:
+                import_shapes = (
+                    import_shape
+                    for vertices in all_vertices
+                    for shape in [cleaned_shape(vertices, consolidated_logger)]
+                    if shape is not None
+                    for import_shape in iter_import_shapes(shape)
+                )
+
+            for import_shape in import_shapes:
                 try:
                     geometries.append(
                         from_shapely(
-                            shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane
+                            import_shape,
+                            axis,
+                            slab_bounds,
+                            dilation,
+                            sidewall_angle,
+                            reference_plane,
                         )
                     )
                 except ValidationError as error:
                     consolidated_logger.warning(str(error))
                 except Tidy3dError as error:
                     consolidated_logger.warning(str(error))
+        if not geometries:
+            raise SetupError(
+                "Couldn't import any valid geometries from 'gds_cell' at "
+                f"gds_layer={gds_layer} with specified gds_dtype={gds_dtype}. "
+                "All polygons were skipped during cleanup or failed conversion."
+            )
         return geometries[0] if len(geometries) == 1 else GeometryGroup(geometries=geometries)
 
     @staticmethod
@@ -1579,6 +1635,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_layer: NonNegativeInt = 0,
         gds_dtype: NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
+        gds_precision: PositiveFloat = 1e-3,
     ) -> None:
         """Export a Geometry object's planar slice to a .gds file.
 
@@ -1598,6 +1655,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             Data-type index to use for the shapes stored in the .gds file.
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
+        gds_precision : float = 1e-3
+            Coordinate precision for the written GDS file in micrometers. The default matches
+            the gdstk default of ``1e-9`` meters.
         """
         try:
             import gdstk
@@ -1610,7 +1670,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                 )
             ) from e
 
-        library = gdstk.Library()
+        library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         fname = pathlib.Path(fname)

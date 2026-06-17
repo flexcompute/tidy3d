@@ -69,6 +69,36 @@ def test_to_gds(tmp_path):
     assert np.allclose(cell.polygons[0].area(), 4.0)
 
 
+def test_to_gds_precision(tmp_path):
+    gds_precision = 2.5e-4
+    structure = td.Structure(geometry=td.Box(size=(2, 2, 2)), medium=td.Medium())
+    fname = str(tmp_path / "structure_precision.gds")
+
+    structure.to_gds_file(fname, x=0, gds_precision=gds_precision)
+
+    lib = gdstk.read_gds(fname)
+    assert np.isclose(lib.unit, 1e-6)
+    assert np.isclose(lib.precision, gds_precision * 1e-6)
+
+
+def test_to_gds_file_pixel_exact_positional_backward_compatible(tmp_path):
+    box = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    nx, ny = 50, 50
+    arr = np.ones((nx, ny, 1))
+    arr[20:30, 20:30] = 2
+    x = np.linspace(-1, 1, nx)
+    y = np.linspace(-1, 1, ny)
+    z = np.asarray([0])
+    permittivity = td.SpatialDataArray(arr, coords={"x": x, "y": y, "z": z})
+
+    structure = td.Structure(geometry=box, medium=td.CustomMedium(permittivity=permittivity))
+    fname = str(tmp_path / "structure-exact-positional.gds")
+    structure.to_gds_file(fname, None, None, 0, 1.5, 3e14, 0, 0, "MAIN", True)
+
+    cell = gdstk.read_gds(fname).cells[0]
+    assert np.allclose(cell.bounding_box(), ((-0.2, -0.2), (0.2, 0.2)), atol=0.01)
+
+
 def test_custom_medium_to_gds(tmp_path):
     geometry = td.Box(size=(2, 2, 2))
 

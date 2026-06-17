@@ -1636,6 +1636,94 @@ def test_from_gds():
     assert len(geo.intersections_plane(z=1)) == 1
 
 
+def test_from_gds_merges_fractured_polygons(tmp_path):
+    angles = np.linspace(0, 2 * np.pi, 301, endpoint=False)
+    points = np.column_stack([np.cos(angles), np.sin(angles)])
+    cell = gdstk.Cell("FRACTURED").add(gdstk.Polygon(points, layer=0))
+
+    fname = str(tmp_path / "fractured.gds")
+    lib = gdstk.Library(unit=1e-6, precision=1e-9)
+    lib.add(cell)
+    lib.write_gds(fname)
+
+    fractured_cell = gdstk.read_gds(fname).top_level()[0]
+    assert len([poly for poly in fractured_cell.get_polygons() if poly.layer == 0]) > 1
+
+    raw_geo = td.Geometry.from_gds(
+        fractured_cell, axis=2, slab_bounds=(0, 1), gds_layer=0, merge_adjacent=False
+    )
+    merged_geo = td.Geometry.from_gds(
+        fractured_cell, axis=2, slab_bounds=(0, 1), gds_layer=0, merge_adjacent=True
+    )
+
+    raw_plane = raw_geo.intersections_plane(z=0.5)
+    merged_plane = merged_geo.intersections_plane(z=0.5)
+
+    assert len(raw_plane) > 1
+    assert len(merged_plane) == 1
+    assert np.isclose(
+        shapely.union_all(raw_plane).area,
+        shapely.union_all(merged_plane).area,
+        atol=1e-12,
+    )
+
+
+def test_from_gds_merge_adjacent_keeps_valid_components(monkeypatch):
+    from tidy3d.components.geometry import base as geometry_base_module
+
+    cell = gdstk.Cell("MERGED_COMPONENTS")
+    cell.add(gdstk.rectangle((-4.0, 0.0), (-3.0, 1.0), layer=0))
+    cell.add(gdstk.rectangle((10.0, 0.0), (11.0, 1.0), layer=0))
+
+    def fake_from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane):
+        if shape.centroid.x > 0:
+            raise SetupError("intentional failure for one merged component")
+        return td.Box(size=(1, 1, 1))
+
+    monkeypatch.setattr(geometry_base_module, "from_shapely", fake_from_shapely)
+
+    geo = td.Geometry.from_gds(cell, axis=2, slab_bounds=(0, 1), gds_layer=0, merge_adjacent=True)
+    assert isinstance(geo, td.Box)
+
+
+def test_from_gds_warns_on_collapsed_polygon(monkeypatch):
+    cell = gdstk.Cell("COLLAPSED")
+    valid = np.array([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)])
+    collapsed = np.array([(0.0, 0.0), (0.5, 0.0), (1.0, 0.0), (0.0, 0.0)])
+
+    monkeypatch.setattr(
+        td.Geometry,
+        "load_gds_vertices_gdstk",
+        staticmethod(lambda *_args, **_kwargs: [valid, collapsed]),
+    )
+
+    with AssertLogLevel("WARNING", contains_str="collapsed during topology cleanup"):
+        geo = td.Geometry.from_gds(cell, axis=2, slab_bounds=(0, 1), gds_layer=0)
+
+    plane = shapely.union_all(geo.intersections_plane(z=0.5))
+    assert np.isclose(plane.area, 1.0)
+
+
+def test_from_gds_raises_clear_error_when_all_polygons_collapse(monkeypatch):
+    cell = gdstk.Cell("COLLAPSED_ALL")
+    collapsed_a = np.array([(0.0, 0.0), (0.5, 0.0), (1.0, 0.0), (0.0, 0.0)])
+    collapsed_b = np.array([(2.0, 0.0), (2.5, 0.0), (3.0, 0.0), (2.0, 0.0)])
+
+    monkeypatch.setattr(
+        td.Geometry,
+        "load_gds_vertices_gdstk",
+        staticmethod(lambda *_args, **_kwargs: [collapsed_a, collapsed_b]),
+    )
+
+    with (
+        AssertLogLevel(
+            "ERROR", contains_str="Couldn't import any valid geometries from 'gds_cell'"
+        ),
+        pytest.raises(SetupError, match="Couldn't import any valid geometries from 'gds_cell'"),
+    ):
+        td.Geometry.from_gds(cell, axis=2, slab_bounds=(0, 1), gds_layer=0)
+
+
 @pytest.mark.parametrize("geometry", GEO_TYPES)
 def test_to_gds(geometry, tmp_path):
     fname = str(tmp_path / f"{geometry.__class__.__name__}.gds")
@@ -1649,6 +1737,17 @@ def test_to_gds(geometry, tmp_path):
     cell = gdstk.read_gds(fname).cells[0]
     assert cell.name == geometry.__class__.__name__
     assert len(cell.polygons) == 0
+
+
+def test_to_gds_precision(tmp_path):
+    gds_precision = 2.5e-4
+    fname = str(tmp_path / "geometry_precision.gds")
+
+    td.Box(size=(1, 1, 1)).to_gds_file(fname, z=0, gds_precision=gds_precision)
+
+    lib = gdstk.read_gds(fname)
+    assert np.isclose(lib.unit, 1e-6)
+    assert np.isclose(lib.precision, gds_precision * 1e-6)
 
 
 def test_custom_surface_geometry(tmp_path):
