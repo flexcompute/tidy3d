@@ -396,60 +396,18 @@ def test_parallel_adjoint_mode_direction_policy_assume_outgoing(monkeypatch):
     assert directions == {expected_dir}
 
 
-def test_parallel_adjoint_unresolved_residual_vjp_fails(use_emulated_run, monkeypatch):  # noqa: F811
-    """Ensure unresolved non-zero residual VJP entries fail parallel fallback."""
-
-    fn_dict = get_functions("medium", "mode")
-    sim = fn_dict["sim"](params0)
-    sim_fields = sim._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_paths=(("structures",),)
-    )
-    sim_data = run(
-        sim,
-        task_name="parallel_unresolved_residual_vjp",
-        verbose=False,
-    )
-    monitor_index, monitor = next(
-        (i, m) for i, m in enumerate(sim.monitors) if isinstance(m, td.ModeMonitor)
-    )
-    mode_data = sim_data[monitor.name]
-    vjp = np.zeros_like(mode_data.amps.values, dtype=complex)
-    vjp[0, 0, 0] = 1.0 + 0.0j
-
-    monkeypatch.setattr(autograd_strategy, "setup_adj", lambda **_: [])
-    with pytest.raises(
-        td.exceptions.AdjointError,
-        match="could not resolve remaining non-zero VJP entries",
-    ):
-        autograd_strategy._prepare_adjoints_from_vjp(
-            task_context=_make_adjoint_task_context(
-                task_name="parallel_unresolved_residual_vjp",
-                sim_fields_original=sim_fields,
-                sim_data_orig=sim_data,
-                parallel_info=ParallelAdjointState(
-                    task_name="parallel_unresolved_residual_vjp",
-                    num_sims=0,
-                    basis_specs=[],
-                    basis_maps={},
-                    basis_task_map={},
-                ),
-                local_gradient=True,
-            ),
-            data_fields_vjp={("data", monitor_index, "amps"): vjp},
-        )
-
-
 def test_nonparallel_unresolved_vjp_returns_zero_map(use_emulated_run, monkeypatch):  # noqa: F811
-    """Ensure legacy non-parallel path keeps zero-gradient fallback when setup_adj returns no sims."""
+    """Ensure non-parallel setup_adj with no sims returns a zero-gradient map."""
 
     fn_dict = get_functions("medium", "mode")
     sim = fn_dict["sim"](params0)
     sim_fields = sim._strip_traced_fields(
         include_untraced_data_arrays=False, starting_paths=(("structures",),)
     )
+    task_name = "unresolved_vjp_zero_map"
     sim_data = run(
         sim,
-        task_name="nonparallel_unresolved_vjp_zero_map",
+        task_name=task_name,
         verbose=False,
     )
     monitor_index, monitor = next(
@@ -463,7 +421,7 @@ def test_nonparallel_unresolved_vjp_returns_zero_map(use_emulated_run, monkeypat
     with AssertLogLevel("WARNING", contains_str="contains no sources"):
         vjp_traced_fields, sims_adj, has_adj_sources = autograd_strategy._prepare_adjoints_from_vjp(
             task_context=_make_adjoint_task_context(
-                task_name="nonparallel_unresolved_vjp_zero_map",
+                task_name=task_name,
                 sim_fields_original=sim_fields,
                 sim_data_orig=sim_data,
                 parallel_info=None,
@@ -702,6 +660,9 @@ def test_apply_parallel_adjoint_assume_outgoing_mode_vjp(use_emulated_run, monke
 
     fn_dict = get_functions("medium", "mode")
     sim = fn_dict["sim"](params0)
+    sim_fields = sim._strip_traced_fields(
+        include_untraced_data_arrays=False, starting_paths=(("structures",),)
+    )
     sim_data = run(
         sim,
         task_name="parallel_apply_assume_outgoing",
@@ -733,12 +694,13 @@ def test_apply_parallel_adjoint_assume_outgoing_mode_vjp(use_emulated_run, monke
     vjp[outgoing_index, 0, 0] = 2.0 + 0.0j
     vjp[incoming_index, 0, 0] = 3.0 + 0.0j
     data_path = ("data", monitor_index, "amps")
+    gradient_path = ("structures", 0, "medium", "permittivity")
     data_fields_vjp = {data_path: vjp}
 
     basis_maps = {
         outgoing_basis: {
-            "real": {("structures", 0, "medium", "permittivity"): np.array(5.0)},
-            "imag": {("structures", 0, "medium", "permittivity"): np.array(7.0)},
+            "real": {gradient_path: np.array(5.0)},
+            "imag": {gradient_path: np.array(7.0)},
         }
     }
     parallel_info = parallel_adjoint_api.ParallelAdjointState(
@@ -764,6 +726,41 @@ def test_apply_parallel_adjoint_assume_outgoing_mode_vjp(use_emulated_run, monke
     fallback_vjp = fallback[data_path]
     assert fallback_vjp[outgoing_index, 0, 0] == 0.0
     assert fallback_vjp[incoming_index, 0, 0] != 0.0
+
+    with monkeypatch.context() as patch:
+        patch.setattr(autograd_strategy, "setup_adj", lambda **_: [])
+        with pytest.raises(
+            td.exceptions.AdjointError,
+            match="could not resolve remaining non-zero VJP entries",
+        ):
+            autograd_strategy._prepare_adjoints_from_vjp(
+                task_context=_make_adjoint_task_context(
+                    task_name="parallel_apply_unresolved_residual",
+                    sim_fields_original=sim_fields,
+                    sim_data_orig=sim_data,
+                    parallel_info=parallel_info,
+                    local_gradient=True,
+                ),
+                data_fields_vjp=data_fields_vjp,
+            )
+
+    vjp_tiny_fallback = np.zeros_like(mode_data.amps.values, dtype=complex)
+    vjp_tiny_fallback[outgoing_index, 0, 0] = 2.0 + 0.0j
+    vjp_tiny_fallback[incoming_index, 0, 0] = 1e-50 + 0.0j
+    vjp_fields, sims_adj, has_adj_sources = autograd_strategy._prepare_adjoints_from_vjp(
+        task_context=_make_adjoint_task_context(
+            task_name="parallel_apply_assume_outgoing",
+            sim_fields_original=sim_fields,
+            sim_data_orig=sim_data,
+            parallel_info=parallel_info,
+            local_gradient=True,
+        ),
+        data_fields_vjp={data_path: vjp_tiny_fallback},
+    )
+
+    assert sims_adj == []
+    assert has_adj_sources is True
+    assert np.isclose(vjp_fields[gradient_path], 10.0)
 
 
 def test_parallel_adjoint_launches_parallel_tasks(use_emulated_run, monkeypatch):  # noqa: F811

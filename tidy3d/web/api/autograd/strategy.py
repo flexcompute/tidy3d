@@ -136,16 +136,26 @@ def _prepare_adjoints_from_vjp(
         )
         task_context.context.simulation_data_forward = sim_data_fwd
 
-    sims_adj = setup_adj(
-        data_fields_vjp=data_fields_vjp_for_adj,
-        sim_data_orig=sim_data_orig,
-        sim_fields_keys=sim_fields_keys,
-        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
-        already_filtered=True,
-        sim_data_fwd=sim_data_fwd,
-    )
+    setup_adj_kwargs = {
+        "data_fields_vjp": data_fields_vjp_for_adj,
+        "sim_data_orig": sim_data_orig,
+        "sim_fields_keys": sim_fields_keys,
+        "max_num_adjoint_per_fwd": max_num_adjoint_per_fwd,
+        "already_filtered": True,
+        "sim_data_fwd": sim_data_fwd,
+    }
+    sims_adj = setup_adj(**setup_adj_kwargs)
     if data_fields_vjp_for_adj and not sims_adj:
         if parallel_info is not None:
+            adjoint_setup_result = setup_adj(**setup_adj_kwargs, return_result=True)
+            if getattr(adjoint_setup_result, "all_sources_underflowed", False):
+                if vjp_traced_fields:
+                    return vjp_traced_fields, [], True
+                return _handle_no_adjoint_sources(
+                    sim_fields_original=sim_fields_original,
+                    task_name=task_name,
+                    warn_if_no_sources=warn_if_no_sources,
+                )
             raise td.exceptions.AdjointError(
                 f"Adjoint fallback for task '{task_name}' could not resolve remaining non-zero VJP "
                 "entries."

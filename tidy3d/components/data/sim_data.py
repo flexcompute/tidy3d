@@ -137,6 +137,88 @@ class AdjointSourceInfo(Tidy3dBaseModel):
 
 
 @dataclass(frozen=True)
+class _AdjointSimulationSetupResult:
+    """Result of constructing adjoint simulations from traced monitor VJPs."""
+
+    simulations: list[Simulation]
+    all_sources_underflowed: bool = False
+
+
+def _min_adjoint_source_amplitude(simulation: Simulation) -> float:
+    """Minimum adjoint source amplitude expected to survive solver source serialization."""
+    source_time_dtype = np.float64 if simulation.precision == "double" else np.float32
+    return float(np.nextafter(source_time_dtype(0), source_time_dtype(1)))
+
+
+def _current_dataset_magnitude(src: CustomCurrentSource) -> float:
+    """Maximum absolute current amplitude stored in a custom current source dataset."""
+    return float(
+        max(
+            np.max(np.abs(field_component.values))
+            for field_component in src.current_dataset.field_components.values()
+        )
+    )
+
+
+def _adjoint_source_dispatch_magnitude(src: SourceType) -> float:
+    """Effective adjoint source magnitude after source-time and dataset amplitudes."""
+    magnitude = abs(src.source_time.amplitude)
+    if isinstance(src, CustomCurrentSource):
+        magnitude *= _current_dataset_magnitude(src)
+    return magnitude
+
+
+def _is_dispatchable_adjoint_source(src: SourceType, min_amplitude: float) -> bool:
+    """Whether an adjoint source magnitude is large enough to dispatch to the solver."""
+    return _adjoint_source_dispatch_magnitude(src) >= min_amplitude
+
+
+def _warn_skipped_adjoint_sources(num_skipped: int, min_amplitude: float) -> None:
+    """Warn once if adjoint source contributions were skipped as numerically zero."""
+    if not num_skipped:
+        return
+
+    log.warning(
+        "Skipped %d adjoint source(s) whose effective magnitude underflows solver precision "
+        "(%s). These contributions are treated as zero.",
+        num_skipped,
+        min_amplitude,
+        log_once=True,
+    )
+
+
+def _filter_adjoint_sources(
+    sources: list[SourceType],
+    min_amplitude: float,
+) -> tuple[list[SourceType], int]:
+    """Drop raw adjoint sources whose effective magnitude is numerically zero."""
+    filtered_sources = [
+        source for source in sources if _is_dispatchable_adjoint_source(source, min_amplitude)
+    ]
+    return filtered_sources, len(sources) - len(filtered_sources)
+
+
+def _filter_adjoint_source_infos(
+    adjoint_source_infos: list[AdjointSourceInfo],
+    min_amplitude: float,
+) -> tuple[list[AdjointSourceInfo], int]:
+    """Drop adjoint sources whose effective magnitude is numerically zero."""
+    filtered_infos = []
+    num_skipped = 0
+    for adjoint_source_info in adjoint_source_infos:
+        sources = tuple(
+            src
+            for src in adjoint_source_info.sources
+            if _is_dispatchable_adjoint_source(src, min_amplitude)
+        )
+        num_skipped += len(adjoint_source_info.sources) - len(sources)
+        if sources:
+            filtered_infos.append(adjoint_source_info.updated_copy(sources=sources))
+
+    return filtered_infos, num_skipped
+
+
+@dataclass(frozen=True)
 class AdjointSourceGroup:
     """Grouped adjoint sources that share a spatial port, with optional metadata."""
 
@@ -1382,26 +1464,60 @@ class SimulationData(AbstractYeeGridSimulationData):
         adjoint_monitors: list[Monitor],
     ) -> list[Simulation]:
         """Make the adjoint simulations from the original simulation and the VJP-containing data."""
+        return self._make_adjoint_sims_with_result(
+            data_vjp_paths=data_vjp_paths,
+            adjoint_monitors=adjoint_monitors,
+        ).simulations
+
+    def _make_adjoint_sims_with_result(
+        self,
+        data_vjp_paths: set[tuple],
+        adjoint_monitors: list[Monitor],
+    ) -> _AdjointSimulationSetupResult:
+        """Make adjoint simulations and report if all generated sources underflowed."""
 
         if not data_vjp_paths:
-            return []
+            return _AdjointSimulationSetupResult([])
+
+        requested_monitor_names = {self.data[index].monitor.name for _, index, _ in data_vjp_paths}
 
         # generate the adjoint sources {mnt_name : list[Source]}
         sources_adj_dict = self._make_adjoint_sources(data_vjp_paths=data_vjp_paths)
         if not sources_adj_dict:
-            return []
+            return _AdjointSimulationSetupResult([])
+        sources_generated_for_all_monitors = requested_monitor_names <= set(sources_adj_dict)
 
         adj_srcs = []
         for src_list in sources_adj_dict.values():
             adj_srcs += list(src_list)
 
         if not adj_srcs:
-            return []
+            return _AdjointSimulationSetupResult([])
+
+        min_source_amplitude = _min_adjoint_source_amplitude(self.simulation)
+        adj_srcs, num_skipped_before_grouping = _filter_adjoint_sources(
+            adj_srcs, min_source_amplitude
+        )
+        if not adj_srcs:
+            _warn_skipped_adjoint_sources(num_skipped_before_grouping, min_source_amplitude)
+            return _AdjointSimulationSetupResult(
+                [],
+                all_sources_underflowed=bool(num_skipped_before_grouping)
+                and sources_generated_for_all_monitors,
+            )
 
         adjoint_source_infos = self._process_adjoint_sources(adj_srcs=adj_srcs)
+        adjoint_source_infos, num_skipped_after_grouping = _filter_adjoint_source_infos(
+            adjoint_source_infos, min_source_amplitude
+        )
+        num_skipped = num_skipped_before_grouping + num_skipped_after_grouping
+        _warn_skipped_adjoint_sources(num_skipped, min_source_amplitude)
 
         if not adjoint_source_infos:
-            return []
+            return _AdjointSimulationSetupResult(
+                [],
+                all_sources_underflowed=bool(num_skipped) and sources_generated_for_all_monitors,
+            )
 
         adj_sims = []
         for adjoint_source_info in adjoint_source_infos:
@@ -1415,7 +1531,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         log.info(f"Created {len(adj_sims)} adjoint simulations.")
 
-        return adj_sims
+        return _AdjointSimulationSetupResult(adj_sims)
 
     def _make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, list[SourceType]]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""

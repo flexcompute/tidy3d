@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -45,6 +46,14 @@ ADJOINT_MEMORY_MULTIPLIER = 6.0
 ADJOINT_MEMORY_BASELINE_MULTIPLIER = 2.0
 
 
+@dataclass(frozen=True)
+class AdjointSetupResult:
+    """Result of setting up adjoint simulations for a VJP map."""
+
+    simulations: list[td.Simulation]
+    all_sources_underflowed: bool = False
+
+
 def make_adjoint_monitors(
     simulation: td.Simulation,
     sim_fields_keys: list[tuple],
@@ -83,7 +92,8 @@ def setup_adj(
     max_num_adjoint_per_fwd: int,
     already_filtered: bool = False,
     sim_data_fwd: td.SimulationData | None = None,
-) -> list[td.Simulation]:
+    return_result: bool = False,
+) -> list[td.Simulation] | AdjointSetupResult:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
@@ -93,7 +103,8 @@ def setup_adj(
 
     # if all entries are zero, there is no adjoint sim to run
     if not data_fields_vjp:
-        return []
+        result = AdjointSetupResult([])
+        return result if return_result else result.simulations
 
     data_fields_vjp, sim_data_for_adj = expand_flux_monitor_vjps(
         data_fields_vjp=data_fields_vjp,
@@ -120,10 +131,11 @@ def setup_adj(
 
     adjoint_monitors = make_adjoint_monitors(sim_data_orig.simulation, sim_fields_keys)
 
-    sims_adj = sim_data_vjp._make_adjoint_sims(
+    adjoint_setup_result = sim_data_vjp._make_adjoint_sims_with_result(
         data_vjp_paths=data_vjp_paths,
         adjoint_monitors=adjoint_monitors,
     )
+    sims_adj = adjoint_setup_result.simulations
 
     if len(sims_adj) > max_num_adjoint_per_fwd:
         raise AdjointError(
@@ -134,7 +146,11 @@ def setup_adj(
             "setup, increase the 'max_num_adjoint_per_fwd' parameter in the run function, and re-run."
         )
 
-    return sims_adj
+    result = AdjointSetupResult(
+        sims_adj,
+        all_sources_underflowed=adjoint_setup_result.all_sources_underflowed,
+    )
+    return result if return_result else result.simulations
 
 
 def _slice_field_data(
