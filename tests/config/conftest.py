@@ -19,6 +19,8 @@ _ENV_VARS_TO_CLEAR = {
     "SIMCLOUD_APIKEY",
     "TIDY3D_AUTH__APIKEY",
     "TIDY3D_WEB__APIKEY",
+    "TIDY3D_WEB__API_ENDPOINT",
+    "TIDY3D_WEB__WEBSITE_ENDPOINT",
     "TIDY3D_BASE_DIR",
 }
 
@@ -68,3 +70,18 @@ def config_manager(mock_config_dir):
     config_wrapper.switch_profile("default")
     manager = get_manager()
     return manager
+
+
+@pytest.fixture
+def cli_config_manager(mock_config_dir, monkeypatch):
+    """Return the real config manager used by tidy3d.web.cli.config."""
+
+    import tidy3d.web.cli.config as cli_config
+    from tidy3d.config import config as config_wrapper
+    from tidy3d.config import get_manager as real_get_manager
+    from tidy3d.config import reload_config as real_reload_config
+
+    monkeypatch.setattr(cli_config, "config", None)
+    real_reload_config(profile="default")
+    config_wrapper.switch_profile("default")
+    return real_get_manager()

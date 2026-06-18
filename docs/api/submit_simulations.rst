@@ -73,6 +73,7 @@ Account and System
 
    web.account
    web.test
+   web.refresh_licenses
 
 Job and Batch Containers
 -------------------------

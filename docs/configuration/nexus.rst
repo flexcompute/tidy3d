@@ -65,7 +65,7 @@ Command Syntax
 
 .. code-block:: bash
 
-   tidy3d configure [--apikey <key>] [--nexus-url <url> | --api-endpoint <url> --website-endpoint <url>] [OPTIONS]
+   tidy3d configure [--apikey <key>] [--nexus-url <url> | --api-endpoint <url> --website-endpoint <url>] [--refresh-licenses] [OPTIONS]
 
 **Options:**
 
@@ -77,6 +77,8 @@ Command Syntax
 * ``--s3-endpoint <url>``: S3 storage URL (e.g., http://server:9000)
 * ``--ssl-verify`` / ``--no-ssl-verify``: SSL verification (default: enabled for HTTPS)
 * ``--enable-caching`` / ``--no-caching``: Server-side result caching
+* ``--refresh-licenses``: Clear cached local license entitlements after
+  successful configuration; see :ref:`refreshing-local-license-entitlements`
 
 Examples
 ~~~~~~~~
