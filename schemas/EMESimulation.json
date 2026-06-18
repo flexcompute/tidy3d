@@ -7357,18 +7357,6 @@
           "default": true,
           "type": "boolean"
         },
-        "min_grids_per_geometry": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": 2
-        },
         "min_steps_along_axis": {
           "anyOf": [
             {
@@ -7380,6 +7368,18 @@
             }
           ],
           "default": null
+        },
+        "min_steps_per_geometry": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 2
         },
         "refinement_inside_sim_only": {
           "default": true,

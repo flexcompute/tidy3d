@@ -1351,9 +1351,9 @@ class LayerRefinementSpec(Box):
         "relative to a threshold value defined by ``corner_finder.axis_aligned_angle_threshold``.",
     )
 
-    min_grids_per_geometry: PositiveFloat | None = Field(
+    min_steps_per_geometry: PositiveFloat | None = Field(
         2,
-        title="Minimum Grid Cells Across A Small Geometry",
+        title="Minimum Grid Steps Across A Small Geometry",
         description="If not ``None`` and ``corner_finder`` is not ``None``, sets the minimum "
         "number of grid cells to place across each disjoint geometry made of the medium "
         "specified by ``corner_finder``, ensuring small features are not under-resolved.",
@@ -1416,7 +1416,7 @@ class LayerRefinementSpec(Box):
         in_plane_edge_refinement: GridRefinement
         | Literal["mirror_corner"]
         | None = "mirror_corner",
-        min_grids_per_geometry: PositiveFloat | None = 2,
+        min_steps_per_geometry: PositiveFloat | None = 2,
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
@@ -1447,7 +1447,7 @@ class LayerRefinementSpec(Box):
         in_plane_edge_refinement : GridRefinement | Literal["mirror_corner"] | None = "mirror_corner"
             Inplane mesh refinement along axis-unaligned edges. ``"mirror_corner"`` uses
             ``corner_refinement``'s grid size; ``None`` disables edge refinement.
-        min_grids_per_geometry : PositiveFloat | None = 2
+        min_steps_per_geometry : PositiveFloat | None = 2
             Minimum number of grid cells across each small disjoint metal geometry. ``None``
             disables small-geometry resolution.
         refinement_inside_sim_only : bool = True
@@ -1482,7 +1482,7 @@ class LayerRefinementSpec(Box):
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
             in_plane_edge_refinement=in_plane_edge_refinement,
-            min_grids_per_geometry=min_grids_per_geometry,
+            min_steps_per_geometry=min_steps_per_geometry,
             refinement_inside_sim_only=refinement_inside_sim_only,
             gap_meshing_iters=gap_meshing_iters,
             dl_min_from_gap_width=dl_min_from_gap_width,
@@ -1504,7 +1504,7 @@ class LayerRefinementSpec(Box):
         in_plane_edge_refinement: GridRefinement
         | Literal["mirror_corner"]
         | None = "mirror_corner",
-        min_grids_per_geometry: PositiveFloat | None = 2,
+        min_steps_per_geometry: PositiveFloat | None = 2,
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
@@ -1537,7 +1537,7 @@ class LayerRefinementSpec(Box):
         in_plane_edge_refinement : GridRefinement | Literal["mirror_corner"] | None = "mirror_corner"
             Inplane mesh refinement along axis-unaligned edges. ``"mirror_corner"`` uses
             ``corner_refinement``'s grid size; ``None`` disables edge refinement.
-        min_grids_per_geometry : PositiveFloat | None = 2
+        min_steps_per_geometry : PositiveFloat | None = 2
             Minimum number of grid cells across each small disjoint metal geometry. ``None``
             disables small-geometry resolution.
         refinement_inside_sim_only : bool = True
@@ -1572,7 +1572,7 @@ class LayerRefinementSpec(Box):
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
             in_plane_edge_refinement=in_plane_edge_refinement,
-            min_grids_per_geometry=min_grids_per_geometry,
+            min_steps_per_geometry=min_steps_per_geometry,
             refinement_inside_sim_only=refinement_inside_sim_only,
             gap_meshing_iters=gap_meshing_iters,
             dl_min_from_gap_width=dl_min_from_gap_width,
@@ -1593,7 +1593,7 @@ class LayerRefinementSpec(Box):
         in_plane_edge_refinement: GridRefinement
         | Literal["mirror_corner"]
         | None = "mirror_corner",
-        min_grids_per_geometry: PositiveFloat | None = 2,
+        min_steps_per_geometry: PositiveFloat | None = 2,
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
@@ -1624,7 +1624,7 @@ class LayerRefinementSpec(Box):
         in_plane_edge_refinement : GridRefinement | Literal["mirror_corner"] | None = "mirror_corner"
             Inplane mesh refinement along axis-unaligned edges. ``"mirror_corner"`` uses
             ``corner_refinement``'s grid size; ``None`` disables edge refinement.
-        min_grids_per_geometry : PositiveFloat | None = 2
+        min_steps_per_geometry : PositiveFloat | None = 2
             Minimum number of grid cells across each small disjoint metal geometry. ``None``
             disables small-geometry resolution.
         refinement_inside_sim_only : bool = True
@@ -1658,7 +1658,7 @@ class LayerRefinementSpec(Box):
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
             in_plane_edge_refinement=in_plane_edge_refinement,
-            min_grids_per_geometry=min_grids_per_geometry,
+            min_steps_per_geometry=min_steps_per_geometry,
             refinement_inside_sim_only=refinement_inside_sim_only,
             gap_meshing_iters=gap_meshing_iters,
             dl_min_from_gap_width=dl_min_from_gap_width,
@@ -1697,7 +1697,7 @@ class LayerRefinementSpec(Box):
         The merge requires ``corner_finder``; with it set, the merge is built when at least one
         consumer is active: corner snapping, corner refinement, edge refinement, the feature-size
         ``dl_min`` reduction (concave/convex/mixed resolution), small-geometry resolution
-        (``min_grids_per_geometry``), or gap meshing (``gap_meshing_iters``).
+        (``min_steps_per_geometry``), or gap meshing (``gap_meshing_iters``).
         """
         if self.corner_finder is None:
             return False
@@ -1706,7 +1706,7 @@ class LayerRefinementSpec(Box):
             or self.corner_refinement is not None
             or self._edge_refinement is not None
             or not self.corner_finder._no_min_dl_override
-            or self.min_grids_per_geometry is not None
+            or self.min_steps_per_geometry is not None
             or self.gap_meshing_iters > 0
         )
 
@@ -1778,8 +1778,8 @@ class LayerRefinementSpec(Box):
 
         For each disjoint geometry and in-plane axis, count the cells of ``grid`` fully contained
         in the geometry's bounding box (the grid boundaries inside the box, minus one); where that
-        count is below ``min_grids_per_geometry`` the axis is refined to
-        ``extent / min_grids_per_geometry``. Unlike corner/edge refinement this runs *after* the
+        count is below ``min_steps_per_geometry`` the axis is refined to
+        ``extent / min_steps_per_geometry``. Unlike corner/edge refinement this runs *after* the
         grid is built, so only features the fully-refined grid leaves under-resolved are refined —
         a large geometry already spans enough cells and is skipped, with no explicit size threshold.
 
@@ -1790,7 +1790,7 @@ class LayerRefinementSpec(Box):
         emitted ``shadow=False`` with ``priority=-1`` so it stacks per axis with any overlapping
         corner/edge override.
         """
-        if self.min_grids_per_geometry is None or self.corner_finder is None:
+        if self.min_steps_per_geometry is None or self.corner_finder is None:
             return [], inf
         _, tan_dims = Box.pop_axis((0, 1, 2), self.axis)
         grid_boundaries = grid.boundaries.to_list
@@ -1817,9 +1817,9 @@ class LayerRefinementSpec(Box):
                     )
                     - 1
                 )
-                # under-resolved axis: shrink the grid size to fit min_grids_per_geometry cells
-                if num_cells < self.min_grids_per_geometry:
-                    dl_axis = extent / self.min_grids_per_geometry
+                # under-resolved axis: shrink the grid size to fit min_steps_per_geometry cells
+                if num_cells < self.min_steps_per_geometry:
+                    dl_axis = extent / self.min_steps_per_geometry
                     dl_2d[axis2d] = dl_axis
                     dl_min = min(dl_min, dl_axis)
             if any(dl is not None for dl in dl_2d):
@@ -3924,7 +3924,7 @@ class GridSpec(Tidy3dBaseModel):
             small_geometry_overrides = []
             dl_min_from_small_geometry = inf
             for ind_layer, layer_spec in enumerate(self.layer_refinement_specs):
-                if layer_spec.min_grids_per_geometry is None:
+                if layer_spec.min_steps_per_geometry is None:
                     continue
                 # reuse the merge gap meshing already consumed; never rerun it, no corner detection
                 if cached_merged_geos is not None:

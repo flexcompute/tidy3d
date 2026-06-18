@@ -722,11 +722,11 @@ def test_different_dl_overrides_kept_separate():
     assert len(inplane) == 5
 
 
-# --- small-geometry resolution (min_grids_per_geometry) -----------------------
+# --- small-geometry resolution (min_steps_per_geometry) -----------------------
 #
 # Small-geometry resolution is a post-mesh *measurement* pass: it counts
 # cells of the constructed grid across each disjoint metal geometry and refines only the axes that
-# fall below ``min_grids_per_geometry``. It is not a pre-mesh override source, so it does not enter
+# fall below ``min_steps_per_geometry``. It is not a pre-mesh override source, so it does not enter
 # ``generate_override_structures`` / the override union, nor the static ``suggested_dl_min`` bound.
 
 
@@ -743,7 +743,7 @@ def _small_geometry_layer(**kwargs):
         "corner_snapping": False,
         "corner_refinement": None,
         "in_plane_edge_refinement": None,
-        "min_grids_per_geometry": 2,
+        "min_steps_per_geometry": 2,
     }
     defaults.update(kwargs)
     return LayerRefinementSpec(**defaults)
@@ -764,20 +764,20 @@ def _pec_merged_geos(bbox):
     return [(td.PEC, shapely.box(*bbox))]
 
 
-def test_min_grids_per_geometry_field():
-    """``min_grids_per_geometry`` must be positive, and ``None`` disables it."""
-    LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_grids_per_geometry=None)
+def test_min_steps_per_geometry_field():
+    """``min_steps_per_geometry`` must be positive, and ``None`` disables it."""
+    LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_steps_per_geometry=None)
     with pytest.raises(ValidationError):
-        LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_grids_per_geometry=0)
+        LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_steps_per_geometry=0)
     with pytest.raises(ValidationError):
-        LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_grids_per_geometry=-1)
+        LayerRefinementSpec(axis=2, size=(td.inf, td.inf, 2), min_steps_per_geometry=-1)
 
 
 @pytest.mark.parametrize(
     "bbox, expected_dl",
     [
         # uniform dl=1 grid with boundaries on the integers; an axis is refined to extent/2 iff it
-        # fully contains fewer than min_grids_per_geometry (=2) cells, i.e. fewer than 3 grid
+        # fully contains fewer than min_steps_per_geometry (=2) cells, i.e. fewer than 3 grid
         # boundaries fall in the bbox along it (cells contained = boundaries in bbox - 1).
         ((0, 0, 0.1, 0.1), (0.05, 0.05)),  # tiny: 1 boundary -> 0 cells per axis -> both refined
         ((0, 0, 0.1, 4.0), (0.05, None)),  # thin trace: x 0 cells, y 4 cells -> narrow x only
@@ -787,8 +787,8 @@ def test_min_grids_per_geometry_field():
     ],
 )
 def test_small_geometry_measurement_per_axis(bbox, expected_dl):
-    """A geometry's in-plane axis is refined to ``extent/min_grids`` iff the constructed grid fully
-    contains fewer than ``min_grids`` cells across it; resolved axes/geometries are left untouched."""
+    """A geometry's in-plane axis is refined to ``extent/min_steps`` iff the constructed grid fully
+    contains fewer than ``min_steps`` cells across it; resolved axes/geometries are left untouched."""
     grid = _uniform_inplane_grid(dl=1.0)
     overrides, dl_min = _small_geometry_layer()._small_geometry_measurement_overrides(
         grid, _pec_merged_geos(bbox)
@@ -815,14 +815,14 @@ def test_small_geometry_skips_near_zero_extent():
     """A near-zero in-plane extent (e.g. a Shapely sliver) is skipped rather than refined to a
     vanishing ``dl``; a genuinely under-resolved axis on the same geometry is still refined."""
     grid = _uniform_inplane_grid(dl=1.0)
-    # x extent below GAP_MESHING_TOL -> skipped; y spans 1 cell (< min_grids=2) -> refined to 0.5
+    # x extent below GAP_MESHING_TOL -> skipped; y spans 1 cell (< min_steps=2) -> refined to 0.5
     bbox = (0.0, 0.0, GAP_MESHING_TOL / 10, 1.0)
     overrides, dl_min = _small_geometry_layer()._small_geometry_measurement_overrides(
         grid, _pec_merged_geos(bbox)
     )
     assert len(overrides) == 1
     override = overrides[0]
-    assert override.dl[0] is None  # sliver x axis skipped, not refined to extent/min_grids
+    assert override.dl[0] is None  # sliver x axis skipped, not refined to extent/min_steps
     assert np.isclose(override.dl[1], 0.5)  # under-resolved y axis still refined
     assert np.isclose(dl_min, 0.5)
 
@@ -837,17 +837,17 @@ def test_small_geometry_requires_corner_finder():
     assert overrides == [] and dl_min == td.inf
 
 
-def test_min_grids_per_geometry_resolves_small_via_in_grid():
-    """End-to-end: the measurement pass refines a small under-resolved via to >= min_grids cells."""
+def test_min_steps_per_geometry_resolves_small_via_in_grid():
+    """End-to-end: the measurement pass refines a small under-resolved via to >= min_steps cells."""
     via = _pec_polyslab_structure([(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1)])
     layer = _small_geometry_layer()
 
-    def build(min_grids):
+    def build(min_steps):
         return td.Simulation(
             size=(4, 4, 2),
             grid_spec=td.GridSpec.auto(
                 wavelength=2.0,
-                layer_refinement_specs=[layer.updated_copy(min_grids_per_geometry=min_grids)],
+                layer_refinement_specs=[layer.updated_copy(min_steps_per_geometry=min_steps)],
             ),
             run_time=1e-13,
             structures=[via],
@@ -881,7 +881,7 @@ def test_small_geometry_rebuild_keeps_internal_overrides_on_none_path():
         corner_finder=CornerFinderSpec(),
         corner_snapping=False,
         corner_refinement=GridRefinement(dl=0.05, num_cells=2),
-        min_grids_per_geometry=2,
+        min_steps_per_geometry=2,
     )
     grid_spec = td.GridSpec.auto(wavelength=2.0, layer_refinement_specs=[layer])
     build_kwargs = {
@@ -908,10 +908,10 @@ def test_from_layer_bounds_new_inplane_fields():
     """``from_layer_bounds`` plumbs both new in-plane fields."""
     spec = GridRefinement(dl=0.05)
     layer = LayerRefinementSpec.from_layer_bounds(
-        axis=2, bounds=(0, 1), in_plane_edge_refinement=spec, min_grids_per_geometry=4
+        axis=2, bounds=(0, 1), in_plane_edge_refinement=spec, min_steps_per_geometry=4
     )
     assert layer.in_plane_edge_refinement == spec
-    assert layer.min_grids_per_geometry == 4
+    assert layer.min_steps_per_geometry == 4
 
 
 def test_from_bounds_and_structures_new_inplane_fields():
@@ -923,15 +923,15 @@ def test_from_bounds_and_structures_new_inplane_fields():
             rmin=(0, 0, 0),
             rmax=(1, 1, 1),
             in_plane_edge_refinement=spec,
-            min_grids_per_geometry=4,
+            min_steps_per_geometry=4,
         ),
         LayerRefinementSpec.from_structures(
-            structures=[via], in_plane_edge_refinement=spec, min_grids_per_geometry=4
+            structures=[via], in_plane_edge_refinement=spec, min_steps_per_geometry=4
         ),
     )
     for layer in explicit:
         assert layer.in_plane_edge_refinement == spec
-        assert layer.min_grids_per_geometry == 4
+        assert layer.min_steps_per_geometry == 4
 
 
 def test_gridrefinement():
@@ -1963,7 +1963,7 @@ def test_gap_meshing_dl_min_warning():
         corner_refinement=None,
         # isolate the gap-width warning: disable the default-on small-geometry resolution, which
         # would otherwise refine these deliberately small strips and change the lateral grid size
-        min_grids_per_geometry=None,
+        min_steps_per_geometry=None,
     )
 
     grid_spec = td.GridSpec.auto(
