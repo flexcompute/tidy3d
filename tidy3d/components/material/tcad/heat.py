@@ -193,7 +193,10 @@ class SolidMedium(AbstractHeatMedium):
         "velocity with a nonzero component normal to an interface between two touching solids is "
         "only supported when ``rho * cp * V . n`` matches across the face; a normal-flux jump at "
         "such an interface is ill-posed and unsupported (velocities tangential to the interface "
-        "are fine).",
+        "are fine). This term is applied by the heat solver, including when heat is coupled "
+        "with electrical conduction. It is not supported in non-isothermal charge "
+        "(coupled charge+heat) simulations, where the coupled thermal solve does not apply "
+        "it, so setting a nonzero ``velocity`` there raises a setup error.",
         json_schema_extra={"units": VELOCITY},
     )
 

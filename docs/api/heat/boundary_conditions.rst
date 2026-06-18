@@ -24,6 +24,7 @@ Types
    TemperatureBC
    ConvectionBC
    HeatFluxBC
+   ThermalContactResistance
 
 
 Placement

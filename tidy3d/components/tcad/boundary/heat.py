@@ -195,6 +195,11 @@ class ThermalContactResistance(HeatChargeBC):
     without meshing them. This condition can only be placed on an interface between two
     solids (:class:`StructureStructureInterface` or :class:`MediumMediumInterface`).
 
+    This boundary condition is applied by the heat solver, including when heat is coupled
+    with electrical conduction. It is not supported in non-isothermal charge (coupled
+    charge+heat) simulations, where the coupled thermal solve does not apply the
+    interfacial thermal resistance, so including it there raises a setup error.
+
     Example
     -------
     >>> import tidy3d as td

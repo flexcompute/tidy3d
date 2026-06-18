@@ -539,6 +539,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("boundary_spec",), self._check_thermal_contact_resistance_placement
         )
+        self._call_with_validation_loc(("structures",), self._check_heat_only_features_in_charge)
         self._call_with_validation_loc(("boundary_spec",), self._check_freqs_requires_ac_source)
         self._call_with_validation_loc(
             ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
@@ -1429,6 +1430,53 @@ class HeatChargeSimulation(AbstractSimulation):
                 raise SetupError(
                     "The current simulation is defined as non-isothermal but no "
                     "solid or semiconductor materials have been defined. "
+                )
+        return self
+
+    def _check_heat_only_features_in_charge(self) -> Self:
+        """Reject heat-only-solver features in non-isothermal charge simulations.
+
+        Solid-medium advection ('SolidMedium.velocity') and resistive interfaces
+        ('ThermalContactResistance') are honored by the heat solver, including when it
+        is coupled with electrical conduction. The coupled thermal solve that runs
+        alongside a non-isothermal charge analysis does not apply either term, so a setup
+        that requests them would silently produce a result that ignores them. Flag them
+        here instead. Heat, conduction+heat, and isothermal charge analyses (the latter
+        runs no thermal solve) are unaffected."""
+        if not self._thermal_solver_active:
+            return self
+
+        # Advection velocity, on the background medium or any structure's solid heat spec.
+        media_sources = [(("medium",), self.medium)]
+        media_sources.extend(
+            (("structures", i), struct.medium) for i, struct in enumerate(self.structures)
+        )
+        for loc, medium in media_sources:
+            heat_spec = (
+                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
+            )
+            velocity = getattr(heat_spec, "velocity", None)
+            if velocity is not None and any(v != 0.0 for v in velocity):
+                self._raise_validation_error_at_loc(
+                    "Solid-medium advection ('SolidMedium.velocity') is not supported in "
+                    "non-isothermal charge (coupled charge+heat) simulations: the coupled "
+                    "thermal solve does not apply the convective transport term "
+                    "'rho * cp * V . grad(T)', so this velocity would be silently ignored. "
+                    "Remove 'velocity' (or set it to 'None') to run this charge simulation.",
+                    *loc,
+                )
+
+        # Resistive interfaces.
+        for i, bc in enumerate(self.boundary_spec):
+            if isinstance(bc.condition, ThermalContactResistance):
+                self._raise_validation_error_at_loc(
+                    "Resistive interfaces ('ThermalContactResistance') are not supported in "
+                    "non-isothermal charge (coupled charge+heat) simulations: the coupled "
+                    "thermal solve does not apply the interfacial thermal resistance, so this "
+                    "boundary condition would be silently ignored. Remove it to run this "
+                    "charge simulation.",
+                    "boundary_spec",
+                    i,
                 )
         return self
 

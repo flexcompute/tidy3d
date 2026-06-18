@@ -2311,6 +2311,67 @@ def test_conduction_sim_voltage_array_error_loc(conduction_simulation):
     assert_single_value_error_loc(excinfo, ("boundary_spec",), "array of voltages")
 
 
+def test_heat_only_features_allowed_in_conduction_heat(mediums, structures, grid_specs):
+    """Advection and resistive interfaces are heat-solver features that the non-isothermal
+    charge guard must NOT reject in a coupled conduction+heat simulation: that runs the
+    standalone heat solver (not the charge-coupled thermal solve), so the features are
+    honored there and the setup must build without error."""
+    # 'solid_medium' is an electrical conductor (no semiconductor) whose solid heat spec
+    # already carries capacity+density, so a nonzero advection velocity is valid on it.
+    moving_solid = mediums["solid_medium"].updated_copy(
+        heat=mediums["solid_medium"].heat.updated_copy(velocity=(1.0, 0.0, 0.0))
+    )
+    solid_structure = structures["solid_structure"].updated_copy(medium=moving_solid)
+    # A second conducting solid so a resistive interface can sit between two solid sides.
+    second_solid = mediums["solid_medium"].updated_copy(name="solid_medium_2")
+    second_structure = structures["solid_structure"].updated_copy(
+        medium=second_solid,
+        name="solid_structure_2",
+        geometry=td.Box(center=(-1, -1, -1), size=(1, 1, 1)),
+    )
+
+    # A heat BC (HEAT) plus an electric BC with no semiconductors present (CONDUCTION)
+    # makes this a conduction+heat simulation, which is not a charge analysis. Both
+    # heat-solver features are exercised: advection (on 'moving_solid') and a resistive
+    # interface between the two solids.
+    boundary_spec = [
+        td.HeatChargeBoundarySpec(
+            condition=td.TemperatureBC(temperature=300),
+            placement=td.SimulationBoundary(),
+        ),
+        td.HeatChargeBoundarySpec(
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1])),
+            placement=td.StructureBoundary(structure="solid_structure"),
+        ),
+        td.HeatChargeBoundarySpec(
+            condition=td.ThermalContactResistance(resistance=3e3),
+            placement=td.StructureStructureInterface(
+                structures=["solid_structure", "solid_structure_2"]
+            ),
+        ),
+    ]
+    monitors = [
+        td.TemperatureMonitor(
+            center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="temp_mnt", unstructured=True
+        ),
+        td.SteadyPotentialMonitor(
+            center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="volt_mnt", unstructured=True
+        ),
+    ]
+
+    sim = td.HeatChargeSimulation(
+        medium=mediums["insulator_medium"],
+        structures=[structures["insulator_structure"], solid_structure, second_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=boundary_spec,
+        grid_spec=grid_specs["uniform"],
+        monitors=monitors,
+    )
+    # The guard keys off this property; conduction+heat is not a coupled charge solve.
+    assert not sim._thermal_solver_active
+
+
 # --------------------------
 # Test Classes with Fixtures
 # --------------------------
@@ -2430,6 +2491,90 @@ class TestCharge:
     @pytest.fixture(scope="class")
     def charge_tolerance(self):
         return td.ChargeToleranceSpec()
+
+    def test_heat_only_features_rejected_in_non_isothermal_charge(
+        self,
+        oxide,
+        p_side,
+        n_side,
+        Si_p,
+        Si_n,
+        charge_global_mnt,
+        potential_global_mnt,
+        bc_n,
+        bc_p,
+        charge_tolerance,
+    ):
+        """Advection velocity and resistive interfaces are heat-only; they must raise a
+        setup error in a non-isothermal charge analysis but be accepted when isothermal."""
+        non_isothermal_spec = td.SteadyChargeDCAnalysis(tolerance_settings=charge_tolerance)
+        sim = td.HeatChargeSimulation(
+            structures=[oxide, p_side, n_side],
+            medium=td.MultiPhysicsMedium(
+                heat=td.FluidSpec(), charge=td.ChargeConductorMedium(conductivity=1), name="air"
+            ),
+            monitors=[charge_global_mnt, potential_global_mnt],
+            center=(0, 0, 0),
+            size=CHARGE_SIMULATION.sim_size,
+            grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+            boundary_spec=[bc_n, bc_p],
+            analysis_spec=non_isothermal_spec,
+        )
+
+        # Advection velocity on a structure's solid medium -> error at that structure.
+        moving_p_side = p_side.updated_copy(
+            medium=Si_p.updated_copy(
+                heat=td.SolidMedium(conductivity=1, capacity=1, density=1, velocity=(1.0, 0.0, 0.0))
+            )
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(structures=[oxide, moving_p_side, n_side])
+        assert_single_value_error_loc(excinfo, ("structures", 1), "SolidMedium.velocity")
+
+        # Advection velocity on the background medium -> error at ("medium",).
+        moving_background = td.MultiPhysicsMedium(
+            heat=td.SolidMedium(conductivity=1, capacity=1, density=1, velocity=(1.0, 0.0, 0.0)),
+            charge=td.ChargeConductorMedium(conductivity=1),
+            name="air",
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(medium=moving_background)
+        assert_single_value_error_loc(excinfo, ("medium",), "SolidMedium.velocity")
+
+        # Resistive interface between the two solids -> error at that boundary_spec entry.
+        contact_resistance_bc = td.HeatChargeBoundarySpec(
+            condition=td.ThermalContactResistance(resistance=3e3),
+            placement=td.StructureStructureInterface(structures=[p_side.name, n_side.name]),
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(boundary_spec=[bc_n, bc_p, contact_resistance_bc])
+        assert_single_value_error_loc(excinfo, ("boundary_spec", 2), "ThermalContactResistance")
+
+        # The guard is scoped to non-isothermal: an isothermal charge analysis runs no
+        # thermal solve, so neither feature raises a setup error there.
+        isothermal_spec = td.IsothermalSteadyChargeDCAnalysis(
+            temperature=300, tolerance_settings=charge_tolerance
+        )
+        # Advection velocity is accepted under an isothermal charge analysis.
+        sim.updated_copy(
+            structures=[oxide, moving_p_side, n_side],
+            analysis_spec=isothermal_spec,
+        )
+        # The resistive interface is likewise accepted. Including it makes the simulation
+        # also solve heat, so pair it with a (non-Neumann) TemperatureBC and a
+        # TemperatureMonitor to keep that heat problem well-posed.
+        temp_bc = td.HeatChargeBoundarySpec(
+            condition=td.TemperatureBC(temperature=300),
+            placement=td.SimulationBoundary(),
+        )
+        temp_mnt = td.TemperatureMonitor(
+            center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="temp_mnt", unstructured=True
+        )
+        sim.updated_copy(
+            boundary_spec=[bc_n, bc_p, contact_resistance_bc, temp_bc],
+            monitors=[charge_global_mnt, potential_global_mnt, temp_mnt],
+            analysis_spec=isothermal_spec,
+        )
 
     def test_charge_simulation(
         self,
