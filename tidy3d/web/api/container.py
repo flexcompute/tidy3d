@@ -503,17 +503,23 @@ class Job(WebContainer):
     def _upload(
         self,
         verbose_estimate_cost: bool | None = None,
+        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
     ) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
         upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
         if verbose_estimate_cost is not None:
             upload_kwargs["verbose_estimate_cost"] = verbose_estimate_cost
-        task_id = web.upload(**upload_kwargs)
-        return task_id
+        if _sidecar_artifacts is not None:
+            upload_kwargs["_sidecar_artifacts"] = _sidecar_artifacts
+        return web._upload(**upload_kwargs)
 
-    def upload(self) -> None:
-        """Upload this ``Job`` if not already got cached results."""
+    def _upload_and_cache(
+        self,
+        verbose_estimate_cost: bool | None = None,
+        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+    ) -> None:
+        """Upload this job and cache the resulting task ID."""
         if self.load_if_cached:
             return
         cached_task_id = self._cached_properties.get("task_id")
@@ -521,10 +527,17 @@ class Job(WebContainer):
             return
 
         self._check_folder(self.folder_name)
-        task_id = self._upload(
-            verbose_estimate_cost=self.verbose,
+        verbose_estimate_cost = (
+            self.verbose if verbose_estimate_cost is None else verbose_estimate_cost
         )
-        self._cached_properties["task_id"] = task_id
+        self._cached_properties["task_id"] = self._upload(
+            verbose_estimate_cost=verbose_estimate_cost,
+            _sidecar_artifacts=_sidecar_artifacts,
+        )
+
+    def upload(self) -> None:
+        """Upload this ``Job`` if not already got cached results."""
+        self._upload_and_cache()
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -926,7 +939,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
     def __len__(self) -> int:
         """Return the top-level container size, or task count for flat batches."""
-        if isinstance(self.task_tree, (dict, tuple)):
+        if isinstance(self.task_tree, dict | tuple):
             return len(self.task_tree)
         return len(self.task_paths)
 
@@ -1401,7 +1414,10 @@ class Batch(WebContainer):
         task_name_hash = hashlib.md5(str(task_name).encode("utf-8")).hexdigest()
         return f"cached_{simulation_hash}_{task_name_hash}"
 
-    def upload(self) -> None:
+    def _upload_jobs(
+        self,
+        _sidecar_artifacts_by_task: Mapping[TaskName, Mapping[str, Tidy3dBaseModel]] | None = None,
+    ) -> None:
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
         jobs_to_upload = self._prepare_uncached_jobs(
             check_folder=True,
@@ -1410,7 +1426,12 @@ class Batch(WebContainer):
         with ThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
             upload_futures: dict[concurrent.futures.Future[Any], Job] = {}
             for job in jobs_to_upload:
-                fut = executor.submit(job.upload)
+                _sidecar_artifacts = (
+                    None
+                    if _sidecar_artifacts_by_task is None
+                    else _sidecar_artifacts_by_task.get(job.task_name)
+                )
+                fut = executor.submit(job._upload_and_cache, _sidecar_artifacts=_sidecar_artifacts)
                 upload_futures[fut] = job
 
             if len(upload_futures) == 0:
@@ -1458,6 +1479,10 @@ class Batch(WebContainer):
                             f"Failed to upload task '{task_name}': {exc.__class__.__name__}: {exc}"
                         )
                         raise
+
+    def upload(self) -> None:
+        """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
+        self._upload_jobs()
 
     def get_info(self) -> dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.

@@ -4,10 +4,17 @@ from pathlib import Path
 from typing import Any
 
 import tidy3d as td
+from tidy3d.components.autograd.field_map import TracerKeys
 from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
 
-from .io_utils import get_vjp_traced_fields, upload_sim_fields_keys
+from .constants import SIM_FIELDS_KEYS_FILE
+from .io_utils import get_vjp_traced_fields
+
+
+def _sim_fields_keys_artifacts(sim_fields_keys: list[tuple]) -> dict[str, TracerKeys]:
+    """Build sidecar artifacts needed before autograd forward metadata processing."""
+    return {SIM_FIELDS_KEYS_FILE: TracerKeys(keys=sim_fields_keys)}
 
 
 def parse_run_kwargs(**run_kwargs: Any) -> dict[str, Any]:
@@ -36,8 +43,10 @@ def _run_tidy3d(
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
     if job.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
+        job._upload_and_cache(
+            verbose_estimate_cost=False,
+            _sidecar_artifacts=_sim_fields_keys_artifacts(run_kwargs["sim_fields_keys"]),
+        )
     path_arg = run_kwargs.get("path")
     if path_arg is None:
         path = webapi._resolve_output_path(None, job._task_type_hint())
@@ -75,19 +84,17 @@ def _run_async_tidy3d(
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
 
     if batch.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        # Need to upload to get the task_ids
         sims = {
             task_name: sim.updated_copy(simulation_type="autograd_fwd", deep=False)
             for task_name, sim in batch.simulations.items()
         }
         batch = batch.updated_copy(simulations=sims)
 
-        batch.upload()
-        task_ids = {key: job.task_id for key, job in batch.jobs.items()}
-        for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
-            task_id = task_ids[task_name]
-            upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
+        sim_fields_key_artifacts = {
+            task_name: _sim_fields_keys_artifacts(sim_fields_keys)
+            for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items()
+        }
+        batch._upload_jobs(_sidecar_artifacts_by_task=sim_fields_key_artifacts)
 
     if path_dir is not None:
         batch_data = batch.run(

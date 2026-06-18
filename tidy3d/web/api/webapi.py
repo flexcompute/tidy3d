@@ -41,6 +41,7 @@ from tidy3d.web.core.constants import (
     SIMULATION_DATA_HDF5_GZ,
 )
 from tidy3d.web.core.http_util import config_toml_path
+from tidy3d.web.core.s3utils import upload_file
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import TaskType
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Literal
 
+    from tidy3d.components.base import Tidy3dBaseModel
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
     from tidy3d.web.cache import CacheEntry
     from tidy3d.web.core.constants import TaskId
@@ -121,7 +123,7 @@ def _resolve_output_path(path: PathLike | None, task_type: str | None) -> Path:
 
 def _is_web_container(value: object) -> bool:
     """Return whether a value is a public web container shape."""
-    return isinstance(value, (list, tuple, Mapping))
+    return isinstance(value, list | tuple | Mapping)
 
 
 def _raise_if_upload_container(simulation: object) -> None:
@@ -354,7 +356,7 @@ def restore_simulation_if_cached(
     cached_task_id = None
     if simulation_cache is not None:
         sim_for_cache = simulation
-        if isinstance(simulation, (ModeSolver, ModeSimulation)):
+        if isinstance(simulation, ModeSolver | ModeSimulation):
             sim_for_cache = get_reduced_simulation(simulation, reduce_simulation)
         entry = simulation_cache.try_fetch(simulation=sim_for_cache, verbose=verbose)
         if entry is not None:
@@ -622,7 +624,28 @@ def _get_task_urls(
     return url, folder_url
 
 
-@wait_for_connection
+def _upload_sidecar_artifacts(
+    resource_id: TaskId,
+    sidecar_artifacts: Mapping[str, Tidy3dBaseModel],
+    verbose: bool,
+) -> None:
+    """Serialize and upload internal sidecar artifacts for an allocated task."""
+    for remote_filename, artifact in sidecar_artifacts.items():
+        suffix = "".join(Path(remote_filename).suffixes) or ".hdf5"
+        handle, fname = tempfile.mkstemp(suffix=suffix)
+        os.close(handle)
+        try:
+            artifact.to_file(fname)
+            upload_file(
+                resource_id,
+                fname,
+                remote_filename,
+                verbose=verbose,
+            )
+        finally:
+            os.unlink(fname)
+
+
 def upload(
     simulation: WorkflowType,
     task_name: str | None = None,
@@ -690,6 +713,39 @@ def upload(
         for this call.
 
     """
+    return _upload(
+        simulation=simulation,
+        task_name=task_name,
+        folder_name=folder_name,
+        callback_url=callback_url,
+        verbose=verbose,
+        progress_callback=progress_callback,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        source_required=source_required,
+        solver_version=solver_version,
+        reduce_simulation=reduce_simulation,
+        verbose_estimate_cost=verbose_estimate_cost,
+    )
+
+
+@wait_for_connection
+def _upload(
+    simulation: WorkflowType,
+    task_name: str | None = None,
+    folder_name: str = "default",
+    callback_url: str | None = None,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] | None = None,
+    simulation_type: str | None = None,
+    parent_tasks: list[str] | None = None,
+    source_required: bool = True,
+    solver_version: str | None = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    verbose_estimate_cost: bool | None = None,
+    _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+) -> TaskId:
+    """Private upload implementation with internal sidecar artifacts before metadata."""
     _raise_if_upload_container(simulation)
 
     console = get_logging_console() if verbose else None
@@ -703,7 +759,7 @@ def upload(
         simulation_type=simulation_type,
     )
 
-    if isinstance(simulation, (ModeSolver, ModeSimulation)):
+    if isinstance(simulation, ModeSolver | ModeSimulation):
         simulation = get_reduced_simulation(simulation, reduce_simulation)
 
     stub = Tidy3dStub(simulation=simulation)
@@ -755,6 +811,8 @@ def upload(
         progress_callback=progress_callback,
         remote_sim_file=remote_sim_file,
     )
+    if _sidecar_artifacts is not None:
+        _upload_sidecar_artifacts(resource_id, _sidecar_artifacts, verbose=verbose)
 
     verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
     estimate_cost(

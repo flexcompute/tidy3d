@@ -1,6 +1,7 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import posixpath
@@ -2141,10 +2142,10 @@ def test_batch_upload_surfaces_upload_errors(monkeypatch):
         "tidy3d.web.api.container.log.error", lambda msg: error_messages.append(msg)
     )
 
-    def _raise_upload(self):
+    def _raise_upload(self, *args, **kwargs):
         raise RuntimeError("upload failed")
 
-    monkeypatch.setattr("tidy3d.web.api.container.Job.upload", _raise_upload)
+    monkeypatch.setattr("tidy3d.web.api.container.Job._upload_and_cache", _raise_upload)
 
     sims = {"task_a": make_sim()}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
@@ -2479,7 +2480,7 @@ def test_batch_upload_and_start_use_fixed_worker_bound(monkeypatch):
         def load_if_cached(self):
             return False
 
-        def upload(self):
+        def _upload_and_cache(self, *args, **kwargs):
             return None
 
         def start(self, priority=None, vgpu_allocation=None, ignore_memory_limit=None):
@@ -2661,7 +2662,7 @@ def apply_common_patches(
         fake_estimate_cost(verbose=verbose_estimate_cost)
         return kwargs["task_name"]
 
-    monkeypatch.setattr(f"{api_path}.upload", fake_upload)
+    monkeypatch.setattr(f"{api_path}._upload", fake_upload)
     monkeypatch.setattr(WebContainer, "_check_folder", lambda *a, **k: True)
     monkeypatch.setattr(f"{api_path}._modesolver_patch", lambda *_, **__: None, raising=False)
     monkeypatch.setattr(f"{api_path}.download", lambda *_, **__: None, raising=False)
@@ -3082,7 +3083,7 @@ def test_job_upload_is_idempotent(monkeypatch):
         upload_calls.append(kwargs)
         return TASK_ID
 
-    monkeypatch.setattr(f"{api_path}.upload", fake_upload)
+    monkeypatch.setattr(f"{api_path}._upload", fake_upload)
     monkeypatch.setattr(WebContainer, "_check_folder", lambda *a, **k: True)
 
     job = Job(simulation=make_sim(), task_name=TASK_NAME, folder_name=PROJECT_NAME, verbose=False)
@@ -3111,7 +3112,7 @@ def test_job_upload_checks_folder_once(monkeypatch):
         check_folder_calls.append((args, kwargs))
         return True
 
-    monkeypatch.setattr(f"{api_path}.upload", fake_upload)
+    monkeypatch.setattr(f"{api_path}._upload", fake_upload)
     monkeypatch.setattr(WebContainer, "_check_folder", fake_check_folder)
 
     job = Job(simulation=make_sim(), task_name=TASK_NAME, folder_name=PROJECT_NAME, verbose=False)
@@ -3122,6 +3123,175 @@ def test_job_upload_checks_folder_once(monkeypatch):
     assert len(check_folder_calls) == 1
     assert len(upload_calls) == 1
     assert "wait_for_estimate_cost" not in upload_calls[0]
+
+
+def test_public_upload_signature_does_not_expose_sidecar_hook():
+    """Autograd sidecar upload hook should stay off the public web.upload API."""
+    import tidy3d.web.api.webapi as webapi
+
+    assert "_sidecar_upload" not in inspect.signature(td.web.upload).parameters
+    assert "_sidecar_upload" not in inspect.signature(webapi.upload).parameters
+    assert "_sidecar_upload" not in inspect.signature(webapi._upload).parameters
+    assert "_sidecar_artifacts" not in inspect.signature(td.web.upload).parameters
+    assert "_sidecar_artifacts" not in inspect.signature(webapi.upload).parameters
+    assert "_sidecar_artifacts" in inspect.signature(webapi._upload).parameters
+
+
+def test_private_upload_writes_sidecar_artifacts_with_task_id(monkeypatch):
+    """Private upload serializes sidecar artifacts once after task allocation."""
+    import tidy3d.web.api.webapi as webapi
+    from tidy3d.components.autograd.field_map import TracerKeys
+    from tidy3d.web.api.autograd.constants import SIM_FIELDS_KEYS_FILE
+
+    sim_fields_keys = [("structures", 0, "geometry", "center", 0)]
+    create_calls = []
+    simulation_upload_calls = []
+    sidecar_upload_calls = []
+    estimate_calls = []
+    validate_calls = []
+
+    class FakeTask:
+        task_id = TASK_ID
+        folder_id = FOLDER_ID
+        folder_name = PROJECT_NAME
+
+        def upload_simulation(self, **kwargs):
+            simulation_upload_calls.append(kwargs)
+
+        def validate_post_upload(self, **kwargs):
+            validate_calls.append(kwargs)
+
+    def fake_create(*args, **kwargs):
+        create_calls.append((args, kwargs))
+        return FakeTask()
+
+    def fake_upload_file(resource_id, path, remote_filename, **kwargs):
+        sidecar_upload_calls.append(
+            (
+                resource_id,
+                remote_filename,
+                TracerKeys.from_file(path).keys,
+                kwargs.get("verbose"),
+            )
+        )
+
+    monkeypatch.setattr(webapi.WebTask, "create", staticmethod(fake_create))
+    monkeypatch.setattr(webapi, "upload_file", fake_upload_file)
+    monkeypatch.setattr(
+        webapi,
+        "estimate_cost",
+        lambda *args, **kwargs: estimate_calls.append((args, kwargs)),
+    )
+
+    task_id = webapi._upload(
+        make_sim(),
+        task_name=TASK_NAME,
+        folder_name=PROJECT_NAME,
+        verbose=False,
+        verbose_estimate_cost=False,
+        _sidecar_artifacts={SIM_FIELDS_KEYS_FILE: TracerKeys(keys=sim_fields_keys)},
+    )
+
+    assert task_id == TASK_ID
+    assert len(create_calls) == 1
+    assert len(simulation_upload_calls) == 1
+    assert sidecar_upload_calls == [(TASK_ID, SIM_FIELDS_KEYS_FILE, tuple(sim_fields_keys), False)]
+    assert len(estimate_calls) == 1
+    assert validate_calls == [{"parent_tasks": None}]
+
+
+def test_autograd_forward_single_uploads_sim_fields_keys_with_task_id(monkeypatch):
+    """Single remote autograd forward uploads traced-field keys once after task allocation."""
+    from tidy3d.web.api.autograd import engine
+    from tidy3d.web.api.autograd.constants import SIM_FIELDS_KEYS_FILE
+
+    sim_fields_keys = [("structures", 0, "geometry", "center", 0)]
+    sidecar_artifacts = []
+    upload_calls = []
+    run_task_ids = []
+
+    def fake_job_upload(self, verbose_estimate_cost=None, _sidecar_artifacts=None):
+        task_id = f"{self.task_name}_allocated"
+        upload_calls.append((self.task_name, verbose_estimate_cost, _sidecar_artifacts is not None))
+        sidecar_artifacts.append(_sidecar_artifacts)
+        return task_id
+
+    def fake_job_run(self, *args, **kwargs):
+        run_task_ids.append(self.task_id)
+        return SimulationData(simulation=self.simulation, data=[], log="", diverged=False)
+
+    monkeypatch.setattr(Job, "_upload", fake_job_upload)
+    monkeypatch.setattr(Job, "run", fake_job_run)
+    monkeypatch.setattr(WebContainer, "_check_folder", lambda *args, **kwargs: None)
+
+    _data, task_id = engine._run_tidy3d(
+        make_sim(),
+        task_name=TASK_NAME,
+        simulation_type="autograd_fwd",
+        sim_fields_keys=sim_fields_keys,
+        verbose=True,
+    )
+
+    assert task_id == f"{TASK_NAME}_allocated"
+    assert upload_calls == [(TASK_NAME, False, True)]
+    assert len(sidecar_artifacts) == 1
+    assert tuple(sidecar_artifacts[0][SIM_FIELDS_KEYS_FILE].keys) == tuple(sim_fields_keys)
+    assert run_task_ids == [f"{TASK_NAME}_allocated"]
+
+
+def test_autograd_forward_async_uploads_sim_fields_keys_with_task_ids(monkeypatch):
+    """Async remote autograd forward uploads traced-field keys once per allocated task."""
+    from tidy3d.web.api.autograd import engine
+    from tidy3d.web.api.autograd.constants import SIM_FIELDS_KEYS_FILE
+
+    sim_fields_keys_dict = {
+        "task_a": [("structures", 0, "geometry", "center", 0)],
+        "task_b": [("structures", 0, "medium", "permittivity")],
+    }
+    sidecar_artifacts = {}
+    upload_calls = []
+
+    def fake_job_upload(self, verbose_estimate_cost=None, _sidecar_artifacts=None):
+        task_id = f"{self.task_name}_allocated"
+        upload_calls.append((self.task_name, _sidecar_artifacts is not None))
+        sidecar_artifacts[self.task_name] = _sidecar_artifacts
+        return task_id
+
+    def fake_batch_run(self, *args, **kwargs):
+        return {
+            task_name: SimulationData(
+                simulation=job.simulation,
+                data=[],
+                log="",
+                diverged=False,
+            )
+            for task_name, job in self.jobs.items()
+        }
+
+    monkeypatch.setattr(Job, "_upload", fake_job_upload)
+    monkeypatch.setattr(Batch, "run", fake_batch_run)
+    monkeypatch.setattr(WebContainer, "_check_folder", lambda *args, **kwargs: None)
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+
+    _data, task_ids = engine._run_async_tidy3d(
+        {task_name: make_sim() for task_name in sim_fields_keys_dict},
+        simulation_type="autograd_fwd",
+        sim_fields_keys_dict=sim_fields_keys_dict,
+        verbose=False,
+    )
+
+    assert task_ids == {
+        "task_a": "task_a_allocated",
+        "task_b": "task_b_allocated",
+    }
+    assert sorted(upload_calls) == [("task_a", True), ("task_b", True)]
+    assert {
+        task_name: tuple(artifacts[SIM_FIELDS_KEYS_FILE].keys)
+        for task_name, artifacts in sidecar_artifacts.items()
+    } == {
+        task_name: tuple(sim_fields_keys)
+        for task_name, sim_fields_keys in sim_fields_keys_dict.items()
+    }
 
 
 def test_job_estimate_cost_logging(monkeypatch, tmp_path, capsys):

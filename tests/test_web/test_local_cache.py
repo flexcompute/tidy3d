@@ -28,7 +28,7 @@ from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.config import get_manager
 from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import webapi as web
-from tidy3d.web.api.autograd import autograd, engine, io_utils
+from tidy3d.web.api.autograd import autograd, io_utils
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
 from tidy3d.web.api.container import Batch, WebContainer
@@ -357,15 +357,13 @@ def _patch_run_pipeline(
         monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
         monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
-    monkeypatch.setattr(web, "upload", _fake_upload)
+    monkeypatch.setattr(web, "_upload", _fake_upload)
     monkeypatch.setattr(web, "start", _fake_start)
     monkeypatch.setattr(web, "monitor", _fake_monitor)
     monkeypatch.setattr(web, "download", _fake_download)
     monkeypatch.setattr(web, "load_simulation", _fake_load_simulation)
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
-    if patch_autograd:
-        monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         web,
         "get_info",
