@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import gc
 import inspect
 from typing import TYPE_CHECKING, Any, get_args
 
@@ -12,7 +13,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.log import get_logging_console, log
-from tidy3d.web.api.container import Batch, BatchData, Job
+from tidy3d.web.api.container import Batch, Job
 
 from .method import (
     MethodBayOpt,
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from tidy3d.log import Console
+    from tidy3d.web.api.container import BatchData
 
 WORKFLOW_TYPES = get_args(WorkflowType)
 WORKFLOW_DATA_TYPES = get_args(WorkflowDataType)
@@ -43,6 +45,7 @@ class _FnMidResult:
     task_ids: list[Any]
     task_paths: list[Any]
     sim_counter: int
+    post_input_loader: Callable[[str, Any], Any] | None = None
 
 
 class DesignSpace(Tidy3dBaseModel):
@@ -379,6 +382,8 @@ class DesignSpace(Tidy3dBaseModel):
     ) -> Any:
         """Get function that tries to use batch processing on a set of arguments."""
 
+        postprocess_fn_mid_result = self._postprocess_fn_mid_result
+
         class Pre_Post_Handler:
             def __init__(self, console: Console, priority: int | None) -> None:
                 self.sim_counter = 0
@@ -410,12 +415,42 @@ class DesignSpace(Tidy3dBaseModel):
                 self.sim_ids.extend(fn_mid_result.task_ids)
                 self.sim_paths.extend(fn_mid_result.task_paths)
                 self.sim_counter = fn_mid_result.sim_counter
-                post_out = [fn_post(val) for val in fn_mid_result.data.values()]
-                return post_out
+                return postprocess_fn_mid_result(fn_post, fn_mid_result)
 
         handler = Pre_Post_Handler(console, priority)
 
         return handler
+
+    @staticmethod
+    def _postprocess_fn_mid_result(
+        fn_post: Callable,
+        fn_mid_result: _FnMidResult,
+    ) -> list[Any]:
+        """Run fn_post, releasing workflow data after each top-level item."""
+
+        if not fn_mid_result.task_names:
+            return [fn_post(val) for val in fn_mid_result.data.values()]
+
+        post_out = []
+        try:
+            while fn_mid_result.data:
+                key = next(iter(fn_mid_result.data))
+                value = fn_mid_result.data.pop(key)
+                post_input = None
+                try:
+                    if fn_mid_result.post_input_loader is None:
+                        post_input = value
+                    else:
+                        post_input = fn_mid_result.post_input_loader(key, value)
+                    post_out.append(fn_post(post_input))
+                finally:
+                    del value
+                    del post_input
+            return post_out
+        finally:
+            if fn_mid_result.data:
+                fn_mid_result.data.clear()
+            gc.collect()
 
     @staticmethod
     def _run_batch(
@@ -525,45 +560,79 @@ class DesignSpace(Tidy3dBaseModel):
             batch_out = self._run_batch(batch, path_dir=self.path_dir, priority=priority)
             batch_results[batch_key] = batch_out
 
-        def _return_to_dict(return_dict: dict, key: str, return_obj: Any) -> None:
-            """Recursively insert items into a dict by keys split with underscore. Only works for dict or dict of dict inputs."""
-            split_key = key.split("_", 1)
-            if len(split_key) > 1:
-                _return_to_dict(return_dict[split_key[0]], split_key[1], return_obj)
-            else:
-                return_dict[split_key[0]] = return_obj
+        sim_key_to_name = {sim_key: sim_name for sim_name, sim_key in translate_sims.items()}
 
-        for sim_name, sim in sims_out.items():
-            translated_name = translate_sims[sim_name]
-            sim.attrs["task_name"] = sim_name
-            sim.attrs["task_id"] = sims_out.task_ids[sim_name]
-            sim.attrs["task_path"] = sims_out.task_paths[sim_name]
-            _return_to_dict(pre_out, translated_name, sim)
+        def _get_sim_metadata(sim_name: str, attr_name: str) -> str:
+            """Get task metadata for an automatically batched simulation."""
+            if attr_name == "task_name":
+                return sim_name
+            if attr_name == "task_id":
+                return sims_out.task_ids[sim_name]
+            return sims_out.task_paths[sim_name]
 
-        for batch_name, batch in batch_results.items():
-            _return_to_dict(pre_out, batch_name, batch)
+        def _get_batch_metadata(batch_data: BatchData, attr_name: str) -> list[str]:
+            """Get task metadata for a user-supplied batch."""
+            if attr_name == "task_name":
+                return list(batch_data.task_ids.keys())
+            if attr_name == "task_id":
+                return list(batch_data.task_ids.values())
+            return list(batch_data.task_paths.values())
 
-        def _remove_or_replace(search_dict: dict, attr_name: str) -> dict:
-            """Recursively search through a dict replacing Sims and Batches or ignoring other items thus removing them"""
+        def _remove_or_replace(
+            search_dict: dict,
+            attr_name: str,
+            previous_key: str = "",
+        ) -> dict:
+            """Recursively build task metadata without loading workflow data."""
             new_dict = {}
             for key, value in search_dict.items():
+                if not len(previous_key):
+                    latest_key = str(key)
+                else:
+                    latest_key = f"{previous_key}_{key}"
+
                 if isinstance(value, dict):
-                    new_sub_dict = _remove_or_replace(value, attr_name)
+                    new_sub_dict = _remove_or_replace(value, attr_name, latest_key)
                     new_dict[key] = new_sub_dict
 
                 else:
-                    if isinstance(value, WORKFLOW_DATA_TYPES):
-                        new_dict[key] = value.attrs[attr_name]
+                    if latest_key in sim_key_to_name:
+                        sim_name = sim_key_to_name[latest_key]
+                        new_dict[key] = _get_sim_metadata(sim_name, attr_name)
 
-                    elif isinstance(value, BatchData):
-                        if attr_name == "task_name":
-                            new_dict[key] = list(value.task_ids.keys())
-                        elif attr_name == "task_id":
-                            new_dict[key] = list(value.task_ids.values())
-                        else:
-                            new_dict[key] = list(value.task_paths.values())
+                    elif latest_key in batch_results:
+                        batch_data = batch_results[latest_key]
+                        new_dict[key] = _get_batch_metadata(batch_data, attr_name)
 
             return new_dict
+
+        def _load_value(value: Any, current_key: str) -> Any:
+            """Load workflow data for a single top-level postprocessing input."""
+            if isinstance(value, dict):
+                return {
+                    key: _load_value(sub_value, f"{current_key}_{key}")
+                    for key, sub_value in value.items()
+                }
+
+            if current_key in sim_key_to_name:
+                sim_name = sim_key_to_name[current_key]
+                sim_data = sims_out[sim_name]
+                sim_data.attrs["task_name"] = sim_name
+                sim_data.attrs["task_id"] = sims_out.task_ids[sim_name]
+                sim_data.attrs["task_path"] = sims_out.task_paths[sim_name]
+                return sim_data
+
+            if current_key in batch_results:
+                return batch_results.pop(current_key)
+
+            return value
+
+        def _load_post_input(top_key: str, top_value: Any) -> Any:
+            """Restore the original top-level fn_pre output shape for fn_post."""
+            post_input = _load_value(top_value, str(top_key))
+            if was_list:
+                return list(post_input.values())
+            return post_input
 
         # Build out a dict of task_name or task_path in the same shape as the original data
         task_names = _remove_or_replace(pre_out.copy(), "task_name")
@@ -577,7 +646,6 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Restore output to a list if a list was supplied
         if was_list:
-            pre_out = {dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()}
             task_names = [list(sub_dict.values()) for sub_dict in task_names]
             task_ids = [list(sub_dict.values()) for sub_dict in task_ids]
             task_paths = [list(sub_dict.values()) for sub_dict in task_paths]
@@ -588,6 +656,7 @@ class DesignSpace(Tidy3dBaseModel):
             task_ids=task_ids,
             task_paths=task_paths,
             sim_counter=sim_counter,
+            post_input_loader=_load_post_input,
         )
 
     def run_batch(

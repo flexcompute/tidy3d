@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import gc
 import sys
 import types
+import weakref
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 import tidy3d as td
+import tidy3d.plugins.design.design as design_module
 import tidy3d.web as web
 from tidy3d.plugins import design as tdd
 
@@ -164,6 +167,71 @@ def test_bayopt_new_api_supports_acquisition_constructors_without_random_state(
     assert getattr(optimizer.acquisition_function, expected_attr) == expected_value
     assert optimizer.random_state == 1
     assert suggest() == {"x": 0.5}
+
+
+def test_pre_post_releases_each_batched_workflow_data_after_postprocessing(monkeypatch):
+    class FakeWorkflow:
+        pass
+
+    class FakeWorkflowData:
+        def __init__(self):
+            self.attrs = {}
+
+    class FakeBatchData:
+        def __init__(self, task_names):
+            self.task_ids = {task_name: f"task_id_{task_name}" for task_name in task_names}
+            self.task_paths = {task_name: f"/path/to/{task_name}" for task_name in task_names}
+
+        def items(self):
+            for task_name in self.task_ids:
+                yield task_name, self[task_name]
+
+        def __getitem__(self, task_name):
+            loaded_task_names.append(task_name)
+            return FakeWorkflowData()
+
+    class FakeBatch:
+        def __init__(self, simulations, **kwargs):
+            self.simulations = simulations
+
+        def run(self, path_dir=".", priority=None):
+            return FakeBatchData(task_names=list(self.simulations))
+
+    monkeypatch.setattr(design_module, "WORKFLOW_TYPES", (FakeWorkflow,))
+    monkeypatch.setattr(design_module, "WORKFLOW_DATA_TYPES", (FakeWorkflowData,))
+    monkeypatch.setattr(design_module, "Batch", FakeBatch)
+
+    data_refs = []
+    loaded_task_names = []
+
+    def pre(x):
+        return FakeWorkflow()
+
+    def post(data):
+        assert all(data_ref() is None for data_ref in data_refs)
+        assert len(loaded_task_names) == len(data_refs) + 1
+        data_refs.append(weakref.ref(data))
+        return float(len(data_refs))
+
+    was_gc_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        design_space = tdd.DesignSpace(
+            parameters=[tdd.ParameterFloat(name="x", span=(0.0, 1.0), num_points=4)],
+            method=tdd.MethodGrid(),
+        )
+
+        design_space.run(pre, post, verbose=False)
+
+        assert len(data_refs) == 4
+        assert len(loaded_task_names) == 4
+        assert all(data_ref() is None for data_ref in data_refs)
+    finally:
+        gc.collect()
+        if was_gc_enabled:
+            gc.enable()
+        else:
+            gc.disable()
 
 
 def emulated_batch_run(simulations, path_dir: str | None = None, **kwargs):
