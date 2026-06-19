@@ -18,6 +18,7 @@ from tidy3d.components.data.monitor_data import (
     MediumData,
     ModeData,
     ModeSolverData,
+    ModeTimeData,
     PermittivityData,
     PointCloudFieldData,
     SurfaceFieldData,
@@ -35,6 +36,7 @@ MonitorDataTypes = (
     MediumData,
     ModeSolverData,
     ModeData,
+    ModeTimeData,
     FluxData,
     FluxTimeData,
     AuxFieldTimeData,
@@ -58,6 +60,7 @@ MonitorDataType = (
     | MediumData
     | ModeSolverData
     | ModeData
+    | ModeTimeData
     | FluxData
     | FluxTimeData
     | AuxFieldTimeData

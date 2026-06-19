@@ -90,6 +90,8 @@ from .medium import (
     AbstractPerturbationMedium,
     AnisotropicMedium,
     AnisotropicMediumFromMedium2D,
+    CustomIsotropicMedium,
+    CustomMedium,
     FullyAnisotropicMedium,
     LossyMetalMedium,
     Medium,
@@ -116,6 +118,7 @@ from .monitor import (
     FreqMonitor,
     MediumMonitor,
     ModeMonitor,
+    ModeTimeMonitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
     SurfaceIntegrationMonitor,
@@ -322,6 +325,62 @@ def validate_boundaries_for_zero_dims(
         return self
 
     return boundaries_for_zero_dims
+
+
+def _medium_can_be_lossy(medium: AbstractMedium) -> bool:
+    """Heuristic: True if ``medium`` may contribute to a lossy waveguide mode
+    (complex ``n_eff``). Used by :meth:`Simulation.complex_fields` to decide
+    whether to enable analytic-signal FDTD for lossy ``ModeTimeMonitor``
+    decomposition.
+
+    Classification (note: ``AbstractPerturbationMedium`` subclasses inherit
+    from a non-perturbation medium type via multiple inheritance, so they
+    fall through to the parent class's branch — the perturbation hasn't been
+    applied yet, so we treat the underlying medium as the source of truth):
+
+    - :class:`LossyMetalMedium` → True.
+    - :class:`AnisotropicMedium` (incl. ``CustomAnisotropicMedium``,
+      ``AnisotropicMediumFromMedium2D``): recurses on xx/yy/zz; True iff
+      any component is lossy.
+    - :class:`FullyAnisotropicMedium`: True iff any tensor entry of
+      conductivity is nonzero.
+    - :class:`CustomMedium`: True iff ``eps_dataset`` (when set) contains
+      any nonzero imaginary part on eps_xx/yy/zz, OR ``conductivity`` is
+      nonzero anywhere.
+    - :class:`CustomIsotropicMedium`: True iff ``conductivity`` is nonzero
+      anywhere.
+    - Other :class:`AbstractCustomMedium` (custom dispersive variants like
+      ``CustomPoleResidue``): conservative — True.
+    - :class:`Medium` (catches plain dielectrics + ``PerturbationMedium``):
+      True iff conductivity is nonzero.
+    - Dispersive / unknown media: conservative — True.
+    """
+    if isinstance(medium, LossyMetalMedium):
+        return True
+    if isinstance(medium, AnisotropicMedium):
+        return any(_medium_can_be_lossy(c) for c in (medium.xx, medium.yy, medium.zz))
+    if isinstance(medium, FullyAnisotropicMedium):
+        return bool(np.any(np.asarray(medium.conductivity) != 0))
+    if isinstance(medium, AbstractCustomMedium):
+        if isinstance(medium, CustomMedium):
+            ds = medium.eps_dataset
+            if ds is not None:
+                for comp in (ds.eps_xx, ds.eps_yy, ds.eps_zz):
+                    if np.any(np.imag(np.asarray(comp)) != 0):
+                        return True
+            cond = medium.conductivity
+            if cond is not None and np.any(np.asarray(cond) != 0):
+                return True
+            return False
+        if isinstance(medium, CustomIsotropicMedium):
+            cond = medium.conductivity
+            if cond is None:
+                return False
+            return bool(np.any(np.asarray(cond) != 0))
+        return True
+    if isinstance(medium, Medium):
+        return bool(np.any(np.asarray(medium.conductivity) != 0))
+    return True
 
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
@@ -3357,6 +3416,8 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_frequency_mode_abc()
         self._validate_relax_courant_compatibility()
         self._validate_absorber_in_zero_dims()
+        self._validate_no_bloch_with_modal_decomposition()
+        self._validate_mode_time_monitor_freq_range()
         self._warn_monitor_mediums_frequency_range()
         self._warn_monitor_simulation_frequency_range()
         self._validate_point_cloud_monitor_points_in_bounds()
@@ -4108,6 +4169,30 @@ class Simulation(AbstractYeeGridSimulation):
 
         return self
 
+    def _check_source_freq_available(
+        self,
+        *,
+        no_source_error: str,
+        no_source_loc: tuple[object, ...],
+        multi_freq_warning: str,
+    ) -> None:
+        """Shared source-frequency availability check.
+
+        Used by objects that derive a single evaluation frequency from the simulation's
+        sources when none is given explicitly (``ModeABCBoundary`` / ``ABCBoundary`` and
+        ``ModeTimeMonitor``). Raises a loc-aware error (at ``no_source_loc``) when there are
+        no sources to derive the frequency from, and warns (``multi_freq_warning``) when the
+        sources do not share a common central frequency — the first source's central
+        frequency is then used.
+        """
+        sources = self.sources
+        if len(sources) == 0:
+            self._raise_validation_error_at_loc(no_source_error, *no_source_loc)
+
+        freq0s = [source.source_time._freq0 for source in sources]
+        if not all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
+            log.warning(multi_freq_warning, capture=False)
+
     def _validate_frequency_mode_abc(self) -> Self:
         """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
 
@@ -4132,22 +4217,17 @@ class Simulation(AbstractYeeGridSimulation):
         )
 
         if need_wavelength:
-            sources = self.sources
-
-            if len(sources) == 0:
-                self._raise_validation_error_at_loc(
+            self._check_source_freq_available(
+                no_source_error=(
                     "At least one 'ModeABCBoundary'/'ABCBoundary' needs specification of frequency at which the absorbed mode must be evaluated. "
-                    "Add at least one source or use parameter 'frequency' for 'ModeABCBoundary'.",
-                    "sources",
-                )
-
-            freq0s = [source.source_time._freq0 for source in sources]
-            if not all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
-                log.warning(
+                    "Add at least one source or use parameter 'frequency' for 'ModeABCBoundary'."
+                ),
+                no_source_loc=("sources",),
+                multi_freq_warning=(
                     "At least one 'ModeABCBoundary' does not specify frequency at which the absorbed mode must be evaluated. "
-                    "The central frequency of the first source will be used.",
-                    capture=False,
-                )
+                    "The central frequency of the first source will be used."
+                ),
+            )
 
         return self
 
@@ -4166,6 +4246,56 @@ class Simulation(AbstractYeeGridSimulation):
                     abc_index,
                 )
 
+        return self
+
+    def _validate_no_bloch_with_modal_decomposition(self) -> Self:
+        """Reject Bloch boundaries combined with ``ModeTimeMonitor``.
+        ``Periodic`` boundaries remain supported.
+        """
+        if not any(
+            isinstance(boundary[0], BlochBoundary) for boundary in self.boundary_spec.to_list
+        ):
+            return self
+        message = (
+            "Bloch boundaries are not supported in combination with "
+            "'ModeTimeMonitor'. Use 'Periodic' boundaries instead, or remove "
+            "the 'ModeTimeMonitor'."
+        )
+        for idx, monitor in enumerate(self.monitors):
+            if isinstance(monitor, ModeTimeMonitor):
+                self._raise_validation_error_at_loc(message, "monitors", idx)
+        return self
+
+    def _validate_mode_time_monitor_freq_range(self) -> Self:
+        """Validate the solve frequency for ``ModeTimeMonitor``\\ s with ``freq_spec=None``.
+
+        A ``ModeTimeMonitor`` with ``freq_spec=None`` derives its single solve frequency from
+        the sources (the central frequency of the first source). Error if there are no sources
+        to derive it from; warn if the sources do not share a common central frequency.
+        """
+        needs_freq = [
+            idx
+            for idx, monitor in enumerate(self.monitors)
+            if isinstance(monitor, ModeTimeMonitor) and monitor.freq_spec is None
+        ]
+        if not needs_freq:
+            return self
+
+        idx = needs_freq[0]
+        self._check_source_freq_available(
+            no_source_error=(
+                f"'ModeTimeMonitor' '{self.monitors[idx].name}' has 'freq_spec=None', which "
+                "requires the simulation to contain at least one source to derive the "
+                "mode-sampling frequency from. Set 'freq_spec' explicitly for a "
+                "source-free simulation."
+            ),
+            no_source_loc=("monitors", idx),
+            multi_freq_warning=(
+                "At least one 'ModeTimeMonitor' does not specify 'freq_spec', the frequency at "
+                "which its mode profiles are solved. The central frequency of the first source "
+                "will be used."
+            ),
+        )
         return self
 
     @field_validator("sources")
@@ -5471,7 +5601,7 @@ class Simulation(AbstractYeeGridSimulation):
                 )
 
         for imnt, monitor in enumerate(self.monitors):
-            if isinstance(monitor, AbstractModeMonitor):
+            if isinstance(monitor, (AbstractModeMonitor, ModeTimeMonitor)):
                 try:
                     validate_mode_object(mode_obj=monitor, msg_prefix=f"'monitors[{imnt}]'")
                 except Exception as e:
@@ -6074,7 +6204,9 @@ class Simulation(AbstractYeeGridSimulation):
     def _validate_modes_size(self) -> None:
         """Warn if mode sources or monitors have a large number of points."""
 
-        def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list) -> None:
+        def warn_mode_size(
+            monitor: AbstractModeMonitor | ModeTimeMonitor, msg_header: str, custom_loc: list
+        ) -> None:
             """Warn if a mode component has a large number of points."""
             num_cells = np.prod(self.discretize_monitor(monitor).num_cells)
             if num_cells > WARN_MODE_NUM_CELLS:
@@ -6103,7 +6235,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for mnt_ind, monitor in enumerate(self.monitors):
-                if isinstance(monitor, AbstractModeMonitor):
+                if isinstance(monitor, (AbstractModeMonitor, ModeTimeMonitor)):
                     msg_header = f"Mode monitor '{monitor.name}' "
                     custom_loc = ["monitors", mnt_ind]
                     warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
@@ -6134,7 +6266,7 @@ class Simulation(AbstractYeeGridSimulation):
                 check_num_cells(source, source.injection_axis, msg_header)
 
         for monitor in self.monitors:
-            if isinstance(monitor, ModeMonitor):
+            if isinstance(monitor, (ModeMonitor, ModeTimeMonitor)):
                 msg_header = f"Mode monitor '{monitor.name}' "
                 check_num_cells(monitor, monitor.normal_axis, msg_header)
 
@@ -7244,8 +7376,10 @@ class Simulation(AbstractYeeGridSimulation):
 
     @cached_property
     def complex_fields(self) -> bool:
-        """Whether complex fields are used in the simulation. Currently this only happens when there
-        are Bloch boundaries.
+        """Whether complex fields are used in the simulation.
+
+        Triggers on Bloch boundaries, complex-fields nonlinear models, or a
+        ``ModeTimeMonitor`` on a simulation that contains a lossy medium.
 
         Returns
         -------
@@ -7258,7 +7392,23 @@ class Simulation(AbstractYeeGridSimulation):
             if medium.nonlinear_spec is not None:
                 if any(model.complex_fields for model in medium._nonlinear_models):
                     return True
+        if self._has_lossy_mode_decomposition_feature:
+            return True
         return False
+
+    @cached_property
+    def _has_lossy_mode_decomposition_feature(self) -> bool:
+        """True iff the simulation contains a ``ModeTimeMonitor`` and any sim
+        medium can be lossy.
+        """
+        has_mtm = any(isinstance(m, ModeTimeMonitor) for m in self.monitors)
+        if not has_mtm:
+            return False
+        # `scene.mediums` covers structure mediums; the background medium is
+        # held separately on the simulation, so include it explicitly.
+        if _medium_can_be_lossy(self.medium):
+            return True
+        return any(_medium_can_be_lossy(medium) for medium in self.scene.mediums)
 
     @cached_property
     def nyquist_step(self) -> int:

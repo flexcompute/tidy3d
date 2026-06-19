@@ -1623,10 +1623,8 @@ class ModeSolverMonitor(AbstractModeMonitor):
             object.__setattr__(self, "store_fields_direction", direction)
         elif store_fields_direction != direction:
             self._raise_validation_error_at_loc(
-                ValidationError(
-                    f"The values of 'direction' ({direction}) and 'store_fields_direction' "
-                    f"({store_fields_direction}) must be equal."
-                ),
+                f"The values of 'direction' ({direction}) and 'store_fields_direction' "
+                f"({store_fields_direction}) must be equal.",
                 "store_fields_direction",
             )
         return self
@@ -1639,6 +1637,116 @@ class ModeSolverMonitor(AbstractModeMonitor):
         if self.mode_spec.precision == "double":
             return 2 * bytes_single
         return bytes_single
+
+
+class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
+    """:class:`~tidy3d.Monitor` that records time-domain modal amplitudes at a waveguide
+    cross-section.
+
+    Notes
+    -----
+
+        Records a complex-valued modal amplitude time series at the monitor plane
+        for each mode and propagation direction. The set of monitored modes is the
+        first ``mode_spec.num_modes`` modes returned by the mode solver.
+
+        When the simulation contains lossy media within the mode plane region, the
+        presence of a ``ModeTimeMonitor`` causes the simulation cost to approximately
+        double, because complex-valued field storage is needed to accurately project
+        onto modes with complex effective indices.
+
+    Example
+    -------
+    >>> mode_spec = ModeSpec(num_modes=3)
+    >>> monitor = ModeTimeMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,0),
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     mode_spec=mode_spec,
+    ...     name='mode_time')
+
+    See Also
+    --------
+
+    :class:`ModeMonitor`
+        Frequency-domain mode monitor using DFT overlap.
+
+    :class:`FluxTimeMonitor`
+        Time-domain total flux monitor.
+    """
+
+    mode_spec: ModeSpec = Field(
+        default_factory=ModeSpec,
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes measured by monitor.",
+    )
+
+    freq_spec: PositiveFloat | None = Field(
+        None,
+        title="Frequency Specification",
+        description="Single frequency at which the mode profiles are solved for the time-domain "
+        "modal decomposition. If ``None``, the central frequency of the first source is used (so "
+        "at least one source is required).",
+    )
+
+    interval: Literal[1] = Field(
+        1,
+        title="Time Interval",
+        description="Sampling rate of the monitor: number of time steps between each measurement. "
+        "Currently must be ``1`` (downsampling of time-domain modal amplitudes is not yet "
+        "supported).",
+    )
+
+    colocate: Literal[False] = Field(
+        False,
+        title="Colocate Fields",
+        description="Hard-coded to ``False``: ``ModeTimeMonitor`` overlaps Yee-native fields "
+        "against per-component primal / dual mode profiles, so colocation to the primal "
+        "grid is not used.",
+    )
+
+    use_colocated_integration: Literal[False] = Field(
+        False,
+        title="Use Colocated Integration",
+        description="Hard-coded to ``False``: overlap weights are built from per-axis primal × "
+        "dual cell widths, matching the Yee-staggered field sampling.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_no_rotated_plane(self) -> Self:
+        """ModeTimeMonitor doesn't support rotated mode planes yet."""
+        if abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
+            self._raise_validation_error_at_loc(
+                "'ModeTimeMonitor' does not yet support rotated mode planes "
+                f"('angle_rotation=True' with 'angle_theta={self.mode_spec.angle_theta}'). "
+                "Use 'angle_theta=0' or set 'angle_rotation=False'.",
+                "mode_spec",
+            )
+        return self
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of the final ``modeAmps`` payload returned to the user."""
+        num_steps = self.num_steps(tmesh)
+        num_modes = self.mode_spec.num_modes
+        num_dirs = 2
+        return BYTES_COMPLEX * num_steps * num_modes * num_dirs
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Solver-side memory footprint for this monitor."""
+        num_modes = self.mode_spec.num_modes
+        num_dirs = 2
+
+        # Per-point sampled E + H (3 complex components each) plus per-point mode
+        # weights for the feedthrough overlap.
+        per_pt = num_cells * (
+            6 * BYTES_COMPLEX + num_modes * num_dirs * 4 * BYTES_COMPLEX + BYTES_COMPLEX
+        )
+
+        # Final payload (running modeAmps over all sampled timesteps).
+        payload = self.storage_size(num_cells=num_cells, tmesh=tmesh)
+
+        return per_pt + payload
 
 
 class FieldProjectionSurface(Tidy3dBaseModel):

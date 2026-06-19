@@ -4693,11 +4693,28 @@ def fixture_fixed_angle_base_sim():
             ("monitors",),
             "Time monitors cannot be used in fixed-angle simulations.",
         ),
+        (
+            # 'ModeTimeMonitor' is a 'TimeMonitor' subclass, so this guard keeps it out
+            # of the fixed-angle time-stepping path (where the modal-overlap snap of E/H
+            # is not time-aligned). Locks that path as unreachable from the frontend.
+            lambda sim: sim.updated_copy(
+                monitors=(
+                    td.ModeTimeMonitor(
+                        size=[td.inf, td.inf, 0],
+                        name="mtm",
+                        mode_spec=td.ModeSpec(num_modes=1),
+                    ),
+                )
+            ),
+            ("monitors",),
+            "Time monitors cannot be used in fixed-angle simulations.",
+        ),
     ],
     ids=[
         "fixed_angle_duplicate_sources",
         "fixed_angle_fully_anisotropic",
         "fixed_angle_time_monitor",
+        "fixed_angle_mode_time_monitor",
     ],
 )
 def test_fixed_angle_validation_error_locs(

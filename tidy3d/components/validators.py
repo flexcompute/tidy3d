@@ -198,10 +198,16 @@ def validate_unique(
 
 
 def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
-    """If a Mode object, this checks that the object is fully in the main quadrant in the presence
-    of symmetry along a given axis, or else centered on the symmetry center."""
+    """If a Mode-like object (ModeSource / ModeMonitor / ModeTimeMonitor),
+    check that the object is fully in the main quadrant in the presence
+    of symmetry along a given axis, or else centered on the symmetry
+    center. ModeTimeMonitor shares the ModeMonitor mode-solver pipeline
+    and inherits the same restriction."""
 
-    obj_type = "ModeSource" if field_name == "sources" else "ModeMonitor"
+    if field_name == "sources":
+        obj_types: tuple[str, ...] = ("ModeSource",)
+    else:
+        obj_types = ("ModeMonitor", "ModeTimeMonitor")
 
     @model_validator(mode="after")
     def check_symmetry(self: T) -> T:
@@ -209,7 +215,7 @@ def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
         val: Sequence[Any] = getattr(self, field_name)
         sim_center = self.center
         for position_index, geometric_object in enumerate(val):
-            if geometric_object.type == obj_type:
+            if geometric_object.type in obj_types:
                 bounds_min, _ = geometric_object.bounds
                 for dim, sym in enumerate(self.symmetry):
                     if (
@@ -219,8 +225,8 @@ def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
                     ):
                         obj_descr = named_obj_descr(geometric_object, field_name, position_index)
                         self._raise_validation_error_at_loc(
-                            f"{obj_type}: {obj_descr} in presence of symmetries must be in the main "
-                            "quadrant, or centered on the symmetry axis.",
+                            f"{geometric_object.type}: {obj_descr} in presence of symmetries must "
+                            "be in the main quadrant, or centered on the symmetry axis.",
                             field_name,
                             position_index,
                         )

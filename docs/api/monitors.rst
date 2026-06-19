@@ -13,7 +13,7 @@ The types of monitors in Tidy3D include:
 
 * `Field`_: Records the EM field components in a spatial region (from 0D up to 3D) at specified time or frequency points
 * `Flux`_: Records EM power flow across a 2D surface or 3D bounding box at specified time or frequency points
-* `Mode`_: Records mode coefficient(s) of the field across a 2D plane
+* `Mode`_: Records mode coefficient(s) of the field across a 2D plane, at specified frequency points or as a time series
 * `Diffraction`_: Records diffraction coefficient(s) in a periodic simulation
 * `Far-field`_: Various monitors for calculating far-field projection and radiation characteristics
 * `Surface`_: Records EM fields on PEC and lossy metal surfaces in a 3D region at specified time or frequency points
@@ -139,6 +139,7 @@ Mode
    ModeSpec
    ModeMonitor
    ModeSolverMonitor
+   ModeTimeMonitor
 
 The ``ModeMonitor`` records the mode coefficients of the incident field at specified frequency point(s).
 
@@ -158,7 +159,21 @@ Behind the scenes, a mode solver simulation is first performed to determine the 
        freqs=np.linspace(240e12, 300e12, 20),
        mode_spec=my_mode_spec,
    )
-   
+
+The ``ModeTimeMonitor`` is the time-domain counterpart of the ``ModeMonitor``: instead of recording mode coefficients at discrete frequency points, it records a complex-valued modal amplitude time series for each mode and propagation direction at the monitor plane. The modes are solved at a single frequency (``freq_spec``, defaulting to the central frequency of the first source).
+
+.. code-block:: python
+
+   # define a mode-time monitor recording modal amplitudes from 1ps to 5ps
+   my_mode_time_monitor = ModeTimeMonitor(
+       center=(10,0,0),
+       size=(0,20,20),
+       name='My mode time monitor',
+       start=1e-12,
+       stop=5e-12,
+       mode_spec=my_mode_spec,
+   )
+
 .. seealso::
 
    For more details and examples, please refer to the following learning center article:

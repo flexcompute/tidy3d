@@ -644,6 +644,55 @@ class ModeSolver(Tidy3dBaseModel):
         snap_spec = SnappingSpec(location=tuple(location), behavior=tuple(behavior))
         return snap_box_to_grid(grid, box, snap_spec)
 
+    @staticmethod
+    def _snapped_mode_domain_to_grid_inds(
+        grid: Grid,
+        snap_box: Box,
+        normal_axis: Axis,
+        solver_symmetry: tuple[int, int] = (0, 0),
+    ) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+        """Map a snapped mode-domain box to cell index ranges ``[beg, end)`` in ``grid``.
+
+        Callers pass the snapped box from
+        ``_snapped_mode_domain(sim.grid, plane, normal_axis)`` together with a grid to
+        index against: ``sim.grid`` for sim-frame indices, or ``_output_grid`` for
+        mode-solver-frame indices. On symmetry axes the start index is pinned to 0
+        (the symmetry plane edge). Degenerate axes (``num_cells <= 1``) are left at
+        ``(0, num_cells)``.
+        """
+        bounds_list = grid.boundaries.to_list
+        num_cells = grid.num_cells
+        span_inds: list[tuple[int, int]] = [(0, num_cells[ax]) for ax in range(3)]
+
+        _, tangential_axes = Box.pop_axis([0, 1, 2], normal_axis)
+        for tang_idx, axis in enumerate(tangential_axes):
+            if num_cells[axis] <= 1:
+                continue
+
+            axis_bounds = bounds_list[axis]
+
+            ind_beg = 0
+            if solver_symmetry[tang_idx] == 0:
+                ind_beg = find_snap_location(
+                    axis_bounds,
+                    snap_box.bounds[0][axis],
+                    "lower",
+                    rel_tol=fp_eps,
+                    abs_tol=fp_eps,
+                )
+
+            ind_end = find_snap_location(
+                axis_bounds,
+                snap_box.bounds[1][axis],
+                "upper",
+                rel_tol=fp_eps,
+                abs_tol=fp_eps,
+            )
+
+            span_inds[axis] = (ind_beg, ind_end)
+
+        return tuple(span_inds)
+
     @cached_property
     def _solver_grid_span_inds(self) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
         """Cell index ranges ``[beg, end]`` inside ``_output_grid`` for the solver grid.
@@ -653,36 +702,13 @@ class ModeSolver(Tidy3dBaseModel):
         cell indices in ``_output_grid``.  On symmetry axes the start index
         is pinned to 0 (the symmetry plane edge).
         """
-        output_bounds = self._output_grid.boundaries.to_list
-        num_cells = self._output_grid.num_cells
-        span_inds: list[tuple[int, int]] = [(0, num_cells[ax]) for ax in range(3)]
-
         snapped = self._snapped_mode_domain(self.simulation.grid, self.plane, self.normal_axis)
-        _, tangential_axes = Box.pop_axis([0, 1, 2], self.normal_axis)
-
-        for tangential_idx, axis in enumerate(tangential_axes):
-            # No truncation on degenerate axes (1D mode solves in 2D simulations)
-            if num_cells[axis] <= 1:
-                continue
-
-            axis_bounds = output_bounds[axis]
-
-            # Keep the symmetry edge (index 0) unchanged.
-            ind_beg = 0
-            if self.solver_symmetry[tangential_idx] == 0:
-                bound_min = snapped.bounds[0][axis]
-                ind_beg = find_snap_location(
-                    axis_bounds, bound_min, "lower", rel_tol=fp_eps, abs_tol=fp_eps
-                )
-
-            bound_max = snapped.bounds[1][axis]
-            ind_end = find_snap_location(
-                axis_bounds, bound_max, "upper", rel_tol=fp_eps, abs_tol=fp_eps
-            )
-
-            span_inds[axis] = (ind_beg, ind_end)
-
-        return tuple(span_inds)
+        return self._snapped_mode_domain_to_grid_inds(
+            grid=self._output_grid,
+            snap_box=snapped,
+            normal_axis=self.normal_axis,
+            solver_symmetry=self.solver_symmetry,
+        )
 
     @classmethod
     def _get_solver_grid(

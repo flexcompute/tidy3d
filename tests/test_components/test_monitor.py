@@ -833,3 +833,159 @@ def test_surface_integration_colocated_switch(cls):
 
     # updated_copy of the switch re-derives colocate
     assert m.updated_copy(use_colocated_integration=False).colocate is False
+
+
+# --- ModeTimeMonitor tests ---
+
+
+def test_modetime_construction_default():
+    """Default construction monitors ``mode_spec.num_modes`` modes."""
+    m = td.ModeTimeMonitor(
+        center=(0, 0, 0),
+        size=(2, 2, 0),
+        mode_spec=td.ModeSpec(num_modes=3),
+        interval=1,
+        name="mode_time",
+    )
+    assert m.mode_spec.num_modes == 3
+
+
+def test_modetime_non_planar_rejected():
+    """Non-planar geometry should be rejected."""
+    with pytest.raises(pd.ValidationError):
+        td.ModeTimeMonitor(center=(0, 0, 0), size=(2, 2, 2), interval=1, name="bad")
+
+
+def test_modetime_storage_size():
+    """storage_size = num_steps * num_modes * 2_dirs * BYTES_COMPLEX."""
+    m = td.ModeTimeMonitor(
+        center=(0, 0, 0),
+        size=(2, 2, 0),
+        mode_spec=td.ModeSpec(num_modes=3),
+        interval=1,
+        name="storage_test",
+    )
+    tmesh = np.linspace(0, 1e-12, 100)
+    size = m.storage_size(num_cells=50, tmesh=tmesh)
+    num_steps = m.num_steps(tmesh)
+    expected = 8 * num_steps * 3 * 2  # BYTES_COMPLEX=8
+    assert size == expected
+
+
+def test_modetime_data_construction():
+    """ModeTimeData can be created from ModeAmpsTimeDataArray + n_complex."""
+    m = td.ModeTimeMonitor(
+        center=(0, 0, 0),
+        size=(2, 2, 0),
+        mode_spec=td.ModeSpec(num_modes=2),
+        interval=1,
+        name="data_test",
+    )
+    direction = ["+", "-"]
+    t = [0, 1e-12, 2e-12]
+    mode_index = np.arange(2)
+    freqs = [2e14]
+    coords = {"direction": direction, "t": t, "mode_index": mode_index}
+    amps = td.ModeAmpsTimeDataArray((1 + 1j) * np.random.random((2, 3, 2)), coords=coords)
+    n_complex = td.ModeIndexDataArray(
+        (1.5 + 0.01j) * np.ones((1, 2)),
+        coords={"f": freqs, "mode_index": mode_index},
+    )
+    data = td.ModeTimeData(monitor=m, amps=amps, n_complex=n_complex)
+    assert data.amps.dims == ("direction", "t", "mode_index")
+    assert data.n_complex.dims == ("f", "mode_index")
+
+
+def test_modetime_json_serialization_roundtrip():
+    """JSON serialization round-trip preserves all fields."""
+    m = td.ModeTimeMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 0),
+        mode_spec=td.ModeSpec(num_modes=4),
+        freq_spec=2e14,
+        start=1e-13,
+        stop=5e-13,
+        interval=1,
+        name="roundtrip",
+    )
+    json_str = m.model_dump_json()
+    m2 = td.ModeTimeMonitor.model_validate_json(json_str)
+    assert m2.name == m.name
+    assert m2.mode_spec.num_modes == m.mode_spec.num_modes
+    assert m2.freq_spec == m.freq_spec
+    assert m2.start == m.start
+    assert m2.stop == m.stop
+    assert m2.interval == m.interval
+
+
+def test_modetime_interval_must_be_one():
+    """ModeTimeMonitor rejects interval != 1 with a loc-aware error."""
+    with pytest.raises(pd.ValidationError):
+        td.ModeTimeMonitor(
+            center=(1, 2, 3),
+            size=(2, 2, 0),
+            mode_spec=td.ModeSpec(num_modes=2),
+            start=1e-13,
+            stop=5e-13,
+            interval=2,
+            name="bad_interval",
+        )
+
+
+def test_modetime_freq_spec_validation():
+    """ModeTimeMonitor.freq_spec must be positive."""
+    with pytest.raises(pd.ValidationError):
+        td.ModeTimeMonitor(
+            center=(1, 2, 3),
+            size=(2, 2, 0),
+            mode_spec=td.ModeSpec(num_modes=2),
+            start=1e-13,
+            stop=5e-13,
+            freq_spec=-2e14,
+            name="bad_freq",
+        )
+
+
+def _sim_with_mtm(sources):
+    """Minimal periodic ``Simulation`` carrying a single ``freq_spec=None`` MTM."""
+    mtm = td.ModeTimeMonitor(
+        center=(0, 0, 0),
+        size=(2, 2, 0),
+        mode_spec=td.ModeSpec(num_modes=1),
+        name="mtm",
+    )
+    return {
+        "size": (4, 4, 4),
+        "run_time": 1e-12,
+        "grid_spec": td.GridSpec.auto(wavelength=1.5),
+        "monitors": (mtm,),
+        "sources": sources,
+        "boundary_spec": td.BoundarySpec.all_sides(td.Periodic()),
+    }
+
+
+def test_modetime_freq_spec_source_free_error():
+    """``freq_spec=None`` derives the solve frequency from the sources, so a
+    source-free simulation must raise a loc-aware error (mirrors ``ModeABCBoundary``)."""
+    with pytest.raises(pd.ValidationError) as excinfo:
+        _ = td.Simulation(**_sim_with_mtm(sources=()))
+    assert_single_value_error_loc(excinfo, ("monitors", 0), "freq_spec=None")
+
+
+def test_modetime_freq_spec_multisource_warning():
+    """Multiple sources with different central frequencies + ``freq_spec=None`` warns
+    (mirrors ``ModeABCBoundary``); the first source's central frequency is used."""
+    src_lo = td.PointDipole(
+        center=(-1, 0, 0),
+        source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
+        polarization="Ex",
+    )
+    src_hi = td.PointDipole(
+        center=(1, 0, 0),
+        source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
+        polarization="Ex",
+    )
+    with AssertLogLevel(
+        "WARNING", contains_str="The central frequency of the first source will be used"
+    ):
+        _ = td.Simulation(**_sim_with_mtm(sources=(src_lo, src_hi)))

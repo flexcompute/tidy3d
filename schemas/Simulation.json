@@ -13963,6 +13963,174 @@
       },
       "type": "object"
     },
+    "ModeTimeMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "colocate": {
+          "const": false,
+          "default": false,
+          "type": "boolean"
+        },
+        "freq_spec": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interval": {
+          "const": 1,
+          "default": 1,
+          "type": "integer"
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "mode_spec": {
+          "$ref": "#/$defs/ModeSpec",
+          "default": {
+            "angle_phi": 0.0,
+            "angle_rotation": false,
+            "angle_theta": 0.0,
+            "attrs": {},
+            "bend_axis": null,
+            "bend_radius": null,
+            "filter_pol": null,
+            "group_index_step": false,
+            "interp_spec": null,
+            "num_modes": 1,
+            "num_pml": [
+              0,
+              0
+            ],
+            "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "bounding_box": null,
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "keep_modes": "all",
+              "sort_key": "n_eff",
+              "sort_order": "descending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
+            "target_neff": null,
+            "track_freq": null,
+            "type": "ModeSpec"
+          }
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "start": {
+          "default": 0.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "ModeTimeMonitor",
+          "default": "ModeTimeMonitor",
+          "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": false,
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
     "ModulationSpec": {
       "additionalProperties": false,
       "properties": {
@@ -19556,6 +19724,7 @@
             "MicrowaveModeSolverMonitor": "#/$defs/MicrowaveModeSolverMonitor",
             "ModeMonitor": "#/$defs/ModeMonitor",
             "ModeSolverMonitor": "#/$defs/ModeSolverMonitor",
+            "ModeTimeMonitor": "#/$defs/ModeTimeMonitor",
             "PermittivityMonitor": "#/$defs/PermittivityMonitor",
             "PointCloudFieldMonitor": "#/$defs/PointCloudFieldMonitor",
             "SurfaceFieldMonitor": "#/$defs/SurfaceFieldMonitor",
@@ -19617,6 +19786,9 @@
           },
           {
             "$ref": "#/$defs/ModeSolverMonitor"
+          },
+          {
+            "$ref": "#/$defs/ModeTimeMonitor"
           },
           {
             "$ref": "#/$defs/PermittivityMonitor"

@@ -20,6 +20,7 @@ from tidy3d.components.monitor import (
     MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
+    ModeTimeMonitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
     SurfaceFieldMonitor,
@@ -37,6 +38,7 @@ MonitorType = (
     | FluxTimeMonitor
     | ModeMonitor
     | ModeSolverMonitor
+    | ModeTimeMonitor
     | FieldProjectionAngleMonitor
     | FieldProjectionCartesianMonitor
     | FieldProjectionKSpaceMonitor

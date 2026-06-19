@@ -1333,6 +1333,23 @@ class ModeAmpsDataArray(DataArray):
     _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
 
 
+class ModeAmpsTimeDataArray(DataArray):
+    """Forward and backward propagating complex-valued mode amplitudes in the time domain.
+
+    Example
+    -------
+    >>> direction = ["+", "-"]
+    >>> t = [0, 1e-12, 2e-12]
+    >>> mode_index = np.arange(4)
+    >>> coords = dict(direction=direction, t=t, mode_index=mode_index)
+    >>> data = ModeAmpsTimeDataArray((1+1j) * np.random.random((2, 3, 4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("direction", "t", "mode_index")
+    _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
+
+
 class ModeIndexDataArray(DataArray):
     """Complex-valued effective propagation index of a mode.
 
@@ -2495,6 +2512,7 @@ DATA_ARRAY_TYPES = [
     FluxDataArray,
     FluxTimeDataArray,
     ModeAmpsDataArray,
+    ModeAmpsTimeDataArray,
     ModeIndexDataArray,
     GroupIndexDataArray,
     ModeDispersionDataArray,
