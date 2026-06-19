@@ -5,6 +5,7 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
+import pydantic
 import pytest
 
 import tidy3d as td
@@ -533,6 +534,74 @@ def test_mesh_direct_override():
     for axis in range(3):
         sizes = sim.grid.sizes.to_list[axis]
         assert sizes[len(sizes) // 2] > 0.15
+
+
+def test_mesh_override_min_steps_per_size():
+    """Test td.MeshOverrideStructure 'min_steps_per_size' resolution into the effective '_dl'."""
+
+    box = td.Box(size=(2, 2, 2))
+
+    # min_steps_per_size only: dl = bbox_size / min_steps_per_size
+    struct = td.MeshOverrideStructure(geometry=box, min_steps_per_size=(10, None, None))
+    assert struct._dl == (0.2, None, None)
+
+    # both set: finer (smaller) grid size wins per axis
+    struct = td.MeshOverrideStructure(
+        geometry=box, dl=(0.5, 0.05, None), min_steps_per_size=(10, 10, 10)
+    )
+    assert struct._dl == (0.2, 0.05, 0.2)
+
+    # zero and infinite bounding-box dimensions are ignored when deriving from min_steps_per_size
+    struct = td.MeshOverrideStructure(
+        geometry=td.Box(size=(td.inf, 0, 4)), min_steps_per_size=(10, 10, 10)
+    )
+    assert struct._dl == (None, None, 0.4)
+
+    # all-None override structure warns and produces no effective grid size
+    with AssertLogLevel("WARNING", contains_str="has no effect"):
+        struct = td.MeshOverrideStructure(geometry=box)
+    assert struct._dl == (None, None, None)
+
+    # non-finite min_steps_per_size is rejected (inf would imply a zero grid size)
+    with pytest.raises(pydantic.ValidationError):
+        td.MeshOverrideStructure(geometry=box, min_steps_per_size=(td.inf, None, None))
+
+    # min_steps_per_size drives the mesh just like an equivalent dl
+    override = td.MeshOverrideStructure(
+        geometry=td.Box(size=(1, 1, 1)), min_steps_per_size=(20,) * 3
+    )
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.auto(
+            wavelength=WAVELENGTH,
+            override_structures=[override],
+        ),
+        run_time=1e-13,
+        structures=[BOX1],
+    )
+    for axis in range(3):
+        sizes = sim.grid.sizes.to_list[axis]
+        assert np.isclose(sizes[len(sizes) // 2], 0.05)
+
+
+def test_mesh_override_min_steps_per_size_traced():
+    """'_dl' resolves to static floats even when the override box size is autograd-traced."""
+    import autograd
+
+    def resolved_dl_x(size_x):
+        box = td.Box(center=(0, 0, 0), size=(size_x, 2.0, 2.0))
+        override = td.MeshOverrideStructure(geometry=box, min_steps_per_size=(10, 10, 10))
+        # must not raise on a traced 'ArrayBox' size, and must resolve to a plain float
+        dl_x = override._dl[0]
+        assert isinstance(dl_x, float)
+        return dl_x
+
+    # constructing/resolving under a trace must not raise; the mesh size carries no gradient
+    assert np.isclose(resolved_dl_x(2.0), 0.2)
+    with warnings.catch_warnings():
+        # expected: '_dl' is intentionally static, so the output is independent of the input
+        warnings.filterwarnings("ignore", message="Output seems independent of input")
+        assert autograd.grad(resolved_dl_x)(2.0) == 0.0
 
 
 def test_mesh_multiple_direct_override_and_global_min():

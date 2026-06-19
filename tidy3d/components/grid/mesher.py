@@ -679,7 +679,7 @@ class GradedMesher(Mesher):
         for structure in structures:
             if isinstance(structure, MeshOverrideStructure):
                 # skip override structure if dl not defined along axis
-                if structure.dl[axis] is None:
+                if structure._dl[axis] is None:
                     continue
             structures_filtered.append(structure)
         return structures_filtered
@@ -747,7 +747,7 @@ class GradedMesher(Mesher):
                     GradedMesher.structure_step(structure, wavelength, min_steps_per_wvl)
                 )
             elif isinstance(structure, MeshOverrideStructure):
-                min_steps.append(structure.dl[axis])
+                min_steps.append(structure._dl[axis])
         min_steps = np.array(min_steps)
         min_steps = np.where(min_steps > dl_max, dl_max, min_steps)
         return np.where(min_steps < dl_min, dl_min, min_steps)

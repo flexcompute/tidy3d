@@ -143,10 +143,13 @@ def _filter_override_structures_to_region(
                 filtered.append(struct.updated_copy(geometry=geometry, deep=False))
             continue
 
-        # MeshOverrideStructure: disable dl along axes where the structure
-        # doesn't overlap the region, rather than discarding it entirely.
+        # MeshOverrideStructure: disable the override along axes where the structure
+        # doesn't overlap the region, rather than discarding it entirely. Freeze the
+        # resolved grid size into 'dl' (clearing 'min_steps_per_size') first so disabling
+        # an axis is a simple 'dl[axis] = None'.
         bounds = struct.geometry.bounds
-        dl = list(struct.dl)
+        frozen = struct._freeze_dl()
+        dl = list(frozen.dl)
 
         for axis in range(3):
             if dl[axis] is None:
@@ -155,7 +158,7 @@ def _filter_override_structures_to_region(
                 dl[axis] = None
 
         if any(val is not None for val in dl):
-            filtered.append(struct.updated_copy(dl=tuple(dl)))
+            filtered.append(frozen.updated_copy(dl=tuple(dl)))
 
     return tuple(filtered)
 
@@ -985,7 +988,7 @@ class QuasiUniformGrid(AbstractAutoGrid):
             dl = [self.dl, self.dl, self.dl]
             # skip override structures containing dl = None along axes
             if isinstance(structure, MeshOverrideStructure):
-                for ind, dl_axis in enumerate(structure.dl):
+                for ind, dl_axis in enumerate(structure._dl):
                     if dl_axis is None:
                         dl[ind] = None
             processed_structures.append(MeshOverrideStructure(geometry=structure.geometry, dl=dl))
@@ -2310,7 +2313,7 @@ class LayerRefinementSpec(Box):
         # bucket candidates by their per-axis target grid size; only same-size boxes may merge
         overrides_by_dl = defaultdict(list)
         for candidate in candidates:
-            overrides_by_dl[tuple(candidate.dl)].append(candidate)
+            overrides_by_dl[tuple(candidate._dl)].append(candidate)
         unioned = []
         for dl, dl_overrides in overrides_by_dl.items():
             unioned += self._union_same_dl_overrides(dl_overrides, dl)
@@ -2448,7 +2451,7 @@ class LayerRefinementSpec(Box):
                 )
                 combined_structure = MeshOverrideStructure(
                     geometry=Box.from_bounds(rmin=rmin, rmax=rmax),
-                    dl=refinement_structures[0].dl,
+                    dl=refinement_structures[0]._dl,
                     shadow=False,
                     drop_outside_sim=self.refinement_inside_sim_only,
                 )
@@ -2457,7 +2460,7 @@ class LayerRefinementSpec(Box):
                 ]
 
             # drop if the grid size is no greater than the one from "min_steps_along_axis"
-            if refinement_structures[0].dl[self.axis] <= dl:
+            if refinement_structures[0]._dl[self.axis] <= dl:
                 override_structures += refinement_structures
         return override_structures
 
@@ -3177,7 +3180,7 @@ class GridSpec(Tidy3dBaseModel):
             if isinstance(structure, Structure):
                 return True, True, True
 
-            for dl_axis, dl in enumerate(structure.dl):
+            for dl_axis, dl in enumerate(structure._dl):
                 if (not override_used[dl_axis]) and (dl is not None):
                     override_used[dl_axis] = True
         return tuple(override_used)
@@ -3516,7 +3519,7 @@ class GridSpec(Tidy3dBaseModel):
 
         # minimal grid size from MeshOverrideStructure
         for structure in mesh_structures:
-            for axis, dl in enumerate(structure.dl):
+            for axis, dl in enumerate(structure._dl):
                 if dl is not None:
                     min_dl_by_axis[axis] = min(min_dl_by_axis[axis], dl)
 

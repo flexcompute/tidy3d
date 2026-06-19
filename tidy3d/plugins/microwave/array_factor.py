@@ -243,7 +243,11 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
                     array_objects.append(new_obj)
             else:
                 # could expand geometry, so we create a copy of the original object with updated size and center
-                if isinstance(obj, (Structure, MeshOverrideStructure)):
+                if isinstance(obj, MeshOverrideStructure):
+                    # freeze the resolved grid size before the box grows, so a 'min_steps_per_size'
+                    # override keeps its refinement instead of coarsening with the expanded box
+                    new_obj = obj._freeze_dl().updated_copy(geometry=expanded_geometry)
+                elif isinstance(obj, Structure):
                     new_obj = obj.updated_copy(
                         geometry=expanded_geometry,
                     )

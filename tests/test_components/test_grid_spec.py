@@ -1029,3 +1029,34 @@ def test_grid_spec_localized_copy_preserves_override_structure_order():
     ]
     assert localized.override_structures[0].dl == (None, 0.1, 0.1)
     assert localized.override_structures[2].dl == (0.1, None, 0.1)
+
+
+def test_grid_spec_localized_copy_filters_min_steps_per_size():
+    """'min_steps_per_size' overrides are filtered to the region like 'dl' overrides."""
+    region = td.Box(center=(0, 0, 0), size=(4.0, 6.0, 8.0))
+    # x is outside the region, y and z are inside -> x axis disabled, structure kept
+    partial = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 0, 0), size=(2, 2, 2)),
+        min_steps_per_size=(10, 10, 10),
+        name="partial",
+    )
+    # entirely outside the region -> dropped, no effective grid size remains
+    fully_out = td.MeshOverrideStructure(
+        geometry=td.Box(center=(10, 10, 10), size=(2, 2, 2)),
+        min_steps_per_size=(10, 10, 10),
+        name="fully_out",
+    )
+    grid_spec = td.GridSpec.auto(
+        wavelength=1.0,
+        override_structures=(partial, fully_out),
+    )
+
+    localized = grid_spec._localized_copy(region=region)
+
+    assert [struct.name for struct in localized.override_structures] == ["partial"]
+    kept = localized.override_structures[0]
+    # filtering bakes the resolved grid size into 'dl' and clears 'min_steps_per_size';
+    # the effective '_dl' is unchanged along the kept axes
+    assert kept._dl == (None, 0.2, 0.2)
+    assert kept.dl == (None, 0.2, 0.2)
+    assert kept.min_steps_per_size == (None, None, None)

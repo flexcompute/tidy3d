@@ -138,6 +138,16 @@ The second method is to define a :class:`.MeshOverrideStructure`. This allows th
        dl=(0.1, None, 0.2),
    )
 
+The step size can be given as an absolute value through ``dl``, or relative to the structure through ``min_steps_per_size`` (the minimum number of grid steps spanning the structure's bounding box along each direction). Either field may be omitted; use ``None`` along a direction to apply no override there. When both are set along a direction, the finer (smaller) of the two grid sizes is used.
+
+.. code-block:: python
+
+   # at least 10 grid steps spanning the structure along x and y, no override along z
+   my_mesh_override_structure = MeshOverrideStructure(
+       geometry=Box(center=(0,0,0), size=(1,1,1)),
+       min_steps_per_size=(10, 10, None),
+   )
+
 The :class:`.LayerRefinementSpec` class allows the user to specify added refinement to a layered region (e.g. a metallic trace plane). Within the layer, the grid can be snapped to structure corners. Along the layer normal axis, the grid can also be snapped to the layer bounds.
 
 .. code-block:: python

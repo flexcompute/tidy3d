@@ -8297,6 +8297,11 @@
           "default": null
         },
         "dl": {
+          "default": [
+            null,
+            null,
+            null
+          ],
           "maxItems": 3,
           "minItems": 3,
           "prefixItems": [
@@ -8393,6 +8398,51 @@
             }
           ]
         },
+        "min_steps_per_size": {
+          "default": [
+            null,
+            null,
+            null
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
         "name": {
           "anyOf": [
             {
@@ -8419,7 +8469,6 @@
         }
       },
       "required": [
-        "dl",
         "geometry"
       ],
       "type": "object"

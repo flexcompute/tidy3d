@@ -511,6 +511,32 @@ def test_rectangular_array_calculator_array_make_antenna_array():
     assert len(sim_array_with_layer_refinement.grid_spec.snapping_points) == 12
 
 
+def test_expanded_mesh_override_keeps_grid_size():
+    """A 'min_steps_per_size' override must not coarsen when its box is expanded into an array.
+
+    Analytic setup: a (4, 1, 1) override box centered at the origin spills past a (2, 2, 2) unit
+    cell along x. Expanding it to a 6-wide array domain grows the box to x-size 8; with a raw
+    'min_steps_per_size' that would relax the x grid size from 4/20 to 8/20. The expand path must
+    freeze the resolved '_dl' so the refinement is preserved.
+    """
+    calc = mw.RectangularAntennaArrayCalculator(
+        array_size=(2, 1, 1),  # extend along x only
+        spacings=(1.0, 1.0, 1.0),
+    )
+    override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, 0, 0), size=(4, 1, 1)),
+        min_steps_per_size=(20, None, None),
+    )
+    expanded = calc._duplicate_or_expand_list_of_objects(
+        objects=(override,),
+        old_sim_bounds=((-1, -1, -1), (1, 1, 1)),
+        new_sim_bounds=((-3, -1, -1), (3, 1, 1)),
+    )
+    assert len(expanded) == 1
+    assert expanded[0].geometry.size[0] == 8  # box did grow
+    assert expanded[0]._dl == override._dl  # but the resolved grid size did not
+
+
 def test_rectangular_array_calculator_monitor_data_from_array_factor():
     """Test that we can get monitor data from array factor."""
     freq0 = 10e9

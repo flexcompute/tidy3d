@@ -18,7 +18,7 @@ from tidy3d.exceptions import SetupError, Tidy3dImportError, format_chained_exce
 from tidy3d.log import log
 
 from .autograd.utils import contains, get_static
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import ScalarFieldDataArray
 from .geometry.base import Box, Geometry
 from .geometry.contour_conversion import (
@@ -1042,11 +1042,23 @@ class MeshOverrideStructure(AbstractStructure):
         grid size along ``x``, ``y``, ``z`` directions, and a boolean on whether the override
         will be enforced.
 
+        The grid size can be specified directly through ``dl`` (an absolute grid size), or
+        relative to the structure through ``min_steps_per_size`` (the minimum number of grid steps
+        spanning the structure's bounding box along each dimension). When both ``dl`` and
+        ``min_steps_per_size`` are set along a dimension, the final grid size is the minimum
+        (finer) of the two.
+
     Example
     -------
     >>> from tidy3d import Box
     >>> box = Box(center=(0,0,1), size=(2, 2, 2))
     >>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')
+
+    Refinement relative to the structure size, here at least 10 grid steps along each direction:
+
+    >>> struct_override = MeshOverrideStructure(
+    ...     geometry=box, min_steps_per_size=(10, 10, 10), name='override_box'
+    ... )
     """
 
     dl: tuple[
@@ -1054,9 +1066,28 @@ class MeshOverrideStructure(AbstractStructure):
         PositiveFloat | None,
         PositiveFloat | None,
     ] = Field(
+        (None, None, None),
         title="Grid Size",
-        description="Grid size along x, y, z directions.",
+        description="Grid size along x, y, z directions. Use ``None`` along a dimension to apply no "
+        "override there, or to leave the grid size to ``min_steps_per_size``. When both ``dl`` and "
+        "``min_steps_per_size`` are set along a dimension, the final grid size is the minimum "
+        "(finer) of the two.",
         json_schema_extra={"units": MICROMETER},
+    )
+
+    min_steps_per_size: tuple[
+        PositiveFloat | None,
+        PositiveFloat | None,
+        PositiveFloat | None,
+    ] = Field(
+        (None, None, None),
+        title="Minimum Steps Per Bounding Box Size",
+        description="Minimum number of grid steps spanning the structure's bounding box along x, "
+        "y, z directions. The grid size along a dimension is the bounding box size divided by this "
+        "value; it is ignored along dimensions where the bounding box size is zero or infinite. "
+        "Use ``None`` along a dimension to apply no override there. When both ``dl`` and "
+        "``min_steps_per_size`` are set along a dimension, the final grid size is the minimum "
+        "(finer) of the two.",
     )
 
     priority: int = Field(
@@ -1093,6 +1124,35 @@ class MeshOverrideStructure(AbstractStructure):
         "and that of the simulation domain overlap.",
     )
 
+    @cached_property
+    def _dl(self) -> tuple[float | None, float | None, float | None]:
+        """Resolved grid size per axis used by the mesher, combining ``dl`` and
+        ``min_steps_per_size``. Along each axis it is the finer (minimum) of the explicit ``dl``
+        and the size implied by ``min_steps_per_size`` (bounding box size divided by
+        ``min_steps_per_size``, ignored when the bounding box size is zero or infinite); ``None``
+        when neither is specified.
+        """
+        # static (untraced) sizes: the mesh grid size feeds the mesher and must not carry
+        # autograd tracing, and the comparisons below are not stable on traced 'ArrayBox' values
+        bbox_size = get_static(self.geometry.bounding_box.size)
+        resolved = []
+        for dl_axis, min_steps_axis, size_axis in zip(self.dl, self.min_steps_per_size, bbox_size):
+            candidates = []
+            if dl_axis is not None:
+                candidates.append(dl_axis)
+            if min_steps_axis is not None and size_axis != 0 and np.isfinite(size_axis):
+                candidates.append(size_axis / min_steps_axis)
+            resolved.append(min(candidates) if candidates else None)
+        return tuple(resolved)
+
+    def _freeze_dl(self) -> Self:
+        """Return a copy with the resolved ``_dl`` baked into ``dl`` and ``min_steps_per_size``
+        cleared, pinning the grid size so it survives a later geometry resize. Without this a
+        ``min_steps_per_size`` override would coarsen as its bounding box grows (e.g. when a box is
+        expanded into an antenna array), unlike an equivalent explicit ``dl`` override which stays
+        fixed. Callers that resize an override's geometry should freeze first."""
+        return self.updated_copy(dl=self._dl, min_steps_per_size=(None, None, None))
+
     @field_validator("geometry")
     @classmethod
     def _box_only(cls, val: GeometryType) -> GeometryType:
@@ -1106,6 +1166,18 @@ class MeshOverrideStructure(AbstractStructure):
                 return val.bounding_box
         return val
 
+    @field_validator("min_steps_per_size")
+    @classmethod
+    def _min_steps_per_size_finite(cls, val: tuple) -> tuple:
+        """Reject non-finite ``min_steps_per_size``: ``inf`` would imply a zero grid size
+        (``bounding_box_size / inf``) and silently drive the mesher into a zero-step path."""
+        if any(v is not None and not np.isfinite(v) for v in val):
+            raise ValueError(
+                "'min_steps_per_size' entries must be finite; use 'None' to apply no override "
+                "along a dimension."
+            )
+        return val
+
     @model_validator(mode="after")
     def _unshadowed_cannot_be_enforced(self) -> Self:
         """Unshadowed structure cannot be enforced."""
@@ -1113,6 +1185,31 @@ class MeshOverrideStructure(AbstractStructure):
             self._raise_validation_error_at_loc(
                 SetupError("A structure cannot be simultaneously enforced and unshadowed."),
                 "enforce",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _warn_no_grid_override(self) -> Self:
+        """Warn when the override resolves to no grid size along any dimension.
+
+        This covers both the case where neither ``dl`` nor ``min_steps_per_size`` is set, and the
+        case where ``min_steps_per_size`` only falls on dimensions with a zero or infinite bounding
+        box size (and thus contributes no grid size).
+        """
+        if all(val is None for val in self._dl):
+            name_str = f" '{self.name}'" if self.name else ""
+            # anchor the warning to whichever field was actually set so the fix stays actionable
+            loc = (
+                "min_steps_per_size"
+                if any(val is not None for val in self.min_steps_per_size)
+                else "dl"
+            )
+            log.warning(
+                f"'MeshOverrideStructure'{name_str} sets no grid size along any dimension: "
+                "neither 'dl' nor an applicable 'min_steps_per_size' is provided "
+                "('min_steps_per_size' is ignored where the bounding box size is zero or "
+                "infinite). This override has no effect on the mesh and will be dropped.",
+                custom_loc=[loc],
             )
         return self
 
