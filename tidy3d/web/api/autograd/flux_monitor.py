@@ -168,7 +168,9 @@ def expand_flux_monitor_vjps(
             helper_spec.surface_signs,
         ):
             try:
-                helper_data = sim_data_fwd[helper_name]
+                # ``SimulationData.__getitem__`` expands symmetry. Adjoint source generation
+                # expects raw stored-domain VJPs with symmetry metadata, like the field path.
+                helper_data = sim_data_fwd.monitor_data[helper_name]
             except KeyError as exc:
                 raise AdjointError(
                     f"Missing hidden field data '{helper_name}' required to differentiate "

@@ -17,6 +17,7 @@ from tidy3d.web.api.autograd import io_utils as autograd_io_utils
 from tidy3d.web.api.autograd import strategy as autograd_strategy
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
 from tidy3d.web.api.autograd.context import AdjointTaskContext, AutogradContext, ForwardTaskContext
+from tidy3d.web.api.autograd.flux_monitor import expand_flux_monitor_vjps
 from tidy3d.web.api.autograd.types import NumericalStructureConfig
 
 from ...utils import AssertLogStr
@@ -226,6 +227,43 @@ def test_flux_monitor_remote_adjoint_matches_field_monitor_flux(use_colocated_in
 
     assert np.all(np.isfinite(flux_grad))
     npt.assert_allclose(flux_grad, field_grad, rtol=1e-12, atol=1e-12)
+
+
+def test_flux_monitor_vjp_expansion_uses_raw_symmetric_helper_data():
+    """Flux helper VJPs should keep stored-grid symmetry metadata for source construction."""
+
+    flux_monitor = td.FluxMonitor(
+        size=(1, 1, 0),
+        center=(0, 0, 0),
+        freqs=[FREQ0],
+        name="flux",
+        enable_adjoint=True,
+    )
+    sim = SIM_BASE.updated_copy(
+        symmetry=(0, -1, 0),
+        monitors=(flux_monitor,),
+    )
+    sim_data_combined = make_simulation_data(sim._with_adjoint_monitors([]))
+    sim_data_orig, sim_data_fwd = sim_data_combined._split_original_fwd(num_mnts_original=1)
+
+    helper_data = sim_data_fwd.data[0].updated_copy(
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        deep=False,
+        validate=False,
+    )
+    sim_data_fwd = sim_data_fwd.updated_copy(data=(helper_data,), deep=False, validate=False)
+
+    _, sim_data_for_adj = expand_flux_monitor_vjps(
+        data_fields_vjp={("data", 0, "flux"): np.ones_like(sim_data_orig.data[0].flux.values)},
+        sim_data_orig=sim_data_orig,
+        sim_data_fwd=sim_data_fwd,
+    )
+
+    helper_vjp_data = sim_data_for_adj.data[len(sim_data_orig.data)]
+    assert helper_vjp_data.symmetry == sim.symmetry
+    for component_name, component_data in helper_vjp_data.field_components.items():
+        assert component_data.shape == helper_data.field_components[component_name].shape
 
 
 def test_flux_monitor_source_gradient_uses_source_adjoint_monitor(monkeypatch):
