@@ -9,6 +9,7 @@ from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.index import SimulationMap
+from tidy3d.components.run_time_spec import RunTimeSpec
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Complex
 from tidy3d.components.types.base import discriminated_union
@@ -76,7 +77,24 @@ class ModalComponentModeler(AbstractComponentModeler):
     @property
     def base_sim(self) -> Simulation:
         """The base simulation."""
-        return self.simulation
+        base = self.simulation
+        # Resolve a 'RunTimeSpec' run_time using the modeler's known excitation pulse, so the
+        # base simulation carries a concrete, source-independent run_time. base_sim has no port
+        # sources, so a 'RunTimeSpec' would otherwise resolve far too short.
+        if isinstance(base.run_time, RunTimeSpec):
+            base = base.updated_copy(run_time=base._resolve_run_time([self._source_time]))
+        return base
+
+    @cached_property
+    def _source_time(self) -> GaussianPulse:
+        """Time-domain pulse used for the port excitations (also used to resolve run_time)."""
+        if self.custom_source_time is not None:
+            return self.custom_source_time
+        freq0 = 0.5 * (max(self.freqs) + min(self.freqs))
+        fwidth = max(max(self.freqs) - min(self.freqs), freq0 * FWIDTH_FRAC)
+        return GaussianPulse(
+            freq0=freq0, fwidth=fwidth, remove_dc_component=self.remove_dc_component
+        )
 
     @cached_property
     def sim_dict(self) -> SimulationMap:
@@ -187,13 +205,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         freq0 = 0.5 * (max(freqs) + min(freqs))
         fdiff = max(freqs) - min(freqs)
         fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
-        source_time = self.custom_source_time
-        if source_time is None:
-            source_time = GaussianPulse(
-                freq0=freq0,
-                fwidth=fwidth,
-                remove_dc_component=self.remove_dc_component,
-            )
+        source_time = self._source_time
         return port.to_source(
             freq0=freq0,
             fwidth=fwidth,

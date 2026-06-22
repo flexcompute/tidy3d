@@ -202,6 +202,7 @@ if TYPE_CHECKING:
         InterpMethod,
         Shapely,
     )
+    from .types.time import SourceTimeType
 
 
 def _raise_setup_error(message: str) -> NoReturn:
@@ -6627,28 +6628,35 @@ class Simulation(AbstractYeeGridSimulation):
         if not isinstance(self.run_time, RunTimeSpec):
             return self.run_time
 
+        return self._resolve_run_time([src.source_time for src in self.sources])
+
+    def _resolve_run_time(self, source_times: list[SourceTimeType]) -> float:
+        """Resolve a ``RunTimeSpec`` run time from explicit source time pulses.
+
+        Decoupled from ``self.sources`` so callers that know the excitation a priori (such as
+        a :class:`.AbstractComponentModeler`) can resolve the run time without attaching
+        sources to the simulation. Assumes ``self.run_time`` is a ``RunTimeSpec``.
+        """
         run_time_spec = self.run_time
 
-        # contribution from the time of of the source pulses
-        if not self.sources:
+        # contribution from the time of the source pulses
+        if not source_times:
             source_time = 0.0
             max_ref_ind = 1
         else:
-            source_times = [src.source_time.end_time() for src in self.sources]
-            source_times = [x for x in source_times if x is not None]
-            if not source_times:
+            end_times = [st.end_time() for st in source_times]
+            end_times = [x for x in end_times if x is not None]
+            if not end_times:
                 raise SetupError(
-                    "Could not compute source contributions to run time from 'RunTimeSpec'."
-                    "Please check all of your 'Source.source_time' and ensure that at least one "
-                    "has a decaying (non-DC) pulse profile to be able to compute the 'run_time'."
+                    "Could not resolve a concrete 'run_time' from the 'RunTimeSpec': at least one "
+                    "excitation must have a decaying (non-DC) pulse profile, so that its end time is "
+                    "defined."
                 )
-            source_time_max = np.max(source_times)
+            source_time_max = np.max(end_times)
             source_time = run_time_spec.source_factor * source_time_max
 
-            # get the maximum refractive index evaluated over each of all the source central frequencies
-            all_ref_inds = [
-                self.get_refractive_indices(src.source_time._freq0) for src in self.sources
-            ]
+            # get the maximum refractive index evaluated over each of the source central frequencies
+            all_ref_inds = [self.get_refractive_indices(st._freq0) for st in source_times]
             avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
             max_ref_ind = np.max(avg_ref_inds, initial=1)
 

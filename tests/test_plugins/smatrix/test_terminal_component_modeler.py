@@ -4115,3 +4115,36 @@ def test_lumped_port_various_impedances_produce_valid_load(spec_kwargs):
     )
     load = port.to_load()
     assert isinstance(load.network, RLCNetwork)
+
+
+def test_base_sim_resolves_run_time_spec_from_modeler_pulse():
+    """base_sim resolves a RunTimeSpec from the modeler's source pulse.
+
+    base_sim carries no port excitation source, so a RunTimeSpec would otherwise resolve far
+    too short on it (the source-pulse term vanishes and the in-medium index defaults to 1),
+    under-estimating the cost. The modeler knows the excitation a priori, so base_sim bakes a
+    concrete, source-independent run_time matching the per-port simulations.
+    """
+    modeler = make_component_modeler(planar_pec=True)
+    modeler = modeler.updated_copy(
+        simulation=modeler.simulation.updated_copy(
+            run_time=td.RunTimeSpec(quality_factor=5, source_factor=3)
+        )
+    )
+
+    base_sim = modeler.base_sim
+    # base_sim carries a concrete float run_time, not a RunTimeSpec ...
+    assert not isinstance(base_sim.run_time, td.RunTimeSpec)
+
+    # ... resolved far longer than the source-less RunTimeSpec resolution that caused the bug,
+    # i.e. it includes the modeler's excitation pulse instead of resolving on the source-less sim.
+    assert base_sim._run_time > 2 * modeler.simulation._run_time
+
+    # ... and exactly equal to an independent source-based resolution: restore the original
+    # RunTimeSpec onto a real source-bearing port sim so it re-resolves from the actual port
+    # excitation, confirming base_sim resolved with the right pulse. (Terminal's sim_dict inherits
+    # base_sim's already-resolved float, so it must be re-spec'd to make this check independent.)
+    representative_sim = next(iter(modeler.sim_dict.values()))
+    source_bearing = representative_sim.updated_copy(run_time=modeler.simulation.run_time)
+    assert isinstance(source_bearing.run_time, td.RunTimeSpec)
+    assert base_sim._run_time == pytest.approx(source_bearing._run_time, rel=1e-9)

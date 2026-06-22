@@ -28,6 +28,7 @@ from tidy3d.components.microwave.path_integrals.specs.impedance import (
     CustomImpedanceSpec,
 )
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
+from tidy3d.components.run_time_spec import RunTimeSpec
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Complex, Coordinate
 from tidy3d.components.types.base import PriorityMode, discriminated_union
@@ -1602,8 +1603,17 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         mnts_with_radiation = list(base_sim_tmp.monitors) + list(self._finalized_radiation_monitors)
         grid_spec = GridSpec.from_grid(base_sim_tmp.grid)
         grid_spec.attrs["from_grid_spec"] = base_sim_tmp.grid_spec.model_dump(mode="json")
+        updates = {"monitors": mnts_with_radiation, "grid_spec": grid_spec}
+        # Resolve a 'RunTimeSpec' run_time up front from the modeler's known excitation pulse, so
+        # base_sim carries a concrete, source-independent run_time (it has no port sources, so a
+        # 'RunTimeSpec' would otherwise resolve far too short: the source-pulse term vanishes and the
+        # in-medium index defaults to 1). Resolution depends only on geometry and media, which the
+        # monitor/grid updates do not change, so it is folded into the single 'updated_copy' below to
+        # validate just once. The per-port simulations inherit this value.
+        if isinstance(base_sim_tmp.run_time, RunTimeSpec):
+            updates["run_time"] = base_sim_tmp._resolve_run_time([self._source_time])
         # We skipped validations up to now, here we finally validate the base sim
-        return base_sim_tmp.updated_copy(monitors=mnts_with_radiation, grid_spec=grid_spec)
+        return base_sim_tmp.updated_copy(**updates)
 
     def _generate_radiation_monitor(
         self, simulation: Simulation, auto_spec: DirectivityMonitorSpec

@@ -573,3 +573,30 @@ def test_validate_run_only_membership_modal():
     invalid_mode = modeler.ports[0].mode_spec.num_modes + 1
     with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=((port0_name, invalid_mode),))
+
+
+def test_base_sim_resolves_run_time_spec_from_modeler_pulse():
+    """base_sim resolves a RunTimeSpec from the modeler's source pulse.
+
+    base_sim carries no port excitation source, so a RunTimeSpec would otherwise resolve far
+    too short on it (the source-pulse term vanishes and the in-medium index defaults to 1),
+    under-estimating the cost. The modeler knows the excitation a priori, so base_sim bakes a
+    concrete, source-independent run_time matching the per-port simulations.
+    """
+    modeler = make_component_modeler()
+    modeler = modeler.updated_copy(
+        simulation=modeler.simulation.updated_copy(
+            run_time=td.RunTimeSpec(quality_factor=5, source_factor=3)
+        )
+    )
+
+    base_sim = modeler.base_sim
+    # base_sim carries a concrete float run_time, not a RunTimeSpec ...
+    assert not isinstance(base_sim.run_time, td.RunTimeSpec)
+
+    # ... equal to what the per-port simulation (which carries the source) resolves ...
+    representative_sim = next(iter(modeler.sim_dict.values()))
+    assert base_sim._run_time == pytest.approx(representative_sim._run_time, rel=1e-9)
+
+    # ... and far longer than the source-less RunTimeSpec resolution that caused the bug.
+    assert base_sim._run_time > 2 * modeler.simulation._run_time
