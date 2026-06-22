@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -856,8 +857,9 @@ class HeatChargeSimulation(AbstractSimulation):
         for bc in val:
             if isinstance(bc.condition, VoltageBC):
                 voltages = []
-                # currently we're only supporting DC BCs, so let's check these values
-                if isinstance(bc.condition.source, DCVoltageSource):
+                # both DC and SSAC sources carry a DC sweep array; counting only
+                # one type would admit an ambiguous two-sweep setup
+                if isinstance(bc.condition.source, (DCVoltageSource, SSACVoltageSource)):
                     voltages = bc.condition.source.voltage
 
                 if len(voltages) > 1:
@@ -894,35 +896,38 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     def _check_ssac_specific_voltages(self) -> Self:
-        """Validate user-selected SSAC bias points against the SSAC voltage source."""
+        """Validate user-selected SSAC bias points against the DC voltage sweep."""
         analysis_spec = self.analysis_spec
         if not isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
             return self
         if analysis_spec.at_voltages is None:
             return self
 
-        ac_source_voltages = None
-        for bc in self.boundary_spec:
-            if isinstance(bc.condition, VoltageBC) and isinstance(
-                bc.condition.source, SSACVoltageSource
-            ):
-                ac_source_voltages = np.asarray(bc.condition.source.voltage, dtype=float)
-                break
-
-        if ac_source_voltages is None:
+        dc_voltages = np.asarray(self._dc_voltages, dtype=float)
+        if dc_voltages.size < 2:
+            # No sweep: ``_dc_voltages`` is just the first scalar source, so
+            # validate against the SSAC operating point (the AC drive's DC bias).
+            ssac_voltages = [
+                float(v)
+                for bc in self.boundary_spec
+                if isinstance(bc.condition, VoltageBC)
+                and isinstance(bc.condition.source, SSACVoltageSource)
+                for v in bc.condition.source.voltage
+            ]
+            dc_voltages = np.asarray(ssac_voltages, dtype=float)
+        if dc_voltages.size == 0:
             return self
 
         missing_voltages = [
             voltage
             for voltage in analysis_spec.at_voltages
-            if not np.any(
-                np.isclose(ac_source_voltages, voltage, rtol=0.0, atol=SSAC_VOLTAGE_MATCH_TOL_V)
-            )
+            if not np.any(np.isclose(dc_voltages, voltage, rtol=0.0, atol=SSAC_VOLTAGE_MATCH_TOL_V))
         ]
         if missing_voltages:
             raise SetupError(
-                "Every entry in 'at_voltages' must be present in the "
-                f"'SSACVoltageSource.voltage' list. Missing voltages: {missing_voltages}."
+                "Every entry in 'at_voltages' must be present in the DC voltage sweep "
+                "(with no multi-voltage sweep, the SSAC source bias). "
+                f"Missing voltages: {missing_voltages}."
             )
 
         return self
@@ -2301,6 +2306,58 @@ class HeatChargeSimulation(AbstractSimulation):
             simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         return simulation_types
+
+    @property
+    def _dc_voltages(self) -> list[float]:
+        """DC bias voltages the charge solver computes steady-state solutions at.
+
+        The sweep array of a ``VoltageBC`` if present (validation permits at most
+        one), else the single requested bias, else empty. ``SSACVoltageSource``
+        carries DC operating points and sweeps the same way.
+        """
+        voltages: list[float] = []
+        for bc in self.boundary_spec:
+            if isinstance(bc.condition, VoltageBC) and isinstance(
+                bc.condition.source, (DCVoltageSource, SSACVoltageSource)
+            ):
+                if len(bc.condition.source.voltage) > len(voltages):
+                    voltages = [float(v) for v in bc.condition.source.voltage]
+        return voltages
+
+    @property
+    def _num_dc_solves(self) -> int:
+        """Number of nonlinear solves the charge solver runs to cover the DC sweep.
+
+        Mirrors the solver's sweep construction: a single requested voltage is
+        one direct solve; otherwise the sweep starts at 0 V and covers positive
+        then negative voltages by increasing magnitude, inserting a warm-start
+        solve per ``convergence_dv`` interval within each pass. Doping ramp-up
+        adds ``tolerance_settings.ramp_up_iters - 1`` solves. Charge sims only.
+        """
+        voltages = self._dc_voltages
+
+        # Doping ramp: the initial solve runs once per ramp level.
+        ramp_solves = self.analysis_spec.tolerance_settings.ramp_up_iters - 1
+
+        if len(voltages) <= 1:
+            # No sweep: one direct solve at the requested bias.
+            return 1 + ramp_solves
+
+        convergence_dv = self.analysis_spec.convergence_dv
+        positive = sorted(v for v in voltages if v > 1e-7)
+        negative = sorted((v for v in voltages if v < -1e-7), key=abs)
+
+        def pass_solves(pass_voltages: list[float]) -> int:
+            n = 0
+            prev = 0.0
+            for v in pass_voltages:
+                gap = abs(v - prev)
+                n += math.ceil(gap / convergence_dv) if gap > convergence_dv else 1
+                prev = v
+            return n
+
+        # 1 for the initial 0 V solve; each pass warm-starts from the 0 V solution.
+        return 1 + pass_solves(positive) + pass_solves(negative) + ramp_solves
 
     @property
     def _thermal_solver_active(self) -> bool:

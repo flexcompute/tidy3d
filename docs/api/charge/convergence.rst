@@ -59,11 +59,15 @@ Parameters you can adjust:
 - ``max_iters`` (``ChargeToleranceSpec``, default ``120``): maximum number of
   nonlinear (Newton) iterations per bias step. If the convergence history shows
   the residual still decreasing when a bias reaches this cap, raise it.
-- ``convergence_dv`` (``SteadyChargeDCAnalysis``, default ``1.0`` V): the bias
-  step. The solver starts at zero bias and ramps to the requested voltage in
-  ``convergence_dv`` increments, re-solving at each step. Lowering it takes
-  smaller, more robust steps toward the target bias, at the cost of more steps
-  and longer runtime.
+- ``convergence_dv`` (``SteadyChargeDCAnalysis``, default ``1.0`` V): the
+  maximum bias step within a voltage sweep. On the accelerated solver it
+  applies only to multi-voltage sweeps: where the gap between consecutive
+  sweep voltages exceeds ``convergence_dv``, intermediate warm-start bias
+  points are inserted (and excluded from the output); a single requested
+  voltage is solved directly, so this field has no effect. Lowering it takes
+  smaller, more robust steps between sweep points, at the cost of more solves
+  and longer runtime. The legacy solver instead ramps every requested bias
+  from zero in ``convergence_dv`` increments.
 - ``ramp_up_iters`` (``ChargeToleranceSpec``, default ``1``): number of
   iterations over which quantities such as doping are ramped up to their full
   values during start-up. Increasing it introduces doping more gradually, which
@@ -100,8 +104,11 @@ solver does not converge, work through these in order:
    also raise ``max_pseudo_steps``. A non-default ``max_pseudo_steps`` emits a
    warning about long runtimes and convergence; that warning is conservative and
    is expected in this case.
-#. **A high-bias point fails or oscillates.** Lower ``convergence_dv`` so the
-   solver approaches the target voltage in smaller bias steps.
+#. **A high-bias point in a sweep fails or oscillates.** Lower
+   ``convergence_dv`` so the solver approaches it through smaller intermediate
+   bias steps. For a single requested voltage ``convergence_dv`` has no
+   effect; turn the simulation into a sweep by adding intermediate voltages
+   instead.
 #. **Start-up is unstable on a heavily doped device.** Increase ``ramp_up_iters``
    so doping is introduced more gradually.
 #. **Only then, trade accuracy for runtime.** If the residual has stagnated above

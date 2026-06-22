@@ -130,10 +130,12 @@ class SteadyChargeDCAnalysis(Tidy3dBaseModel):
     convergence_dv: PositiveFloat = Field(
         default=1.0,
         title="Bias step.",
-        description="By default, a solution is computed at 0 bias. If a bias different than "
-        "0 is requested through a voltage source, the charge solver will start at 0 and increase bias "
-        "at `convergence_dv` intervals until the required bias is reached. This is, therefore, a "
-        "convergence parameter in DC computations.",
+        description="Maximum bias step used to aid convergence in DC computations. "
+        "The accelerated solver applies it only to multi-voltage sweeps: where the gap "
+        "between consecutive sweep voltages exceeds `convergence_dv`, intermediate "
+        "warm-start bias points are inserted (and excluded from the output); a "
+        "single-voltage simulation is solved directly. The legacy solver instead ramps "
+        "every requested bias from 0 in `convergence_dv` increments.",
     )
 
     fermi_dirac: bool = Field(

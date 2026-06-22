@@ -1011,6 +1011,50 @@ def test_freqs_validation():
     specific_voltage_sim = sim.updated_copy(analysis_spec=specific_voltage_spec)
     assert np.isclose(specific_voltage_sim.analysis_spec.at_voltages, [0, 2]).all()
 
+    mixed_source_sim = sim.updated_copy(
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+                condition=td.VoltageBC(
+                    source=td.SSACVoltageSource(voltage=np.array([0.5]), amplitude=1e-3)
+                ),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([0, 1, 2]))),
+            ),
+        ],
+        analysis_spec=isothermal_spec.updated_copy(at_voltages=np.array([1])),
+    )
+    assert np.isclose(mixed_source_sim.analysis_spec.at_voltages, [1]).all()
+
+    # All-scalar sources (no sweep): at_voltages validates against the SSAC
+    # operating point, regardless of source order in the boundary list.
+    scalar_bc_pair = [
+        td.HeatChargeBoundarySpec(
+            placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+            condition=td.VoltageBC(source=td.SSACVoltageSource(voltage=0.5, amplitude=1e-3)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.2)),
+        ),
+    ]
+    for boundary_spec in (scalar_bc_pair, scalar_bc_pair[::-1]):
+        no_sweep_sim = sim.updated_copy(
+            boundary_spec=boundary_spec,
+            analysis_spec=isothermal_spec.updated_copy(at_voltages=[0.5]),
+        )
+        assert np.isclose(no_sweep_sim.analysis_spec.at_voltages, [0.5]).all()
+        # Entries matching no SSAC operating point stay rejected (the other
+        # contact's fixed bias is not an AC bias point).
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(
+                boundary_spec=boundary_spec,
+                analysis_spec=isothermal_spec.updated_copy(at_voltages=[0.2]),
+            )
+        assert_single_value_error_loc(excinfo, ("analysis_spec", "at_voltages"), "Missing voltages")
+
     with pytest.raises(ValidationError) as excinfo:
         sim.updated_copy(analysis_spec=isothermal_spec.updated_copy(at_voltages=[3]))
     assert_single_value_error_loc(excinfo, ("analysis_spec", "at_voltages"), "Missing voltages")
@@ -1708,6 +1752,62 @@ def test_ssac_accepts_fermi_dirac():
         use_accelerated_solver=True,
     )
     assert dc_sim._resolve_use_accelerated_solver is True
+
+
+def test_only_one_voltage_array_across_source_types():
+    """A swept ``SSACVoltageSource`` and a swept ``DCVoltageSource`` cannot
+    coexist: both carry a DC sweep array, so accepting two would leave the
+    sweep selection ambiguous."""
+    metal_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    structures = [
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+            medium=metal_medium,
+            name="cathode",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(1, 1, 1), size=(2, 2, 2)),
+            medium=CHARGE_SIMULATION.intrinsic_Si,
+            name="silicon",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(2, 2, 2), size=(2, 2, 2)),
+            medium=metal_medium,
+            name="anode",
+        ),
+    ]
+    with pytest.raises(ValidationError, match="More than one voltage array"):
+        _ = td.HeatChargeSimulation(
+            size=(8, 8, 8),
+            center=(0, 0, 0),
+            structures=structures,
+            boundary_spec=[
+                td.HeatChargeBoundarySpec(
+                    placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+                    condition=td.VoltageBC(
+                        source=td.SSACVoltageSource(voltage=np.array([0, 1, 2]), amplitude=1e-3)
+                    ),
+                ),
+                td.HeatChargeBoundarySpec(
+                    placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                    condition=td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([0, 1]))),
+                ),
+            ],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.SteadyPotentialMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="voltage",
+                    unstructured=False,
+                )
+            ],
+            analysis_spec=td.IsothermalSSACAnalysis(temperature=300, freqs=[1e3, 1e4]),
+        )
 
 
 def test_non_charge_sim_always_accelerated(heat_simulation, conduction_simulation):
