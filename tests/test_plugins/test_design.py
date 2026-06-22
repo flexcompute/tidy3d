@@ -776,8 +776,13 @@ def test_result_real_cost(monkeypatch):
         "task_id_batch_low": 2.0,
         "task_id_batch_high": 3.0,
     }
+    requested_task_ids = []
 
-    monkeypatch.setattr(web, "real_cost", lambda task_id, verbose=True: task_costs.get(task_id))
+    def _fake_real_cost(task_id, verbose=True):
+        requested_task_ids.append(task_id)
+        return task_costs.get(task_id)
+
+    monkeypatch.setattr(web, "real_cost", _fake_real_cost)
 
     result = tdd.Result(
         dims=("x",),
@@ -785,14 +790,16 @@ def test_result_real_cost(monkeypatch):
         coords=((0.0,), (1.0,)),
         task_ids=[
             "task_id_direct",
+            None,
             {
-                "nested": ["task_id_nested_a", "task_id_nested_b"],
+                "nested": ["task_id_nested_a", None, "task_id_nested_b"],
                 "batch": {"low": "task_id_batch_low", "high": "task_id_batch_high"},
             },
         ],
     )
 
     assert result.real_cost == 6.75
+    assert None not in requested_task_ids
 
 
 def test_result_real_cost_none_without_task_ids():

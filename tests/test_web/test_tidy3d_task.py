@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 import responses
@@ -10,6 +11,7 @@ from responses import matchers
 import tidy3d as td
 from tidy3d import config
 from tidy3d.web.core import http_util
+from tidy3d.web.core.exceptions import WebError
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
 from tidy3d.web.core.types import PayType, TaskType
 
@@ -26,6 +28,24 @@ def make_sim():
         run_time=1e-12,
         sources=[pt_dipole],
     )
+
+
+def test_heat_parent_task_validation_rejects_non_mesh_parent(monkeypatch):
+    task = SimulationTask(taskId="heat-task", taskType=TaskType.HEAT.name)
+
+    def fake_get(task_id, **kwargs):
+        if task_id == "parent-task":
+            return SimpleNamespace(
+                task_type=TaskType.FDTD.name,
+                status="success",
+                childFileMd5="mesh-md5",
+            )
+        return SimpleNamespace(fileMd5="heat-md5")
+
+    monkeypatch.setattr(SimulationTask, "get", staticmethod(fake_get))
+
+    with pytest.raises(WebError, match="VolumeMesher"):
+        task.validate_post_upload(parent_tasks=["parent-task"])
 
 
 @pytest.fixture

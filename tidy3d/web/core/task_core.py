@@ -832,7 +832,7 @@ class SimulationTask(WebTask):
 
     def validate_post_upload(self, parent_tasks: list[str] | None = None) -> None:
         """Perform checks after task is uploaded and metadata is processed."""
-        if self.task_type == "HEAT_CHARGE" and parent_tasks:
+        if self.task_type in {"HEAT", "HEAT_CHARGE"} and parent_tasks:
             try:
                 if len(parent_tasks) > 1:
                     raise ValueError(
@@ -855,8 +855,8 @@ class SimulationTask(WebTask):
                     raise ValidationError(
                         format_chained_exception_message(
                             "The parent task must be a 'VolumeMesher' task which has been "
-                            "successfully run and is associated to the same "
-                            "'HeatChargeSimulation' as provided here.",
+                            "successfully run and is associated to the same simulation as "
+                            "provided here.",
                             e,
                         )
                     ) from e
@@ -972,11 +972,13 @@ class BatchTask(WebTask):
             The data protocol version. Defaults to the current version.
         worker_group : Optional[str], default=None
             Optional identifier for a specific worker group to run on.
+        priority : Optional[int], default=None
+            Priority of the batch in the vGPU queue, where 1 is lowest and 10 is highest.
         vgpu_allocation : Optional[int], default=None
-            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the batch (1, 2, 4, or 8).
         ignore_memory_limit : Optional[bool], default=None
-            If ``True``, allows the simulation to run even when estimated vGPU memory
-            exceeds the allocation limit (up to 2x the limit).
+            Not supported for batch tasks. Passing a non-``None`` value raises
+            :class:`NotImplementedError`.
         additional_payload : Optional[Union[dict[str, Any], str]], default=None
             Additional submit payload. Dict values are JSON-serialized and sent
             under ``additionalPayload``.
@@ -996,7 +998,8 @@ class BatchTask(WebTask):
             )
         if ignore_memory_limit is not None:
             raise NotImplementedError(
-                "The 'ignore_memory_limit' argument is not yet supported and will be ignored."
+                "The 'ignore_memory_limit' argument is not supported for batch tasks; remove it "
+                "before starting the batch."
             )
 
         if protocol_version is None:

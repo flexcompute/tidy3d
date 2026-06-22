@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from tidy3d.components.mode.mode_solver import ModeSolver
-    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
     from tidy3d.web.core.constants import TaskId
 
 CACHE_ARTIFACT_NAME = "simulation_data.hdf5"
@@ -609,7 +609,7 @@ class LocalCache:
 
     def try_fetch(
         self,
-        simulation: WorkflowType,
+        simulation: WorkflowOperationType,
         verbose: bool = False,
     ) -> CacheEntry | None:
         """
@@ -648,7 +648,7 @@ class LocalCache:
         task_id: TaskId,
         path: str,
         workflow_type: str,
-        simulation: WorkflowType | None = None,
+        simulation: WorkflowOperationType | None = None,
     ) -> bool:
         """
         Stores completed workflow results in the local cache using a canonical cache key.

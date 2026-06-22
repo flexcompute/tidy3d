@@ -26,12 +26,14 @@ from tests.utils import run_emulated
 from tidy3d import config
 from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.config import get_manager
+from tidy3d.exceptions import DataError
 from tidy3d.web import Job, common, run, run_async
+from tidy3d.web.api import task_api
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.autograd import autograd, io_utils
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
-from tidy3d.web.api.container import Batch, WebContainer
+from tidy3d.web.api.container import Batch, BatchData, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import (
     CACHE_ARTIFACT_NAME,
@@ -43,7 +45,8 @@ from tidy3d.web.cache import (
     resolve_local_cache,
 )
 from tidy3d.web.cli.app import tidy3d_cli
-from tidy3d.web.core.task_core import BatchTask, SimulationTask
+from tidy3d.web.core.task_core import BatchTask, SimulationTask, TaskFactory
+from tidy3d.web.core.types import TaskType
 
 common.CONNECTION_RETRY_TIME = 0.1
 
@@ -269,7 +272,7 @@ def _patch_run_pipeline(
                 for sim in sims.values():
                     if isinstance(sim, td.Simulation):
                         return sim
-            elif isinstance(sims, (list, tuple)):
+            elif isinstance(sims, list | tuple):
                 for sim in sims:
                     if isinstance(sim, td.Simulation):
                         return sim
@@ -311,6 +314,14 @@ def _patch_run_pipeline(
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
         path_obj.write_text("{}")
+        return sim
+
+    def _fake_load_simulation_via_tempfile(task_id):
+        sim = TASK_TO_SIM.get(task_id)
+        if sim is None:
+            sim = next(iter(PATH_TO_SIM.values()), None)
+        if sim is None:
+            raise RuntimeError(f"No simulation mapped for task_id {task_id}")
         return sim
 
     def _fake__check_folder(*args, **kwargs):
@@ -356,16 +367,37 @@ def _patch_run_pipeline(
         monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
         monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
         monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
+        monkeypatch.setattr(
+            io_utils, "_load_simulation_via_tempfile", _fake_load_simulation_via_tempfile
+        )
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
-    monkeypatch.setattr(web, "_upload", _fake_upload)
+    monkeypatch.setattr(web, "upload", _fake_upload)
+    monkeypatch.setattr(task_api, "upload", _fake_upload)
+    monkeypatch.setattr(task_api, "_upload", _fake_upload)
     monkeypatch.setattr(web, "start", _fake_start)
+    monkeypatch.setattr(task_api, "start", _fake_start)
     monkeypatch.setattr(web, "monitor", _fake_monitor)
+    monkeypatch.setattr(task_api, "monitor", _fake_monitor)
     monkeypatch.setattr(web, "download", _fake_download)
+    monkeypatch.setattr(task_api, "download", _fake_download)
     monkeypatch.setattr(web, "load_simulation", _fake_load_simulation)
+    monkeypatch.setattr(web, "_load_simulation_via_tempfile", _fake_load_simulation_via_tempfile)
+    monkeypatch.setattr(
+        task_api, "_load_simulation_via_tempfile", _fake_load_simulation_via_tempfile
+    )
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
+    monkeypatch.setattr(task_api, "estimate_cost", lambda *args, **kwargs: 0.0)
+    monkeypatch.setattr(task_api, "real_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
     monkeypatch.setattr(
         web,
+        "get_info",
+        lambda task_id, verbose=True: type(
+            "_Info", (), {"solverVersion": "solver-1", "taskType": task_type, "status": "success"}
+        )(),
+    )
+    monkeypatch.setattr(
+        task_api,
         "get_info",
         lambda task_id, verbose=True: type(
             "_Info", (), {"solverVersion": "solver-1", "taskType": task_type, "status": "success"}
@@ -684,6 +716,33 @@ def test_job_load_uses_default_path_on_cache_hit(monkeypatch, basic_simulation, 
     assert isinstance(data, _FakeStubData)
     assert counters["download"] == 0
     assert default_path.exists()
+
+
+def test_cached_job_task_id_without_server_id_raises(monkeypatch, basic_simulation, tmp_path):
+    def _fake_restore_simulation_if_cached(simulation, path, **kwargs):
+        Path(path).write_text("cached")
+        return path, None
+
+    monkeypatch.setattr(
+        task_api, "restore_simulation_if_cached", _fake_restore_simulation_if_cached
+    )
+
+    cached_job = Job(simulation=basic_simulation, task_name="cached-no-server-id", verbose=False)
+
+    assert cached_job.load_if_cached is True
+    with pytest.raises(DataError, match="no server task id"):
+        _ = cached_job.task_id
+    monkeypatch.setattr(
+        task_api,
+        "real_cost",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("real_cost should not be called without a server task id")
+        ),
+    )
+    assert cached_job.real_cost(verbose=False) is None
+    batch = Batch(simulations={"cached": basic_simulation}, verbose=False)
+    batch._cached_properties = {"jobs": {"cached": cached_job}}
+    assert batch.real_cost(verbose=False) is None
 
 
 def test_autograd_cache(monkeypatch, request, tmp_path):
@@ -1166,14 +1225,8 @@ def test_cache_key_includes_workflow_type():
     assert key_heat == key_heat2
 
 
-def test_volume_mesh_cache_no_collision_with_heat(tmp_path_factory):
-    """Storing a VOLUME_MESH result must not be returned when fetching a
-    HeatChargeSimulation that shares the same inner simulation.
-
-    Reproduces the notebook bug where web.run(sim, parent_tasks=[mesh_job.task_id])
-    returned VolumeMesherData instead of running the heat solver.
-    """
-    heat_sim = td.HeatChargeSimulation(
+def _make_heat_charge_simulation():
+    return td.HeatChargeSimulation(
         size=(3.0, 3.0, 3.0),
         medium=td.Medium(permittivity=1.0, heat_spec=td.FluidSpec()),
         structures=[
@@ -1198,6 +1251,16 @@ def test_volume_mesh_cache_no_collision_with_heat(tmp_path_factory):
             td.TemperatureMonitor(center=(0, 0, 0), size=(1, 1, 0), name="temp", unstructured=True),
         ],
     )
+
+
+def test_volume_mesh_cache_no_collision_with_heat(tmp_path_factory):
+    """Storing a VOLUME_MESH result must not be returned when fetching a
+    HeatChargeSimulation that shares the same inner simulation.
+
+    Reproduces the notebook bug where web.run(sim, parent_tasks=[mesh_job.task_id])
+    returned VolumeMesherData instead of running the heat solver.
+    """
+    heat_sim = _make_heat_charge_simulation()
 
     mesher = td.VolumeMesher(
         simulation=heat_sim,
@@ -1252,3 +1315,342 @@ def test_volume_mesh_cache_no_collision_with_heat(tmp_path_factory):
 
     entry_heat = cache.try_fetch(heat_sim)
     assert entry_heat is not None, "HEAT_CHARGE entry should be fetchable for HeatChargeSimulation"
+
+
+def test_multistep_mesh_step_load_seeds_real_cache(monkeypatch, tmp_path):
+    """A loaded mesh step should be reusable as a cached parent task."""
+    heat_sim = _make_heat_charge_simulation()
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    uploads = []
+    task_type_by_id = {}
+    operation_by_id = {}
+
+    def _task_type_for_operation(operation):
+        if isinstance(operation, td.VolumeMesher):
+            return TaskType.VOLUME_MESH.name
+        return TaskType.HEAT_CHARGE.name
+
+    def _fake_upload(**kwargs):
+        task_id = f"task-{len(uploads) + 1}"
+        operation = kwargs["simulation"]
+        uploads.append({"task_id": task_id, "kwargs": kwargs})
+        operation_by_id[task_id] = operation
+        task_type_by_id[task_id] = _task_type_for_operation(operation)
+        return task_id
+
+    class _FakeTask:
+        def __init__(self, task_id):
+            self.task_id = task_id
+            self.task_type = task_type_by_id[task_id]
+
+        def get_data_hdf5(self, to_file, **kwargs):
+            Path(to_file).write_text(f"payload:{self.task_id}")
+
+    class _FakeData:
+        def __init__(self, operation):
+            self.simulation = (
+                operation.simulation if isinstance(operation, td.VolumeMesher) else operation
+            )
+
+    def _fake_postprocess(path, lazy=False):
+        task_id = Path(path).read_text().split("payload:", 1)[1].strip()
+        return _FakeData(operation_by_id[task_id])
+
+    monkeypatch.setattr(WebContainer, "_check_folder", lambda *args, **kwargs: None)
+    monkeypatch.setattr(task_api, "upload", _fake_upload)
+    monkeypatch.setattr(task_api, "start", lambda *args, **kwargs: None)
+    monkeypatch.setattr(task_api, "monitor", lambda *args, **kwargs: None)
+    monkeypatch.setattr(task_api, "estimate_cost", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr(
+        task_api,
+        "get_info",
+        lambda task_id, **kwargs: SimpleNamespace(
+            taskType=task_type_by_id[task_id], status="success"
+        ),
+    )
+    monkeypatch.setattr(TaskFactory, "get", lambda task_id, **kwargs: _FakeTask(task_id))
+    monkeypatch.setattr(web.Tidy3dStubData, "postprocess", staticmethod(_fake_postprocess))
+
+    first_job = Job(simulation=heat_sim, task_name="first", folder_name="default", verbose=False)
+    first_job.step(path=tmp_path / "mesh.hdf5")
+    mesh_task_id = first_job.task_ids["mesh"]
+    mesh_entry = cache.try_fetch(first_job.steps[0].operation)
+    assert mesh_entry is not None
+    assert mesh_entry.metadata.task_id == mesh_task_id
+    assert cache.try_fetch(heat_sim) is None
+
+    uploads.clear()
+    second_job = Job(simulation=heat_sim, task_name="second", folder_name="default", verbose=False)
+    assert second_job.estimate_cost(verbose=False) == 1.0
+
+    assert len(uploads) == 1
+    assert uploads[0]["kwargs"]["parent_tasks"] == [mesh_task_id]
+    assert isinstance(uploads[0]["kwargs"]["simulation"], td.HeatChargeSimulation)
+    assert second_job.task_ids["mesh"] == mesh_task_id
+    assert second_job.state.owned_task_ids["mesh"] is False
+
+
+def test_standalone_volume_mesher_load_seeds_real_cache(monkeypatch, tmp_path):
+    """Standalone VolumeMesher loads should cache under the mesher operation."""
+    heat_sim = _make_heat_charge_simulation()
+    mesher = td.VolumeMesher(
+        simulation=heat_sim,
+        monitors=[
+            td.VolumeMeshMonitor(center=(0, 0, 0), size=(1, 1, 0), name="mesh"),
+        ],
+    )
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    uploads = []
+    operation_by_id = {}
+
+    def _fake_upload(**kwargs):
+        task_id = f"task-{len(uploads) + 1}"
+        uploads.append({"task_id": task_id, "kwargs": kwargs})
+        operation_by_id[task_id] = kwargs["simulation"]
+        return task_id
+
+    class _FakeTask:
+        task_type = TaskType.VOLUME_MESH.name
+
+        def __init__(self, task_id):
+            self.task_id = task_id
+
+        def get_data_hdf5(self, to_file, **kwargs):
+            Path(to_file).write_text(f"payload:{self.task_id}")
+
+    class _FakeVolumeMesherData:
+        def __init__(self, sim):
+            self.simulation = sim
+
+    def _fake_postprocess(path, lazy=False):
+        task_id = Path(path).read_text().split("payload:", 1)[1].strip()
+        operation = operation_by_id[task_id]
+        return _FakeVolumeMesherData(operation.simulation)
+
+    monkeypatch.setattr(WebContainer, "_check_folder", lambda *args, **kwargs: None)
+    monkeypatch.setattr(task_api, "upload", _fake_upload)
+    monkeypatch.setattr(task_api, "start", lambda *args, **kwargs: None)
+    monkeypatch.setattr(task_api, "monitor", lambda *args, **kwargs: None)
+    monkeypatch.setattr(task_api, "estimate_cost", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr(
+        task_api,
+        "get_info",
+        lambda task_id, **kwargs: SimpleNamespace(
+            taskType=TaskType.VOLUME_MESH.name, status="success"
+        ),
+    )
+    monkeypatch.setattr(TaskFactory, "get", lambda task_id, **kwargs: _FakeTask(task_id))
+    monkeypatch.setattr(web.Tidy3dStubData, "postprocess", staticmethod(_fake_postprocess))
+
+    job = Job(simulation=mesher, task_name="mesh", folder_name="default", verbose=False)
+    job.run(path=tmp_path / "mesh.hdf5")
+
+    mesh_entry = cache.try_fetch(mesher)
+    assert mesh_entry is not None
+    assert mesh_entry.metadata.task_id == uploads[0]["task_id"]
+    assert cache.try_fetch(heat_sim) is None
+
+
+def test_batch_data_volume_mesher_load_seeds_real_cache_without_lookup(monkeypatch, tmp_path):
+    """BatchData.load_sim_data should keep the VolumeMesher cache key without a lookup."""
+    heat_sim = _make_heat_charge_simulation()
+    mesher = td.VolumeMesher(
+        simulation=heat_sim,
+        monitors=[
+            td.VolumeMeshMonitor(center=(0, 0, 0), size=(1, 1, 0), name="mesh"),
+        ],
+    )
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    task_id = "batch-mesh-task"
+    result_path = tmp_path / "batch_mesh.hdf5"
+    result_path.write_text(f"payload:{task_id}")
+
+    class _FakeVolumeMesherData:
+        def __init__(self, sim):
+            self.simulation = sim
+
+    def _unexpected_lookup(*args, **kwargs):
+        raise AssertionError("BatchData local load should not fetch task metadata.")
+
+    monkeypatch.setattr(task_api, "get_info", _unexpected_lookup)
+    monkeypatch.setattr(TaskFactory, "get", _unexpected_lookup)
+    monkeypatch.setattr(
+        web.Tidy3dStubData,
+        "postprocess",
+        staticmethod(lambda path, lazy=False: _FakeVolumeMesherData(heat_sim)),
+    )
+
+    batch_data = BatchData(
+        task_paths={"mesh": str(result_path)},
+        task_ids={"mesh": task_id},
+        cached_tasks={"mesh": False},
+        is_downloaded=True,
+        verbose=False,
+    )
+    batch_data._cache_simulations = {"mesh": mesher}
+    batch_data._cacheable_tasks = {"mesh": True}
+
+    batch_data.load_sim_data("mesh")
+
+    mesh_entry = cache.try_fetch(mesher)
+    assert mesh_entry is not None
+    assert mesh_entry.metadata.task_id == task_id
+    assert cache.try_fetch(heat_sim) is None
+
+
+def test_raw_local_path_load_skips_cache_when_no_task_id(monkeypatch, tmp_path):
+    """Unchecked local files should load without fetching metadata to seed the cache."""
+    heat_sim = _make_heat_charge_simulation()
+    mesher = td.VolumeMesher(
+        simulation=heat_sim,
+        monitors=[
+            td.VolumeMeshMonitor(center=(0, 0, 0), size=(1, 1, 0), name="mesh"),
+        ],
+    )
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    task_id = "raw-mesh-task"
+    result_path = tmp_path / "raw_mesh.hdf5"
+    result_path.write_text(f"payload:{task_id}")
+
+    class _FakeVolumeMesherData:
+        def __init__(self, sim):
+            self.simulation = sim
+
+    def _unexpected_lookup(*args, **kwargs):
+        raise AssertionError("Explicit-path load should not fetch task metadata.")
+
+    monkeypatch.setattr(task_api, "get_info", _unexpected_lookup)
+    monkeypatch.setattr(
+        task_api.Tidy3dStubData,
+        "postprocess",
+        staticmethod(lambda path, lazy=False: _FakeVolumeMesherData(heat_sim)),
+    )
+    monkeypatch.setattr(task_api, "_load_simulation_via_tempfile", _unexpected_lookup)
+
+    task_api.load(task_id=None, path=result_path, replace_existing=False, verbose=False)
+
+    mesh_entry = cache.try_fetch(mesher)
+    assert mesh_entry is None
+    assert cache.try_fetch(heat_sim) is None
+
+
+def test_lazy_load_with_cache_simulation_stores_without_tempfile(monkeypatch, tmp_path):
+    """Known cache_simulation should seed cache even if lazy simulation fetch would fail."""
+    heat_sim = _make_heat_charge_simulation()
+    mesher = td.VolumeMesher(
+        simulation=heat_sim,
+        monitors=[
+            td.VolumeMeshMonitor(center=(0, 0, 0), size=(1, 1, 0), name="mesh"),
+        ],
+    )
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    task_id = "lazy-mesh-task"
+    result_path = tmp_path / "lazy_mesh.hdf5"
+
+    class _FakeLazyVolumeMesherData:
+        def __init__(self, sim):
+            self.simulation = sim
+
+    class _FakeTask:
+        task_type = TaskType.VOLUME_MESH.name
+        status = "success"
+
+        @staticmethod
+        def get_data_hdf5(to_file, **kwargs):
+            Path(to_file).write_text(f"payload:{task_id}")
+
+    def _unexpected_tempfile_load(task_id):
+        raise AssertionError("cache_simulation should avoid tempfile simulation loading")
+
+    monkeypatch.setattr(TaskFactory, "get", lambda *args, **kwargs: _FakeTask())
+    monkeypatch.setattr(
+        task_api,
+        "get_info",
+        lambda task_id, **kwargs: SimpleNamespace(
+            taskType=TaskType.VOLUME_MESH.name, status="success"
+        ),
+    )
+    monkeypatch.setattr(
+        task_api.Tidy3dStubData,
+        "postprocess",
+        staticmethod(lambda path, lazy=False: _FakeLazyVolumeMesherData(heat_sim)),
+    )
+    monkeypatch.setattr(task_api, "_load_simulation_via_tempfile", _unexpected_tempfile_load)
+
+    task_api.load(
+        task_id=task_id,
+        path=result_path,
+        replace_existing=True,
+        verbose=False,
+        lazy=True,
+        cache_simulation=mesher,
+    )
+
+    mesh_entry = cache.try_fetch(mesher)
+    assert mesh_entry is not None
+    assert mesh_entry.metadata.task_id == task_id
+    assert cache.try_fetch(heat_sim) is None
+
+
+def test_lazy_load_tempfile_failure_skips_cache_store(monkeypatch, tmp_path):
+    """Lazy loads should not fall back to stub_data.simulation when simulation fetch fails."""
+    task_id = "lazy-cache-skip-task"
+    result_path = tmp_path / "lazy_skip.hdf5"
+    store_calls = []
+
+    class _FakeLazyData:
+        @property
+        def simulation(self):
+            raise AssertionError("lazy cache fallback should not access stub_data.simulation")
+
+    class _FakeTask:
+        task_type = TaskType.FDTD.name
+        status = "success"
+
+        @staticmethod
+        def get_data_hdf5(to_file, **kwargs):
+            Path(to_file).write_text(f"payload:{task_id}")
+
+    class _FakeCache:
+        def store_result(self, **kwargs):
+            store_calls.append(kwargs)
+            raise AssertionError("lazy tempfile failure should skip cache storage")
+
+    monkeypatch.setattr(TaskFactory, "get", lambda *args, **kwargs: _FakeTask())
+    monkeypatch.setattr(
+        task_api,
+        "get_info",
+        lambda task_id, **kwargs: SimpleNamespace(taskType=TaskType.FDTD.name, status="success"),
+    )
+    monkeypatch.setattr(
+        task_api.Tidy3dStubData,
+        "postprocess",
+        staticmethod(lambda path, lazy=False: _FakeLazyData()),
+    )
+    monkeypatch.setattr(
+        task_api,
+        "_load_simulation_via_tempfile",
+        lambda task_id: (_ for _ in ()).throw(RuntimeError("simulation unavailable")),
+    )
+    monkeypatch.setattr(task_api, "resolve_local_cache", lambda *args, **kwargs: _FakeCache())
+
+    data = task_api.load(
+        task_id=task_id,
+        path=result_path,
+        replace_existing=True,
+        verbose=False,
+        lazy=True,
+    )
+
+    assert isinstance(data, _FakeLazyData)
+    assert store_calls == []

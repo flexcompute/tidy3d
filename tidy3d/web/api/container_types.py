@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import TypeAliasType
 
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
 
 if TYPE_CHECKING:
     pass
@@ -18,7 +18,7 @@ BatchTaskTree = TypeAliasType(
 
 BatchInput = TypeAliasType(
     "BatchInput",
-    WorkflowType | list["BatchInput"] | tuple["BatchInput", ...] | dict[str, "BatchInput"],
+    WorkflowOperationType | list["BatchInput"] | tuple["BatchInput", ...] | dict[str, "BatchInput"],
 )
 BatchOutput = TypeAliasType(
     "BatchOutput",

@@ -11,14 +11,16 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Literal
 
-    from tidy3d.components.types.workflow import WorkflowType
+    from tidy3d.components.types.workflow import WorkflowOperationType
     from tidy3d.web.core.types import PayType
 
     from .container import BatchData
 
 
 def run_async(
-    simulations: dict[str, WorkflowType] | tuple[WorkflowType] | list[WorkflowType],
+    simulations: dict[str, WorkflowOperationType]
+    | tuple[WorkflowOperationType]
+    | list[WorkflowOperationType],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
     callback_url: str | None = None,

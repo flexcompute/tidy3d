@@ -1,6 +1,9 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 import responses
 from botocore.exceptions import ClientError
@@ -9,8 +12,9 @@ from responses import matchers
 import tidy3d as td
 from tidy3d import HeatSimulation
 from tidy3d import config as td_config
+from tidy3d.exceptions import DataError
 from tidy3d.web.api.asynchronous import run_async
-from tidy3d.web.api.container import Batch, Job
+from tidy3d.web.api.container import Batch, Job, WebContainer
 from tidy3d.web.api.webapi import (
     abort,
     download_json,
@@ -239,10 +243,67 @@ def mock_webapi(
     """Mocks all webapi operation."""
 
 
+@pytest.fixture
+def mock_heat_workflow_api(monkeypatch):
+    """Mock the two-step HeatSimulation workflow API calls."""
+    calls = {
+        "upload": [],
+        "start": [],
+        "monitor": [],
+        "download": [],
+        "load": [],
+        "delete": [],
+    }
+
+    monkeypatch.setattr(WebContainer, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.restore_simulation_if_cached",
+        lambda *args, **kwargs: (None, None),
+    )
+
+    def fake_upload_task(*args, **kwargs):
+        task_id = f"task-{len(calls['upload']) + 1}"
+        calls["upload"].append({"task_id": task_id, "kwargs": kwargs})
+        return task_id
+
+    def fake_start_task(task_id, **kwargs):
+        calls["start"].append({"task_id": task_id, "kwargs": kwargs})
+
+    def fake_monitor_task(task_id, **kwargs):
+        calls["monitor"].append({"task_id": task_id, "kwargs": kwargs})
+
+    def fake_download_task(task_id, path, **kwargs):
+        calls["download"].append({"task_id": task_id, "path": str(path), "kwargs": kwargs})
+        Path(path).touch()
+
+    def fake_load_task(task_id=None, path="simulation_data.hdf5", **kwargs):
+        calls["load"].append({"task_id": task_id, "path": str(path), "kwargs": kwargs})
+        return {"task_id": task_id, "path": str(path)}
+
+    def fake_delete_task(task_id, **kwargs):
+        calls["delete"].append(task_id)
+
+    monkeypatch.setattr("tidy3d.web.api.task_api.upload", fake_upload_task)
+    monkeypatch.setattr("tidy3d.web.api.task_api.start", fake_start_task)
+    monkeypatch.setattr("tidy3d.web.api.task_api.monitor", fake_monitor_task)
+    monkeypatch.setattr("tidy3d.web.api.task_api.download", fake_download_task)
+    monkeypatch.setattr("tidy3d.web.api.task_api.load", fake_load_task)
+    monkeypatch.setattr("tidy3d.web.api.task_api.delete", fake_delete_task)
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.get_info",
+        lambda task_id, **kwargs: SimpleNamespace(status="success"),
+    )
+    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", lambda *a, **k: EST_FLEX_UNIT)
+    monkeypatch.setattr("tidy3d.web.api.task_api.real_cost", lambda *a, **k: FLEX_UNIT)
+
+    return calls
+
+
 @responses.activate
 def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_heat_sim()
-    assert upload(sim, TASK_NAME, PROJECT_NAME)
+    with pytest.raises(DataError, match=r"web.run\(\).*web.Job"):
+        upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
@@ -290,15 +351,18 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
 
 
 @responses.activate
-def test_run(mock_webapi, monkeypatch, tmp_path):
+def test_run(mock_heat_workflow_api, tmp_path):
     sim = make_heat_sim()
-    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
-    assert run(
+    data = run(
         sim,
         task_name=TASK_NAME,
         folder_name=PROJECT_NAME,
         path=str(tmp_path / "web_test_tmp.json"),
     )
+    assert data["task_id"] == "task-2"
+    assert len(mock_heat_workflow_api["upload"]) == 2
+    assert mock_heat_workflow_api["upload"][0]["kwargs"]["parent_tasks"] is None
+    assert mock_heat_workflow_api["upload"][1]["kwargs"]["parent_tasks"] == ["task-1"]
 
 
 @responses.activate
@@ -324,17 +388,16 @@ def test_abort_task(set_api_key, mock_get_info):
 
 
 @responses.activate
-def test_job(mock_webapi, monkeypatch, tmp_path):
-    monkeypatch.setattr("tidy3d.web.api.container.Job.load", lambda *args, **kwargs: True)
+def test_job(mock_heat_workflow_api, tmp_path):
     sim = make_heat_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
     _ = j.run(path=str(tmp_path / "web_test_tmp.json"))
-    _ = j.status
-    j.estimate_cost()
-    # j.download
-    _ = j.delete
-    assert j.real_cost() == FLEX_UNIT
+    assert j.status == "success"
+    assert j.estimate_cost() == 0.0
+    j.delete()
+    assert set(mock_heat_workflow_api["delete"]) == set(j.task_ids.values())
+    assert j.real_cost() == 2 * FLEX_UNIT
 
 
 @pytest.fixture
@@ -344,22 +407,24 @@ def mock_job_status(monkeypatch):
 
 
 @responses.activate
-def test_batch(mock_webapi, mock_job_status, tmp_path):
+def test_batch(mock_heat_workflow_api, tmp_path):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
     sims = {TASK_NAME: make_heat_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
-    b.estimate_cost()
+    assert b.estimate_cost(verbose=False) == EST_FLEX_UNIT * len(sims)
     _ = b.run(path_dir=str(tmp_path))
-    assert b.real_cost() == FLEX_UNIT * len(sims)
+    assert b.real_cost() == 2 * FLEX_UNIT * len(sims)
 
 
 """ Async """
 
 
 @responses.activate
-def test_async(mock_webapi, mock_job_status, tmp_path):
+def test_async(mock_heat_workflow_api, tmp_path):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_heat_sim()}
     _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=str(tmp_path))
+    assert len(mock_heat_workflow_api["upload"]) == 2
+    assert mock_heat_workflow_api["upload"][1]["kwargs"]["parent_tasks"] == ["task-1"]

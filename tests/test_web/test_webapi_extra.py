@@ -5,6 +5,7 @@ from datetime import datetime
 import pytest
 import responses
 
+from tidy3d.web.api import task_api
 from tidy3d.web.api.webapi import delete, get_info, get_tasks, real_cost, start
 
 
@@ -88,4 +89,5 @@ def test_real_cost_no_flex_unit(monkeypatch):
         taskType = "FDTD"
 
     monkeypatch.setattr("tidy3d.web.api.webapi.get_info", lambda *args, **kwargs: MockTaskInfo())
+    monkeypatch.setattr(task_api, "get_info", lambda *args, **kwargs: MockTaskInfo())
     assert real_cost("task_id") is None

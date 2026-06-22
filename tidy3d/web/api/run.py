@@ -4,7 +4,7 @@ import typing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
 from tidy3d.config import config
 from tidy3d.log import get_logging_console
 from tidy3d.web.api.autograd.autograd import run as run_autograd
@@ -21,7 +21,10 @@ if TYPE_CHECKING:
     from tidy3d.web.core.types import PayType
 
 RunInput: typing.TypeAlias = (
-    WorkflowType | list["RunInput"] | tuple["RunInput", ...] | dict[typing.Hashable, "RunInput"]
+    WorkflowOperationType
+    | list["RunInput"]
+    | tuple["RunInput", ...]
+    | dict[typing.Hashable, "RunInput"]
 )
 
 RunOutput: typing.TypeAlias = (
@@ -35,21 +38,21 @@ RunOutput: typing.TypeAlias = (
 def _validate_run_mapping_key(key: object) -> None:
     """Reject unhashable keys and simulation objects in run containers."""
     validate_mapping_key(key)
-    if isinstance(key, WorkflowType):
+    if isinstance(key, WorkflowOperationType):
         raise ValueError("Dict keys must not be simulations.")
 
 
 def _collect_by_hash(
     node: RunInput,
-) -> dict[str, WorkflowType]:
+) -> dict[str, WorkflowOperationType]:
     """Traverses the structure and collects all simulations into a `{hash: sim}` mapping.
     The latest occurrence of the same hash overwrites the previous one — which is fine
     since identical objects share the same hash."""
     return typing.cast(
-        dict[str, WorkflowType],
+        dict[str, WorkflowOperationType],
         flatten_container(
             node,
-            is_leaf=lambda value: isinstance(value, WorkflowType),
+            is_leaf=lambda value: isinstance(value, WorkflowOperationType),
             validate_dict_key=_validate_run_mapping_key,
             leaf_id=lambda _path, simulation: simulation._hash_self(),
         ),
@@ -66,7 +69,7 @@ def _reconstruct_by_hash(node: RunInput, h2data: dict[str, WorkflowDataType]) ->
     seen = set()
 
     def _recur(item: RunInput) -> RunOutput:
-        if isinstance(item, WorkflowType):
+        if isinstance(item, WorkflowOperationType):
             hash_value = item._hash_self()
             data = h2data[hash_value]
             if hash_value in seen:

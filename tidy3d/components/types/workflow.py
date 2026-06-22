@@ -14,5 +14,6 @@ from tidy3d.plugins.smatrix.data.terminal import (
     TerminalComponentModelerData,
 )
 
-WorkflowType = SimulationType | ModalComponentModeler | TerminalComponentModeler
+WorkflowOperationType = SimulationType | ModalComponentModeler | TerminalComponentModeler
+WorkflowType = WorkflowOperationType
 WorkflowDataType = SimulationDataType | ModalComponentModelerData | TerminalComponentModelerData

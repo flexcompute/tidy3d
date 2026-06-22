@@ -37,6 +37,7 @@ FILE_SIZE_GB = 4.0
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
+task_api_path = "tidy3d.web.api.task_api"
 
 f, AX = plt.subplots()
 
@@ -358,6 +359,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
 def test_run(mock_webapi, monkeypatch, tmp_path, unique_project_name):
     sim = make_mode_sim()
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr(f"{task_api_path}.load", lambda *args, **kwargs: True)
     assert run(
         sim,
         task_name=TASK_NAME,
@@ -413,6 +415,7 @@ def test_batch(mock_webapi, mock_job_status, tmp_path, monkeypatch, unique_proje
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr(f"{task_api_path}.load", lambda *args, **kwargs: True)
 
     sims = {TASK_NAME: make_mode_sim()}
     b = Batch(simulations=sims, folder_name=unique_project_name)
@@ -428,6 +431,7 @@ def test_batch(mock_webapi, mock_job_status, tmp_path, monkeypatch, unique_proje
 def test_async(mock_webapi, mock_job_status, monkeypatch, tmp_path, unique_project_name):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr(f"{task_api_path}.load", lambda *args, **kwargs: True)
 
     sims = {TASK_NAME: make_mode_sim()}
     _ = run_async(sims, folder_name=unique_project_name, path_dir=str(tmp_path))
@@ -459,6 +463,7 @@ def test_patch_data(mock_webapi, monkeypatch, tmp_path, unique_project_name):
     sim, data_local, data_remote = get_sim_and_data()
 
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: data_remote)
+    monkeypatch.setattr(f"{task_api_path}.load", lambda *args, **kwargs: data_remote)
 
     result = run(
         sim,

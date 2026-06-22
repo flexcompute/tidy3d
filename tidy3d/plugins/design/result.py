@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 # NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
 
-TaskIdMetadata = TaskId | list[TaskId] | dict[str, Any]
+TaskIdMetadata = TaskId | None | list[TaskId | None] | dict[str, Any]
 
 
 class Result(Tidy3dBaseModel):
@@ -163,7 +163,7 @@ class Result(Tidy3dBaseModel):
             return tuple(value.keys())
 
         # if array-like, ith output has key "output {i}"
-        if isinstance(value, (tuple, list, np.ndarray)):
+        if isinstance(value, tuple | list | np.ndarray):
             return tuple(f"output_{i}" for i in range(len(value)))
 
         # if simply single value (float, int, bool, etc) just label "output"
@@ -200,6 +200,9 @@ class Result(Tidy3dBaseModel):
     def _iter_task_ids(task_info: Any) -> Iterator[TaskId]:
         """Yield task ids from a nested result metadata container."""
 
+        if task_info is None:
+            return
+
         if isinstance(task_info, str):
             yield task_info
             return
@@ -209,7 +212,7 @@ class Result(Tidy3dBaseModel):
                 yield from Result._iter_task_ids(value)
             return
 
-        if isinstance(task_info, (list, tuple)):
+        if isinstance(task_info, list | tuple):
             for value in task_info:
                 yield from Result._iter_task_ids(value)
 

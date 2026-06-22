@@ -19,7 +19,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 from tidy3d.plugins.smatrix.component_modelers.modal import (
     ModalComponentModeler,
@@ -53,7 +53,7 @@ TYPE_MAP: dict[type, TaskType] = {
 }
 
 
-def task_type_name_of(simulation: WorkflowType) -> str:
+def task_type_name_of(simulation: WorkflowOperationType) -> str:
     for cls, ttype in TYPE_MAP.items():
         if isinstance(simulation, cls):
             return ttype.name
@@ -61,21 +61,21 @@ def task_type_name_of(simulation: WorkflowType) -> str:
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: WorkflowType = Field(discriminator="type")
+    simulation: WorkflowOperationType = Field(discriminator="type")
 
     @classmethod
-    def from_file(cls, file_path: PathLike) -> WorkflowType:
-        """Loads a ``WorkflowType`` instance from .yaml, .json, or .hdf5 file.
+    def from_file(cls, file_path: PathLike) -> WorkflowOperationType:
+        """Loads a ``WorkflowOperationType`` instance from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the
-            ``WorkflowType`` from.
+            ``WorkflowOperationType`` from.
 
         Returns
         -------
-        WorkflowType
+        WorkflowOperationType
             An instance of the component class calling ``load``.
         """
         return Tidy3dBaseModel.from_file(file_path)
@@ -84,22 +84,22 @@ class Tidy3dStub(BaseModel, TaskStub):
         self,
         file_path: PathLike,
     ) -> None:
-        """Exports ``WorkflowType`` instance to .yaml, .json, or .hdf5 file
+        """Exports ``WorkflowOperationType`` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         file_path : PathLike
-            Full path to the .yaml or .json or .hdf5 file to save the ``WorkflowType`` to.
+            Full path to the .yaml or .json or .hdf5 file to save the ``WorkflowOperationType`` to.
         """
         self.simulation.to_file(file_path)
 
     def to_hdf5_gz(self, fname: PathLike) -> None:
-        """Exports ``WorkflowType`` instance to .hdf5.gz file.
+        """Exports ``WorkflowOperationType`` instance to .hdf5.gz file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .hdf5.gz file to save the ``WorkflowType`` to.
+            Full path to the .hdf5.gz file to save the ``WorkflowOperationType`` to.
         """
 
         self.simulation.to_hdf5_gz(fname)

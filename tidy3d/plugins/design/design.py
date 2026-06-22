@@ -11,7 +11,7 @@ from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.container import Batch, Job
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from tidy3d.log import Console
     from tidy3d.web.api.container import BatchData
 
-WORKFLOW_TYPES = get_args(WorkflowType)
+WORKFLOW_TYPES = get_args(WorkflowOperationType)
 WORKFLOW_DATA_TYPES = get_args(WorkflowDataType)
 
 
@@ -209,7 +209,7 @@ class DesignSpace(Tidy3dBaseModel):
         The ``fn`` function must take a dictionary input - this can be stored a dictionary ``def example_fn(**params)``
         or left as keyword arguments ``def example_fn(arg1, arg2)`` where the keywords correspond to the ``name`` of the parameters in the design space.
 
-        If used as a pre function, the output of ``fn`` must be a float, a ``WorkflowType`` (for example ``Simulation``, ``ModeSimulation``, ``EMESimulation``),
+        If used as a pre function, the output of ``fn`` must be a float, a ``WorkflowOperationType`` (for example ``Simulation``, ``ModeSimulation``, ``EMESimulation``),
         a ``Batch``, list, or dict. Supplied ``Batch`` objects are run without modification and are run in series. A list or dict of workflow objects is flattened
         into a single ``Batch`` to enable parallel computation on the cloud. The original structure is then restored for output; all workflow objects are replaced by their corresponding data objects.
         Example pre return formats and associated post inputs can be seen in the table below.
@@ -661,7 +661,10 @@ class DesignSpace(Tidy3dBaseModel):
 
     def run_batch(
         self,
-        fn_pre: Callable[Any, WorkflowType | list[WorkflowType] | dict[str, WorkflowType]],
+        fn_pre: Callable[
+            Any,
+            WorkflowOperationType | list[WorkflowOperationType] | dict[str, WorkflowOperationType],
+        ],
         fn_post: Callable[
             WorkflowDataType | list[WorkflowDataType] | dict[str, WorkflowDataType], Any
         ],
@@ -691,7 +694,7 @@ class DesignSpace(Tidy3dBaseModel):
     def estimate_cost(self, fn_pre: Callable) -> float:
         """Compute the maximum FlexCredit charge for the ``DesignSpace.run`` computation.
 
-        Require a pre function that should return a ``WorkflowType`` object, a ``Batch`` object, or collection of either.
+        Require a pre function that should return a ``WorkflowOperationType`` object, a ``Batch`` object, or collection of either.
         The pre function is called to estimate the cost - complicated pre functions may cause long runtimes. The cost per
         iteration is multiplied by the theoretical maximum number of iterations to give the maximum cost.
 
@@ -699,7 +702,7 @@ class DesignSpace(Tidy3dBaseModel):
         ----------
         fn_pre : Callable
             Function accepting arguments that correspond to the ``name`` fields
-            of the ``DesignSpace.parameters``. Should return a ``WorkflowType`` or ``Batch`` object, or a
+            of the ``DesignSpace.parameters``. Should return a ``WorkflowOperationType`` or ``Batch`` object, or a
             top-level ``list`` / nested ``dict`` tree of these objects.
 
         Returns
@@ -716,7 +719,7 @@ class DesignSpace(Tidy3dBaseModel):
         # Compute fn_pre
         pre_out = fn_pre(**arg_dict)
 
-        def _estimate_sim_cost(workflow: WorkflowType) -> float:
+        def _estimate_sim_cost(workflow: WorkflowOperationType) -> float:
             job = Job(simulation=workflow, task_name="estimate_cost")
 
             estimate = job.estimate_cost()

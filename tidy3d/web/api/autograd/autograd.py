@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
     from tidy3d.web.api.container import BatchData
     from tidy3d.web.core.types import PayType
 
@@ -299,7 +299,7 @@ def verify_custom_vjp(
 
 
 def run_custom(
-    simulation: WorkflowType,
+    simulation: WorkflowOperationType,
     task_name: str | None = None,
     folder_name: str = "default",
     path: PathLike | None = None,
@@ -919,7 +919,7 @@ def run_async_custom(
 
 
 def run(
-    simulation: WorkflowType,
+    simulation: WorkflowOperationType,
     task_name: str | None = None,
     folder_name: str = "default",
     path: PathLike | None = None,

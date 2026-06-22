@@ -35,6 +35,7 @@ FILE_SIZE_GB = 4.0
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
+task_api_path = "tidy3d.web.api.task_api"
 
 
 def make_mode_sim():
@@ -353,6 +354,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
 def test_run(mock_webapi, monkeypatch, tmp_path, unique_project_name):
     sim = make_mode_sim()
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr(f"{task_api_path}.load", lambda *args, **kwargs: True)
     assert run(
         sim,
         task_name=TASK_NAME,
