@@ -1338,6 +1338,11 @@ def test_fixed_angle_tfsf_rejects_sidewall_surface_bc():
     legacy_tfsf = _make_fixed_angle_tfsf(angular_spec=td.FixedInPlaneKSpec())
     legacy_sim = _make_fixed_angle_sim([legacy_tfsf], structures=[layer])
     legacy_sim._validate_tfsf_structure_intersections()
+    # A penetrable lossy metal is a regular medium, not a surface BC, so a
+    # fixed-angle TFSF sidewall may intersect it.
+    penetrable_layer = layer.updated_copy(medium=metal.updated_copy(penetrable=True))
+    penetrable_sim = _make_fixed_angle_sim([tfsf], structures=[penetrable_layer])
+    penetrable_sim._validate_tfsf_structure_intersections()
 
 
 def test_fixed_angle_tfsf_normal_incidence_warns():

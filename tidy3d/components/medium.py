@@ -5867,7 +5867,8 @@ class LossyMetalMedium(Medium):
         None,
         title="Surface Roughness Model",
         description="Surface roughness model that applies a frequency-dependent scaling "
-        "factor to surface impedance.",
+        "factor to surface impedance. Takes effect only when ``penetrable=False`` and "
+        "``Simulation.subpixel.lossy_metal`` is ``SurfaceImpedance``.",
         discriminator=TYPE_TAG_STR,
     )
 
@@ -5875,7 +5876,9 @@ class LossyMetalMedium(Medium):
         None,
         title="Conductor Thickness",
         description="When the thickness of the conductor is not much greater than skin depth, "
-        "1D transmission line model is applied to compute the surface impedance of the thin conductor.",
+        "1D transmission line model is applied to compute the surface impedance of the thin conductor. "
+        "Takes effect only when ``penetrable=False`` and ``Simulation.subpixel.lossy_metal`` is "
+        "``SurfaceImpedance``.",
         json_schema_extra={"units": MICROMETER},
     )
 
@@ -5889,7 +5892,18 @@ class LossyMetalMedium(Medium):
         default_factory=SurfaceImpedanceFitterParam,
         title="Fitting Parameters For Surface Impedance",
         description="Parameters for fitting surface impedance divided by (-1j * omega) over "
-        "the frequency range using pole-residue pair model.",
+        "the frequency range using pole-residue pair model. Takes effect only when "
+        "``penetrable=False`` and ``Simulation.subpixel.lossy_metal`` is ``SurfaceImpedance``.",
+    )
+
+    penetrable: bool = Field(
+        False,
+        title="Penetrable",
+        description="If ``True``, the metal is solved as a regular conductive medium with the "
+        "given ``conductivity`` (and ``permittivity = 1``), and subpixel averaging on this "
+        "material follows ``Simulation.subpixel.dielectric``. If ``False`` (default), the metal "
+        "uses the lossy-metal handling selected by ``Simulation.subpixel.lossy_metal`` (e.g. a "
+        "surface impedance boundary condition).",
     )
 
     @field_validator("frequency_range")
@@ -5906,7 +5920,7 @@ class LossyMetalMedium(Medium):
     @cached_property
     def is_pec_like(self) -> bool:
         """Whether the medium is treated as a PEC medium in surface monitors."""
-        return True
+        return not self.penetrable
 
     @cached_property
     def _fitting_result(self) -> tuple[PoleResidue, float]:

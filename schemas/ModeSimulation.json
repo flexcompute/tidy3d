@@ -7392,6 +7392,10 @@
           ],
           "default": null
         },
+        "penetrable": {
+          "default": false,
+          "type": "boolean"
+        },
         "permittivity": {
           "const": 1.0,
           "default": 1.0,

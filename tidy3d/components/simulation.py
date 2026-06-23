@@ -5161,7 +5161,8 @@ class Simulation(AbstractYeeGridSimulation):
                 )
                 if len(bounds) == 0:
                     self._raise_validation_error_at_loc(
-                        f"Surface monitor {mnt.name} does not cross any PEC or LossyMetalMedium structures.",
+                        f"Surface monitor {mnt.name} does not cross any PEC or lossy metal "
+                        "(LossyMetalMedium with penetrable=False) surface.",
                         "monitors",
                         monitor_ind,
                     )
@@ -6453,7 +6454,11 @@ class Simulation(AbstractYeeGridSimulation):
                     # constant-in-plane-k TFSF supports them. Move the structure fully
                     # inside the box, or switch the source to ``FixedInPlaneKSpec``.
                     if isinstance(source.angular_spec, FixedAngleSpec) and any(
-                        isinstance(struct.medium, LossyMetalMedium | PECMedium | PMCMedium)
+                        isinstance(struct.medium, PECMedium | PMCMedium)
+                        or (
+                            isinstance(struct.medium, LossyMetalMedium)
+                            and not struct.medium.penetrable
+                        )
                         for struct in intersecting_structs
                     ):
                         self._raise_validation_error_at_loc(
@@ -7223,7 +7228,11 @@ class Simulation(AbstractYeeGridSimulation):
             )
             or len(self.internal_absorbers) > 0
         )
-        contain_sibc_structures = any(isinstance(medium, LossyMetalMedium) for medium in mediums)
+        # A penetrable lossy metal is solved as a regular medium, so it does not impose the
+        # SIBC courant restriction.
+        contain_sibc_structures = any(
+            isinstance(medium, LossyMetalMedium) and not medium.penetrable for medium in mediums
+        )
         return self.courant * self._subpixel.courant_ratio(
             contain_pec_structures=contain_pec_structures,
             contain_sibc_structures=contain_sibc_structures,

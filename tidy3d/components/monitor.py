@@ -2562,8 +2562,8 @@ class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
 
         :class:`SurfaceFieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of
         frequencies to perform the calculation "in-place" with the time stepping. These monitors are designed
-        to record fields on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) surfaces,
-        storing the normal E and tangential H fields.
+        to record fields on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) with
+        ``penetrable=False``, storing the normal E and tangential H fields.
 
     Example
     -------
@@ -2624,7 +2624,7 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
     -----
 
         :class:`SurfaceFieldTimeMonitor` objects are best used to monitor the time dependence of the fields
-        on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) surfaces. They can also be used to create
+        on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) with ``penetrable=False``. They can also be used to create
         “animations” of the field pattern evolution.
 
         To create an animation, we need to capture the frames at different time instances of the simulation. This can

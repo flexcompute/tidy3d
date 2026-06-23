@@ -28,7 +28,7 @@ Note that the unit of ``conductivity`` is ``S/um`` and the unit of ``freq_range`
 
 .. note::
 
-   When modeling lossy metals, always be sure to check the skin depth --- if the skin depth is significant compared to the geometry size, then :class:`~tidy3d.rf.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead.
+   When modeling lossy metals, always be sure to check the skin depth --- if the skin depth is significant compared to the geometry size, then :class:`~tidy3d.rf.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead, or set ``penetrable=True`` to solve the fields inside the metal as a regular conductive medium (then ``Simulation.subpixel.dielectric`` is applied; surface roughness, thickness, and the surface-impedance fit are not used).
 
 
 .. autosummary::

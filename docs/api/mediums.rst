@@ -209,7 +209,7 @@ The :class:`~tidy3d.rf.LossyMetalMedium` class implements the surface impedance 
 
 .. note::
    
-   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then :class:`~tidy3d.rf.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead.
+   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then :class:`~tidy3d.rf.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead, or set ``penetrable=True`` to solve the fields inside the metal as a regular conductive medium (then ``Simulation.subpixel.dielectric`` is applied; surface roughness, thickness, and the surface-impedance fit are not used).
 
 ~~~~
 

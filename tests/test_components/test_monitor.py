@@ -752,7 +752,8 @@ def test_surface_monitors():
     # monitor doesn't overlap any pec structure
     with pytest.raises(
         pd.ValidationError,
-        match=r"Surface monitor surface does not cross any PEC or LossyMetalMedium structures.",
+        match=r"Surface monitor surface does not cross any PEC or lossy metal "
+        r"\(LossyMetalMedium with penetrable=False\) surface.",
     ):
         surf_mnt = td.SurfaceFieldMonitor(
             size=(0.2, 1, 1), center=(0.8, 0, 0), freqs=[td.C_0], name="surface"
@@ -765,6 +766,36 @@ def test_surface_monitors():
             run_time=1e-12,
             grid_spec=td.GridSpec.auto(wavelength=1),
         )
+
+    # a penetrable=True LossyMetalMedium is penetrable, so it is not a valid surface: a
+    # surface monitor overlapping only such a structure is rejected at the monitor location.
+    lossy_inside = td.Structure(
+        geometry=td.Sphere(radius=0.5),
+        medium=td.LossyMetalMedium(
+            conductivity=10, frequency_range=(td.C_0 / 2, td.C_0 * 2), penetrable=True
+        ),
+    )
+    surf_mnt_full = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
+    with pytest.raises(pd.ValidationError) as exc_info:
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            structures=[lossy_inside],
+            monitors=[surf_mnt_full],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )
+    assert any(err["loc"][:2] == ("monitors", 0) for err in exc_info.value.errors())
+
+    # the same metal with penetrable=False is an impenetrable surface and is accepted
+    _ = td.Simulation(
+        size=(2, 2, 2),
+        structures=[
+            lossy_inside.updated_copy(medium=lossy_inside.medium.updated_copy(penetrable=False))
+        ],
+        monitors=[surf_mnt_full],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1),
+    )
 
     # monitor must be volumetric
     with pytest.raises(pd.ValidationError, match=r"must be volumetric"):

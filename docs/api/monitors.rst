@@ -317,7 +317,7 @@ Surface
    SurfaceFieldMonitor
    SurfaceFieldTimeMonitor
 
-The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``) and lossy metal (``LossyMetalMedium``) surfaces within a 3D region at specified frequency point(s). The ``SurfaceFieldTimeMonitor`` does the same, except at specified time intervals instead of frequency. These monitors store the normal E and tangential H fields on these surfaces.
+The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``) and lossy metal (``LossyMetalMedium``) with ``penetrable=False`` within a 3D region at specified frequency point(s). The ``SurfaceFieldTimeMonitor`` does the same, except at specified time intervals instead of frequency. These monitors store the normal E and tangential H fields on these surfaces.
 
 .. code-block:: python
 

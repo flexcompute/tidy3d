@@ -261,6 +261,14 @@ def test_lossy_metal():
     model = mat.scaled_surface_impedance_model
     num_poles = mat.num_poles
 
+    # a penetrable lossy metal is a regular conductive medium, so it is a valid anisotropic
+    # component whose conductivity enters the diagonal permittivity tensor
+    lossy_inside = td.LossyMetalMedium(
+        conductivity=1.0, frequency_range=(1e14, 4e14), penetrable=True
+    )
+    aniso = td.AnisotropicMedium(xx=lossy_inside, yy=td.Medium(), zz=td.Medium())
+    assert aniso.eps_diagonal(2e14)[0].imag != 0
+
 
 def test_lossy_metal_surface_roughness():
     mat_orig = td.LossyMetalMedium(
