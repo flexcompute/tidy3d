@@ -287,7 +287,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             center=center,
             size=size,
             sign="+",
-            extrapolate_to_endpoints=True,
+            extrapolate_to_endpoints=False,
             snap_contour_to_grid=True,
         )
 

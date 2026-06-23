@@ -84,7 +84,7 @@ def path_integrals_from_lumped_element(
         size=current_box.size,
         sign=current_sign,
         snap_contour_to_grid=True,
-        extrapolate_to_endpoints=True,
+        extrapolate_to_endpoints=False,
     )
 
     return (voltage_integral, current_integral)

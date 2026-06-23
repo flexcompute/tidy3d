@@ -1948,8 +1948,8 @@ def test_axis_aligned_path_integral_extrapolate_endpoints_boundary_tolerance():
 
 
 def test_axis_aligned_path_integral_extrapolate_endpoints_no_interior_samples():
-    """When every sample sits within tolerance of the bounds there is nothing to
-    extrapolate from; a clear ``DataError`` is raised instead of an opaque failure."""
+    """When every sample sits within tolerance of the bounds the box rule has no
+    interior sample to weight; a clear ``DataError`` is raised instead of an opaque failure."""
     eps = 1e-8  # both samples within fp_eps of the bounds
     z = np.array([9.0 + eps, 11.0 - eps])
     ez = np.array([5.0, 5.0])
@@ -1965,6 +1965,145 @@ def test_axis_aligned_path_integral_extrapolate_endpoints_no_interior_samples():
     )
     with pytest.raises(DataError, match="no field samples strictly inside"):
         integral.compute_integral(field)
+
+
+def test_axis_aligned_path_integral_box_rule_no_samples_within_bounds():
+    """The box rule (``extrapolate_to_endpoints=False``) raises a clear ``DataError`` when a
+    sub-cell path falls between samples with nothing inside or on its bounds, rather than failing
+    opaquely."""
+    z = np.array([0.0, 1.0, 2.0, 3.0])
+    fz = np.array([1.0, 2.0, 3.0, 4.0])
+    field = td.ScalarFieldDataArray(
+        np.broadcast_to(fz[None, None, :, None], (1, 1, z.size, 1)).astype(complex),
+        coords={"x": [0.0], "y": [0.0], "z": z, "f": [1e9]},
+    )
+    integral = AxisAlignedPathIntegral(
+        center=(0, 0, 1.5),
+        size=(0, 0, 0.2),
+        snap_path_to_grid=False,
+        extrapolate_to_endpoints=False,
+    )
+    with pytest.raises(DataError, match="no field samples within its bounds"):
+        integral.compute_integral(field)
+
+
+@pytest.mark.parametrize(
+    "z, fz, min_bound, max_bound",
+    [
+        # samples beyond the bounds must not leak into the corner nodes (the regression)
+        ([-0.5, 0.0, 1.0, 2.0, 3.0, 3.5], [100, 1, 2, 3, 4, 100], -0.3, 3.3),
+        ([-0.5, 0.0, 1.0, 2.0, 3.0, 3.5], [100, 1, 2, 3, 4, 100], 0.4, 2.6),
+        # constant, linear, and on-bound-artifact fields on a non-uniform grid
+        ([0.0, 0.3, 0.5, 0.9, 1.0, 1.4, 2.0], [3.0] * 7, 0.0, 2.0),
+        ([-0.5, 0.0, 1.0, 2.0, 3.0, 3.5], [-0.5, 0.0, 1.0, 2.0, 3.0, 3.5], -0.3, 3.3),
+        ([0.5, 1.0, 2.0, 3.0], [99, 1, 2, 99], 0.5, 3.0),
+    ],
+)
+def test_axis_aligned_path_integral_box_rule(z, fz, min_bound, max_bound):
+    """The centered box rule (``extrapolate_to_endpoints=False``) equals ``numpy.trapezoid`` over
+    the in-bound samples with the boundary sample held flat at each bound. It references in-bound
+    samples only, so out-of-bound samples never leak into the corner nodes."""
+    z = np.asarray(z, dtype=float)
+    fz = np.asarray(fz, dtype=float)
+    field = td.ScalarFieldDataArray(
+        np.broadcast_to(fz[None, None, :, None], (1, 1, z.size, 1)).astype(complex),
+        coords={"x": [0.0], "y": [0.0], "z": z, "f": [1e9]},
+    )
+    integral = AxisAlignedPathIntegral(
+        center=(0, 0, (min_bound + max_bound) / 2),
+        size=(0, 0, max_bound - min_bound),
+        snap_path_to_grid=False,
+        extrapolate_to_endpoints=False,
+    )
+    result = complex(integral.compute_integral(field).values.item())
+
+    # Reference: numpy trapezoid over the in-bound samples, boundary sample held flat at the bounds.
+    in_bound = (z >= min_bound) & (z <= max_bound)
+    p, fp = z[in_bound], fz[in_bound]
+    nodes = np.concatenate(([min_bound], p, [max_bound]))
+    vals = np.concatenate(([fp[0]], fp, [fp[-1]]))
+    assert isclose(result.real, float(np.trapezoid(vals, nodes)), abs_tol=1e-12)
+
+
+def test_axis_aligned_path_integral_box_rule_boundary_tolerance():
+    """For the box rule a sample within floating-point tolerance of a bound is the boundary
+    sample: it is kept and held flat to the corner, not dropped as an out-of-loop sample."""
+    eps = 1e-8  # within fp_eps of the bounds; logically on the endpoints
+    z = np.array([9.0 - eps, 9.5, 10.0, 10.5, 11.0 + eps])
+    fz = np.array([2.0, 5.0, 5.0, 5.0, 2.0])
+    field = td.ScalarFieldDataArray(
+        np.broadcast_to(fz[None, None, :, None], (1, 1, z.size, 1)).astype(complex),
+        coords={"x": [0.0], "y": [0.0], "z": z, "f": [1e9]},
+    )
+    integral = AxisAlignedPathIntegral(
+        center=(0, 0, 10.0),
+        size=(0, 0, 2.0),
+        snap_path_to_grid=False,
+        extrapolate_to_endpoints=False,
+    )
+    result = complex(integral.compute_integral(field).values.item())
+    # All five samples are kept (the outer two sit within tolerance of the bounds), so the
+    # box rule matches the plain trapezoid over them up to the sub-tolerance corner clamp.
+    assert isclose(result.real, float(np.trapezoid(fz, z)), abs_tol=1e-6)
+
+
+@pytest.mark.parametrize("kind", ["uniform", "curl"])
+@pytest.mark.parametrize("snap_contour_to_grid", [False, True])
+def test_axis_aligned_current_integral_box_rule_slices_out_of_loop(snap_contour_to_grid, kind):
+    """The lumped-port current integral (box rule, ``extrapolate_to_endpoints=False``) must slice
+    out samples beyond the contour instead of leaking them into the loop corners. Checked on a
+    non-colocated (staggered Yee) grid for the exact contour (``snap_contour_to_grid=False``) and
+    the snapped contour used by lumped ports / ``TerminalComponentModeler`` (``True``), where the
+    bounds land between the integrated component's samples — the regime the old corner leak hit.
+
+    Every sample outside the contour is NaN, so a leak returns NaN instead of the analytic current:
+    a uniform H field encloses no current (opposing edges cancel) -> 0; the uniform current density
+    ``Hx=-y``, ``Hy=x`` (curl 2) encloses ``2 * area``.
+    """
+    hx_coords = get_spatial_coords_dict(SIM_Z, COAX_FIELD_MONITOR, "Hx")
+    hy_coords = get_spatial_coords_dict(SIM_Z, COAX_FIELD_MONITOR, "Hy")
+    fx, fy = {
+        "uniform": (lambda x, y: np.full_like(x, 2.0), lambda x, y: np.full_like(x, 2.0)),
+        "curl": (lambda x, y: -y, lambda x, y: x),
+    }[kind]
+
+    def _field(coords, fn):
+        XS, YS, ZS = np.asarray(coords["x"]), np.asarray(coords["y"]), coords["z"]
+        XG, YG = np.meshgrid(XS, YS, indexing="ij")
+        arr = np.broadcast_to(fn(XG, YG)[:, :, None, None], (len(XS), len(YS), len(ZS), len(FS)))
+        return td.ScalarFieldDataArray(
+            arr.astype(complex), coords={"x": XS, "y": YS, "z": ZS, "f": FS}
+        )
+
+    hx = _field(hx_coords, fx)
+    hy = _field(hy_coords, fy)
+
+    current_integral = td.AxisAlignedCurrentIntegral(
+        center=(0, 0, 0),
+        size=(1.0, 0.5, 0),
+        sign="+",
+        snap_contour_to_grid=snap_contour_to_grid,
+        extrapolate_to_endpoints=False,
+    )
+    # Read the bounds the contour actually integrates over (exact, or snapped onto Yee samples).
+    bottom, _, _, left = current_integral._to_path_integrals(hx, hy)
+    left_bound, right_bound = bottom.bounds[0][0], bottom.bounds[1][0]
+    bottom_bound, top_bound = left.bounds[0][1], left.bounds[1][1]
+
+    # NaN every sample outside the contour along the axis each component is integrated on.
+    hx_in = (np.asarray(hx_coords["x"]) > left_bound) & (np.asarray(hx_coords["x"]) < right_bound)
+    hy_in = (np.asarray(hy_coords["y"]) > bottom_bound) & (np.asarray(hy_coords["y"]) < top_bound)
+    hx.values[~hx_in, :, :, :] = np.nan
+    hy.values[:, ~hy_in, :, :] = np.nan
+
+    field_data = make_coax_field_data().updated_copy(Hx=hx, Hy=hy)
+    current = current_integral.compute_current(field_data)
+
+    expected = (
+        0.0 if kind == "uniform" else 2 * (right_bound - left_bound) * (top_bound - bottom_bound)
+    )
+    assert np.all(np.isfinite(current.values))
+    assert np.allclose(current.values, expected, atol=1e-12)
 
 
 def test_current_integral_toggles():
@@ -2329,7 +2468,12 @@ def test_auto_path_integrals_for_lumped_element():
 
     SIM_Z_with_element = SIM_Z.updated_copy(lumped_elements=[linear_element])
 
-    _, _ = td.path_integrals_from_lumped_element(linear_element, SIM_Z_with_element.grid, "+")
+    voltage_integral, current_integral = td.path_integrals_from_lumped_element(
+        linear_element, SIM_Z_with_element.grid, "+"
+    )
+    # The current loop uses the centered box rule; voltage still extrapolates to the terminals.
+    assert current_integral.extrapolate_to_endpoints is False
+    assert voltage_integral.extrapolate_to_endpoints is True
 
 
 def test_composite_current_integral_compute_current():
