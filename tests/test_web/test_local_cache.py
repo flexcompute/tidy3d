@@ -514,6 +514,73 @@ def test_mode_solver_caching(monkeypatch, tmp_path):
     assert load_simulation_if_cached(mode_sim, path=tmp_file) is not None
 
 
+def _make_custom_medium_mode_sim():
+    mode_sim = make_mode_sim()
+    custom_medium = td.CustomMedium(
+        permittivity=td.SpatialDataArray(
+            [[[2.0]]],
+            coords={"x": [0.0], "y": [0.0], "z": [0.0]},
+        )
+    )
+    simulation = mode_sim.simulation.updated_copy(
+        structures=(
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+                medium=custom_medium,
+            ),
+        ),
+        deep=False,
+    )
+    return mode_sim.updated_copy(simulation=simulation, deep=False)
+
+
+def test_reduced_mode_solver_run_cache_hit(monkeypatch, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch, task_type="MODE_SOLVER")
+    tmp_file = tmp_path / "tmp.hdf5"
+    cache = resolve_local_cache(True)
+    mode_sim = make_mode_sim()
+
+    def assert_second_run_uses_cache(run_once):
+        cache.clear()
+        _reset_counters(counters)
+
+        run_once()
+        assert len(cache) == 1
+
+        _reset_counters(counters)
+        run_once()
+        assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+
+    assert_second_run_uses_cache(lambda: web.run(mode_sim, path=tmp_file, reduce_simulation=True))
+    assert_second_run_uses_cache(
+        lambda: Job(simulation=mode_sim, task_name="test", reduce_simulation=True).run(
+            path=tmp_file
+        )
+    )
+    assert_second_run_uses_cache(
+        lambda: Batch(simulations={"sim1": mode_sim}, reduce_simulation=True).run(path_dir=tmp_path)
+    )
+
+
+def test_auto_reduced_custom_medium_mode_solver_run_cache_hit(monkeypatch, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch, task_type="MODE_SOLVER")
+    tmp_file = tmp_path / "tmp.hdf5"
+    cache = resolve_local_cache(True)
+    mode_sim = _make_custom_medium_mode_sim()
+    reduced_mode_sim = web.get_reduced_simulation(mode_sim, "auto", warn_auto=False)
+
+    assert mode_sim._hash_self() != reduced_mode_sim._hash_self()
+
+    web.run(mode_sim, path=tmp_file)
+    assert len(cache) == 1
+    assert cache.list()[0]["simulation_hash"] == reduced_mode_sim._hash_self()
+    assert load_simulation_if_cached(mode_sim, path=tmp_file) is not None
+
+    _reset_counters(counters)
+    web.run(mode_sim, path=tmp_file)
+    assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+
+
 def test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
     monkeypatch.setattr(config.local_cache, "max_entries", 128)

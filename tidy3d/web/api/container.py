@@ -1336,7 +1336,16 @@ class Job(WebContainer):
 
         if isinstance(step.operation, ModeSolver):
             if not from_stash and task_id is not None:
-                _store_mode_solver_in_cache(task_id, step.operation, data, resolved_path)
+                _store_mode_solver_in_cache(
+                    task_id,
+                    task_api.get_reduced_simulation(
+                        step.operation,
+                        self.reduce_simulation,
+                        warn_auto=False,
+                    ),
+                    data,
+                    resolved_path,
+                )
             step.operation._patch_data(data=data)
         return data
 
@@ -1778,7 +1787,11 @@ class Job(WebContainer):
             if not loaded_from_cache:
                 _store_mode_solver_in_cache(
                     self.task_id,
-                    operation,
+                    task_api.get_reduced_simulation(
+                        operation,
+                        self.reduce_simulation,
+                        warn_auto=False,
+                    ),
                     data,
                     resolved_path,
                 )
@@ -4071,7 +4084,14 @@ class Batch(WebContainer):
                 job_data = data.load_sim_data(task_name)
                 if not loaded_from_cache[task_name]:
                     _store_mode_solver_in_cache(
-                        task_ids[task_name], cache_operation, job_data, task_paths[task_name]
+                        task_ids[task_name],
+                        task_api.get_reduced_simulation(
+                            cache_operation,
+                            job.reduce_simulation,
+                            warn_auto=False,
+                        ),
+                        job_data,
+                        task_paths[task_name],
                     )
                 cache_operation._patch_data(data=job_data)
 

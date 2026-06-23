@@ -327,7 +327,10 @@ def _cache_simulation_for_load(
 
 
 def get_reduced_simulation(
-    simulation: WorkflowOperationType, reduce_simulation: Literal["auto", True, False]
+    simulation: WorkflowOperationType,
+    reduce_simulation: Literal["auto", True, False],
+    *,
+    warn_auto: bool = True,
 ) -> WorkflowOperationType:
     """
     Adjust the given simulation object based on the reduce_simulation parameter. Currently only
@@ -341,7 +344,7 @@ def get_reduced_simulation(
         contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
         reduce_simulation = contains_custom
 
-        if reduce_simulation:
+        if reduce_simulation and warn_auto:
             log.warning(
                 f"The {type(simulation)} object contains custom mediums. It will be "
                 "automatically restricted to the solver domain to reduce data for uploading. "
