@@ -3758,6 +3758,40 @@ def test_to_gds_precision(tmp_path):
     assert np.isclose(lib.precision, gds_precision * 1e-6)
 
 
+def test_to_gds_precision_too_fine_raises(tmp_path):
+    gds_precision = 1e-12
+    sim = td.Simulation(
+        size=(4.5, 4.5, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(td.Structure(geometry=td.Box(size=(4.5, 4.5, 1.0)), medium=td.Medium()),),
+    )
+
+    fname = tmp_path / "simulation_precision_invalid.gds"
+    with pytest.raises(SetupError, match=r"Simulation\.to_gds_file\(\)"):
+        sim.to_gds_file(fname, z=0.0, gds_precision=gds_precision)
+
+    assert not fname.exists()
+
+
+def test_to_gds_precision_with_symmetry_exports(tmp_path):
+    sim = td.Simulation(
+        size=(4.5, 4.5, 1.0),
+        run_time=1e-12,
+        symmetry=(1, 1, 0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        structures=(td.Structure(geometry=td.Box(size=(4.5, 4.5, 1.0)), medium=td.Medium()),),
+    )
+
+    fname = str(tmp_path / "simulation_precision_symmetry.gds")
+    sim.to_gds_file(fname, z=0.0, gds_precision=1e-6)
+
+    cell = gdstk.read_gds(fname).top_level()[0]
+    assert np.allclose(cell.bounding_box(), ((-2.25, -2.25), (2.25, 2.25)))
+
+
 def test_sim_subsection_common():
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))

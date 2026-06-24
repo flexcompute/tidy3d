@@ -7129,9 +7129,26 @@ class Simulation(AbstractYeeGridSimulation):
             If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
         gds_precision : float = 1e-3
             Coordinate precision for the written GDS file in micrometers. The default matches
-            the gdstk default of ``1e-9`` meters.
+            the gdstk default of ``1e-9`` meters. If the requested precision is too fine for the
+            written slice coordinates, export raises :class:`.SetupError`. The minimum safe value
+            scales with the maximum absolute written planar coordinate as
+            ``max_abs_coord / (2**31 - 1)``.
         """
         if gdstk_available:
+            polygons = self.to_gdstk(
+                x=x,
+                y=y,
+                z=z,
+                permittivity_threshold=permittivity_threshold,
+                frequency=frequency,
+                gds_layer_dtype_map=gds_layer_dtype_map,
+                pixel_exact=pixel_exact,
+            )
+            gds_precision = Geometry._validate_gds_precision(
+                polygons=polygons,
+                gds_precision=float(gds_precision),
+                context="Simulation.to_gds_file()",
+            )
             library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
             reference = gdstk.Reference
             rotation = np.pi
@@ -7155,16 +7172,8 @@ class Simulation(AbstractYeeGridSimulation):
             outer_cell.add(reference(cell))
             outer_cell.add(reference(cell, x_reflection=True))
 
-        self.to_gds(
-            cell,
-            x=x,
-            y=y,
-            z=z,
-            permittivity_threshold=permittivity_threshold,
-            frequency=frequency,
-            gds_layer_dtype_map=gds_layer_dtype_map,
-            pixel_exact=pixel_exact,
-        )
+        if polygons:
+            cell.add(*polygons)
         fname = pathlib.Path(fname)
         fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)

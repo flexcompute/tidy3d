@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 import tidy3d as td
+from tidy3d.exceptions import SetupError
 
 
 def test_empty_background_medium_dict_stays_invalid_for_direct_validation():
@@ -79,6 +80,27 @@ def test_to_gds_precision(tmp_path):
     lib = gdstk.read_gds(fname)
     assert np.isclose(lib.unit, 1e-6)
     assert np.isclose(lib.precision, gds_precision * 1e-6)
+
+
+def test_to_gds_precision_too_fine_raises(tmp_path):
+    gds_precision = 1e-12
+    structure = td.Structure(geometry=td.Box(size=(4.5, 4.5, 1.0)), medium=td.Medium())
+    fname = tmp_path / "structure_precision_invalid.gds"
+
+    with pytest.raises(SetupError, match=r"Structure\.to_gds_file\(\)"):
+        structure.to_gds_file(fname, z=0, gds_precision=gds_precision)
+
+    assert not fname.exists()
+
+
+def test_to_gds_precision_too_fine_allows_empty_slice(tmp_path):
+    structure = td.Structure(geometry=td.Box(size=(2, 2, 2)), medium=td.Medium())
+    fname = str(tmp_path / "structure_precision_empty.gds")
+
+    structure.to_gds_file(fname, x=1e30, gds_precision=1e-12)
+
+    cell = gdstk.read_gds(fname).cells[0]
+    assert len(cell.polygons) == 0
 
 
 def test_to_gds_file_pixel_exact_positional_backward_compatible(tmp_path):

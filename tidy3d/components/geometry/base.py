@@ -77,6 +77,7 @@ POLY_TOLERANCE_RATIO = 1e-12
 POLY_DISTANCE_TOLERANCE = 8e-12
 # Tolerance for validating linear-only transforms (no translation)
 LINEAR_TRANSFORM_TOL = 1e-12
+GDS_MAX_COORDINATE_INDEX = 2**31 - 1
 
 
 _shapely_operations = {
@@ -908,6 +909,52 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
+    def _validate_gds_precision(
+        *,
+        polygons: list[Any],
+        gds_precision: float,
+        context: str,
+    ) -> float:
+        """Validate that the requested GDS precision is safe for the written polygons."""
+        if not np.isfinite(gds_precision) or gds_precision <= 0:
+            raise SetupError(
+                f"Requested 'gds_precision={gds_precision:.6g} um' in {context} must be "
+                "positive and finite."
+            )
+
+        if not polygons:
+            return gds_precision
+
+        max_abs_coord = 0.0
+        for polygon in polygons:
+            bbox = polygon.bounding_box()
+            if bbox is None:
+                continue
+            for point in bbox:
+                for value in point:
+                    coordinate = float(value)
+                    if not np.isfinite(coordinate):
+                        raise SetupError(
+                            f"Cannot export non-finite GDS coordinate '{coordinate}' in "
+                            f"{context}. Use finite geometry bounds before exporting to GDS."
+                        )
+                    max_abs_coord = max(max_abs_coord, abs(coordinate))
+
+        if max_abs_coord <= 0:
+            return gds_precision
+
+        min_safe_precision = float(np.nextafter(max_abs_coord / GDS_MAX_COORDINATE_INDEX, np.inf))
+        if gds_precision >= min_safe_precision:
+            return gds_precision
+
+        raise SetupError(
+            f"Requested 'gds_precision={gds_precision:.6g} um' in {context} is too fine for "
+            f"the export bounds (+/-{max_abs_coord:.6g} um). The minimum safe precision is "
+            f"'{min_safe_precision:.6g} um' to stay within the signed 32-bit GDS coordinate "
+            "range. Use a larger 'gds_precision'."
+        )
+
+    @staticmethod
     def parse_two_xyz_kwargs(**xyz: Any) -> list[tuple[Axis, float]]:
         """Turns x,y,z kwargs into indices of axes and the position along each axis.
 
@@ -1657,7 +1704,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             Name of the cell created in the .gds file to store the geometry.
         gds_precision : float = 1e-3
             Coordinate precision for the written GDS file in micrometers. The default matches
-            the gdstk default of ``1e-9`` meters.
+            the gdstk default of ``1e-9`` meters. If the requested precision is too fine for the
+            written slice coordinates, export raises :class:`.SetupError`. The minimum safe value
+            scales with the maximum absolute written planar coordinate as
+            ``max_abs_coord / (2**31 - 1)``.
         """
         try:
             import gdstk
@@ -1670,9 +1720,22 @@ class Geometry(Tidy3dBaseModel, ABC):
                 )
             ) from e
 
+        polygons = self.to_gdstk(
+            x=x,
+            y=y,
+            z=z,
+            gds_layer=gds_layer,
+            gds_dtype=gds_dtype,
+        )
+        gds_precision = self._validate_gds_precision(
+            polygons=polygons,
+            gds_precision=float(gds_precision),
+            context="Geometry.to_gds_file()",
+        )
         library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
         cell = library.new_cell(gds_cell_name)
-        self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+        if polygons:
+            cell.add(*polygons)
         fname = pathlib.Path(fname)
         fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)

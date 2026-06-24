@@ -1750,6 +1750,60 @@ def test_to_gds_precision(tmp_path):
     assert np.isclose(lib.precision, gds_precision * 1e-6)
 
 
+def test_to_gds_file_precision_too_fine_raises(tmp_path):
+    gds_precision = 1e-12
+    fname = tmp_path / "geometry_precision_invalid.gds"
+
+    with pytest.raises(SetupError, match=r"Geometry\.to_gds_file\(\)"):
+        td.Box(size=(4.5, 4.5, 1.0)).to_gds_file(fname, z=0, gds_precision=gds_precision)
+
+    assert not fname.exists()
+
+
+@pytest.mark.parametrize("gds_precision", (0, -1e-3, np.nan, np.inf))
+@pytest.mark.parametrize("slice_kwargs", ({"z": 0}, {"y": 1e30}), ids=("nonempty", "empty"))
+def test_to_gds_file_invalid_precision_raises(tmp_path, gds_precision, slice_kwargs):
+    fname = tmp_path / "geometry_invalid_precision.gds"
+
+    with pytest.raises(SetupError, match="positive and finite"):
+        td.Box(size=(1, 1, 1)).to_gds_file(fname, gds_precision=gds_precision, **slice_kwargs)
+
+    assert not fname.exists()
+
+
+def test_to_gds_precision_too_fine_allows_empty_slice(tmp_path):
+    fname = str(tmp_path / "geometry_precision_empty.gds")
+
+    td.Box(size=(1, 1, 1)).to_gds_file(fname, y=1e30, gds_precision=1e-12)
+
+    cell = gdstk.read_gds(fname).cells[0]
+    assert len(cell.polygons) == 0
+
+
+def test_to_gds_file_non_finite_coordinates_raise(tmp_path):
+    fname = tmp_path / "geometry_non_finite.gds"
+
+    with pytest.raises(SetupError, match="non-finite GDS coordinate"):
+        td.Box(size=(td.inf, 1, 1)).to_gds_file(fname, z=0)
+
+    assert not fname.exists()
+
+
+def test_to_gds_precision_uses_written_slice_not_geometry_bounds(tmp_path):
+    geometry = td.GeometryGroup(
+        geometries=(
+            td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+            td.Box(size=(1, 1, 1), center=(1000, 0, 10)),
+        )
+    )
+    fname = str(tmp_path / "geometry_precision_slice_bounds.gds")
+
+    geometry.to_gds_file(fname, z=0, gds_precision=1e-8)
+
+    cell = gdstk.read_gds(fname).cells[0]
+    assert np.allclose(cell.bounding_box(), ((-0.5, -0.5), (0.5, 0.5)))
+
+
 def test_custom_surface_geometry(tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
