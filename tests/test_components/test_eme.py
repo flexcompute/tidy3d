@@ -153,11 +153,27 @@ def test_sim_version_update():
     assert sim_new.version == td.__version__
 
 
-def test_eme_mode_spec_increasing_mode_tolerance_default():
+def test_eme_mode_spec_defaults_and_auto_precision_resolution(eme_base_sim):
     mode_spec = td.EMEModeSpec()
 
     assert mode_spec.increasing_mode_tolerance == pytest.approx(1e-12)
+    assert mode_spec.precision == "double"
     assert td.EMEModeSpec(increasing_mode_tolerance=0).increasing_mode_tolerance == 0
+
+    for structures, expected_precision in [
+        ([], "single"),
+        ([td.Structure(geometry=td.Box(size=(0.4, 0.4, 0.4)), medium=td.PEC)], "double"),
+    ]:
+        mode_spec = td.EMEModeSpec(num_modes=1, precision="auto")
+        sim = eme_base_sim.updated_copy(
+            structures=structures,
+            eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=mode_spec),
+        )
+        mode_solver = sim.mode_simulations[0]._mode_solver
+
+        assert mode_spec.precision == "auto"
+        assert mode_solver.mode_spec.precision == "auto"
+        assert mode_solver._precision == expected_precision
 
 
 @pytest.mark.parametrize("num_pml", [(0, 0), (1, 1)])
@@ -610,6 +626,65 @@ def test_eme_monitor():
         sweep_spec=None,
     )
     assert size_empty == 0
+
+
+def test_eme_monitors_data_size_complex128():
+    """``monitors_data_size`` reflects the complex128 EME monitor storage (precision-independent).
+
+    EME serializes recorded modes, fields, and coefficients as complex128 regardless of the cell
+    mode-spec precision, while ``storage_size`` uses a complex64 baseline, so ``monitors_data_size``
+    doubles it for single, double, and auto alike. (``ModeSolverMonitor.storage_size`` downcasts
+    single to complex64, but the EME monitor writers do not.)
+    """
+    freq0 = td.C_0 / 1.55
+    monitors = [
+        td.EMEModeSolverMonitor(
+            size=(td.inf, td.inf, td.inf), freqs=[freq0], num_modes=2, name="modes"
+        ),
+        td.EMEFieldMonitor(
+            size=(td.inf, td.inf, td.inf), freqs=[freq0], num_modes=2, name="fields"
+        ),
+        td.EMECoefficientMonitor(
+            size=(td.inf, td.inf, td.inf), freqs=[freq0], num_modes=2, name="coeffs"
+        ),
+    ]
+
+    def make(precision: str) -> td.EMESimulation:
+        return td.EMESimulation(
+            size=(2, 2, 2),
+            medium=td.Medium(permittivity=2),
+            structures=[
+                td.Structure(
+                    geometry=td.Box(size=(0.5, 0.22, td.inf)), medium=td.Medium(permittivity=12)
+                )
+            ],
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            axis=2,
+            eme_grid_spec=td.EMEUniformGrid(
+                num_cells=3, mode_spec=td.EMEModeSpec(num_modes=2, precision=precision)
+            ),
+            monitors=monitors,
+            freqs=[freq0],
+        )
+
+    sizes = {p: make(p).monitors_data_size for p in ("single", "double", "auto")}
+    for name in ("modes", "fields", "coeffs"):
+        # EME always serializes complex128, so the estimate is precision-independent
+        assert sizes["single"][name] == sizes["double"][name] == sizes["auto"][name] > 0
+
+    # the estimate is exactly twice the complex64 ``storage_size`` baseline (i.e. complex128)
+    sim = make("single")
+    monitor = next(m for m in sim.monitors if m.name == "modes")
+    raw = monitor.storage_size(
+        num_cells=sim._monitor_num_cells(monitor),
+        num_transverse_cells=sim._monitor_num_transverse_cells(monitor),
+        num_eme_cells=sim._monitor_num_eme_cells(monitor),
+        num_virtual_eme_cells=sim._monitor_num_virtual_eme_cells(monitor),
+        num_freqs=sim._monitor_num_freqs(monitor),
+        num_modes=sim._monitor_num_modes(monitor),
+        sweep_spec=sim.sweep_spec,
+    )
+    assert sim.monitors_data_size["modes"] == 2 * raw
 
 
 def test_eme_monitor_storage_size_with_sweep_spec():
@@ -1490,10 +1565,13 @@ def test_eme_simulation(eme_base_sim):
         freqs=list(1e14 * np.linspace(1, 2, 1)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
+    # field monitor large enough to warn (> WARN_MONITOR_DATA_SIZE_GB) but, at double precision
+    # (complex128, ~12GB/freq here), still under the total MAX_SIMULATION_DATA_SIZE_GB limit, so
+    # this warns rather than erroring.
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
         monitors=(large_monitor,),
-        freqs=list(1e14 * np.linspace(1, 2, 5)),
+        freqs=list(1e14 * np.linspace(1, 2, 3)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
     with AssertLogLevel("WARNING", contains_str="estimated storage"):
@@ -1510,11 +1588,13 @@ def test_eme_simulation(eme_base_sim):
     with AssertLogLevel("WARNING", contains_str="store_coeffs"):
         sim_bad.updated_copy(store_coeffs=True).validate_pre_upload()
     # port_modes warning
+    # port_modes large enough to warn but, at double precision (complex128), still under the
+    # total MAX_SIMULATION_DATA_SIZE_GB limit, so this warns rather than erroring.
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
         monitors=[],
         store_coeffs=False,
-        freqs=list(1e14 * np.linspace(1, 2, 100)),
+        freqs=list(1e14 * np.linspace(1, 2, 40)),
         eme_grid_spec=td.EMEUniformGrid(mode_spec=td.EMEModeSpec(num_modes=100), num_cells=100),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )

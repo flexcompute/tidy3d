@@ -40,8 +40,9 @@ class EMEModeSpec(ModeSpec):
         - Propagation angles (``angle_theta``, ``angle_phi``) are locked to ``0``.
           For off-normal injection, use a :class:`.ModeSolverMonitor` together with
           :meth:`.EMESimulationData.smatrix_in_basis`.
-        - Default precision is ``'auto'`` (double precision for structures with good
-          conductors, single precision otherwise).
+        - Default precision is ``'double'`` for accurate EME results. ``'auto'``
+          resolves precision per EME cell -- double where that cell's mode solve
+          contains a good conductor, single otherwise.
         - Includes a ``bend_medium_frame`` field to control whether media in bent
           EME cells are interpreted in the global frame or as co-rotating with the
           local waveguide frame.
@@ -99,12 +100,12 @@ class EMEModeSpec(ModeSpec):
     )
 
     precision: Literal["auto", "single", "double"] = Field(
-        "auto",
+        "double",
         title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
-        "Choose ``'auto'`` to apply double precision if the simulation contains a good "
-        "conductor, single precision otherwise.",
+        "The default is ``'double'``. Choose ``'auto'`` to resolve precision per EME "
+        "cell: double where that cell's mode solve contains a good conductor, single otherwise.",
     )
 
     bend_medium_frame: Literal["global", "co_rotating"] = Field(

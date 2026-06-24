@@ -1655,7 +1655,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         # Make sure that internal storage from mode solvers also does not exceed the limit.
         for monitor in self.mode_solver_monitors:
             num_cells = self._monitor_num_cells(monitor)
-            solver_data = (monitor.storage_size(num_cells=num_cells, tmesh=0)) / 1e9
+            solver_bytes = monitor.storage_size(num_cells=num_cells, tmesh=0)
+            # ``precision='auto'`` may promote to double precision at solve time; count it
+            # conservatively (matching the runtime overlap estimator) so a promoted job cannot
+            # slip past this internal-storage limit.
+            if monitor.mode_spec.precision == "auto":
+                solver_bytes *= 2
+            solver_data = solver_bytes / 1e9
             if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
                 raise SetupError(
                     f"Estimated internal storage of monitor '{monitor.name}' is "
@@ -1732,6 +1738,11 @@ class EMESimulation(AbstractYeeGridSimulation):
                         sweep_spec=self.sweep_spec,
                     )
                 )
+                # EME serializes recorded modes, fields, and coefficients as complex128 regardless
+                # of the cell mode-spec precision (single, double, or auto), while ``storage_size``
+                # uses a complex64 baseline -- so double it. (``ModeSolverMonitor.storage_size``
+                # downcasts single to complex64, but the EME monitor writers do not.)
+                storage_size *= 2
             else:
                 storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=0))
             data_size[monitor.name] = storage_size
