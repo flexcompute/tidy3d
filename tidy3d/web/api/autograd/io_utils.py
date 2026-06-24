@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import tidy3d as td
 from tidy3d.components.autograd.field_map import FieldMap, TracerKeys
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
-from tidy3d.web.api.webapi import _load_simulation_via_tempfile, get_info
+from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.cache import resolve_local_cache
 from tidy3d.web.core.s3utils import download_file, upload_file  # type: ignore
 
@@ -15,23 +15,74 @@ from .constants import SIM_FIELDS_KEYS_FILE, SIM_FWD_FLUX_DATA_FILE, SIM_VJP_FIL
 
 if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.types.workflow import WorkflowType
+    from tidy3d.web.cache import LocalCache
 
 
-def _store_vjp_cache_entry(task_id_adj: str, field_map: FieldMap, *, artifact_path: str) -> None:
-    """Store adjoint VJP fields in the local cache when available."""
+VJP_CACHE_ARTIFACT_TYPE = "autograd_vjp"
+
+
+def _vjp_cache_context(
+    simulation: WorkflowType | None,
+) -> tuple[LocalCache, str, str] | None:
+    """Return cache, workflow type, and simulation hash for VJP cache lookups."""
     simulation_cache = resolve_local_cache()
-    if simulation_cache is None:
-        return
-    info = get_info(task_id_adj, verbose=False)
-    workflow_type = getattr(info, "taskType", None)
-    simulation = _load_simulation_via_tempfile(task_id_adj)
-    simulation_cache.store_result(
-        stub_data=field_map,
-        task_id=task_id_adj,
-        path=artifact_path,
-        workflow_type=workflow_type,
-        simulation=simulation,
+    if simulation_cache is None or simulation is None:
+        return None
+    return (
+        simulation_cache,
+        Tidy3dStub(simulation=simulation).get_type(),
+        simulation._hash_self(),
     )
+
+
+def _load_vjp_fields(path: os.PathLike) -> AutogradFieldMap:
+    return FieldMap.from_file(path).to_autograd_field_map
+
+
+def get_cached_vjp_traced_fields(
+    simulation: WorkflowType | None, verbose: bool = True
+) -> AutogradFieldMap | None:
+    """Load cached adjoint VJP fields without using the normal result cache namespace."""
+    cache_context = _vjp_cache_context(simulation)
+    if cache_context is None:
+        return None
+    simulation_cache, workflow_type, simulation_hash = cache_context
+
+    entry = simulation_cache.try_fetch_with_hash(
+        simulation_hash=simulation_hash,
+        workflow_type=workflow_type,
+        verbose=verbose,
+        artifact_type=VJP_CACHE_ARTIFACT_TYPE,
+    )
+    if entry is None:
+        return None
+
+    try:
+        return _load_vjp_fields(entry.artifact_path)
+    except Exception as e:
+        td.log.error(f"Could not load VJP cache entry: {e}")
+        simulation_cache.invalidate(entry.key)
+        return None
+
+
+def _store_vjp_cache_entry(
+    task_id_adj: str, *, artifact_path: str, simulation: WorkflowType | None
+) -> None:
+    cache_context = _vjp_cache_context(simulation)
+    if cache_context is None:
+        return
+    simulation_cache, workflow_type, simulation_hash = cache_context
+    try:
+        simulation_cache.store_result_with_hash(
+            task_id=task_id_adj,
+            path=artifact_path,
+            workflow_type=workflow_type,
+            simulation_hash=simulation_hash,
+            artifact_type=VJP_CACHE_ARTIFACT_TYPE,
+        )
+    except Exception as e:
+        td.log.error(f"Could not store VJP cache entry: {e}")
 
 
 def upload_sim_fields_keys(
@@ -91,17 +142,20 @@ def get_autograd_flux_forward_data(task_id_fwd: str, verbose: bool) -> td.Simula
 def get_vjp_traced_fields(
     task_id_adj: str,
     verbose: bool,
+    *,
+    cache_simulation: WorkflowType | None = None,
 ) -> AutogradFieldMap:
     """Download and deserialize VJP traced fields for a completed adjoint job."""
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)
     try:
         download_file(task_id_adj, SIM_VJP_FILE, to_file=fname, verbose=verbose)
-        field_map = FieldMap.from_file(fname)
-        _store_vjp_cache_entry(task_id_adj, field_map, artifact_path=fname)
+        field_map = _load_vjp_fields(fname)
+        if cache_simulation is not None:
+            _store_vjp_cache_entry(task_id_adj, artifact_path=fname, simulation=cache_simulation)
     except Exception as e:
         td.log.error(f"Error occurred while getting VJP traced fields: {e}")
         raise e
     finally:
         os.unlink(fname)
-    return field_map.to_autograd_field_map
+    return field_map

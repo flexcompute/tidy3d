@@ -9,7 +9,7 @@ from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
 
 from .constants import SIM_FIELDS_KEYS_FILE
-from .io_utils import get_vjp_traced_fields
+from .io_utils import get_cached_vjp_traced_fields, get_vjp_traced_fields
 
 
 def _sim_fields_keys_artifacts(sim_fields_keys: list[tuple]) -> dict[str, TracerKeys]:
@@ -120,10 +120,25 @@ def _run_async_tidy3d_bwd(
 ) -> dict[str, dict]:
     """Run a batch of adjoint simulations using regular web.run()."""
 
+    verbose = run_kwargs.get("verbose", True)
+    vjp_traced_fields_dict = {}
+    simulations_to_run = {}
+    for task_name, simulation in simulations.items():
+        cached = get_cached_vjp_traced_fields(simulation, verbose=verbose)
+        if cached is None:
+            simulations_to_run[task_name] = simulation
+        else:
+            vjp_traced_fields_dict[task_name] = cached
+
+    if not simulations_to_run:
+        return vjp_traced_fields_dict
+
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     _ = run_kwargs.pop("path_dir", None)
     num_workers = run_kwargs.get("num_workers")
-    batch = _build_batch(simulations=simulations, num_workers=num_workers, **batch_init_kwargs)
+    batch = _build_batch(
+        simulations=simulations_to_run, num_workers=num_workers, **batch_init_kwargs
+    )
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
 
     priority = run_kwargs.get("priority")
@@ -134,10 +149,13 @@ def _run_async_tidy3d_bwd(
     )
     batch.monitor()
 
-    vjp_traced_fields_dict = {}
     for task_name, job in batch.jobs.items():
         task_id = job.task_id
-        vjp = get_vjp_traced_fields(task_id_adj=task_id, verbose=batch.verbose)
+        vjp = get_vjp_traced_fields(
+            task_id_adj=task_id,
+            verbose=batch.verbose,
+            cache_simulation=job.simulation,
+        )
         vjp_traced_fields_dict[task_name] = vjp
 
     return vjp_traced_fields_dict

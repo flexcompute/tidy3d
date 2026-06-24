@@ -30,7 +30,7 @@ from tidy3d.exceptions import DataError
 from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import task_api
 from tidy3d.web.api import webapi as web
-from tidy3d.web.api.autograd import autograd, io_utils
+from tidy3d.web.api.autograd import autograd, engine, io_utils
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
 from tidy3d.web.api.container import Batch, BatchData, WebContainer
@@ -367,9 +367,6 @@ def _patch_run_pipeline(
         monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
         monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
         monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
-        monkeypatch.setattr(
-            io_utils, "_load_simulation_via_tempfile", _fake_load_simulation_via_tempfile
-        )
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
     monkeypatch.setattr(web, "upload", _fake_upload)
     monkeypatch.setattr(task_api, "upload", _fake_upload)
@@ -403,16 +400,6 @@ def _patch_run_pipeline(
             "_Info", (), {"solverVersion": "solver-1", "taskType": task_type, "status": "success"}
         )(),
     )
-    if patch_autograd:
-        monkeypatch.setattr(
-            io_utils,
-            "get_info",
-            lambda task_id, verbose=True: type(
-                "_Info",
-                (),
-                {"solverVersion": "solver-1", "taskType": task_type, "status": "success"},
-            )(),
-        )
     if postprocess is not None:
         monkeypatch.setattr(web.Tidy3dStubData, "postprocess", staticmethod(postprocess))
     monkeypatch.setattr(
@@ -862,7 +849,53 @@ def test_autograd_cache(monkeypatch, request, tmp_path):
 
     _reset_counters(counters)
     ag.value_and_grad(objective)(params0)
-    assert counters["download"] == 1  # download field data
+    assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+    assert len(cache) == 2
+
+
+def test_public_vjp_helper_does_not_cache(monkeypatch):
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    autograd.get_vjp_traced_fields("adjoint-task-1", verbose=False)
+    assert counters["download"] == 1
+    assert len(cache) == 0
+
+    _reset_counters(counters)
+    autograd.get_vjp_traced_fields("adjoint-task-2", verbose=False)
+    assert counters["download"] == 1
+    assert len(cache) == 0
+
+
+def test_async_bwd_partial_vjp_cache_hit(monkeypatch, tmp_path, basic_simulation):
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    cached_sim = basic_simulation.updated_copy(
+        shutoff=1e-4, simulation_type="autograd_bwd", deep=False
+    )
+    miss_sim = basic_simulation.updated_copy(
+        shutoff=1e-3, simulation_type="autograd_bwd", deep=False
+    )
+    cached_vjp_path = tmp_path / "cached_vjp.hdf5"
+    cached_vjp_path.write_text("cached-vjp")
+    io_utils._store_vjp_cache_entry(
+        "cached-adjoint-task", artifact_path=str(cached_vjp_path), simulation=cached_sim
+    )
+    assert len(cache) == 1
+    assert "artifact_type" not in cache.list()[0]
+
+    _reset_counters(counters)
+    results = engine._run_async_tidy3d_bwd(
+        {"cached": cached_sim, "miss": miss_sim},
+        verbose=False,
+        path_dir=tmp_path,
+    )
+
+    assert set(results) == {"cached", "miss"}
+    assert counters == {"upload": 1, "start": 1, "monitor": 0, "download": 1}
     assert len(cache) == 2
 
 
@@ -1280,10 +1313,17 @@ def test_cache_key_includes_workflow_type():
         simulation_hash=common_hash, version=version, workflow_type="VOLUME_MESH"
     )
     key_fdtd = build_cache_key(simulation_hash=common_hash, version=version, workflow_type="FDTD")
+    key_fdtd_vjp = build_cache_key(
+        simulation_hash=common_hash,
+        version=version,
+        workflow_type="FDTD",
+        artifact_type=io_utils.VJP_CACHE_ARTIFACT_TYPE,
+    )
 
     assert key_heat != key_mesh, "HEAT_CHARGE and VOLUME_MESH must produce different cache keys"
     assert key_heat != key_fdtd, "HEAT_CHARGE and FDTD must produce different cache keys"
     assert key_mesh != key_fdtd, "VOLUME_MESH and FDTD must produce different cache keys"
+    assert key_fdtd != key_fdtd_vjp, "VJP artifacts must not share the normal result key"
 
     # Same inputs must be deterministic
     key_heat2 = build_cache_key(

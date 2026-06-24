@@ -1297,9 +1297,15 @@ def upload_sim_fields_keys(
 """ VJP maker for ADJ pass."""
 
 
-def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
-    """Fetch VJP traced fields for a completed adjoint job (delegated)."""
-    return io_utils.get_vjp_traced_fields(task_id_adj=task_id_adj, verbose=verbose)
+def get_vjp_traced_fields(
+    task_id_adj: str,
+    verbose: bool,
+) -> AutogradFieldMap:
+    """Fetch VJP traced fields for a completed adjoint job."""
+    return io_utils.get_vjp_traced_fields(
+        task_id_adj=task_id_adj,
+        verbose=verbose,
+    )
 
 
 def _run_bwd(
