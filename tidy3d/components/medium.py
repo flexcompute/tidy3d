@@ -6131,6 +6131,20 @@ class AnisotropicMedium(AbstractMedium):
             )
         return val
 
+    @field_validator("xx", "yy", "zz")
+    @classmethod
+    def _no_surface_lossy_metal_component(
+        cls, val: IsotropicUniformMediumType, info: FieldValidationInfo
+    ) -> IsotropicUniformMediumType:
+        """A non-penetrable lossy metal has no anisotropic-component formulation."""
+        if isinstance(val, LossyMetalMedium) and not val.penetrable:
+            raise ValidationError(
+                f"The '{info.field_name}' component is a non-penetrable 'LossyMetalMedium', "
+                "which is not supported as a component of an 'AnisotropicMedium'. Set "
+                "'penetrable=True' to use it as a regular conductive medium."
+            )
+        return val
+
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""

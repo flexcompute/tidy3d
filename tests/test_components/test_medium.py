@@ -269,6 +269,11 @@ def test_lossy_metal():
     aniso = td.AnisotropicMedium(xx=lossy_inside, yy=td.Medium(), zz=td.Medium())
     assert aniso.eps_diagonal(2e14)[0].imag != 0
 
+    # a non-penetrable lossy metal has no anisotropic-component formulation, so it is rejected
+    surface_metal = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14))
+    with pytest.raises(pd.ValidationError):
+        _ = td.AnisotropicMedium(xx=surface_metal, yy=td.Medium(), zz=td.Medium())
+
 
 def test_lossy_metal_surface_roughness():
     mat_orig = td.LossyMetalMedium(
