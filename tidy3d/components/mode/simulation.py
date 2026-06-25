@@ -77,6 +77,7 @@ MODE_SIM_YEE_SIM_SHARED_ATTRS = [
     "subpixel",
     "simulation_type",
     "post_norm",
+    "structure_priority_mode",
 ]
 
 

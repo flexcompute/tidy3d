@@ -631,6 +631,31 @@ def test_mode_sim():
     )
 
 
+def test_from_simulation_preserves_structure_priority_mode():
+    """`structure_priority_mode` must survive Simulation->ModeSimulation->Simulation."""
+    fdtd_sim = td.Simulation(
+        size=(4, 3, 3),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1.5, 100, 1)),
+                medium=td.Medium(permittivity=4.0),
+            )
+        ],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        structure_priority_mode="conductor",
+    )
+    mode_sim = td.ModeSimulation.from_simulation(
+        simulation=fdtd_sim,
+        plane=td.Box(size=(4, 4, 0)),
+        mode_spec=td.ModeSpec(),
+        freqs=[td.C_0],
+    )
+    assert mode_sim.structure_priority_mode == "conductor"
+    assert mode_sim._as_fdtd_sim.structure_priority_mode == "conductor"
+
+
 def get_mode_solver_data():
     mode_data = td.ModeSolverData(
         monitor=MODE_MONITOR_WITH_FIELDS,
