@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import operator
-
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import trimesh
+from pydantic import BaseModel
 
 import tidy3d as td
 from tidy3d.web.api.autograd import autograd as autograd_module
@@ -16,14 +15,21 @@ from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
 from tidy3d.web.api.autograd.types import NumericalStructureConfig
 
 from .numerical_derivative_helpers import compute_ring_vjp
+from .numerical_test_helpers import (
+    EvalFn,
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_gradient_angle_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
 
 PLOT_FD_ADJ_COMPARISON = False
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_numerical_structures_test/"
 SHOW_PRINT_STATEMENTS = False
 
 OVERLAP_ERROR_THRESHOLD_DEG = 15.0
@@ -255,6 +261,30 @@ def make_eval_fns():
     return eval_fns, eval_fn_names
 
 
+class NumericalStructureCaseIdentity(BaseModel):
+    """Semantic identity for one numerical-structures gradient case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_bg_index: float
+    pw_angle_deg: float
+    eval_fn_name: str
+    run_fn: str
+
+
+class NumericalStructureTestParameters(NumericalStructureCaseIdentity):
+    """Full parameter bundle for one numerical-structures test invocation."""
+
+    eval_fn: EvalFn
+    test_number: int
+
+
+def _case_identity(
+    test_parameters: NumericalStructureTestParameters,
+) -> NumericalStructureCaseIdentity:
+    return case_identity_from_parameters(NumericalStructureCaseIdentity, test_parameters)
+
+
 background_indices = [1.0]
 mesh_wvls_um = [1.5]
 adj_wvls_um = [1.5]
@@ -282,52 +312,35 @@ for idx in range(len(mesh_wvls_um)):
             for eval_fn_idx, eval_fn in enumerate(eval_fns):
                 for run_fn in run_functions:
                     test_parameters.append(
-                        {
-                            "mesh_wvl_um": mesh_wvl_um,
-                            "adj_wvl_um": adj_wvl_um,
-                            "monitor_bg_index": monitor_bg_index,
-                            "pw_angle_deg": pw_angle_deg,
-                            "eval_fn": eval_fn,
-                            "eval_fn_name": eval_fn_names[eval_fn_idx],
-                            "run_fn": run_fn,
-                            "test_number": test_number,
-                        }
+                        NumericalStructureTestParameters(
+                            mesh_wvl_um=mesh_wvl_um,
+                            adj_wvl_um=adj_wvl_um,
+                            monitor_bg_index=monitor_bg_index,
+                            pw_angle_deg=pw_angle_deg,
+                            eval_fn=eval_fn,
+                            eval_fn_name=eval_fn_names[eval_fn_idx],
+                            run_fn=run_fn,
+                            test_number=test_number,
+                        )
                     )
 
                     test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("test_parameters", test_parameters)
-def test_finite_difference_numerical_structures(
-    test_parameters, rng, tmp_path, redirect_stdout_to_stderr
-):
-    """Compare numerical_structures adjoint gradients against finite differences."""
+def _collect_numerical_structure_evaluation_data(
+    test_parameters: NumericalStructureTestParameters,
+    numerical_case_dir,
+) -> EvaluationData:
+    mesh_wvl_um = test_parameters.mesh_wvl_um
+    adj_wvl_um = test_parameters.adj_wvl_um
+    monitor_bg_index = test_parameters.monitor_bg_index
+    pw_angle_deg = test_parameters.pw_angle_deg
+    eval_fn = test_parameters.eval_fn
+    run_fn = test_parameters.run_fn
+    test_number = test_parameters.test_number
 
-    test_number = test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_bg_index,
-        pw_angle_deg,
-        eval_fn,
-        eval_fn_name,
-        run_fn,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_bg_index",
-        "pw_angle_deg",
-        "eval_fn",
-        "eval_fn_name",
-        "run_fn",
-        "test_number",
-    )(test_parameters)
-
-    sim_path_dir = tmp_path / f"test{test_number}"
-    sim_path_dir.mkdir()
+    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     objective = create_objective_function(
         lambda mesh_wvl_um=mesh_wvl_um,
@@ -348,8 +361,6 @@ def test_finite_difference_numerical_structures(
 
     ring_init_mesh_wvl_factor = [0.15, 0.30, 0.2]
     ring_init = [r * mesh_wvl_um for r in ring_init_mesh_wvl_factor]
-
-    test_results = np.zeros((2, len(ring_init)))
 
     _obj, adj_grad = obj_val_and_grad([ring_init])
 
@@ -379,46 +390,100 @@ def test_finite_difference_numerical_structures(
 
         fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - adj_grad)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(adj_grad)
+    return {
+        "fd_grad": np.asarray(fd_grad, dtype=float),
+        "adj_grad": np.asarray(adj_grad, dtype=float),
+        "ring_init": np.asarray(ring_init, dtype=float),
+        "fd_step": np.asarray(fd_step, dtype=float),
+    }
 
-    dot = np.sum((fd_grad / fd_mag) * (adj_grad / adj_mag))
-    overlap_deg = np.arccos(dot) * 180.0 / np.pi
 
-    if SHOW_PRINT_STATEMENTS:
-        print("\n" * 3)
-        print("-" * 20)
-        print(f"Numerical test #{test_number}")
-        print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-        print(f"Input plane wave angle (deg): {pw_angle_deg}")
-        print(f"Background index for monitor: {monitor_bg_index}")
-        print(f"Eval function: {eval_fn_name}")
-        print(f"RMS Error: {rms_error}")
-        print(f"Gradient overlap (deg): {overlap_deg}")
-        print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-        print("-" * 20)
-        print("\n" * 3)
-
-    assert overlap_deg < OVERLAP_ERROR_THRESHOLD_DEG, (
-        "Adjoint and finite difference gradients misaligned."
+def _evaluate_numerical_structure_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    return evaluate_gradient_angle_agreement(
+        np.asarray(evaluation_data["fd_grad"], dtype=float),
+        np.asarray(evaluation_data["adj_grad"], dtype=float),
+        angle_threshold_deg=OVERLAP_ERROR_THRESHOLD_DEG,
     )
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = adj_grad
 
-    test_number += 1
+def _print_numerical_structure_summary(
+    test_parameters: NumericalStructureTestParameters,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    if not SHOW_PRINT_STATEMENTS:
+        return
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    print("\n" * 3)
+    print("-" * 20)
+    print(f"Numerical test #{test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        f"Mesh and adjoint wavelengths: {test_parameters.mesh_wvl_um}, {test_parameters.adj_wvl_um}"
+    )
+    print(f"Input plane wave angle (deg): {test_parameters.pw_angle_deg}")
+    print(f"Background index for monitor: {test_parameters.monitor_bg_index}")
+    print(f"Eval function: {test_parameters.eval_fn_name}")
+    print(f"Run function: {test_parameters.run_fn}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"Gradient overlap (deg): {diagnostics['gradient_overlap_deg']}")
+    print(f"FD, Adj magnitudes: {diagnostics['reference_mag']}, {diagnostics['adjoint_mag']}")
+    print("-" * 20)
+    print("\n" * 3)
 
+
+def _plot_numerical_structure_comparison(
+    test_parameters: NumericalStructureTestParameters, evaluation_data: EvaluationData
+) -> None:
     if PLOT_FD_ADJ_COMPARISON:
+        adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
+        fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
         plt.plot(adj_grad, color="g", linewidth=2.0)
         plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
-        plt.title(f"Gradient for objective: {eval_fn_name}")
+        plt.title(f"Gradient for objective: {test_parameters.eval_fn_name}")
         plt.legend(["Adjoint", "Finite difference"])
         plt.xlabel("Sample number")
         plt.ylabel("Gradient value")
         plt.show()
 
-    if SAVE_FD_ADJ_DATA:
-        results_dir = tmp_path / NUMERICAL_RESULTS_DATA_DIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        np.save(results_dir / f"results_{test_number}.npy", test_results)
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "test_parameters",
+    test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="num-struct"),
+)
+def test_finite_difference_numerical_structures(
+    request: pytest.FixtureRequest,
+    test_parameters: NumericalStructureTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    """Compare numerical_structures adjoint gradients against finite differences."""
+    case_identity = _case_identity(test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_numerical_structure_evaluation_data(
+            test_parameters, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_numerical_structure_evaluation_data(evaluation_data)
+    )
+    _print_numerical_structure_summary(test_parameters, diagnostics, eval_only=numerical_eval_only)
+    _plot_numerical_structure_comparison(test_parameters, evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Adjoint and finite difference gradients misaligned; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

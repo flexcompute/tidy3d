@@ -8,18 +8,23 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 from autograd.tracer import getval
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_id,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 tmm = pytest.importorskip("tmm")
 
 PLOT_TMM_ADJ_COMPARISON = False
 LOCAL_GRADIENT = True
-SAVE_TEST_DATA = True
-NUMERICAL_RESULTS_SUBDIR = "tmm_gradients"
-SAVE_TMM_LOC = 0
-SAVE_ADJ_LOC = 1
 
 RMS_RELATIVE_THRESHOLD_EPS = 0.02
 RMS_RELATIVE_THRESHOLD_DS = 0.002
@@ -204,26 +209,61 @@ def transmission_from_sim(sim_data: td.SimulationData) -> anp.ndarray:
     return anp.sum(anp.abs(amps) ** 2)
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("geom_type", ("box", "polyslab"))
-def test_tmm_gradient_match(geom_type, numerical_case_dir, redirect_stdout_to_stderr):
+class TMMGradientCaseIdentity(BaseModel):
+    """Semantic identity for one TMM gradient comparison case."""
+
+    geom_type: str
+    adj_freq0: float
+    slab_eps: tuple[float, ...]
+    slab_ds: tuple[float, ...]
+    spc: float
+    theta: float
+
+
+test_parameters = [
+    TMMGradientCaseIdentity(
+        geom_type=geom_type,
+        adj_freq0=ADJ_FREQ0,
+        slab_eps=tuple(float(eps) for eps in SLAB_EPS0),
+        slab_ds=tuple(float(ds) for ds in SLAB_DS0),
+        spc=SPC,
+        theta=THETA,
+    )
+    for geom_type in ("box", "polyslab")
+]
+
+
+def _collect_tmm_gradient_evaluation_data(
+    test_parameters: TMMGradientCaseIdentity,
+    numerical_case_dir,
+) -> EvaluationData:
+    geom_type = test_parameters.geom_type
     params0 = np.concatenate([SLAB_EPS0, SLAB_DS0])
     tmm_grad = compute_T_tmm_grad(SLAB_EPS0, SLAB_DS0)
+    sim_path_dir = numerical_case_dir / "simulations"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     def objective(params):
         slab_eps = params[: SLAB_EPS0.size]
         slab_ds = params[SLAB_EPS0.size :]
         sim = make_simulation(slab_eps, slab_ds, geom_type)
-        sim_path = numerical_case_dir / "tmm_gradients.hdf5"
+        sim_path = sim_path_dir / "tmm_gradients.hdf5"
         sim_data = web.run(sim, path=str(sim_path), local_gradient=LOCAL_GRADIENT)
         return transmission_from_sim(sim_data)
 
     obj_val, adj_grad = ag.value_and_grad(objective)(params0)
     adj_grad = np.asarray(adj_grad, dtype=float)
 
-    test_results = np.zeros((2, tmm_grad.size))
-    test_results[SAVE_TMM_LOC, :] = tmm_grad
-    test_results[SAVE_ADJ_LOC, :] = adj_grad
+    return {
+        "tmm_grad": np.asarray(tmm_grad, dtype=float),
+        "adj_grad": np.asarray(adj_grad, dtype=float),
+        "obj_val": np.asarray(obj_val, dtype=float),
+    }
+
+
+def _evaluate_tmm_gradient_evaluation_data(evaluation_data: EvaluationData):
+    tmm_grad = np.asarray(evaluation_data["tmm_grad"], dtype=float)
+    adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
 
     tmm_grad_eps = tmm_grad[0 : len(SLAB_EPS0)]
     tmm_grad_ds = tmm_grad[len(SLAB_EPS0) :]
@@ -231,41 +271,125 @@ def test_tmm_gradient_match(geom_type, numerical_case_dir, redirect_stdout_to_st
     adj_grad_eps = adj_grad[0 : len(SLAB_EPS0)]
     adj_grad_ds = adj_grad[len(SLAB_EPS0) :]
 
-    rms_relative_eps = np.linalg.norm(adj_grad_eps - tmm_grad_eps) / np.linalg.norm(tmm_grad_eps)
-    rms_relative_ds = np.linalg.norm(adj_grad_ds - tmm_grad_ds) / np.linalg.norm(tmm_grad_ds)
+    rms_relative_eps = float(
+        np.linalg.norm(adj_grad_eps - tmm_grad_eps) / np.linalg.norm(tmm_grad_eps)
+    )
+    rms_relative_ds = float(np.linalg.norm(adj_grad_ds - tmm_grad_ds) / np.linalg.norm(tmm_grad_ds))
 
+    regression_metrics = [
+        Metric(
+            name="rms_relative_eps",
+            observed=rms_relative_eps,
+            expected=RMS_RELATIVE_THRESHOLD_EPS,
+            comparator="lt",
+        ),
+        Metric(
+            name="rms_relative_ds",
+            observed=rms_relative_ds,
+            expected=RMS_RELATIVE_THRESHOLD_DS,
+            comparator="lt",
+        ),
+    ]
+    observation_metrics = [
+        Metric(
+            name="tmm_grad_norm",
+            observed=float(np.linalg.norm(tmm_grad)),
+            expected=0.0,
+            comparator="gte",
+        ),
+        Metric(
+            name="adj_grad_norm",
+            observed=float(np.linalg.norm(adj_grad)),
+            expected=0.0,
+            comparator="gte",
+        ),
+    ]
+    diagnostics = {
+        "obj_val": float(np.asarray(evaluation_data["obj_val"])),
+        "tmm_grad_eps": tmm_grad_eps,
+        "adj_grad_eps": adj_grad_eps,
+        "tmm_grad_ds": tmm_grad_ds,
+        "adj_grad_ds": adj_grad_ds,
+        "rms_relative_eps": rms_relative_eps,
+        "rms_relative_ds": rms_relative_ds,
+    }
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def _print_tmm_gradient_summary(
+    test_parameters: TMMGradientCaseIdentity,
+    diagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print("\n" * 2)
     print("-" * 20)
     print("TMM vs FDTD gradients")
-    print(f"Geometry type: {geom_type}")
-    print(f"Objective value: {obj_val}")
-    print(f"TMM grad (eps): {tmm_grad_eps}")
-    print(f"Adj grad (eps): {adj_grad_eps}")
-    print(f"TMM grad (ds): {tmm_grad_ds}")
-    print(f"Adj grad (ds): {adj_grad_ds}")
-    print(f"RMS relative error (eps): {rms_relative_eps}")
-    print(f"RMS relative error (ds): {rms_relative_ds}")
+    print(f"Evaluation mode: {mode_label}")
+    print(f"Geometry type: {test_parameters.geom_type}")
+    print(f"Objective value: {diagnostics['obj_val']}")
+    print(f"TMM grad (eps): {diagnostics['tmm_grad_eps']}")
+    print(f"Adj grad (eps): {diagnostics['adj_grad_eps']}")
+    print(f"TMM grad (ds): {diagnostics['tmm_grad_ds']}")
+    print(f"Adj grad (ds): {diagnostics['adj_grad_ds']}")
+    print(f"RMS relative error (eps): {diagnostics['rms_relative_eps']}")
+    print(f"RMS relative error (ds): {diagnostics['rms_relative_ds']}")
     print("-" * 20)
     print("\n" * 2)
 
+
+def _plot_tmm_gradient_comparison(
+    test_parameters: TMMGradientCaseIdentity,
+    evaluation_data: EvaluationData,
+) -> None:
     if PLOT_TMM_ADJ_COMPARISON:
+        tmm_grad = np.asarray(evaluation_data["tmm_grad"], dtype=float)
+        adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
         plt.plot(tmm_grad, color="b", linewidth=1.5)
         plt.plot(adj_grad, color="g", linewidth=1.5, linestyle="--")
-        plt.title(f"TMM vs FDTD gradients (geom type: {geom_type})")
+        plt.title(f"TMM vs FDTD gradients (geom type: {test_parameters.geom_type})")
         plt.legend(["TMM (finite diff)", "FDTD (adjoint)"])
         plt.xlabel("Parameter index (eps first, then thickness)")
         plt.ylabel("Gradient value")
         plt.show()
 
-    save_path = None
-    if SAVE_TEST_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"{geom_type}_results.npy"
 
-    try:
-        assert rms_relative_eps < RMS_RELATIVE_THRESHOLD_EPS, "RMS error for eps exceeded threshold"
-        assert rms_relative_ds < RMS_RELATIVE_THRESHOLD_DS, "RMS error for ds exceeded threshold"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "test_parameters",
+    test_parameters,
+    ids=lambda params: case_identity_id(params, prefix="tmm"),
+)
+def test_tmm_gradient_match(
+    request: pytest.FixtureRequest,
+    test_parameters: TMMGradientCaseIdentity,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    case_identity = test_parameters
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_tmm_gradient_evaluation_data(
+            test_parameters, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_tmm_gradient_evaluation_data(
+        evaluation_data
+    )
+    _print_tmm_gradient_summary(test_parameters, diagnostics, eval_only=numerical_eval_only)
+    _plot_tmm_gradient_comparison(test_parameters, evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "TMM and adjoint gradients diverged; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

@@ -1,27 +1,32 @@
 # tests custom_vjp autograd hooks for ComponentModeler and compares to numerically computed finite difference gradients
 from __future__ import annotations
 
-import operator
-
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import xarray as xr
+from pydantic import BaseModel
 
 import tidy3d as td
 from tidy3d.plugins.smatrix import ComponentModeler, Port
 from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web.api.autograd.types import CustomVJPConfig
 
-PLOT_FD_ADJ_COMPARISON = True
-NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = True
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_gradient_angle_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+
+PLOT_FD_ADJ_COMPARISON = False
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_cm_custom_vjp_test"
 
 OVERLAP_ERROR_THRESHOLD_DEG = 10.0
 
@@ -189,7 +194,6 @@ def create_objective_function(geometry, create_sim_base, adj_wvl_um, sim_path_di
         ports, sim_base = create_sim_base()
 
         simulation_dict = {}
-        geom_dict = {}
         for idx, geom_parameters in enumerate(geom_parameters_lists):
             sphere_structure = td.Structure(
                 geometry=td.Sphere(center=geom_parameters[0:3], radius=geom_parameters[3]),
@@ -201,7 +205,6 @@ def create_objective_function(geometry, create_sim_base, adj_wvl_um, sim_path_di
             )
 
             simulation_dict[f"numerical_custom_vjp_testing_{idx}"] = sim_with_sphere.copy()
-            geom_dict[f"numerical_custom_vjp_testing_{idx}"] = geom_parameters
 
         sim_data = {}
         for key, sim_val in simulation_dict.items():
@@ -236,6 +239,24 @@ def create_objective_function(geometry, create_sim_base, adj_wvl_um, sim_path_di
     return objective
 
 
+class CMCustomVJPCaseIdentity(BaseModel):
+    """Semantic identity for one ComponentModeler custom-VJP case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_bg_index: float
+
+
+class CMCustomVJPTestParameters(CMCustomVJPCaseIdentity):
+    """Full parameter bundle for one ComponentModeler custom-VJP test invocation."""
+
+    test_number: int
+
+
+def _case_identity(test_parameters: CMCustomVJPTestParameters) -> CMCustomVJPCaseIdentity:
+    return case_identity_from_parameters(CMCustomVJPCaseIdentity, test_parameters)
+
+
 background_indices = [1.0]
 mesh_wvls_um = [1.5]
 adj_wvls_um = [1.5]
@@ -249,38 +270,26 @@ for idx in range(len(mesh_wvls_um)):
 
     for monitor_bg_index in background_indices:
         test_parameters.append(
-            {
-                "mesh_wvl_um": mesh_wvl_um,
-                "adj_wvl_um": adj_wvl_um,
-                "monitor_bg_index": monitor_bg_index,
-                "test_number": test_number,
-            }
+            CMCustomVJPTestParameters(
+                mesh_wvl_um=mesh_wvl_um,
+                adj_wvl_um=adj_wvl_um,
+                monitor_bg_index=monitor_bg_index,
+                test_number=test_number,
+            )
         )
 
         test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("test_parameters", test_parameters)
-def test_finite_difference_custom_vjp(
-    test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test a variety of autograd permittivity gradients for DiffractionData by"""
-    """comparing them to numerical finite difference."""
-
-    test_number = test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_bg_index,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_bg_index",
-        "test_number",
-    )(test_parameters)
+def _collect_cm_custom_vjp_evaluation_data(
+    test_parameters: CMCustomVJPTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir,
+) -> EvaluationData:
+    mesh_wvl_um = test_parameters.mesh_wvl_um
+    adj_wvl_um = test_parameters.adj_wvl_um
+    monitor_bg_index = test_parameters.monitor_bg_index
+    test_number = test_parameters.test_number
 
     sim_geometry = get_sim_geometry(mesh_wvl_um)
 
@@ -324,7 +333,6 @@ def test_finite_difference_custom_vjp(
     ]
 
     geom_init = sphere_init
-    test_results = np.zeros((2, len(geom_init)))
 
     _obj, adj_grad = obj_val_and_grad([geom_init])
     adj_grad = np.squeeze(np.array(adj_grad))
@@ -353,28 +361,48 @@ def test_finite_difference_custom_vjp(
 
         fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - adj_grad)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(adj_grad)
+    return {
+        "fd_grad": np.asarray(fd_grad, dtype=float),
+        "adj_grad": np.asarray(adj_grad, dtype=float),
+        "sphere_init": np.asarray(sphere_init, dtype=float),
+        "fd_step": np.asarray(fd_step, dtype=float),
+    }
 
-    dot = np.sum((fd_grad / fd_mag) * (adj_grad / adj_mag))
-    overlap_deg = np.arccos(dot) * 180.0 / np.pi
 
+def _evaluate_cm_custom_vjp_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    return evaluate_gradient_angle_agreement(
+        np.asarray(evaluation_data["fd_grad"], dtype=float),
+        np.asarray(evaluation_data["adj_grad"], dtype=float),
+        angle_threshold_deg=OVERLAP_ERROR_THRESHOLD_DEG,
+    )
+
+
+def _print_cm_custom_vjp_summary(
+    test_parameters: CMCustomVJPTestParameters,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Background index for monitor: {monitor_bg_index}")
-    print(f"RMS Error: {rms_error}")
-    print(f"Gradient overlap (deg): {overlap_deg}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
+    print(f"Numerical test #{test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        f"Mesh and adjoint wavelengths: {test_parameters.mesh_wvl_um}, {test_parameters.adj_wvl_um}"
+    )
+    print(f"Background index for monitor: {test_parameters.monitor_bg_index}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"Gradient overlap (deg): {diagnostics['gradient_overlap_deg']}")
+    print(f"FD, Adj magnitudes: {diagnostics['reference_mag']}, {diagnostics['adjoint_mag']}")
     print("-" * 20)
     print("\n" * 3)
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = adj_grad
 
+def _plot_cm_custom_vjp_comparison(evaluation_data: EvaluationData) -> None:
     if PLOT_FD_ADJ_COMPARISON:
+        adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
+        fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
         plt.plot(adj_grad, color="g", linewidth=2.0)
         plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
         plt.legend(["Adjoint", "Finite difference"])
@@ -382,19 +410,44 @@ def test_finite_difference_custom_vjp(
         plt.ylabel("Gradient value")
         plt.show()
 
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
 
-    try:
-        assert overlap_deg < OVERLAP_ERROR_THRESHOLD_DEG, (
-            "Adjoint and finite difference gradients misaligned."
-        )
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "test_parameters",
+    test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="cm-custom-vjp"),
+)
+def test_finite_difference_custom_vjp(
+    request: pytest.FixtureRequest,
+    test_parameters: CMCustomVJPTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    """Compare ComponentModeler custom-VJP gradients against finite differences."""
+    case_identity = _case_identity(test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_cm_custom_vjp_evaluation_data(
+            test_parameters, rng, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_cm_custom_vjp_evaluation_data(
+        evaluation_data
+    )
+    _print_cm_custom_vjp_summary(test_parameters, diagnostics, eval_only=numerical_eval_only)
+    _plot_cm_custom_vjp_comparison(evaluation_data)
 
-    test_number += 1
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Adjoint and finite difference gradients misaligned; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

@@ -164,6 +164,52 @@ def evaluate_fd_adjoint_gradient_agreement(
     return regression_metrics, observation_metrics, diagnostics
 
 
+def gradient_angle_deg(reference_grad: np.ndarray, adjoint_grad: np.ndarray) -> float:
+    """Return the angle in degrees between two gradient vectors."""
+    reference_grad = np.asarray(reference_grad, dtype=float)
+    adjoint_grad = np.asarray(adjoint_grad, dtype=float)
+    reference_norm = np.linalg.norm(reference_grad)
+    adjoint_norm = np.linalg.norm(adjoint_grad)
+    if np.isclose(reference_norm, 0.0) or np.isclose(adjoint_norm, 0.0):
+        if np.isclose(reference_norm, 0.0) and np.isclose(adjoint_norm, 0.0):
+            return 0.0
+        return np.inf
+    dot = np.sum((reference_grad / reference_norm) * (adjoint_grad / adjoint_norm))
+    dot = np.clip(dot, -1.0, 1.0)
+    return float(np.arccos(dot) * 180.0 / np.pi)
+
+
+def evaluate_gradient_angle_agreement(
+    reference_grad: np.ndarray,
+    adjoint_grad: np.ndarray,
+    *,
+    angle_threshold_deg: float,
+    metric_name: str = "gradient_overlap_deg",
+) -> MetricGroups:
+    """Evaluate gradient agreement using vector-angle overlap."""
+    reference_grad = np.asarray(reference_grad, dtype=float)
+    adjoint_grad = np.asarray(adjoint_grad, dtype=float)
+    angle_deg = gradient_angle_deg(reference_grad, adjoint_grad)
+    rms_error = float(np.linalg.norm(reference_grad - adjoint_grad))
+    reference_mag = float(np.linalg.norm(reference_grad))
+    adjoint_mag = float(np.linalg.norm(adjoint_grad))
+    regression_metrics = [
+        Metric(
+            name=metric_name,
+            observed=angle_deg,
+            expected=float(angle_threshold_deg),
+            comparator="lt",
+        )
+    ]
+    diagnostics = {
+        "gradient_overlap_deg": angle_deg,
+        "rms_error": rms_error,
+        "reference_mag": reference_mag,
+        "adjoint_mag": adjoint_mag,
+    }
+    return regression_metrics, [], diagnostics
+
+
 def condition_metric(name: str, condition: bool) -> Metric:
     """Represent a boolean assertion as a regression metric."""
     return Metric(
@@ -183,8 +229,8 @@ def evaluate_allclose_agreement(
     metric_name: str = "max_allclose_scaled_error",
 ) -> MetricGroups:
     """Evaluate NumPy ``assert_allclose``-style agreement as one scalar metric."""
-    actual = np.asarray(actual, dtype=float)
-    desired = np.asarray(desired, dtype=float)
+    actual = np.asarray(actual)
+    desired = np.asarray(desired)
     abs_error = np.abs(actual - desired)
     tolerance = atol + rtol * np.abs(desired)
     scaled_error = np.divide(

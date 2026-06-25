@@ -6,10 +6,10 @@ import autograd.numpy as anp
 import numpy as np
 import pytest
 from autograd import value_and_grad
+from pydantic import BaseModel
 
 import tidy3d as td
 from tests.test_components.autograd.numerical.test_autograd_box_polyslab_numerical import (
-    angled_overlap_deg,
     dimension_permutation,
     finite_difference,
     make_base_simulation,
@@ -17,6 +17,15 @@ from tests.test_components.autograd.numerical.test_autograd_box_polyslab_numeric
     squeeze_dimension,
 )
 from tidy3d import config
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_id,
+    finalize_result,
+    gradient_angle_deg,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 config.local_cache.enabled = True
 WL_UM = 0.65
@@ -31,7 +40,6 @@ FINITE_DIFFERENCE_STEP = MESH_SPACING_UM
 LOCAL_GRADIENT = True
 VERBOSE = False
 PLOT_FD_ADJ_COMPARISON = False
-SAVE_OUTPUT_DATA = True
 COMPARE_TO_FINITE_DIFFERENCE = True
 COMPARE_TO_POLYSLAB = True
 
@@ -115,14 +123,19 @@ def make_objective(
     tmp_path,
     *,
     local_gradient: bool,
+    fixed_grid_spec: td.GridSpec | None = None,
 ):
+    objective_base_sim = base_sim
+    if fixed_grid_spec is not None:
+        objective_base_sim = base_sim.updated_copy(grid_spec=fixed_grid_spec, validate=True)
+
     def objective(parameters):
         results = run_parameter_simulations(
             parameters,
             make_geometry,
             box_center,
             tag,
-            base_sim,
+            objective_base_sim,
             fom,
             tmp_path,
             local_gradient=local_gradient,
@@ -133,44 +146,91 @@ def make_objective(
     return objective
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize(
-    "is_3d, infinite_dim_2d",
-    [
+def fixed_grid_spec_for_parameters(
+    make_geometry,
+    box_center,
+    params: anp.ndarray,
+    base_sim: td.Simulation,
+) -> td.GridSpec:
+    """Resolve the unperturbed simulation grid and reuse it for finite differences."""
+    geometry = make_geometry(params, box_center)
+    structure = td.Structure(
+        geometry=geometry,
+        medium=td.Medium(permittivity=PERMITTIVITY),
+    )
+    sim = base_sim.updated_copy(structures=[structure], validate=True)
+    return td.GridSpec.from_grid(sim.grid)
+
+
+class PolySlabTriangleMeshCaseIdentity(BaseModel):
+    """Semantic identity for one PolySlab/TriangleMesh comparison."""
+
+    is_3d: bool
+    infinite_dim_2d: int
+    shift_box_center: bool
+    compare_to_finite_difference: bool
+    compare_to_polyslab: bool
+
+
+POLYSLAB_TRIANGLEMESH_CASES = [
+    PolySlabTriangleMeshCaseIdentity(
+        is_3d=is_3d,
+        infinite_dim_2d=infinite_dim_2d,
+        shift_box_center=shift_box_center,
+        compare_to_finite_difference=COMPARE_TO_FINITE_DIFFERENCE,
+        compare_to_polyslab=COMPARE_TO_POLYSLAB,
+    )
+    for is_3d, infinite_dim_2d in [
         (True, 2),
         (False, 0),
         (False, 1),
         (False, 2),
-    ],
-)
-@pytest.mark.parametrize("shift_box_center", (True, False))
-def test_polyslab_and_trianglemesh_gradients_match(
-    is_3d, infinite_dim_2d, shift_box_center, tmp_path, redirect_stdout_to_stderr
-):
-    """Test that the triangle mesh and polyslab gradients match for rectangular slab geometries. Allow
-    comparison as well to finite difference values."""
+    ]
+    for shift_box_center in (True, False)
+]
 
-    base_sim, fom = make_base_simulation(is_3d, infinite_dim_2d if not is_3d else None)
 
-    if shift_box_center:
+def _box_center_for_case(case: PolySlabTriangleMeshCaseIdentity) -> list[float]:
+    box_center = [0.0, 0.0, 0.0]
+    if case.shift_box_center:
+        # test what happens when part of the structure falls outside the simulation domain
+        # but don't shift along source axis
+        if case.is_3d:
+            box_center[0:2] = [0.5 * p for p in PERIODS_UM]
+        else:
+            _, final_dim_2d = dimension_permutation(case.infinite_dim_2d)
+            box_center[case.infinite_dim_2d] = 0.5 * INFINITE_DIM_SIZE_UM
+            box_center[final_dim_2d] = 0.5 * PERIODS_UM[0]
+    return box_center
+
+
+def _initial_params_for_case(case: PolySlabTriangleMeshCaseIdentity) -> anp.ndarray:
+    if case.shift_box_center:
         slab_init_size = [2.0 * WL_UM, 2.5 * WL_UM, 0.75 * WL_UM]
     else:
         slab_init_size = [1.0 * WL_UM, 1.25 * WL_UM, 0.75 * WL_UM]
+    return anp.array(slab_init_size)
 
-    initial_params = anp.array(slab_init_size)
 
-    polyslab_axis = 2 if is_3d else infinite_dim_2d
-
-    box_center = [0.0, 0.0, 0.0]
-    if shift_box_center:
-        # test what happens when part of the structure falls outside the simulation domain
-        # but don't shift along source axis
-        if is_3d:
-            box_center[0:2] = [0.5 * p for p in PERIODS_UM]
-        else:
-            _, final_dim_2d = dimension_permutation(infinite_dim_2d)
-            box_center[infinite_dim_2d] = 0.5 * INFINITE_DIM_SIZE_UM
-            box_center[final_dim_2d] = 0.5 * PERIODS_UM[0]
+def _collect_polyslab_trianglemesh_evaluation_data(
+    case: PolySlabTriangleMeshCaseIdentity,
+    numerical_case_dir,
+) -> EvaluationData:
+    base_sim, fom = make_base_simulation(
+        case.is_3d,
+        case.infinite_dim_2d if not case.is_3d else None,
+    )
+    initial_params = _initial_params_for_case(case)
+    polyslab_axis = 2 if case.is_3d else case.infinite_dim_2d
+    box_center = _box_center_for_case(case)
+    sim_path_dir = numerical_case_dir / "simulations"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
+    fixed_grid_spec = fixed_grid_spec_for_parameters(
+        make_trianglemesh_geometry,
+        box_center,
+        initial_params,
+        base_sim,
+    )
 
     triangle_objective = make_objective(
         make_trianglemesh_geometry,
@@ -178,8 +238,9 @@ def test_polyslab_and_trianglemesh_gradients_match(
         "trianglemesh",
         base_sim,
         fom,
-        tmp_path,
+        sim_path_dir,
         local_gradient=LOCAL_GRADIENT,
+        fixed_grid_spec=fixed_grid_spec,
     )
 
     polyslab_objective = make_objective(
@@ -188,8 +249,9 @@ def test_polyslab_and_trianglemesh_gradients_match(
         "polyslab",
         base_sim,
         fom,
-        tmp_path,
+        sim_path_dir,
         local_gradient=LOCAL_GRADIENT,
+        fixed_grid_spec=fixed_grid_spec,
     )
 
     triangle_objective_fd = make_objective(
@@ -198,66 +260,153 @@ def test_polyslab_and_trianglemesh_gradients_match(
         "trianglemesh_fd",
         base_sim,
         fom,
-        tmp_path,
+        sim_path_dir,
         local_gradient=False,
+        fixed_grid_spec=fixed_grid_spec,
     )
 
     _triangle_value, triangle_grad = value_and_grad(triangle_objective)([initial_params])
-    assert triangle_grad is not None
-    if is_3d or infinite_dim_2d not in [1, 2]:
-        grad_norm_triangle = np.linalg.norm(triangle_grad)
-        assert grad_norm_triangle > 1e-6, (
-            f"Assumed norm to be bigger than 1e-6, got {grad_norm_triangle}"
+    triangle_grad_filtered = squeeze_dimension(triangle_grad, case.is_3d, case.infinite_dim_2d)
+
+    _polyslab_value, polyslab_grad = value_and_grad(polyslab_objective)([initial_params])
+    polyslab_grad_filtered = squeeze_dimension(polyslab_grad, case.is_3d, case.infinite_dim_2d)
+
+    fd_triangle = squeeze_dimension(
+        finite_difference(triangle_objective_fd, initial_params, case.is_3d, case.infinite_dim_2d),
+        case.is_3d,
+        case.infinite_dim_2d,
+    )
+
+    return {
+        "fd_triangle": np.asarray(fd_triangle, dtype=float),
+        "triangle_grad": np.asarray(triangle_grad_filtered, dtype=float),
+        "triangle_grad_full": np.asarray(triangle_grad, dtype=float),
+        "polyslab_grad": np.asarray(polyslab_grad_filtered, dtype=float),
+    }
+
+
+def _evaluate_polyslab_trianglemesh_evaluation_data(
+    case: PolySlabTriangleMeshCaseIdentity,
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric], dict[str, float]]:
+    triangle_grad = np.asarray(evaluation_data["triangle_grad"], dtype=float)
+    triangle_grad_full = np.asarray(evaluation_data["triangle_grad_full"], dtype=float)
+    polyslab_grad = np.asarray(evaluation_data["polyslab_grad"], dtype=float)
+    fd_triangle = np.asarray(evaluation_data["fd_triangle"], dtype=float)
+    triangle_grad_norm = float(np.linalg.norm(triangle_grad_full))
+
+    regression_metrics: list[Metric] = []
+    observation_metrics: list[Metric] = [
+        Metric(
+            name="triangle_grad_norm",
+            observed=triangle_grad_norm,
+            expected=0.0,
+            comparator="gte",
         )
-    triangle_grad_filtered = squeeze_dimension(triangle_grad, is_3d, infinite_dim_2d)
-    polyslab_grad_filtered = None
-    if COMPARE_TO_POLYSLAB:
-        _polyslab_value, polyslab_grad = value_and_grad(polyslab_objective)([initial_params])
-        polyslab_grad_filtered = squeeze_dimension(polyslab_grad, is_3d, infinite_dim_2d)
+    ]
+
+    if case.is_3d or case.infinite_dim_2d not in [1, 2]:
+        regression_metrics.append(
+            Metric(
+                name="triangle_grad_norm_nonzero",
+                observed=triangle_grad_norm,
+                expected=1e-6,
+                comparator="gt",
+            )
+        )
+
+    diagnostics: dict[str, float] = {}
+    if case.compare_to_polyslab:
+        triangle_polyslab_overlap_deg = gradient_angle_deg(triangle_grad, polyslab_grad)
+        diagnostics["triangle_polyslab_overlap_deg"] = triangle_polyslab_overlap_deg
+        regression_metrics.append(
+            Metric(
+                name="triangle_polyslab_overlap_deg",
+                observed=triangle_polyslab_overlap_deg,
+                expected=ANGLE_OVERLAP_THRESH_DEG,
+                comparator="lt",
+            )
+        )
+
+    if case.compare_to_finite_difference:
+        triangle_fd_adj_overlap_deg = gradient_angle_deg(triangle_grad, fd_triangle)
+        diagnostics["triangle_fd_adj_overlap_deg"] = triangle_fd_adj_overlap_deg
+        regression_metrics.append(
+            Metric(
+                name="triangle_fd_adj_overlap_deg",
+                observed=triangle_fd_adj_overlap_deg,
+                expected=ANGLE_OVERLAP_FD_ADJ_THRESH_DEG,
+                comparator="lt",
+            )
+        )
+
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def _print_polyslab_trianglemesh_summary(
+    case: PolySlabTriangleMeshCaseIdentity,
+    diagnostics: dict[str, float],
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "PolySlab/TriangleMesh case: "
+        f"is_3d={case.is_3d}, infinite_dim_2d={case.infinite_dim_2d}, "
+        f"shift_box_center={case.shift_box_center}"
+    )
+    if "triangle_polyslab_overlap_deg" in diagnostics:
         print(
-            "polyslab_grad_filtered\t",
-            polyslab_grad_filtered.tolist()
-            if not isinstance(polyslab_grad_filtered, list)
-            else polyslab_grad_filtered,
+            "TriangleMesh FD vs. polyslab overlap: "
+            f"{diagnostics['triangle_polyslab_overlap_deg']:.3f} deg"
+        )
+    if "triangle_fd_adj_overlap_deg" in diagnostics:
+        print(
+            "TriangleMesh FD vs. Adjoint angle overlap: "
+            f"{diagnostics['triangle_fd_adj_overlap_deg']:.3f} deg"
         )
 
-    fd_triangle = None
-    if COMPARE_TO_FINITE_DIFFERENCE:
-        fd_triangle = squeeze_dimension(
-            finite_difference(triangle_objective_fd, initial_params, is_3d, infinite_dim_2d),
-            is_3d,
-            infinite_dim_2d,
-        )
 
-    if SAVE_OUTPUT_DATA:
-        test_data = {
-            "fd trianglemesh": fd_triangle,
-            "grad trianglemesh": triangle_grad_filtered,
-            "grad polyslab": polyslab_grad_filtered,
-        }
-        np.savez(
-            f"test_diff_triangle_poly_{'3' if is_3d else '2'}d_infinite_dim_{infinite_dim_2d}.npz",
-            **test_data,
-        )
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case",
+    POLYSLAB_TRIANGLEMESH_CASES,
+    ids=lambda case: case_identity_id(case, prefix="polyslab-trianglemesh"),
+)
+def test_polyslab_and_trianglemesh_gradients_match(
+    request: pytest.FixtureRequest,
+    case: PolySlabTriangleMeshCaseIdentity,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    """Compare TriangleMesh gradients to equivalent PolySlab and finite-difference values."""
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case,
+        collect_evaluation_data=lambda: _collect_polyslab_trianglemesh_evaluation_data(
+            case,
+            numerical_case_dir,
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_polyslab_trianglemesh_evaluation_data(case, evaluation_data)
+    )
+    _print_polyslab_trianglemesh_summary(
+        case,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
-    if COMPARE_TO_POLYSLAB:
-        triangle_polyslab_overlap_deg = angled_overlap_deg(
-            triangle_grad_filtered, polyslab_grad_filtered
-        )
-        print(f"TriangleMesh FD vs. polyslab overlap: {triangle_polyslab_overlap_deg:.3f}° ")
-        assert triangle_polyslab_overlap_deg < ANGLE_OVERLAP_THRESH_DEG, (
-            f"[TriangleMesh vs. PolySlab] Autograd gradients disagree: "
-            f"angle overlap = {triangle_polyslab_overlap_deg:.3f}° "
-            f"(threshold = {ANGLE_OVERLAP_THRESH_DEG:.3f}°, "
-            f"difference = {triangle_polyslab_overlap_deg - ANGLE_OVERLAP_THRESH_DEG:+.3f}°)"
-        )
-
-    if COMPARE_TO_FINITE_DIFFERENCE:
-        triangle_fd_adj_overlap_deg = angled_overlap_deg(triangle_grad_filtered, fd_triangle)
-        print(f"TriangleMesh FD vs. Adjoint angle overlap: {triangle_fd_adj_overlap_deg:.3f}° ")
-        assert triangle_fd_adj_overlap_deg < ANGLE_OVERLAP_FD_ADJ_THRESH_DEG, (
-            f"Autograd and finite-difference gradients disagree: "
-            f"angle overlap = {triangle_fd_adj_overlap_deg:.3f}° "
-            f"(threshold = {ANGLE_OVERLAP_FD_ADJ_THRESH_DEG:.3f}°, "
-            f"difference = {triangle_fd_adj_overlap_deg - ANGLE_OVERLAP_FD_ADJ_THRESH_DEG:+.3f}°)"
-        )
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "TriangleMesh gradient comparison failed; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

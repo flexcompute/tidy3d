@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -7,10 +9,22 @@ from dataclasses import dataclass, replace
 import autograd as ag
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_id,
+    condition_metric,
+    evaluate_allclose_agreement,
+    finalize_result,
+    gradient_angle_deg,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 
 @pytest.fixture(autouse=True)
@@ -140,18 +154,6 @@ def _to_static_float_tuple(values: tuple[float, float, float]) -> tuple[float, f
     return tuple(float(get_static(value)) for value in values)
 
 
-def angled_overlap_deg(v1: np.ndarray, v2: np.ndarray) -> float:
-    norm_v1 = np.linalg.norm(v1)
-    norm_v2 = np.linalg.norm(v2)
-    if np.isclose(norm_v1, 0.0) or np.isclose(norm_v2, 0.0):
-        if not (np.isclose(norm_v1, 0.0) and np.isclose(norm_v2, 0.0)):
-            return np.inf
-        return 0.0
-    dot = np.sum((v1 / norm_v1) * (v2 / norm_v2))
-    dot = np.clip(dot, -1.0, 1.0)
-    return float(np.arccos(dot) * 180.0 / np.pi)
-
-
 @dataclass(frozen=True)
 class SweepConfig:
     dataset_spacing: float = BASE_DATASET_SPACING
@@ -167,6 +169,36 @@ class SweepConfig:
     source_structure_permittivity: float | None = None
     source_structure_custom_medium: bool = False
     add_far_corner_structure: bool = False
+
+
+def _dataset_spacing_sweep_config(base_config: SweepConfig, value: float) -> SweepConfig:
+    return replace(base_config, dataset_spacing=value)
+
+
+def _grid_resolution_sweep_config(base_config: SweepConfig, value: int) -> SweepConfig:
+    return replace(base_config, min_steps_per_wvl=value)
+
+
+def _source_size_sweep_config(base_config: SweepConfig, value: float) -> SweepConfig:
+    return replace(base_config, source_size=(value, value, 0.0))
+
+
+def _amplitude_sweep_config(base_config: SweepConfig, value: float) -> SweepConfig:
+    return replace(base_config, amplitude_scale=value)
+
+
+def _permittivity_sweep_config(
+    base_config: SweepConfig, value: tuple[float, float | None]
+) -> SweepConfig:
+    return replace(
+        base_config,
+        background_permittivity=value[0],
+        source_structure_permittivity=value[1],
+    )
+
+
+def _wavelength_sweep_config(base_config: SweepConfig, value: float) -> SweepConfig:
+    return replace(base_config, wvl0=value)
 
 
 @dataclass(frozen=True)
@@ -186,6 +218,63 @@ class GradientMetrics:
     angle_deg: float
     adjoint_norm: float
     fd_norm: float
+
+
+@dataclass(frozen=True)
+class SourceGradientTestParameters:
+    case_name: str
+    derivative_target: str
+    sim_dims: int = 3
+
+
+class SourceGradientCaseIdentity(BaseModel):
+    """Semantic identity for one custom-source gradient artifact."""
+
+    test_name: str
+    case_name: str
+    derivative_target: str
+    resolved_derivative_target: str
+    dataset_spacing: float
+    min_steps_per_wvl: int
+    wvl0: float
+    source_size: tuple[float, float, float]
+    sim_dims: int
+    objective_3d: str
+    monitor_freq_scale: float
+    monitor_freq_scales: tuple[float, ...] | None
+    amplitude_scale: float
+    background_permittivity: float
+    source_structure_permittivity: float | None
+    source_structure_custom_medium: bool
+    add_far_corner_structure: bool
+    variation_name: str | None = None
+    variation_values: tuple[str, ...] = ()
+
+
+class SourceVariationSweepCaseIdentity(SourceGradientCaseIdentity):
+    """Semantic identity for a custom-source gradient variation sweep artifact."""
+
+    realized_sweep_config_hash: str
+
+
+class SourcePhaseCaseIdentity(BaseModel):
+    """Semantic identity for one custom-source global-phase equivariance artifact."""
+
+    test_name: str
+    case_name: str
+    dataset_spacing: float
+    min_steps_per_wvl: int
+    wvl0: float
+    source_size: tuple[float, float, float]
+    sim_dims: int
+    objective_3d: str
+    monitor_freq_scale: float
+    monitor_freq_scales: tuple[float, ...] | None
+    amplitude_scale: float
+    background_permittivity: float
+    source_structure_permittivity: float | None
+    source_structure_custom_medium: bool
+    add_far_corner_structure: bool
 
 
 def _resolve_derivative_target(case: SourceCase, derivative_target: str) -> str:
@@ -224,6 +313,29 @@ SOURCE_CASES = (
         source_size_mask=(True, True, True),
     ),
 )
+
+
+def _source_case_from_name(case_name: str) -> SourceCase:
+    return next(case for case in SOURCE_CASES if case.name == case_name)
+
+
+def _source_gradient_parameters(
+    *,
+    case_names: tuple[str, ...] | None = None,
+    sim_dims_values: tuple[int, ...] = (3,),
+    derivative_targets: tuple[str, ...] = DERIVATIVE_TARGETS,
+) -> tuple[SourceGradientTestParameters, ...]:
+    selected_case_names = case_names or tuple(case.name for case in SOURCE_CASES)
+    return tuple(
+        SourceGradientTestParameters(
+            case_name=case_name,
+            derivative_target=derivative_target,
+            sim_dims=sim_dims,
+        )
+        for sim_dims in sim_dims_values
+        for derivative_target in derivative_targets
+        for case_name in selected_case_names
+    )
 
 
 def _source_size_for_case(
@@ -510,6 +622,310 @@ def _fd_agreement_tolerances(derivative_target: str) -> tuple[float, float, floa
     raise ValueError(f"Unsupported derivative target for agreement check: {derivative_target!r}")
 
 
+def _sweep_config_identity_payload(config: SweepConfig) -> dict[str, object]:
+    return {
+        "dataset_spacing": float(config.dataset_spacing),
+        "min_steps_per_wvl": int(config.min_steps_per_wvl),
+        "wvl0": float(config.wvl0),
+        "source_size": tuple(float(value) for value in config.source_size),
+        "sim_dims": int(config.sim_dims),
+        "objective_3d": config.objective_3d,
+        "monitor_freq_scale": float(config.monitor_freq_scale),
+        "monitor_freq_scales": (
+            None
+            if config.monitor_freq_scales is None
+            else tuple(float(value) for value in config.monitor_freq_scales)
+        ),
+        "amplitude_scale": float(config.amplitude_scale),
+        "background_permittivity": float(config.background_permittivity),
+        "source_structure_permittivity": (
+            None
+            if config.source_structure_permittivity is None
+            else float(config.source_structure_permittivity)
+        ),
+        "source_structure_custom_medium": bool(config.source_structure_custom_medium),
+        "add_far_corner_structure": bool(config.add_far_corner_structure),
+    }
+
+
+def _source_gradient_case_identity(
+    *,
+    test_name: str,
+    case: SourceCase,
+    derivative_target: str,
+    config: SweepConfig,
+    variation_name: str | None = None,
+    variation_values: tuple = (),
+) -> SourceGradientCaseIdentity:
+    return SourceGradientCaseIdentity(
+        test_name=test_name,
+        case_name=case.name,
+        derivative_target=derivative_target,
+        resolved_derivative_target=_resolve_derivative_target(case, derivative_target),
+        **_sweep_config_identity_payload(config),
+        variation_name=variation_name,
+        variation_values=tuple(str(value) for value in variation_values),
+    )
+
+
+def _phase_equivariance_config() -> SweepConfig:
+    return replace(SweepConfig(sim_dims=3), objective_3d="intensity")
+
+
+def _source_phase_case_identity(
+    *,
+    test_name: str,
+    case: SourceCase,
+    config: SweepConfig,
+) -> SourcePhaseCaseIdentity:
+    return SourcePhaseCaseIdentity(
+        test_name=test_name,
+        case_name=case.name,
+        **_sweep_config_identity_payload(config),
+    )
+
+
+def _source_phase_case_id(case_name: str) -> str:
+    return case_identity_id(
+        _source_phase_case_identity(
+            test_name="custom_source_intensity_gradient_global_phase_equivariance",
+            case=_source_case_from_name(case_name),
+            config=_phase_equivariance_config(),
+        ),
+        prefix="source-phase",
+    )
+
+
+def _realized_sweep_configs(
+    base_config: SweepConfig,
+    values: tuple,
+    update_config: Callable[[SweepConfig, object], SweepConfig],
+) -> tuple[SweepConfig, ...]:
+    return tuple(update_config(base_config, value) for value in values)
+
+
+def _realized_sweep_config_hash(configs: tuple[SweepConfig, ...]) -> str:
+    config_json = json.dumps(
+        [_sweep_config_identity_payload(config) for config in configs],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(config_json.encode("utf-8")).hexdigest()
+
+
+def _source_variation_sweep_case_identity(
+    *,
+    test_name: str,
+    case: SourceCase,
+    derivative_target: str,
+    base_config: SweepConfig,
+    variation_name: str,
+    variation_values: tuple,
+    realized_configs: tuple[SweepConfig, ...],
+) -> SourceVariationSweepCaseIdentity:
+    base_identity = _source_gradient_case_identity(
+        test_name=test_name,
+        case=case,
+        derivative_target=derivative_target,
+        config=base_config,
+        variation_name=variation_name,
+        variation_values=variation_values,
+    )
+    return SourceVariationSweepCaseIdentity(
+        **base_identity.model_dump(),
+        realized_sweep_config_hash=_realized_sweep_config_hash(realized_configs),
+    )
+
+
+def _source_gradient_case_id(
+    *,
+    test_name: str,
+    params: SourceGradientTestParameters,
+    config: SweepConfig,
+    variation_name: str | None = None,
+    variation_values: tuple = (),
+) -> str:
+    case = _source_case_from_name(params.case_name)
+    return case_identity_id(
+        _source_gradient_case_identity(
+            test_name=test_name,
+            case=case,
+            derivative_target=params.derivative_target,
+            config=config,
+            variation_name=variation_name,
+            variation_values=variation_values,
+        ),
+        prefix="source",
+    )
+
+
+def _source_variation_sweep_case_id(
+    *,
+    test_name: str,
+    params: SourceGradientTestParameters,
+    base_config: SweepConfig,
+    variation_name: str,
+    variation_values: tuple,
+    update_config: Callable[[SweepConfig, object], SweepConfig],
+) -> str:
+    case = _source_case_from_name(params.case_name)
+    realized_configs = _realized_sweep_configs(base_config, variation_values, update_config)
+    return case_identity_id(
+        _source_variation_sweep_case_identity(
+            test_name=test_name,
+            case=case,
+            derivative_target=params.derivative_target,
+            base_config=base_config,
+            variation_name=variation_name,
+            variation_values=variation_values,
+            realized_configs=realized_configs,
+        ),
+        prefix="source",
+    )
+
+
+def _gradient_metrics_to_evaluation_data(metrics: GradientMetrics) -> EvaluationData:
+    return {
+        "grad_adjoint": np.asarray(metrics.grad_adjoint, dtype=float),
+        "grad_fd": np.asarray(metrics.grad_fd, dtype=float),
+    }
+
+
+def _gradient_metrics_from_gradients(
+    grad_adjoint: np.ndarray,
+    grad_fd: np.ndarray,
+) -> GradientMetrics:
+    grad_adjoint = np.asarray(grad_adjoint, dtype=float)
+    grad_fd = np.asarray(grad_fd, dtype=float)
+    return GradientMetrics(
+        grad_adjoint=grad_adjoint,
+        grad_fd=grad_fd,
+        angle_deg=gradient_angle_deg(grad_adjoint, grad_fd),
+        adjoint_norm=float(np.linalg.norm(grad_adjoint)),
+        fd_norm=float(np.linalg.norm(grad_fd)),
+    )
+
+
+def _gradient_metrics_from_evaluation_data(
+    evaluation_data: EvaluationData,
+    *,
+    index: int | None = None,
+) -> GradientMetrics:
+    def value(name: str) -> np.ndarray:
+        data = np.asarray(evaluation_data[name], dtype=float)
+        return data if index is None else data[index]
+
+    grad_adjoint = value("grad_adjoint")
+    grad_fd = value("grad_fd")
+    return _gradient_metrics_from_gradients(grad_adjoint, grad_fd)
+
+
+def _evaluate_source_gradient_metrics(
+    metrics: GradientMetrics,
+    case: SourceCase,
+    derivative_target: str,
+    *,
+    metric_prefix: str,
+) -> tuple[list[Metric], list[Metric]]:
+    resolved_derivative_target = _resolve_derivative_target(case, derivative_target)
+    angle_limit_deg, norm_rtol, norm_atol = _fd_agreement_tolerances(resolved_derivative_target)
+    regression_metrics = [
+        Metric(
+            name=f"{metric_prefix}_angle_deg",
+            observed=metrics.angle_deg,
+            expected=angle_limit_deg,
+            comparator="lt",
+        ),
+        condition_metric(
+            f"{metric_prefix}_adjoint_norm_finite",
+            np.isfinite(metrics.adjoint_norm),
+        ),
+        condition_metric(
+            f"{metric_prefix}_fd_norm_finite",
+            np.isfinite(metrics.fd_norm),
+        ),
+    ]
+    norm_metrics, norm_observations, _ = evaluate_allclose_agreement(
+        np.asarray([metrics.adjoint_norm], dtype=float),
+        np.asarray([metrics.fd_norm], dtype=float),
+        rtol=norm_rtol,
+        atol=norm_atol,
+        metric_name=f"{metric_prefix}_norm_scaled_error",
+    )
+    regression_metrics.extend(norm_metrics)
+    observation_metrics = [
+        Metric(
+            name=f"{metric_prefix}_adjoint_norm",
+            observed=metrics.adjoint_norm,
+            expected=0.0,
+            comparator="gte",
+        ),
+        Metric(
+            name=f"{metric_prefix}_fd_norm",
+            observed=metrics.fd_norm,
+            expected=0.0,
+            comparator="gte",
+        ),
+    ]
+    observation_metrics.extend(norm_observations)
+    return regression_metrics, observation_metrics
+
+
+def _collect_source_gradient_evaluation_data(
+    numerical_case_dir,
+    case: SourceCase,
+    config: SweepConfig,
+    derivative_target: str,
+    *,
+    label: str,
+) -> EvaluationData:
+    sim_path_dir = numerical_case_dir / "simulations"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
+    metrics = _run_gradient_case(
+        sim_path_dir,
+        case,
+        config,
+        derivative_target,
+        label=label,
+    )
+    return _gradient_metrics_to_evaluation_data(metrics)
+
+
+def _evaluate_source_gradient_evaluation_data(
+    evaluation_data: EvaluationData,
+    case: SourceCase,
+    derivative_target: str,
+    *,
+    metric_prefix: str,
+) -> tuple[list[Metric], list[Metric]]:
+    metrics = _gradient_metrics_from_evaluation_data(evaluation_data)
+    return _evaluate_source_gradient_metrics(
+        metrics,
+        case,
+        derivative_target,
+        metric_prefix=metric_prefix,
+    )
+
+
+def _finalize_source_gradient_result(
+    *,
+    request: pytest.FixtureRequest,
+    numerical_case_dir,
+    regression_metrics: list[Metric],
+    observation_metrics: list[Metric],
+) -> None:
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Custom source adjoint and finite-difference gradients diverged; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )
+
+
 def _run_gradient_case(
     tmp_path,
     case: SourceCase,
@@ -609,23 +1025,15 @@ def _run_gradient_case(
         )
         grad_fd[idx] = (obj_plus - obj_minus) / (2 * delta)
 
-    angle_deg = angled_overlap_deg(grad_adjoint, grad_fd)
-    adjoint_norm = float(np.linalg.norm(grad_adjoint))
-    fd_norm = float(np.linalg.norm(grad_fd))
+    metrics = _gradient_metrics_from_gradients(grad_adjoint, grad_fd)
 
     print(f"[{label}] grad_adjoint = {grad_adjoint}", file=sys.stderr)
     print(f"[{label}] grad_fd      = {grad_fd}", file=sys.stderr)
-    print(f"[{label}] angle_deg    = {angle_deg}", file=sys.stderr)
-    print(f"[{label}] adjoint_norm = {adjoint_norm}", file=sys.stderr)
-    print(f"[{label}] fd_norm      = {fd_norm}", file=sys.stderr)
+    print(f"[{label}] angle_deg    = {metrics.angle_deg}", file=sys.stderr)
+    print(f"[{label}] adjoint_norm = {metrics.adjoint_norm}", file=sys.stderr)
+    print(f"[{label}] fd_norm      = {metrics.fd_norm}", file=sys.stderr)
 
-    return GradientMetrics(
-        grad_adjoint=grad_adjoint,
-        grad_fd=grad_fd,
-        angle_deg=angle_deg,
-        adjoint_norm=adjoint_norm,
-        fd_norm=fd_norm,
-    )
+    return metrics
 
 
 def _run_adjoint_only_gradient_case(
@@ -662,44 +1070,202 @@ def _run_adjoint_only_gradient_case(
     )
 
 
-def _assert_fd_agreement(
-    metrics: GradientMetrics, case: SourceCase, derivative_target: str, *, label: str
-) -> None:
-    resolved_derivative_target = _resolve_derivative_target(case, derivative_target)
-    angle_limit_deg, norm_rtol, norm_atol = _fd_agreement_tolerances(resolved_derivative_target)
-    context = (
-        f"{label}: angle_deg={metrics.angle_deg:.6g}, "
-        f"grad_adjoint={metrics.grad_adjoint}, grad_fd={metrics.grad_fd}, "
-        f"adjoint_norm={metrics.adjoint_norm:.6g}, fd_norm={metrics.fd_norm:.6g}"
-    )
-    assert metrics.angle_deg < angle_limit_deg, context
-    assert np.isfinite(metrics.adjoint_norm), context
-    assert np.isfinite(metrics.fd_norm), context
-    np.testing.assert_allclose(
-        metrics.adjoint_norm,
-        metrics.fd_norm,
-        rtol=norm_rtol,
-        atol=norm_atol,
-        err_msg=context,
-    )
+def _collect_source_variation_sweep_evaluation_data(
+    numerical_case_dir,
+    case: SourceCase,
+    derivative_target: str,
+    variation_name: str,
+    values: tuple,
+    realized_configs: tuple[SweepConfig, ...],
+) -> EvaluationData:
+    resolved_target = _resolve_derivative_target(case, derivative_target)
+    metrics_by_value = []
+    sim_path_dir = numerical_case_dir / "simulations"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
+    for value, config in zip(values, realized_configs, strict=True):
+        label = f"{case.name}_{resolved_target}_{variation_name}_{value}_{config.sim_dims}d"
+        metrics_by_value.append(
+            _run_gradient_case(sim_path_dir, case, config, derivative_target, label=label)
+        )
+
+    return {
+        "grad_adjoint": np.stack([metrics.grad_adjoint for metrics in metrics_by_value]),
+        "grad_fd": np.stack([metrics.grad_fd for metrics in metrics_by_value]),
+    }
+
+
+def _evaluate_source_variation_sweep_evaluation_data(
+    evaluation_data: EvaluationData,
+    case: SourceCase,
+    derivative_target: str,
+    variation_name: str,
+    values: tuple,
+) -> tuple[list[Metric], list[Metric]]:
+    regression_metrics: list[Metric] = []
+    observation_metrics: list[Metric] = []
+    for idx, _value in enumerate(values):
+        metrics = _gradient_metrics_from_evaluation_data(evaluation_data, index=idx)
+        value_regression_metrics, value_observation_metrics = _evaluate_source_gradient_metrics(
+            metrics,
+            case,
+            derivative_target,
+            metric_prefix=f"{variation_name}_{idx}",
+        )
+        regression_metrics.extend(value_regression_metrics)
+        observation_metrics.extend(value_observation_metrics)
+    return regression_metrics, observation_metrics
 
 
 def _run_variation_sweep(
-    tmp_path,
+    request: pytest.FixtureRequest,
+    numerical_case_dir,
+    numerical_eval_only: bool,
     case: SourceCase,
     sim_dims: int,
     derivative_target: str,
     variation_name: str,
     values: tuple,
     update_config: Callable[[SweepConfig, object], SweepConfig],
+    *,
+    test_name: str,
 ) -> None:
     base_config = replace(SweepConfig(), sim_dims=sim_dims)
-    resolved_target = _resolve_derivative_target(case, derivative_target)
-    for value in values:
-        config = update_config(base_config, value)
-        label = f"{case.name}_{resolved_target}_{variation_name}_{value}_{sim_dims}d"
-        metrics = _run_gradient_case(tmp_path, case, config, derivative_target, label=label)
-        _assert_fd_agreement(metrics, case, derivative_target, label=label)
+    realized_configs = _realized_sweep_configs(base_config, values, update_config)
+    case_identity = _source_variation_sweep_case_identity(
+        test_name=test_name,
+        case=case,
+        derivative_target=derivative_target,
+        base_config=base_config,
+        variation_name=variation_name,
+        variation_values=values,
+        realized_configs=realized_configs,
+    )
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_source_variation_sweep_evaluation_data(
+            numerical_case_dir,
+            case,
+            derivative_target,
+            variation_name,
+            values,
+            realized_configs,
+        ),
+    )
+    regression_metrics, observation_metrics = _evaluate_source_variation_sweep_evaluation_data(
+        evaluation_data,
+        case,
+        derivative_target,
+        variation_name,
+        values,
+    )
+    _finalize_source_gradient_result(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+    )
+
+
+def _run_single_source_gradient_artifact(
+    *,
+    request: pytest.FixtureRequest,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    test_name: str,
+    case: SourceCase,
+    config: SweepConfig,
+    derivative_target: str,
+    label: str,
+    metric_prefix: str,
+) -> None:
+    case_identity = _source_gradient_case_identity(
+        test_name=test_name,
+        case=case,
+        derivative_target=derivative_target,
+        config=config,
+    )
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_source_gradient_evaluation_data(
+            numerical_case_dir,
+            case,
+            config,
+            derivative_target,
+            label=label,
+        ),
+    )
+    regression_metrics, observation_metrics = _evaluate_source_gradient_evaluation_data(
+        evaluation_data,
+        case,
+        derivative_target,
+        metric_prefix=metric_prefix,
+    )
+    _finalize_source_gradient_result(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+    )
+
+
+def _collect_phase_equivariance_evaluation_data(
+    numerical_case_dir,
+    case: SourceCase,
+    config: SweepConfig,
+) -> EvaluationData:
+    sim_path_dir = numerical_case_dir / "simulations"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
+    base_params = tuple(np.asarray(BASE_PARAM_AMPLITUDES, dtype=complex))
+    phased_params = tuple(1j * np.asarray(BASE_PARAM_AMPLITUDES, dtype=complex))
+
+    grad_base = _run_adjoint_only_gradient_case(
+        sim_path_dir,
+        case,
+        config,
+        label=f"{case.name}_intensity_phase_base",
+        params=base_params,
+    )
+    grad_phased = _run_adjoint_only_gradient_case(
+        sim_path_dir,
+        case,
+        config,
+        label=f"{case.name}_intensity_phase_j",
+        params=phased_params,
+    )
+    return {
+        "grad_base": np.asarray(grad_base, dtype=complex),
+        "grad_phased": np.asarray(grad_phased, dtype=complex),
+    }
+
+
+def _evaluate_phase_equivariance_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric]]:
+    grad_base = np.asarray(evaluation_data["grad_base"], dtype=complex)
+    grad_phased = np.asarray(evaluation_data["grad_phased"], dtype=complex)
+    regression_metrics = [
+        condition_metric(
+            "base_real_nonzero",
+            not np.allclose(grad_base.real, 0.0, rtol=0.0, atol=1e-12),
+        ),
+        condition_metric(
+            "base_imag_nonzero",
+            not np.allclose(grad_base.imag, 0.0, rtol=0.0, atol=1e-12),
+        ),
+    ]
+    phase_metrics, phase_observations, _ = evaluate_allclose_agreement(
+        grad_phased,
+        -1j * grad_base,
+        rtol=1e-2,
+        atol=1e-6,
+        metric_name="phase_equivariance_scaled_error",
+    )
+    regression_metrics.extend(phase_metrics)
+    return regression_metrics, phase_observations
 
 
 def _skip_2d_field_cases(sim_dims: int, case: SourceCase) -> None:
@@ -708,155 +1274,295 @@ def _skip_2d_field_cases(sim_dims: int, case: SourceCase) -> None:
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(sim_dims_values=SIM_DIMS_VALUES),
+    ids=lambda params: _source_variation_sweep_case_id(
+        test_name="custom_source_gradient_vs_dataset_spacing",
+        params=params,
+        base_config=replace(SweepConfig(), sim_dims=params.sim_dims),
+        variation_name="dataset_spacing",
+        variation_values=DATASET_SPACING_VALUES,
+        update_config=_dataset_spacing_sweep_config,
+    ),
+)
 def test_custom_source_gradient_vs_dataset_spacing(
-    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    sim_dims = params.sim_dims
+    derivative_target = params.derivative_target
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
-        tmp_path,
+        request,
+        numerical_case_dir,
+        numerical_eval_only,
         case,
         sim_dims,
         derivative_target,
         "dataset_spacing",
         DATASET_SPACING_VALUES,
-        lambda base, value: replace(base, dataset_spacing=value),
+        _dataset_spacing_sweep_config,
+        test_name="custom_source_gradient_vs_dataset_spacing",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(sim_dims_values=SIM_DIMS_VALUES),
+    ids=lambda params: _source_variation_sweep_case_id(
+        test_name="custom_source_gradient_vs_grid_resolution",
+        params=params,
+        base_config=replace(SweepConfig(), sim_dims=params.sim_dims),
+        variation_name="min_steps_per_wvl",
+        variation_values=MIN_STEPS_PER_WVL_VALUES,
+        update_config=_grid_resolution_sweep_config,
+    ),
+)
 def test_custom_source_gradient_vs_grid_resolution(
-    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    sim_dims = params.sim_dims
+    derivative_target = params.derivative_target
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
-        tmp_path,
+        request,
+        numerical_case_dir,
+        numerical_eval_only,
         case,
         sim_dims,
         derivative_target,
         "min_steps_per_wvl",
         MIN_STEPS_PER_WVL_VALUES,
-        lambda base, value: replace(base, min_steps_per_wvl=value),
+        _grid_resolution_sweep_config,
+        test_name="custom_source_gradient_vs_grid_resolution",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(sim_dims_values=SIM_DIMS_VALUES),
+    ids=lambda params: _source_variation_sweep_case_id(
+        test_name="custom_source_gradient_vs_source_size",
+        params=params,
+        base_config=replace(SweepConfig(), sim_dims=params.sim_dims),
+        variation_name="source_size_xy",
+        variation_values=SOURCE_SIZE_XY_VALUES,
+        update_config=_source_size_sweep_config,
+    ),
+)
 def test_custom_source_gradient_vs_source_size(
-    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    sim_dims = params.sim_dims
+    derivative_target = params.derivative_target
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
-        tmp_path,
+        request,
+        numerical_case_dir,
+        numerical_eval_only,
         case,
         sim_dims,
         derivative_target,
         "source_size_xy",
         SOURCE_SIZE_XY_VALUES,
-        lambda base, value: replace(base, source_size=(value, value, 0.0)),
+        _source_size_sweep_config,
+        test_name="custom_source_gradient_vs_source_size",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(sim_dims_values=SIM_DIMS_VALUES),
+    ids=lambda params: _source_variation_sweep_case_id(
+        test_name="custom_source_gradient_vs_amplitude",
+        params=params,
+        base_config=replace(SweepConfig(), sim_dims=params.sim_dims),
+        variation_name="amplitude_scale",
+        variation_values=AMPLITUDE_SCALE_VALUES,
+        update_config=_amplitude_sweep_config,
+    ),
+)
 def test_custom_source_gradient_vs_amplitude(
-    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    sim_dims = params.sim_dims
+    derivative_target = params.derivative_target
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
-        tmp_path,
+        request,
+        numerical_case_dir,
+        numerical_eval_only,
         case,
         sim_dims,
         derivative_target,
         "amplitude_scale",
         AMPLITUDE_SCALE_VALUES,
-        lambda base, value: replace(base, amplitude_scale=value),
+        _amplitude_sweep_config,
+        test_name="custom_source_gradient_vs_amplitude",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(sim_dims_values=SIM_DIMS_VALUES),
+    ids=lambda params: _source_variation_sweep_case_id(
+        test_name="custom_source_gradient_vs_permittivity",
+        params=params,
+        base_config=replace(SweepConfig(), sim_dims=params.sim_dims),
+        variation_name="permittivity",
+        variation_values=PERMITTIVITY_VALUES,
+        update_config=_permittivity_sweep_config,
+    ),
+)
 def test_custom_source_gradient_vs_permittivity(
-    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    sim_dims = params.sim_dims
+    derivative_target = params.derivative_target
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
-        tmp_path,
+        request,
+        numerical_case_dir,
+        numerical_eval_only,
         case,
         sim_dims,
         derivative_target,
         "permittivity",
         PERMITTIVITY_VALUES,
-        lambda base, value: replace(
-            base,
-            background_permittivity=value[0],
-            source_structure_permittivity=value[1],
-        ),
+        _permittivity_sweep_config,
+        test_name="custom_source_gradient_vs_permittivity",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(sim_dims_values=SIM_DIMS_VALUES),
+    ids=lambda params: _source_variation_sweep_case_id(
+        test_name="custom_source_gradient_vs_wavelength",
+        params=params,
+        base_config=replace(SweepConfig(), sim_dims=params.sim_dims),
+        variation_name="wvl0",
+        variation_values=WVL0_VALUES,
+        update_config=_wavelength_sweep_config,
+    ),
+)
 def test_custom_source_gradient_vs_wavelength(
-    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    sim_dims = params.sim_dims
+    derivative_target = params.derivative_target
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
-        tmp_path,
+        request,
+        numerical_case_dir,
+        numerical_eval_only,
         case,
         sim_dims,
         derivative_target,
         "wvl0",
         WVL0_VALUES,
-        lambda base, value: replace(base, wvl0=value),
+        _wavelength_sweep_config,
+        test_name="custom_source_gradient_vs_wavelength",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(
+        case_names=("custom_field_vec_e", "custom_current_vec_e"),
+    ),
+    ids=lambda params: _source_gradient_case_id(
+        test_name="custom_source_gradient_off_center_monitor_frequency",
+        params=params,
+        config=replace(
+            SweepConfig(sim_dims=3),
+            monitor_freq_scale=OFF_CENTER_MONITOR_FREQ_SCALE,
+        ),
+    ),
+)
 def test_custom_source_gradient_off_center_monitor_frequency(
-    _enable_local_cache, tmp_path, case_name, derivative_target
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
     """Check source gradients when objective frequency is offset from source center frequency."""
-    case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
+    case = _source_case_from_name(params.case_name)
+    derivative_target = params.derivative_target
     resolved_target = _resolve_derivative_target(case, derivative_target)
     config = replace(
         SweepConfig(sim_dims=3),
         monitor_freq_scale=OFF_CENTER_MONITOR_FREQ_SCALE,
     )
     label = f"{case.name}_{resolved_target}_monitor_freq_scale_{OFF_CENTER_MONITOR_FREQ_SCALE}_3d"
-    metrics = _run_gradient_case(
-        tmp_path,
-        case,
-        config,
-        derivative_target,
+    _run_single_source_gradient_artifact(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        test_name="custom_source_gradient_off_center_monitor_frequency",
+        case=case,
+        config=config,
+        derivative_target=derivative_target,
         label=label,
+        metric_prefix="off_center_monitor_frequency",
     )
-    _assert_fd_agreement(metrics, case, derivative_target, label=label)
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(
+        case_names=("custom_field_vec_e", "custom_current_vec_e"),
+    ),
+    ids=lambda params: _source_gradient_case_id(
+        test_name="custom_source_gradient_two_frequency_flux_difference",
+        params=params,
+        config=replace(
+            SweepConfig(sim_dims=3),
+            objective_3d="flux_difference",
+            monitor_freq_scales=TWO_FREQ_MONITOR_SCALES,
+        ),
+    ),
+)
 def test_custom_source_gradient_two_frequency_flux_difference(
-    _enable_local_cache, tmp_path, case_name, derivative_target
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
     """Check source gradients with objective flux(f0) - flux(0.95*f0) in 3D."""
-    case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
+    case = _source_case_from_name(params.case_name)
+    derivative_target = params.derivative_target
     resolved_target = _resolve_derivative_target(case, derivative_target)
     config = replace(
         SweepConfig(sim_dims=3),
@@ -864,168 +1570,161 @@ def test_custom_source_gradient_two_frequency_flux_difference(
         monitor_freq_scales=TWO_FREQ_MONITOR_SCALES,
     )
     label = f"{case.name}_{resolved_target}_flux_difference_3d"
-    metrics = _run_gradient_case(
-        tmp_path,
-        case,
-        config,
-        derivative_target,
+    _run_single_source_gradient_artifact(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        test_name="custom_source_gradient_two_frequency_flux_difference",
+        case=case,
+        config=config,
+        derivative_target=derivative_target,
         label=label,
+        metric_prefix="two_frequency_flux_difference",
     )
-    _assert_fd_agreement(metrics, case, derivative_target, label=label)
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(),
+    ids=lambda params: _source_gradient_case_id(
+        test_name="custom_source_gradient_inside_structure",
+        params=params,
+        config=replace(SweepConfig(), source_structure_permittivity=4.0),
+    ),
+)
 def test_custom_source_gradient_inside_structure(
-    _enable_local_cache, tmp_path, case, derivative_target
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    derivative_target = params.derivative_target
     resolved_target = _resolve_derivative_target(case, derivative_target)
     structure_config = replace(SweepConfig(), source_structure_permittivity=4.0)
-    structure_metrics = _run_gradient_case(
-        tmp_path,
-        case,
-        structure_config,
-        derivative_target,
+    _run_single_source_gradient_artifact(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        test_name="custom_source_gradient_inside_structure",
+        case=case,
+        config=structure_config,
+        derivative_target=derivative_target,
         label=f"{case.name}_{resolved_target}_source_in_structure_eps_4",
-    )
-    _assert_fd_agreement(
-        structure_metrics,
-        case,
-        derivative_target,
-        label=f"{case.name}_{resolved_target}_source_in_structure_eps_4",
+        metric_prefix="inside_structure",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-def test_custom_current_source_gradient_cube_size(_enable_local_cache, tmp_path, derivative_target):
-    current_case = next(case for case in SOURCE_CASES if case.name == "custom_current_vec_e")
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(case_names=("custom_current_vec_e",)),
+    ids=lambda params: _source_gradient_case_id(
+        test_name="custom_current_source_gradient_cube_size",
+        params=params,
+        config=replace(SweepConfig(), source_size=(0.5, 0.5, 0.5)),
+    ),
+)
+def test_custom_current_source_gradient_cube_size(
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+):
+    current_case = _source_case_from_name(params.case_name)
+    derivative_target = params.derivative_target
     resolved_target = _resolve_derivative_target(current_case, derivative_target)
     cube_config = replace(SweepConfig(), source_size=(0.5, 0.5, 0.5))
-    cube_metrics = _run_gradient_case(
-        tmp_path,
-        current_case,
-        cube_config,
-        derivative_target,
+    _run_single_source_gradient_artifact(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        test_name="custom_current_source_gradient_cube_size",
+        case=current_case,
+        config=cube_config,
+        derivative_target=derivative_target,
         label=f"{current_case.name}_{resolved_target}_source_size_xyz_0.5",
-    )
-    _assert_fd_agreement(
-        cube_metrics,
-        current_case,
-        derivative_target,
-        label=f"{current_case.name}_{resolved_target}_source_size_xyz_0.5",
+        metric_prefix="cube_size",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-@pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
+@pytest.mark.parametrize(
+    "params",
+    _source_gradient_parameters(),
+    ids=lambda params: _source_gradient_case_id(
+        test_name="custom_source_gradient_in_nonuniform_custom_medium",
+        params=params,
+        config=replace(SweepConfig(), source_structure_custom_medium=True),
+    ),
+)
 def test_custom_source_gradient_in_nonuniform_custom_medium(
-    _enable_local_cache, tmp_path, case, derivative_target
+    request: pytest.FixtureRequest,
+    params: SourceGradientTestParameters,
+    numerical_case_dir,
+    numerical_eval_only: bool,
 ):
+    case = _source_case_from_name(params.case_name)
+    derivative_target = params.derivative_target
     resolved_target = _resolve_derivative_target(case, derivative_target)
     custom_medium_config = replace(SweepConfig(), source_structure_custom_medium=True)
-    custom_medium_metrics = _run_gradient_case(
-        tmp_path,
-        case,
-        custom_medium_config,
-        derivative_target,
+    _run_single_source_gradient_artifact(
+        request=request,
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        test_name="custom_source_gradient_in_nonuniform_custom_medium",
+        case=case,
+        config=custom_medium_config,
+        derivative_target=derivative_target,
         label=f"{case.name}_{resolved_target}_source_in_custom_medium",
-    )
-    _assert_fd_agreement(
-        custom_medium_metrics,
-        case,
-        derivative_target,
-        label=f"{case.name}_{resolved_target}_source_in_custom_medium",
+        metric_prefix="nonuniform_custom_medium",
     )
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
-def test_custom_source_gradient_stable_with_remote_dt_constraint(
-    _enable_local_cache, tmp_path, derivative_target
-):
-    """Source gradients should stay stable when unrelated remote cells constrain global dt."""
-    case = next(candidate for candidate in SOURCE_CASES if candidate.name == "custom_current_vec_h")
-    resolved_target = _resolve_derivative_target(case, derivative_target)
-    base_config = replace(SweepConfig(), source_structure_permittivity=4.0)
-    constrained_config = replace(base_config, add_far_corner_structure=True)
-
-    base_metrics = _run_gradient_case(
-        tmp_path,
-        case,
-        base_config,
-        derivative_target,
-        label=f"{case.name}_{resolved_target}_inside_structure_base",
-    )
-    constrained_metrics = _run_gradient_case(
-        tmp_path,
-        case,
-        constrained_config,
-        derivative_target,
-        label=f"{case.name}_{resolved_target}_inside_structure_remote_dt",
-    )
-
-    _assert_fd_agreement(
-        base_metrics,
-        case,
-        derivative_target,
-        label=f"{case.name}_{resolved_target}_inside_structure_base",
-    )
-    _assert_fd_agreement(
-        constrained_metrics,
-        case,
-        derivative_target,
-        label=f"{case.name}_{resolved_target}_inside_structure_remote_dt",
-    )
-    resolved_derivative_target = _resolve_derivative_target(case, derivative_target)
-    _, norm_rtol, norm_atol = _fd_agreement_tolerances(resolved_derivative_target)
-
-    np.testing.assert_allclose(
-        constrained_metrics.fd_norm,
-        base_metrics.fd_norm,
-        rtol=norm_rtol,
-        atol=norm_atol,
-    )
-    np.testing.assert_allclose(
-        constrained_metrics.adjoint_norm,
-        base_metrics.adjoint_norm,
-        rtol=norm_rtol,
-        atol=norm_atol,
-    )
-
-
-@pytest.mark.numerical
-@pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
+@pytest.mark.parametrize(
+    "case_name",
+    ("custom_field_vec_e", "custom_current_vec_e"),
+    ids=_source_phase_case_id,
+)
 def test_custom_source_intensity_gradient_global_phase_equivariance(
-    _enable_local_cache, tmp_path, case_name, redirect_stdout_to_stderr
+    request: pytest.FixtureRequest,
+    case_name,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
 ):
     """Intensity objective gradients should rotate with a global ``1j`` source phase."""
-    case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
-    config = replace(SweepConfig(sim_dims=3), objective_3d="intensity")
+    case = _source_case_from_name(case_name)
+    config = _phase_equivariance_config()
 
-    base_params = tuple(np.asarray(BASE_PARAM_AMPLITUDES, dtype=complex))
-    phased_params = tuple(1j * np.asarray(BASE_PARAM_AMPLITUDES, dtype=complex))
-
-    grad_base = _run_adjoint_only_gradient_case(
-        tmp_path,
-        case,
-        config,
-        label=f"{case.name}_intensity_phase_base",
-        params=base_params,
+    case_identity = _source_phase_case_identity(
+        test_name="custom_source_intensity_gradient_global_phase_equivariance",
+        case=case,
+        config=config,
     )
-    grad_phased = _run_adjoint_only_gradient_case(
-        tmp_path,
-        case,
-        config,
-        label=f"{case.name}_intensity_phase_j",
-        params=phased_params,
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_phase_equivariance_evaluation_data(
+            numerical_case_dir,
+            case,
+            config,
+        ),
+    )
+    regression_metrics, observation_metrics = _evaluate_phase_equivariance_evaluation_data(
+        evaluation_data
     )
 
-    assert not np.allclose(grad_base.real, 0.0, rtol=0.0, atol=1e-12)
-    assert not np.allclose(grad_base.imag, 0.0, rtol=0.0, atol=1e-12)
-    # This test differentiates a real-valued intensity objective through the full adjoint chain,
-    # not just the direct source VJP map. Under this convention, a global ``1j`` phase on the
-    # traced source parameters rotates the gradient by ``-1j``.
-    np.testing.assert_allclose(grad_phased, -1j * grad_base, rtol=1e-2, atol=1e-6)
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Custom source global-phase gradient equivariance failed; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import operator
-
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import trimesh
 import xarray as xr
+from pydantic import BaseModel
 
 import tidy3d as td
 from tidy3d.plugins.smatrix import ComponentModeler, Port
@@ -17,14 +16,20 @@ from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
 from .numerical_derivative_helpers import compute_ring_vjp
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_gradient_angle_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
 
 PLOT_FD_ADJ_COMPARISON = False
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_cm_custom_vjp_numerical_structures_test/"
 
 OVERLAP_ERROR_THRESHOLD_DEG = 10.0
 
@@ -269,6 +274,25 @@ def create_objective_function(create_sim_base, adj_wvl_um):
     return objective
 
 
+class CMCustomVJPNumericalStructureCaseIdentity(BaseModel):
+    """Semantic identity for one ComponentModeler combined-gradient case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+
+
+class CMCustomVJPNumericalStructureTestParameters(CMCustomVJPNumericalStructureCaseIdentity):
+    """Full parameter bundle for one ComponentModeler combined-gradient test invocation."""
+
+    test_number: int
+
+
+def _case_identity(
+    test_parameters: CMCustomVJPNumericalStructureTestParameters,
+) -> CMCustomVJPNumericalStructureCaseIdentity:
+    return case_identity_from_parameters(CMCustomVJPNumericalStructureCaseIdentity, test_parameters)
+
+
 mesh_wvls_um = [1.5]
 adj_wvls_um = [1.5]
 
@@ -280,37 +304,22 @@ for idx in range(len(mesh_wvls_um)):
     adj_wvl_um = adj_wvls_um[idx]
 
     test_parameters.append(
-        {
-            "mesh_wvl_um": mesh_wvl_um,
-            "adj_wvl_um": adj_wvl_um,
-            "test_number": test_number,
-        }
+        CMCustomVJPNumericalStructureTestParameters(
+            mesh_wvl_um=mesh_wvl_um,
+            adj_wvl_um=adj_wvl_um,
+            test_number=test_number,
+        )
     )
 
     test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize(
-    "test_parameters",
-    test_parameters,
-)
-def test_finite_difference_numerical_structures(
-    test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test a variety of the numerical_structures integration allows specification of special structure types."""
-
-    test_number = test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "test_number",
-    )(test_parameters)
+def _collect_cm_custom_vjp_numerical_structure_evaluation_data(
+    test_parameters: CMCustomVJPNumericalStructureTestParameters,
+    rng: np.random.Generator,
+) -> EvaluationData:
+    mesh_wvl_um = test_parameters.mesh_wvl_um
+    adj_wvl_um = test_parameters.adj_wvl_um
 
     objective = create_objective_function(
         lambda mesh_wvl_um=mesh_wvl_um, adj_wvl_um=adj_wvl_um: make_base_sim(
@@ -341,8 +350,6 @@ def test_finite_difference_numerical_structures(
 
     geom_init = sphere_init + ring_init
 
-    test_results = np.zeros((2, len(geom_init)))
-
     _obj, adj_grad = obj_val_and_grad([geom_init])
     adj_grad = np.squeeze(np.array(adj_grad))
 
@@ -370,34 +377,54 @@ def test_finite_difference_numerical_structures(
 
         fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - adj_grad)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(adj_grad)
+    return {
+        "fd_grad": np.asarray(fd_grad, dtype=float),
+        "adj_grad": np.asarray(adj_grad, dtype=float),
+        "sphere_init": np.asarray(sphere_init, dtype=float),
+        "ring_init": np.asarray(ring_init, dtype=float),
+        "fd_step": np.asarray(fd_step, dtype=float),
+    }
 
-    dot = np.sum((fd_grad / fd_mag) * (adj_grad / adj_mag))
-    overlap_deg = np.arccos(dot) * 180.0 / np.pi
 
-    if VERBOSE:
-        print("\n" * 3)
-        print("-" * 20)
-        print(f"Numerical test #{test_number}")
-        print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-        print(f"RMS Error: {rms_error}")
-        print(f"Gradient overlap (deg): {overlap_deg}")
-        print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-        print("-" * 20)
-        print("\n" * 3)
-
-    assert overlap_deg < OVERLAP_ERROR_THRESHOLD_DEG, (
-        "Adjoint and finite difference gradients misaligned."
+def _evaluate_cm_custom_vjp_numerical_structure_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> MetricGroups:
+    return evaluate_gradient_angle_agreement(
+        np.asarray(evaluation_data["fd_grad"], dtype=float),
+        np.asarray(evaluation_data["adj_grad"], dtype=float),
+        angle_threshold_deg=OVERLAP_ERROR_THRESHOLD_DEG,
     )
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = adj_grad
 
-    test_number += 1
+def _print_cm_custom_vjp_numerical_structure_summary(
+    test_parameters: CMCustomVJPNumericalStructureTestParameters,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    if not VERBOSE:
+        return
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    print("\n" * 3)
+    print("-" * 20)
+    print(f"Numerical test #{test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        f"Mesh and adjoint wavelengths: {test_parameters.mesh_wvl_um}, {test_parameters.adj_wvl_um}"
+    )
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"Gradient overlap (deg): {diagnostics['gradient_overlap_deg']}")
+    print(f"FD, Adj magnitudes: {diagnostics['reference_mag']}, {diagnostics['adjoint_mag']}")
+    print("-" * 20)
+    print("\n" * 3)
 
+
+def _plot_cm_custom_vjp_numerical_structure_comparison(
+    evaluation_data: EvaluationData,
+) -> None:
     if PLOT_FD_ADJ_COMPARISON:
+        adj_grad = np.asarray(evaluation_data["adj_grad"], dtype=float)
+        fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
         plt.plot(adj_grad, color="g", linewidth=2.0)
         plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
         plt.legend(["Adjoint", "Finite difference"])
@@ -405,7 +432,46 @@ def test_finite_difference_numerical_structures(
         plt.ylabel("Gradient value")
         plt.show()
 
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_DATA_DIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        np.save(results_dir / f"results_{test_number}.npy", test_results)
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "test_parameters",
+    test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="cm-custom-vjp-num-struct"),
+)
+def test_finite_difference_numerical_structures(
+    request: pytest.FixtureRequest,
+    test_parameters: CMCustomVJPNumericalStructureTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    """Compare combined custom-VJP/numerical-structure gradients against finite differences."""
+    case_identity = _case_identity(test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: (
+            _collect_cm_custom_vjp_numerical_structure_evaluation_data(test_parameters, rng)
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_cm_custom_vjp_numerical_structure_evaluation_data(evaluation_data)
+    )
+    _print_cm_custom_vjp_numerical_structure_summary(
+        test_parameters, diagnostics, eval_only=numerical_eval_only
+    )
+    _plot_cm_custom_vjp_numerical_structure_comparison(evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Adjoint and finite difference gradients misaligned; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )
