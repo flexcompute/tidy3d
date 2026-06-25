@@ -19,11 +19,12 @@ from tidy3d.components.workflow import (
     resolve_workflow,
 )
 from tidy3d.exceptions import DataError, WebError
+from tidy3d.web.api import task_api
 from tidy3d.web.api.container import Batch, Job, JobState, WebContainer
 from tidy3d.web.api.webapi import upload
 from tidy3d.web.core.exceptions import WebError as CoreWebError
 
-from ..utils import FULL_STEADY_HEAT
+from ..utils import FULL_CHARGE, FULL_STEADY_HEAT
 
 
 def _make_heat_simulation() -> HeatSimulation:
@@ -330,6 +331,10 @@ def mock_multistep_task_api(monkeypatch):
         lambda task_id, **kwargs: SimpleNamespace(status="success"),
     )
     monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", lambda *a, **k: 0.0)
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.estimate_cost_info",
+        lambda *a, **k: task_api.FlexCreditEstimate(maximum=0.0),
+    )
     monkeypatch.setattr("tidy3d.web.api.task_api.real_cost", lambda *a, **k: 0.0)
 
     return calls
@@ -532,14 +537,14 @@ def test_multistep_estimate_cost_advances_past_cached_step(
 
     estimate_calls = []
 
-    def _fake_estimate_cost(task_id, **kwargs):
+    def _fake_estimate_cost_info(task_id, **kwargs):
         estimate_calls.append(task_id)
-        return 12.0
+        return task_api.FlexCreditEstimate(maximum=12.0)
 
     monkeypatch.setattr(
         "tidy3d.web.api.task_api.restore_simulation_if_cached", _fake_restore_if_cached
     )
-    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", _fake_estimate_cost)
+    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost_info", _fake_estimate_cost_info)
     monkeypatch.setattr(
         WebContainer,
         "_check_folder",
@@ -571,12 +576,12 @@ def test_multistep_estimate_cost_refreshes_uploaded_step_before_estimate(
 
     estimate_calls = []
 
-    def _fake_estimate_cost(task_id, **kwargs):
+    def _fake_estimate_cost_info(task_id, **kwargs):
         estimate_calls.append(task_id)
-        return 9.0
+        return task_api.FlexCreditEstimate(maximum=9.0)
 
     monkeypatch.setattr("tidy3d.web.api.task_api.get_info", _fake_get_info)
-    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", _fake_estimate_cost)
+    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost_info", _fake_estimate_cost_info)
 
     job = Job(
         simulation=FULL_STEADY_HEAT,
@@ -595,6 +600,34 @@ def test_multistep_estimate_cost_refreshes_uploaded_step_before_estimate(
     assert len(mock_multistep_task_api["upload"]) == 1
     assert mock_multistep_task_api["upload"][0]["kwargs"]["parent_tasks"] == ["mesh-id"]
     assert estimate_calls == [mock_multistep_task_api["upload"][0]["task_id"]]
+
+
+def test_multistep_job_estimate_cost_reports_mesh_step_guidance(
+    mock_multistep_task_api, monkeypatch
+):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.estimate_cost_info",
+        lambda *a, **k: task_api.FlexCreditEstimate(maximum=1.0),
+    )
+
+    job = Job(
+        simulation=FULL_STEADY_HEAT,
+        task_name="workflow_job",
+        folder_name="default",
+        verbose=False,
+    )
+
+    assert job.estimate_cost(verbose=True) == 1.0
+    assert log_messages == [
+        "The FlexCredit estimate shown above is for the next workflow step 'mesh' only.",
+        "This is the mesh step. Run it first with 'Job.step()'; after it completes, call "
+        "'Job.estimate_cost()' again for the solver estimate.",
+    ]
 
 
 def test_multistep_dependency_cache_without_task_id_is_bypassed(
@@ -1526,7 +1559,10 @@ def test_uniform_multistep_batch_estimate_cost_reports_mesh_frontier(
         "tidy3d.web.api.workflow_batch.get_logging_console",
         lambda: SimpleNamespace(log=log_messages.append),
     )
-    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", lambda *a, **k: 2.5)
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.estimate_cost_info",
+        lambda *a, **k: task_api.FlexCreditEstimate(maximum=2.5),
+    )
 
     batch = Batch(
         simulations={"a": FULL_STEADY_HEAT, "b": FULL_STEADY_HEAT},
@@ -1541,9 +1577,9 @@ def test_uniform_multistep_batch_estimate_cost_reports_mesh_frontier(
     ]
     assert mock_multistep_task_api["start"] == []
     assert log_messages == [
-        "Maximum FlexCredit cost: 5.000 for next workflow step 'mesh' across the batch.",
-        "This estimates the mesh step only. Solver cost depends on the generated mesh "
-        "and can be estimated after the mesh step completes.",
+        "Maximum FlexCredit cost: 5.000 for the next workflow step 'mesh' across the batch.",
+        "This estimates the mesh step only. Run the mesh step first with 'Batch.step()'; "
+        "after it completes, call 'Batch.estimate_cost()' again for the solver estimate.",
     ]
 
 
@@ -1555,7 +1591,10 @@ def test_uniform_multistep_batch_estimate_cost_reports_solver_frontier(
         "tidy3d.web.api.workflow_batch.get_logging_console",
         lambda: SimpleNamespace(log=log_messages.append),
     )
-    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", lambda *a, **k: 7.0)
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.estimate_cost_info",
+        lambda *a, **k: task_api.FlexCreditEstimate(maximum=7.0),
+    )
 
     batch = Batch(
         simulations={"a": FULL_STEADY_HEAT, "b": FULL_STEADY_HEAT},
@@ -1570,7 +1609,84 @@ def test_uniform_multistep_batch_estimate_cost_reports_solver_frontier(
         "b_solve",
     ]
     assert log_messages == [
-        "Maximum FlexCredit cost: 14.000 for next workflow step 'solve' across the batch.",
+        "Maximum FlexCredit cost: 14.000 for the next workflow step 'solve' across the batch.",
+        "All jobs are at the final solver step, so this is the estimated solver cost for the batch.",
+    ]
+
+
+def test_uniform_multistep_batch_estimate_cost_reports_typical_solver_frontier(
+    monkeypatch, mock_multistep_task_api, tmp_path
+):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.workflow_batch.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.estimate_cost_info",
+        lambda *a, **k: task_api.FlexCreditEstimate(maximum=7.0, typical=2.0),
+    )
+
+    batch = Batch(
+        simulations={"a": FULL_STEADY_HEAT, "b": FULL_STEADY_HEAT},
+        folder_name="default",
+        verbose=False,
+    )
+    batch.step(path_dir=tmp_path)
+
+    assert batch.estimate_cost(verbose=True) == 14.0
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 4.000 for the next workflow step 'solve' across the batch.",
+        "Maximum FlexCredit cost: 14.000 for the next workflow step 'solve' across the batch.",
+        "All jobs are at the final solver step, so this is the estimated solver cost for the batch.",
+    ]
+
+
+def test_uniform_multistep_batch_estimate_cost_includes_heat_only_solver_in_typical_total(
+    monkeypatch, mock_multistep_task_api, tmp_path
+):
+    log_messages = []
+    estimate_calls = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.workflow_batch.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    def estimate_cost_info(task_id, **kwargs):
+        estimate_calls.append({"task_id": task_id, "kwargs": kwargs})
+        if kwargs["is_final_billed_cost"]:
+            return task_api.FlexCreditEstimate(
+                maximum=5.0,
+                task_type="HEAT_CHARGE",
+                is_final_billed_cost=True,
+            )
+        return task_api.FlexCreditEstimate(
+            maximum=7.0,
+            typical=2.0,
+            task_type="HEAT_CHARGE",
+            is_final_billed_cost=False,
+            typical_cost_kind=task_api._TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS,
+        )
+
+    monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost_info", estimate_cost_info)
+
+    batch = Batch(
+        simulations={"heat": FULL_STEADY_HEAT, "charge": FULL_CHARGE},
+        folder_name="default",
+        verbose=False,
+    )
+    batch.step(path_dir=tmp_path)
+
+    assert batch.estimate_cost(verbose=True) == 12.0
+    assert [call["kwargs"]["is_final_billed_cost"] for call in estimate_calls[-2:]] == [
+        True,
+        False,
+    ]
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 7.000 for the next workflow step 'solve' across the batch.",
+        "Maximum FlexCredit cost: 12.000 for the next workflow step 'solve' across the batch.",
+        "For charge simulations, the billed cost depends on the number of solver iterations "
+        "required for convergence.",
         "All jobs are at the final solver step, so this is the estimated solver cost for the batch.",
     ]
 

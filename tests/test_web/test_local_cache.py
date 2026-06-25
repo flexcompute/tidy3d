@@ -384,6 +384,11 @@ def _patch_run_pipeline(
     )
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(task_api, "estimate_cost", lambda *args, **kwargs: 0.0)
+    monkeypatch.setattr(
+        task_api,
+        "estimate_cost_info",
+        lambda *args, **kwargs: task_api.FlexCreditEstimate(maximum=0.0),
+    )
     monkeypatch.setattr(task_api, "real_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
     monkeypatch.setattr(
@@ -1472,6 +1477,11 @@ def test_multistep_mesh_step_load_seeds_real_cache(monkeypatch, tmp_path):
     monkeypatch.setattr(task_api, "estimate_cost", lambda *args, **kwargs: 1.0)
     monkeypatch.setattr(
         task_api,
+        "estimate_cost_info",
+        lambda *args, **kwargs: task_api.FlexCreditEstimate(maximum=1.0),
+    )
+    monkeypatch.setattr(
+        task_api,
         "get_info",
         lambda task_id, **kwargs: SimpleNamespace(
             taskType=task_type_by_id[task_id], status="success"
@@ -1543,6 +1553,11 @@ def test_standalone_volume_mesher_load_seeds_real_cache(monkeypatch, tmp_path):
     monkeypatch.setattr(task_api, "start", lambda *args, **kwargs: None)
     monkeypatch.setattr(task_api, "monitor", lambda *args, **kwargs: None)
     monkeypatch.setattr(task_api, "estimate_cost", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr(
+        task_api,
+        "estimate_cost_info",
+        lambda *args, **kwargs: task_api.FlexCreditEstimate(maximum=1.0),
+    )
     monkeypatch.setattr(
         task_api,
         "get_info",

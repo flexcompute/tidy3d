@@ -34,6 +34,7 @@ from tidy3d.components.workflow import Step, StepInput, StepOutput, Workflow, re
 from tidy3d.exceptions import DataError, SetupError, WebError
 from tidy3d.exceptions import WebError as Tidy3dWebError
 from tidy3d.web import common
+from tidy3d.web.api import task_api
 from tidy3d.web.api import webapi as webapi_module
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import (
@@ -1981,6 +1982,172 @@ def test_batch_real_cost_preserves_and_logs_zero(monkeypatch):
     assert log_messages == ["Total billed flex credit cost: 0.000."]
 
 
+def test_log_flex_credit_estimate_keeps_generic_typical_message():
+    log_messages = []
+
+    task_api._log_flex_credit_estimate(
+        SimpleNamespace(log=log_messages.append),
+        task_api.FlexCreditEstimate(
+            maximum=7.0,
+            typical=2.0,
+            task_type=TaskType.FDTD.name,
+        ),
+    )
+
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 2.000.",
+        "Maximum FlexCredit cost: 7.000. Use 'web.real_cost(task_id)' to get the billed "
+        "FlexCredit cost after a simulation run.",
+    ]
+
+
+def test_batch_estimate_cost_logs_typical_cost(monkeypatch):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+    monkeypatch.setattr(
+        Job,
+        "_estimate_cost_info",
+        lambda self, verbose=True: task_api.FlexCreditEstimate(maximum=7.0, typical=2.0),
+    )
+
+    batch = Batch(simulations={"a": make_sim(), "b": make_sim()}, folder_name=PROJECT_NAME)
+
+    assert batch.estimate_cost(verbose=True) == 14.0
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 4.000 for the whole batch.",
+        "Maximum FlexCredit cost: 14.000 for the whole batch.",
+    ]
+
+
+def test_batch_estimate_cost_includes_fixed_cost_jobs_in_typical_total(monkeypatch):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    def estimate_cost_info(self, verbose=True):
+        if self.task_name == "charge":
+            return task_api.FlexCreditEstimate(
+                maximum=7.0,
+                typical=2.0,
+                task_type=TaskType.HEAT_CHARGE.name,
+                typical_cost_kind=task_api._TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS,
+            )
+        return task_api.FlexCreditEstimate(maximum=5.0, task_type=TaskType.HEAT.name)
+
+    monkeypatch.setattr(Job, "_estimate_cost_info", estimate_cost_info)
+
+    batch = Batch(simulations={"charge": make_sim(), "heat": make_sim()}, folder_name=PROJECT_NAME)
+
+    assert batch.estimate_cost(verbose=True) == 12.0
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 7.000 for the whole batch.",
+        "Maximum FlexCredit cost: 12.000 for the whole batch.",
+        "For charge simulations, the billed cost depends on the number of solver iterations "
+        "required for convergence.",
+    ]
+
+
+def test_batch_estimate_cost_treats_zero_cost_jobs_as_neutral_in_typical_total(monkeypatch):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    def estimate_cost_info(self, verbose=True):
+        if self.task_name == "charge":
+            return task_api.FlexCreditEstimate(
+                maximum=7.0,
+                typical=2.0,
+                task_type=TaskType.HEAT_CHARGE.name,
+                typical_cost_kind=task_api._TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS,
+            )
+        return task_api.FlexCreditEstimate(maximum=0.0)
+
+    monkeypatch.setattr(Job, "_estimate_cost_info", estimate_cost_info)
+
+    batch = Batch(
+        simulations={"cached": make_sim(), "charge": make_sim()},
+        folder_name=PROJECT_NAME,
+    )
+
+    assert batch.estimate_cost(verbose=True) == 7.0
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 2.000 for the whole batch.",
+        "Maximum FlexCredit cost: 7.000 for the whole batch.",
+        "For charge simulations, the billed cost depends on the number of solver iterations "
+        "required for convergence.",
+    ]
+
+
+def test_batch_estimate_cost_prefers_maximum_for_explicit_fixed_cost(monkeypatch):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    def estimate_cost_info(self, verbose=True):
+        if self.task_name == "charge":
+            return task_api.FlexCreditEstimate(
+                maximum=7.0,
+                typical=2.0,
+                task_type=TaskType.HEAT_CHARGE.name,
+                typical_cost_kind=task_api._TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS,
+            )
+        return task_api.FlexCreditEstimate(
+            maximum=5.0,
+            typical=1.0,
+            task_type=TaskType.HEAT_CHARGE.name,
+            is_final_billed_cost=True,
+        )
+
+    monkeypatch.setattr(Job, "_estimate_cost_info", estimate_cost_info)
+
+    batch = Batch(
+        simulations={"fixed": make_sim(), "charge": make_sim()},
+        folder_name=PROJECT_NAME,
+    )
+
+    assert batch.estimate_cost(verbose=True) == 12.0
+    assert log_messages == [
+        "Estimated typical FlexCredit cost: 7.000 for the whole batch.",
+        "Maximum FlexCredit cost: 12.000 for the whole batch.",
+        "For charge simulations, the billed cost depends on the number of solver iterations "
+        "required for convergence.",
+    ]
+
+
+def test_batch_estimate_cost_does_not_fold_fdtd_maximum_into_typical_total(monkeypatch):
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    def estimate_cost_info(self, verbose=True):
+        if self.task_name == "charge":
+            return task_api.FlexCreditEstimate(
+                maximum=7.0,
+                typical=2.0,
+                task_type=TaskType.HEAT_CHARGE.name,
+                typical_cost_kind=task_api._TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS,
+            )
+        return task_api.FlexCreditEstimate(maximum=5.0, task_type=TaskType.FDTD.name)
+
+    monkeypatch.setattr(Job, "_estimate_cost_info", estimate_cost_info)
+
+    batch = Batch(simulations={"charge": make_sim(), "fdtd": make_sim()}, folder_name=PROJECT_NAME)
+
+    assert batch.estimate_cost(verbose=True) == 12.0
+    assert log_messages == ["Maximum FlexCredit cost: 12.000 for the whole batch."]
+
+
 def test_batch_real_cost_returns_none_if_any_job_cost_unavailable(monkeypatch):
     job_costs = iter([1.0, None])
 
@@ -3752,6 +3919,11 @@ def apply_common_patches(
 
     monkeypatch.setattr(f"{api_path}.estimate_cost", fake_estimate_cost)
     monkeypatch.setattr(f"{task_api_path}.estimate_cost", fake_estimate_cost)
+
+    def fake_estimate_cost_info(*args, **kwargs):
+        return task_api.FlexCreditEstimate(maximum=fake_estimate_cost(*args, **kwargs))
+
+    monkeypatch.setattr(f"{task_api_path}.estimate_cost_info", fake_estimate_cost_info)
 
     def fake_upload(*args, **kwargs):
         verbose = kwargs.pop("verbose", True)

@@ -13,6 +13,7 @@ import tidy3d as td
 from tidy3d import HeatSimulation
 from tidy3d import config as td_config
 from tidy3d.exceptions import DataError
+from tidy3d.web.api import task_api
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job, WebContainer
 from tidy3d.web.api.webapi import (
@@ -36,6 +37,7 @@ CREATED_AT = "2022-01-01T00:00:00.000Z"
 PROJECT_NAME = "default"
 FLEX_UNIT = 1.0
 EST_FLEX_UNIT = 11.11
+EST_FLEX_UNIT_TYPICAL = 3.21
 FILE_SIZE_GB = 4.0
 
 task_core_path = "tidy3d.web.core.task_core"
@@ -294,6 +296,10 @@ def mock_heat_workflow_api(monkeypatch):
         lambda task_id, **kwargs: SimpleNamespace(status="success"),
     )
     monkeypatch.setattr("tidy3d.web.api.task_api.estimate_cost", lambda *a, **k: EST_FLEX_UNIT)
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.estimate_cost_info",
+        lambda *a, **k: task_api.FlexCreditEstimate(maximum=EST_FLEX_UNIT),
+    )
     monkeypatch.setattr("tidy3d.web.api.task_api.real_cost", lambda *a, **k: FLEX_UNIT)
 
     return calls
@@ -320,6 +326,149 @@ def test_get_run_info(mock_get_run_info, mock_get_info):
 @responses.activate
 def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
     assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
+
+
+@responses.activate
+def test_estimate_cost_logs_typical_charge_cost(set_api_key, mock_metadata, monkeypatch):
+    responses.add(
+        responses.GET,
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": TASK_NAME,
+                "taskType": TaskType.HEAT_CHARGE.name,
+                "createdAt": CREATED_AT,
+                "estFlexUnit": EST_FLEX_UNIT,
+                "estFlexUnitTypical": EST_FLEX_UNIT_TYPICAL,
+                "metadataStatus": "processed",
+                "status": "success",
+            }
+        },
+        status=200,
+    )
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
+    assert log_messages == [
+        f"Estimated typical FlexCredit cost: {EST_FLEX_UNIT_TYPICAL:1.3f}. "
+        "For charge simulations, the billed cost depends on the number of solver "
+        "iterations required for convergence.",
+        f"Maximum FlexCredit cost: {EST_FLEX_UNIT:1.3f}. This assumes the charge solver "
+        "reaches its configured iteration limits for all applied biases. Use "
+        "'web.real_cost(task_id)' to get the billed FlexCredit cost after a simulation run.",
+    ]
+
+
+@responses.activate
+def test_estimate_cost_treats_zero_typical_heat_charge_as_fixed_cost(
+    set_api_key, mock_metadata, monkeypatch
+):
+    responses.add(
+        responses.GET,
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": TASK_NAME,
+                "taskType": TaskType.HEAT_CHARGE.name,
+                "createdAt": CREATED_AT,
+                "estFlexUnit": EST_FLEX_UNIT,
+                "estFlexUnitTypical": 0.0,
+                "metadataStatus": "processed",
+                "status": "success",
+            }
+        },
+        status=200,
+    )
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
+    assert log_messages == [
+        f"Estimated FlexCredit cost: {EST_FLEX_UNIT:1.3f}. For this solver type, "
+        "the estimate is the final billed cost.",
+    ]
+
+
+@responses.activate
+def test_estimate_cost_info_ignores_typical_when_known_fixed_cost(
+    set_api_key, mock_metadata, monkeypatch
+):
+    responses.add(
+        responses.GET,
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": TASK_NAME,
+                "taskType": TaskType.HEAT_CHARGE.name,
+                "createdAt": CREATED_AT,
+                "estFlexUnit": EST_FLEX_UNIT,
+                "estFlexUnitTypical": EST_FLEX_UNIT_TYPICAL,
+                "metadataStatus": "processed",
+                "status": "success",
+            }
+        },
+        status=200,
+    )
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    estimate = task_api.estimate_cost_info(TASK_ID, is_final_billed_cost=True)
+
+    assert estimate.maximum == EST_FLEX_UNIT
+    assert estimate.typical is None
+    assert estimate.is_final_billed_cost is True
+    assert estimate.typical_cost_kind is None
+    assert log_messages == [
+        f"Estimated FlexCredit cost: {EST_FLEX_UNIT:1.3f}. For this solver type, "
+        "the estimate is the final billed cost.",
+    ]
+
+
+@responses.activate
+def test_estimate_cost_does_not_treat_missing_typical_heat_charge_as_fixed_cost(
+    set_api_key, mock_metadata, monkeypatch
+):
+    responses.add(
+        responses.GET,
+        f"{td_config.web.api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": TASK_NAME,
+                "taskType": TaskType.HEAT_CHARGE.name,
+                "createdAt": CREATED_AT,
+                "estFlexUnit": EST_FLEX_UNIT,
+                "metadataStatus": "processed",
+                "status": "success",
+            }
+        },
+        status=200,
+    )
+    log_messages = []
+    monkeypatch.setattr(
+        "tidy3d.web.api.task_api.get_logging_console",
+        lambda: SimpleNamespace(log=log_messages.append),
+    )
+
+    assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
+    assert log_messages == [
+        f"Estimated FlexCredit cost: {EST_FLEX_UNIT:1.3f}. Use "
+        "'web.real_cost(task_id)' to get the billed FlexCredit cost after a simulation "
+        "run.",
+    ]
 
 
 @responses.activate

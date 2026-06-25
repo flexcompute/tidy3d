@@ -97,12 +97,19 @@ class WorkflowStepJobAdapter:
     def get_info(self) -> TaskInfo:
         return task_api.get_info(task_id=self.task_id, verbose=self.job.verbose)
 
-    def estimate_cost(self, verbose: bool = True) -> float:
-        return task_api.estimate_cost(
+    def _estimate_cost_info(self, verbose: bool = True) -> task_api.FlexCreditEstimate:
+        """Estimate FlexCredit charge details for this workflow step task."""
+        return task_api.estimate_cost_info(
             task_id=self.task_id,
             verbose=verbose,
             solver_version=self.job.solver_version,
+            is_final_billed_cost=task_api._operation_estimate_is_final_billed_cost(
+                self.step.operation
+            ),
         )
+
+    def estimate_cost(self, verbose: bool = True) -> float:
+        return self._estimate_cost_info(verbose=verbose).maximum
 
     def download(self, path: PathLike) -> None:
         self.job._workflow_download_step(self.step.name, path=path)
@@ -759,18 +766,39 @@ class UniformMultiStepBatchRunner:
 
         step_idx = next(iter(next_step_indices.values()))
         step_name = next(iter(jobs.values())).steps[step_idx].name
-        batch_cost = sum(job.estimate_cost(verbose=False) for job in jobs.values())
+        job_estimates = [job._estimate_cost_info(verbose=False) for job in jobs.values()]
+        batch_cost = sum(estimate.maximum for estimate in job_estimates)
+        batch_typical_cost = task_api._batch_typical_flex_credit_cost(job_estimates)
 
         if verbose:
             console = get_logging_console()
-            console.log(
-                f"Maximum FlexCredit cost: {batch_cost:1.3f} for next workflow "
-                f"step '{step_name}' across the batch."
-            )
+            if batch_typical_cost is not None:
+                console.log(
+                    f"Estimated typical FlexCredit cost: {batch_typical_cost:1.3f} "
+                    f"for the next workflow step '{step_name}' across the batch."
+                )
+                console.log(
+                    f"Maximum FlexCredit cost: {batch_cost:1.3f} for the next workflow "
+                    f"step '{step_name}' across the batch."
+                )
+                if any(
+                    task_api._estimate_has_charge_solver_iteration_scaling(estimate)
+                    for estimate in job_estimates
+                ):
+                    console.log(
+                        "For charge simulations, the billed cost depends on the number of "
+                        "solver iterations required for convergence."
+                    )
+            else:
+                console.log(
+                    f"Maximum FlexCredit cost: {batch_cost:1.3f} for the next workflow "
+                    f"step '{step_name}' across the batch."
+                )
             if step_idx == 0:
                 console.log(
-                    "This estimates the mesh step only. Solver cost depends on the generated "
-                    "mesh and can be estimated after the mesh step completes."
+                    "This estimates the mesh step only. Run the mesh step first with "
+                    "'Batch.step()'; after it completes, call 'Batch.estimate_cost()' again "
+                    "for the solver estimate."
                 )
             elif step_idx == len(next(iter(jobs.values())).steps) - 1:
                 console.log(

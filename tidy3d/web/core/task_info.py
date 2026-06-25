@@ -93,6 +93,9 @@ class TaskInfo(TaskBase):
     estFlexUnit: float | None = None
     """Estimated flexible units for the task."""
 
+    estFlexUnitTypical: float | None = None
+    """Typical estimated flexible units for charge tasks."""
+
     estFlexCreditTimeStepping: float | None = None
     """Estimated flexible credits for time stepping."""
 

@@ -1866,32 +1866,13 @@ class Job(WebContainer):
             return task_api.real_cost(self._cached_task_id, verbose=verbose)
         return task_api.real_cost(self.task_id, verbose=verbose)
 
-    def estimate_cost(self, verbose: bool = True) -> float:
-        """Estimate the maximum FlexCredit charge for this :class:`.Job`.
-
-        For multi-step jobs, estimates the first incomplete workflow step only.
-        Returns ``0.0`` when every step is already complete.
-
-        Parameters
-        ----------
-        verbose : bool = True
-            Whether to log the cost and helpful messages.
-
-        Returns
-        -------
-        float
-            Estimated cost of the task in FlexCredits.
-
-        Note
-        ----
-        Cost is calculated assuming the simulation runs for
-        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
-        """
+    def _estimate_cost_info(self, verbose: bool = True) -> task_api.FlexCreditEstimate:
+        """Estimate FlexCredit charge details for this :class:`.Job`."""
         if self.is_multi_step:
             while True:
                 step_idx = self._next_pending_step_index()
                 if step_idx >= len(self.steps):
-                    return 0.0
+                    return task_api.FlexCreditEstimate(maximum=0.0)
 
                 step = self.steps[step_idx]
                 if self._restore_step_if_cached(step):
@@ -1913,26 +1894,62 @@ class Job(WebContainer):
                     self._raise_if_step_failed(step, status)
                     self._raise_if_step_blocks_downstream(step, status)
 
-                estimate = task_api.estimate_cost(
+                estimate = task_api.estimate_cost_info(
                     task_id,
                     verbose=verbose,
                     solver_version=self.solver_version,
+                    is_final_billed_cost=task_api._operation_estimate_is_final_billed_cost(
+                        step.operation
+                    ),
                 )
                 if verbose:
                     console = get_logging_console()
                     console.log(
-                        "Maximum FlexCredit cost shown above is for next workflow "
+                        "The FlexCredit estimate shown above is for the next workflow "
                         f"step '{step.name}' only."
                     )
+                    if step_idx == 0:
+                        console.log(
+                            "This is the mesh step. Run it first with 'Job.step()'; after it "
+                            "completes, call 'Job.estimate_cost()' again for the solver "
+                            "estimate."
+                        )
                 return estimate
 
         if self.load_if_cached:
-            return 0.0
-        return task_api.estimate_cost(
+            return task_api.FlexCreditEstimate(maximum=0.0)
+        return task_api.estimate_cost_info(
             self.task_id,
             verbose=verbose,
             solver_version=self.solver_version,
+            is_final_billed_cost=task_api._operation_estimate_is_final_billed_cost(self.simulation),
         )
+
+    def estimate_cost(self, verbose: bool = True) -> float:
+        """Estimate the maximum FlexCredit charge for this :class:`.Job`.
+
+        For multi-step jobs, estimates the first incomplete workflow step only.
+        Returns ``0.0`` when every step is already complete.
+
+        Parameters
+        ----------
+        verbose : bool = True
+            Whether to log the cost and helpful messages.
+
+        Returns
+        -------
+        float
+            Estimated cost of the task in FlexCredits.
+
+        Note
+        ----
+        FDTD cost is calculated assuming the simulation runs for the full ``run_time``. If
+        early shutoff is triggered, the cost is adjusted proportionately. For charge
+        simulations, the billed cost depends on the number of solver iterations required
+        for convergence. For Mode, EME, and Heat simulations, the estimated cost is the
+        final billed cost.
+        """
+        return self._estimate_cost_info(verbose=verbose).maximum
 
     @staticmethod
     def _check_path_dir(path: PathLike) -> None:
@@ -1962,6 +1979,9 @@ class Job(WebContainer):
             stub = Tidy3dStub(simulation=sim)
             data["task_name"] = stub.get_default_task_name()
         return data
+
+
+_DEFAULT_JOB_ESTIMATE_COST = Job.estimate_cost
 
 
 class BatchData(Tidy3dBaseModel, Mapping):
@@ -4140,16 +4160,37 @@ class Batch(WebContainer):
         cost_subject: str = "the whole batch",
     ) -> float:
         """Estimate cost for an already-filtered set of single-step jobs."""
-        job_costs = [job.estimate_cost(verbose=False) for _, job in jobs.items()]
+        job_estimates = [self._estimate_cost_info_for_job(job) for _, job in jobs.items()]
+        job_costs = [estimate.maximum for estimate in job_estimates]
         if any(cost is None for cost in job_costs):
             batch_cost = None
         else:
             batch_cost = sum(job_costs)
+        batch_typical_cost = (
+            task_api._batch_typical_flex_credit_cost(job_estimates)
+            if batch_cost is not None
+            else None
+        )
 
         if verbose:
             console = get_logging_console()
             if batch_cost is not None and batch_cost > 0:
-                console.log(f"Maximum FlexCredit cost: {batch_cost:1.3f} for {cost_subject}.")
+                if batch_typical_cost is not None:
+                    console.log(
+                        f"Estimated typical FlexCredit cost: {batch_typical_cost:1.3f} "
+                        f"for {cost_subject}."
+                    )
+                    console.log(f"Maximum FlexCredit cost: {batch_cost:1.3f} for {cost_subject}.")
+                    if any(
+                        task_api._estimate_has_charge_solver_iteration_scaling(estimate)
+                        for estimate in job_estimates
+                    ):
+                        console.log(
+                            "For charge simulations, the billed cost depends on the number of "
+                            "solver iterations required for convergence."
+                        )
+                else:
+                    console.log(f"Maximum FlexCredit cost: {batch_cost:1.3f} for {cost_subject}.")
             elif batch_cost == 0 and all(job.load_if_cached for job in jobs.values()):
                 console.log(
                     f"No Flexcredit cost for {cost_subject} as all simulations were restored "
@@ -4159,6 +4200,18 @@ class Batch(WebContainer):
                 console.log("Could not get estimated batch cost!")
 
         return batch_cost
+
+    @staticmethod
+    def _estimate_cost_info_for_job(
+        job: Job | WorkflowStepJobAdapter,
+    ) -> task_api.FlexCreditEstimate:
+        """Return detailed estimate info while preserving legacy estimate_cost mocks."""
+        estimate_cost_info = getattr(job, "_estimate_cost_info", None)
+        if isinstance(job, Job) and type(job).estimate_cost is not _DEFAULT_JOB_ESTIMATE_COST:
+            estimate_cost_info = None
+        if estimate_cost_info is not None:
+            return estimate_cost_info(verbose=False)
+        return task_api.FlexCreditEstimate(maximum=job.estimate_cost(verbose=False))
 
     def _estimate_uniform_multi_step_frontier_cost(
         self,
@@ -4178,8 +4231,11 @@ class Batch(WebContainer):
 
         Note
         ----
-        Cost is calculated assuming the simulation runs for
-        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
+        FDTD cost is calculated assuming each simulation runs for the full ``run_time``. If
+        early shutoff is triggered, the cost is adjusted proportionately. For charge
+        simulations, the billed cost depends on the number of solver iterations required
+        for convergence. For Mode, EME, and Heat simulations, the estimated cost is the
+        final billed cost.
 
         Returns
         -------

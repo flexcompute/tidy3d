@@ -7,14 +7,16 @@ import os
 import tempfile
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation, TCADAnalysisTypes
 from tidy3d.components.workflow import resolve_workflow
 from tidy3d.config import config
 from tidy3d.exceptions import DataError, WebError, format_chained_exception_message
@@ -55,7 +57,7 @@ from .run_options import (
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData, task_type_name_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
     from os import PathLike
     from typing import Literal
 
@@ -81,6 +83,23 @@ SOLVER_NAME = {
     "HEAT_CHARGE": "HeatCharge",
     "VOLUME_MESH": "VolumeMesher",
 }
+
+
+@dataclass(frozen=True)
+class FlexCreditEstimate:
+    """Estimated task cost in FlexCredits."""
+
+    maximum: float
+    typical: float | None = None
+    task_type: str | None = None
+    is_final_billed_cost: bool | None = None
+    typical_cost_kind: str | None = None
+
+
+_FINAL_BILLED_COST_TASK_TYPES = {"MODE", "MODE_SOLVER", "EME", "HEAT"}
+_TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS = "charge_solver_iterations"
+
+
 DEFAULT_DATA_FILENAME = {
     TaskType.FDTD.name: "simulation_data.hdf5",
     TaskType.MODE_SOLVER.name: "simulation_data.hdf5",
@@ -102,6 +121,55 @@ def default_data_filename(task_type: str | None) -> str:
     if isinstance(task_type, TaskType):
         task_type = task_type.name
     return DEFAULT_DATA_FILENAME.get(task_type or "", "simulation_data.hdf5")
+
+
+def _estimate_is_final_billed_cost(estimate: FlexCreditEstimate) -> bool:
+    """Return ``True`` when the estimate equals the final billed solver cost."""
+    if estimate.is_final_billed_cost is not None:
+        return estimate.is_final_billed_cost
+    task_type = (estimate.task_type or "").upper()
+    return task_type in _FINAL_BILLED_COST_TASK_TYPES
+
+
+def _estimate_has_charge_solver_iteration_scaling(estimate: FlexCreditEstimate) -> bool:
+    """Return whether ``estimate.typical`` comes from charge iteration scaling."""
+    return (
+        estimate.typical is not None
+        and not _estimate_is_final_billed_cost(estimate)
+        and estimate.typical_cost_kind == _TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS
+    )
+
+
+def _operation_estimate_is_final_billed_cost(operation: Any) -> bool | None:
+    """Return local operation knowledge about whether an estimate is final."""
+    if isinstance(operation, HeatChargeSimulation):
+        return TCADAnalysisTypes.CHARGE not in operation._get_simulation_types()
+    try:
+        task_type = task_type_name_of(operation)
+    except TypeError:
+        return None
+    return task_type.upper() in _FINAL_BILLED_COST_TASK_TYPES
+
+
+def _batch_typical_flex_credit_cost(estimates: Iterable[FlexCreditEstimate]) -> float | None:
+    """Return a batch typical cost when it can be reported as a complete batch total."""
+    estimates = list(estimates)
+
+    batch_typical_cost = 0.0
+    has_typical_estimate = False
+    for estimate in estimates:
+        if _estimate_is_final_billed_cost(estimate):
+            batch_typical_cost += estimate.maximum
+        elif estimate.typical is not None:
+            has_typical_estimate = True
+            batch_typical_cost += estimate.typical
+        elif estimate.maximum == 0:
+            continue
+        else:
+            return None
+    if not has_typical_estimate:
+        return None
+    return batch_typical_cost
 
 
 def _resolve_output_path(path: PathLike | None, task_type: str | None) -> Path:
@@ -1183,13 +1251,60 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
     return TaskInfo(**{"taskId": task.task_id, **task.model_dump()})
 
 
+def _log_flex_credit_estimate(console: Any, estimate: FlexCreditEstimate) -> None:
+    """Log a user-facing FlexCredit estimate."""
+    task_type = (estimate.task_type or "").upper()
+    if estimate.typical is not None:
+        if _estimate_has_charge_solver_iteration_scaling(estimate):
+            console.log(
+                f"Estimated typical FlexCredit cost: {estimate.typical:1.3f}. "
+                "For charge simulations, the billed cost depends on the number of solver "
+                "iterations required for convergence."
+            )
+            console.log(
+                f"Maximum FlexCredit cost: {estimate.maximum:1.3f}. This assumes the charge "
+                "solver reaches its configured iteration limits for all applied biases. Use "
+                "'web.real_cost(task_id)' to get the billed FlexCredit cost after a simulation "
+                "run."
+            )
+        else:
+            console.log(f"Estimated typical FlexCredit cost: {estimate.typical:1.3f}.")
+            console.log(
+                f"Maximum FlexCredit cost: {estimate.maximum:1.3f}. Use "
+                "'web.real_cost(task_id)' to get the billed FlexCredit cost after a simulation "
+                "run."
+            )
+        return
+
+    if task_type in {"FDTD", "RF_FDTD"}:
+        console.log(
+            f"Estimated FlexCredit cost: {estimate.maximum:1.3f}. This assumes the FDTD "
+            "solver runs for the full simulation time; if early shutoff is reached, the "
+            "billed cost can be lower. Use 'web.real_cost(task_id)' to get the billed "
+            "FlexCredit cost after a simulation run."
+        )
+    elif _estimate_is_final_billed_cost(estimate):
+        console.log(
+            f"Estimated FlexCredit cost: {estimate.maximum:1.3f}. For this solver type, "
+            "the estimate is the final billed cost."
+        )
+    else:
+        console.log(
+            f"Estimated FlexCredit cost: {estimate.maximum:1.3f}. Use "
+            "'web.real_cost(task_id)' to get the billed FlexCredit cost after a simulation "
+            "run."
+        )
+
+
 @wait_for_connection
-def estimate_cost(
+def estimate_cost_info(
     task_id: TaskId,
     verbose: bool = True,
     solver_version: str | None = None,
-) -> float:
-    """Compute the maximum FlexCredit charge for a given task."""
+    *,
+    is_final_billed_cost: bool | None = None,
+) -> FlexCreditEstimate:
+    """Compute the FlexCredit charge estimate details for a given task."""
     if not isinstance(task_id, str):
         raise ValueError(
             f"Task ID: {task_id} is not a string. You can get it using 'web.upload(<simulation>)'."
@@ -1211,12 +1326,14 @@ def estimate_cost(
         if status in ERROR_STATES:
             _batch_detail_error(resource_id=task_id)
         est_flex_unit = detail.estFlexUnit
+        estimate = FlexCreditEstimate(
+            maximum=est_flex_unit,
+            task_type=detail.taskType,
+            is_final_billed_cost=is_final_billed_cost,
+        )
         if verbose:
-            console.log(
-                f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Minimum cost depends on "
-                "task execution details. Use 'web.real_cost(task_id)' after run."
-            )
-        return est_flex_unit
+            _log_flex_credit_estimate(console, estimate)
+        return estimate
 
     task.estimate_cost(solver_version=solver_version)
     task_info = get_info(task_id)
@@ -1238,19 +1355,47 @@ def estimate_cost(
         except Exception:
             error_msg = "Error message could not be obtained, please contact customer support."
         raise WebError(f"Error estimating cost for task {task_id}! {error_msg}")
+    typical = task_info.estFlexUnitTypical
+    estimate_is_final_billed_cost = is_final_billed_cost
+    if (task_info.taskType or "").upper() == TaskType.HEAT_CHARGE.name:
+        if estimate_is_final_billed_cost is None and typical is not None and typical <= 0:
+            estimate_is_final_billed_cost = True
+    if estimate_is_final_billed_cost:
+        typical = None
+    elif typical is not None and typical <= 0:
+        typical = None
+    typical_cost_kind = None
+    if typical is not None and (task_info.taskType or "").upper() == TaskType.HEAT_CHARGE.name:
+        typical_cost_kind = _TYPICAL_COST_KIND_CHARGE_SOLVER_ITERATIONS
+    estimate = FlexCreditEstimate(
+        maximum=task_info.estFlexUnit,
+        typical=typical,
+        task_type=task_info.taskType,
+        is_final_billed_cost=estimate_is_final_billed_cost,
+        typical_cost_kind=typical_cost_kind,
+    )
     if verbose:
-        console.log(
-            f"Estimated FlexCredit cost: {task_info.estFlexUnit:1.3f}. Minimum cost depends on "
-            "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
-            "cost after a simulation run."
-        )
+        _log_flex_credit_estimate(console, estimate)
         fc_mode = task_info.estFlexCreditMode
         fc_post = task_info.estFlexCreditPostProcess
         if fc_mode:
             console.log(f"  {fc_mode:1.3f} FlexCredit of the total cost from mode solves.")
         if fc_post:
             console.log(f"  {fc_post:1.3f} FlexCredit of the total cost from post-processing.")
-    return task_info.estFlexUnit
+    return estimate
+
+
+def estimate_cost(
+    task_id: TaskId,
+    verbose: bool = True,
+    solver_version: str | None = None,
+) -> float:
+    """Compute the maximum FlexCredit charge for a given task."""
+    return estimate_cost_info(
+        task_id=task_id,
+        verbose=verbose,
+        solver_version=solver_version,
+    ).maximum
 
 
 @wait_for_connection
