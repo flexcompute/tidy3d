@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import autograd as ag
 import autograd.numpy as np
+import h5py
 import matplotlib.pyplot as plt
 import numpy
 import pytest
@@ -13,7 +14,7 @@ from pydantic import TypeAdapter, ValidationError
 
 import tidy3d as td
 from tidy3d.components.autograd.utils import hasbox
-from tidy3d.components.data.data_array import DATA_ARRAY_MAP
+from tidy3d.components.data.data_array import DATA_ARRAY_MAP, DATA_ARRAY_VALUE_NAME
 from tidy3d.components.data.monitor_data import ElectromagneticFieldData
 from tidy3d.components.data.utils import static_dataarray_for_plot
 from tidy3d.exceptions import DataError
@@ -432,6 +433,29 @@ def test_scalar_field_data_array():
         data = make_scalar_field_data_array(grid_key)
         data = data.interp(f=1.5e14)
         _ = data.isel(y=2)
+
+
+def test_data_array_hdf5_serializes_only_declared_dimension_coords(tmp_path):
+    data = td.SpatialDataArray(
+        np.ones((2, 3, 4)),
+        coords={
+            "x": [0.0, 1.0],
+            "y": [0.0, 1.0, 2.0],
+            "z": [0.0, 1.0, 2.0, 3.0],
+            "f": 2e14,
+            "mode_index": 0,
+        },
+        dims=("x", "y", "z"),
+    )
+    path = tmp_path / "data_array.hdf5"
+
+    data.to_hdf5(path, "data")
+
+    with h5py.File(path) as handle:
+        assert set(handle["data"]) == {DATA_ARRAY_VALUE_NAME, "x", "y", "z"}
+
+    loaded = td.SpatialDataArray.from_hdf5(path, "data")
+    assert set(loaded.coords) == {"x", "y", "z"}
 
 
 def test_scalar_field_time_data_array():

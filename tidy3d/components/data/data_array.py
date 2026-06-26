@@ -348,7 +348,10 @@ class DataArray(xr.DataArray):
         """Save an ``xr.DataArray`` to the hdf5 file handle with a given path to the group."""
         sub_group = f_handle.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
-        for key, val in self.coords.items():
+        for key in self._dims:
+            if key not in self.coords:
+                continue
+            val = self.coords[key]
             if val.dtype.kind == "U":
                 # Convert Unicode strings to list for HDF5 storage
                 sub_group[key] = val.values.tolist()

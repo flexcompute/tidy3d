@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
+import tidy3d as td
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.workflow import (
@@ -30,6 +33,56 @@ from ..utils import FULL_CHARGE, FULL_STEADY_HEAT
 def _make_heat_simulation() -> HeatSimulation:
     """Build a deprecated heat-only simulation from the shared HeatCharge fixture."""
     return HeatSimulation(**FULL_STEADY_HEAT.model_dump(exclude={"type"}))
+
+
+def _file_md5(path: Path) -> str:
+    """Return md5 digest of a local file."""
+    return hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
+
+
+def _add_distributed_generation_with_scalar_coords(
+    simulation: td.HeatChargeSimulation,
+) -> td.HeatChargeSimulation:
+    """Add generated-carrier data shaped like mode-solver-derived notebook output."""
+    x = np.linspace(-0.1, 0.1, 3)
+    y = np.linspace(-0.1, 0.1, 4)
+    z = np.linspace(-0.05, 0.05, 2)
+    generation_rate = td.SpatialDataArray(
+        np.ones((3, 4, 2)),
+        coords={
+            "x": x,
+            "y": y,
+            "z": z,
+            "f": 193414489032258.06,
+            "mode_index": 0,
+        },
+        dims=("x", "y", "z"),
+    )
+    distributed_generation = td.DistributedGeneration.from_rate_um3(generation_rate)
+
+    updated_structures = []
+    added_generation = False
+    for structure in simulation.structures:
+        medium = structure.medium
+        if isinstance(medium, td.SemiconductorMedium):
+            updated_medium = medium.updated_copy(R=(*tuple(medium.R), distributed_generation))
+            updated_structures.append(structure.updated_copy(medium=updated_medium))
+            added_generation = True
+            continue
+
+        charge = getattr(medium, "charge", None)
+        if isinstance(charge, td.SemiconductorMedium):
+            updated_charge = charge.updated_copy(R=(*tuple(charge.R), distributed_generation))
+            updated_structures.append(
+                structure.updated_copy(medium=medium.updated_copy(charge=updated_charge))
+            )
+            added_generation = True
+            continue
+
+        updated_structures.append(structure)
+
+    assert added_generation
+    return simulation.updated_copy(structures=tuple(updated_structures))
 
 
 def test_heat_charge_workflow_structure():
@@ -66,6 +119,22 @@ def test_top_level_upload_rejects_multistep_simulation():
 def test_top_level_upload_rejects_deprecated_heat_simulation():
     with pytest.raises(DataError, match=r"web.run\(\).*web.Job"):
         upload(_make_heat_simulation(), task_name="heat", folder_name="default")
+
+
+def test_parent_task_upload_canonicalizes_heat_charge_simulation(tmp_path):
+    simulation = _add_distributed_generation_with_scalar_coords(FULL_CHARGE)
+
+    upload_path = tmp_path / "upload.hdf5"
+    simulation.to_file(upload_path)
+
+    mesher_path = tmp_path / "mesher.hdf5"
+    child_path = tmp_path / "child.hdf5"
+    VolumeMesher(simulation=simulation).to_file(mesher_path)
+    child_simulation = VolumeMesher.from_file(mesher_path).simulation
+    child_simulation.to_file(child_path)
+
+    assert _file_md5(upload_path) == _file_md5(child_path)
+    assert simulation._hash_self() == child_simulation._hash_self()
 
 
 def test_resolve_workflow_override_is_used():
