@@ -39,6 +39,7 @@ from .api.webapi import (
 )
 from .cli import tidy3d_cli
 from .cli.config import configure_fn as configure
+from .diagnostics import diagnose_connection
 from .license import refresh_licenses
 
 __all__ = [
@@ -50,6 +51,7 @@ __all__ = [
     "configure",
     "delete",
     "delete_old",
+    "diagnose_connection",
     "download",
     "download_json",
     "download_log",
