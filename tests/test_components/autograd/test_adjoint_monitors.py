@@ -9,6 +9,8 @@ import pytest
 import tidy3d as td
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.components.structure import _expand_adjoint_monitor_box
+from tidy3d.exceptions import AdjointError
+from tidy3d.web.api.autograd.autograd import _validate_autograd_frequency_monitors
 
 from ...utils import assert_single_value_error_loc
 
@@ -197,6 +199,68 @@ def test_adjoint_monitors_3d_use_geometry_bounding_box(geometry):
     assert monitors_field[0].center == pytest.approx(tuple(expected_box.center))
     assert monitors_eps[0].size == pytest.approx(tuple(expected_box.size))
     assert monitors_eps[0].center == pytest.approx(tuple(expected_box.center))
+
+
+def test_point_cloud_diagnostic_monitors_do_not_contribute_adjoint_freqs():
+    structure = td.Structure(geometry=td.Box(size=(1.0, 1.0, 1.0)), medium=td.Medium())
+    sim = _make_3d_simulation(structure)
+    points = td.PointDataArray([[0.0, 0.0, 0.0]], dims=("index", "axis"))
+    point_cloud_field = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Ex",),
+        freqs=[3e14],
+        name="pc_field",
+    )
+    point_cloud_eps = td.PointCloudPermittivityMonitor(
+        points=points,
+        freqs=[4e14],
+        name="pc_eps",
+    )
+
+    sim_with_point_cloud = sim.updated_copy(
+        monitors=(*sim.monitors, point_cloud_field, point_cloud_eps)
+    )
+
+    assert sim_with_point_cloud._freqs_adjoint == [2e14]
+    _validate_autograd_frequency_monitors(sim_with_point_cloud)
+    monitors_field, monitors_eps = sim_with_point_cloud._make_adjoint_monitors(SIM_FIELDS_KEYS)
+    assert all(list(monitor.freqs) == [2e14] for monitor in monitors_field + monitors_eps)
+
+    sim_point_cloud_only = sim.updated_copy(monitors=(point_cloud_field, point_cloud_eps))
+    assert sim_point_cloud_only._freqs_adjoint == []
+    with pytest.raises(AdjointError, match=r"Point-cloud.*currently unsupported"):
+        _validate_autograd_frequency_monitors(sim_point_cloud_only)
+
+
+def test_dipole_emission_monitor_has_dedicated_autograd_error():
+    points = td.PointDataArray([[0.0, 0.0, 0.0]], dims=("index", "axis"))
+    monitor = td.DipoleEmissionMonitor(
+        points=points,
+        position_weights=[1.0],
+        freqs=[2e14],
+        name="emission",
+    )
+    source = td.TFSF(
+        center=(0.0, 0.0, 0.0),
+        size=(1.0, 1.0, 1.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        direction="+",
+        injection_axis=2,
+        angle_theta=0.0,
+        angular_spec=td.FixedAngleSpec(),
+        name="tfsf",
+    )
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=0.2),
+        run_time=1e-12,
+        sources=(source,),
+        monitors=(monitor,),
+    )
+
+    assert sim._freqs_adjoint == []
+    with pytest.raises(AdjointError, match=r"Dipole-emission.*DipoleEmissionData"):
+        _validate_autograd_frequency_monitors(sim)
 
 
 @pytest.mark.parametrize("use_colocated_integration", [True, False])

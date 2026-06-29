@@ -40,7 +40,12 @@ from tidy3d.exceptions import AdjointError, DataError, SetupError, Tidy3dKeyErro
 from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
-from .monitor_data import AbstractFieldData, FieldTimeData, PointCloudFieldData
+from .monitor_data import (
+    AbstractFieldData,
+    FieldTimeData,
+    PointCloudFieldData,
+    PointCloudPermittivityData,
+)
 from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
@@ -241,23 +246,30 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
     """
 
     @staticmethod
-    def _raise_if_point_cloud_field_data(monitor_data: MonitorDataType, operation: str) -> None:
-        """Reject structured field helpers for indexed point-cloud field data."""
-        if not isinstance(monitor_data, PointCloudFieldData):
+    def _raise_if_point_cloud_data(monitor_data: MonitorDataType, operation: str) -> None:
+        """Reject structured field helpers for indexed point-cloud data."""
+        if isinstance(monitor_data, PointCloudFieldData):
+            data_kind = "fields"
+            example_component = "Ex"
+        elif isinstance(monitor_data, PointCloudPermittivityData):
+            data_kind = "permittivity components"
+            example_component = "eps_xx"
+        else:
             return
 
+        monitor_name = monitor_data.monitor.name
         raise DataError(
-            f"'{operation}' is not supported for PointCloudFieldData because point-cloud "
-            "fields are indexed by 'index' rather than structured 'x', 'y', and 'z' "
-            "coordinates. Access point-cloud fields directly, for example "
-            f"sim_data['{monitor_data.monitor.name}'].Ex, and use "
-            f"sim_data['{monitor_data.monitor.name}'].points for the corresponding coordinates."
+            f"'{operation}' is not supported for {type(monitor_data).__name__} because "
+            f"point-cloud {data_kind} are indexed by 'index' rather than structured 'x', "
+            "'y', and 'z' coordinates. Access point-cloud data directly, for example "
+            f"sim_data['{monitor_name}'].{example_component}, and use "
+            f"sim_data['{monitor_name}'].points for the corresponding coordinates."
         )
 
     def load_field_monitor(self, monitor_name: str) -> AbstractFieldData:
         """Load monitor and raise exception if not a field monitor."""
         mon_data = self[monitor_name]
-        self._raise_if_point_cloud_field_data(mon_data, "load_field_monitor")
+        self._raise_if_point_cloud_data(mon_data, "load_field_monitor")
         if not isinstance(mon_data, AbstractFieldData):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
@@ -553,13 +565,24 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         return suffix in {".hdf5", ".h5"} and group_path == "/"
 
     @classmethod
-    def _lazy_proxy_ensure_metadata(cls, lazy_state: dict[str, Any]) -> None:
-        """Load simulation metadata needed for selective monitor access."""
+    def _lazy_proxy_monitor_selection(
+        cls, lazy_state: dict[str, Any], model_dict: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], tuple[int, ...]]:
+        """Return raw monitor dictionaries and selected indices from lazy-file metadata."""
 
-        if (
-            lazy_state.get("_lazy_simulation") is not None
-            and lazy_state.get("_lazy_monitor_data_map") is not None
-        ):
+        monitor_dicts = model_dict["simulation"]["monitors"]
+        requested_monitor_names = lazy_state.get("_lazy_monitor_names")
+        if requested_monitor_names is None:
+            selected_indices = tuple(range(len(monitor_dicts)))
+        else:
+            selected_indices = cls._selected_monitor_indices(monitor_dicts, requested_monitor_names)
+        return monitor_dicts, selected_indices
+
+    @classmethod
+    def _lazy_proxy_ensure_monitor_data_map(cls, lazy_state: dict[str, Any]) -> None:
+        """Build a lazy monitor-data map without validating simulation monitor metadata."""
+
+        if lazy_state.get("_lazy_monitor_data_map") is not None:
             return
 
         model_dict = cls.dict_from_file(
@@ -567,26 +590,45 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             group_path=cls._construct_group_path(lazy_state["_lazy_group_path"]),
             load_data_arrays=False,
         )
-        monitor_dicts = model_dict["simulation"]["monitors"]
-        requested_monitor_names = lazy_state.get("_lazy_monitor_names")
-        if requested_monitor_names is None:
-            selected_indices = tuple(range(len(monitor_dicts)))
-        else:
-            selected_indices = cls._selected_monitor_indices(monitor_dicts, requested_monitor_names)
+        monitor_dicts, selected_indices = cls._lazy_proxy_monitor_selection(lazy_state, model_dict)
+        selected_monitor_names = tuple(monitor_dicts[index]["name"] for index in selected_indices)
+        lazy_state["_lazy_selected_monitor_names"] = selected_monitor_names
+        lazy_state["_lazy_monitor_data"] = {}
+        lazy_state["_lazy_monitor_data_map"] = _LazyMonitorDataMap(
+            selected_monitor_names,
+            lambda monitor_name: cls._lazy_proxy_load_monitor_data(lazy_state, monitor_name),
+        )
+
+    @classmethod
+    def _lazy_proxy_ensure_simulation(cls, lazy_state: dict[str, Any]) -> None:
+        """Load and validate simulation metadata for explicit simulation access."""
+
+        if lazy_state.get("_lazy_simulation") is not None:
+            return
+
+        model_dict = cls.dict_from_file(
+            fname=lazy_state["_lazy_fname"],
+            group_path=cls._construct_group_path(lazy_state["_lazy_group_path"]),
+            load_data_arrays=False,
+        )
+        monitor_dicts, selected_indices = cls._lazy_proxy_monitor_selection(lazy_state, model_dict)
+        cls._load_selected_simulation_data_arrays(
+            lazy_state["_lazy_fname"], model_dict, selected_indices
+        )
+        if lazy_state.get("_lazy_monitor_names") is not None:
             model_dict["simulation"]["monitors"] = [
                 monitor_dicts[index] for index in selected_indices
             ]
 
         simulation_type = cls.model_fields["simulation"].annotation
         lazy_state["_lazy_simulation"] = simulation_type.model_validate(model_dict["simulation"])
-        lazy_state["_lazy_selected_monitor_names"] = tuple(
-            monitor_dicts[index]["name"] for index in selected_indices
-        )
-        lazy_state["_lazy_monitor_data"] = {}
-        lazy_state["_lazy_monitor_data_map"] = _LazyMonitorDataMap(
-            lazy_state["_lazy_selected_monitor_names"],
-            lambda monitor_name: cls._lazy_proxy_load_monitor_data(lazy_state, monitor_name),
-        )
+
+    @classmethod
+    def _lazy_proxy_ensure_metadata(cls, lazy_state: dict[str, Any]) -> None:
+        """Load all lazy metadata needed by legacy proxy fallbacks."""
+
+        cls._lazy_proxy_ensure_simulation(lazy_state)
+        cls._lazy_proxy_ensure_monitor_data_map(lazy_state)
 
     @classmethod
     def _lazy_proxy_load_monitor_data(
@@ -594,7 +636,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
     ) -> MonitorDataType:
         """Load and cache one monitor's data without materializing the full model."""
 
-        cls._lazy_proxy_ensure_metadata(lazy_state)
+        cls._lazy_proxy_ensure_monitor_data_map(lazy_state)
         selected_monitor_names = lazy_state["_lazy_selected_monitor_names"]
         if monitor_name not in selected_monitor_names:
             raise KeyError(monitor_name)
@@ -615,13 +657,13 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         if not cls._lazy_proxy_supports_selective_loading(lazy_state):
             return _LAZY_PROXY_UNHANDLED
         if name == "simulation":
-            cls._lazy_proxy_ensure_metadata(lazy_state)
+            cls._lazy_proxy_ensure_simulation(lazy_state)
             return lazy_state["_lazy_simulation"]
         if name == "monitor_data":
-            cls._lazy_proxy_ensure_metadata(lazy_state)
+            cls._lazy_proxy_ensure_monitor_data_map(lazy_state)
             return lazy_state["_lazy_monitor_data_map"]
         if name == "get_monitor_by_name":
-            cls._lazy_proxy_ensure_metadata(lazy_state)
+            cls._lazy_proxy_ensure_simulation(lazy_state)
             return lazy_state["_lazy_simulation"].get_monitor_by_name
         return _LAZY_PROXY_UNHANDLED
 
@@ -661,6 +703,34 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             raise ValueError(f"Monitor name(s) not found in data file: {missing}.")
 
         return selected_indices
+
+    @classmethod
+    def _load_selected_simulation_data_arrays(
+        cls, fname: PathLike, model_dict: dict[str, Any], selected_monitor_indices: tuple[int, ...]
+    ) -> None:
+        """Load simulation metadata arrays without loading monitor result data arrays."""
+
+        selected_monitor_index_set = set(selected_monitor_indices)
+
+        def should_load_path(path: str) -> bool:
+            path_parts = path.strip("/").split("/")
+            if not path_parts or path_parts[0] != "simulation":
+                return False
+
+            if len(path_parts) >= 3 and path_parts[1] == "monitors":
+                try:
+                    return int(path_parts[2]) in selected_monitor_index_set
+                except ValueError:
+                    return False
+
+            return True
+
+        cls._load_data_from_file(
+            fname=fname,
+            model_dict=model_dict,
+            group_path="/",
+            should_load_path=should_load_path,
+        )
 
     @classmethod
     def mnt_data_from_file(
@@ -754,9 +824,16 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         selected_indices = cls._selected_monitor_indices(monitor_dicts, monitor_names)
 
         selected_roots = {f"data/{index}" for index in selected_indices}
+        selected_index_set = set(selected_indices)
 
         def should_load_path(subpath: str) -> bool:
             normalized_subpath = subpath.strip("/")
+            path_parts = normalized_subpath.split("/")
+            if len(path_parts) >= 3 and path_parts[:2] == ["simulation", "monitors"]:
+                try:
+                    return int(path_parts[2]) in selected_index_set
+                except ValueError:
+                    return False
             if not normalized_subpath.startswith("data/"):
                 return True
             return any(
@@ -857,7 +934,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        self._raise_if_point_cloud_field_data(field_monitor_data, "plot_field")
+        self._raise_if_point_cloud_data(field_monitor_data, "plot_field")
 
         # get the DataArray corresponding to the monitor_name and field_name
         if field_name in ("E", "H") or field_name[0] == "S":

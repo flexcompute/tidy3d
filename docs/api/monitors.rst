@@ -356,9 +356,12 @@ Permittivity and Permeability
    :template: module.rst
 
    PermittivityMonitor
+   PointCloudPermittivityMonitor
    MediumMonitor
 
-The ``PermittivityMonitor`` is used to record local relative permittivity data in the region of interest, and the ``MediumMonitor`` can additionally record permeability data. Those data can be useful for post-simulation calculations that require permittivity or permeability values, such as mode volume and absorption density.
+The ``PermittivityMonitor`` is used to record local relative permittivity data in the region of interest, and the ``PointCloudPermittivityMonitor`` records local relative permittivity components for arbitrary requested point coordinates. ``PermittivityMonitor``, ``PointCloudPermittivityMonitor``, and ``MediumMonitor`` return material values on the simulation Yee grid. Near material interfaces, these may be effective grid values representing the discretized interface rather than the bulk value of exactly one adjacent material. The monitors do not apply additional interpolation or smoothing to user-requested coordinates. For ``PointCloudPermittivityMonitor``, each returned component is sampled from its nearest native Yee-grid location, using the ``eps_xx`` / ``eps_yy`` / ``eps_zz`` component grids associated with ``Ex`` / ``Ey`` / ``Ez`` respectively; values are not interpolated to the exact requested coordinates. The returned ``.points`` array stores the requested point cloud, not the snapped component-grid sampling locations. The ``MediumMonitor`` can additionally record permeability data. Those data can be useful for post-simulation calculations that require permittivity or permeability values, such as mode volume and absorption density.
+
+Point-cloud permittivity data is indexed by point rather than by structured ``x`` / ``y`` / ``z`` grid coordinates. Access the components directly, for example ``sim_data["my point-cloud permittivity monitor"].eps_xx``, and inspect the requested coordinates with ``sim_data["my point-cloud permittivity monitor"].points``.
 
 .. code-block:: python
 
@@ -367,6 +370,15 @@ The ``PermittivityMonitor`` is used to record local relative permittivity data i
        size=(8,8,8),
        freqs=[250e12, 300e12],
        name='my permittivity monitor',
+   )
+
+   my_point_cloud_permittivity_monitor = PointCloudPermittivityMonitor(
+       points=PointDataArray(
+           [[0.0, 0.0, 0.0], [0.1, 0.2, 0.3]],
+           coords={"index": [0, 1], "axis": [0, 1, 2]},
+       ),
+       freqs=[250e12, 300e12],
+       name='my point-cloud permittivity monitor',
    )
 
 .. seealso::

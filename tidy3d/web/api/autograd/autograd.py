@@ -150,6 +150,25 @@ def _untracked_flux_monitor_names(simulation: td.Simulation) -> list[str]:
     ]
 
 
+def _point_cloud_monitor_names(simulation: td.Simulation) -> list[str]:
+    """Exact point-cloud monitor names present in the simulation."""
+    return [
+        monitor.name
+        for monitor in simulation.monitors
+        if isinstance(monitor, (td.PointCloudFieldMonitor, td.PointCloudPermittivityMonitor))
+        and not isinstance(monitor, td.DipoleEmissionMonitor)
+    ]
+
+
+def _dipole_emission_monitor_names(simulation: td.Simulation) -> list[str]:
+    """Exact dipole-emission monitor names present in the simulation."""
+    return [
+        monitor.name
+        for monitor in simulation.monitors
+        if isinstance(monitor, td.DipoleEmissionMonitor)
+    ]
+
+
 def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
     """Validate that an autograd run has differentiable frequency-domain monitor data."""
 
@@ -165,6 +184,20 @@ def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
             f"{', '.join(untracked_flux_monitor_names)} are not tracked for adjoint by "
             "default. Set 'enable_adjoint=True' to differentiate their flux in an "
             f"autograd run. See {FLUX_MONITOR_ADJOINT_DOCS}."
+        )
+    dipole_emission_monitor_names = _dipole_emission_monitor_names(simulation)
+    if dipole_emission_monitor_names:
+        raise AdjointError(
+            "Dipole-emission frequency-domain monitor data is present, but adjoint objectives "
+            "depending on DipoleEmissionData are currently unsupported. Dipole-emission "
+            f"monitor(s): {', '.join(dipole_emission_monitor_names)}."
+        )
+    point_cloud_monitor_names = _point_cloud_monitor_names(simulation)
+    if point_cloud_monitor_names:
+        raise AdjointError(
+            "Point-cloud frequency-domain monitor data is present, but adjoint objectives "
+            "depending on PointCloudFieldData or PointCloudPermittivityData are currently "
+            f"unsupported. Point-cloud monitor(s): {', '.join(point_cloud_monitor_names)}."
         )
     raise AdjointError(
         "No frequency-domain data found in simulation, but found traced simulation inputs. "

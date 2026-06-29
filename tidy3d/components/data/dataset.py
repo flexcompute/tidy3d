@@ -33,6 +33,7 @@ from .data_array import (
     _TracedDataset,
 )
 from .em_fields import em_field_symmetry_eigenvalues
+from .point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS
 from .unstructured.surface import TriangularSurfaceDataset
 from .zbf import ZBFData
 
@@ -610,6 +611,83 @@ class PointCloudFieldDataset(AbstractFieldDataset):
     def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
         """Point-cloud field data is already sampled at requested points and cannot be colocated."""
         raise DataError("PointCloudFieldDataset data cannot be colocated on a structured grid.")
+
+
+class PointCloudPermittivityDataset(AbstractFieldDataset):
+    """Dataset storing permittivity components for requested point-cloud coordinates.
+
+    Components are scalar data arrays indexed by ``("index", "f")``. The ``points`` array maps
+    each ``index`` row to the requested Cartesian coordinate. Component values are sampled from the
+    nearest native Yee-grid locations, which may differ from the requested coordinates and from each
+    other across components.
+    """
+
+    points: PointDataArray = Field(
+        ...,
+        title="Points",
+        description="Requested point coordinates associated with the indexed permittivity data.",
+    )
+
+    eps_xx: IndexedFreqDataArray = Field(
+        title="Epsilon xx",
+        description="Point-cloud xx-component of the relative permittivity.",
+    )
+    eps_yy: IndexedFreqDataArray = Field(
+        title="Epsilon yy",
+        description="Point-cloud yy-component of the relative permittivity.",
+    )
+    eps_zz: IndexedFreqDataArray = Field(
+        title="Epsilon zz",
+        description="Point-cloud zz-component of the relative permittivity.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, IndexedFreqDataArray]:
+        """Maps the permittivity components to their associated data."""
+        return {
+            field_name: getattr(self, field_name)
+            for field_name in POINT_CLOUD_PERMITTIVITY_COMPONENTS
+        }
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps permittivity components to their native Yee-grid field locations."""
+        return {"eps_xx": "Ex", "eps_yy": "Ey", "eps_zz": "Ez"}
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, None]:
+        """Maps permittivity components to their scalar symmetry eigenvalues."""
+        return {"eps_xx": None, "eps_yy": None, "eps_zz": None}
+
+    @model_validator(mode="after")
+    def _validate_component_indices(self) -> Self:
+        """Ensure point-indexed permittivity data is aligned with the point cloud."""
+
+        num_points = self.points.sizes["index"]
+        point_index = np.asarray(self.points.coords["index"])
+        for component_name, component_data in self.field_components.items():
+            if component_data.sizes["index"] != num_points:
+                self._raise_validation_error_at_loc(
+                    f"Permittivity component '{component_name}' has "
+                    f"{component_data.sizes['index']} points, but 'points' contains "
+                    f"{num_points} points.",
+                    component_name,
+                )
+
+            if not np.array_equal(np.asarray(component_data.coords["index"]), point_index):
+                self._raise_validation_error_at_loc(
+                    f"Permittivity component '{component_name}' has index coordinates that do "
+                    "not match the point-cloud index coordinates.",
+                    component_name,
+                )
+
+        return self
+
+    def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
+        """Point-cloud permittivity data cannot be colocated on a structured grid."""
+        raise DataError(
+            "PointCloudPermittivityDataset data cannot be colocated on a structured grid."
+        )
 
 
 class FieldTimeDataset(ElectromagneticFieldDataset):

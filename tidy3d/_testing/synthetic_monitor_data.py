@@ -12,6 +12,7 @@ from tidy3d.components.data.data_array import (
     ImpedanceFreqModeDataArray,
     VoltageFreqModeDataArray,
 )
+from tidy3d.components.data.point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 
 if TYPE_CHECKING:
@@ -176,6 +177,24 @@ class SyntheticMonitorDataFactory:
             )
 
         return td.PointCloudFieldData(monitor=monitor, points=monitor.points, **field_cmps)
+
+    def make_point_cloud_permittivity_data(
+        self, monitor: td.PointCloudPermittivityMonitor
+    ) -> td.PointCloudPermittivityData:
+        field_cmps = {}
+        coords = {"index": np.asarray(monitor.points.coords["index"]), "f": list(monitor.freqs)}
+        for component_name in POINT_CLOUD_PERMITTIVITY_COMPONENTS:
+            values = self._make_data(
+                coords=coords,
+                data_array_type=td.IndexedFreqDataArray,
+                is_complex=True,
+            )
+            field_cmps[component_name] = td.IndexedFreqDataArray(
+                1.5**2 + np.abs(values.values),
+                coords=coords,
+            )
+
+        return td.PointCloudPermittivityData(monitor=monitor, points=monitor.points, **field_cmps)
 
     def make_field_time_data(self, monitor: td.FieldTimeMonitor) -> td.FieldTimeData:
         field_cmps = {}
@@ -582,6 +601,7 @@ class SyntheticMonitorDataFactory:
         monitor_maker_map = {
             td.FieldMonitor: self.make_field_data,
             td.PointCloudFieldMonitor: self.make_point_cloud_field_data,
+            td.PointCloudPermittivityMonitor: self.make_point_cloud_permittivity_data,
             td.FieldTimeMonitor: self.make_field_time_data,
             td.ModeSolverMonitor: self.make_mode_solver_data,
             td.MicrowaveModeSolverMonitor: self.make_microwave_mode_solver_data,

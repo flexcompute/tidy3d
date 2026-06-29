@@ -29,7 +29,7 @@ from .autograd.parallel_adjoint_bases import (
 from .base import Tidy3dBaseModel, cached_property
 from .base_sim.monitor import AbstractMonitor
 from .data.data_array import PointDataArray
-from .data.point_cloud import canonicalize_point_cloud_points
+from .data.point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS, canonicalize_point_cloud_points
 from .diffraction import (
     DIFFRACTION_POLARIZATIONS,
     bloch_vec_at_freq,
@@ -80,6 +80,7 @@ BYTES_COMPLEX = 8
 WARN_NUM_FREQS = 2000
 WARN_NUM_MODES = 100
 MAX_POINT_CLOUD_FIELD_MONITOR_POINTS = 10_000_000
+MAX_POINT_CLOUD_PERMITTIVITY_MONITOR_POINTS = 10_000_000
 DIPOLE_EMISSION_FIELD_COMPONENTS = ("Ex", "Ey", "Ez")
 DIPOLE_EMISSION_DIPOLE_AXES = ("x", "y", "z")
 
@@ -1255,6 +1256,104 @@ class PermittivityMonitor(AbstractMediumPropertyMonitor):
         """Size of monitor storage given the number of points after discretization."""
         # stores 3 complex number per grid cell, per frequency
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
+
+
+class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
+    """:class:`~tidy3d.Monitor` that records permittivity for arbitrary requested points.
+
+    The monitor samples diagonal permittivity components using nearest-neighbor selection on each
+    component's native Yee-grid location. Stored point coordinates are the requested coordinates,
+    not the snapped component-grid sampling locations. This monitor records the diagonal entries
+    of the permittivity tensor, matching :class:`.PermittivityMonitor`. Point order and duplicate
+    points are preserved.
+    """
+
+    _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
+
+    center: Coordinate = Field(
+        (0.0, 0.0, 0.0),
+        title="Derived Center",
+        description="Bounding-box center derived from the point cloud coordinates.",
+        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
+    )
+
+    size: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
+        (0.0, 0.0, 0.0),
+        title="Derived Size",
+        description="Bounding-box size derived from the point cloud coordinates.",
+        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
+    )
+
+    points: PointDataArray = Field(
+        ...,
+        title="Points",
+        description="Requested point coordinates for point-cloud permittivity sampling. The array "
+        "must have dimensions ``('index', 'axis')`` and shape ``(num_points, 3)``. Values are "
+        "sampled from each component's nearest native Yee-grid location, which may differ from "
+        "these requested coordinates.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
+        (1, 1, 1),
+        title="Spatial Interval",
+        description="Point-cloud permittivity monitors do not support spatial downsampling.",
+    )
+
+    @field_validator("points")
+    @classmethod
+    def _validate_points(cls, val: PointDataArray) -> PointDataArray:
+        """Validate point-cloud coordinates and assign canonical coordinates when omitted."""
+        return canonicalize_point_cloud_points(
+            val,
+            empty_error="Point-cloud permittivity monitors require at least one point.",
+            max_num_points=MAX_POINT_CLOUD_PERMITTIVITY_MONITOR_POINTS,
+            require_real=True,
+            require_finite=True,
+            cast_to_float=True,
+            preserve_index=True,
+        )
+
+    @model_validator(mode="after")
+    def _derive_geometry_from_points(self) -> Self:
+        """Keep inherited box geometry consistent with the point-cloud bounds."""
+
+        center, size = PointCloudFieldMonitor._geometry_from_points(self.points)
+        for field_name, derived_value in (("center", center), ("size", size)):
+            if field_name in self.model_fields_set and not np.allclose(
+                getattr(self, field_name), derived_value
+            ):
+                log.warning(
+                    f"PointCloudPermittivityMonitor '{self.name}' derives '{field_name}' from "
+                    f"'points'; the supplied '{field_name}' value will be ignored.",
+                    custom_loc=[field_name],
+                )
+
+        object.__setattr__(self, "center", center)
+        object.__setattr__(self, "size", size)
+        return self
+
+    @property
+    def num_points(self) -> int:
+        """Number of points sampled by this monitor."""
+        return int(self.points.sizes["index"])
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of point-cloud samples."""
+        points_size = self.points.values.nbytes
+        components_size = (
+            BYTES_COMPLEX
+            * self.num_points
+            * len(self.freqs)
+            * len(POINT_CLOUD_PERMITTIVITY_COMPONENTS)
+        )
+        return points_size + components_size
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        return (
+            BYTES_COMPLEX * num_cells * len(self.freqs) * len(POINT_CLOUD_PERMITTIVITY_COMPONENTS)
+        )
 
 
 class SurfaceIntegrationMonitor(Monitor, ABC):

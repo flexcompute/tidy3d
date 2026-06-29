@@ -244,6 +244,7 @@ from .components.data.dataset import (
     ModeSolverDataset,
     PermittivityDataset,
     PointCloudFieldDataset,
+    PointCloudPermittivityDataset,
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
@@ -265,6 +266,7 @@ from .components.data.monitor_data import (
     ModeTimeData,
     PermittivityData,
     PointCloudFieldData,
+    PointCloudPermittivityData,
     SurfaceFieldData,
     SurfaceFieldTimeData,
 )
@@ -435,6 +437,7 @@ from .components.monitor import (
     Monitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
+    PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
 )
@@ -875,6 +878,9 @@ __all__ = [
     "PointCloudFieldData",
     "PointCloudFieldDataset",
     "PointCloudFieldMonitor",
+    "PointCloudPermittivityData",
+    "PointCloudPermittivityDataset",
+    "PointCloudPermittivityMonitor",
     "PointDataArray",
     "PointDipole",
     "PolarizedAveraging",

@@ -67,7 +67,11 @@ from .boundary import (
     StablePML,
 )
 from .data.data_array import FreqDataArray, IndexedDataArray
-from .data.point_cloud import point_cloud_sampled_cells_upper_bound
+from .data.point_cloud import (
+    POINT_CLOUD_PERMITTIVITY_COMPONENTS,
+    point_cloud_nearest_sampled_cells_upper_bound,
+    point_cloud_sampled_cells_upper_bound,
+)
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .diffraction import diffraction_monitor_storage_size, diffraction_order_grid_size
@@ -121,6 +125,7 @@ from .monitor import (
     ModeTimeMonitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
+    PointCloudPermittivityMonitor,
     SurfaceIntegrationMonitor,
     TimeMonitor,
 )
@@ -638,6 +643,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 symmetry=self.symmetry,
                 num_points=monitor.num_points,
                 num_fields=len(monitor.fields),
+            )
+        if isinstance(monitor, PointCloudPermittivityMonitor):
+            return point_cloud_nearest_sampled_cells_upper_bound(
+                num_cells=self.grid.num_cells,
+                symmetry=self.symmetry,
+                num_points=monitor.num_points,
+                num_components=len(POINT_CLOUD_PERMITTIVITY_COMPONENTS),
             )
 
         def num_cells_in_monitor(monitor: Monitor) -> int:
@@ -4453,7 +4465,9 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for monitor_index, monitor in enumerate(val):
-                if not isinstance(monitor, FreqMonitor):
+                if not isinstance(monitor, FreqMonitor) or isinstance(
+                    monitor, PermittivityMonitor | MediumMonitor | PointCloudPermittivityMonitor
+                ):
                     continue
 
                 freqs = np.array(monitor.freqs)
@@ -4475,18 +4489,20 @@ class Simulation(AbstractYeeGridSimulation):
         bounds = np.asarray(self.bounds, dtype=float)
         strict_inequality = np.asarray([size != 0 for size in self.size], dtype=bool)
         for monitor_ind, monitor in enumerate(self.monitors):
-            if not isinstance(monitor, PointCloudFieldMonitor):
+            if not isinstance(monitor, (PointCloudFieldMonitor, PointCloudPermittivityMonitor)):
                 continue
 
             points = np.asarray(monitor.points.values, dtype=float)
             outside = points_outside_bounds(points, bounds, strict_inequality)
             if np.any(outside):
-                first_index = int(np.nonzero(outside)[0][0])
+                first_row = int(np.nonzero(outside)[0][0])
+                first_index = np.asarray(monitor.points.coords["index"].values)[first_row]
+                first_index = first_index.item() if hasattr(first_index, "item") else first_index
                 num_outside = int(np.count_nonzero(outside))
                 self._raise_validation_error_at_loc(
                     f"Point-cloud monitor '{monitor.name}' has {num_outside} point(s) outside "
                     "the simulation domain. The first outside point has index "
-                    f"{first_index} and coordinates {points[first_index].tolist()}.",
+                    f"{first_index} and coordinates {points[first_row].tolist()}.",
                     "monitors",
                     monitor_ind,
                     "points",
@@ -6188,7 +6204,10 @@ class Simulation(AbstractYeeGridSimulation):
             num_cells = self._monitor_num_cells(monitor)
             # intermediate storage needed, in GB
             solver_data = monitor._storage_size_solver(num_cells=num_cells, tmesh=self.tmesh) / 1e9
-            if isinstance(monitor, PointCloudFieldMonitor) and self.precision == "double":
+            if (
+                isinstance(monitor, (PointCloudFieldMonitor, PointCloudPermittivityMonitor))
+                and self.precision == "double"
+            ):
                 solver_data *= 2
             if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
                 self._raise_validation_error_at_loc(
@@ -6312,7 +6331,9 @@ class Simulation(AbstractYeeGridSimulation):
         sci_fmin, sci_fmax = self._scientific_notation(freq_min, freq_max)
 
         for monitor_ind, monitor in enumerate(self.monitors):
-            if not isinstance(monitor, FreqMonitor):
+            if not isinstance(monitor, FreqMonitor) or isinstance(
+                monitor, PermittivityMonitor | MediumMonitor | PointCloudPermittivityMonitor
+            ):
                 continue
 
             freqs = np.array(monitor.freqs)
@@ -6394,7 +6415,7 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(monitor, DipoleEmissionMonitor) and self.precision == "double":
                 storage_size *= 2
             elif (
-                isinstance(monitor, PointCloudFieldMonitor)
+                isinstance(monitor, (PointCloudFieldMonitor, PointCloudPermittivityMonitor))
                 and not isinstance(monitor, DipoleEmissionMonitor)
                 and self.precision == "double"
             ):
@@ -6618,6 +6639,8 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(mnt, FluxMonitor):
                 if mnt.enable_adjoint:
                     freqs.update(mnt.freqs)
+                continue
+            if isinstance(mnt, (PointCloudFieldMonitor, PointCloudPermittivityMonitor)):
                 continue
             if isinstance(mnt, FreqMonitor):
                 freqs.update(mnt.freqs)
@@ -7454,7 +7477,9 @@ class Simulation(AbstractYeeGridSimulation):
                 monitor.frequency_range[1]
                 for monitor in self.monitors
                 if isinstance(monitor, FreqMonitor)
-                and not isinstance(monitor, PermittivityMonitor | MediumMonitor)
+                and not isinstance(
+                    monitor, PermittivityMonitor | MediumMonitor | PointCloudPermittivityMonitor
+                )
             ),
             default=0.0,
         )

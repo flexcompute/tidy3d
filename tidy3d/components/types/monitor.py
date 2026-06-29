@@ -23,6 +23,7 @@ from tidy3d.components.monitor import (
     ModeTimeMonitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
+    PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
 )
@@ -50,6 +51,7 @@ MonitorType = (
     | AstigmaticGaussianOverlapMonitor
     | DipoleEmissionMonitor
     | PointCloudFieldMonitor
+    | PointCloudPermittivityMonitor
     | SurfaceFieldMonitor
     | SurfaceFieldTimeMonitor
 )

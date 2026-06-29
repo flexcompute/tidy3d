@@ -280,6 +280,199 @@ def test_point_cloud_field_data_adjoint_unsupported():
         data._make_adjoint_sources(dataset_names=["Ex"], fwidth=1e12)
 
 
+def make_point_cloud_permittivity_data():
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.1, -0.1]],
+        coords={"index": [10, 20], "axis": [0, 1, 2]},
+    )
+    freqs = [1e14, 2e14]
+    eps_xx = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64) * (2.0 + 0.1j),
+        coords={"index": [10, 20], "f": freqs},
+    )
+    eps_yy = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64) * (3.0 + 0.15j),
+        coords={"index": [10, 20], "f": freqs},
+    )
+    eps_zz = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64) * (4.0 + 0.2j),
+        coords={"index": [10, 20], "f": freqs},
+    )
+    monitor = td.PointCloudPermittivityMonitor(
+        points=points,
+        freqs=freqs,
+        name="point_cloud_eps",
+    )
+    return td.PointCloudPermittivityData(
+        monitor=monitor,
+        points=points,
+        eps_xx=eps_xx,
+        eps_yy=eps_yy,
+        eps_zz=eps_zz,
+    )
+
+
+def test_point_cloud_lazy_monitor_access_skips_simulation_points(monkeypatch, tmp_path):
+    """Lazy single-monitor access should not load all point-cloud monitor metadata arrays."""
+
+    first_data = make_point_cloud_permittivity_data()
+    first_data = first_data.updated_copy(
+        monitor=first_data.monitor.updated_copy(name="point_cloud_eps_0")
+    )
+    second_data = make_point_cloud_permittivity_data()
+    second_data = second_data.updated_copy(
+        monitor=second_data.monitor.updated_copy(name="point_cloud_eps_1")
+    )
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(0.1),
+        run_time=1e-12,
+        monitors=[first_data.monitor, second_data.monitor],
+    )
+    sim_data = td.SimulationData(simulation=sim, data=(first_data, second_data))
+    path = tmp_path / "point_cloud_permittivity_data.hdf5"
+    sim_data.to_file(path)
+
+    loaded_paths = []
+    original_from_hdf5 = DataArray.from_hdf5.__func__
+
+    def tracking_from_hdf5(cls, fname, group_path):
+        loaded_paths.append(str(group_path).strip("/"))
+        return original_from_hdf5(cls, fname, group_path)
+
+    monkeypatch.setattr(DataArray, "from_hdf5", classmethod(tracking_from_hdf5))
+
+    lazy_sim_data = td.SimulationData.from_file(path, lazy=True)
+    assert lazy_sim_data["point_cloud_eps_1"] == second_data
+
+    assert not any(path.startswith("simulation/monitors/") for path in loaded_paths)
+    assert not any(path.startswith("data/0/") for path in loaded_paths)
+    assert any(path.startswith("data/1/") for path in loaded_paths)
+
+
+def test_point_cloud_permittivity_data(tmp_path):
+    """Test point-cloud permittivity data validation and HDF5 loading."""
+
+    data = make_point_cloud_permittivity_data()
+    assert set(data.field_components) == {"eps_xx", "eps_yy", "eps_zz"}
+    assert data.grid_locations == {"eps_xx": "Ex", "eps_yy": "Ey", "eps_zz": "Ez"}
+    normalized_data = data.normalize(lambda freq: 2.0)
+    assert isinstance(normalized_data, td.PointCloudPermittivityData)
+    assert normalized_data == data
+
+    bad_index_eps = td.IndexedFreqDataArray(
+        np.ones((1, 2), dtype=np.complex64),
+        coords={"index": [10], "f": data.monitor.freqs},
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudPermittivityData(
+            monitor=data.monitor,
+            points=data.points,
+            eps_xx=bad_index_eps,
+            eps_yy=data.eps_yy,
+            eps_zz=data.eps_zz,
+        )
+    assert_single_value_error_loc(excinfo, ("eps_xx",))
+
+    mismatched_index_eps = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64),
+        coords={"index": [0, 1], "f": data.monitor.freqs},
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudPermittivityData(
+            monitor=data.monitor,
+            points=data.points,
+            eps_xx=mismatched_index_eps,
+            eps_yy=data.eps_yy,
+            eps_zz=data.eps_zz,
+        )
+    assert_single_value_error_loc(excinfo, ("eps_xx",))
+
+    bad_freq_eps = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64),
+        coords={"index": [10, 20], "f": [3e14, 4e14]},
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudPermittivityData(
+            monitor=data.monitor,
+            points=data.points,
+            eps_xx=bad_freq_eps,
+            eps_yy=data.eps_yy,
+            eps_zz=data.eps_zz,
+        )
+    assert_single_value_error_loc(excinfo, ("eps_xx",))
+
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudPermittivityData(
+            monitor=data.monitor,
+            points=data.points,
+            eps_xx=data.eps_xx,
+            eps_yy=data.eps_yy,
+        )
+    errors = excinfo.value.errors(include_input=False, include_url=False)
+    assert errors == [{"type": "missing", "loc": ("eps_zz",), "msg": "Field required"}]
+
+    with pytest.raises(DataError, match="cannot be colocated"):
+        data.colocate()
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(0.1),
+        run_time=1e-12,
+        monitors=[data.monitor],
+    )
+    sim_data = td.SimulationData(simulation=sim, data=(data,))
+    path = tmp_path / "point_cloud_permittivity_data.hdf5"
+    sim_data.to_file(path)
+    loaded_data = td.SimulationData.mnt_data_from_file(path, mnt_name="point_cloud_eps")
+    assert loaded_data == data
+    loaded_sim_data = td.SimulationData.from_file(path)
+    assert loaded_sim_data["point_cloud_eps"] == data
+    selected_sim_data = td.SimulationData.from_file(path, monitor_names="point_cloud_eps")
+    assert selected_sim_data.data == (data,)
+    lazy_sim_data = td.SimulationData.from_file(path, lazy=True)
+    assert "_lazy_fname" in lazy_sim_data.__dict__
+    assert lazy_sim_data["point_cloud_eps"] == data
+    assert "_lazy_fname" in lazy_sim_data.__dict__
+    assert lazy_sim_data.data == (data,)
+    lazy_selected_sim_data = td.SimulationData.from_file(
+        path, lazy=True, monitor_names="point_cloud_eps"
+    )
+    assert lazy_selected_sim_data["point_cloud_eps"] == data
+
+
+def test_point_cloud_permittivity_data_adjoint_unsupported():
+    """Point-cloud permittivity data should explicitly reject adjoint objectives in v1."""
+
+    data = make_point_cloud_permittivity_data()
+
+    assert data._make_adjoint_sources(dataset_names=[], fwidth=1e12) == []
+    with pytest.raises(Tidy3dNotImplementedError, match="PointCloudPermittivityData"):
+        data._make_adjoint_sources(dataset_names=["eps_xx"], fwidth=1e12)
+
+
+def test_dipole_emission_data_adjoint_unsupported():
+    """Dipole-emission data should explicitly reject adjoint objectives in v1."""
+
+    freqs = [1e14, 2e14]
+    points = td.PointDataArray([[0.0, 0.0, 0.0]], dims=("index", "axis"))
+    monitor = td.DipoleEmissionMonitor(
+        points=points,
+        position_weights=[1.0],
+        freqs=freqs,
+        name="emission",
+    )
+    radiation_intensity = td.DipoleEmissionDataArray(
+        np.ones((3, len(freqs))),
+        coords={"dipole_axis": ["x", "y", "z"], "f": freqs},
+    )
+    data = td.DipoleEmissionData(monitor=monitor, radiation_intensity=radiation_intensity)
+
+    assert data._make_adjoint_sources(dataset_names=[], fwidth=1e12) == []
+    with pytest.raises(Tidy3dNotImplementedError, match="DipoleEmissionData"):
+        data._make_adjoint_sources(dataset_names=["radiation_intensity"], fwidth=1e12)
+
+
 def make_field_data(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return FieldData(

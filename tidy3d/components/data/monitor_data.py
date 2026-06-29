@@ -62,6 +62,7 @@ from tidy3d.components.monitor import (
     ModeTimeMonitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
+    PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
 )
@@ -117,6 +118,7 @@ from .dataset import (
     ModeSolverDataset,
     PermittivityDataset,
     PointCloudFieldDataset,
+    PointCloudPermittivityDataset,
 )
 from .em_fields import frequency_normalized_field_components
 
@@ -1976,12 +1978,53 @@ class PointCloudFieldData(MonitorData, PointCloudFieldDataset):
 
     def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
         """Reject adjoint use until a batched point-cloud adjoint source is available."""
-        del fwidth
         if not dataset_names:
             return []
 
         raise Tidy3dNotImplementedError(
             "Adjoint objectives depending on PointCloudFieldData are currently unsupported."
+        )
+
+
+class PointCloudPermittivityData(MonitorData, PointCloudPermittivityDataset):
+    """Data associated with a :class:`.PointCloudPermittivityMonitor`.
+
+    Diagonal permittivity components are indexed by requested point row and frequency. The ``points``
+    array stores the requested coordinates, while each component value is sampled from its nearest
+    native Yee-grid location.
+    """
+
+    monitor: PointCloudPermittivityMonitor = Field(
+        ..., title="Monitor", description="Frequency-domain point-cloud permittivity monitor."
+    )
+
+    @model_validator(mode="after")
+    def _frequencies_match_monitor(self) -> Self:
+        """Ensure stored component frequency coordinates match the associated monitor."""
+        monitor_freqs = np.asarray(self.monitor.freqs)
+        for component_name, component_data in self.field_components.items():
+            component_freqs = np.asarray(component_data.coords["f"].values)
+            if not np.array_equal(component_freqs, monitor_freqs):
+                self._raise_validation_error_at_loc(
+                    f"Permittivity component '{component_name}' has frequency coordinates that "
+                    "do not match the associated point-cloud permittivity monitor frequencies.",
+                    component_name,
+                )
+        return self
+
+    def normalize(
+        self, source_spectrum_fn: Callable[[float], complex]
+    ) -> PointCloudPermittivityData:
+        """Return copy of self; permittivity data is not source-normalized."""
+        return self.copy(deep=False)
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Reject adjoint use until a batched point-cloud adjoint source is available."""
+        if not dataset_names:
+            return []
+
+        raise Tidy3dNotImplementedError(
+            "Adjoint objectives depending on PointCloudPermittivityData are currently unsupported."
         )
 
 
@@ -2031,6 +2074,15 @@ class DipoleEmissionData(MonitorData):
                     array_name,
                 )
         return self
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Reject adjoint use until dipole-emission adjoint sources are available."""
+        if not dataset_names:
+            return []
+
+        raise Tidy3dNotImplementedError(
+            "Adjoint objectives depending on DipoleEmissionData are currently unsupported."
+        )
 
 
 class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):

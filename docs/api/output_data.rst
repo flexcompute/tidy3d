@@ -50,6 +50,7 @@ List of Monitor Data Types
 
    FieldData
    PointCloudFieldData
+   PointCloudPermittivityData
    DipoleEmissionData
    FieldTimeData
    ModeSolverData
@@ -65,6 +66,8 @@ List of Monitor Data Types
    AuxFieldTimeData
    SurfaceFieldData
    SurfaceFieldTimeData
+
+Point-cloud monitor data containers are indexed by ``index`` and frequency ``f`` rather than by structured ``x`` / ``y`` / ``z`` grid coordinates. Access point-cloud fields or permittivity components directly, for example ``sim_data["point_cloud"].Ex`` or ``sim_data["point_cloud_eps"].eps_xx``, and use the corresponding ``.points`` array to inspect the requested point coordinates. For ``PointCloudPermittivityData``, component values are sampled from the nearest native Yee-grid locations; ``.points`` does not expose those snapped component-grid sampling locations.
 
 
 ~~~~
@@ -83,6 +86,7 @@ List of Dataset Types
    DipoleEmissionDataArray
    DipoleEmissionPositionDataArray
    PointCloudFieldDataset
+   PointCloudPermittivityDataset
    ScalarModeFieldDataArray
    ScalarFieldTimeDataArray
    components.data.data_array.FreqDataArray

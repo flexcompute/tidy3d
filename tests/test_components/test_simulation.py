@@ -466,6 +466,29 @@ def test_validate_monitor_simulation_frequency_range():
         excinfo, ("monitors", 0, "freqs"), "outside of the simulation frequency range"
     )
 
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0]],
+        coords={"index": [0], "axis": [0, 1, 2]},
+    )
+    mnt = td.PointCloudPermittivityMonitor(
+        points=points,
+        freqs=[5e13],
+        name="pc_eps",
+    )
+    with AssertLogLevel("INFO", contains_str="Auto meshing using wavelength") as log_capture:
+        s = td.Simulation(
+            size=(1, 1, 1),
+            monitors=(mnt,),
+            sources=(src,),
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+    assert all(
+        "outside of the simulation frequency range" not in message
+        for _, message in log_capture.records
+    )
+    s.validate_pre_upload()
+
 
 def test_validate_bloch_with_symmetry():
     with pytest.raises(ValidationError):
@@ -1289,6 +1312,23 @@ def test_nyquist():
         update={"monitors": (td.FluxMonitor(size=(1, 1, 0), freqs=[1e14, 1e20], name="flux"),)}
     )
     assert S_MONITOR.nyquist_step == 1
+
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0]],
+        coords={"index": [0], "axis": [0, 1, 2]},
+    )
+    S_POINT_CLOUD_EPS = S.copy(
+        update={
+            "monitors": (
+                td.PointCloudPermittivityMonitor(
+                    points=points,
+                    freqs=[1e14, 1e20],
+                    name="pc_eps",
+                ),
+            )
+        }
+    )
+    assert S_POINT_CLOUD_EPS.nyquist_step == S.nyquist_step
 
     # fake a scenario where the fmax of the simulation is negative?
     class MockSim:

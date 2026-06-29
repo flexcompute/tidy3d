@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 POINT_CLOUD_STENCIL_CORNERS_PER_FIELD = 8
+POINT_CLOUD_PERMITTIVITY_COMPONENTS = ("eps_xx", "eps_yy", "eps_zz")
 
 
 def _axis_label_to_index(label: object) -> int | None:
@@ -118,3 +119,19 @@ def point_cloud_sampled_cells_upper_bound(
     stencil_rows = POINT_CLOUD_STENCIL_CORNERS_PER_FIELD * num_points * num_fields
     grid_cells = math.prod(point_cloud_stencil_grid_num_cells(num_cells, symmetry))
     return int(min(stencil_rows, grid_cells))
+
+
+def point_cloud_nearest_sampled_cells_upper_bound(
+    *,
+    num_cells: Sequence[int],
+    symmetry: Sequence[int],
+    num_points: int,
+    num_components: int,
+) -> int:
+    """Conservative upper bound on nearest sampled Yee cells for point-cloud data."""
+
+    if num_points == 0 or num_components == 0:
+        return 0
+
+    grid_cells = math.prod(point_cloud_stencil_grid_num_cells(num_cells, symmetry))
+    return int(min(num_points * num_components, grid_cells))

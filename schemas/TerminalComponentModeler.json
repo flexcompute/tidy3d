@@ -16581,6 +16581,132 @@
       ],
       "type": "object"
     },
+    "PointCloudPermittivityMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "$ref": "#/$defs/ApodizationSpec",
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "colocate": {
+          "const": false,
+          "default": false,
+          "type": "boolean"
+        },
+        "freqs": {
+          "type": "ArrayLike",
+          "x-array-dtype": "<f8",
+          "x-array-forbid_nan": true,
+          "x-array-ndim": 1,
+          "x-array-scalar_to_1d": true,
+          "x-array-shape": null,
+          "x-array-strict": false
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "points": {
+          "type": "string"
+        },
+        "size": {
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "type": {
+          "const": "PointCloudPermittivityMonitor",
+          "default": "PointCloudPermittivityMonitor",
+          "type": "string"
+        },
+        "use_colocated_integration": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "points"
+      ],
+      "type": "object"
+    },
     "PointDipole": {
       "additionalProperties": false,
       "properties": {
@@ -18197,6 +18323,7 @@
                 "ModeTimeMonitor": "#/$defs/ModeTimeMonitor",
                 "PermittivityMonitor": "#/$defs/PermittivityMonitor",
                 "PointCloudFieldMonitor": "#/$defs/PointCloudFieldMonitor",
+                "PointCloudPermittivityMonitor": "#/$defs/PointCloudPermittivityMonitor",
                 "SurfaceFieldMonitor": "#/$defs/SurfaceFieldMonitor",
                 "SurfaceFieldTimeMonitor": "#/$defs/SurfaceFieldTimeMonitor"
               },
@@ -18265,6 +18392,9 @@
               },
               {
                 "$ref": "#/$defs/PointCloudFieldMonitor"
+              },
+              {
+                "$ref": "#/$defs/PointCloudPermittivityMonitor"
               },
               {
                 "$ref": "#/$defs/SurfaceFieldMonitor"

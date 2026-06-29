@@ -445,6 +445,79 @@ def test_point_cloud_field_monitor(monkeypatch):
         td.PointCloudFieldMonitor(points=points, fields=("Ex",), freqs=[1e12], name="pc_too_many")
 
 
+def test_point_cloud_permittivity_monitor(monkeypatch):
+    """Test point-cloud permittivity monitor validation and storage estimates."""
+
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.4, 0.6]],
+        coords={"index": [10, 11], "axis": ["x", "y", "z"]},
+    )
+    monitor = td.PointCloudPermittivityMonitor(
+        points=points,
+        freqs=[1e12, 2e12],
+        name="pc_eps",
+    )
+
+    assert monitor.num_points == 2
+    assert monitor.colocate is False
+    assert "components" not in td.PointCloudPermittivityMonitor.model_fields
+    assert np.array_equal(monitor.points.coords["index"], [10, 11])
+    assert np.array_equal(monitor.points.coords["axis"], [0, 1, 2])
+    assert np.allclose(monitor.center, (0.1, 0.2, 0.3))
+    assert np.allclose(monitor.size, (0.2, 0.4, 0.6))
+    assert monitor.storage_size(num_cells=1000, tmesh=[]) == 8 * 2 * 3 + 8 * 2 * 2 * 3
+    assert monitor._storage_size_solver(num_cells=1000, tmesh=[]) == 8 * 1000 * 2 * 3
+
+    with pytest.raises(pd.ValidationError):
+        td.PointCloudPermittivityMonitor(
+            points=points,
+            freqs=[1e12],
+            name="pc_eps_colocate",
+            colocate=True,
+        )
+
+    import tidy3d.components.monitor as monitor_module
+
+    assert monitor_module.MAX_POINT_CLOUD_PERMITTIVITY_MONITOR_POINTS == 10_000_000
+
+    monkeypatch.setattr(monitor_module, "MAX_POINT_CLOUD_PERMITTIVITY_MONITOR_POINTS", 1)
+    with pytest.raises(pd.ValidationError):
+        td.PointCloudPermittivityMonitor(
+            points=points,
+            freqs=[1e12],
+            name="pc_eps_too_many",
+        )
+
+
+def test_point_cloud_permittivity_monitor_allows_anisotropic_media():
+    """Point-cloud permittivity follows regular PermittivityMonitor diagonal tensor output."""
+
+    points = td.PointDataArray([[0.0, 0.0, 0.0]], coords={"index": [0], "axis": [0, 1, 2]})
+    monitor = td.PointCloudPermittivityMonitor(
+        points=points,
+        freqs=[1e12],
+        name="pc_eps",
+    )
+    diagonal_medium = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=2.0),
+        yy=td.Medium(permittivity=3.0),
+        zz=td.Medium(permittivity=4.0),
+    )
+    full_medium = td.FullyAnisotropicMedium(
+        permittivity=[[2.0, 0.1, 0.0], [0.1, 3.0, 0.0], [0.0, 0.0, 4.0]]
+    )
+
+    for medium in (diagonal_medium, full_medium):
+        structure = td.Structure(geometry=td.Box(size=(0.5, 0.5, 0.5)), medium=medium)
+        td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(0.1),
+            run_time=1e-12,
+            structures=[structure],
+            monitors=[monitor],
+        )
+
+
 def test_point_cloud_field_monitor_simulation_bounds():
     """Point-cloud monitors require every point to be inside the simulation domain."""
 
@@ -464,9 +537,20 @@ def test_point_cloud_field_monitor_simulation_bounds():
         8 * 2 * 3 + 16 * 2 * 1 * 1
     )
 
+    eps_monitor = td.PointCloudPermittivityMonitor(
+        points=points,
+        freqs=[1e12],
+        name="pc_eps",
+    )
+    sim_with_eps = sim.updated_copy(monitors=[eps_monitor])
+    assert sim_with_eps.monitors_data_size["pc_eps"] == 8 * 2 * 3 + 8 * 2 * 1 * 3
+    assert sim_with_eps.updated_copy(precision="double").monitors_data_size["pc_eps"] == (
+        8 * 2 * 3 + 16 * 2 * 1 * 3
+    )
+
     outside_points = td.PointDataArray(
         [[0.0, 0.0, 0.0], [0.6, 0.0, 0.0]],
-        coords={"index": [0, 1], "axis": [0, 1, 2]},
+        coords={"index": [10, 11], "axis": [0, 1, 2]},
     )
     outside_monitor = td.PointCloudFieldMonitor(
         points=outside_points, fields=("Ex",), freqs=[1e12], name="pc_outside"
@@ -479,6 +563,22 @@ def test_point_cloud_field_monitor_simulation_bounds():
             monitors=[outside_monitor],
         )
     assert_single_value_error_loc(excinfo, ("monitors", 0, "points"))
+    assert "first outside point has index 11" in str(excinfo.value)
+
+    outside_eps_monitor = td.PointCloudPermittivityMonitor(
+        points=outside_points,
+        freqs=[1e12],
+        name="pc_eps_outside",
+    )
+    with pytest.raises(pd.ValidationError) as excinfo:
+        td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(0.1),
+            run_time=1e-12,
+            monitors=[outside_eps_monitor],
+        )
+    assert_single_value_error_loc(excinfo, ("monitors", 0, "points"))
+    assert "first outside point has index 11" in str(excinfo.value)
 
     boundary_point = (0.5, 0.0, 0.0)
     field_monitor = td.FieldMonitor(
