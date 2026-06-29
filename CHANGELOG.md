@@ -9,6 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.12.0.dev2] - 2026-06-29
+
+### Added
+
+- Added `gds_precision` to `Geometry.to_gds_file()`, `Structure.to_gds_file()`, and `Simulation.to_gds_file()` to control the coordinate precision written to GDS exports.
+- Added `merge_adjacent` to `Geometry.from_gds()`; set `merge_adjacent=True` to merge fractured same-layer GDS polygons during import for roundtrip reconstruction.
+- HeatSimulation and HeatChargeSimulation cloud runs now create a volume mesh before running the solver; use web.run(), run_async(), Job.run(), Job.step(), Batch.run(), or Batch.step() instead of separate upload/start/monitor calls for these simulations. Uniform Heat/HeatCharge batches advance the mesh and solver workflow automatically, with Batch.run() starting each solver step as soon as that simulation's mesh step completes. Batch.estimate_cost() reports the summed cost of the shared next workflow step for supported uniform batches; after estimating the mesh step, run it first before estimating the solver step. Batch.estimate_cost() raises for mixed or non-uniform multi-step batches; use Job.estimate_cost() per job in those cases. Cache-only batch results may record `None` in `BatchData.task_ids` because no server task ID exists. Mixed batches containing both regular simulations and Heat/HeatCharge simulations run those groups separately; split them into separate batches for maximum parallelism.
+- Added thermionic Schottky contacts to the accelerated charge solver (DC and small-signal AC). Schottky physics is an opt-in on `VoltageBC` via `model="schottky_mott"`; the Mott rule `phi_Bn = W - chi`, `phi_Bp = E_g - phi_Bn` is built from per-medium material properties — `work_function` on the adjacent `ChargeConductorMedium` and `electron_affinity` / `richardson_electron` / `richardson_hole` on the adjacent `SemiconductorMedium`. Default `model="ohmic"` is the standard ohmic contact. Schottky contacts compose with `SSACAnalysis` / `IsothermalSSACAnalysis`, enabling Mott-Schottky `1/C^2` extraction on Schottky diodes.
+- Native autograd support for `FluxMonitor` using hidden forward field storage in autograd runs. Set `enable_adjoint=True` on `FluxMonitor` objects whose `.flux` output is used in an autograd objective; this stores hidden surface field data for all requested flux-monitor frequencies.
+- Added `PalankovskiQuayApproxCarrierLifetime`: doping- and temperature-dependent SRH lifetime in the Palankovski–Quay empirical Scharfetter form. Supported by the accelerated charge solver only.
+- Added faster adjoint source construction for `ModeMonitor`, `GaussianOverlapMonitor`, `AstigmaticGaussianOverlapMonitor`, and `DiffractionMonitor` data with many active amplitudes.
+- Improved polygon triangulation performance using Shapely constrained Delaunay triangulation.
+- `LayerRefinementSpec` now refines axis-unaligned in-plane metal edges (`in_plane_edge_refinement`, default `"mirror_corner"`) and resolves small disjoint metal geometries such as vias (`min_steps_per_geometry`, default `2`), with a tunable `CornerFinderSpec.axis_aligned_angle_threshold`; both are on by default and give existing setups a finer mesh, set them to `None` to keep the previous mesh.
+- - `ModeTimeMonitor` records time-domain modal amplitudes at a waveguide
+    cross-section, projecting the running Yee-grid fields onto the mode profiles
+    solved at a single frequency (`freq_spec`, defaulting to the first source's
+    central frequency).
+- `SolidMedium` now accepts an optional `velocity` vector (in `um/s`; `from_si_units` takes `m/s` and converts), enabling a convective transport term in heat simulations for structures using that medium (both `capacity` and `density` are required when `velocity` is nonzero).
+- `FluxMonitor` and `FluxTimeMonitor` now support staggered Yee-grid surface integration via `use_colocated_integration=False`, computed on the server with the same scheme as `FieldMonitor(colocate=False, use_colocated_integration=False)` flux, keeping tangential fields at their native Yee positions to avoid interpolation across material discontinuities.
+- `ThermalContactResistance` boundary condition for heat simulations: an interfacial thermal resistance (thermal contact / Kapitza resistance, in `K*um^2/W`; `from_si_units` takes `m^2*K/W`) placed on a `StructureStructureInterface` or `MediumMediumInterface` allows a temperature jump proportional to the heat flux across the interface between two touching solids.
+- Added `tidy3d.web.refresh_licenses()` and `tidy3d configure --refresh-licenses` to clear cached local license entitlements so the next local license check fetches current server state. Successful API key or API endpoint configuration updates now refresh local license state automatically. Rejected configuration updates do not refresh local license state; when combined with explicit refresh, the command or call reports that the cache was not refreshed. If automatic refresh fails after configuration is saved, `tidy3d configure` exits nonzero and `web.configure(...)` raises while leaving the saved configuration in place.
+- Schottky contacts (`VoltageBC` with `model="schottky_mott"`) now support Fermi-Dirac carrier statistics (`fermi_dirac=True` in the charge analysis spec), enabling Schottky devices with degenerately doped semiconductor regions in DC and small-signal AC analyses.
+- Added `PointCloudPermittivityMonitor` for recording diagonal permittivity components for requested point clouds by sampling each component from its nearest native `Ex` / `Ey` / `Ez` Yee-grid location.
+- `MeshOverrideStructure` accepts a `min_steps_per_size` field to set the grid size relative to the structure's bounding box (bounding box size divided by the requested number of steps, ignored on axes whose bounding box size is zero or infinite); when both `dl` and `min_steps_per_size` are set along a dimension, the finer grid size is used. `dl` is now optional (defaults to no override) so an override can be specified with `min_steps_per_size` alone.
+- Added `tidy3d.web.diagnose_connection()` and the `tidy3d diagnose-connection` CLI for measuring Tidy3D API reachability and storage download throughput.
+- Added `penetrable` to `LossyMetalMedium`: when `True`, the metal is solved as a regular conductive medium with subpixel averaging `Simulation.subpixel.dielectric`, instead of the lossy-metal-specific handling selected by `Simulation.subpixel.lossy_metal`.
+
+### Changed
+
+- Changed the default `cSi` material-library variant from `Green2008` to `Palik_LowLoss`. Accessing the `cSi` default medium implicitly now emits a migration warning. Callers that need pre-change results should request `Green2008` explicitly, including in the 1.2 to 1.45 um overlap where both variants are valid. `Palik_LowLoss` is valid from 1.2 to 250 um. `Green2008` covers pre-change results from 0.25 to 1.2 um, and `Palik_Lossy` is available from 0.1 to 1.4 um when the lossy Palik model is desired.
+- Changed the `cSi` material-library `Si_MultiPhysics` optical model from `Green2008` to `Palik_LowLoss`, aligning it with the new `cSi` default optical model.
+- Updated tidy3d MCP startup for FastMCP 3.2.4 compatibility and documented exact remote MCP endpoint URLs for custom deployments.
+- Mesh override structures with `shadow=False` now reuse a nearby existing grid line instead of always inserting a new one at their bounding box, so refined regions add fewer grid lines; affected setups may see slightly fewer or shifted grid lines around such overrides.
+- Changed adjoint gradients to skip sources whose effective magnitude underflows solver precision and treat those contributions as zero.
+- `HeatChargeSimulation` now raises a setup error when heat-solver features are requested in a non-isothermal charge analysis: solid-medium advection (`SolidMedium.velocity`) and resistive interfaces (`ThermalContactResistance`) are applied by the heat solver (including heat coupled with electrical conduction) but were previously ignored silently in non-isothermal charge (coupled charge+heat) runs. Heat, conduction+heat, and isothermal charge analyses are unaffected. `ThermalContactResistance` is now also listed in the heat boundary-conditions API reference.
+- Path integrals with ``extrapolate_to_endpoints=False`` (the default for current integrals) now use a centered box-rule treatment at the endpoints instead of linear extrapolation, slightly changing coarse-mesh results for ``AxisAlignedCurrentIntegral``, ``path_integrals_from_lumped_element``, ``CustomImpedanceSpec.from_bounding_box`` (used by ``TerminalWavePort``), lumped ports, and ``TerminalComponentModeler``. Voltage integrals (default ``extrapolate_to_endpoints=True``) are unchanged.
+- Made `Geometry.to_gds_file()`, `Structure.to_gds_file()`, and `Simulation.to_gds_file()` raise `SetupError` when the requested precision is too fine for the exported coordinates or when exported coordinates are non-finite.
+- EMEModeSpec.precision now defaults to "double"; set precision="auto" to resolve precision per EME cell -- double where that cell's mode solve contains a good conductor, single otherwise.
+  EME monitor storage-size estimates now account for the double-precision (complex128) data EME writes (previously about 2x low); simulations near the storage limit may now report a larger size or exceed it.
+- Heat and HeatCharge solver tasks are now billed based on their associated computational cost, like other solvers. For Heat and HeatCharge workflow jobs, `Job.estimate_cost()` and `Batch.estimate_cost()` now explicitly state when an estimate is for the mesh step only and that `Job.step()` or `Batch.step()` should be run before estimating the solver step. For variable-cost charge solves, estimates now show a typical FlexCredit cost separately from the maximum cost when the server provides one. The billed charge-solver cost depends on the solver iterations run to convergence; this is usually much smaller than the maximum allowed iterations, but hard-to-converge cases can reach the maximum cost.
+
+### Fixed
+
+- Fixed `Simulation` GDS exports so vacuum/background cutouts are preserved more reliably, including when exporting holes on the default layer and when mixing mapped and unmapped media in the same layout.
+- Corrected the `convergence_dv` description in `SteadyChargeDCAnalysis`: the accelerated charge solver applies it only to multi-voltage sweeps (inserting intermediate warm-start bias points), while the from-zero bias ramp it previously described applies to the legacy solver.
+
+  Validation now rejects providing more than one multi-voltage sweep array across `VoltageBC` sources of any type; previously a swept `SSACVoltageSource` alongside a swept `DCVoltageSource` was silently accepted with ambiguous sweep selection.
+- Fixed EME coefficient normalization to use absolute real mode flux and leave zero-flux
+  modes unscaled. All four interface S-matrix blocks are renormalized with the
+  same absolute-real-flux rule, using flux data for both EME cells adjacent to
+  each interface. Downsampled `EMECoefficientMonitor` data must use
+  `eme_cell_interval_space=1` when requesting normalized interface S matrices.
+  Repeated-grid coefficient data must provide flux on the same virtual-cell
+  `eme_cell_index` coordinates before normalizing A/B fields.
+- Fixed `FieldMonitor` and `FieldTimeMonitor` flux over-counting under periodic and Bloch boundaries for monitors that span or exceed the simulation domain when using the experimental option `use_colocated_integration=False`; default and colocated monitors were not affected.
+- Fixed nonzero diffraction-order adjoint plane waves to use single-frequency injection and avoid broadband grazing-angle artifacts.
+- `PolySlab` now accepts polygons with arc segments (`bulges`) that enclose a finite area even when their `vertices` are collinear; previously such polygons were rejected with "The polygon almost collapses to a 1D curve."
+- Fixed repeated autograd gradient evaluations so matching cached adjoint results are reused.
+- Fixed component modeler FlexCredit cost estimates that could be lower than the real cost when the simulation `run_time` is a `RunTimeSpec`; the estimate now resolves the run time from the modeler's port excitation instead of the source-less base simulation.
+- Fixed excessive memory retention during `DesignSpace.run(fn_pre, fn_post)` workflows that run batched simulations.
+- A non-penetrable `LossyMetalMedium` is now rejected as a component of an `AnisotropicMedium` at construction time.
+- Fixed `structure_priority_mode` being ignored when a `WavePort` is converted to a mode solver via `to_mode_solver`/`to_mode_simulation`.
+
 ## [2.12.0.dev1] - 2026-06-04
 
 ### Added
@@ -2201,6 +2264,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.12.0.dev2]: https://github.com/flexcompute/tidy3d/compare/v2.12.0.dev1...v2.12.0.dev2
 [2.12.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.12.0.dev0...v2.12.0.dev1
 [2.12.0.dev0]: https://github.com/flexcompute/tidy3d/compare/v2.11.2...v2.12.0.dev0
 [2.11.2]: https://github.com/flexcompute/tidy3d/compare/v2.11.1...v2.11.2
