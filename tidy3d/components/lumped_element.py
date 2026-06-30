@@ -23,9 +23,9 @@ from pydantic import (
 
 from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam, fit
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.components.validators import assert_plane, validate_name_str
-from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, SpiceUnitScaling
-from tidy3d.exceptions import ValidationError
+from tidy3d.components.validators import assert_line_or_plane, validate_name_str
+from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, SpiceUnitScaling, fp_eps
+from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .base import cached_property, keyed_cache
@@ -231,6 +231,11 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid, frequency_range=frequency_range)]
 
+    def _check_grid_size(self, grid: Grid) -> None:
+        """Raise :class:`.SetupError` if the simulation grid is too coarse to resolve this element.
+
+        No-op by default; subclasses override when a coarse grid can degenerate the geometry."""
+
 
 class RectangularLumpedElement(LumpedElement, Box):
     """Class representing a rectangular planar element with zero thickness along its normal axis.
@@ -240,15 +245,14 @@ class RectangularLumpedElement(LumpedElement, Box):
 
     Note
     ----
-    The element must be planar (exactly one zero-size dimension). One-dimensional elements
-    (two zero-size dimensions) are not supported. If you need a narrow element, provide a
-    small but finite width along the lateral axis.
+    The element may be planar (exactly one zero-size dimension) or a one-dimensional line
+    (two zero-size dimensions).
     """
 
     voltage_axis: Axis = Field(
         title="Voltage Drop Axis",
         description="Specifies the axis along which the component is oriented and along which the "
-        "associated voltage drop will occur. Must be in the plane of the element.",
+        "associated voltage drop will occur. Must be a nonzero-size dimension of the element.",
     )
 
     snap_perimeter_to_grid: bool = Field(
@@ -261,17 +265,54 @@ class RectangularLumpedElement(LumpedElement, Box):
         "boundary along their ``normal_axis``, regardless of this option.",
     )
 
-    _plane_validator = assert_plane()
+    _plane_validator = assert_line_or_plane()
+
+    @cached_property
+    def _is_line(self) -> bool:
+        """Whether the element is one-dimensional (two zero-size dimensions)."""
+        return self.size.count(0.0) == 2
 
     @cached_property
     def normal_axis(self) -> Axis:
-        """Normal axis of the lumped element, which is the axis where the element has zero size."""
+        """Normal axis of the lumped element: the (first) axis where the element has zero size.
+        A line element has two such zero-size axes; this returns the first."""
+        # Implementation note (not user-facing): for a 1D (line) element the normal is essentially
+        # nominal -- after discretization the element is always a single-cell-thick sheet; the choice
+        # only matters for second-order subpixel averaging when a substrate/superstrate discontinuity
+        # makes one transverse axis the preferred normal (picked at meshing by choose_line_normal_axis).
         return self.size.index(0.0)
 
     @cached_property
     def lateral_axis(self) -> Axis:
         """Lateral axis of the lumped element."""
         return 3 - self.voltage_axis - self.normal_axis
+
+    def _raise_if_line(self) -> None:
+        """A line element's resolved structure depends on the grid and surrounding media, so it
+        cannot be produced standalone; it is resolved at simulation time."""
+        if self._is_line:
+            raise SetupError(
+                "A 1D (line) lumped element's structure is resolved at simulation time (it depends "
+                "on the grid and surrounding media); access it via 'Simulation.volumetric_structures'."
+            )
+
+    def _check_grid_size(self, grid: Grid) -> None:
+        """Raise :class:`.SetupError` if the grid is too coarse to resolve this element as a sheet.
+
+        Both planar and line elements are realized as a single-grid-cell-wide :class:`.Medium2D`
+        sheet, so each axis transverse to the ``voltage_axis`` needs at least two grid cells. With
+        fewer, the dual-cell snap and neighbor probe degenerate -- otherwise surfacing during
+        volumetric resolution as a cryptic "zero volume", ``IndexError``, or divide-by-zero."""
+        num_cells = grid.num_cells
+        for axis in range(3):
+            if axis == self.voltage_axis or num_cells[axis] >= 2:
+                continue
+            raise SetupError(
+                f"Grid is too coarse along the '{'xyz'[axis]}' axis for lumped element "
+                f"'{self.name}' at '{self.center}': it is realized as a single-grid-cell-wide "
+                f"Medium2D sheet and needs at least two grid cells along each axis transverse to "
+                f"its 'voltage_axis'. Refine the 'GridSpec' along '{'xyz'[axis]}'."
+            )
 
     @cached_property
     def _voltage_axis_2d(self) -> Axis2D:
@@ -314,8 +355,7 @@ class RectangularLumpedElement(LumpedElement, Box):
         if self.num_grid_cells is None:
             return []
         dl = self.size[self.voltage_axis] / self.num_grid_cells
-        override_size = list(self.size)
-        override_size[self.normal_axis] = 4 * dl
+        override_size = [size if size > 0 else 4 * dl for size in self.size]
         return [
             MeshOverrideStructure(
                 geometry=Box(center=self.center, size=override_size),
@@ -332,9 +372,11 @@ class RectangularLumpedElement(LumpedElement, Box):
 
         if not self.enable_snapping_points:
             return []
-        # normal axis
+        # snap along every zero-size (transverse) axis; a line has two such axes
         snapping_points = [
-            Geometry.unpop_axis(self.center[self.normal_axis], (None, None), axis=self.normal_axis)
+            Geometry.unpop_axis(self.center[axis], (None, None), axis=axis)
+            for axis in range(3)
+            if self.size[axis] == 0
         ]
         # also snap along voltage axis
         for bound_coord in self.bounds:
@@ -383,12 +425,13 @@ class RectangularLumpedElement(LumpedElement, Box):
         """
 
         center = list(self.center)
-        # Size of monitor needs to be nonzero along the normal axis so that the magnetic field on
-        # both sides of the sheet will be available
-        mon_size = list(self.size)
-        mon_size[self.normal_axis] = 2 * (
-            increment_float(center[self.normal_axis], 1.0) - center[self.normal_axis]
-        )
+        # Each zero-size dimension needs a small nonzero extent so the magnetic field on both sides
+        # is available; the floor at ``fp_eps`` keeps it from degenerating (e.g. at the origin). A
+        # line element has two such dimensions, a planar element one.
+        mon_size = [
+            max(2 * (increment_float(coord, 1.0) - coord), fp_eps) if size == 0 else size
+            for size, coord in zip(self.size, center)
+        ]
 
         e_component = "xyz"[self.voltage_axis]
         h1_component = "xyz"[self.lateral_axis]
@@ -408,15 +451,15 @@ class RectangularLumpedElement(LumpedElement, Box):
         return f"{self.name}_monitor"
 
     @model_validator(mode="after")
-    def _voltage_axis_in_plane(self) -> Self:
-        """Ensure voltage drop axis is in the plane of the lumped element."""
-        val = self.voltage_axis
-        name = self.name
-        size = self.size
-        if size.count(0.0) == 1 and size.index(0.0) == val:
-            # if not planar, then a separate validator should be triggered, not this one
-            raise ValidationError(
-                f"'voltage_axis' must be in the plane of lumped element '{name}'."
+    def _voltage_axis_has_extent(self) -> Self:
+        """Ensure the voltage drop axis has nonzero extent: it must lie in the plane of a sheet
+        element, and be the single nonzero (line) axis of a one-dimensional element."""
+        if self.size[self.voltage_axis] == 0:
+            self._raise_validation_error_at_loc(
+                ValidationError(
+                    f"'voltage_axis' must be a nonzero-size dimension of lumped element '{self.name}'."
+                ),
+                "voltage_axis",
             )
         return self
 
@@ -443,6 +486,7 @@ class LumpedResistor(RectangularLumpedElement):
     ) -> Structure:
         """Converts the :class:`LumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
+        self._raise_if_line()
         box = self.to_geometry(grid=grid)
         conductivity = self._sheet_conductance(box)
         components_2d = ["ss", "tt"]
@@ -2057,6 +2101,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         :attr:`freq_range` is used (e.g. after injection by
         :class:`~tidy3d.plugins.smatrix.TerminalComponentModeler`).
         """
+        self._raise_if_line()
         cell_box = self._create_box_for_network(grid)
         medium_scaling_factor = self._admittance_transfer_function_scaling(cell_box)
         medium = self.network._to_medium(medium_scaling_factor, frequency_range=frequency_range)
@@ -2105,6 +2150,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         the model's :attr:`freq_range` is used (e.g. after injection by
         :class:`~tidy3d.plugins.smatrix.TerminalComponentModeler`).
         """
+        self._raise_if_line()
         PEC_connection = self.to_PEC_connection(grid)
         structures = []
         if PEC_connection is not None:

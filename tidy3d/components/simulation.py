@@ -85,10 +85,16 @@ from .geometry.utils import (
     flatten_groups,
     traverse_geometries,
 )
-from .geometry.utils_2d import get_bounds, snap_coordinate_to_grid, subdivide
+from .geometry.utils_2d import (
+    choose_line_normal_axis,
+    get_bounds,
+    snap_coordinate_to_grid,
+    snap_to_dual_cell,
+    subdivide,
+)
 from .grid.grid import Coords, Grid
 from .grid.grid_spec import GridSpec, UniformGrid, _GeneratedGridSizeError
-from .lumped_element import LumpedElementType
+from .lumped_element import LumpedElementType, RectangularLumpedElement
 from .medium import (
     AbstractCustomMedium,
     AbstractMedium,
@@ -2081,6 +2087,35 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             or self.lumped_elements
         )
 
+    def _promote_line_lumped_element(
+        self, element: LumpedElementType, grid: Grid
+    ) -> LumpedElementType:
+        """Realize a one-dimensional (line) lumped element as a single-grid-cell-wide planar
+        element so it can flow through the regular :class:`.Medium2D` pipeline.
+
+        The normal axis is chosen so the resulting sheet straddles any material interface adjacent
+        to the line (see :func:`.choose_line_normal_axis`). The element is then sized and centered on
+        the lateral dual grid cell (the span between the two grid centers straddling the line), which
+        is the transverse footprint of the smallest planar lumped element and is preserved by the
+        later center-snap. With the lateral width equal to that dual cell ``dl_lateral`` and the
+        normal-direction averaging contributing ``1 / dl_normal``, the equivalent volumetric
+        admittance reduces to ``Y * length / (dl_lateral * dl_normal)`` -- the value expected for a
+        true 1D element."""
+        if not isinstance(element, RectangularLumpedElement) or not element._is_line:
+            return element
+        normal_axis = choose_line_normal_axis(
+            element.geometry, element.voltage_axis, list(self.static_structures), self.medium, grid
+        )
+        lateral_axis = 3 - element.voltage_axis - normal_axis
+        lateral_center, lateral_width = snap_to_dual_cell(
+            grid, element.center[lateral_axis], lateral_axis
+        )
+        new_center = list(element.center)
+        new_size = list(element.size)
+        new_center[lateral_axis] = lateral_center
+        new_size[lateral_axis] = lateral_width
+        return element.updated_copy(center=tuple(new_center), size=tuple(new_size))
+
     def _volumetric_structures_grid(self, grid: Grid) -> tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
@@ -2123,13 +2158,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             snapped_center = snap_coordinate_to_grid(grid, center, axis)
             return geom._update_from_bounds(bounds=(snapped_center, snapped_center), axis=axis)
 
-        # Convert lumped elements into structures
+        # Convert lumped elements into structures. One-dimensional (line) elements are first
+        # promoted to a single-grid-cell-wide planar element so they can be realized as a Medium2D.
         lumped_structures = []
         for lumped_element in self.lumped_elements:
+            # fail loud with a clear coarse-grid message before the resolution below would otherwise
+            # degenerate (zero-area probe / divide-by-zero) on a single-cell transverse axis
+            lumped_element._check_grid_size(grid)
+            element = self._promote_line_lumped_element(lumped_element, grid)
             strict_ineq = 3 * [False]
-            strict_ineq[lumped_element.normal_axis] = True
-            if self.geometry.contains(lumped_element.geometry, strict_inequality=strict_ineq):
-                lumped_structures += lumped_element.to_structures(self.grid)
+            strict_ineq[element.normal_axis] = True
+            if self.geometry.contains(element.geometry, strict_inequality=strict_ineq):
+                lumped_structures += element.to_structures(self.grid)
 
         # Begin volumetric structures grid
         all_structures = list(self.static_structures) + lumped_structures
@@ -6093,6 +6133,10 @@ class Simulation(AbstractYeeGridSimulation):
         source_required: bool = True
             If ``True``, validation will fail in case no sources are found in the simulation.
         """
+        # run before super(): catches a degenerate (single-cell transverse axis) line element with a
+        # clear message, ahead of the finalized-simulation build that would otherwise surface it as a
+        # cryptic "zero volume" probe error
+        self._validate_lumped_element_grid_size()
         super().validate_pre_upload()
         log.begin_capture()
         self._validate_size()
@@ -6157,6 +6201,15 @@ class Simulation(AbstractYeeGridSimulation):
                 f"Simulation has {num_cells_times_steps:.2e} grid cells * time steps, "
                 f"a maximum of {MAX_CELLS_TIMES_STEPS:.2e} are allowed."
             )
+
+    def _validate_lumped_element_grid_size(self) -> None:
+        """Ensure each lumped element resolves to a non-degenerate sheet on the simulation grid.
+
+        Mirrors the per-port :meth:`LumpedPort._check_grid_size` coarse-grid guard; in particular a
+        1D (line) element needs at least two cells along each transverse axis."""
+        grid = self.grid
+        for element in self.lumped_elements:
+            element._check_grid_size(grid)
 
     def _num_non_pml_cells(self) -> int:
         """Number of grid cells in the simulation domain excluding PML/absorber layers."""

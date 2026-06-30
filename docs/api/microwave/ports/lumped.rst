@@ -10,7 +10,7 @@ Lumped Port & Elements
    rf.LumpedPort
    rf.CoaxialLumpedPort
 
-The :class:`~tidy3d.rf.LumpedPort` feature represents a planar, uniform current excitation with a fixed impedance termination.
+The :class:`~tidy3d.rf.LumpedPort` feature represents a uniform current excitation with a fixed impedance termination.
 
 .. code-block:: python
 
@@ -23,7 +23,7 @@ The :class:`~tidy3d.rf.LumpedPort` feature represents a planar, uniform current 
        impedance=50,   # port impedance
    )
 
-The :class:`~tidy3d.rf.LumpedPort` must be planar (exactly one zero-size dimension). Only axis-aligned planes are supported at this time. If you need a narrow port, provide a small but finite width along the lateral axis. Only real ``impedance`` values are supported at this time.
+The :class:`~tidy3d.rf.LumpedPort` may be planar (exactly one zero-size dimension) or a one-dimensional line (two zero-size dimensions). Only axis-aligned geometries are supported at this time. Only real ``impedance`` values are supported at this time.
 
 .. note::
 

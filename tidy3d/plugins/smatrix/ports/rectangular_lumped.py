@@ -29,7 +29,7 @@ from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAli
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import UniformCurrentSource
 from tidy3d.components.types import Axis, LumpDistType
-from tidy3d.components.validators import assert_plane
+from tidy3d.components.validators import assert_line_or_plane
 from tidy3d.exceptions import SetupError, ValidationError
 
 from .base_lumped import AbstractLumpedPort
@@ -49,15 +49,11 @@ if TYPE_CHECKING:
 class LumpedPort(AbstractLumpedPort, Box):
     """Class representing a single rectangular lumped port.
 
-    The port must be planar (exactly one zero-size dimension). The impedance is specified via
+    The port may be planar (exactly one zero-size dimension) or a one-dimensional line (two
+    zero-size dimensions). The impedance is specified via
     :attr:`impedance`. For a purely real impedance a resistor load is used. For a complex
     impedance ``Z = R + jX`` the load is a series RL (``X > 0``) or series RC (``X < 0``)
     network inferred from the measurement frequency in the :class:`ImpedanceSpec`.
-
-    Note
-    ----
-    One-dimensional ports (two zero-size dimensions) are not supported. If you need a narrow
-    port, provide a small but finite width along the lateral axis (e.g., ``fp_eps`` or larger).
 
     Example
     -------
@@ -86,7 +82,7 @@ class LumpedPort(AbstractLumpedPort, Box):
     voltage_axis: Axis = Field(
         title="Voltage Integration Axis",
         description="Specifies the axis along which the E-field line integral is performed when "
-        "computing the port voltage. The integration axis must lie in the plane of the port.",
+        "computing the port voltage. The integration axis must be a nonzero-size dimension of the port.",
     )
 
     snap_perimeter_to_grid: bool = Field(
@@ -109,21 +105,27 @@ class LumpedPort(AbstractLumpedPort, Box):
         "the lumped port.",
     )
 
-    _plane_validator = assert_plane()
+    _plane_validator = assert_line_or_plane()
 
     @cached_property
     def injection_axis(self) -> int:
-        """Injection axis of the port."""
+        """Injection axis of the port: the (first) zero-size axis. A line port has two such axes;
+        the one not used here serves as the current-integration axis, and the choice between them
+        does not affect the enclosed current."""
+        # Implementation note (not user-facing): for a 1D (line) port this axis is essentially
+        # nominal -- after discretization the port load is a single-cell-thick sheet; the choice
+        # only matters for second-order subpixel averaging when a substrate/superstrate discontinuity
+        # makes one transverse axis the preferred normal (picked at meshing by choose_line_normal_axis).
         return self.size.index(0.0)
 
     @model_validator(mode="after")
-    def _voltage_axis_in_plane(self) -> Self:
-        """Ensure voltage integration axis is in the port's plane."""
-        if self.size is None:
-            return self
-        if self.voltage_axis == self.size.index(0.0):
+    def _voltage_axis_has_extent(self) -> Self:
+        """Ensure the voltage integration axis has nonzero extent: in the plane of a sheet port, and
+        the single nonzero (line) axis of a one-dimensional port."""
+        if self.size[self.voltage_axis] == 0:
             self._raise_validation_error_at_loc(
-                ValidationError("'voltage_axis' must lie in the port's plane."), "voltage_axis"
+                ValidationError("'voltage_axis' must be a nonzero-size dimension of the port."),
+                "voltage_axis",
             )
         return self
 
@@ -258,6 +260,10 @@ class LumpedPort(AbstractLumpedPort, Box):
             size = list(self.size)
             size[self.injection_axis] = dl
             size[self.voltage_axis] = 0.0
+            # A line (1D) port is also zero-size along the current axis; give it a nonzero extent
+            # so the contour can close around the sheet (the grid path handles this via the load box).
+            if size[self.current_axis] == 0.0:
+                size[self.current_axis] = dl
 
         h_component = "xyz"[self.current_axis]
         h_cap_component = "xyz"[self.injection_axis]

@@ -54,7 +54,12 @@ from tidy3d.plugins.smatrix.data.terminal import MicrowaveSMatrixData
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import compute_F, s_to_z, validate_square_matrix
 
-from ...utils import AssertLogLevel, AssertLogStr, run_emulated
+from ...utils import (
+    AssertLogLevel,
+    AssertLogStr,
+    assert_single_value_error_loc,
+    run_emulated,
+)
 from .terminal_component_modeler_def import (
     Rinner,
     Router,
@@ -412,10 +417,10 @@ def test_no_port(tmp_path):
 
 
 def test_ports_union_discriminated_on_type(tmp_path):
-    """An invalid WavePort dict must produce a single WavePort-anchored error (FXC-7220).
+    """An invalid WavePort dict must produce a single WavePort-anchored error.
 
     Before the discriminator was added, pydantic smart-union matched against every
-    branch and surfaced LumpedPort-scoped errors (e.g. ``_voltage_axis_in_plane``)
+    branch and surfaced LumpedPort-scoped errors (e.g. ``_voltage_axis_has_extent``)
     for WavePort inputs, making the port appear to be misidentified as a LumpedPort.
     """
     modeler = make_component_modeler(planar_pec=True)
@@ -765,27 +770,62 @@ def test_validate_port_voltage_axis():
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
 
 
-def test_validate_port_must_be_planar():
-    """Test that 1D lumped ports (two zero-size dimensions) are not allowed.
+def test_1d_lumped_port_allowed():
+    """1D (line) lumped ports with two zero-size dimensions are allowed; the voltage axis must be
+    the single nonzero dimension, and the injection/current axes are the two zero-size axes."""
+    for voltage_axis in range(3):
+        size = [0, 0, 0]
+        size[voltage_axis] = 1
+        port = LumpedPort(
+            center=(0, 0, 0), size=size, voltage_axis=voltage_axis, impedance=50, name="1D_port"
+        )
+        # injection and current axes are the two zero-size (transverse) axes
+        assert port.injection_axis != voltage_axis
+        assert port.current_axis != voltage_axis
+        assert port.injection_axis != port.current_axis
 
-    Users must provide a finite width along the lateral axis. This ensures the
-    injection axis can be properly determined for the underlying lumped element.
-    """
-    # 1D port (two zeros) should fail validation
+    # the voltage axis must have nonzero size: pointing it along a zero axis is invalid, and the
+    # error is attributed to the 'voltage_axis' field
+    with pytest.raises(ValidationError) as excinfo:
+        LumpedPort(center=(0, 0, 0), size=(1, 0, 0), voltage_axis=1, impedance=50, name="bad")
+    assert_single_value_error_loc(excinfo, ("voltage_axis",))
+
+    # a full volume (no zero-size dimension) is invalid
     with pytest.raises(ValidationError):
-        LumpedPort(center=(0, 0, 0), size=(1, 0, 0), voltage_axis=0, impedance=50, name="1D_port")
+        LumpedPort(center=(0, 0, 0), size=(1, 1, 1), voltage_axis=0, impedance=50, name="vol")
 
-    with pytest.raises(ValidationError):
-        LumpedPort(center=(0, 0, 0), size=(0, 1, 0), voltage_axis=1, impedance=50, name="1D_port")
-
-    with pytest.raises(ValidationError):
-        LumpedPort(center=(0, 0, 0), size=(0, 0, 1), voltage_axis=2, impedance=50, name="1D_port")
-
-    # Planar port (one zero) should work fine
+    # Planar port (one zero) should still work fine
     port = LumpedPort(
         center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, impedance=50, name="2D_port"
     )
     assert port.injection_axis == 0  # x is the injection axis (zero size)
+
+
+def test_1d_lumped_port_boxes_nondegenerate():
+    """A 1D (line) port's grid-based current/voltage boxes are non-degenerate: the current contour
+    is a finite loop (one cell in both transverse axes), and the voltage path is a line along the
+    voltage axis."""
+    port = LumpedPort(center=(0, 0, 0), size=(0, 0, 2.0), voltage_axis=2, impedance=50, name="p")
+    assert port.to_load()._is_line
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        lumped_elements=[port.to_load()],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        medium=td.Medium(permittivity=1.0),
+    )
+    grid = sim.grid
+    # current contour: finite in both transverse axes, zero along the voltage axis
+    current_box = port._to_current_box(grid)
+    assert current_box.size[port.injection_axis] > 0
+    assert current_box.size[port.current_axis] > 0
+    assert current_box.size[port.voltage_axis] == 0
+    # voltage path: a line along the voltage axis
+    voltage_box = port._to_voltage_box(grid)
+    assert voltage_box.size[port.voltage_axis] > 0
+    assert voltage_box.size[port.injection_axis] == 0
+    assert voltage_box.size[port.current_axis] == 0
 
 
 def test_lumped_port_from_structures():

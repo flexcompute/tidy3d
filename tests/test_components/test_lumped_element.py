@@ -16,6 +16,8 @@ from tidy3d.components.lumped_element import (
     LumpedNodeMapper,
     network_complex_permittivity,
 )
+from tidy3d.components.medium import AnisotropicMediumFromMedium2D
+from tidy3d.exceptions import SetupError
 
 from ..utils import assert_single_value_error_loc
 
@@ -55,15 +57,18 @@ def test_lumped_resistor():
             name="R",
         )
 
-    # error if not planar
-    with pytest.raises(ValidationError):
-        _ = td.LumpedResistor(
-            resistance=50.0,
-            center=[0, 0, 0],
-            size=[0, 0, 3],
-            voltage_axis=2,
-            name="R",
-        )
+    # a 1D (line) resistor is now allowed: two zero-size dimensions with the voltage axis
+    # along the single nonzero dimension
+    line_resistor = td.LumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0],
+        size=[0, 0, 3],
+        voltage_axis=2,
+        name="R",
+    )
+    assert line_resistor._is_line
+
+    # error if the element is a full volume (no zero-size dimension)
     with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
@@ -341,41 +346,48 @@ def test_impedance_admittance_calculation():
     assert np.allclose(Y_expected, Y_calc)
 
 
-def test_1d_lumped_element_not_allowed():
-    """Test that 1D lumped elements (two zero-size dimensions) are not allowed.
+def test_1d_lumped_element_allowed():
+    """Test that 1D (line) lumped elements with two zero-size dimensions are allowed.
 
-    Users must provide a finite width along the lateral axis. This ensures the
-    normal axis can be properly determined for the underlying 2D material.
+    The voltage axis must be the single nonzero dimension; the normal axis is resolved at
+    meshing time and defaults to the first zero-size dimension.
     """
     RLC = td.RLCNetwork(resistance=50)
 
-    # Attempting to create a 1D lumped element should raise a validation error
+    for voltage_axis in range(3):
+        size = [0, 0, 0]
+        size[voltage_axis] = 1
+        element_1d = td.LinearLumpedElement(
+            center=[0, 0, 0],
+            size=size,
+            voltage_axis=voltage_axis,
+            network=RLC,
+            name="1D_RLC",
+        )
+        assert element_1d._is_line
+        # the default normal axis is one of the two zero-size (transverse) axes
+        assert element_1d.normal_axis != voltage_axis
+
+    # the voltage axis must have nonzero size: pointing it along a zero axis is invalid, and the
+    # error is attributed to the 'voltage_axis' field
+    with pytest.raises(ValidationError) as excinfo:
+        td.LinearLumpedElement(
+            center=[0, 0, 0],
+            size=[1, 0, 0],
+            voltage_axis=1,  # zero-size axis
+            network=RLC,
+            name="1D_RLC",
+        )
+    assert_single_value_error_loc(excinfo, ("voltage_axis",))
+
+    # a full volume (no zero-size dimension) is still invalid
     with pytest.raises(ValidationError):
         td.LinearLumpedElement(
             center=[0, 0, 0],
-            size=[1, 0, 0],  # 1D element: only x has non-zero size (invalid)
+            size=[1, 1, 1],
             voltage_axis=0,
             network=RLC,
-            name="1D_RLC",
-        )
-
-    # Other 1D configurations should also fail
-    with pytest.raises(ValidationError):
-        td.LinearLumpedElement(
-            center=[0, 0, 0],
-            size=[0, 1, 0],  # 1D element: only y has non-zero size (invalid)
-            voltage_axis=1,
-            network=RLC,
-            name="1D_RLC",
-        )
-
-    with pytest.raises(ValidationError):
-        td.LinearLumpedElement(
-            center=[0, 0, 0],
-            size=[0, 0, 1],  # 1D element: only z has non-zero size (invalid)
-            voltage_axis=2,
-            network=RLC,
-            name="1D_RLC",
+            name="vol_RLC",
         )
 
     # Planar elements (one zero-size dimension) should still work
@@ -395,13 +407,253 @@ def test_1d_lumped_element_not_allowed():
     assert snap_spec.behavior[element_2d.lateral_axis] == SnapBehavior.Expand
 
 
+def test_1d_lumped_element_to_structure_raises():
+    """A raw 1D (line) element cannot produce its own structure: the resolved geometry depends on
+    the grid and surrounding media, so ``to_structure``/``to_structures`` must fail loudly and
+    direct the user to ``Simulation.volumetric_structures``."""
+    grid = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        medium=td.Medium(permittivity=1.0),
+    ).grid
+
+    line_resistor = td.LumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0],
+        size=[0, 1, 0],
+        voltage_axis=1,
+        name="R_line",
+    )
+    line_element = td.LinearLumpedElement(
+        center=[0, 0, 0],
+        size=[0, 1, 0],
+        voltage_axis=1,
+        network=td.RLCNetwork(resistance=50.0),
+        name="RLC_line",
+    )
+    # ``dist_type != "on"`` routes ``to_structures`` through ``to_PEC_connection`` first, so the
+    # guard must fire before that grid-dependent work rather than after it
+    line_element_off = line_element.updated_copy(dist_type="laterally_only")
+
+    for element in (line_resistor, line_element, line_element_off):
+        with pytest.raises(SetupError):
+            element.to_structure(grid)
+        with pytest.raises(SetupError):
+            element.to_structures(grid)
+
+    # Only the medium-resolution helpers are guarded. The PEC-connection, parasitic-estimate, and
+    # path-integral helpers DO work on a line element when a grid is supplied: the line snaps to a
+    # single-cell sheet and their output (PEC geometry / L,C / contour) is axis-agnostic, so it
+    # matches the equivalent thin planar element rather than failing loud.
+    line_off = line_element.updated_copy(dist_type="off")
+    sheet_off = line_off.updated_copy(size=(0, 1, 1e-5))
+    assert np.allclose(
+        line_off.to_PEC_connection(grid).geometry.bounds,
+        sheet_off.to_PEC_connection(grid).geometry.bounds,
+    )
+    assert np.allclose(
+        line_off.estimate_parasitic_elements(grid),
+        sheet_off.estimate_parasitic_elements(grid),
+    )
+    v_int, i_int = td.path_integrals_from_lumped_element(line_element, grid)
+    assert v_int is not None and i_int is not None
+
+
+@pytest.mark.parametrize(
+    "size",
+    [
+        (0, 1.0, 0),  # 1D line: transverse axes x and z (z is the single-cell axis below)
+        (0, 1.0, 0.05),  # 2D planar: lateral axis z is the single-cell axis
+    ],
+)
+def test_lumped_element_coarse_grid_raises(size):
+    """A lumped element with only one grid cell along an axis transverse to its voltage axis is
+    rejected at pre-upload with a clear coarse-grid error -- for both 1D (line) and 2D (planar)
+    elements -- instead of a cryptic zero-volume / index / divide-by-zero crash at resolution."""
+    elem = td.LinearLumpedElement(
+        network=td.RLCNetwork(resistance=50.0),
+        center=(0, 0, 0),
+        size=size,
+        voltage_axis=1,
+        name="L",
+    )
+    coarse = td.Simulation(
+        size=(2, 2, 0.1),  # z resolves to a single cell at dl=0.1
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        lumped_elements=[elem],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        medium=td.Medium(permittivity=1.0),
+    )
+    with pytest.raises(SetupError, match="too coarse"):
+        coarse.validate_pre_upload(source_required=False)
+
+    # a planar element whose *normal* axis lands on a single-cell dimension is also caught
+    normal_1cell = coarse.updated_copy(size=(0.1, 2, 2)).grid  # x is the single-cell axis
+    with pytest.raises(SetupError, match="too coarse"):
+        elem.updated_copy(size=(0, 1.0, 0.5))._check_grid_size(normal_1cell)
+
+    # a grid with >= 2 cells on every transverse axis passes the per-element check
+    elem._check_grid_size(coarse.updated_copy(size=(2, 2, 2)).grid)
+
+
+def _voltage_axis_conductivity(medium, axis):
+    """DC conductivity of an AnisotropicMediumFromMedium2D component along ``axis``."""
+    comp = medium.elements["xyz"[axis] * 2]
+    if hasattr(comp, "poles"):
+        return sum(2 * td.EPSILON_0 * np.real(c) for (a, c) in comp.poles if abs(a) < 1e-30)
+    return float(comp.conductivity)
+
+
+def _lumped_volumetric_medium(sim):
+    aniso = [
+        s.medium
+        for s in sim.volumetric_structures
+        if isinstance(s.medium, AnisotropicMediumFromMedium2D)
+    ]
+    assert aniso, "no volumetric Medium2D-equivalent produced"
+    return aniso[-1]
+
+
+def test_1d_lumped_element_volumetric():
+    """A 1D (line) element produces the same volumetric medium as the equivalent one-cell-wide
+    planar element: admittance on the voltage axis, transparent on the transverse axes, with the
+    normal axis chosen from the surrounding media."""
+    dl = 0.1
+    length = 1.0
+    resistance = 50.0
+    network = td.RLCNetwork(resistance=resistance, network_topology="series")
+
+    def sim_with(element, structures=()):
+        return td.Simulation(
+            size=(3, 3, 3),
+            grid_spec=td.GridSpec.uniform(dl=dl),
+            structures=list(structures),
+            lumped_elements=[element],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+            medium=td.Medium(permittivity=1.0),
+        )
+
+    line = td.LinearLumpedElement(
+        center=(0, 0, 0), size=(0, 0, length), voltage_axis=2, network=network, name="line"
+    )
+    # homogeneous background -> no interface, so the normal falls back to the first zero-size axis (0)
+    sheet = td.LinearLumpedElement(
+        center=(0, 0, 0), size=(0, dl, length), voltage_axis=2, network=network, name="sheet"
+    )
+
+    med_line = _lumped_volumetric_medium(sim_with(line))
+    med_sheet = _lumped_volumetric_medium(sim_with(sheet))
+
+    sigma_line = _voltage_axis_conductivity(med_line, axis=2)
+    # analytic equivalent: Y * length / (dl_t1 * dl_t2)
+    assert np.isclose(sigma_line, (1.0 / resistance) * length / (dl * dl), rtol=1e-6)
+    assert np.isclose(sigma_line, _voltage_axis_conductivity(med_sheet, axis=2), rtol=1e-6)
+    # transverse axes are transparent (background only)
+    assert np.isclose(_voltage_axis_conductivity(med_line, axis=0), 0.0)
+    assert np.isclose(_voltage_axis_conductivity(med_line, axis=1), 0.0)
+
+
+@pytest.mark.parametrize("normal_axis", [0, 1])
+def test_1d_lumped_element_normal_axis_on_interface(normal_axis):
+    """When a line element lies exactly on a material interface, the normal axis is chosen as the
+    interface normal -- the probe resolves the two sides robustly even when the line sits on the
+    seam (it compares structure cross-sections via ``intersections_plane``, not point membership)."""
+    dl = 0.1
+    voltage_axis = 2
+    network = td.RLCNetwork(resistance=50.0, network_topology="series")
+    line = td.LinearLumpedElement(
+        center=(0, 0, 0), size=(0, 0, 1.0), voltage_axis=voltage_axis, network=network, name="line"
+    )
+    # half-space interface whose face passes through the origin, normal to ``normal_axis``
+    slab_size = [td.inf, td.inf, td.inf]
+    slab_size[normal_axis] = 1.5
+    slab_center = [0, 0, 0]
+    slab_center[normal_axis] = -0.75
+    slab = td.Structure(
+        geometry=td.Box(center=slab_center, size=slab_size), medium=td.Medium(permittivity=4.0)
+    )
+    sim = td.Simulation(
+        size=(3, 3, 3),
+        grid_spec=td.GridSpec.uniform(dl=dl),
+        structures=[slab],
+        lumped_elements=[line],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        medium=td.Medium(permittivity=1.0),
+    )
+    promoted = sim._promote_line_lumped_element(line, sim.grid)
+    assert promoted.normal_axis == normal_axis
+    # promotion turns the line into a valid one-cell-wide planar element
+    assert not promoted._is_line
+    assert np.isclose(promoted.size[promoted.lateral_axis], dl)
+
+
+def test_1d_lumped_element_nonuniform_grid():
+    """On a non-uniform grid the 1D element's volumetric conductivity matches the equivalent thin
+    2D element: the promoted lateral footprint is the dual grid cell (mean of adjacent cells), not
+    the primal cell. The line is placed off-center between graded cells so primal != dual."""
+    resistance = 50.0
+    length = 1.0
+    y_center = 0.55  # between graded cells -> primal cell width differs from the dual cell width
+    dly = [0.3, 0.25, 0.2, 0.15, 0.1, 0.1, 0.15, 0.2, 0.25, 0.3]
+    grid_spec = td.GridSpec(
+        grid_x=td.UniformGrid(dl=0.1),
+        grid_y=td.CustomGrid(dl=dly),
+        grid_z=td.UniformGrid(dl=0.1),
+    )
+    network = td.RLCNetwork(resistance=resistance, network_topology="series")
+
+    def sim_with(element):
+        return td.Simulation(
+            size=(2, 2, 2),
+            grid_spec=grid_spec,
+            lumped_elements=[element],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+            medium=td.Medium(permittivity=1.0),
+        )
+
+    line = td.LinearLumpedElement(
+        center=(0, y_center, 0), size=(0, 0, length), voltage_axis=2, network=network, name="line"
+    )
+    # the smallest finite-width 2D element is the reference the 1D element must reproduce
+    sheet = td.LinearLumpedElement(
+        center=(0, y_center, 0), size=(0, 1e-6, length), voltage_axis=2, network=network, name="ref"
+    )
+    sigma_line = _voltage_axis_conductivity(_lumped_volumetric_medium(sim_with(line)), axis=2)
+    sigma_sheet = _voltage_axis_conductivity(_lumped_volumetric_medium(sim_with(sheet)), axis=2)
+    assert np.isclose(sigma_line, sigma_sheet, rtol=1e-6)
+
+
+def test_1d_lumped_element_monitor():
+    """A 1D (line) element's field monitor is non-degenerate -- both zero-size dimensions get a
+    small nonzero extent -- and records the voltage-axis E field plus both transverse H components
+    needed for the current loop."""
+    network = td.RLCNetwork(resistance=50, network_topology="series")
+    line = td.LinearLumpedElement(
+        center=(0, 0, 0), size=(0, 0, 1.0), voltage_axis=2, network=network, name="line"
+    )
+    monitor = line.to_monitor(freqs=np.array([10e9]))
+    # no zero-size dimension survives, so the monitor is not degenerate
+    assert all(extent > 0 for extent in monitor.size)
+    # the voltage axis keeps its physical length; the two transverse dims are infinitesimal
+    assert monitor.size[2] == 1.0
+    assert monitor.size[0] < 1e-6 and monitor.size[1] < 1e-6
+    # records E along the voltage axis and both transverse H components
+    assert set(monitor.fields) == {"Ez", "Hx", "Hy"}
+
+
 @pytest.mark.parametrize("dist_type", ["off", "laterally_only", "on"])
 @pytest.mark.parametrize("width", [1e-6, 5])
 def test_distribution_variants(dist_type, width):
     """Test different distribution types with varying widths.
 
-    Note: width=0 is no longer allowed (1D elements are not supported).
-    Use a small finite width (e.g., 1e-6 mm) for narrow elements.
+    A finite lateral width is exercised here; true 1D (line) elements with two zero-size
+    dimensions are covered separately in ``test_1d_lumped_element_allowed``.
     """
     mm = 1e3
     RLC = td.RLCNetwork(
