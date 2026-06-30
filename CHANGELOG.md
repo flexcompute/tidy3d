@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
-## [2.12.0.dev2] - 2026-06-29
+## [2.12.0.dev2] - 2026-06-30
 
 ### Added
 
+- Added `Dx`, `Dy`, and `Dz` output support to `PointCloudFieldMonitor`, reconstructing `D / epsilon_0` from raw E-field samples and diagonal Yee permittivity; sampled off-diagonal Yee permittivity emits a warning and uses diagonal components only.
 - Added `gds_precision` to `Geometry.to_gds_file()`, `Structure.to_gds_file()`, and `Simulation.to_gds_file()` to control the coordinate precision written to GDS exports.
 - Added `merge_adjacent` to `Geometry.from_gds()`; set `merge_adjacent=True` to merge fractured same-layer GDS polygons during import for roundtrip reconstruction.
 - HeatSimulation and HeatChargeSimulation cloud runs now create a volume mesh before running the solver; use web.run(), run_async(), Job.run(), Job.step(), Batch.run(), or Batch.step() instead of separate upload/start/monitor calls for these simulations. Uniform Heat/HeatCharge batches advance the mesh and solver workflow automatically, with Batch.run() starting each solver step as soon as that simulation's mesh step completes. Batch.estimate_cost() reports the summed cost of the shared next workflow step for supported uniform batches; after estimating the mesh step, run it first before estimating the solver step. Batch.estimate_cost() raises for mixed or non-uniform multi-step batches; use Job.estimate_cost() per job in those cases. Cache-only batch results may record `None` in `BatchData.task_ids` because no server task ID exists. Mixed batches containing both regular simulations and Heat/HeatCharge simulations run those groups separately; split them into separate batches for maximum parallelism.
@@ -52,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `ModeSimulation.epsilon()` when `config.simulation.use_local_subpixel` enables local subpixel averaging.
 - Fixed `Simulation` GDS exports so vacuum/background cutouts are preserved more reliably, including when exporting holes on the default layer and when mixing mapped and unmapped media in the same layout.
 - Corrected the `convergence_dv` description in `SteadyChargeDCAnalysis`: the accelerated charge solver applies it only to multi-voltage sweeps (inserting intermediate warm-start bias points), while the from-zero bias ramp it previously described applies to the legacy solver.
 
