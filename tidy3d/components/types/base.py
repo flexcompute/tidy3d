@@ -294,6 +294,7 @@ Direction = Literal["+", "-"]
 
 DiffractionPolarization = Literal["s", "p"]
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+PointCloudFieldComponent = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz", "Dx", "Dy", "Dz"]
 EMSurfaceField = Literal["E", "H"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = ArrayFloat1D

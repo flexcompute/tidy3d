@@ -70,6 +70,7 @@ from .data.data_array import FreqDataArray, IndexedDataArray
 from .data.point_cloud import (
     POINT_CLOUD_PERMITTIVITY_COMPONENTS,
     point_cloud_nearest_sampled_cells_upper_bound,
+    point_cloud_num_sampled_grid_fields,
     point_cloud_sampled_cells_upper_bound,
 )
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
@@ -642,7 +643,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 num_cells=self.grid.num_cells,
                 symmetry=self.symmetry,
                 num_points=monitor.num_points,
-                num_fields=len(monitor.fields),
+                num_fields=point_cloud_num_sampled_grid_fields(monitor.fields),
             )
         if isinstance(monitor, PointCloudPermittivityMonitor):
             return point_cloud_nearest_sampled_cells_upper_bound(

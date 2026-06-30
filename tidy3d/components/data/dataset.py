@@ -11,7 +11,14 @@ from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import xyz
-from tidy3d.constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling
+from tidy3d.constants import (
+    AMP,
+    C_0,
+    MICROMETER,
+    PICOSECOND_PER_NANOMETER_PER_KILOMETER,
+    VOLT,
+    UnitScaling,
+)
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
@@ -32,7 +39,7 @@ from .data_array import (
     TriangleMeshDataArray,
     _TracedDataset,
 )
-from .em_fields import em_field_symmetry_eigenvalues
+from .em_fields import em_field_symmetry_eigenvalues, point_cloud_field_symmetry_eigenvalues
 from .point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS
 from .unstructured.surface import TriangularSurfaceDataset
 from .zbf import ZBFData
@@ -50,6 +57,8 @@ if TYPE_CHECKING:
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
 DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
+ELECTRIC_FIELD_UNITS = f"{VOLT}/{MICROMETER}"
+MAGNETIC_FIELD_UNITS = f"{AMP}/{MICROMETER}"
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -535,31 +544,58 @@ class PointCloudFieldDataset(AbstractFieldDataset):
         None,
         title="Ex",
         description="Point-cloud x-component of the electric field.",
+        json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Ey: IndexedFreqDataArray | None = Field(
         None,
         title="Ey",
         description="Point-cloud y-component of the electric field.",
+        json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Ez: IndexedFreqDataArray | None = Field(
         None,
         title="Ez",
         description="Point-cloud z-component of the electric field.",
+        json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Hx: IndexedFreqDataArray | None = Field(
         None,
         title="Hx",
         description="Point-cloud x-component of the magnetic field.",
+        json_schema_extra={"units": MAGNETIC_FIELD_UNITS},
     )
     Hy: IndexedFreqDataArray | None = Field(
         None,
         title="Hy",
         description="Point-cloud y-component of the magnetic field.",
+        json_schema_extra={"units": MAGNETIC_FIELD_UNITS},
     )
     Hz: IndexedFreqDataArray | None = Field(
         None,
         title="Hz",
         description="Point-cloud z-component of the magnetic field.",
+        json_schema_extra={"units": MAGNETIC_FIELD_UNITS},
+    )
+    Dx: IndexedFreqDataArray | None = Field(
+        None,
+        title="Dx",
+        description="Point-cloud x-component of ``D / epsilon_0``, computed from Ex and "
+        "the local x-direction relative permittivity.",
+        json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
+    )
+    Dy: IndexedFreqDataArray | None = Field(
+        None,
+        title="Dy",
+        description="Point-cloud y-component of ``D / epsilon_0``, computed from Ey and "
+        "the local y-direction relative permittivity.",
+        json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
+    )
+    Dz: IndexedFreqDataArray | None = Field(
+        None,
+        title="Dz",
+        description="Point-cloud z-component of ``D / epsilon_0``, computed from Ez and "
+        "the local z-direction relative permittivity.",
+        json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
 
     @property
@@ -572,6 +608,9 @@ class PointCloudFieldDataset(AbstractFieldDataset):
             "Hx": self.Hx,
             "Hy": self.Hy,
             "Hz": self.Hz,
+            "Dx": self.Dx,
+            "Dy": self.Dy,
+            "Dz": self.Dz,
         }
         return {field_name: field for field_name, field in fields.items() if field is not None}
 
@@ -583,7 +622,7 @@ class PointCloudFieldDataset(AbstractFieldDataset):
     @property
     def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
-        return em_field_symmetry_eigenvalues()
+        return point_cloud_field_symmetry_eigenvalues()
 
     @model_validator(mode="after")
     def _validate_field_indices(self) -> Self:

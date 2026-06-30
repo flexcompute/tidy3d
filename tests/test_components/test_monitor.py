@@ -295,6 +295,42 @@ def test_point_cloud_field_monitor(monkeypatch):
     assert monitor._storage_size_solver(num_cells=1000, tmesh=[]) == 8 * 1000 * 2 * 6
     assert not monitor.supports_parallel_adjoint()
 
+    d_monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Dx", "Dy", "Dz"),
+        freqs=[1e12, 2e12],
+        name="pc_d",
+    )
+    assert d_monitor.fields == ("Dx", "Dy", "Dz")
+    assert d_monitor.storage_size(num_cells=1000, tmesh=[]) == 8 * 2 * 3 + 8 * 2 * 2 * 3
+    d_num_cells = 8 * 2 * 3
+    assert (
+        d_monitor._storage_size_solver(num_cells=d_num_cells, tmesh=[]) == 8 * d_num_cells * 2 * 6
+    )
+
+    mixed_d_monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Ex", "Dx", "Hy"),
+        freqs=[1e12, 2e12],
+        name="pc_mixed_d",
+    )
+    mixed_num_cells = 8 * 2 * 2
+    mixed_d_num_cells = 8 * 2
+    assert mixed_d_monitor._storage_size_solver(num_cells=mixed_num_cells, tmesh=[]) == 8 * 2 * (
+        mixed_num_cells * 6 + mixed_d_num_cells * 3
+    )
+    from tidy3d.components.data.point_cloud import (
+        point_cloud_grid_field,
+        point_cloud_num_sampled_grid_fields,
+    )
+
+    assert point_cloud_grid_field("Dx") == "Ex"
+    assert point_cloud_grid_field("Hy") == "Hy"
+    assert point_cloud_num_sampled_grid_fields(("Ex", "Dx", "Hy", "Dz", "Ez")) == 3
+
+    with pytest.raises(pd.ValidationError):
+        td.FieldMonitor(size=(0, 0, 0), fields=("Dx",), freqs=[1e12], name="field_d")
+
     monitor_from_bare_points = td.PointCloudFieldMonitor(
         points=td.PointDataArray([[0.0, 0.0, 0.0]]),
         fields=("Ex",),

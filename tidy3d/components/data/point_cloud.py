@@ -10,7 +10,7 @@ import numpy as np
 from .data_array import PointDataArray
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
 POINT_CLOUD_STENCIL_CORNERS_PER_FIELD = 8
 POINT_CLOUD_PERMITTIVITY_COMPONENTS = ("eps_xx", "eps_yy", "eps_zz")
@@ -135,3 +135,17 @@ def point_cloud_nearest_sampled_cells_upper_bound(
 
     grid_cells = math.prod(point_cloud_stencil_grid_num_cells(num_cells, symmetry))
     return int(min(num_points * num_components, grid_cells))
+
+
+def point_cloud_grid_field(field: str) -> str:
+    """Return the Yee-grid field sampled for a point-cloud output component."""
+
+    if field[0] == "D":
+        return f"E{field[-1]}"
+    return field
+
+
+def point_cloud_num_sampled_grid_fields(fields: Iterable[str]) -> int:
+    """Number of distinct component-native grids needed to sample point-cloud raw fields."""
+
+    return len({point_cloud_grid_field(field) for field in fields})

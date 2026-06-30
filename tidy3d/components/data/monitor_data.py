@@ -1931,8 +1931,9 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
 class PointCloudFieldData(MonitorData, PointCloudFieldDataset):
     """
-    Data associated with a :class:`.PointCloudFieldMonitor`: scalar components of E and H
-    fields at point-cloud coordinates.
+    Data associated with a :class:`.PointCloudFieldMonitor`: scalar components of E, H, and
+    ``D / epsilon_0`` at point-cloud coordinates, where ``epsilon_0`` is the vacuum
+    permittivity.
 
     Example
     -------

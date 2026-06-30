@@ -51,6 +51,7 @@ point-cloud positions and is typically created by the
 intervals instead of frequency.
 
 Point-cloud field data is indexed by point rather than by structured ``x`` / ``y`` / ``z`` grid coordinates, so structured-grid plotting helpers such as ``SimulationData.plot_field()`` do not support ``PointCloudFieldData``.
+For point-cloud monitors, ``Dx``, ``Dy``, and ``Dz`` store electric displacement divided by ``epsilon_0`` (``D / epsilon_0``), where ``epsilon_0`` is the vacuum permittivity. They are reconstructed from raw E-field samples and the matching directional relative permittivity on the Yee grid: ``Dx`` uses ``Ex`` with x-direction permittivity, ``Dy`` uses ``Ey`` with y-direction permittivity, and ``Dz`` uses ``Ez`` with z-direction permittivity. The reconstructed values have the same units as the electric field.
 
 .. code-block:: python
 

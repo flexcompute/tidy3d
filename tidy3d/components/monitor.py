@@ -29,7 +29,12 @@ from .autograd.parallel_adjoint_bases import (
 from .base import Tidy3dBaseModel, cached_property
 from .base_sim.monitor import AbstractMonitor
 from .data.data_array import PointDataArray
-from .data.point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS, canonicalize_point_cloud_points
+from .data.point_cloud import (
+    POINT_CLOUD_PERMITTIVITY_COMPONENTS,
+    POINT_CLOUD_STENCIL_CORNERS_PER_FIELD,
+    canonicalize_point_cloud_points,
+    point_cloud_num_sampled_grid_fields,
+)
 from .diffraction import (
     DIFFRACTION_POLARIZATIONS,
     bloch_vec_at_freq,
@@ -55,6 +60,7 @@ from .types import (
     EMSurfaceField,
     FreqArray,
     ObsGridArray,
+    PointCloudFieldComponent,
 )
 from .validators import (
     assert_plane,
@@ -863,8 +869,14 @@ class PointCloudFieldMonitor(FreqMonitor):
 
     The monitor stores field components indexed by point and frequency. Point coordinates are
     supplied as a :class:`.PointDataArray` with dimensions ``("index", "axis")`` and shape
-    ``(num_points, 3)``. Point-cloud fields are sampled from native field values, equivalent to
-    point :class:`FieldMonitor` objects with ``colocate=False``.
+    ``(num_points, 3)``. Point-cloud E and H fields are sampled from native field values,
+    equivalent to point :class:`FieldMonitor` objects with ``colocate=False``. Point-cloud
+    ``Dx``, ``Dy``, and ``Dz`` components are reconstructed as ``D / epsilon_0``, where
+    ``epsilon_0`` is the vacuum permittivity. ``Dx`` uses raw ``Ex`` samples and the x-direction
+    relative permittivity, ``Dy`` uses raw ``Ey`` samples and the y-direction relative
+    permittivity, and ``Dz`` uses raw ``Ez`` samples and the z-direction relative permittivity.
+    The reconstructed values have the same units as E fields. Off-diagonal permittivity
+    components are ignored; solver logs warn if they are sampled for D reconstruction.
 
     Example
     -------
@@ -904,7 +916,7 @@ class PointCloudFieldMonitor(FreqMonitor):
         json_schema_extra={"units": MICROMETER},
     )
 
-    fields: tuple[EMField, ...] = Field(
+    fields: tuple[PointCloudFieldComponent, ...] = Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
@@ -919,8 +931,10 @@ class PointCloudFieldMonitor(FreqMonitor):
     colocate: Literal[False] = Field(
         False,
         title="Colocate Fields",
-        description="Point-cloud field monitors always store fields sampled from native Yee-grid "
-        "field values and do not support field colocation.",
+        description="Point-cloud field monitors do not support field colocation. E and H "
+        "components are sampled from native Yee-grid field values; D components are "
+        "reconstructed as D / epsilon_0 from raw E samples and matching directional relative "
+        "permittivity.",
     )
 
     @field_validator("points")
@@ -939,7 +953,9 @@ class PointCloudFieldMonitor(FreqMonitor):
 
     @field_validator("fields")
     @classmethod
-    def _validate_unique_fields(cls, val: tuple[EMField, ...]) -> tuple[EMField, ...]:
+    def _validate_unique_fields(
+        cls, val: tuple[PointCloudFieldComponent, ...]
+    ) -> tuple[PointCloudFieldComponent, ...]:
         """Reject duplicate point-cloud field components before sparse reconstruction."""
         if len(set(val)) != len(val):
             raise ValueError("Point-cloud field monitor components must be unique.")
@@ -998,13 +1014,25 @@ class PointCloudFieldMonitor(FreqMonitor):
         if len(self.fields) == 0:
             return 0
 
-        field_components_factor = 0
-        if any(comp[0] == "E" for comp in self.fields):
-            field_components_factor += 3
+        raw_field_components_factor = 0
+        if any(comp[0] in ("E", "D") for comp in self.fields):
+            raw_field_components_factor += 3
         if any(comp[0] == "H" for comp in self.fields):
-            field_components_factor += 3
+            raw_field_components_factor += 3
 
-        return BYTES_COMPLEX * num_cells * len(self.freqs) * field_components_factor
+        storage_size = BYTES_COMPLEX * num_cells * len(self.freqs) * raw_field_components_factor
+
+        num_d_fields = point_cloud_num_sampled_grid_fields(
+            field for field in self.fields if field[0] == "D"
+        )
+        if num_d_fields:
+            num_d_stencil_cells = (
+                POINT_CLOUD_STENCIL_CORNERS_PER_FIELD * self.num_points * num_d_fields
+            )
+            num_d_cells = min(num_cells, num_d_stencil_cells)
+            storage_size += BYTES_COMPLEX * num_d_cells * len(self.freqs) * 3
+
+        return storage_size
 
 
 class DipoleEmissionMonitor(PointCloudFieldMonitor):

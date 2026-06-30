@@ -2963,6 +2963,40 @@ def test_monitor_num_cells():
     assert np.isclose(num_cells_downsample, num_cells_2d / downsample**2, rtol=0.1)
 
 
+@pytest.mark.parametrize(
+    "fields, raw_factor",
+    [
+        (("Ex", "Dy"), 3),
+        (("Hy", "Dx"), 6),
+    ],
+)
+def test_point_cloud_mixed_d_storage_size_solver_uses_d_sampled_cells(fields, raw_factor):
+    """Point-cloud D epsilon storage is based on D sampled cells, not all raw cells."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+    )
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.4, 0.6]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=fields,
+        freqs=[1e12, 2e12],
+        name="pc_mixed_d",
+    )
+
+    num_cells = sim._monitor_num_cells(monitor)
+    num_d_cells = 8 * monitor.num_points
+    assert num_cells == 2 * num_d_cells
+    assert monitor._storage_size_solver(num_cells=num_cells, tmesh=sim.tmesh) == 8 * 2 * (
+        num_cells * raw_factor + num_d_cells * 3
+    )
+
+
 @pytest.mark.parametrize("start, log_level", [(1e-12, None), (1, "WARNING")])
 def test_warn_time_monitor_outside_run_time(start, log_level):
     """Make sure we get a warning if the mode monitor grid is too large."""

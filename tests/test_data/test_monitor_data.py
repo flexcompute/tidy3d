@@ -37,7 +37,7 @@ from tidy3d.components.data.monitor_data import (
 from tidy3d.components.data.utils import _dot_numpy, _outer_dot_numpy
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.constants import UnitScaling
+from tidy3d.constants import AMP, MICROMETER, VOLT, UnitScaling
 from tidy3d.exceptions import DataError, Tidy3dNotImplementedError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc, run_emulated
@@ -243,6 +243,69 @@ def test_point_cloud_field_data(tmp_path):
     sim_data.to_file(path)
     loaded_data = td.SimulationData.mnt_data_from_file(path, mnt_name="point_cloud")
     assert loaded_data == data
+
+
+def test_point_cloud_field_data_d_components(tmp_path):
+    """Point-cloud field data supports electric displacement components."""
+
+    points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [0.2, 0.1, -0.1]],
+        coords={"index": [0, 1], "axis": [0, 1, 2]},
+    )
+    freqs = [1e14, 2e14]
+    field = td.IndexedFreqDataArray(
+        np.ones((2, 2), dtype=np.complex64) * (1.0 + 1.0j),
+        coords={"index": [0, 1], "f": freqs},
+    )
+    monitor = td.PointCloudFieldMonitor(
+        points=points,
+        fields=("Dx", "Dy"),
+        freqs=freqs,
+        name="point_cloud_d",
+    )
+
+    data = td.PointCloudFieldData(monitor=monitor, points=points, Dx=field, Dy=2 * field)
+
+    assert set(data.field_components) == {"Dx", "Dy"}
+    assert data.symmetry_eigenvalues["Dx"](0) == -1
+    assert data.symmetry_eigenvalues["Dy"](0) == 1
+
+    def source_spectrum(freq):
+        return 2.0 * np.ones_like(freq)
+
+    normalized_data = data.normalize(source_spectrum)
+    assert normalized_data.Dx.dtype == data.Dx.dtype
+    assert np.allclose(normalized_data.Dx.values, data.Dx.values / 2.0)
+
+    with pytest.raises(ValidationError) as excinfo:
+        td.PointCloudFieldData(monitor=monitor, points=points, Dx=field)
+    assert_single_value_error_loc(excinfo, ("Dy",))
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(0.1),
+        run_time=1e-12,
+        monitors=[monitor],
+    )
+    sim_data = td.SimulationData(simulation=sim, data=(data,))
+    path = tmp_path / "point_cloud_field_data_d.hdf5"
+    sim_data.to_file(path)
+    loaded_data = td.SimulationData.mnt_data_from_file(path, mnt_name="point_cloud_d")
+    assert loaded_data == data
+
+
+def test_point_cloud_field_data_component_units():
+    """Point-cloud field data declares units for E, H, and D / epsilon_0 components."""
+
+    component_units = {
+        field_name: td.PointCloudFieldData.model_fields[field_name].json_schema_extra["units"]
+        for field_name in ("Ex", "Hx", "Dx")
+    }
+    assert component_units == {
+        "Ex": f"{VOLT}/{MICROMETER}",
+        "Hx": f"{AMP}/{MICROMETER}",
+        "Dx": f"{VOLT}/{MICROMETER}",
+    }
 
 
 def test_point_cloud_field_data_preserves_labeled_indices():
