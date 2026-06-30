@@ -49,6 +49,16 @@ DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
 DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 
+# Scales with extent (not absolute coordinate) so detection is origin-independent;
+# absolute floor handles degenerate/tiny slices where the relative term underflows.
+PLANAR_ZERO_DIM_TOLERANCE_ABS = 1e-6
+PLANAR_ZERO_DIM_TOLERANCE_REL = 2e-8
+
+
+def planar_zero_dim_tolerance(size_scale: float) -> float:
+    """Tolerance for treating a slice's nominally zero-thickness axis as zero."""
+    return max(PLANAR_ZERO_DIM_TOLERANCE_ABS, PLANAR_ZERO_DIM_TOLERANCE_REL * size_scale)
+
 
 class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, ABC):
     """Abstract base for datasets that store unstructured grid or surface data."""

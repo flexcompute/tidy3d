@@ -30,6 +30,7 @@ from .base import (
     DEFAULT_MAX_SAMPLES_PER_STEP,
     DEFAULT_TOLERANCE_CELL_FINDING,
     UnstructuredGridDataset,
+    planar_zero_dim_tolerance,
 )
 
 if TYPE_CHECKING:
@@ -175,11 +176,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
-        # VTU slices can accumulate small floating-point jitter in the nominally
-        # zero-thickness direction. Scale tolerance with geometry extent (rather than
-        # absolute coordinate value) to avoid origin-dependent behavior.
         size_scale = float(np.max(bounds)) if bounds.size > 0 else 0.0
-        zero_dim_tol = max(1e-6, 2e-8 * size_scale)
+        zero_dim_tol = planar_zero_dim_tolerance(size_scale)
         zero_dims = np.where(np.isclose(bounds, 0, atol=zero_dim_tol))[0]
 
         if len(zero_dims) != 1:
