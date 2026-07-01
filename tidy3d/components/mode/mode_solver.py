@@ -276,7 +276,7 @@ class ModeSolver(Tidy3dBaseModel):
     @field_validator("simulation")
     @classmethod
     def _convert_to_simulation(cls, val: MODE_SIMULATION_TYPE) -> MODE_SIMULATION_TYPE:
-        """Convert to regular Simulation if e.g. JaxSimulation given."""
+        """Convert legacy differentiable simulation wrappers to regular Simulation."""
         if hasattr(val, "to_simulation"):
             val = val.to_simulation()[0]
             log.warning(

@@ -193,7 +193,7 @@ class TopologyDesignRegion(DesignRegion):
         None,
         title="Design Region Override Structure",
         description="Defines grid size when adding an ``override_structure`` to the "
-        "``JaxSimulation.grid_spec`` corresponding to this design region. "
+        "``Simulation.grid_spec`` corresponding to this design region. "
         "If left ``None``, ``invdes`` will mesh the simulation with the same resolution as the "
         "``pixel_size``. "
         "This is advised if the pixel size is relatively close to the FDTD grid size. "

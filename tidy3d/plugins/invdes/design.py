@@ -69,7 +69,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
     task_name: str = Field(
         title="Task Name",
-        description="Task name to use in the objective function when running the ``JaxSimulation``.",
+        description="Task name to use in the objective function when running the simulation.",
     )
 
     verbose: bool = Field(
@@ -243,7 +243,7 @@ class InverseDesign(AbstractInverseDesign):
             )
 
     def is_output_monitor(self, monitor: td.Monitor) -> bool:
-        """Whether a monitor is added to the ``JaxSimulation`` as an ``output_monitor``."""
+        """Whether a monitor is added to the objective output monitors."""
 
         output_mnt_types = td.components.simulation.OutputMonitorTypes
 

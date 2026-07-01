@@ -314,7 +314,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         if monitor_data.monitor.colocate:
             # TODO: this still errors if monitor_data.colocate is allowed to be ``True`` in the
             # adjoint plugin, and the monitor data is tracked in a gradient computation. It seems
-            # interpolating does something to the arrays that makes the JAX chain work.
+            # interpolating does something to the arrays that preserves the gradient chain.
             return monitor_data.package_colocate_results(monitor_data.field_components)
 
         # colocate to monitor grid boundaries

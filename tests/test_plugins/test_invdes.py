@@ -223,7 +223,7 @@ def test_invdes_penalties_respect_shifted_simulation_symmetry():
 
 
 def test_region_to_structure():
-    """Test converting ``TopologyDesignRegion`` to jax and regular structure."""
+    """Test converting ``TopologyDesignRegion`` to regular structures."""
 
     region = make_design_region()
 
@@ -340,7 +340,7 @@ def test_invdes_simulation_data(use_emulated_run, use_emulated_to_sim_data):  # 
 
 
 def test_invdes_mesh_override():
-    """Test all edge cases of mesh override structure in the ``JaxSimulation``."""
+    """Test all edge cases of mesh override structure in the simulation."""
 
     region = make_design_region()
     invdes = make_invdes()

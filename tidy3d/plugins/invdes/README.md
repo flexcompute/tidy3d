@@ -364,7 +364,7 @@ result = tdi.InverseDesignResult.from_file(optimizer.results_cache_fname)
 
 ### Continuing an optimization run
 
-To continue an optimization run from where it left off, you can use `Optimizer.continue_run(results)`, passing in the `InverseDesignResult`. As the `InverseDesignResult` stores the previous states of the `optax` optimizer, it can continue the optimization without loss of information. The return value of this method will be a new copy of the `InverseDesignResult` with the combined data.
+To continue an optimization run from where it left off, you can use `Optimizer.continue_run(results)`, passing in the `InverseDesignResult`. As the `InverseDesignResult` stores the previous optimizer states, it can continue the optimization without loss of information. The return value of this method will be a new copy of the `InverseDesignResult` with the combined data.
 
 ```py
 
