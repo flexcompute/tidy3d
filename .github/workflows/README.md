@@ -10,9 +10,9 @@ All release workflows in this repository now rely on `workflow_dispatch` (manual
 
 The orchestrator for the entire release pipeline. It sequences:
 
-1. **Scope detection** (`determine-workflow-scope`) – figures out which stages need to run, how `release_type` should map to deployments, and if submodule tests must be enforced.
+1. **Scope detection** (`determine-workflow-scope`) – figures out which stages need to run and how `release_type` should map to deployments.
 2. **Tagging** – delegates to `tidy3d-python-client-create-tag.yml` when tagging is enabled.
-3. **Testing** – reuses `tidy3d-python-client-tests.yml` with knobs for local, remote, CLI, and submodule suites. The workflow consumes the `workflow_success` output from the tests job before proceeding.
+3. **Testing** – reuses `tidy3d-python-client-tests.yml` with knobs for local, remote, CLI, and extras integration suites. The workflow consumes the `workflow_success` output from the tests job before proceeding.
 4. **GitHub release** – creates a GitHub release when the deployment stage is active.
 5. **Package deployment** – invokes `tidy3d-python-client-deploy.yml` with the resolved TestPyPI/PyPI targets.
 
@@ -32,7 +32,6 @@ The orchestrator for the entire release pipeline. It sequences:
 - Test toggles:
   - `client_tests`
   - `cli_tests`
-  - `submodule_tests` (auto-enabled for non-RC `pypi` releases even if left `false`)
   - `extras_integration_tests` (runs with `test_type='full'` covering 10 platform/Python combinations)
 
 When invoked via `workflow_call`, two optional overrides are also honored:
@@ -45,7 +44,7 @@ If those overrides are omitted, deployment targets are inferred from `release_ty
 | --- | --- | --- |
 | `draft` | none | Runs tagging/tests but does not publish packages. |
 | `testpypi` | TestPyPI | Requires version parity with `pyproject.toml`. Good for validating artifacts. |
-| `pypi` | TestPyPI + PyPI | Enforces semver tag format and auto-runs submodule tests when the tag is non-RC. |
+| `pypi` | TestPyPI + PyPI | Enforces semver tag format. |
 
 **Testing stage**
 - Uses the unified `tidy3d-python-client-tests.yml` workflow instead of the retired release-specific test workflow.
@@ -80,7 +79,7 @@ If those overrides are omitted, deployment targets are inferred from `release_ty
 Primary CI workflow; it runs on PRs (`latest`, `develop`, `pre/*`), merge queue (`merge_group`), manual dispatch, and `workflow_call`. Highlights:
 - **Local tests**: Self-hosted Slurm runners on Python 3.10 and 3.13 (coverage enforced, diff-coverage comments for 3.13).
 - **Remote tests**: GitHub-hosted matrix across Windows, Linux, and macOS for Python 3.10–3.13.
-- **Optional suites**: CLI tests, version consistency checks, submodule validation (non-RC release tags only), and `tidy3d-extras` integration tests can be toggled via inputs.
+- **Optional suites**: CLI tests, version consistency checks, and `tidy3d-extras` integration tests can be toggled via inputs.
 - **Extras integration tests**: When enabled on merge_group, runs basic smoke tests (4 configurations). When called from release workflow, runs full tests (10 configurations covering all architectures and Python 3.10/3.13).
 - **Test type control**: `test_type` input ("basic" or "full") can override automatic selection for extras integration tests.
 - **Test selection control**: `test_selection` input (`testmon` or `full`) controls whether local/remote suites run with pytest-testmon (`--testmon --testmon-forceselect`) or full (`--no-testmon`) execution.
@@ -178,7 +177,6 @@ If no fragments are present in `changelog.d/`, the workflow exits without openin
 3. **Respect semver tags** – `release_type: pypi` will fail early if the tag is not `v{major}.{minor}.{patch}[rc{num}]`.
 4. **Leverage `workflow_control`** – resume from `start-tests` or `start-deploy` instead of repeating earlier successful stages.
 5. **Watch `workflow-validation`** – that job in the tests workflow aggregates CLI and test failures.
-6. **Let submodule tests run for stable releases** – they are auto-enabled for non-RC PyPI releases; only disable when you have a compelling reason.
 
 ### Version validation
 
