@@ -14,6 +14,7 @@ from tidy3d.exceptions import AdjointError, format_chained_exception_message
 
 if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.path_utils import AutogradRoute
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.medium import MediumType
     from tidy3d.components.simulation import Simulation
@@ -275,3 +276,9 @@ class SetupRunResult(NamedTuple):
     sim_fields: AutogradFieldMap
     simulation: Simulation
     numerical_structure_map: dict[int, NumericalStructureConfig]
+    autograd_routes: tuple[AutogradRoute, ...] = ()
+
+    @property
+    def needs_autograd(self) -> bool:
+        """Whether this prepared simulation has validated fields needing autograd."""
+        return bool(self.sim_fields)

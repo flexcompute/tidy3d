@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 import shapely
@@ -13,6 +13,17 @@ from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
 from tidy3d.compat import _package_is_older_than
 from tidy3d.components.autograd import TracedCoordinate, TracedFloat, TracedSize, get_static
+from tidy3d.components.autograd.path_utils import (
+    AutogradRoute,
+    format_traced_paths,
+    indexed_traced_paths,
+    raise_unsupported_traced_path,
+    raise_with_traced_path_context,
+    resolve_delegated_autograd_route,
+    traced_paths,
+    validate_traced_path,
+)
+from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.geometry.float_utils import increment_float
@@ -36,6 +47,7 @@ from tidy3d.components.viz import (
 )
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
 from tidy3d.exceptions import (
+    AdjointError,
     SetupError,
     Tidy3dError,
     Tidy3dImportError,
@@ -78,6 +90,22 @@ POLY_DISTANCE_TOLERANCE = 8e-12
 # Tolerance for validating linear-only transforms (no translation)
 LINEAR_TRANSFORM_TOL = 1e-12
 GDS_MAX_COORDINATE_INDEX = 2**31 - 1
+
+
+def _raise_unsupported_traced_geometry_path(
+    geometry_name: str,
+    field_path: tuple[Any, ...],
+    *,
+    supported_parameters: tuple[str, ...] = (),
+) -> None:
+    """Raise a user-facing validation error for an unsupported geometry trace."""
+    raise_unsupported_traced_path(
+        parameter_kind="geometry",
+        owner_kind="geometry type",
+        owner_name=geometry_name,
+        field_path=field_path,
+        supported_parameters=supported_parameters,
+    )
 
 
 _shapely_operations = {
@@ -144,6 +172,13 @@ def check_transform_invertible(transform: MatrixReal4x4, index: int | None = Non
 
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
+
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = ()
+
+    @classmethod
+    def _traced_autograd_supported_parameters(cls) -> tuple[str, ...]:
+        """Return user-facing supported parameter names for setup validation."""
+        return format_traced_paths(cls._traced_supported_paths)
 
     @cached_property
     def plot_params(self) -> PlotParams:
@@ -1744,6 +1779,17 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
 
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced geometry path for adjoint routing."""
+        return validate_traced_path(
+            parameter_kind="geometry",
+            owner_kind="geometry type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            supported_paths=self._traced_supported_paths,
+            supported_parameters=type(self)._traced_autograd_supported_parameters(),
+        )
+
     def _as_union(self) -> list[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
         if isinstance(self, GeometryGroup):
@@ -2201,6 +2247,13 @@ class Box(SimplePlaneIntersection, Centered):
     -------
     >>> b = Box(center=(1,2,3), size=(2,2,2))
     """
+
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths(
+        "center",
+        "size",
+        *indexed_traced_paths("center", 3),
+        *indexed_traced_paths("size", 3),
+    )
 
     size: TracedSize = Field(
         title="Size",
@@ -3699,19 +3752,25 @@ class ClipOperation(Geometry):
         new_geom_b = self.geometry_b._update_from_bounds(bounds=bounds, axis=axis)
         return self.updated_copy(geometry_a=new_geom_a, geometry_b=new_geom_b)
 
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced ClipOperation path for adjoint routing."""
+        return resolve_delegated_autograd_route(
+            parameter_kind="geometry",
+            owner_kind="geometry type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            delegates={"geometry_a": self.geometry_a, "geometry_b": self.geometry_b},
+            supported_parameters=(
+                "geometry_a.<parameter>",
+                "geometry_b.<parameter>",
+            ),
+        )
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives by accumulating contributions from both operands."""
         geometry_paths = {"geometry_a": [], "geometry_b": []}
         for path in derivative_info.paths:
-            if not path:
-                raise ValidationError("Encountered empty path while processing ClipOperation VJP.")
-
             geometry_key, *sub_path = path
-            if geometry_key not in geometry_paths:
-                raise ValidationError(
-                    "ClipOperation derivative path must start with 'geometry_a' or 'geometry_b', "
-                    f"got '{geometry_key}'."
-                )
             geometry_paths[geometry_key].append(tuple(sub_path))
 
         if derivative_info.clipped_geometry is None:
@@ -3995,6 +4054,28 @@ class GeometryGroup(Geometry):
             geometry._update_from_bounds(bounds=bounds, axis=axis) for geometry in self.geometries
         )
         return self.updated_copy(geometries=new_geometries)
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced GeometryGroup path for adjoint routing."""
+        if len(field_path) < 2 or field_path[0] != "geometries":
+            _raise_unsupported_traced_geometry_path(
+                type(self).__name__,
+                field_path,
+                supported_parameters=("geometries[index].<parameter>",),
+            )
+
+        index = field_path[1]
+        sub_path = field_path[2:]
+        try:
+            self.geometries[index]._resolve_autograd_route(sub_path)
+        except AdjointError as err:
+            raise_with_traced_path_context(
+                err,
+                parameter_kind="geometry",
+                local_path=sub_path,
+                full_path=field_path,
+            )
+        return AutogradRoute(local_path=field_path)
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""

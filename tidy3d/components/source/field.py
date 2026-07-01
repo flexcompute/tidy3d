@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
@@ -12,6 +12,7 @@ from tidy3d.components.autograd import TracedFloat, TracedPositiveFloat
 from tidy3d.components.autograd.derivative_utils import (
     transpose_interp_field_to_dataset,
 )
+from tidy3d.components.autograd.path_utils import AutogradRoute, format_traced_path
 from tidy3d.components.autograd.utils import get_static, negate_vjp_map
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.dataset import FieldDataset
@@ -37,7 +38,6 @@ from .adjoint_helpers import (
     assign_center_path_derivatives,
     parse_source_field_component,
     split_source_paths,
-    validate_no_collapsed_bounds_for_requested_center_axes,
     validate_no_zero_dim_center_paths,
 )
 from .base import Source
@@ -66,10 +66,9 @@ def _get_curl_coupled_source_adjoint_and_sign(
     injection_axis: int,
     e_adj: dict[str, Any],
     h_adj: dict[str, Any],
-    source_name: str,
 ) -> tuple[Any, float]:
     """Get adjoint field/sign for curl-coupled ``CustomFieldSource`` gradients."""
-    field_type, component_axis = parse_source_field_component(field_name, source_name=source_name)
+    field_type, component_axis = parse_source_field_component(field_name)
     if component_axis == injection_axis:
         raise ValueError(
             f"Field component '{field_name}' is normal to injection axis '{'xyz'[injection_axis]}'."
@@ -316,6 +315,9 @@ class CustomFieldSource(FieldSource, PlanarSource):
         * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
+    _supported_traced_source_fields: ClassVar[tuple[str, ...]] = ("field_dataset", "center")
+    _traced_source_dataset_key: ClassVar[str] = "field_dataset"
+
     field_dataset: FieldDataset | None = Field(
         None,
         title="Field Dataset",
@@ -357,19 +359,9 @@ class CustomFieldSource(FieldSource, PlanarSource):
         derivative_map: AutogradFieldMap = {}
         for field_path in dataset_paths:
             field_path = tuple(field_path)
-            if len(field_path) < 2:
-                raise ValueError(
-                    "Field source derivative paths must include dataset component names, "
-                    f"got '{field_path}'."
-                )
-
             field_name = field_path[1]
-            _, component_axis = parse_source_field_component(
-                field_name, source_name=type(self).__name__
-            )
-            field_data = getattr(self.field_dataset, field_name, None)
-            if field_data is None:
-                raise ValueError(f"Cannot find field '{field_name}' in field dataset.")
+            _, component_axis = parse_source_field_component(field_name)
+            field_data = getattr(self.field_dataset, field_name)
 
             if component_axis == self.injection_axis:
                 derivative_map[field_path] = np.zeros_like(field_data.data)
@@ -380,7 +372,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 injection_axis=self.injection_axis,
                 e_adj=e_adj,
                 h_adj=h_adj,
-                source_name=type(self).__name__,
             )
 
             adjoint_on_dataset = transpose_interp_field_to_dataset(
@@ -409,9 +400,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
         center_field_components = {}
         for field_name, field_data in self.field_dataset.field_components.items():
-            _, component_axis = parse_source_field_component(
-                field_name, source_name=type(self).__name__
-            )
+            _, component_axis = parse_source_field_component(field_name)
             if component_axis != self.injection_axis:
                 center_field_components[field_name] = field_data
 
@@ -421,7 +410,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 injection_axis=self.injection_axis,
                 e_adj=e_adj,
                 h_adj=h_adj,
-                source_name=type(self).__name__,
             )
 
         vjp_center = accumulate_center_vjp(
@@ -432,10 +420,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
             get_adjoint_and_sign=_get_adjoint_and_sign,
         )
 
-        validate_no_collapsed_bounds_for_requested_center_axes(
-            center_paths,
-            bounds=bounds,
-        )
         assign_center_path_derivatives(
             derivative_map,
             center_paths,
@@ -450,23 +434,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
         e_adj = derivative_info.E_adj or {}
         h_adj = derivative_info.H_adj or {}
 
-        supported_roots = ("field_dataset", "center")
-        for field_path in derivative_info.paths:
-            self._validate_traced_source_path(
-                tuple(field_path),
-                dataset_key="field_dataset",
-                supported_roots=supported_roots,
-            )
-
-        dataset_paths, center_paths = split_source_paths(
-            derivative_info.paths,
-            primary_roots={"field_dataset"},
-        )
-        validate_no_zero_dim_center_paths(
-            center_paths,
-            source_size=tuple(self.size),
-            source_name=type(self).__name__,
-        )
+        dataset_paths, center_paths = split_source_paths(derivative_info.paths)
 
         derivative_map.update(
             self._compute_dataset_derivatives(
@@ -1084,14 +1052,7 @@ def _compute_gaussian_like_derivatives(
     3) map dataset cotangents back to source parameters
     """
     derivative_map: AutogradFieldMap = {}
-    validated_paths = []
-
-    for field_path in derivative_info.paths:
-        field_path = tuple(field_path)
-        field_path = source.validate_traced_path(field_path)
-        validated_paths.append(field_path)
-
-    param_paths, center_paths = split_source_paths(validated_paths, primary_roots=None)
+    param_paths, center_paths = split_source_paths(derivative_info.paths)
 
     freqs = np.asarray(derivative_info.frequencies, dtype=float).reshape(-1)
     for freq in freqs:
@@ -1180,6 +1141,20 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
         """Compute derivatives for Gaussian-like beam source parameters."""
         return _compute_gaussian_like_derivatives(self, derivative_info)
 
+    def _resolve_autograd_route(self, field_path: PathType) -> AutogradRoute:
+        """Resolve and validate one traced Gaussian-like source path."""
+        return self.validate_traced_path(field_path)
+
+    @property
+    def _supported_traced_source_fields(self) -> tuple[str, ...]:
+        """Top-level source fields supported by Gaussian-like source VJPs."""
+        scalar_roots = self._common_scalar_roots | self._beam_scalar_roots
+        return (
+            "center",
+            *tuple(sorted(scalar_roots)),
+            *tuple(sorted(self._beam_tuple_roots)),
+        )
+
     @property
     def _common_scalar_roots(self) -> set[str]:
         return {"angle_theta", "angle_phi", "pol_angle"}
@@ -1241,31 +1216,41 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
             params[root] = value
         return params
 
-    def validate_traced_path(self, field_path: PathType) -> PathType:
+    def validate_traced_path(self, field_path: PathType) -> AutogradRoute:
         """Validate traced Gaussian-like source paths."""
         if not field_path:
-            raise ValueError(f"Empty traced source path encountered in '{type(self).__name__}'.")
+            raise AdjointError(
+                f"Empty traced source parameter encountered in '{type(self).__name__}'."
+            )
 
         root = field_path[0]
+        parameter = format_traced_path(field_path)
         scalar_allowed = self._common_scalar_roots | self._beam_scalar_roots
-        if root in scalar_allowed or root in self._beam_tuple_roots:
-            return field_path
+        supported_roots = self._supported_traced_source_fields
+
+        if root not in supported_roots:
+            raise AdjointError(
+                f"Unsupported traced source parameter '{parameter}' for '{type(self).__name__}'. "
+                f"This parameter is not supported. {self._traced_source_support_message()}"
+            )
 
         if root == "center":
-            try:
-                validate_no_zero_dim_center_paths(
-                    [field_path],
-                    source_size=tuple(self.size),
-                    source_name=type(self).__name__,
-                )
-            except AdjointError as err:
-                raise ValueError(str(err)) from err
-            return field_path
+            validate_no_zero_dim_center_paths(
+                [field_path],
+                source_size=tuple(self.size),
+                source_name=type(self).__name__,
+            )
+            return AutogradRoute(local_path=field_path)
 
-        raise ValueError(
-            f"Unsupported traced source path '{field_path}' for '{type(self).__name__}'. "
-            "Supported parameters are beam waists, beam distances, angle_theta, angle_phi, pol_angle, "
-            "and lateral center components."
+        if root in scalar_allowed:
+            return AutogradRoute(local_path=field_path)
+
+        if root in self._beam_tuple_roots:
+            return AutogradRoute(local_path=field_path)
+
+        raise AdjointError(
+            f"Unsupported traced source parameter '{parameter}' for '{type(self).__name__}'. "
+            f"This parameter is not supported. {self._traced_source_support_message()}"
         )
 
 

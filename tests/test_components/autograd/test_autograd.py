@@ -56,7 +56,6 @@ from ...utils import (
     SIM_FULL,
     AssertLogLevel,
     AssertLogStr,
-    custom_poleresidue_u,
     run_emulated,
     tracer_arr,
 )
@@ -1255,6 +1254,60 @@ def test_numerical_structure_derivative_view_clip_geometry_supported(use_emulate
 
     _val, grad = ag.value_and_grad(objective)(params0)
     assert np.all(np.isfinite(grad))
+
+
+def test_numerical_structure_derivative_helper_rejects_unsupported_clip_path(use_emulated_run):
+    """derivative_helper should validate paths before derivative dispatch."""
+    fn_dict = get_functions("polyslab", "mode")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    polyslab_axis = 0
+
+    def invalid_clip_path_vjp(parameters, derivative_info, derivative_helper):
+        lower, upper = derivative_info.bounds
+        center = tuple(0.5 * (lo + hi) for lo, hi in zip(lower, upper))
+        size = tuple(0.25 * (hi - lo) for lo, hi in zip(lower, upper))
+        clip_geometry = td.ClipOperation(
+            operation="union",
+            geometry_a=td.Box(center=center, size=size),
+            geometry_b=td.Box(center=center, size=size),
+        )
+        helper_info = derivative_info.updated_copy(
+            paths=[("geometry", "axis")],
+            deep=False,
+        )
+        derivative_helper(
+            helper_info,
+            derivative_view=DerivativeView(geometry=clip_geometry),
+        )
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    def objective(*args):
+        static_args = [get_static(arg) for arg in args]
+        base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+        structures = [
+            structure
+            for structure in base_sim.structures
+            if not isinstance(structure.geometry, td.PolySlab)
+        ]
+        sim_strip_structure = base_sim.updated_copy(structures=structures)
+        numerical_structure = NumericalStructureConfig(
+            create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+            compute_derivatives=invalid_clip_path_vjp,
+            parameters=np.array(args).flatten(),
+        )
+        sim_data = run_custom(
+            sim_strip_structure,
+            numerical_structures=numerical_structure,
+            local_gradient=True,
+        )
+        return postprocess(sim_data)
+
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match=r"geometry parameter 'axis'.*ClipOperation",
+    ):
+        ag.value_and_grad(objective)(params0)
 
 
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
@@ -3786,40 +3839,6 @@ def test_custom_pole_residue(monkeypatch):
         for j in range(2):
             field_path = ("poles", i, j)
             assert np.allclose(grads_computed[field_path], np.conj(grad_poles[i][j]))
-
-
-def test_custom_pole_residue_unstructured_derivatives():
-    """Ensure unstructured pole residue adjoints are explicitly unsupported."""
-    pr = custom_poleresidue_u
-    field_paths = [("eps_inf",), ("poles", 0, 0), ("poles", 0, 1)]
-
-    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
-
-    info = DerivativeInfo(
-        paths=field_paths,
-        E_der_map={},
-        D_der_map={},
-        E_fwd={},
-        D_fwd={},
-        E_adj={},
-        D_adj={},
-        eps_data={
-            key: td.ScalarFieldDataArray(
-                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
-            )
-            for key in eps_keys
-        },
-        frequencies=[3e8],
-        bounds=((-1, -1, -1), (1, 1, 1)),
-        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
-        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
-        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [3e8]}
-        ),
-    )
-
-    with pytest.raises(NotImplementedError, match=r"unstructured"):
-        pr._compute_derivatives(derivative_info=info)
 
 
 def test_custom_sellmeier(monkeypatch):

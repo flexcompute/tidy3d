@@ -10,12 +10,15 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponent
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.web import Batch
-from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
+from tidy3d.web.api.autograd.types import NumericalStructureConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
     from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
     from tidy3d.web import BatchData
+    from tidy3d.web.api.autograd.types import CustomVJPSpec, SetupRunResult
 
 DEFAULT_DATA_DIR = "."
 
@@ -122,7 +125,8 @@ def _run_local(
     numerical_structures: NumericalStructureConfig
     | tuple[NumericalStructureConfig, ...]
     | None = None,
-    custom_vjp: CustomVJPConfig | tuple[CustomVJPConfig, ...] | None = None,
+    custom_vjp: CustomVJPSpec | None = None,
+    setup_results: Mapping[str, SetupRunResult] | None = None,
     **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
@@ -161,13 +165,33 @@ def _run_local(
 
     if isinstance(numerical_structures, NumericalStructureConfig):
         numerical_structures = (numerical_structures,)
+    if numerical_structures:
+        web_ag.validate_numerical_structure_parameters(numerical_structures)
 
     traced_numerical_structures = numerical_structures and web_ag.has_traced_numerical_structures(
         numerical_structures
     )
-    should_use_autograd = traced_numerical_structures or any(
-        web_ag.is_valid_for_autograd(sim) for sim in sims.values()
+    modeler_numerical_structures = (
+        dict.fromkeys(sims, numerical_structures) if numerical_structures else None
     )
+
+    if setup_results is None:
+        (
+            needs_autograd,
+            expanded_custom_vjp_dict,
+            setup_results,
+        ) = web_ag._prepare_simulation_mapping_for_autograd(
+            sims,
+            custom_vjp=custom_vjp,
+            numerical_structures=modeler_numerical_structures,
+        )
+    else:
+        needs_autograd = tuple(setup_results[name].needs_autograd for name in sims)
+        expanded_custom_vjp_dict = web_ag._expand_custom_vjp_for_simulations(
+            sims,
+            custom_vjp,
+        )
+    should_use_autograd = traced_numerical_structures or any(needs_autograd)
 
     if should_use_autograd:
         if len(modeler.element_mappings) > 0:
@@ -179,7 +203,7 @@ def _run_local(
                 log_once=True,
             )
 
-        from tidy3d.web.api.autograd.autograd import _run_async, expand_custom_vjp
+        from tidy3d.web.api.autograd.autograd import _run_async
 
         kwargs.setdefault("folder_name", "default")
         kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
@@ -196,26 +220,14 @@ def _run_local(
                     "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
                 )
 
-        expanded_custom_vjp_dict = None
-        if isinstance(custom_vjp, CustomVJPConfig):
-            custom_vjp = (custom_vjp,)
-
-        if custom_vjp:
-            custom_vjp = dict.fromkeys(sims, custom_vjp)
-            expanded_custom_vjp_dict = {}
-            for sim_key, custom_vjp_entry in custom_vjp.items():
-                expanded_custom_vjp_dict[sim_key] = expand_custom_vjp(
-                    custom_vjp_entry, sims[sim_key]
-                )
-
         if numerical_structures:
-            web_ag.validate_numerical_structure_parameters(numerical_structures)
-            numerical_structures = dict.fromkeys(sims, numerical_structures)
+            numerical_structures = modeler_numerical_structures
 
         sim_data_map = _run_async(
             simulations=sims,
             numerical_structures=numerical_structures,
             custom_vjp=expanded_custom_vjp_dict,
+            setup_results=setup_results,
             **kwargs,
         )
 

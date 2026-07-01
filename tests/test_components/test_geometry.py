@@ -41,7 +41,7 @@ from tidy3d.components.geometry.utils import (
 )
 from tidy3d.components.geometry.utils_2d import _is_sliver_polygon, subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
-from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import AdjointError, SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
@@ -931,15 +931,15 @@ def test_self_intersection_error_loc_with_arcs():
 
 
 def test_adjoint_error_with_bulges():
-    """_compute_derivatives must raise NotImplementedError for non-zero bulges."""
+    """Autograd route validation must reject non-zero bulges."""
     polyslab = td.PolySlab(
         vertices=[(0, 0), (1, 0), (1, 1), (0, 1)],
         bulges=[0.2, 0, 0, 0],
         axis=2,
         slab_bounds=(-0.5, 0.5),
     )
-    with pytest.raises(NotImplementedError, match=r"Adjoint derivatives are not supported"):
-        polyslab._compute_derivatives(derivative_info=None)
+    with pytest.raises(AdjointError, match=r"vertices include non-zero bulge values"):
+        polyslab._resolve_autograd_route(("vertices",))
 
 
 def test_surfaces():

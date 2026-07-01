@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
 
+from tidy3d.components.autograd.path_utils import format_traced_path
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.solver_types import (
     ChargeMediumType,
@@ -11,6 +12,10 @@ from tidy3d.components.material.solver_types import (
     OpticalMediumType,
 )
 from tidy3d.components.types.base import TYPE_TAG_STR
+from tidy3d.exceptions import AdjointError
+
+if TYPE_CHECKING:
+    from tidy3d.components.autograd.path_utils import AutogradRoute
 
 
 class MultiPhysicsMedium(Tidy3dBaseModel):
@@ -111,6 +116,15 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         description="Specifies properties for Charge simulations.",
         discriminator=TYPE_TAG_STR,
     )
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Reject native autograd routes through multiphysics media."""
+        parameter = format_traced_path(tuple(field_path))
+        raise AdjointError(
+            f"Automatic differentiation with respect to medium parameter '{parameter}' is not "
+            f"supported for medium type '{type(self).__name__}'. Use an optical medium directly "
+            "or provide a custom_vjp."
+        )
 
     def __getattr__(self, name: str) -> Any:
         """

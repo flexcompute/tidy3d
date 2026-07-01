@@ -937,6 +937,9 @@ def _process_structure_gradients(
                             "within the original structure bounds because derivative fields are "
                             "evaluated on the original monitor volume."
                         )
+                # Numerical VJP helpers can request paths that did not go through setup_run().
+                for helper_path in helper_derivative_info.paths:
+                    target_structure._resolve_autograd_route(tuple(helper_path))
                 shared_interpolators = helper_derivative_info.interpolators
                 if shared_interpolators is None:
                     # Reuse per-chunk interpolators to avoid rebuilding in helper loops.

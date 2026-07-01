@@ -201,7 +201,7 @@ def test_adjoint_monitors_3d_use_geometry_bounding_box(geometry):
     assert monitors_eps[0].center == pytest.approx(tuple(expected_box.center))
 
 
-def test_point_cloud_diagnostic_monitors_do_not_contribute_adjoint_freqs():
+def test_point_cloud_monitors_rejected_for_autograd():
     structure = td.Structure(geometry=td.Box(size=(1.0, 1.0, 1.0)), medium=td.Medium())
     sim = _make_3d_simulation(structure)
     points = td.PointDataArray([[0.0, 0.0, 0.0]], dims=("index", "axis"))
@@ -222,13 +222,12 @@ def test_point_cloud_diagnostic_monitors_do_not_contribute_adjoint_freqs():
     )
 
     assert sim_with_point_cloud._freqs_adjoint == [2e14]
-    _validate_autograd_frequency_monitors(sim_with_point_cloud)
-    monitors_field, monitors_eps = sim_with_point_cloud._make_adjoint_monitors(SIM_FIELDS_KEYS)
-    assert all(list(monitor.freqs) == [2e14] for monitor in monitors_field + monitors_eps)
+    with pytest.raises(AdjointError, match=r"Point-cloud.*pc_field.*pc_eps"):
+        _validate_autograd_frequency_monitors(sim_with_point_cloud)
 
     sim_point_cloud_only = sim.updated_copy(monitors=(point_cloud_field, point_cloud_eps))
     assert sim_point_cloud_only._freqs_adjoint == []
-    with pytest.raises(AdjointError, match=r"Point-cloud.*currently unsupported"):
+    with pytest.raises(AdjointError, match=r"Point-cloud.*pc_field.*pc_eps"):
         _validate_autograd_frequency_monitors(sim_point_cloud_only)
 
 

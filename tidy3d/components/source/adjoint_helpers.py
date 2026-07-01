@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from numbers import Integral
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from tidy3d.components.autograd.derivative_utils import compute_spatial_weights
+from tidy3d.components.autograd.path_utils import format_traced_path
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.grid.grid import Coords
@@ -34,24 +36,17 @@ def collapse_source_adjoint_to_dataset_frequency(
     return fld_adj.updated_copy(**update)
 
 
-def split_source_paths(
-    paths: Sequence[PathType],
-    *,
-    primary_roots: set[str] | None = None,
-) -> tuple[list[PathType], list[PathType]]:
+def split_source_paths(paths: Sequence[PathType]) -> tuple[list[PathType], list[PathType]]:
     """Split source paths into primary and center groups.
 
     Parameters
     ----------
     paths
         Traced source paths.
-    primary_roots
-        Allowed non-center root names for the primary group. If ``None``, all
-        non-center roots are routed to the primary group.
     Notes
     -----
-    ``center`` paths are always split into the second output list. Unknown
-    non-center roots are rejected and should be validated by callers first.
+    ``center`` paths are always split into the second output list. The setup validator is
+    responsible for rejecting unsupported non-center roots.
     """
     primary_paths: list[PathType] = []
     center_paths: list[PathType] = []
@@ -59,45 +54,56 @@ def split_source_paths(
         path = tuple(path)
         if path and path[0] == "center":
             center_paths.append(path)
-        elif path and (primary_roots is None or path[0] in primary_roots):
-            primary_paths.append(path)
         else:
-            raise ValueError(
-                f"Unexpected traced source path '{path}'. Paths must be validated before "
-                "calling 'split_source_paths'."
-            )
+            primary_paths.append(path)
     return primary_paths, center_paths
 
 
 def _center_path_axes(path: PathType) -> tuple[int, ...]:
-    """Return axis indices addressed by a traced center path."""
+    """Return axis indices addressed by a validated traced center path."""
+    if len(path) == 1:
+        return (0, 1, 2)
+    return (int(path[1]),)
+
+
+def validate_center_path_axes(path: PathType) -> tuple[int, ...]:
+    """Validate and return axis indices addressed by a traced center path."""
     path = tuple(path)
     if not path or path[0] != "center":
-        raise ValueError(f"Expected 'center' traced path, got '{path}'.")
+        raise AdjointError(
+            f"Expected 'center' traced source parameter, got '{format_traced_path(path)}'."
+        )
     if len(path) == 1:
         return (0, 1, 2)
     if len(path) == 2:
-        axis = int(path[1])
-        if axis not in (0, 1, 2):
-            raise ValueError(f"Unsupported axis index '{axis}' in traced path '{path}'.")
-        return (axis,)
-    raise ValueError(
-        f"Unsupported traced source path '{path}'. "
+        axis = path[1]
+        if not isinstance(axis, Integral) or axis not in (0, 1, 2):
+            raise AdjointError(
+                f"Unsupported traced source parameter '{format_traced_path(path)}'. "
+                "Only center, center[0], center[1], and center[2] are supported."
+            )
+        return (int(axis),)
+    raise AdjointError(
+        f"Unsupported traced source parameter '{format_traced_path(path)}'. "
         "Only full-vector paths or single-axis paths are supported for center."
     )
 
 
-def parse_source_field_component(field_name: str, *, source_name: str) -> tuple[str, int]:
-    """Parse and validate a source field component name like ``Ex`` or ``Hz``."""
+def validate_source_field_component(field_name: str, *, source_name: str) -> None:
+    """Validate a source field component name like ``Ex`` or ``Hz``."""
     if (
         len(field_name) != 2
         or field_name[0] not in ("E", "H")
         or field_name[1] not in ("x", "y", "z")
     ):
-        raise ValueError(
+        raise AdjointError(
             f"Unsupported field component '{field_name}' in {source_name}. "
             "Expected one of Ex, Ey, Ez, Hx, Hy, Hz."
         )
+
+
+def parse_source_field_component(field_name: str) -> tuple[str, int]:
+    """Parse a validated source field component name like ``Ex`` or ``Hz``."""
     return field_name[0], "xyz".index(field_name[1])
 
 
@@ -130,34 +136,17 @@ def validate_no_zero_dim_center_paths(
     source_name: str,
 ) -> None:
     """Reject center derivatives on collapsed source axes."""
-    source_size_arr = np.asarray(source_size, dtype=float)
+    source_size_arr = np.asarray(get_static(source_size), dtype=float)
     for field_path in center_paths:
         path = tuple(field_path)
-        axes = _center_path_axes(path)
+        axes = validate_center_path_axes(path)
 
         for axis in axes:
             if np.isclose(source_size_arr[axis], 0.0):
                 raise AdjointError(
                     f"{source_name} does not support derivatives on collapsed axis "
-                    f"'{'xyz'[axis]}' for traced path {path!r}."
-                )
-
-
-def validate_no_collapsed_bounds_for_requested_center_axes(
-    center_paths: Sequence[PathType],
-    *,
-    bounds: Bound,
-) -> None:
-    """Reject requested center derivatives on collapsed bounds axes."""
-    lower, upper = _static_bounds(bounds)
-    for field_path in center_paths:
-        path = tuple(field_path)
-        axes = _center_path_axes(path)
-        for axis in axes:
-            if np.isclose(float(lower[axis]), float(upper[axis])):
-                raise AdjointError(
-                    "Center derivatives on collapsed bounds axis "
-                    f"'{'xyz'[axis]}' for traced path {path!r}."
+                    f"'{'xyz'[axis]}' for source parameter "
+                    f"'{format_traced_path(path)}'."
                 )
 
 

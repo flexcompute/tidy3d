@@ -6,7 +6,7 @@ import functools
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from math import isclose
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, get_args
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar, get_args
 
 import autograd.numpy as np
 import numpy as npo
@@ -22,6 +22,15 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.components.autograd.path_utils import (
+    AutogradRoute,
+    format_traced_path,
+    format_traced_paths,
+    raise_unsupported_traced_path,
+    resolve_delegated_autograd_route,
+    traced_paths,
+    validate_traced_path,
+)
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.constants import (
     C_0,
@@ -39,7 +48,7 @@ from tidy3d.constants import (
     fp_eps,
     pec_val,
 )
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import AdjointError, SetupError, ValidationError
 from tidy3d.log import log
 
 from .autograd.derivative_utils import (
@@ -48,7 +57,7 @@ from .autograd.derivative_utils import (
     integrate_within_bounds,
     transpose_interp_axis,
 )
-from .autograd.types import TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
+from .autograd.types import PathType, TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import PermittivityDataset
@@ -93,6 +102,8 @@ from .validators import call_wrapped_validator, validate_name_str, validate_para
 from .viz import VisualizationSpec, add_ax_if_none
 
 if TYPE_CHECKING:
+    from typing import NoReturn
+
     from autograd.numpy.numpy_boxes import ArrayBox
     from numpy.typing import ArrayLike
     from pydantic import FieldValidationInfo
@@ -122,6 +133,40 @@ ArrayGeneric = NDArray[Any]
 FrequencyArray = Sequence[float] | ArrayFloat
 WeightFunction = Callable[[float], ArrayComplex]
 ComplexArrayOrScalar = complex | ArrayGeneric
+
+_EPS_SIGMA_TRACED_PATHS = traced_paths("permittivity", "conductivity")
+
+
+def _validate_traced_custom_data_path(
+    medium_name: str,
+    field_path: tuple[Any, ...],
+    *,
+    scalar_data: Mapping[str, Any] | None = None,
+    indexed_data: Mapping[str, Sequence[Sequence[Any]]] | None = None,
+) -> None:
+    """Reject unstructured custom data at a validated traced medium path."""
+    scalar_data = scalar_data or {}
+    indexed_data = indexed_data or {}
+
+    if len(field_path) >= 1 and field_path[0] in scalar_data:
+        custom_data_path = field_path[:1]
+        spatial_data = scalar_data[field_path[0]]
+    elif len(field_path) >= 3 and field_path[0] in indexed_data:
+        data_values = indexed_data[field_path[0]]
+        component_values = data_values[field_path[1]]
+        custom_data_path = field_path[:3]
+        spatial_data = component_values[field_path[2]]
+    else:
+        return
+
+    if isinstance(spatial_data, UnstructuredGridDatasetType):
+        parameter = format_traced_path(custom_data_path)
+        raise AdjointError(
+            f"Automatic differentiation with respect to medium parameter '{parameter}' is not "
+            f"supported for medium type '{medium_name}' when the traced custom data is "
+            "unstructured. Use structured SpatialDataArray data or provide a custom_vjp."
+        )
+
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -214,6 +259,8 @@ def ensure_freq_in_range(
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate."""
+
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = ()
 
     name: str | None = Field(None, title="Name", description="Optional unique name for medium.")
 
@@ -898,6 +945,41 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     """ Autograd code """
 
+    @classmethod
+    def _traced_autograd_supported_parameters(cls) -> tuple[str, ...]:
+        """Return user-facing supported parameter names for setup validation."""
+        return format_traced_paths(cls._traced_supported_paths)
+
+    def _raise_unsupported_traced_path(
+        self,
+        field_path: tuple[Any, ...],
+        *,
+        supported_parameters: tuple[str, ...] | None = None,
+    ) -> NoReturn:
+        """Raise a user-facing validation error for an unsupported medium trace."""
+        raise_unsupported_traced_path(
+            parameter_kind="medium",
+            owner_kind="medium type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            supported_parameters=(
+                type(self)._traced_autograd_supported_parameters()
+                if supported_parameters is None
+                else supported_parameters
+            ),
+        )
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced medium path for adjoint routing."""
+        return validate_traced_path(
+            parameter_kind="medium",
+            owner_kind="medium type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            supported_paths=self._traced_supported_paths,
+            supported_parameters=type(self)._traced_autograd_supported_parameters(),
+        )
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
@@ -1506,6 +1588,8 @@ class Medium(AbstractMedium):
 
     """
 
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = _EPS_SIGMA_TRACED_PATHS
+
     permittivity: TracedFloat = Field(
         1.0,
         ge=1.0,
@@ -1914,6 +1998,8 @@ class CustomMedium(AbstractCustomMedium):
     >>> dielectric = CustomMedium(permittivity=permittivity, conductivity=conductivity)
     >>> eps = dielectric.eps_model(200e12)
     """
+
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = _EPS_SIGMA_TRACED_PATHS
 
     eps_dataset: PermittivityDataset | None = Field(
         None,
@@ -2626,6 +2712,36 @@ class CustomMedium(AbstractCustomMedium):
             eps_dataset=eps_reduced,
         )
 
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced CustomMedium path for adjoint routing."""
+        if field_path and field_path[0] in ("permittivity", "conductivity"):
+            _validate_traced_custom_data_path(
+                type(self).__name__,
+                field_path,
+                scalar_data={
+                    "permittivity": self.permittivity,
+                    "conductivity": self.conductivity,
+                },
+            )
+        if field_path in self._traced_supported_paths:
+            return AutogradRoute(local_path=field_path)
+
+        eps_components = (
+            tuple(self.eps_dataset.field_components.keys()) if self.eps_dataset is not None else ()
+        )
+        if (
+            len(field_path) == 2
+            and field_path[0] == "eps_dataset"
+            and field_path[1] in eps_components
+        ):
+            return AutogradRoute(local_path=field_path)
+
+        supported_eps = tuple(f"eps_dataset.{component}" for component in eps_components)
+        self._raise_unsupported_traced_path(
+            field_path,
+            supported_parameters=("permittivity", "conductivity", *supported_eps),
+        )
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
@@ -2675,10 +2791,6 @@ class CustomMedium(AbstractCustomMedium):
                     bounds=derivative_info.bounds_intersect,
                     component="complex",
                 )
-            else:
-                raise NotImplementedError(
-                    f"No derivative defined for 'CustomMedium' field: {field_path}."
-                )
 
         return vjps
 
@@ -2724,6 +2836,8 @@ class DispersiveMedium(AbstractMedium, ABC):
     **Lectures**
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
+
+    _traced_indexed_root: ClassVar[str | None] = None
 
     @staticmethod
     def _permittivity_modulation_validation() -> Callable[[T], T]:
@@ -2848,9 +2962,44 @@ class DispersiveMedium(AbstractMedium, ABC):
                 out[k] = np.real(g[idx])
         return out
 
+    @classmethod
+    def _traced_autograd_supported_parameters(cls) -> tuple[str, ...]:
+        """Return user-facing supported parameter names for setup validation."""
+        parameters = format_traced_paths(cls._traced_supported_paths)
+        root = cls._traced_indexed_root
+        if root is None:
+            return parameters
+        return (*parameters, f"{root}[index][component]")
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced dispersive medium path for adjoint routing."""
+        if field_path in self._traced_supported_paths:
+            return AutogradRoute(local_path=field_path)
+
+        root = self._traced_indexed_root
+        # Stripped paths are produced from model containers; for indexed material coefficients
+        # we only need to check the derivative-map path shape here, not duplicate model bounds.
+        if root is not None and len(field_path) == 3 and field_path[0] == root:
+            return AutogradRoute(local_path=field_path)
+
+        self._raise_unsupported_traced_path(field_path)
+
 
 class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
     """A spatially varying dispersive medium."""
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced custom dispersive medium path."""
+        root = self._traced_indexed_root
+        scalar_data = {path[0]: getattr(self, path[0]) for path in self._traced_supported_paths}
+        indexed_data = {root: getattr(self, root)} if root is not None else {}
+        _validate_traced_custom_data_path(
+            type(self).__name__,
+            field_path,
+            scalar_data=scalar_data,
+            indexed_data=indexed_data,
+        )
+        return super()._resolve_autograd_route(field_path)
 
     @cached_property
     def n_cfl(self) -> float:
@@ -3036,6 +3185,9 @@ class PoleResidue(DispersiveMedium):
     **Lectures**
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
+
+    _traced_indexed_root: ClassVar[str] = "poles"
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: TracedPositiveFloat = Field(
         1.0,
@@ -3908,6 +4060,8 @@ class Sellmeier(DispersiveMedium):
     * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
+    _traced_indexed_root: ClassVar[str] = "coeffs"
+
     coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
@@ -4377,6 +4531,9 @@ class Lorentz(DispersiveMedium):
     **Lectures**
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
+
+    _traced_indexed_root: ClassVar[str] = "coeffs"
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: PositiveFloat = Field(
         1.0,
@@ -4901,6 +5058,9 @@ class Drude(DispersiveMedium):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
+    _traced_indexed_root: ClassVar[str] = "coeffs"
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
+
     eps_inf: PositiveFloat = Field(
         1.0,
         title="Epsilon at Infinity",
@@ -5241,6 +5401,9 @@ class Debye(DispersiveMedium):
     **Lectures**
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
+
+    _traced_indexed_root: ClassVar[str] = "coeffs"
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: PositiveFloat = Field(
         1.0,
@@ -6332,17 +6495,23 @@ class AnisotropicMedium(AbstractMedium):
             paths=component_paths, E_der_map=projected_E, D_der_map=projected_D
         )
 
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced AnisotropicMedium path for adjoint routing."""
+        components = self.components
+        return resolve_delegated_autograd_route(
+            parameter_kind="medium",
+            owner_kind="medium type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            delegates=components,
+            supported_parameters=tuple(f"{component}.<parameter>" for component in components),
+        )
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Delegate derivatives for each diagonal component of an anisotropic medium."""
 
-        components = self.components
-        for field_path in derivative_info.paths:
-            if len(field_path) < 2 or field_path[0] not in components:
-                raise NotImplementedError(
-                    f"No derivative defined for '{type(self).__name__}' field: {field_path}."
-                )
-
         vjps: AutogradFieldMap = {}
+        components = self.components
         for comp_name, component in components.items():
             comp_info = self._component_derivative_info(
                 derivative_info=derivative_info, component=comp_name

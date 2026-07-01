@@ -1,6 +1,7 @@
 # autograd wrapper for web functions
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.path_utils import AutogradRoute
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
     from tidy3d.web.api.container import BatchData
     from tidy3d.web.core.types import PayType
@@ -141,6 +143,73 @@ def validate_numerical_structure_parameters(
             )
 
 
+def _custom_vjp_covers_structure_path(
+    vjp_config: CustomVJPConfig,
+    structure_index: int,
+    structure_path: tuple,
+) -> bool:
+    """Return whether a custom VJP handles the traced structure path."""
+    if vjp_config.structure != structure_index:
+        return False
+    if vjp_config.path_key is None:
+        return True
+    return tuple(vjp_config.path_key) == tuple(structure_path[:2])
+
+
+def _resolve_traced_autograd_routes(
+    simulation: td.Simulation,
+    traced_fields: AutogradFieldMap,
+    *,
+    custom_vjp: Sequence[CustomVJPConfig] | None = None,
+    skip_structure_indices: tuple[int, ...] = (),
+) -> tuple[AutogradRoute, ...]:
+    """Resolve traced source and structure paths into validated native VJP routes."""
+    skip_indices = set(skip_structure_indices)
+    routes = []
+    for component_type, component_index, *component_path in traced_fields.keys():
+        component_path = tuple(component_path)
+        # These paths come from _strip_traced_fields(starting_paths=("structures", "sources")).
+        # Trust that root/index shape here and let component validators check VJP support.
+        if component_type == "sources":
+            routes.append(
+                simulation.sources[component_index]._resolve_autograd_route(component_path)
+            )
+            continue
+
+        if component_type != "structures" or component_index in skip_indices:
+            continue
+        if any(
+            _custom_vjp_covers_structure_path(vjp_config, component_index, component_path)
+            for vjp_config in custom_vjp or ()
+        ):
+            continue
+
+        routes.append(
+            simulation.structures[component_index]._resolve_autograd_route(component_path)
+        )
+    return tuple(routes)
+
+
+def _strip_validated_autograd_fields(
+    simulation: td.Simulation,
+    *,
+    custom_vjp: Sequence[CustomVJPConfig] | None = None,
+    skip_structure_indices: tuple[int, ...] = (),
+) -> tuple[AutogradFieldMap, tuple[AutogradRoute, ...]]:
+    """Strip traced simulation fields and reject unsupported autograd traces."""
+    traced_fields = simulation._strip_traced_fields(
+        include_untraced_data_arrays=False,
+        starting_paths=(("structures",), ("sources",)),
+    )
+    autograd_routes = _resolve_traced_autograd_routes(
+        simulation=simulation,
+        traced_fields=traced_fields,
+        custom_vjp=custom_vjp,
+        skip_structure_indices=skip_structure_indices,
+    )
+    return traced_fields, autograd_routes
+
+
 def _untracked_flux_monitor_names(simulation: td.Simulation) -> list[str]:
     """Exact ``FluxMonitor`` names that are present but not opted into adjoint tracking."""
     return [
@@ -172,6 +241,14 @@ def _dipole_emission_monitor_names(simulation: td.Simulation) -> list[str]:
 def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
     """Validate that an autograd run has differentiable frequency-domain monitor data."""
 
+    point_cloud_monitor_names = _point_cloud_monitor_names(simulation)
+    if point_cloud_monitor_names:
+        raise AdjointError(
+            "Point-cloud frequency-domain monitor data is present, but adjoint objectives "
+            "depending on PointCloudFieldData or PointCloudPermittivityData are currently "
+            f"unsupported. Point-cloud monitor(s): {', '.join(point_cloud_monitor_names)}."
+        )
+
     # if no frequency-domain data (e.g. only field time monitors), raise an error
     if simulation._freqs_adjoint:
         return
@@ -192,35 +269,42 @@ def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
             "depending on DipoleEmissionData are currently unsupported. Dipole-emission "
             f"monitor(s): {', '.join(dipole_emission_monitor_names)}."
         )
-    point_cloud_monitor_names = _point_cloud_monitor_names(simulation)
-    if point_cloud_monitor_names:
-        raise AdjointError(
-            "Point-cloud frequency-domain monitor data is present, but adjoint objectives "
-            "depending on PointCloudFieldData or PointCloudPermittivityData are currently "
-            f"unsupported. Point-cloud monitor(s): {', '.join(point_cloud_monitor_names)}."
-        )
     raise AdjointError(
         "No frequency-domain data found in simulation, but found traced simulation inputs. "
         "For an autograd run, you must have at least one frequency-domain monitor."
     )
 
 
-def is_valid_for_autograd(simulation: td.Simulation) -> bool:
+def is_valid_for_autograd(
+    simulation: td.Simulation,
+    custom_vjp: CustomVJPConfig | Sequence[CustomVJPConfig] | None = None,
+) -> bool:
     """Check whether a supplied Simulation can use the autograd path."""
     if not isinstance(simulation, td.Simulation):
         return False
 
-    # if no tracers just use regular web.run()
-    traced_fields = simulation._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_paths=(("structures",), ("sources",))
-    )
-    if not traced_fields:
+    try:
+        setup_result = setup_run(simulation=simulation, custom_vjp=custom_vjp)
+    except AdjointError:
         return False
+    return _setup_result_needs_autograd(setup_result)
 
+
+def _setup_result_needs_autograd(setup_result: Any) -> bool:
+    """Return whether a prepared setup result needs autograd."""
+    return getattr(setup_result, "needs_autograd", bool(setup_result.sim_fields))
+
+
+def _validate_autograd_run_constraints(
+    simulation: td.Simulation, traced_fields: AutogradFieldMap
+) -> None:
+    """Validate traced-field requirements that apply to autograd runs."""
     _validate_autograd_frequency_monitors(simulation)
 
     # if too many structures, raise an error
-    structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
+    structure_indices = {
+        i for key, i, *_ in traced_fields.keys() if key in ("structures", "numerical")
+    }
     num_traced_structures = len(structure_indices)
     max_structures = config.adjoint.max_traced_structures
     if num_traced_structures > max_structures:
@@ -229,14 +313,91 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
             f"traced fields. Found {num_traced_structures} structures with traced fields."
         )
 
-    return True
+
+def _normalize_custom_vjp_entry(
+    custom_vjp: CustomVJPConfig | Sequence[CustomVJPConfig] | None,
+) -> tuple[CustomVJPConfig, ...] | None:
+    """Normalize one custom VJP entry to a tuple."""
+    if custom_vjp is None:
+        return None
+    if isinstance(custom_vjp, CustomVJPConfig):
+        return (custom_vjp,)
+    return tuple(custom_vjp)
 
 
-def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
+def _expand_custom_vjp_for_simulations(
+    simulations: Mapping[str, td.Simulation],
+    custom_vjp: CustomVJPConfig
+    | Sequence[CustomVJPConfig]
+    | Mapping[str, CustomVJPConfig | Sequence[CustomVJPConfig]]
+    | None,
+) -> dict[str, tuple[CustomVJPConfig, ...]] | None:
+    """Expand custom VJP configs for each simulation in a mapping."""
+    if custom_vjp is None:
+        return None
+
+    expanded_custom_vjp = {}
+    for sim_key, sim in simulations.items():
+        custom_vjp_entry = (
+            custom_vjp.get(sim_key) if isinstance(custom_vjp, Mapping) else custom_vjp
+        )
+        normalized_entry = _normalize_custom_vjp_entry(custom_vjp_entry)
+        if normalized_entry is not None:
+            expanded_custom_vjp[sim_key] = expand_custom_vjp(normalized_entry, sim)
+    return expanded_custom_vjp
+
+
+def _prepare_simulation_mapping_for_autograd(
+    simulations: Mapping[str, td.Simulation],
+    custom_vjp: CustomVJPConfig
+    | Sequence[CustomVJPConfig]
+    | Mapping[str, CustomVJPConfig | Sequence[CustomVJPConfig]]
+    | None = None,
+    numerical_structures: Mapping[str, Sequence[NumericalStructureConfig]] | None = None,
+) -> tuple[
+    tuple[bool, ...],
+    dict[str, tuple[CustomVJPConfig, ...]] | None,
+    dict[str, SetupRunResult],
+]:
+    """Prepare simulations and return whether each one needs autograd."""
+    expanded_custom_vjp = _expand_custom_vjp_for_simulations(simulations, custom_vjp)
+    numerical_structures = numerical_structures or {}
+    setup_results = {
+        sim_key: setup_run(
+            simulation=sim,
+            numerical_structures=numerical_structures.get(sim_key),
+            custom_vjp=expanded_custom_vjp.get(sim_key)
+            if expanded_custom_vjp is not None
+            else None,
+        )
+        for sim_key, sim in simulations.items()
+    }
+    needs_autograd = tuple(
+        _setup_result_needs_autograd(setup_result) for setup_result in setup_results.values()
+    )
+    return needs_autograd, expanded_custom_vjp, setup_results
+
+
+def is_valid_for_autograd_async(
+    simulations: dict[str, td.Simulation],
+    custom_vjp: dict[str, Sequence[CustomVJPConfig]] | None = None,
+) -> bool:
     """Check whether the supplied simulations dict can use autograd run_async."""
     if not isinstance(simulations, dict):
         return False
-    if not all(is_valid_for_autograd(sim) for sim in simulations.values()):
+    fdtd_simulations = {
+        sim_key: sim for sim_key, sim in simulations.items() if isinstance(sim, td.Simulation)
+    }
+    if not fdtd_simulations:
+        return False
+    try:
+        needs_autograd, _, _ = _prepare_simulation_mapping_for_autograd(
+            fdtd_simulations,
+            custom_vjp=custom_vjp,
+        )
+    except AdjointError:
+        return False
+    if len(fdtd_simulations) != len(simulations) or not any(needs_autograd):
         return False
     return True
 
@@ -529,9 +690,19 @@ def run_custom(
 
     if isinstance(simulation, get_args(ComponentModelerType)):
         sim_dict = simulation.sim_dict
-        should_use_component_autograd = traced_numerical_structures or any(
-            is_valid_for_autograd(sim) for sim in sim_dict.values()
+        modeler_numerical_structures = (
+            dict.fromkeys(sim_dict, numerical_structures) if numerical_structures else None
         )
+        (
+            needs_autograd,
+            expanded_custom_vjp_dict,
+            setup_results,
+        ) = _prepare_simulation_mapping_for_autograd(
+            sim_dict,
+            custom_vjp=custom_vjp,
+            numerical_structures=modeler_numerical_structures,
+        )
+        should_use_component_autograd = traced_numerical_structures or any(needs_autograd)
         contains_numerical_structures = bool(numerical_structures)
         should_run_local = should_use_component_autograd or contains_numerical_structures
 
@@ -553,12 +724,22 @@ def run_custom(
                 local_gradient=local_gradient,
                 max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
                 numerical_structures=numerical_structures,
-                custom_vjp=custom_vjp,
+                custom_vjp=expanded_custom_vjp_dict,
+                setup_results=setup_results,
             )
 
     should_use_autograd = False
+    expanded_custom_vjp = None
+    setup_result = None
     if isinstance(simulation, td.Simulation):
-        should_use_autograd = is_valid_for_autograd(simulation) or traced_numerical_structures
+        if custom_vjp is not None:
+            expanded_custom_vjp = expand_custom_vjp(custom_vjp, simulation)
+        setup_result = setup_run(
+            simulation=simulation,
+            numerical_structures=numerical_structures,
+            custom_vjp=expanded_custom_vjp,
+        )
+        should_use_autograd = _setup_result_needs_autograd(setup_result)
 
     if should_use_autograd:
         if (custom_vjp is not None) and (not local_gradient):
@@ -568,11 +749,6 @@ def run_custom(
             raise AdjointError(
                 "numerical_structures specified for a remote gradient not supported."
             )
-
-        if custom_vjp is not None:
-            expanded_custom_vjp = expand_custom_vjp(custom_vjp, simulation)
-        else:
-            expanded_custom_vjp = None
 
         return _run(
             simulation=simulation,
@@ -591,6 +767,7 @@ def run_custom(
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             numerical_structures=numerical_structures,
             custom_vjp=expanded_custom_vjp,
+            setup_result=setup_result,
             pay_type=pay_type,
             priority=priority,
             vgpu_allocation=vgpu_allocation,
@@ -598,8 +775,8 @@ def run_custom(
             lazy=lazy,
         )
 
-    simulation_static = simulation
-    if isinstance(simulation, td.Simulation) and numerical_structures:
+    simulation_static = setup_result.simulation if setup_result is not None else simulation
+    if setup_result is None and isinstance(simulation, td.Simulation) and numerical_structures:
         # if there are numerical_structures without traced parameters, we still want
         # to insert them into the simulation
         simulation_static = insert_numerical_structures_static(
@@ -872,7 +1049,33 @@ def run_async_custom(
         has_traced_numerical_structures(numerical_structure)
         for _, numerical_structure in numerical_structures.items()
     )
-    should_use_autograd_async = is_valid_for_autograd_async(sim_dict) or traced_numerical_structures
+    fdtd_sim_dict = {
+        sim_key: sim for sim_key, sim in sim_dict.items() if isinstance(sim, td.Simulation)
+    }
+    all_simulations_are_fdtd = len(fdtd_sim_dict) == len(sim_dict)
+    (
+        needs_autograd,
+        expanded_custom_vjp_dict,
+        setup_results,
+    ) = (
+        _prepare_simulation_mapping_for_autograd(
+            fdtd_sim_dict,
+            custom_vjp=custom_vjp,
+            numerical_structures=numerical_structures,
+        )
+        if fdtd_sim_dict
+        else ((), None, {})
+    )
+
+    if any(needs_autograd) and not all_simulations_are_fdtd:
+        raise AdjointError(
+            "A run_async batch containing traced FDTD Simulation tasks cannot be mixed with "
+            "other simulation types. Run the traced FDTD simulations separately."
+        )
+
+    should_use_autograd_async = (
+        all_simulations_are_fdtd and any(needs_autograd)
+    ) or traced_numerical_structures
 
     if should_use_autograd_async:
         if (custom_vjp is not None) and (not local_gradient):
@@ -882,15 +1085,6 @@ def run_async_custom(
             raise AdjointError(
                 "numerical_structures specified for a remote gradient not supported."
             )
-
-        if custom_vjp is not None:
-            expanded_custom_vjp_dict = {}
-            for sim_key, custom_vjp_entry in custom_vjp.items():
-                expanded_custom_vjp_dict[sim_key] = expand_custom_vjp(
-                    custom_vjp_entry, sim_dict[sim_key]
-                )
-        else:
-            expanded_custom_vjp_dict = None
 
         return _run_async(
             simulations=sim_dict,
@@ -906,6 +1100,7 @@ def run_async_custom(
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             numerical_structures=numerical_structures,
             custom_vjp=expanded_custom_vjp_dict,
+            setup_results=setup_results,
             pay_type=pay_type,
             priority=priority,
             vgpu_allocation=vgpu_allocation,
@@ -916,14 +1111,7 @@ def run_async_custom(
     # insert numerical_structures even if not traced
     if numerical_structures:
         simulations_static = {
-            name: (
-                insert_numerical_structures_static(
-                    simulation=sim_dict[name],
-                    numerical_structures=numerical_structures[name],
-                )
-                if numerical_structures[name]
-                else sim_dict[name]
-            )
+            name: setup_results[name].simulation if numerical_structures[name] else sim_dict[name]
             for name in sim_dict
         }
     else:
@@ -1050,14 +1238,17 @@ def _run(
     max_num_adjoint_per_fwd: int | None = None,
     numerical_structures: tuple[NumericalStructureConfig, ...] | None = None,
     custom_vjp: tuple[CustomVJPConfig, ...] | None = None,
+    setup_result: SetupRunResult | None = None,
     **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
 
-    setup_result = setup_run(
-        simulation=simulation,
-        numerical_structures=numerical_structures,
-    )
+    if setup_result is None:
+        setup_result = setup_run(
+            simulation=simulation,
+            numerical_structures=numerical_structures,
+            custom_vjp=custom_vjp,
+        )
     if custom_vjp:
         verify_custom_vjp(custom_vjp, setup_result.sim_fields)
     traced_fields_sim = setup_result.sim_fields
@@ -1104,6 +1295,7 @@ def _run_async(
     max_num_adjoint_per_fwd: int | None = None,
     numerical_structures: dict[str, Sequence[NumericalStructureConfig]] | None = None,
     custom_vjp: dict[str, Sequence[CustomVJPConfig]] | None = None,
+    setup_results: Mapping[str, SetupRunResult] | None = None,
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
@@ -1118,15 +1310,19 @@ def _run_async(
 
     numerical_structures = numerical_structures or {}
     custom_vjp = custom_vjp or {}
+    setup_results = setup_results or {}
     contexts = {task_name: AutogradContext() for task_name in task_names}
 
     for task_name in task_names:
         sim = simulations[task_name]
-        setup_result = setup_run(
-            simulation=sim,
-            numerical_structures=numerical_structures.get(task_name),
-        )
-        if custom_vjp:
+        setup_result = setup_results.get(task_name)
+        if setup_result is None:
+            setup_result = setup_run(
+                simulation=sim,
+                numerical_structures=numerical_structures.get(task_name),
+                custom_vjp=custom_vjp.get(task_name),
+            )
+        if task_name in custom_vjp:
             verify_custom_vjp(custom_vjp[task_name], setup_result.sim_fields)
         sim_prepared = setup_result.simulation
         traced_fields = setup_result.sim_fields
@@ -1169,6 +1365,7 @@ def _run_async(
 def setup_run(
     simulation: td.Simulation,
     numerical_structures: tuple[NumericalStructureConfig, ...] | None = None,
+    custom_vjp: CustomVJPConfig | Sequence[CustomVJPConfig] | None = None,
 ) -> SetupRunResult:
     """Prepare simulation and traced fields, including numerical structure insertions."""
 
@@ -1176,14 +1373,21 @@ def setup_run(
     numerical_structure_indices: tuple[int, ...] = ()
     numerical_structure_map: dict[int, NumericalStructureConfig] = {}
 
+    if isinstance(custom_vjp, CustomVJPConfig):
+        custom_vjp = (custom_vjp,)
+    if custom_vjp:
+        custom_vjp = expand_custom_vjp(tuple(custom_vjp), simulation)
+
     if numerical_structures:
         sim_prepared, numerical_structure_indices = _insert_numerical_structures(
             simulation=simulation, numerical_structures=numerical_structures
         )
         numerical_structure_map = dict(zip(numerical_structure_indices, numerical_structures))
 
-    sim_fields_map = sim_prepared._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_paths=(("structures",), ("sources",))
+    sim_fields_map, autograd_routes = _strip_validated_autograd_fields(
+        sim_prepared,
+        custom_vjp=custom_vjp,
+        skip_structure_indices=numerical_structure_indices,
     )
 
     if numerical_structures:
@@ -1207,12 +1411,13 @@ def setup_run(
         sim_fields_map = builtins.dict(sim_fields_dict)
 
     if sim_fields_map:
-        _validate_autograd_frequency_monitors(sim_prepared)
+        _validate_autograd_run_constraints(sim_prepared, sim_fields_map)
 
     return SetupRunResult(
         sim_fields=sim_fields_map,
         simulation=sim_prepared,
         numerical_structure_map=numerical_structure_map,
+        autograd_routes=autograd_routes,
     )
 
 

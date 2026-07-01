@@ -912,59 +912,6 @@ class TestCustomFieldSourceUniform:
 
 
 @pytest.mark.parametrize(
-    (
-        "source_ctor",
-        "dataset_key",
-        "source_size",
-        "unsupported_path",
-        "adjoint_component",
-        "adjoint_value",
-    ),
-    (
-        (td.CustomCurrentSource, "current_dataset", (1.0, 1.0, 0.1), ("size", 0), "Ex", -1j),
-        (td.CustomFieldSource, "field_dataset", (1.0, 1.0, 0.0), ("size", 0), "Hy", 1j),
-    ),
-)
-def test_unsupported_traced_paths_raise_error(
-    source_ctor,
-    dataset_key,
-    source_size,
-    unsupported_path,
-    adjoint_component,
-    adjoint_value,
-):
-    """Unsupported traced source parameters should raise an explicit error."""
-
-    center = (0.0, 0.0, 0.0)
-    field_dataset = create_uniform_field_data(center, source_size, field_value=1.0)
-
-    source = source_ctor(
-        center=center,
-        size=source_size,
-        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
-        **{dataset_key: field_dataset},
-    )
-
-    E_adj = {}
-    H_adj = {}
-    if adjoint_component.startswith("E"):
-        E_adj[adjoint_component] = create_adjoint_field_dataarray(adjoint_value)
-    else:
-        H_adj[adjoint_component] = create_adjoint_field_dataarray(adjoint_value)
-
-    di = DummySourceDI(
-        paths=[(dataset_key, "Ex"), unsupported_path, ("source_time", "freq0")],
-        E_adj=E_adj,
-        H_adj=H_adj,
-        frequencies=np.array([2e14]),
-        bounds=source.geometry.bounds,
-    )
-
-    with pytest.raises(ValueError, match="not supported"):
-        source._compute_derivatives(di)
-
-
-@pytest.mark.parametrize(
     ("source_ctor", "dataset_key", "source_size", "adj_component"),
     (
         (td.CustomCurrentSource, "current_dataset", (1.0, 1.0, 0.1), "Ex"),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import cos, isclose, sin
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -25,8 +25,6 @@ from .adjoint_helpers import (
     assign_center_path_derivatives,
     parse_source_field_component,
     split_source_paths,
-    validate_no_collapsed_bounds_for_requested_center_axes,
-    validate_no_zero_dim_center_paths,
 )
 from .base import Source
 
@@ -43,10 +41,9 @@ def _get_direct_source_adjoint_and_sign(
     *,
     e_adj: dict[str, Any],
     h_adj: dict[str, Any],
-    source_name: str,
 ) -> tuple[Any, float]:
     """Get adjoint field/sign for direct ``CustomCurrentSource`` gradients."""
-    field_type, _ = parse_source_field_component(field_name, source_name=source_name)
+    field_type, _ = parse_source_field_component(field_name)
     if field_type == "H":
         return h_adj[field_name], -1.0
     return e_adj[field_name], 1.0
@@ -271,6 +268,9 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
+    _supported_traced_source_fields: ClassVar[tuple[str, ...]] = ("current_dataset", "center")
+    _traced_source_dataset_key: ClassVar[str] = "current_dataset"
+
     current_dataset: FieldDataset | None = Field(
         title="Current Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
@@ -322,23 +322,13 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         derivative_map: AutogradFieldMap = {}
         for field_path in dataset_paths:
             field_path = tuple(field_path)
-            if len(field_path) < 2:
-                raise ValueError(
-                    "Current source derivative paths must include dataset component names, "
-                    f"got '{field_path}'."
-                )
-
             field_name = field_path[1]
-            parse_source_field_component(field_name, source_name=type(self).__name__)
-            field_data = getattr(self.current_dataset, field_name, None)
-            if field_data is None:
-                raise ValueError(f"Cannot find field '{field_name}' in current dataset.")
+            field_data = getattr(self.current_dataset, field_name)
 
             adjoint_field, component_sign = _get_direct_source_adjoint_and_sign(
                 field_name,
                 e_adj=e_adj,
                 h_adj=h_adj,
-                source_name=type(self).__name__,
             )
 
             adjoint_on_dataset = transpose_interp_field_to_dataset(
@@ -375,7 +365,6 @@ class CustomCurrentSource(ReverseInterpolatedSource):
                 field_name,
                 e_adj=e_adj,
                 h_adj=h_adj,
-                source_name=type(self).__name__,
             )
 
         vjp_center = accumulate_center_vjp(
@@ -386,10 +375,6 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             get_adjoint_and_sign=_get_adjoint_and_sign,
         )
 
-        validate_no_collapsed_bounds_for_requested_center_axes(
-            center_paths,
-            bounds=bounds,
-        )
         assign_center_path_derivatives(
             derivative_map,
             center_paths,
@@ -405,23 +390,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         h_adj = derivative_info.H_adj or {}
         e_adj = derivative_info.E_adj or {}
 
-        supported_roots = ("current_dataset", "center")
-        for field_path in derivative_info.paths:
-            self._validate_traced_source_path(
-                tuple(field_path),
-                dataset_key="current_dataset",
-                supported_roots=supported_roots,
-            )
-
-        dataset_paths, center_paths = split_source_paths(
-            derivative_info.paths,
-            primary_roots={"current_dataset"},
-        )
-        validate_no_zero_dim_center_paths(
-            center_paths,
-            source_size=tuple(self.size),
-            source_name=type(self).__name__,
-        )
+        dataset_paths, center_paths = split_source_paths(derivative_info.paths)
 
         derivative_map.update(
             self._compute_dataset_derivatives(

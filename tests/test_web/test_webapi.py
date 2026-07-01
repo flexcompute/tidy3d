@@ -1147,13 +1147,27 @@ def test_regular_autograd_internal_simulation_type_does_not_warn(monkeypatch, ca
         "tidy3d.web.api.autograd.autograd.is_valid_for_autograd_async",
         lambda simulations: True,
     )
-    monkeypatch.setattr(
-        "tidy3d.web.api.autograd.autograd.setup_run",
-        lambda simulation, numerical_structures=None: SimpleNamespace(
-            simulation=simulation,
+
+    def setup_run_stub(simulation, numerical_structures=None, custom_vjp=None):
+        return SimpleNamespace(
+            simulation=simulation.updated_copy(
+                monitors=(
+                    FieldMonitor(
+                        center=(0, 0, 0),
+                        size=(0, 0, 0),
+                        freqs=[2e14],
+                        name="freq",
+                        fields=["Ex"],
+                    ),
+                )
+            ),
             sim_fields={("sources", 0, "center", 0): 0.0},
             numerical_structure_map={},
-        ),
+        )
+
+    monkeypatch.setattr(
+        "tidy3d.web.api.autograd.autograd.setup_run",
+        setup_run_stub,
     )
     monkeypatch.setattr(
         "tidy3d.web.api.autograd.autograd.setup_fwd",

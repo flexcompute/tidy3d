@@ -14,9 +14,15 @@ from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.config import config
 from tidy3d.constants import MICROMETER
-from tidy3d.exceptions import SetupError, Tidy3dImportError, format_chained_exception_message
+from tidy3d.exceptions import (
+    AdjointError,
+    SetupError,
+    Tidy3dImportError,
+    format_chained_exception_message,
+)
 from tidy3d.log import log
 
+from .autograd.path_utils import AutogradRoute, format_traced_path
 from .autograd.utils import contains, get_static
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import ScalarFieldDataArray
@@ -640,6 +646,27 @@ class Structure(AbstractStructure):
                 derivative_map[path] = derivative_value
 
         return derivative_map
+
+    def _resolve_autograd_route(self, structure_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate a traced structure path for adjoint routing."""
+        if not structure_path:
+            raise AdjointError("Empty traced structure parameter encountered.")
+
+        med_or_geo = structure_path[0]
+        field_path = structure_path[1:]
+        if med_or_geo == "geometry":
+            self.geometry._resolve_autograd_route(field_path)
+            return AutogradRoute(local_path=structure_path)
+
+        if med_or_geo == "medium":
+            self.medium._resolve_autograd_route(field_path)
+            return AutogradRoute(local_path=structure_path)
+
+        parameter = format_traced_path(structure_path)
+        raise AdjointError(
+            f"Automatic differentiation with respect to structure parameter '{parameter}' is "
+            "not supported. Supported structure parameters start with 'geometry' or 'medium'."
+        )
 
     """ End autograd code."""
 

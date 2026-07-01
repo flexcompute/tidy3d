@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 import shapely
@@ -14,14 +14,15 @@ from numpy.polynomial.legendre import leggauss as _leggauss
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd import TracedArrayFloat2D, get_static
-from tidy3d.components.autograd.types import TracedFloat
+from tidy3d.components.autograd.path_utils import traced_paths
+from tidy3d.components.autograd.types import PathType, TracedFloat
 from tidy3d.components.autograd.utils import hasbox
 from tidy3d.components.base import cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
-from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
+from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.path_utils import AutogradRoute
     from tidy3d.components.types import (
         ArrayFloat2D,
         ArrayLike,
@@ -457,6 +459,13 @@ class PolySlab(base.Planar):
     ...     vertices=vertices, axis=2, slab_bounds=(-1, 1), bulges=[0, 0.5, 0]
     ... )
     """
+
+    _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths(
+        "vertices",
+        "sidewall_angle",
+        ("slab_bounds", 0),
+        ("slab_bounds", 1),
+    )
 
     slab_bounds: tuple[TracedFloat, TracedFloat] = Field(
         title="Slab Bounds",
@@ -2199,6 +2208,17 @@ class PolySlab(base.Planar):
 
     """ Autograd code """
 
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+        """Resolve and validate one traced PolySlab path for adjoint routing."""
+        if self._has_arc_segments:
+            raise AdjointError(
+                "Automatic differentiation with respect to PolySlab geometry parameters is not "
+                "supported when vertices include non-zero bulge values. Use straight-edged "
+                "polyslabs for inverse design optimization."
+            )
+
+        return super()._resolve_autograd_route(field_path)
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """
         Return VJPs while handling several edge-cases:
@@ -2209,13 +2229,6 @@ class PolySlab(base.Planar):
           gradients; this includes the +/- inf cases.
         - A 2d simulation collapses the surface integral to a line integral
         """
-        if self._has_arc_segments:
-            raise NotImplementedError(
-                "Adjoint derivatives are not supported for 'PolySlab' with non-zero "
-                "bulge (arc segment) values. Please use straight-edged polyslabs for "
-                "inverse design optimization."
-            )
-
         vjps: AutogradFieldMap = {}
 
         intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
@@ -2270,8 +2283,6 @@ class PolySlab(base.Planar):
                 if idx == 0:
                     v *= -1
                 vjps[path] = v
-            else:
-                raise ValueError(f"No derivative defined w.r.t. 'PolySlab' field '{path}'.")
 
         return vjps
 
