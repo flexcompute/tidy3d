@@ -138,6 +138,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         values_type: type = IndexedDataArray,
         expect_complex: bool | None = None,
         ignore_invalid_cells: bool = False,
+        warn_unused_points: bool = True,
     ) -> Self:
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -218,7 +219,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
                 points=points, values=values, cells=cells
             )
 
-        return cls(
+        return cls._construct_from_vtk_arrays(
+            warn_unused_points=warn_unused_points,
             normal_axis=normal_axis,
             normal_pos=normal_pos,
             points=points,

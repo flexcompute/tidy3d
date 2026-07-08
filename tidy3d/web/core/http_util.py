@@ -247,19 +247,22 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
     return wrapper
 
 
+def ssl_context_for_config(*, cert_reqs: int | None = None) -> ssl.SSLContext:
+    """Create a urllib3 SSL context using Tidy3D's configured TLS version."""
+
+    try:
+        ssl_version = (
+            ssl.TLSVersion[config.web.ssl_version] if config.web.ssl_version is not None else None
+        )
+    except KeyError:
+        log.warning(f"Invalid SSL/TLS version '{config.web.ssl_version}', using default")
+        ssl_version = None
+    return create_urllib3_context(ssl_version=ssl_version, cert_reqs=cert_reqs)
+
+
 class TLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
-        try:
-            ssl_version = (
-                ssl.TLSVersion[config.web.ssl_version]
-                if config.web.ssl_version is not None
-                else None
-            )
-        except KeyError:
-            log.warning(f"Invalid SSL/TLS version '{config.web.ssl_version}', using default")
-            ssl_version = None
-        context = create_urllib3_context(ssl_version=ssl_version)
-        kwargs["ssl_context"] = context
+        kwargs["ssl_context"] = ssl_context_for_config()
         return super().init_poolmanager(*args, **kwargs)
 
 

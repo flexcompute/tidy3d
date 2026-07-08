@@ -14,6 +14,7 @@ from tidy3d.components.data.data_array import (
 )
 from tidy3d.components.data.point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+from tidy3d.components.types import TYPE_TAG_STR
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -298,7 +299,7 @@ class SyntheticMonitorDataFactory:
         )
 
     def make_eps_data(self, monitor: td.PermittivityMonitor) -> td.PermittivityData:
-        field_mnt = td.FieldMonitor(**monitor.model_dump(exclude={"type", "fields"}))
+        field_mnt = td.FieldMonitor(**monitor.model_dump(exclude={TYPE_TAG_STR, "fields"}))
         field_data = self.make_field_data(field_mnt)
 
         def permittivity_from_field(
@@ -325,7 +326,7 @@ class SyntheticMonitorDataFactory:
         )
 
     def make_medium_data(self, monitor: td.MediumMonitor) -> td.MediumData:
-        field_mnt = td.FieldMonitor(**monitor.model_dump(exclude={"type", "fields"}))
+        field_mnt = td.FieldMonitor(**monitor.model_dump(exclude={TYPE_TAG_STR, "fields"}))
         field_data = self.make_field_data(field_mnt)
         return td.MediumData(
             monitor=monitor,

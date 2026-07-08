@@ -52,18 +52,24 @@ def test_sidewall_constant_g_zero():
     assert np.isclose(val, 0.0)
 
 
-def test_sidewall_reference_plane_invariance():
+def test_sidewall_reference_plane_pins_vertices():
     # g ∝ z to avoid zero
     g_fun = lambda centers: centers[:, 2]
     bounds = ((-1, -1, -1), (1, 1, 1))
     di = _DummyDerivativeInfo(bounds_intersect=bounds, g_fun=g_fun)
-    vals = []
-    for ref in ("bottom", "middle", "top"):
-        poly = _make_rect(axis=2, theta=0.2, ref_plane=ref)
-        vals.append(
-            poly._compute_derivative_sidewall_angle(di, anp.array(bounds[0]), anp.array(bounds[1]))
-        )
-    assert np.allclose(vals[0], vals[1]) and np.allclose(vals[1], vals[2])
+    polys = [_make_rect(axis=2, theta=0.2, ref_plane=ref) for ref in ("bottom", "middle", "top")]
+
+    assert np.allclose(polys[0].base_polygon, polys[0].reference_polygon)
+    assert np.allclose(polys[1].middle_polygon, polys[1].reference_polygon)
+    assert np.allclose(polys[2].top_polygon, polys[2].reference_polygon)
+
+    vals = [
+        poly._compute_derivative_sidewall_angle(di, anp.array(bounds[0]), anp.array(bounds[1]))
+        for poly in polys
+    ]
+    assert np.all(np.isfinite(vals))
+    assert not np.allclose(vals[0], vals[1])
+    assert not np.allclose(vals[1], vals[2])
 
 
 def test_sidewall_orientation_invariance():
@@ -75,7 +81,18 @@ def test_sidewall_orientation_invariance():
         di, anp.array([-1, -1, -1]), anp.array([1, 1, 1])
     )
     verts_rev = poly.vertices[::-1]
-    poly_rev = td.PolySlab(vertices=verts_rev, slab_bounds=(-0.5, 0.5), axis=2, sidewall_angle=0.15)
+    poly_rev = td.PolySlab(
+        vertices=verts_rev,
+        slab_bounds=poly.slab_bounds,
+        axis=poly.axis,
+        sidewall_angle=poly.sidewall_angle,
+        dilation=poly.dilation,
+        reference_plane=poly.reference_plane,
+    )
+    assert np.allclose(poly.reference_polygon, poly_rev.reference_polygon)
+    assert np.allclose(poly.base_polygon, poly_rev.base_polygon)
+    assert np.allclose(poly.top_polygon, poly_rev.top_polygon)
+
     val_rev = poly_rev._compute_derivative_sidewall_angle(
         di, anp.array([-1, -1, -1]), anp.array([1, 1, 1])
     )
@@ -98,8 +115,8 @@ def test_sidewall_negative_angle_parity():
     # magnitude should be similar for ±theta for a symmetric g; sign may differ
     g_fun = lambda centers: anp.ones(len(centers))
     di = _DummyDerivativeInfo(bounds_intersect=((-1, -1, -1), (1, 1, 1)), g_fun=g_fun)
-    poly_pos = _make_rect(axis=2, theta=0.2)
-    poly_neg = _make_rect(axis=2, theta=-0.2)
+    poly_pos = _make_rect(axis=2, theta=0.2, ref_plane="middle")
+    poly_neg = _make_rect(axis=2, theta=-0.2, ref_plane="middle")
     v_pos = poly_pos._compute_derivative_sidewall_angle(
         di, anp.array([-1, -1, -1]), anp.array([1, 1, 1])
     )

@@ -205,7 +205,7 @@ class ModeSolver(Tidy3dBaseModel):
     simulation: MODE_SIMULATION_TYPE = Field(
         title="Simulation",
         description="Simulation or EMESimulation defining all structures and mediums.",
-        discriminator="type",
+        discriminator=TYPE_TAG_STR,
     )
 
     plane: MODE_PLANE_TYPE = Field(
@@ -890,7 +890,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Compute data on the Yee grid
         mode_solver_data = self._data_on_yee_grid()
         if self._has_microwave_mode_spec or self._has_microwave_terminal_mode_spec:
-            data = mode_solver_data.model_dump(exclude={"type", "monitor"})
+            data = mode_solver_data.model_dump(exclude={TYPE_TAG_STR, "monitor"})
             data["monitor"] = mode_solver_data.monitor
             mode_solver_data = MicrowaveModeSolverData(**data)
 

@@ -636,6 +636,36 @@ def test_plot_property_custom_doping_uses_nonzero_slice_position():
     np.testing.assert_allclose(plotted_values, 1.5)
 
 
+def test_plot_property_doping_overlap_sums_like_solver():
+    """Overlapping ConstantDoping boxes render as a SUM, matching the solver.
+
+    The doping plot shares ``aggregate_doping_seam_aware`` with the solver setup, so
+    overlapping (stacked) boxes render as background + implant, not just the larger
+    of the two.
+    """
+    semicon = td.material_library["cSi"].variants["Si_MultiPhysics"].medium.charge
+    background = td.ConstantDoping(center=(0, 0, 0), size=(2, 2, 2), concentration=1e15)
+    implant = td.ConstantDoping(center=(0, 0, 0), size=(1, 1, 2), concentration=1e17)
+    donor_box = td.ConstantDoping(concentration=0)
+    medium = td.MultiPhysicsMedium(
+        optical=td.Medium(permittivity=11.7),
+        charge=semicon.updated_copy(N_a=[background, implant], N_d=[donor_box]),
+        name="Si_MultiPhysics",
+    )
+    scene = td.Scene(
+        medium=td.Medium(permittivity=1.0),
+        structures=[td.Structure(geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)), medium=medium)],
+    )
+
+    _, ax = plt.subplots()
+    scene.plot_structures_property(z=0, property="N_a", ax=ax)
+    plotted_values = np.asarray(ax.collections[-1].get_array())
+
+    # Overlap region stacks (background + implant); background-only region is just 1e15.
+    assert np.isclose(plotted_values.max(), 1e15 + 1e17, rtol=1e-9)
+    assert np.any(np.isclose(plotted_values, 1e15, rtol=1e-9))
+
+
 def test_log_scale_with_custom_limits():
     """Test log scale with custom limits."""
 

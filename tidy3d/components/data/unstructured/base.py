@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numbers
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -27,6 +29,7 @@ from tidy3d.log import log
 from tidy3d.packaging import requires_vtk, vtk
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from os import PathLike
     from typing import Literal
 
@@ -53,6 +56,17 @@ DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 # absolute floor handles degenerate/tiny slices where the relative term underflows.
 PLANAR_ZERO_DIM_TOLERANCE_ABS = 1e-6
 PLANAR_ZERO_DIM_TOLERANCE_REL = 2e-8
+_WARN_UNUSED_POINTS = ContextVar("tidy3d_warn_unused_unstructured_points", default=True)
+
+
+@contextmanager
+def _suppress_unstructured_grid_unused_point_warnings() -> Iterator[None]:
+    """Suppress unused-point warnings while rebuilding trusted internal solver datasets."""
+    token = _WARN_UNUSED_POINTS.set(False)
+    try:
+        yield
+    finally:
+        _WARN_UNUSED_POINTS.reset(token)
 
 
 def planar_zero_dim_tolerance(size_scale: float) -> float:
@@ -271,6 +285,9 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
         Uses efficient NumPy boolean array instead of Python sets for O(n) performance.
         """
+        if not _WARN_UNUSED_POINTS.get():
+            return self
+
         num_points = len(self.points.data)
         cell_indices = self.cells.values.ravel()
 
@@ -582,6 +599,15 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         return grid
 
     @classmethod
+    def _construct_from_vtk_arrays(cls, warn_unused_points: bool = True, **data: Any) -> Self:
+        """Construct a dataset while optionally suppressing trusted internal cleanup hints."""
+        if warn_unused_points:
+            return cls(**data)
+
+        with _suppress_unstructured_grid_unused_point_warnings():
+            return cls(**data)
+
+    @classmethod
     @requires_vtk
     def _from_vtk_obj(
         cls,
@@ -592,6 +618,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         values_type: type = IndexedDataArray,
         expect_complex: bool | None = None,
         ignore_invalid_cells: bool = False,
+        warn_unused_points: bool = True,
     ) -> UnstructuredDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -645,7 +672,12 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
                 points=points, values=values, cells=cells
             )
 
-        return cls(points=points, cells=cells, values=values)
+        return cls._construct_from_vtk_arrays(
+            warn_unused_points=warn_unused_points,
+            points=points,
+            cells=cells,
+            values=values,
+        )
 
     @requires_vtk
     def _from_vtk_obj_internal(

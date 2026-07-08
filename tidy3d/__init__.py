@@ -14,6 +14,7 @@ from tidy3d.components.material.tcad.charge import (
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
+    AnisotropicConductivity,
     FluidMedium,
     FluidSpec,
     SolidMedium,
@@ -583,6 +584,7 @@ __all__ = [
     "AbstractFieldProjectionData",
     "AbstractMedium",
     "AdmittanceNetwork",
+    "AnisotropicConductivity",
     "AnisotropicMedium",
     "AntennaMetricsData",
     "ApodizationSpec",

@@ -191,7 +191,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "apply PML layers in the mode solver.",
     )
 
-    monitors: tuple[ModeSimulationMonitorType, ...] = Field(
+    monitors: tuple[discriminated_union(ModeSimulationMonitorType), ...] = Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "

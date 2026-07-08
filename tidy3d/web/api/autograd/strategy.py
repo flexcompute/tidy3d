@@ -6,14 +6,19 @@ keeping shared VJP orchestration in small helper functions.
 
 from __future__ import annotations
 
+import hashlib
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import tidy3d as td
 from tidy3d.components.autograd.utils import accumulate_field_map
+from tidy3d.components.workflow import Step, Workflow
 from tidy3d.config import config
 from tidy3d.web.api import webapi
+from tidy3d.web.api.container import Job
+from tidy3d.web.api.tidy3d_stub import task_type_name_of
+from tidy3d.web.cache import resolve_local_cache
 
 from . import hooks
 from .backward import postprocess_adj, setup_adj
@@ -21,7 +26,7 @@ from .constants import FLUX_MONITOR_ADJOINT_DOCS
 from .context import AdjointPostprocessInputs, PreparedAdjointBatch
 from .flux_monitor import requires_flux_monitor_helpers, untracked_flux_monitor_vjp_names
 from .forward import postprocess_fwd, setup_fwd
-from .io_utils import get_autograd_flux_forward_data
+from .io_utils import get_autograd_flux_forward_data, get_cached_vjp_traced_fields
 from .parallel_adjoint import (
     _populate_parallel_adjoint_bases,
     _warn_parallel_adjoint_fallback,
@@ -72,11 +77,20 @@ def _handle_no_adjoint_sources(
     return zero_vjp_map(sim_fields_original), [], False
 
 
+def _remote_forward_rerun_path(
+    *, path_dir: str | Path, task_name: str, remote_sim: td.Simulation
+) -> Path:
+    """Return a deterministic, filesystem-safe output path for uncached forward reruns."""
+    task_name_hash = hashlib.md5(str(task_name).encode("utf-8")).hexdigest()
+    return Path(path_dir) / f"autograd_fwd_{remote_sim._hash_self()}_{task_name_hash}.hdf5"
+
+
 def _prepare_adjoints_from_vjp(
     *,
     task_context: AdjointTaskContext,
     data_fields_vjp: AutogradFieldMap,
     warn_if_no_sources: bool = True,
+    refresh_forward_task: Callable[[AdjointTaskContext], str] | None = None,
 ) -> tuple[AutogradFieldMap, list[td.Simulation], bool]:
     sim_fields_original = task_context.sim_fields_original
     sim_data_orig = task_context.sim_data_orig
@@ -122,18 +136,29 @@ def _prepare_adjoints_from_vjp(
                 "Set 'enable_adjoint=True' on those FluxMonitor objects and rerun the "
                 f"forward simulation. See {FLUX_MONITOR_ADJOINT_DOCS}."
             )
-        if task_context.forward_task_id is None:
-            raise td.exceptions.AdjointError(
-                f"Task '{task_name}' differentiates a FluxMonitor, but hidden forward field data "
-                "is not available for client-side adjoint source construction. Set "
-                "'enable_adjoint=True' on the FluxMonitor before rerunning the forward "
-                f"simulation. See {FLUX_MONITOR_ADJOINT_DOCS}."
+        cache_simulation = sim_data_orig.simulation
+        forward_task_id = task_context.context.forward_task_id or task_context.forward_task_id
+        td.log.info("Loading hidden forward data for FluxMonitor adjoint source construction.")
+        try:
+            sim_data_fwd = get_autograd_flux_forward_data(
+                forward_task_id,
+                verbose=False,
+                cache_simulation=cache_simulation,
             )
-        td.log.info("Downloading hidden forward data for FluxMonitor adjoint source construction.")
-        sim_data_fwd = get_autograd_flux_forward_data(
-            task_context.forward_task_id,
-            verbose=False,
-        )
+        except td.exceptions.AdjointError:
+            if task_context.context.forward_task_from_cache and refresh_forward_task is not None:
+                td.log.info(
+                    f"Cached forward task '{forward_task_id}' did not provide hidden FluxMonitor "
+                    "data. Rerunning the forward task before adjoint source construction."
+                )
+                forward_task_id = refresh_forward_task(task_context)
+                sim_data_fwd = get_autograd_flux_forward_data(
+                    forward_task_id,
+                    verbose=False,
+                    cache_simulation=cache_simulation,
+                )
+            else:
+                raise
         task_context.context.simulation_data_forward = sim_data_fwd
 
     setup_adj_kwargs = {
@@ -211,6 +236,7 @@ def _prepare_adjoint_batch(
     data_fields_dict_vjp: dict[str, AutogradFieldMap],
     task_contexts: Mapping[str, AdjointTaskContext],
     warn_if_no_sources: bool,
+    refresh_forward_task: Callable[[AdjointTaskContext], str] | None = None,
 ) -> PreparedAdjointBatch:
     sims_adj: dict[str, td.Simulation] = {}
     task_name_mapping: dict[str, str] = {}
@@ -222,6 +248,7 @@ def _prepare_adjoint_batch(
             task_context=task_context,
             data_fields_vjp=data_fields_dict_vjp[task_name],
             warn_if_no_sources=warn_if_no_sources,
+            refresh_forward_task=refresh_forward_task,
         )
         task_has_adj_sources[task_name] = has_adj_sources
 
@@ -299,6 +326,7 @@ def _make_async_vjp_common(
     ],
     warn_if_no_sources: bool = False,
     warn_if_empty_batch: bool = True,
+    refresh_forward_task: Callable[[AdjointTaskContext], str] | None = None,
 ) -> Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     run_async_kwargs_base = dict(run_async_kwargs)
     run_async_kwargs_base["is_adjoint"] = True
@@ -310,6 +338,7 @@ def _make_async_vjp_common(
             data_fields_dict_vjp=data_fields_dict_vjp,
             task_contexts=task_contexts,
             warn_if_no_sources=warn_if_no_sources,
+            refresh_forward_task=refresh_forward_task,
         )
         return _execute_prepared_adjoint_batch(
             prepared=prepared,
@@ -332,6 +361,7 @@ def _make_single_task_vjp_from_async(
         [dict[str, td.Simulation], dict[str, str], dict[str, Any]],
         dict[str, AutogradFieldMap],
     ],
+    refresh_forward_task: Callable[[AdjointTaskContext], str] | None = None,
 ) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
     task_name = task_context.task_name
     task_contexts = {task_name: task_context}
@@ -354,6 +384,7 @@ def _make_single_task_vjp_from_async(
         run_adjoint_batch=_run_adjoint_batch_with_logs,
         warn_if_no_sources=True,
         warn_if_empty_batch=False,
+        refresh_forward_task=refresh_forward_task,
     )
 
     def vjp(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
@@ -621,13 +652,129 @@ class RemoteClientSourceStrategy(GradientStrategy):
         *,
         task_context: ForwardTaskContext,
         sim_data_orig: td.SimulationData,
-        task_id_fwd: str,
+        task_id_fwd: str | None,
+        task_from_cache: bool = False,
     ) -> AutogradFieldMap:
         task_context.context.forward_task_id = task_id_fwd
+        task_context.context.forward_task_from_cache = task_from_cache
         task_context.context.simulation_data_original = sim_data_orig
         return sim_data_orig._strip_traced_fields(
             include_untraced_data_arrays=True, starting_paths=(("data",),)
         )
+
+    @staticmethod
+    def _repair_remote_forward_result_cache(
+        *,
+        remote_sim: td.Simulation,
+        sim_data_orig: td.SimulationData,
+        task_id_fwd: str,
+        path: str | Path,
+    ) -> None:
+        simulation_cache = resolve_local_cache()
+        if simulation_cache is None:
+            return
+        simulation_cache.store_result(
+            stub_data=sim_data_orig,
+            task_id=task_id_fwd,
+            path=str(path),
+            workflow_type=task_type_name_of(remote_sim),
+            simulation=remote_sim,
+        )
+
+    @classmethod
+    def _run_remote_forward_uncached(
+        cls,
+        *,
+        task_name: str,
+        remote_sim: td.Simulation,
+        sim_fields_keys: list[tuple],
+        run_kwargs: dict[str, Any],
+    ) -> tuple[td.SimulationData, str]:
+        run_kwargs_local = dict(run_kwargs)
+        path = run_kwargs_local.get("path")
+        if path is None:
+            path_dir = run_kwargs_local.get("path_dir")
+            if path_dir is None:
+                path = webapi._resolve_output_path(None, task_type_name_of(remote_sim))
+            else:
+                path = _remote_forward_rerun_path(
+                    path_dir=path_dir,
+                    task_name=task_name,
+                    remote_sim=remote_sim,
+                )
+            run_kwargs_local["path"] = path
+        run_kwargs_local["simulation_type"] = "autograd_fwd"
+        run_kwargs_local["sim_fields_keys"] = sim_fields_keys
+        run_kwargs_local["workflow"] = Workflow(
+            steps=(Step(name="execute", operation=remote_sim, cacheable=False),)
+        )
+        sim_data_orig, task_id_fwd = hooks._run_tidy3d(
+            remote_sim,
+            task_name=task_name,
+            **run_kwargs_local,
+        )
+        cls._repair_remote_forward_result_cache(
+            remote_sim=remote_sim,
+            sim_data_orig=sim_data_orig,
+            task_id_fwd=task_id_fwd,
+            path=path,
+        )
+        return sim_data_orig, task_id_fwd
+
+    @staticmethod
+    def _vjp_cache_miss_task_names(
+        *,
+        remote_sims_adj: dict[str, td.Simulation],
+        task_name_mapping: dict[str, str],
+        verbose: bool,
+    ) -> set[str]:
+        return {
+            task_name_mapping[adj_task_name]
+            for adj_task_name, sim_adj in remote_sims_adj.items()
+            if get_cached_vjp_traced_fields(sim_adj, verbose=verbose) is None
+        }
+
+    @classmethod
+    def _rerun_remote_forward_for_parent(
+        cls,
+        *,
+        task_context: AdjointTaskContext,
+        run_kwargs: dict[str, Any],
+    ) -> str:
+        remote_sim = task_context.sim_data_orig.simulation.updated_copy(
+            simulation_type="autograd_fwd", deep=False
+        )
+        sim_data_orig, task_id_fwd = cls._run_remote_forward_uncached(
+            task_name=task_context.task_name,
+            remote_sim=remote_sim,
+            sim_fields_keys=task_context.sim_fields_keys,
+            run_kwargs=run_kwargs,
+        )
+        task_context.context.forward_task_id = task_id_fwd
+        task_context.context.forward_task_from_cache = False
+        task_context.context.simulation_data_original = sim_data_orig
+        return task_id_fwd
+
+    @classmethod
+    def _live_forward_task_id_for_parent(
+        cls,
+        *,
+        task_context: AdjointTaskContext,
+        run_kwargs: dict[str, Any],
+    ) -> str:
+        forward_task_id = task_context.context.forward_task_id or task_context.forward_task_id
+        if task_context.context.forward_task_from_cache:
+            if forward_task_id is None or not Job._cached_parent_task_is_available(forward_task_id):
+                forward_task_id = cls._rerun_remote_forward_for_parent(
+                    task_context=task_context,
+                    run_kwargs=run_kwargs,
+                )
+        if forward_task_id is None:
+            raise td.exceptions.AdjointError(
+                f"Task '{task_context.task_name}' needs a server-side adjoint parent task, "
+                "but no forward task id is available."
+            )
+        return forward_task_id
 
     def run_forward(
         self,
@@ -643,7 +790,17 @@ class RemoteClientSourceStrategy(GradientStrategy):
             reduce_simulation=run_kwargs.get("reduce_simulation", "auto"),
             verbose=run_kwargs.get("verbose", True),
         )
-        if restored_path is None or task_id_fwd is None:
+        task_from_cache = restored_path is not None
+
+        if task_from_cache:
+            sim_data_orig = webapi.load(
+                task_id=None,
+                path=run_kwargs.get("path", None),
+                verbose=run_kwargs.get("verbose", None),
+                progress_callback=run_kwargs.get("progress_callback", None),
+                lazy=run_kwargs.get("lazy", None),
+            )
+        else:
             run_kwargs_local = dict(run_kwargs)
             run_kwargs_local["simulation_type"] = "autograd_fwd"
             run_kwargs_local["sim_fields_keys"] = task_context.sim_fields_keys
@@ -653,19 +810,12 @@ class RemoteClientSourceStrategy(GradientStrategy):
                 task_name=task_context.task_name,
                 **run_kwargs_local,
             )
-        else:
-            sim_data_orig = webapi.load(
-                task_id=None,
-                path=run_kwargs.get("path", None),
-                verbose=run_kwargs.get("verbose", None),
-                progress_callback=run_kwargs.get("progress_callback", None),
-                lazy=run_kwargs.get("lazy", None),
-            )
 
         return self._store_remote_forward_result(
             task_context=task_context,
             sim_data_orig=sim_data_orig,
             task_id_fwd=task_id_fwd,
+            task_from_cache=task_from_cache,
         )
 
     def run_forward_async(
@@ -689,15 +839,18 @@ class RemoteClientSourceStrategy(GradientStrategy):
             remote_forward_sims,
             **run_async_kwargs_local,
         )
+        cached_tasks = getattr(sim_data_orig_dict, "cached_tasks", None) or {}
 
         field_map_fwd_dict: dict[str, AutogradFieldMap] = {}
         for task_name, task_id_fwd in task_ids_fwd_dict.items():
-            sim_data_orig = sim_data_orig_dict[task_name]
             task_context = batch_context[task_name]
+            sim_data_orig = sim_data_orig_dict[task_name]
+            task_from_cache = bool(cached_tasks.get(task_name))
             field_map_fwd_dict[task_name] = self._store_remote_forward_result(
                 task_context=task_context,
                 sim_data_orig=sim_data_orig,
                 task_id_fwd=task_id_fwd,
+                task_from_cache=task_from_cache,
             )
 
         return field_map_fwd_dict
@@ -708,8 +861,6 @@ class RemoteClientSourceStrategy(GradientStrategy):
         task_context: AdjointTaskContext,
         run_kwargs: dict[str, Any],
     ) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
-        forward_task_id = task_context.forward_task_id
-
         def _run_remote_sync_adjoint_batch(
             sims_adj_dict: dict[str, td.Simulation],
             _task_name_mapping: dict[str, str],
@@ -717,13 +868,24 @@ class RemoteClientSourceStrategy(GradientStrategy):
         ) -> dict[str, AutogradFieldMap]:
             run_kwargs_local = dict(run_kwargs_base)
             run_kwargs_local["simulation_type"] = "autograd_bwd"
-            run_kwargs_local["parent_tasks"] = {
-                adj_task_name: [forward_task_id] for adj_task_name in sims_adj_dict
-            }
             remote_sims_adj = {
                 adj_task_name: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
                 for adj_task_name, sim in sims_adj_dict.items()
             }
+            task_name_mapping = dict.fromkeys(sims_adj_dict, task_context.task_name)
+            vjp_miss_task_names = self._vjp_cache_miss_task_names(
+                remote_sims_adj=remote_sims_adj,
+                task_name_mapping=task_name_mapping,
+                verbose=run_kwargs_base.get("verbose", True),
+            )
+            if task_context.task_name in vjp_miss_task_names:
+                forward_task_id = self._live_forward_task_id_for_parent(
+                    task_context=task_context,
+                    run_kwargs=run_kwargs_base,
+                )
+                run_kwargs_local["parent_tasks"] = {
+                    adj_task_name: [forward_task_id] for adj_task_name in sims_adj_dict
+                }
             vjp_fields_dict = hooks._run_async_tidy3d_bwd(
                 simulations=remote_sims_adj,
                 **run_kwargs_local,
@@ -737,6 +899,10 @@ class RemoteClientSourceStrategy(GradientStrategy):
             gradient_mode_log="Using server-side gradient computation mode",
             start_batch_log="Starting server-side batch of adjoint simulations ...",
             run_adjoint_batch=_run_remote_sync_adjoint_batch,
+            refresh_forward_task=lambda task_context: self._rerun_remote_forward_for_parent(
+                task_context=task_context,
+                run_kwargs=run_kwargs,
+            ),
         )
 
     def make_async_vjp(
@@ -750,14 +916,27 @@ class RemoteClientSourceStrategy(GradientStrategy):
             run_async_kwargs_base: dict[str, Any],
         ) -> dict[str, AutogradFieldMap]:
             run_async_kwargs_local = dict(run_async_kwargs_base)
-            run_async_kwargs_local["parent_tasks"] = {
-                adj_task_name: [batch_context[task_name].forward_task_id]
-                for adj_task_name, task_name in task_name_mapping.items()
-            }
             run_async_kwargs_local["simulation_type"] = "autograd_bwd"
             remote_sims_adj = {
                 adj_task_name: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
                 for adj_task_name, sim in all_sims_adj.items()
+            }
+            vjp_miss_task_names = self._vjp_cache_miss_task_names(
+                remote_sims_adj=remote_sims_adj,
+                task_name_mapping=task_name_mapping,
+                verbose=run_async_kwargs_base.get("verbose", True),
+            )
+            forward_task_ids = {}
+            for task_name in vjp_miss_task_names:
+                task_context = batch_context[task_name]
+                forward_task_ids[task_name] = self._live_forward_task_id_for_parent(
+                    task_context=task_context,
+                    run_kwargs=run_async_kwargs_base,
+                )
+            run_async_kwargs_local["parent_tasks"] = {
+                adj_task_name: [forward_task_ids[task_name]]
+                for adj_task_name, task_name in task_name_mapping.items()
+                if task_name in forward_task_ids
             }
             return hooks._run_async_tidy3d_bwd(
                 simulations=remote_sims_adj,
@@ -768,4 +947,8 @@ class RemoteClientSourceStrategy(GradientStrategy):
             task_contexts=batch_context.tasks,
             run_async_kwargs=batch_context.run_kwargs,
             run_adjoint_batch=_run_remote_async_adjoint_batch,
+            refresh_forward_task=lambda task_context: self._rerun_remote_forward_for_parent(
+                task_context=task_context,
+                run_kwargs=batch_context.run_kwargs,
+            ),
         )

@@ -19,7 +19,7 @@ from tidy3d.components.autograd.types import PathType, TracedFloat
 from tidy3d.components.autograd.utils import hasbox
 from tidy3d.components.base import cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import ArrayFloat1D
+from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, ValidationError
@@ -2583,6 +2583,16 @@ class PolySlab(base.Planar):
         # pre-compute values that are constant across z slices
         n_z = len(z_centers)
         z_centers_arr = np.asarray(z_centers, dtype=_dtype)
+        d_all = -(z_centers_arr - z_ref) * tan_th  # (n_z,)
+        # _shift_vertices() treats positive distances as outward offsets for CCW polygons.
+        # Preserve the caller's vertex order, but flip the offset for CW inputs so the
+        # physical sidewall slices match the outward normals used by the VJP integrand.
+        offset_sign = 1.0 if PolySlab._area(get_static(vertices)) > 0 else -1.0
+        slice_vertices = np.asarray(
+            [self._shift_vertices(vertices, offset_sign * dist)[0] for dist in d_all],
+            dtype=_dtype,
+        )
+        slice_next_vertices = np.roll(slice_vertices, -1, axis=1)
 
         # slanted local basis (constant across z for non-slanted case)
         # for slanted: rz = axis_vec + dprime * n2d, but dprime is constant
@@ -2623,20 +2633,21 @@ class PolySlab(base.Planar):
             if not np.isclose(T2_norm, 0.0):
                 T2_vec = T2_vec / T2_norm
 
-            # batch compute offsets for all z slices at once
-            d_all = -(z_centers_arr - z_ref) * tan_th  # (n_z,)
-            offsets_3d = d_all[:, None] * n2d  # (n_z, 3) - faster than np.outer
+            # batch compute true offset-polygon segment starts and ends for all z slices
+            # rather than translating the reference edge, which over-samples near vertices
+            # when the cross-section shrinks.
+            segment_vertices = slice_vertices[:, ei, :]
+            segment_next_vertices = slice_next_vertices[:, ei, :]
+            segment_edges = segment_next_vertices - segment_vertices
+            segment_lengths = np.linalg.norm(segment_edges, axis=1)
 
-            # batch compute segment starts and ends for all z slices
             segment_starts = np.empty((n_z, 3), dtype=_dtype)
             segment_ends = np.empty((n_z, 3), dtype=_dtype)
             plane_axes = [i for i in range(3) if i != self.axis]
             segment_starts[:, self.axis] = z_centers_arr
-            segment_starts[:, plane_axes] = v0
-            segment_starts += offsets_3d
+            segment_starts[:, plane_axes] = segment_vertices
             segment_ends[:, self.axis] = z_centers_arr
-            segment_ends[:, plane_axes] = v1
-            segment_ends += offsets_3d
+            segment_ends[:, plane_axes] = segment_next_vertices
 
             # batch clip all z slices at once
             is_within_bounds, t_starts, t_ends = self._clip_edges_to_bounds_batch(
@@ -2665,9 +2676,14 @@ class PolySlab(base.Planar):
 
             # process each z slice
             for zi, t0, t1 in zip(valid_indices, t0_valid, t1_valid):
-                if (t0, t1) not in sample_cache:
-                    sample_cache[(t0, t1)] = self._adaptive_edge_samples(
-                        L,
+                L_slice = segment_lengths[zi]
+                if L_slice < 1e-12:
+                    continue
+
+                sample_cache_key = (t0, t1, np.round(L_slice, 10))
+                if sample_cache_key not in sample_cache:
+                    sample_cache[sample_cache_key] = self._adaptive_edge_samples(
+                        L_slice,
                         denom_edge,
                         t0,
                         t1,
@@ -2676,21 +2692,21 @@ class PolySlab(base.Planar):
                         _dtype=_dtype,
                     )
 
-                s_list, w_list = sample_cache[(t0, t1)]
+                s_list, w_list = sample_cache[sample_cache_key]
                 if len(s_list) == 0:
                     continue
 
                 zc = z_centers_arr[zi]
-                offset3d = offsets_3d[zi]
+                segment_v0 = segment_vertices[zi]
+                segment_edge = segment_edges[zi]
 
-                pts2d = v0 + s_list[:, None] * edge_vec  # faster than np.outer
+                pts2d = segment_v0 + s_list[:, None] * segment_edge  # faster than np.outer
 
                 # inline unpop_axis_vect for xyz computation
                 n_pts = len(s_list)
                 xyz = np.empty((n_pts, 3), dtype=_dtype)
                 xyz[:, self.axis] = zc
                 xyz[:, plane_axes] = pts2d
-                xyz += offset3d
 
                 n_patches = n_pts
                 new_size_needed = patch_idx + n_patches
@@ -2712,7 +2728,7 @@ class PolySlab(base.Planar):
                 normals[sl] = N_vec
                 perps1[sl] = T1_vec
                 perps2[sl] = T2_vec
-                Ls[sl] = L
+                Ls[sl] = L_slice
                 s_vals[sl] = s_list
                 s_weights[sl] = w_list
                 zc_vals[sl] = zc
@@ -2770,7 +2786,12 @@ class PolySlab(base.Planar):
         if is_2d:
             return 0.0
 
-        vertices, next_v, edges, basis = self._edge_geometry_arrays()
+        # The scalar sidewall-angle VJP should not depend on the user's input winding.
+        # Use the canonical reference polygon; vertex VJPs keep the raw ordering.
+        vertices, next_v, edges, basis = self._edge_geometry_arrays(
+            vertices=self.reference_polygon,
+            is_ccw=True,
+        )
 
         dx = derivative_info.adaptive_vjp_spacing()
 
@@ -3098,18 +3119,24 @@ class PolySlab(base.Planar):
         return vjp_per_vertex
 
     def _edge_geometry_arrays(
-        self, dtype: np.dtype = config.adjoint.gradient_dtype_float
+        self,
+        dtype: np.dtype = config.adjoint.gradient_dtype_float,
+        vertices: NDArray | None = None,
+        is_ccw: bool | None = None,
     ) -> tuple[NDArray, NDArray, NDArray, dict[str, NDArray]]:
         """Return (vertices, next_v, edges, basis) arrays for sidewall edge geometry."""
-        vertices = np.asarray(self.vertices, dtype=dtype)
+        if vertices is None:
+            vertices = self.vertices
+        vertices = np.asarray(vertices, dtype=dtype)
         next_v = np.roll(vertices, -1, axis=0)
         edges = next_v - vertices
-        basis = self.edge_basis_vectors(edges)
+        basis = self.edge_basis_vectors(edges, is_ccw=is_ccw)
         return vertices, next_v, edges, basis
 
     def edge_basis_vectors(
         self,
         edges: NDArray,  # (N, 2)
+        is_ccw: bool | None = None,
     ) -> dict[str, NDArray]:  # (N, 3)
         """Normalized basis vectors for ``normal`` direction, ``slab`` tangent direction and ``edge``."""
 
@@ -3138,7 +3165,9 @@ class PolySlab(base.Planar):
 
         # normalized vectors pointing in normal direction of edge
         # cross yields inward normal when the extrusion axis is y, so negate once for axis==1
-        sign = (-1 if self.axis == 1 else 1) * (-1 if not self.is_ccw else 1)
+        if is_ccw is None:
+            is_ccw = self.is_ccw
+        sign = (-1 if self.axis == 1 else 1) * (-1 if not is_ccw else 1)
         normals_norm_xyz = sign * np.cross(edges_norm_xyz, slabs_norm_xyz)
 
         return {
@@ -3386,7 +3415,7 @@ class ComplexPolySlabBase(PolySlab):
         sub_polyslab_list = []
         num_division_count = 0
         # initialize sub-polyslab parameters
-        sub_polyslab_dict = self.model_dump(exclude={"type"}).copy()
+        sub_polyslab_dict = self.model_dump(exclude={TYPE_TAG_STR}).copy()
         if math.isclose(self.sidewall_angle, 0):
             return [PolySlab.model_validate(sub_polyslab_dict)]
 

@@ -26,7 +26,7 @@ from tidy3d.components.simulation import (
     Simulation,
     validate_boundaries_for_zero_dims,
 )
-from tidy3d.components.types import Axis, FreqArray
+from tidy3d.components.types import TYPE_TAG_STR, Axis, FreqArray
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.validators import (
     MIN_FREQUENCY,
@@ -324,6 +324,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     eme_grid_spec: EMEGridSpecType = Field(
+        discriminator=TYPE_TAG_STR,
         title="EME Grid Specification",
         description="Specification for the EME propagation grid. "
         "The simulation is divided into cells in the propagation direction; "
@@ -420,6 +421,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     sweep_spec: EMESweepSpecType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="EME Sweep Specification",
         description="Specification for a parameter sweep to be performed during the EME "
         "propagation step. The results are stored "
@@ -2346,12 +2348,49 @@ class EMESimulation(AbstractYeeGridSimulation):
                 f"Expected ModeSimulationData or ModeSolverData, got {type(mode_data).__name__}."
             )
 
-        sim_freqs = np.array(self.freqs)
-        mode_freqs = modes.n_complex.f.values
-        if not np.allclose(mode_freqs, sim_freqs, rtol=1e-10):
+        # Accept a reduced interpolation basis (interp_spec with reduce_data=True) stored on the
+        # cell's sampling grid, and keep it reduced: the overlap kernels interpolate the overlaps
+        # onto modes.monitor.freqs with the basis's interp_spec method (the backend's path). Accept
+        # only when that monitor metadata matches this cell, else it stages onto the wrong grid.
+        sim_freqs = np.asarray(self.freqs, dtype=float)
+        mode_freqs = np.asarray(modes.n_complex.f.values, dtype=float)
+        target_freqs = np.asarray(modes.monitor.freqs, dtype=float)
+        cell_mode_spec = self._internal_mode_spec(cell_index)
+        sampling_freqs = np.asarray(
+            cell_mode_spec._sampling_freqs_mode_solver_data(freqs=list(sim_freqs)), dtype=float
+        )
+
+        def _freqs_match(actual: np.ndarray, expected: np.ndarray) -> bool:
+            return actual.shape == expected.shape and bool(
+                np.allclose(actual, expected, rtol=1e-10)
+            )
+
+        data_interp_spec = getattr(modes.monitor.mode_spec, "interp_spec", None)
+        cell_interp_spec = cell_mode_spec.interp_spec
+        stored_full = _freqs_match(mode_freqs, sim_freqs)
+        stored_reduced = (
+            _freqs_match(mode_freqs, sampling_freqs)
+            and _freqs_match(target_freqs, sim_freqs)
+            and data_interp_spec is not None
+            and cell_interp_spec is not None
+            and data_interp_spec.method == cell_interp_spec.method
+        )
+        if not (stored_full or stored_reduced):
+            cell_method = cell_interp_spec.method if cell_interp_spec is not None else None
+            accepted = f"the full simulation frequencies {sim_freqs}"
+            if not _freqs_match(sampling_freqs, sim_freqs):
+                accepted += (
+                    f", or this cell's reduced interpolation sampling grid {sampling_freqs} "
+                    f"targeting {sim_freqs}"
+                    + (f" with interpolation method '{cell_method}'" if cell_method else "")
+                )
+            data_method = getattr(data_interp_spec, "method", None)
             raise ValidationError(
-                f"Mode data for cell {cell_index} has frequencies {mode_freqs} "
-                f"that do not match simulation frequencies {sim_freqs}."
+                f"Mode data for cell {cell_index} does not match this cell's interpolation basis "
+                f"('interp_spec'): it must be stored on {accepted}, but was stored at {mode_freqs} "
+                f"targeting {target_freqs}"
+                + (f" with interpolation method '{data_method}'" if data_method else "")
+                + ". Use mode data produced by 'EMESimulation.mode_simulations' for this simulation."
             )
 
         # Verify the supplied mode data is for this cell's mode plane. Without this

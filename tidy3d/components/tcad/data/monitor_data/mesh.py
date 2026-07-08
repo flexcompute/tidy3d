@@ -7,6 +7,7 @@ from pydantic import Field
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
+from tidy3d.components.types import TYPE_TAG_STR
 
 UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
@@ -47,6 +48,7 @@ class VolumeMeshData(HeatChargeMonitorData):
     )
 
     mesh: UnstructuredFieldType = Field(
+        discriminator=TYPE_TAG_STR,
         title="Mesh",
         description="Dataset storing the mesh.",
     )

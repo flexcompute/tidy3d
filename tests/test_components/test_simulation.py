@@ -41,6 +41,38 @@ def fixture_fdtd_base_sim():
     return td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.uniform(dl=0.1), run_time=1e-12)
 
 
+def test_simulation_validation_uses_custom_medium_eps_model_fast_path(monkeypatch):
+    """Simulation validation should avoid full CustomMedium complex evaluation."""
+
+    eps_values = np.full((2, 2, 2), 2.0)
+    coords = {
+        "x": np.arange(eps_values.shape[0], dtype=float),
+        "y": np.arange(eps_values.shape[1], dtype=float),
+        "z": np.arange(eps_values.shape[2], dtype=float),
+    }
+    medium = td.CustomMedium(permittivity=td.SpatialDataArray(eps_values, coords=coords))
+    structure = td.Structure(geometry=td.Box(size=(0.5, 0.5, 0.5)), medium=medium)
+
+    def fail_medium(_):
+        raise AssertionError("Simulation validation should not construct CustomMedium._medium.")
+
+    monkeypatch.setattr(td.CustomMedium, "_medium", property(fail_medium))
+
+    td.Simulation(
+        size=(1.0, 1.0, 1.0),
+        grid_spec=td.GridSpec.uniform(dl=0.2),
+        structures=[structure],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=td.C_0, fwidth=td.C_0 * 0.1),
+                polarization="Ex",
+            )
+        ],
+        run_time=1e-15,
+    )
+
+
 def test_sim_init():
     """make sure a simulation can be initialized"""
 

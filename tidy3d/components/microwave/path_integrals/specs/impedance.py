@@ -15,6 +15,7 @@ from tidy3d.components.microwave.path_integrals.types import (
     CurrentPathSpecType,
     VoltagePathSpecType,
 )
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
@@ -82,12 +83,14 @@ class CustomImpedanceSpec(AbstractImpedanceSpec):
 
     voltage_spec: VoltagePathSpecType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Voltage Integration Path",
         description="Path specification for computing the voltage associated with a mode profile.",
     )
 
     current_spec: CurrentPathSpecType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Current Integration Path",
         description="Path specification for computing the current associated with a mode profile.",
     )

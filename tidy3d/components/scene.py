@@ -33,7 +33,11 @@ from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
 )
-from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
+from tidy3d.components.material.tcad.heat import (
+    AnisotropicConductivity,
+    SolidMedium,
+    SolidSpec,
+)
 from tidy3d.components.material.types import MultiPhysicsMediumType3D
 from tidy3d.components.tcad.doping import (
     ConstantDoping,
@@ -41,6 +45,7 @@ from tidy3d.components.tcad.doping import (
     DopingBoxType,
     GaussianDoping,
 )
+from tidy3d.components.tcad.doping_utils import aggregate_doping_seam_aware
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
 from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from tidy3d.exceptions import SetupError, Tidy3dError
@@ -102,6 +107,13 @@ MAX_STRUCTURES_PER_MEDIUM = 1_000
 
 def _get_colormap(reverse: bool = False) -> str:
     return STRUCTURE_EPS_CMAP_R if reverse else STRUCTURE_EPS_CMAP
+
+
+def _heat_conductivity_scalar(conductivity: float | AnisotropicConductivity) -> float:
+    """Scalar for grayscale plotting: mean of principals for a tensor, pass-through for a scalar."""
+    if isinstance(conductivity, AnisotropicConductivity):
+        return (conductivity.xx + conductivity.yy + conductivity.zz) / 3
+    return conductivity
 
 
 class Scene(Tidy3dBaseModel):
@@ -1715,7 +1727,9 @@ class Scene(Tidy3dBaseModel):
             medium_list = [
                 medium for medium in medium_list if isinstance(medium.heat_spec, SolidType)
             ]
-            cond_list = [medium.heat_spec.conductivity for medium in medium_list]
+            cond_list = [
+                _heat_conductivity_scalar(medium.heat_spec.conductivity) for medium in medium_list
+            ]
         elif property == "electric_conductivity":
             cond_mediums = [
                 medium for medium in medium_list if isinstance(medium.charge, ChargeConductorMedium)
@@ -1752,7 +1766,7 @@ class Scene(Tidy3dBaseModel):
         cond_medium = None
         SolidType = (SolidSpec, SolidMedium)
         if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidType):
-            cond_medium = medium.heat_spec.conductivity
+            cond_medium = _heat_conductivity_scalar(medium.heat_spec.conductivity)
         elif property == "electric_conductivity" and isinstance(
             medium.charge, ChargeConductorMedium
         ):
@@ -2072,14 +2086,17 @@ class Scene(Tidy3dBaseModel):
                 struct_doping[n] = struct_doping[n] + contrib
             # Handle doping boxes
             if isinstance(doping, tuple):
-                for doping_box in doping:
-                    if isinstance(doping_box, DopingBoxType.__args__):
-                        coords_dict = {
-                            "xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)
-                        }
-                        coords_dict["xyz"[normal_axis_ind]] = [normal_position]
-                        contrib = doping_box._get_contrib(coords_dict)
-                        struct_doping[n] = struct_doping[n] + contrib
+                boxes = [b for b in doping if isinstance(b, DopingBoxType.__args__)]
+                if boxes:
+                    # Use the same seam-aware aggregation as the solver so the
+                    # rendered field matches the solved one (interiors SUM, abutting
+                    # seams dedupe via last-in-list-wins, 1-ULP misses recovered).
+                    flat = [None, None, None]
+                    flat[plane_axes_inds[0]] = X.ravel()
+                    flat[plane_axes_inds[1]] = Y.ravel()
+                    flat[normal_axis_ind] = np.full(X.size, normal_position)
+                    contrib = aggregate_doping_seam_aware(boxes, *flat)
+                    struct_doping[n] = struct_doping[n] + contrib.reshape(X.shape)
 
         if plt_type == "doping":
             struct_doping_to_plot = struct_doping[0] - struct_doping[1]

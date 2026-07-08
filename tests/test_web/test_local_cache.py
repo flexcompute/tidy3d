@@ -25,15 +25,24 @@ from tests.test_web.test_webapi_mode import make_mode_sim
 from tests.utils import run_emulated
 from tidy3d import config
 from tidy3d.components.autograd.field_map import FieldMap
+from tidy3d.components.workflow import Step, Workflow
 from tidy3d.config import get_manager
-from tidy3d.exceptions import DataError
 from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import task_api
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.autograd import autograd, engine, io_utils
+from tidy3d.web.api.autograd import strategy as autograd_strategy
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
+from tidy3d.web.api.autograd.context import (
+    AdjointTaskBatch,
+    AdjointTaskContext,
+    AutogradContext,
+    ForwardTaskBatch,
+    PreparedAdjointBatch,
+)
 from tidy3d.web.api.container import Batch, BatchData, WebContainer
+from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import (
     CACHE_ARTIFACT_NAME,
@@ -421,6 +430,18 @@ def _reset_counters(counters: dict[str, int]) -> None:
         counters[key] = 0
 
 
+def _patch_forward_result_cache_store(monkeypatch):
+    store_calls = []
+
+    class _FakeCache:
+        def store_result(self, **kwargs):
+            store_calls.append(kwargs)
+            return True
+
+    monkeypatch.setattr(autograd_strategy, "resolve_local_cache", lambda: _FakeCache())
+    return store_calls
+
+
 def test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
     counters = _patch_run_pipeline(monkeypatch)
     out_path = tmp_path / "result.hdf5"
@@ -777,7 +798,24 @@ def test_job_load_uses_default_path_on_cache_hit(monkeypatch, basic_simulation, 
     assert default_path.exists()
 
 
-def test_cached_job_task_id_without_server_id_raises(monkeypatch, basic_simulation, tmp_path):
+def test_async_engine_ignores_single_job_workflow_kwarg(monkeypatch, basic_simulation, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch)
+    workflow = Workflow(steps=(Step(name="execute", operation=basic_simulation, cacheable=False),))
+
+    _batch_data, task_ids = engine._run_async_tidy3d(
+        {"task": basic_simulation},
+        workflow=workflow,
+        verbose=False,
+        path_dir=tmp_path,
+    )
+
+    assert set(task_ids) == {"task"}
+    assert counters == {"upload": 1, "start": 1, "monitor": 0, "download": 1}
+
+
+def test_async_engine_uses_batchdata_task_ids_without_server_id(
+    monkeypatch, basic_simulation, tmp_path
+):
     def _fake_restore_simulation_if_cached(simulation, path, **kwargs):
         Path(path).write_text("cached")
         return path, None
@@ -786,22 +824,14 @@ def test_cached_job_task_id_without_server_id_raises(monkeypatch, basic_simulati
         task_api, "restore_simulation_if_cached", _fake_restore_simulation_if_cached
     )
 
-    cached_job = Job(simulation=basic_simulation, task_name="cached-no-server-id", verbose=False)
-
-    assert cached_job.load_if_cached is True
-    with pytest.raises(DataError, match="no server task id"):
-        _ = cached_job.task_id
-    monkeypatch.setattr(
-        task_api,
-        "real_cost",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("real_cost should not be called without a server task id")
-        ),
+    batch_data, task_ids = engine._run_async_tidy3d(
+        {"cached": basic_simulation},
+        verbose=False,
+        path_dir=tmp_path,
     )
-    assert cached_job.real_cost(verbose=False) is None
-    batch = Batch(simulations={"cached": basic_simulation}, verbose=False)
-    batch._cached_properties = {"jobs": {"cached": cached_job}}
-    assert batch.real_cost(verbose=False) is None
+
+    assert task_ids == {"cached": None}
+    assert batch_data.cached_tasks == {"cached": True}
 
 
 def test_autograd_cache(monkeypatch, request, tmp_path):
@@ -873,6 +903,65 @@ def test_public_vjp_helper_does_not_cache(monkeypatch):
     assert len(cache) == 0
 
 
+def test_flux_forward_data_uses_dedicated_cache(monkeypatch, basic_simulation):
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    calls = {"download": 0, "loads": []}
+
+    def _fake_download_file(task_id, remote_filename, to_file=None, **kwargs):
+        calls["download"] += 1
+        Path(to_file).write_text(f"helper:{task_id}")
+
+    def _fake_from_file(path):
+        calls["loads"].append(Path(path).read_text())
+        return _FakeStubData(basic_simulation)
+
+    monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
+    monkeypatch.setattr(td.SimulationData, "from_file", staticmethod(_fake_from_file))
+
+    io_utils.get_autograd_flux_forward_data(
+        "live-forward-task",
+        verbose=False,
+        cache_simulation=basic_simulation,
+    )
+
+    assert calls == {"download": 1, "loads": ["helper:live-forward-task"]}
+    assert len(cache) == 1
+
+    def _unexpected_download_file(*args, **kwargs):
+        raise AssertionError("cached FluxMonitor helper data should avoid remote download")
+
+    monkeypatch.setattr(io_utils, "download_file", _unexpected_download_file)
+    io_utils.get_autograd_flux_forward_data(
+        "live-forward-task",
+        verbose=False,
+        cache_simulation=basic_simulation,
+    )
+
+    assert calls == {
+        "download": 1,
+        "loads": ["helper:live-forward-task", "helper:live-forward-task"],
+    }
+    assert len(cache) == 1
+
+    monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
+    io_utils.get_autograd_flux_forward_data(
+        "new-forward-task",
+        verbose=False,
+        cache_simulation=basic_simulation,
+    )
+
+    assert calls == {
+        "download": 2,
+        "loads": [
+            "helper:live-forward-task",
+            "helper:live-forward-task",
+            "helper:new-forward-task",
+        ],
+    }
+    assert len(cache) == 2
+
+
 def test_async_bwd_partial_vjp_cache_hit(monkeypatch, tmp_path, basic_simulation):
     counters = _patch_run_pipeline(monkeypatch)
     cache = resolve_local_cache(use_cache=True)
@@ -902,6 +991,453 @@ def test_async_bwd_partial_vjp_cache_hit(monkeypatch, tmp_path, basic_simulation
     assert set(results) == {"cached", "miss"}
     assert counters == {"upload": 1, "start": 1, "monitor": 0, "download": 1}
     assert len(cache) == 2
+
+
+def test_async_bwd_vjp_miss_ignores_generic_cache(monkeypatch, tmp_path, basic_simulation):
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    adjoint_sim = basic_simulation.updated_copy(
+        shutoff=1e-3, simulation_type="autograd_bwd", deep=False
+    )
+    generic_cached_result = tmp_path / "generic_simulation_data.hdf5"
+    generic_cached_result.write_text("generic-result")
+    cache.store_result_with_hash(
+        task_id="deleted-adjoint-task",
+        path=str(generic_cached_result),
+        workflow_type=Tidy3dStub(simulation=adjoint_sim).get_type(),
+        simulation_hash=adjoint_sim._hash_self(),
+    )
+    assert len(cache) == 1
+
+    _reset_counters(counters)
+    results = engine._run_async_tidy3d_bwd(
+        {"miss": adjoint_sim},
+        verbose=False,
+        path_dir=tmp_path,
+    )
+
+    assert set(results) == {"miss"}
+    assert counters == {"upload": 1, "start": 1, "monitor": 0, "download": 1}
+    assert len(cache) == 2
+
+
+def test_remote_forward_async_accepts_mapping_hook_result(monkeypatch, tmp_path, basic_simulation):
+    def _fake_run_async_tidy3d(simulations, **run_kwargs):
+        return {"forward-task": _FakeStubData(basic_simulation)}, {"forward-task": "live-task-id"}
+
+    monkeypatch.setattr(autograd_strategy.hooks, "_run_async_tidy3d", _fake_run_async_tidy3d)
+    context = AutogradContext()
+    batch_context = ForwardTaskBatch.from_inputs(
+        sim_fields_dict={"forward-task": {}},
+        sims_original={"forward-task": basic_simulation},
+        contexts={"forward-task": context},
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+    )
+    strategy = autograd_strategy.RemoteClientSourceStrategy()
+
+    field_maps = strategy.run_forward_async(batch_context=batch_context)
+
+    assert set(field_maps) == {"forward-task"}
+    assert context.forward_task_id == "live-task-id"
+    assert context.forward_task_from_cache is False
+
+
+def test_remote_forward_async_cache_without_task_id_reruns_when_backward_needs_parent(
+    monkeypatch, tmp_path, basic_simulation
+):
+    counters = _patch_run_pipeline(monkeypatch)
+    store_calls = _patch_forward_result_cache_store(monkeypatch)
+
+    class _CachedBatchData(dict):
+        cached_tasks = {"forward-task": True}
+
+    def _fake_run_async_tidy3d(simulations, **run_kwargs):
+        return _CachedBatchData({"forward-task": _FakeStubData(basic_simulation)}), {
+            "forward-task": None
+        }
+
+    monkeypatch.setattr(autograd_strategy.hooks, "_run_async_tidy3d", _fake_run_async_tidy3d)
+
+    context = AutogradContext()
+    forward_batch_context = ForwardTaskBatch.from_inputs(
+        sim_fields_dict={"forward-task": {}},
+        sims_original={"forward-task": basic_simulation},
+        contexts={"forward-task": context},
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+    )
+    strategy = autograd_strategy.RemoteClientSourceStrategy()
+
+    field_maps = strategy.run_forward_async(batch_context=forward_batch_context)
+
+    assert set(field_maps) == {"forward-task"}
+    assert context.forward_task_id is None
+    assert context.forward_task_from_cache is True
+    assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+
+    adjoint_batch_context = AdjointTaskBatch.from_inputs(
+        sim_fields_original_dict={"forward-task": {}},
+        contexts={"forward-task": context},
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+        local_gradient=False,
+    )
+    adjoint_sim = basic_simulation.updated_copy(simulation_type="autograd_bwd", deep=False)
+
+    def _fake_prepare_adjoint_batch(**kwargs):
+        return PreparedAdjointBatch(
+            sims_adj={"forward-task_adjoint": adjoint_sim},
+            task_name_mapping={"forward-task_adjoint": "forward-task"},
+            sim_fields_vjp_dict={"forward-task": {}},
+            task_has_adj_sources={"forward-task": True},
+        )
+
+    parent_tasks = {}
+
+    def _fake_run_async_tidy3d_bwd(simulations, **run_kwargs):
+        parent_tasks.update(run_kwargs["parent_tasks"])
+        return {"forward-task_adjoint": {}}
+
+    monkeypatch.setattr(autograd_strategy, "_prepare_adjoint_batch", _fake_prepare_adjoint_batch)
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_cached_vjp_traced_fields",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        autograd_strategy.hooks,
+        "_run_async_tidy3d_bwd",
+        _fake_run_async_tidy3d_bwd,
+    )
+
+    vjp = strategy.make_async_vjp(batch_context=adjoint_batch_context)
+    assert vjp({"forward-task": {}}) == {"forward-task": {}}
+
+    assert context.forward_task_id is not None
+    assert context.forward_task_from_cache is False
+    assert parent_tasks == {"forward-task_adjoint": [context.forward_task_id]}
+    assert counters == {"upload": 1, "start": 1, "monitor": 1, "download": 1}
+    assert len(store_calls) == 1
+    assert store_calls[0]["task_id"] == context.forward_task_id
+    assert store_calls[0]["workflow_type"] == TaskType.FDTD.name
+    assert store_calls[0]["simulation"].simulation_type == "autograd_fwd"
+
+
+def test_remote_forward_uncached_uses_safe_path_dir_filename(
+    monkeypatch, tmp_path, basic_simulation
+):
+    captured_paths = []
+
+    def _fake_run_tidy3d(simulation, task_name, **run_kwargs):
+        captured_paths.append(Path(run_kwargs["path"]))
+        return _FakeStubData(simulation), "live-forward-task"
+
+    monkeypatch.setattr(autograd_strategy.hooks, "_run_tidy3d", _fake_run_tidy3d)
+
+    autograd_strategy.RemoteClientSourceStrategy._run_remote_forward_uncached(
+        task_name="../unsafe/task",
+        remote_sim=basic_simulation,
+        sim_fields_keys=[],
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+    )
+
+    assert len(captured_paths) == 1
+    path = captured_paths[0]
+    assert path.parent == tmp_path
+    assert path == tmp_path / path.name
+    assert path.name.startswith("autograd_fwd_")
+    assert path.suffix == ".hdf5"
+
+
+def _patch_cached_parent_task_status(monkeypatch, unavailable_task_id):
+    def _fake_get_info(task_id, verbose=True):
+        if task_id == unavailable_task_id:
+            raise ValueError("Task not found.")
+        return SimpleNamespace(
+            solverVersion="solver-1",
+            taskType="FDTD",
+            status="success",
+        )
+
+    monkeypatch.setattr(task_api, "get_info", _fake_get_info)
+
+
+@pytest.mark.parametrize("parent_available", [True, False])
+def test_remote_vjp_miss_refreshes_cached_forward_parent_if_unavailable(
+    monkeypatch, tmp_path, basic_simulation, parent_available
+):
+    counters = _patch_run_pipeline(monkeypatch)
+    store_calls = _patch_forward_result_cache_store(monkeypatch)
+    cached_forward_task_id = "cached-forward-task"
+    if not parent_available:
+        _patch_cached_parent_task_status(monkeypatch, unavailable_task_id=cached_forward_task_id)
+    context = AutogradContext(
+        simulation_data_original=_FakeStubData(basic_simulation),
+        forward_task_id=cached_forward_task_id,
+        forward_task_from_cache=True,
+    )
+    task_context = AdjointTaskContext.from_inputs(
+        task_name="forward-task",
+        sim_fields_original={},
+        context=context,
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        local_gradient=False,
+    )
+    adjoint_sim = basic_simulation.updated_copy(simulation_type="autograd_bwd", deep=False)
+
+    def _fake_prepare_adjoint_batch(**kwargs):
+        return PreparedAdjointBatch(
+            sims_adj={"forward-task_adjoint": adjoint_sim},
+            task_name_mapping={"forward-task_adjoint": "forward-task"},
+            sim_fields_vjp_dict={"forward-task": {}},
+            task_has_adj_sources={"forward-task": True},
+        )
+
+    parent_tasks = {}
+
+    def _fake_run_async_tidy3d_bwd(simulations, **run_kwargs):
+        parent_tasks.update(run_kwargs["parent_tasks"])
+        return {"forward-task_adjoint": {}}
+
+    monkeypatch.setattr(autograd_strategy, "_prepare_adjoint_batch", _fake_prepare_adjoint_batch)
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_cached_vjp_traced_fields",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        autograd_strategy.hooks,
+        "_run_async_tidy3d_bwd",
+        _fake_run_async_tidy3d_bwd,
+    )
+    strategy = autograd_strategy.RemoteClientSourceStrategy()
+
+    vjp = strategy.make_vjp(
+        task_context=task_context,
+        run_kwargs={"path": tmp_path / "forward.hdf5", "verbose": False},
+    )
+    assert vjp({}) == {}
+
+    if parent_available:
+        assert context.forward_task_id == cached_forward_task_id
+        assert context.forward_task_from_cache is True
+        assert parent_tasks == {"forward-task_adjoint": [cached_forward_task_id]}
+        assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+        assert store_calls == []
+    else:
+        assert context.forward_task_id != cached_forward_task_id
+        assert context.forward_task_from_cache is False
+        assert parent_tasks == {"forward-task_adjoint": [context.forward_task_id]}
+        assert counters == {"upload": 1, "start": 1, "monitor": 1, "download": 1}
+        assert len(store_calls) == 1
+        assert store_calls[0]["task_id"] == context.forward_task_id
+        assert store_calls[0]["workflow_type"] == TaskType.FDTD.name
+        assert store_calls[0]["simulation"].simulation_type == "autograd_fwd"
+
+
+def test_flux_helper_miss_reruns_cached_forward_parent(monkeypatch, tmp_path, basic_simulation):
+    counters = _patch_run_pipeline(monkeypatch)
+    context = AutogradContext(
+        simulation_data_original=_FakeStubData(basic_simulation),
+        forward_task_id="deleted-forward-task",
+        forward_task_from_cache=True,
+    )
+    batch_context = AdjointTaskBatch.from_inputs(
+        sim_fields_original_dict={"forward-task": {}},
+        contexts={"forward-task": context},
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+        local_gradient=False,
+    )
+    adjoint_sim = basic_simulation.updated_copy(simulation_type="autograd_bwd", deep=False)
+    flux_download_task_ids = []
+
+    def _fake_get_autograd_flux_forward_data(task_id_fwd, verbose, cache_simulation=None):
+        flux_download_task_ids.append(task_id_fwd)
+        if task_id_fwd == "deleted-forward-task":
+            raise td.exceptions.AdjointError("forward task not found")
+        return _FakeStubData(basic_simulation)
+
+    parent_tasks = {}
+
+    def _fake_run_async_tidy3d_bwd(simulations, **run_kwargs):
+        parent_tasks.update(run_kwargs["parent_tasks"])
+        return {"forward-task_adjoint_0": {}}
+
+    monkeypatch.setattr(autograd_strategy, "requires_flux_monitor_helpers", lambda *_, **__: True)
+    monkeypatch.setattr(autograd_strategy, "untracked_flux_monitor_vjp_names", lambda *_, **__: [])
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_autograd_flux_forward_data",
+        _fake_get_autograd_flux_forward_data,
+    )
+    monkeypatch.setattr(autograd_strategy, "setup_adj", lambda *_, **__: [adjoint_sim])
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_cached_vjp_traced_fields",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        autograd_strategy.hooks,
+        "_run_async_tidy3d_bwd",
+        _fake_run_async_tidy3d_bwd,
+    )
+    strategy = autograd_strategy.RemoteClientSourceStrategy()
+
+    vjp = strategy.make_async_vjp(batch_context=batch_context)
+    assert vjp({"forward-task": {("data", 0, "flux"): 1.0}}) == {"forward-task": {}}
+
+    assert flux_download_task_ids == ["deleted-forward-task", context.forward_task_id]
+    assert context.forward_task_from_cache is False
+    assert parent_tasks == {"forward-task_adjoint_0": [context.forward_task_id]}
+    assert counters == {"upload": 1, "start": 1, "monitor": 1, "download": 1}
+
+
+def test_flux_helper_hit_vjp_miss_reuses_available_cached_forward_parent(
+    monkeypatch, tmp_path, basic_simulation
+):
+    counters = _patch_run_pipeline(monkeypatch)
+    cached_forward_task_id = "cached-forward-task"
+    context = AutogradContext(
+        simulation_data_original=_FakeStubData(basic_simulation),
+        forward_task_id=cached_forward_task_id,
+        forward_task_from_cache=True,
+    )
+    batch_context = AdjointTaskBatch.from_inputs(
+        sim_fields_original_dict={"forward-task": {}},
+        contexts={"forward-task": context},
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+        local_gradient=False,
+    )
+    adjoint_sim = basic_simulation.updated_copy(simulation_type="autograd_bwd", deep=False)
+    flux_helper_task_ids = []
+
+    def _fake_get_autograd_flux_forward_data(task_id_fwd, verbose, cache_simulation=None):
+        flux_helper_task_ids.append(task_id_fwd)
+        return _FakeStubData(basic_simulation)
+
+    parent_tasks = {}
+
+    def _fake_run_async_tidy3d_bwd(simulations, **run_kwargs):
+        parent_tasks.update(run_kwargs["parent_tasks"])
+        return {"forward-task_adjoint_0": {}}
+
+    monkeypatch.setattr(autograd_strategy, "requires_flux_monitor_helpers", lambda *_, **__: True)
+    monkeypatch.setattr(autograd_strategy, "untracked_flux_monitor_vjp_names", lambda *_, **__: [])
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_autograd_flux_forward_data",
+        _fake_get_autograd_flux_forward_data,
+    )
+    monkeypatch.setattr(autograd_strategy, "setup_adj", lambda *_, **__: [adjoint_sim])
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_cached_vjp_traced_fields",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        autograd_strategy.hooks,
+        "_run_async_tidy3d_bwd",
+        _fake_run_async_tidy3d_bwd,
+    )
+    strategy = autograd_strategy.RemoteClientSourceStrategy()
+
+    vjp = strategy.make_async_vjp(batch_context=batch_context)
+    assert vjp({"forward-task": {("data", 0, "flux"): 1.0}}) == {"forward-task": {}}
+
+    assert flux_helper_task_ids == [cached_forward_task_id]
+    assert context.forward_task_id == cached_forward_task_id
+    assert context.forward_task_from_cache is True
+    assert parent_tasks == {"forward-task_adjoint_0": [cached_forward_task_id]}
+    assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+
+
+@pytest.mark.parametrize("parent_available", [True, False])
+def test_remote_async_vjp_miss_refreshes_cached_forward_parent_if_unavailable(
+    monkeypatch, tmp_path, basic_simulation, parent_available
+):
+    counters = _patch_run_pipeline(monkeypatch)
+    store_calls = _patch_forward_result_cache_store(monkeypatch)
+    cached_forward_task_id = "cached-forward-task"
+    if not parent_available:
+        _patch_cached_parent_task_status(monkeypatch, unavailable_task_id=cached_forward_task_id)
+    context = AutogradContext(
+        simulation_data_original=_FakeStubData(basic_simulation),
+        forward_task_id=cached_forward_task_id,
+        forward_task_from_cache=True,
+    )
+    batch_context = AdjointTaskBatch.from_inputs(
+        sim_fields_original_dict={"forward-task": {}},
+        contexts={"forward-task": context},
+        max_num_adjoint_per_fwd=1,
+        numerical_structures={},
+        custom_vjp=None,
+        run_kwargs={"path_dir": tmp_path, "verbose": False},
+        local_gradient=False,
+    )
+    adjoint_sim = basic_simulation.updated_copy(simulation_type="autograd_bwd", deep=False)
+
+    def _fake_prepare_adjoint_batch(**kwargs):
+        return PreparedAdjointBatch(
+            sims_adj={"forward-task_adjoint": adjoint_sim},
+            task_name_mapping={"forward-task_adjoint": "forward-task"},
+            sim_fields_vjp_dict={"forward-task": {}},
+            task_has_adj_sources={"forward-task": True},
+        )
+
+    parent_tasks = {}
+
+    def _fake_run_async_tidy3d_bwd(simulations, **run_kwargs):
+        parent_tasks.update(run_kwargs["parent_tasks"])
+        return {"forward-task_adjoint": {}}
+
+    monkeypatch.setattr(autograd_strategy, "_prepare_adjoint_batch", _fake_prepare_adjoint_batch)
+    monkeypatch.setattr(
+        autograd_strategy,
+        "get_cached_vjp_traced_fields",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        autograd_strategy.hooks,
+        "_run_async_tidy3d_bwd",
+        _fake_run_async_tidy3d_bwd,
+    )
+    strategy = autograd_strategy.RemoteClientSourceStrategy()
+
+    vjp = strategy.make_async_vjp(batch_context=batch_context)
+    assert vjp({"forward-task": {}}) == {"forward-task": {}}
+
+    if parent_available:
+        assert context.forward_task_id == cached_forward_task_id
+        assert context.forward_task_from_cache is True
+        assert parent_tasks == {"forward-task_adjoint": [cached_forward_task_id]}
+        assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
+        assert store_calls == []
+    else:
+        assert context.forward_task_id != cached_forward_task_id
+        assert context.forward_task_from_cache is False
+        assert parent_tasks == {"forward-task_adjoint": [context.forward_task_id]}
+        assert counters == {"upload": 1, "start": 1, "monitor": 1, "download": 1}
+        assert len(store_calls) == 1
+        assert store_calls[0]["task_id"] == context.forward_task_id
+        assert store_calls[0]["workflow_type"] == TaskType.FDTD.name
+        assert store_calls[0]["simulation"].simulation_type == "autograd_fwd"
 
 
 def test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):

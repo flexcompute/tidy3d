@@ -15,6 +15,7 @@ from tidy3d.components.medium import (
     SurfaceImpedanceFitterParam,
     SurfaceRoughnessType,
 )
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import (
     CONDUCTIVITY,
     HERTZ,
@@ -270,6 +271,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
 
     roughness: SurfaceRoughnessType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Surface Roughness Model",
         description="Surface roughness model that applies a frequency-dependent scaling "
         "factor to surface impedance, accounting for increased losses at higher frequencies "

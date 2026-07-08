@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import math
-from typing import Annotated, Any, Literal
+import types
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 import numpy as np
 import pytest
@@ -718,3 +719,85 @@ def test_find_submodels_complex_structure_and_order():
     all_models = root.find_submodels(Tidy3dBaseModel)
     expected_all_models = [root, n1, l1, n2_special, l2, l_shared, n3]
     assert all_models == expected_all_models
+
+
+# Every public ``tidy3d`` / ``tidy3d.rf`` model union of tagged models -- at any depth, including
+# inside tuple/list/dict containers -- must be discriminated. Add an entry here only to deliberately
+# exempt a bare union (and explain why).
+_ALLOWED_BARE_UNIONS: set[str] = set()
+
+
+def _iter_bare_model_unions(annotation, *, discriminated):
+    """Yield each union-of-tagged-models in ``annotation`` that is NOT discriminated.
+
+    Recurses into container element types (``tuple``/``list``/``set``/``frozenset`` items and
+    ``dict`` values) so unions nested inside containers are checked too, and honours an enclosing
+    ``Annotated[..., Field(discriminator=...)]`` (the ``discriminated_union`` wrapper) at any depth.
+    ``discriminated`` is True when an enclosing context already supplies a discriminator (a
+    field-level ``Field(discriminator=...)`` for the top-level union, or an ``Annotated`` wrapper).
+    """
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        args = get_args(annotation)
+        has_disc = any(getattr(meta, "discriminator", None) for meta in args[1:])
+        yield from _iter_bare_model_unions(args[0], discriminated=discriminated or has_disc)
+    elif origin in (Union, types.UnionType):
+        members = [a for a in get_args(annotation) if a is not type(None)]
+        if len(members) >= 2 and all(_is_tagged_model(m) for m in members) and not discriminated:
+            yield tuple(m.__name__ for m in members)
+        for member in members:
+            yield from _iter_bare_model_unions(member, discriminated=False)
+    elif origin in (tuple, list, set, frozenset):
+        for arg in get_args(annotation):
+            yield from _iter_bare_model_unions(arg, discriminated=False)
+    elif origin is dict:
+        args = get_args(annotation)
+        if len(args) == 2:
+            yield from _iter_bare_model_unions(args[1], discriminated=False)
+
+
+def _is_tagged_model(obj):
+    """A concrete ``Tidy3dBaseModel`` carries a ``type`` literal usable as a discriminator."""
+    return isinstance(obj, type) and issubclass(obj, Tidy3dBaseModel) and "type" in obj.model_fields
+
+
+def test_public_model_unions_are_discriminated():
+    """Public model union fields of tagged models must use a discriminated union.
+
+    A bare union of similarly shaped tagged models silently accepts the wrong class at
+    construction (pydantic does not revalidate model instances by default) and only fails later
+    during serialization or server-side validation. Declaring the union discriminated -- field-level
+    ``Field(discriminator=TYPE_TAG_STR)`` for a top-level field, or ``discriminated_union(...)`` for a
+    union nested inside a container -- makes the mistake fail loudly and locally instead. This walks
+    every field annotation recursively (including into tuple/list/dict element types), so the
+    invariant holds at any nesting depth. ``_ALLOWED_BARE_UNIONS`` is the (currently empty) set of
+    deliberate exemptions.
+    """
+    import tidy3d
+    import tidy3d.rf
+
+    models = set()
+    for module in (tidy3d, tidy3d.rf):
+        for name in module.__all__:
+            obj = getattr(module, name, None)
+            if isinstance(obj, type) and issubclass(obj, Tidy3dBaseModel):
+                models.add(obj)
+
+    offenders = set()
+    for cls in models:
+        for fname, field in cls.model_fields.items():
+            discriminated = field.discriminator is not None
+            for _members in _iter_bare_model_unions(field.annotation, discriminated=discriminated):
+                offenders.add(f"{cls.__name__}.{fname}")
+
+    new_offenders = offenders - _ALLOWED_BARE_UNIONS
+    assert not new_offenders, (
+        "Public model union fields of tagged models must be discriminated via "
+        'Field(discriminator="type") (or a discriminated-union alias). Undiscriminated unions '
+        f"found: {sorted(new_offenders)}. If intentional, add them to _ALLOWED_BARE_UNIONS."
+    )
+
+    stale = _ALLOWED_BARE_UNIONS - offenders
+    assert not stale, (
+        f"_ALLOWED_BARE_UNIONS lists fields that are now discriminated (remove them): {sorted(stale)}"
+    )

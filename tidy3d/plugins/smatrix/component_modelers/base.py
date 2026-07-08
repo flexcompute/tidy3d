@@ -11,7 +11,8 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.monitor import WARN_NUM_FREQS
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.types import Complex, FreqArray
+from tidy3d.components.types import TYPE_TAG_STR, Complex, FreqArray
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.time import SourceTimeType
 from tidy3d.components.validators import (
     assert_unique_names,
@@ -59,7 +60,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: tuple[Port | TerminalPortType, ...] = Field(
+    ports: tuple[discriminated_union(Port | TerminalPortType), ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
@@ -102,6 +103,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     )
     custom_source_time: SourceTimeType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Custom Source Time",
         description="If provided, this will be used as specification of the source time-dependence in simulations. "
         "Otherwise, a default source time will be constructed.",

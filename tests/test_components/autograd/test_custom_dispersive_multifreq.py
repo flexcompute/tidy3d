@@ -58,8 +58,8 @@ def test_custom_sellmeier_multifrequency_weights(monkeypatch):
     expected_gC = 0.0
     for idx, f in enumerate(freqs):
         dJ_f = dJ[..., idx]
-        expected_gB += np.real(dJ_f * np.conj(td.Sellmeier._w_B(f, C.values)))
-        expected_gC += np.real(dJ_f * np.conj(td.Sellmeier._w_C(f, B.values, C.values)))
+        expected_gB += np.real(dJ_f * td.Sellmeier._w_B(f, C.values))
+        expected_gC += np.real(dJ_f * td.Sellmeier._w_C(f, B.values, C.values))
 
     np.testing.assert_allclose(grads[("coeffs", 0, 0)], expected_gB)
     np.testing.assert_allclose(grads[("coeffs", 0, 1)], expected_gC)

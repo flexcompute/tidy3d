@@ -32,10 +32,19 @@ from tidy3d.web.diagnostics import (
     is_flag=True,
     help="Print structured JSON instead of the support text summary.",
 )
+@click.option(
+    "--private-network-details",
+    is_flag=True,
+    help=(
+        "Include private network details for the user's IT administrators. "
+        "Do not share this output outside the institution."
+    ),
+)
 def diagnose_connection_command(
     api_samples: int,
     timeout: float,
     json_output: bool,
+    private_network_details: bool,
 ) -> None:
     """Run connection diagnostics for support debugging."""
 
@@ -43,6 +52,7 @@ def diagnose_connection_command(
         api_samples=api_samples,
         timeout=timeout,
         verbose=False,
+        include_private_network_details=private_network_details,
     )
     output = report.model_dump_json(indent=2) if json_output else report.support_text()
     click.echo(output)

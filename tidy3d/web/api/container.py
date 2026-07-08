@@ -32,6 +32,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from tidy3d._runtime import WASM_BUILD
 from tidy3d.components.base import TYPE_TO_CLASS_MAP, Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.workflow import WorkflowOperationType
 from tidy3d.components.workflow import Workflow, resolve_workflow
@@ -59,7 +60,7 @@ from tidy3d.web.api.states import (
     SUCCESS_STATES,
 )
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub, task_type_name_of
-from tidy3d.web.api.workflow_batch import UniformMultiStepBatchRunner
+from tidy3d.web.api.workflow_batch import UniformMultiStepBatchRunner, WorkflowStepJobAdapter
 from tidy3d.web.api.workflow_dependencies import (
     is_supported_parent_task_input,
     supports_implicit_parent_task_reuse,
@@ -82,7 +83,6 @@ if TYPE_CHECKING:
     from tidy3d.components.types.workflow import WorkflowDataType
     from tidy3d.components.workflow import Step, StepInput
     from tidy3d.web.api.container_types import BatchOutput
-    from tidy3d.web.api.workflow_batch import WorkflowStepJobAdapter
     from tidy3d.web.core.task_info import RunInfo, TaskInfo
 
 # Backward compatibility alias for code/tests patching `container.web`.
@@ -323,7 +323,7 @@ class Job(WebContainer):
     simulation: WorkflowOperationType = Field(
         title="simulation",
         description="Simulation to run as a 'task'.",
-        discriminator="type",
+        discriminator=TYPE_TAG_STR,
     )
 
     workflow: Workflow | None = Field(
@@ -690,15 +690,22 @@ class Job(WebContainer):
         """Return the terminal status from persisted final-step state."""
         return self._workflow_terminal_status()
 
-    def _workflow_upload_step(self, step: Step, *, verbose: bool | None = False) -> None:
+    def _workflow_upload_step(
+        self,
+        step: Step,
+        *,
+        verbose: bool | None = False,
+        verbose_estimate_cost: bool | None = None,
+    ) -> None:
         """Upload a workflow step through the single-step task API."""
         parent_task_ids = self._resolve_parent_tasks(step)
         self._check_folder(self.folder_name)
+        verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
         self._ensure_step_uploaded(
             step,
             parent_task_ids=parent_task_ids,
             verbose=verbose,
-            verbose_estimate_cost=False,
+            verbose_estimate_cost=verbose_estimate_cost,
         )
 
     def _workflow_download_step(self, step_name: str, path: PathLike) -> None:
@@ -1080,6 +1087,7 @@ class Job(WebContainer):
         step: Step,
         *,
         progress_callback_upload: Callable[[float], None] | None = None,
+        verbose_estimate_cost: bool | None = None,
         worker_group: str | None = None,
         priority: int | None = None,
         vgpu_allocation: int | None = None,
@@ -1106,7 +1114,9 @@ class Job(WebContainer):
             step,
             parent_task_ids=parent_task_ids,
             progress_callback=progress_callback_upload,
-            verbose_estimate_cost=False,
+            verbose_estimate_cost=(
+                self.verbose if verbose_estimate_cost is None else verbose_estimate_cost
+            ),
         )
         if checkpoint_callback is not None:
             checkpoint_callback()
@@ -1215,6 +1225,7 @@ class Job(WebContainer):
         *,
         progress_callback_upload: Callable[[float], None] | None = None,
         progress_callback_download: Callable[[float], None] | None = None,
+        verbose_estimate_cost: bool | None = None,
         worker_group: str | None = None,
         priority: int | None = None,
         vgpu_allocation: int | None = None,
@@ -1259,6 +1270,7 @@ class Job(WebContainer):
             self._complete_step(
                 step,
                 progress_callback_upload=progress_callback_upload,
+                verbose_estimate_cost=verbose_estimate_cost,
                 worker_group=worker_group,
                 priority=priority,
                 vgpu_allocation=vgpu_allocation,
@@ -1291,7 +1303,12 @@ class Job(WebContainer):
         if self.is_multi_step:
             self._refresh_cache_only_completed_steps()
         if self._next_pending_step_index() >= len(self.steps):
-            raise DataError("All workflow steps are already complete.")
+            raise DataError(
+                "All workflow steps are already complete. Job.step() only advances an "
+                "incomplete workflow one step. Use 'Job.load()' to load the completed "
+                "result, or 'Job.run()' to return the final result, including results "
+                "restored from the local cache."
+            )
         step = self.steps[self._next_pending_step_index()]
         return self._run_step(
             step,
@@ -2660,6 +2677,7 @@ class Batch(WebContainer):
                 try:
                     job._run_to_file(
                         path=temp_job_path,
+                        verbose_estimate_cost=self.verbose,
                         priority=priority,
                         vgpu_allocation=vgpu_allocation,
                         ignore_memory_limit=ignore_memory_limit,
@@ -3096,6 +3114,8 @@ class Batch(WebContainer):
                         job._upload_and_cache,
                         _sidecar_artifacts=_sidecar_artifacts,
                     )
+                elif isinstance(job, WorkflowStepJobAdapter):
+                    fut = executor.submit(job.upload, verbose_estimate_cost=self.verbose)
                 else:
                     fut = executor.submit(job.upload)
                 upload_futures[fut] = job

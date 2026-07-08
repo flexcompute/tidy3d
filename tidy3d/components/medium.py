@@ -1054,6 +1054,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
     derived_from: PerturbationMediumType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Parent Medium",
         description="If not ``None``, it records the parent medium from which this medium was derived.",
     )
@@ -1421,14 +1422,15 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         else:
             vjp_array = values.reshape([*eps_shape, values.shape[-1]])
 
-        # match derivative dtype to the underlying dataset
-        target_array = getattr(spatial_data, "values", None)
-        if target_array is None and hasattr(spatial_data, "data"):
-            target_array = spatial_data.data
-        if target_array is not None:
-            target_dtype = np.asarray(target_array).dtype
-            if not np.issubdtype(target_dtype, np.complexfloating):
-                vjp_array = np.real(vjp_array).astype(target_dtype, copy=False)
+        # match derivative dtype to the underlying dataset for real-valued components
+        if component != "complex":
+            target_array = getattr(spatial_data, "values", None)
+            if target_array is None and hasattr(spatial_data, "data"):
+                target_array = spatial_data.data
+            if target_array is not None:
+                target_dtype = np.asarray(target_array).dtype
+                if not np.issubdtype(target_dtype, np.complexfloating):
+                    vjp_array = np.real(vjp_array).astype(target_dtype, copy=False)
 
         return vjp_array
 
@@ -1892,6 +1894,33 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         """Whether the medium is isotropic."""
         return True
 
+    @cached_property
+    def _permittivity_mean(self) -> complex:
+        """Spatial mean of the real permittivity profile."""
+        return np.mean(_get_numpy_array(self.permittivity))
+
+    @cached_property
+    def _conductivity_mean(self) -> complex:
+        """Spatial mean of the conductivity profile."""
+        if self.conductivity is None:
+            return 0.0
+        return np.mean(_get_numpy_array(self.conductivity))
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        """Complex-valued spatially averaged permittivity as a function of frequency."""
+        return self.eps_sigma_to_eps_complex(
+            self._permittivity_mean, self._conductivity_mean, frequency
+        )
+
+    @ensure_freq_in_range
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor at ``frequency``."""
+        if self.conductivity is None:
+            eps = np.max(_get_numpy_array(self.permittivity))
+            return (eps, eps, eps)
+        return super().eps_diagonal(frequency)
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -2342,6 +2371,20 @@ class CustomMedium(AbstractCustomMedium):
         }
 
     @cached_property
+    def _permittivity_mean(self) -> complex | None:
+        """Spatial mean of the real permittivity profile."""
+        if self.permittivity is None:
+            return None
+        return np.mean(_get_numpy_array(self.permittivity))
+
+    @cached_property
+    def _conductivity_mean(self) -> complex:
+        """Spatial mean of the conductivity profile."""
+        if self.conductivity is None:
+            return 0.0
+        return np.mean(_get_numpy_array(self.conductivity))
+
+    @cached_property
     def freqs(self) -> ArrayFloat:
         """float array of frequencies.
         This field is to be deprecated in v3.0.
@@ -2362,7 +2405,7 @@ class CustomMedium(AbstractCustomMedium):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
-        self_dict = self.model_dump(exclude={"type", "eps_dataset"})
+        self_dict = self.model_dump(exclude={TYPE_TAG_STR, "eps_dataset"})
         # isotropic
         if self.eps_dataset is None:
             self_dict.update({"permittivity": self.permittivity, "conductivity": self.conductivity})
@@ -2463,6 +2506,9 @@ class CustomMedium(AbstractCustomMedium):
         at ``frequency``. Spatially, we take :math:`\\max\\{|\\varepsilon|\\}`, so that autoMesh generation
         works appropriately.
         """
+        if self.eps_dataset is None and self.permittivity is not None and self.conductivity is None:
+            eps = np.max(_get_numpy_array(self.permittivity))
+            return (eps, eps, eps)
         return self._medium.eps_diagonal(frequency)
 
     @ensure_freq_in_range
@@ -2470,6 +2516,10 @@ class CustomMedium(AbstractCustomMedium):
         """Spatial and polarizaiton average of complex-valued permittivity
         as a function of frequency.
         """
+        if self.eps_dataset is None and self.permittivity is not None:
+            return self.eps_sigma_to_eps_complex(
+                self._permittivity_mean, self._conductivity_mean, frequency
+            )
         return self._medium.eps_model(frequency)
 
     @classmethod
@@ -2784,12 +2834,17 @@ class CustomMedium(AbstractCustomMedium):
                 if spatial_data is None:
                     continue
                 dim = key[-1]
+                component = (
+                    "complex"
+                    if np.issubdtype(np.asarray(spatial_data.values).dtype, np.complexfloating)
+                    else "real"
+                )
                 vjps[field_path] = self._derivative_field_cmp_custom(
                     E_der_map=derivative_info.E_der_map,
                     spatial_data=spatial_data,
                     dim=dim,
                     bounds=derivative_info.bounds_intersect,
-                    component="complex",
+                    component=component,
                 )
 
         return vjps
@@ -3096,14 +3151,16 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
                 E_der_map=derivative_info.E_der_map,
                 spatial_data=spatial_ref,
                 dim=dim,
+                bounds=derivative_info.bounds_intersect,
+                component="complex",
                 sum_over_freqs=False,
             )
         return dJ
 
     @staticmethod
     def _accum_real_inner(dJ: ArrayComplex, weight: ArrayComplex) -> ArrayFloat:
-        """Compute Re(dJ * conj(weight)) with proper broadcasting."""
-        return np.real(dJ * np.conj(weight))
+        """Compute Re(dJ * weight) with proper broadcasting."""
+        return np.real(dJ * weight)
 
     def _sum_real_over_freqs(self, dJ: np.ndarray, freqs: list[float] | np.ndarray) -> np.ndarray:
         """Sum real parts over the frequency axis using the shared accumulator."""
@@ -3914,7 +3971,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """
         poles = [(_zeros_like(medium.conductivity), medium.conductivity / (2 * EPSILON_0))]
         medium_dict = medium.model_dump(
-            exclude={"type", "eps_dataset", "permittivity", "conductivity"}
+            exclude={TYPE_TAG_STR, "eps_dataset", "permittivity", "conductivity"}
         )
         medium_dict.update({"eps_inf": medium.permittivity, "poles": poles})
         return CustomPoleResidue.model_validate(medium_dict)
@@ -3938,7 +3995,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             res = res + (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
 
-        self_dict = self.model_dump(exclude={"type", "eps_inf", "poles"})
+        self_dict = self.model_dump(exclude={TYPE_TAG_STR, "eps_inf", "poles"})
         self_dict.update({"permittivity": self.eps_inf, "conductivity": np.real(sigma)})
         return CustomMedium.model_validate(self_dict)
 
@@ -7142,7 +7199,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
             Resulting medium with perturbation model.
         """
 
-        new_dict = medium.model_dump(exclude={"type"})
+        new_dict = medium.model_dump(exclude={TYPE_TAG_STR})
 
         new_dict["perturbation_spec"] = perturbation_spec
         new_dict["subpixel"] = subpixel
@@ -7433,7 +7490,12 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
             return self
 
         new_dict = self.model_dump(
-            exclude={"eps_inf_perturbation", "poles_perturbation", "perturbation_spec", "type"}
+            exclude={
+                "eps_inf_perturbation",
+                "poles_perturbation",
+                "perturbation_spec",
+                TYPE_TAG_STR,
+            }
         )
 
         if all(x is None for x in [temperature, electron_density, hole_density]):

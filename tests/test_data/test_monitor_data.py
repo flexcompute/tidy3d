@@ -857,6 +857,87 @@ def test_field_data():
     assert np.allclose(flux1, flux2)
 
 
+def test_field_intensity_component_selection():
+    data = make_field_data_2d()
+
+    intensity_all = data.intensity
+    intensity_ex = data.field_intensity(components=("Ex",))
+    intensity_ey = data.field_intensity(components=("Ey",))
+    intensity_ez = data.field_intensity(components=("Ez",))
+    intensity_ex_ey = data.field_intensity(components=("Ex", "Ey"))
+
+    assert np.allclose(data.field_intensity(components="Ex").values, intensity_ex.values)
+    assert np.allclose(intensity_ex_ey.values, (intensity_ex + intensity_ey).values)
+    assert np.allclose(
+        intensity_all.values,
+        (intensity_ex + intensity_ey + intensity_ez).values,
+    )
+
+    with pytest.raises(ValueError, match="At least one electric field component"):
+        data.field_intensity(components=())
+
+    with pytest.raises(ValueError, match="Invalid electric field component"):
+        data.field_intensity(components=("Hx",))
+
+    with pytest.raises(ValueError, match="Duplicate electric field component"):
+        data.field_intensity(components=("Ex", "Ex"))
+
+
+def test_field_intensity_subset_of_stored_components():
+    data = make_field_data_2d()
+    monitor = FIELD_MONITOR_2D.updated_copy(fields=("Ex", "Ey"))
+    data_without_ez = FieldData(
+        monitor=monitor,
+        Ex=data.Ex,
+        Ey=data.Ey,
+        symmetry=data.symmetry,
+        symmetry_center=data.symmetry_center,
+        grid_expanded=SIM_SYM.discretize_monitor(monitor),
+    )
+
+    intensity_ex_ey = data_without_ez.field_intensity(components=("Ex", "Ey"))
+
+    assert np.allclose(
+        intensity_ex_ey.values,
+        data.field_intensity(components=("Ex", "Ey")).values,
+    )
+
+    with pytest.raises(DataError, match="Field components \\['Ez'\\] not included"):
+        _ = data_without_ez.intensity
+
+    with pytest.raises(DataError, match="Field components \\['Ez'\\] not included"):
+        data_without_ez.field_intensity(components=("Ez",))
+
+
+def test_field_intensity_component_selection_uses_colocated_fields():
+    monitor = FIELD_MONITOR_2D.updated_copy(colocate=False, fields=("Ex", "Ey", "Ez"))
+    data = FieldData(
+        monitor=monitor,
+        Ex=make_scalar_field_data_array("Ex", symmetry=False, colocate=False).interp(
+            y=[1.0], method="nearest"
+        ),
+        Ey=make_scalar_field_data_array("Ey", symmetry=False, colocate=False).interp(
+            y=[1.0], method="nearest"
+        ),
+        Ez=make_scalar_field_data_array("Ez", symmetry=False, colocate=False).interp(
+            y=[1.0], method="nearest"
+        ),
+        symmetry=SIM.symmetry,
+        symmetry_center=SIM.center,
+        grid_expanded=SIM.discretize_monitor(monitor),
+    )
+
+    colocated_fields = data._colocated_fields
+    intensity_ex_ey = data.field_intensity(components=("Ex", "Ey"))
+    expected = (colocated_fields["Ex"].abs ** 2 + colocated_fields["Ey"].abs ** 2).squeeze(
+        dim=["y"], drop=True
+    )
+
+    assert data.Ex.shape != colocated_fields["Ex"].shape
+    assert intensity_ex_ey.shape == expected.shape
+    assert np.allclose(intensity_ex_ey.values, expected.values)
+
+
 def test_field_data_to_source():
     data = make_field_data_2d(symmetry=True)
     data = data.copy(update={key: val.isel(f=[-1]) for key, val in data.field_components.items()})

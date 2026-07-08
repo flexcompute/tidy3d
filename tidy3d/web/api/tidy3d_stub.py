@@ -19,6 +19,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 from tidy3d.plugins.smatrix.component_modelers.modal import (
@@ -61,7 +62,7 @@ def task_type_name_of(simulation: WorkflowOperationType) -> str:
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: WorkflowOperationType = Field(discriminator="type")
+    simulation: WorkflowOperationType = Field(discriminator=TYPE_TAG_STR)
 
     @classmethod
     def from_file(cls, file_path: PathLike) -> WorkflowOperationType:

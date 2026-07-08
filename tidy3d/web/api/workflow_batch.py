@@ -69,8 +69,17 @@ class WorkflowStepJobAdapter:
     def task_id(self) -> TaskId:
         return self.job._workflow_required_step_task_id(self.step.name)
 
-    def upload(self, *, verbose: bool | None = False) -> None:
-        self.job._workflow_upload_step(self.step, verbose=verbose)
+    def upload(
+        self,
+        *,
+        verbose: bool | None = False,
+        verbose_estimate_cost: bool | None = None,
+    ) -> None:
+        self.job._workflow_upload_step(
+            self.step,
+            verbose=verbose,
+            verbose_estimate_cost=verbose_estimate_cost,
+        )
 
     def start(
         self,
@@ -474,7 +483,7 @@ class UniformMultiStepBatchRunner:
 
             if schedule.needs_upload:
                 try:
-                    adapter.upload()
+                    adapter.upload(verbose_estimate_cost=self.batch.verbose)
                 except Exception as exc:
                     log.error(
                         f"Failed to upload workflow step '{adapter.step.name}' for task "
@@ -705,7 +714,12 @@ class UniformMultiStepBatchRunner:
 
         step_index = self.next_step_index(runnable_jobs)
         if step_index >= len(next(iter(runnable_jobs.values())).steps):
-            raise DataError("All workflow steps are already complete.")
+            raise DataError(
+                "All workflow steps are already complete. Batch.step() only advances "
+                "an incomplete batch workflow one step. Use 'Batch.load()' to load "
+                "completed results, or 'Batch.run()' to return the final results, "
+                "including results restored from the local cache."
+            )
 
         is_final_step = step_index == len(next(iter(runnable_jobs.values())).steps) - 1
         self.complete_step_batch(

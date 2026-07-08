@@ -8,9 +8,19 @@ import autograd.numpy as anp
 import numpy as np
 import pytest
 from autograd import value_and_grad
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_id,
+    finalize_result,
+    gradient_angle_deg,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 WL_UM = 0.65
 FREQ0 = td.C_0 / WL_UM
@@ -24,7 +34,6 @@ FINITE_DIFFERENCE_STEP = MESH_SPACING_UM
 LOCAL_GRADIENT = True
 VERBOSE = False
 PLOT_FD_ADJ_COMPARISON = False
-SAVE_OUTPUT_DATA = True
 COMPARE_TO_FINITE_DIFFERENCE = True
 
 ANGLE_OVERLAP_THRESH_DEG = 1.0
@@ -36,26 +45,43 @@ else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 
-def angled_overlap_deg(v1, v2):
-    norm_v1 = np.linalg.norm(v1)
-    norm_v2 = np.linalg.norm(v2)
+class BoxPolyslabCaseIdentity(BaseModel):
+    """Semantic identity for one Box-vs-PolySlab gradient comparison."""
 
-    if np.isclose(norm_v1, 0.0) or np.isclose(norm_v2, 0.0):
-        if not (np.isclose(norm_v1, 0.0) and np.isclose(norm_v2, 0.0)):
-            return np.inf
-
-        return 0.0
-
-    dot = np.minimum(1.0, np.sum((v1 / np.linalg.norm(v1)) * (v2 / np.linalg.norm(v2))))
-    angle_deg = np.arccos(dot) * 180.0 / np.pi
-
-    return angle_deg
+    is_3d: bool
+    infinite_dim_2d: int | None
+    shift_box_center: bool
+    finite_difference_step: float
+    compare_to_finite_difference: bool
+    adjoint_overlap_threshold_deg: float
+    fd_adjoint_overlap_threshold_deg: float
 
 
 def case_identifier(is_3d: bool, infinite_dim_2d: int | None, shift_box_center: bool) -> str:
     geometry_tag = "3d" if is_3d else f"2d_infinite_dim_{infinite_dim_2d}"
     shift_tag = "shifted" if shift_box_center else "centered"
     return f"box_polyslab_{geometry_tag}_{shift_tag}"
+
+
+def _case_identity(
+    is_3d: bool, infinite_dim_2d: int | None, shift_box_center: bool
+) -> BoxPolyslabCaseIdentity:
+    return BoxPolyslabCaseIdentity(
+        is_3d=is_3d,
+        infinite_dim_2d=None if is_3d else infinite_dim_2d,
+        shift_box_center=shift_box_center,
+        finite_difference_step=FINITE_DIFFERENCE_STEP,
+        compare_to_finite_difference=COMPARE_TO_FINITE_DIFFERENCE,
+        adjoint_overlap_threshold_deg=ANGLE_OVERLAP_THRESH_DEG,
+        fd_adjoint_overlap_threshold_deg=ANGLE_OVERLAP_FD_ADJ_THRESH_DEG,
+    )
+
+
+BOX_POLYSLAB_CASES = tuple(
+    _case_identity(is_3d, infinite_dim_2d, shift_box_center)
+    for is_3d, infinite_dim_2d in ((True, 2), (False, 0), (False, 1), (False, 2))
+    for shift_box_center in (True, False)
+)
 
 
 def dimension_permutation(infinite_dim: int) -> tuple[int, int]:
@@ -244,6 +270,7 @@ def run_parameter_simulations(
         path_dir=str(output_dir),
         local_gradient=local_gradient,
         verbose=VERBOSE,
+        lazy=False,
     )
 
     return [fom(sim_data_map[key]) for key in simulation_dict]
@@ -319,24 +346,15 @@ def squeeze_dimension(array: np.ndarray, is_3d: bool, infinite_dim: int | None) 
     return np.delete(squeezed, infinite_dim)
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize(
-    "is_3d, infinite_dim_2d",
-    [
-        (True, 2),
-        (False, 0),
-        (False, 1),
-        (False, 2),
-    ],
-)
-@pytest.mark.parametrize("shift_box_center", (True, False))
-def test_box_and_polyslab_gradients_match(
-    is_3d, infinite_dim_2d, shift_box_center, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test that the box and polyslab gradients match for rectangular slab geometries. Allow
-    comparison as well to finite difference values."""
+def _collect_box_polyslab_evaluation_data(
+    case: BoxPolyslabCaseIdentity,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    is_3d = case.is_3d
+    infinite_dim_2d = case.infinite_dim_2d
+    shift_box_center = case.shift_box_center
 
-    base_sim, fom = make_base_simulation(is_3d, infinite_dim_2d if not is_3d else None)
+    base_sim, fom = make_base_simulation(is_3d, infinite_dim_2d)
 
     if shift_box_center:
         box_init_size = [2.0 * WL_UM, 2.5 * WL_UM, 0.75 * WL_UM]
@@ -358,8 +376,8 @@ def test_box_and_polyslab_gradients_match(
             box_center[infinite_dim_2d] = 0.5 * INFINITE_DIM_SIZE_UM
             box_center[final_dim_2d] = 0.5 * PERIODS_UM[0]
 
-    case_id = case_identifier(is_3d, None if is_3d else infinite_dim_2d, shift_box_center)
-    case_dir = numerical_case_dir / case_id
+    case_id = case_identifier(is_3d, infinite_dim_2d, shift_box_center)
+    case_dir = numerical_case_dir / "simulations" / case_id
     case_dir.mkdir(parents=True, exist_ok=True)
 
     box_objective = make_objective(
@@ -420,41 +438,122 @@ def test_box_and_polyslab_gradients_match(
         infinite_dim_2d,
     )
 
-    test_data = {
-        "fd box": fd_box,
-        "fd polyslab": fd_polyslab,
-        "grad box": box_grad_filtered,
-        "grad polyslab": polyslab_grad_filtered,
+    return {
+        "fd_box": np.asarray(fd_box, dtype=float),
+        "fd_polyslab": np.asarray(fd_polyslab, dtype=float),
+        "box_grad": np.asarray(box_grad_filtered, dtype=float),
+        "polyslab_grad": np.asarray(polyslab_grad_filtered, dtype=float),
+        "initial_params": np.asarray(initial_params, dtype=float),
+        "box_center": np.asarray(box_center, dtype=float),
     }
 
-    if SAVE_OUTPUT_DATA:
-        npz_path = case_dir / (
-            f"test_diff_init_{'3' if is_3d else '2'}d_infinite_dim_{infinite_dim_2d}.npz"
-        )
-        np.savez(npz_path, **test_data)
 
-    box_polyslab_overlap_deg = angled_overlap_deg(box_grad_filtered, polyslab_grad_filtered)
-    fd_overlap_deg = angled_overlap_deg(fd_box, fd_polyslab)
-    box_fd_adj_overlap_deg = angled_overlap_deg(box_grad_filtered, fd_box)
-    polyslab_fd_adj_overlap_deg = angled_overlap_deg(polyslab_grad_filtered, fd_polyslab)
+def _evaluate_box_polyslab_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric], dict[str, float]]:
+    fd_box = np.asarray(evaluation_data["fd_box"], dtype=float)
+    fd_polyslab = np.asarray(evaluation_data["fd_polyslab"], dtype=float)
+    box_grad = np.asarray(evaluation_data["box_grad"], dtype=float)
+    polyslab_grad = np.asarray(evaluation_data["polyslab_grad"], dtype=float)
 
-    print("Overlaps (deg):")
-    print(f"Box vs. PolySlab Adjoint: {box_polyslab_overlap_deg}")
-    print(f"Box vs. PolySlab Finite Difference: {fd_overlap_deg}")
-    print(f"Box Finite Difference vs. Adjoint: {box_fd_adj_overlap_deg}")
-    print(f"PolySlab Finite Difference vs. Adjoint: {polyslab_fd_adj_overlap_deg}")
+    box_polyslab_overlap_deg = gradient_angle_deg(box_grad, polyslab_grad)
+    fd_overlap_deg = gradient_angle_deg(fd_box, fd_polyslab)
+    box_fd_adj_overlap_deg = gradient_angle_deg(box_grad, fd_box)
+    polyslab_fd_adj_overlap_deg = gradient_angle_deg(polyslab_grad, fd_polyslab)
 
-    assert box_polyslab_overlap_deg < ANGLE_OVERLAP_THRESH_DEG, (
-        "Autograd gradients for Box and PolySlab disagree"
-    )
-    assert fd_overlap_deg < ANGLE_OVERLAP_THRESH_DEG, (
-        "Finite-difference gradients for Box and PolySlab disagree"
-    )
-
+    regression_metrics = [
+        Metric(
+            name="box_polyslab_adjoint_overlap_deg",
+            observed=box_polyslab_overlap_deg,
+            expected=ANGLE_OVERLAP_THRESH_DEG,
+            comparator="lt",
+        ),
+        Metric(
+            name="box_polyslab_fd_overlap_deg",
+            observed=fd_overlap_deg,
+            expected=ANGLE_OVERLAP_THRESH_DEG,
+            comparator="lt",
+        ),
+    ]
     if COMPARE_TO_FINITE_DIFFERENCE:
-        assert box_fd_adj_overlap_deg < ANGLE_OVERLAP_FD_ADJ_THRESH_DEG, (
-            "Autograd and finite-difference gradients for the Box geometry disagree"
+        regression_metrics.extend(
+            [
+                Metric(
+                    name="box_fd_adjoint_overlap_deg",
+                    observed=box_fd_adj_overlap_deg,
+                    expected=ANGLE_OVERLAP_FD_ADJ_THRESH_DEG,
+                    comparator="lt",
+                ),
+                Metric(
+                    name="polyslab_fd_adjoint_overlap_deg",
+                    observed=polyslab_fd_adj_overlap_deg,
+                    expected=ANGLE_OVERLAP_FD_ADJ_THRESH_DEG,
+                    comparator="lt",
+                ),
+            ]
         )
-        assert polyslab_fd_adj_overlap_deg < ANGLE_OVERLAP_FD_ADJ_THRESH_DEG, (
-            "Autograd and finite-difference gradients for the PolySlab geometry disagree"
-        )
+
+    diagnostics = {
+        "box_polyslab_overlap_deg": box_polyslab_overlap_deg,
+        "fd_overlap_deg": fd_overlap_deg,
+        "box_fd_adj_overlap_deg": box_fd_adj_overlap_deg,
+        "polyslab_fd_adj_overlap_deg": polyslab_fd_adj_overlap_deg,
+        "box_grad_norm": float(np.linalg.norm(box_grad)),
+        "polyslab_grad_norm": float(np.linalg.norm(polyslab_grad)),
+        "fd_box_norm": float(np.linalg.norm(fd_box)),
+        "fd_polyslab_norm": float(np.linalg.norm(fd_polyslab)),
+    }
+    return regression_metrics, [], diagnostics
+
+
+def _print_box_polyslab_summary(
+    diagnostics: dict[str, float],
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    print(f"Evaluation mode: {mode_label}")
+    print("Overlaps (deg):")
+    print(f"Box vs. PolySlab Adjoint: {diagnostics['box_polyslab_overlap_deg']}")
+    print(f"Box vs. PolySlab Finite Difference: {diagnostics['fd_overlap_deg']}")
+    print(f"Box Finite Difference vs. Adjoint: {diagnostics['box_fd_adj_overlap_deg']}")
+    print(f"PolySlab Finite Difference vs. Adjoint: {diagnostics['polyslab_fd_adj_overlap_deg']}")
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case",
+    BOX_POLYSLAB_CASES,
+    ids=lambda case: case_identity_id(case, prefix="box-polyslab"),
+)
+def test_box_and_polyslab_gradients_match(
+    request: pytest.FixtureRequest,
+    case: BoxPolyslabCaseIdentity,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Compare Box, PolySlab, and finite-difference gradients for rectangular slabs."""
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case,
+        collect_evaluation_data=lambda: _collect_box_polyslab_evaluation_data(
+            case, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_box_polyslab_evaluation_data(
+        evaluation_data
+    )
+    _print_box_polyslab_summary(diagnostics, eval_only=numerical_eval_only)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Box, PolySlab, and finite-difference gradients disagree; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

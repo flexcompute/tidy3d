@@ -26,6 +26,7 @@ from tidy3d.components.material.tcad.charge import (
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
+    AnisotropicConductivity,
     FluidMedium,
     SolidMedium,
 )
@@ -422,6 +423,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     analysis_spec: AnalysisSpecType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Analysis specification.",
         description="The `analysis_spec` is used to specify the type of simulation. Currently, it is used to "
         "specify Charge simulations or transient Heat simulations.",
@@ -1051,6 +1053,10 @@ class HeatChargeSimulation(AbstractSimulation):
         raise_error = False
         for sim_type in simulation_types:
             if sim_type == TCADAnalysisTypes.HEAT:
+                # Transient heat is well-posed with all-Neumann BCs (initial
+                # condition pins the solution); only steady state is ambiguous.
+                if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
+                    continue
                 type_bcs = [
                     bc for bc in self.boundary_spec if isinstance(bc.condition, HeatBCTypes)
                 ]
@@ -1353,7 +1359,11 @@ class HeatChargeSimulation(AbstractSimulation):
                     capacities.append(heat_properties.capacity)
                 if heat_properties.density is not None:
                     densities.append(heat_properties.density)
-                conductivities.append(heat_properties.conductivity)
+                conductivity = heat_properties.conductivity
+                # Scalar diffusion-time estimate: reduce a tensor to its mean principal value.
+                if isinstance(conductivity, AnisotropicConductivity):
+                    conductivity = (conductivity.xx + conductivity.yy + conductivity.zz) / 3
+                conductivities.append(conductivity)
         return capacities, densities, conductivities
 
     def _check_transient_heat_solid_properties(self) -> Self:
@@ -1441,17 +1451,18 @@ class HeatChargeSimulation(AbstractSimulation):
     def _check_heat_only_features_in_charge(self) -> Self:
         """Reject heat-only-solver features in non-isothermal charge simulations.
 
-        Solid-medium advection ('SolidMedium.velocity') and resistive interfaces
-        ('ThermalContactResistance') are honored by the heat solver, including when it
-        is coupled with electrical conduction. The coupled thermal solve that runs
-        alongside a non-isothermal charge analysis does not apply either term, so a setup
-        that requests them would silently produce a result that ignores them. Flag them
-        here instead. Heat, conduction+heat, and isothermal charge analyses (the latter
-        runs no thermal solve) are unaffected."""
+        Solid-medium advection ('SolidMedium.velocity'), anisotropic thermal conductivity
+        ('AnisotropicConductivity') and resistive interfaces ('ThermalContactResistance')
+        are honored by the heat solver, including when it is coupled with electrical
+        conduction. The coupled thermal solve that runs alongside a non-isothermal charge
+        analysis does not apply any of them, so a setup that requests them would silently
+        produce a result that ignores them. Flag them here instead. Heat, conduction+heat,
+        and isothermal charge analyses (the latter runs no thermal solve) are unaffected."""
         if not self._thermal_solver_active:
             return self
 
-        # Advection velocity, on the background medium or any structure's solid heat spec.
+        # Advection velocity and anisotropic conductivity, on the background medium or any
+        # structure's solid heat spec.
         media_sources = [(("medium",), self.medium)]
         media_sources.extend(
             (("structures", i), struct.medium) for i, struct in enumerate(self.structures)
@@ -1468,6 +1479,15 @@ class HeatChargeSimulation(AbstractSimulation):
                     "thermal solve does not apply the convective transport term "
                     "'rho * cp * V . grad(T)', so this velocity would be silently ignored. "
                     "Remove 'velocity' (or set it to 'None') to run this charge simulation.",
+                    *loc,
+                )
+            if isinstance(getattr(heat_spec, "conductivity", None), AnisotropicConductivity):
+                self._raise_validation_error_at_loc(
+                    "Anisotropic thermal conductivity ('AnisotropicConductivity') is not "
+                    "supported in non-isothermal charge (coupled charge+heat) simulations: the "
+                    "coupled thermal solve only handles a scalar (isotropic) conductivity, so a "
+                    "tensor conductivity would be silently ignored. Provide a scalar "
+                    "'conductivity' to run this charge simulation.",
                     *loc,
                 )
 

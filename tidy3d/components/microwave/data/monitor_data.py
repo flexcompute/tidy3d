@@ -30,6 +30,7 @@ from tidy3d.components.microwave.data.dataset import (
     TransmissionLineTerminalDataset,
 )
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import C_0
 from tidy3d.log import log
 
@@ -131,7 +132,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
             "power_incident": power_inc,
             "power_reflected": power_refl,
         }
-        antenna_params_dict.pop("type")
+        antenna_params_dict.pop(TYPE_TAG_STR)
         return AntennaMetricsData(**antenna_params_dict)
 
     @property

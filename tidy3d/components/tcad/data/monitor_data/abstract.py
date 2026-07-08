@@ -11,7 +11,7 @@ from tidy3d.components.base_sim.data.monitor_data import AbstractUnstructuredMon
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.types import HeatChargeMonitorType
-from tidy3d.components.types import ScalarSymmetry
+from tidy3d.components.types import TYPE_TAG_STR, ScalarSymmetry
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.log import log
 
@@ -28,6 +28,7 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
 
     monitor: HeatChargeMonitorType = Field(
+        discriminator=TYPE_TAG_STR,
         title="Monitor",
         description="Monitor associated with the data.",
     )

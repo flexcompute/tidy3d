@@ -12,7 +12,8 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
 from tidy3d.components.mode_spec import ModeInterpSpec, ModeSpec
-from tidy3d.components.types import ArrayFloat1D, Axis
+from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Axis
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import RADIAN, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
 
@@ -154,7 +155,7 @@ class EMEModeSpec(ModeSpec):
     def _to_mode_spec(self) -> ModeSpec:
         """Convert to ordinary :class:`.ModeSpec`."""
         ms_dict = self.model_dump()
-        ms_dict.pop("type")
+        ms_dict.pop(TYPE_TAG_STR)
         ms_dict.pop("bend_medium_frame")
         ms_dict.pop("increasing_mode_tolerance")
         return ModeSpec.model_validate(ms_dict)
@@ -485,7 +486,7 @@ class EMECompositeGrid(EMEGridSpec):
     ... )
     """
 
-    subgrids: list[EMESubgridType] = Field(
+    subgrids: list[discriminated_union(EMESubgridType)] = Field(
         title="Subgrids",
         description="Subgrids in the composite grid.",
     )

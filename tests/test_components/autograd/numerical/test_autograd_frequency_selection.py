@@ -1,25 +1,32 @@
 # test autograd postprocess for frequency slicing to ensure gradients are consistent
 from __future__ import annotations
 
-import operator
+from pathlib import Path
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.types.base import Size
 from tidy3d.config import config
 
-PLOT_ADJ_COMPARISON = True  # False
-NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_from_parameters,
+    case_identity_id,
+    condition_metric,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
+
+PLOT_ADJ_COMPARISON = False
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_test_frequency_selection"
 
 if PLOT_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
@@ -257,7 +264,26 @@ adj_wvls_um = [1.5]
 geometry_sizes_wvl = [(3.0, 3.0, MODE_LAYER_HEIGHT_WVL)]
 polyslab_indices = np.linspace(SUBSTRATE_INDEX, WG_INDEX, 3)
 
-mode_data_test_parameters = []
+
+class FrequencySelectionCaseIdentity(BaseModel):
+    """Semantic identity for one mode-data frequency-selection case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    geometry_size_wvl: Size
+    polyslab_permittivity: float
+    num_extra_freqs: int
+    num_objectives: int
+    solver_freq_chunk_size: int
+
+
+class FrequencySelectionTestParameters(FrequencySelectionCaseIdentity):
+    """Full parameter bundle for one frequency-selection test invocation."""
+
+    test_number: int
+
+
+mode_data_test_parameters: list[FrequencySelectionTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -269,55 +295,41 @@ for idx in range(len(mesh_wvls_um)):
             polyslab_permittivity = polyslab_index**2
 
             mode_data_test_parameters.append(
-                {
-                    "mesh_wvl_um": mesh_wvl_um,
-                    "adj_wvl_um": adj_wvl_um,
-                    "geometry_size_wvl": geometry_size_wvl,
-                    "polyslab_permittivity": polyslab_permittivity,
-                    "test_number": test_number,
-                }
+                FrequencySelectionTestParameters(
+                    mesh_wvl_um=mesh_wvl_um,
+                    adj_wvl_um=adj_wvl_um,
+                    geometry_size_wvl=geometry_size_wvl,
+                    polyslab_permittivity=polyslab_permittivity,
+                    num_extra_freqs=NUM_EXTRA_FREQS,
+                    num_objectives=NUM_OBJECTIVES,
+                    solver_freq_chunk_size=2,
+                    test_number=test_number,
+                )
             )
 
             test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("mode_data_test_parameters", mode_data_test_parameters)
-def test_finite_difference_mode_data_polyslab(
-    mode_data_test_parameters, rng, monkeypatch, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test a variety of frequency combinations in the forward monitor to ensure we get
-    the same adjoint gradient when using a fixed set of frequencies in the objective function."""
+def _case_identity(parameters: FrequencySelectionTestParameters) -> FrequencySelectionCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return case_identity_from_parameters(FrequencySelectionCaseIdentity, parameters)
 
-    monkeypatch.setattr(config.adjoint, "solver_freq_chunk_size", 2)
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
-
-    test_number = mode_data_test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        geometry_size_wvl,
-        polyslab_permittivity,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "geometry_size_wvl",
-        "polyslab_permittivity",
-        "test_number",
-    )(mode_data_test_parameters)
+def _collect_frequency_selection_evaluation_data(
+    mode_data_test_parameters: FrequencySelectionTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    """Collect gradients for several objectives with different unselected monitor frequencies."""
+    mesh_wvl_um = mode_data_test_parameters.mesh_wvl_um
+    adj_wvl_um = mode_data_test_parameters.adj_wvl_um
+    geometry_size_wvl = mode_data_test_parameters.geometry_size_wvl
+    polyslab_permittivity = mode_data_test_parameters.polyslab_permittivity
+    num_extra_freqs = mode_data_test_parameters.num_extra_freqs
+    num_objectives = mode_data_test_parameters.num_objectives
+    test_number = mode_data_test_parameters.test_number
 
     adj_freq = td.C_0 / adj_wvl_um
-
-    dim_x_um = geometry_size_wvl[0] * mesh_wvl_um * 2
-    dim_y_um = geometry_size_wvl[1] * mesh_wvl_um * 2
-    thickness_um = geometry_size_wvl[2] * mesh_wvl_um
-
-    dim_x = 1 + int(dim_x_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    dim_y = 1 + int(dim_y_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    Nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
 
     sim_geometry = get_sim_geometry(mesh_wvl_um)
 
@@ -374,7 +386,7 @@ def test_finite_difference_mode_data_polyslab(
                 geometry_size_wvl=geometry_size_wvl,
                 box_for_override=box_for_override,
                 required_freqs=required_freqs,
-                num_extra_freqs=NUM_EXTRA_FREQS,
+                num_extra_freqs=num_extra_freqs,
                 rng=rng,
                 run_time=2e-11,
             ),
@@ -387,7 +399,7 @@ def test_finite_difference_mode_data_polyslab(
 
         return objective
 
-    objectives = [make_random_objective() for idx in range(NUM_OBJECTIVES)]
+    objectives = [make_random_objective() for _idx in range(num_objectives)]
     objective_grads = [ag.grad(obj) for obj in objectives]
 
     angles = np.linspace(0, 2 * np.pi, NUM_VERTICES + 1)[0:-1]
@@ -397,42 +409,130 @@ def test_finite_difference_mode_data_polyslab(
     input_data = [list(vertex_centers_x) + list(vertex_centers_y)]
     gradients = [np.squeeze(np.array(grad_fn(input_data)).flatten()) for grad_fn in objective_grads]
 
-    if PLOT_ADJ_COMPARISON:
-        for grad in gradients:
-            plt.plot(grad)
-        plt.xlabel("vertex")
-        plt.ylabel("gradient")
-        plt.show()
+    return {
+        "gradients": np.asarray(gradients, dtype=float),
+        "monitor_top_weights": monitor_top_weights,
+        "monitor_bottom_weights": monitor_bottom_weights,
+    }
 
+
+def _evaluate_frequency_selection_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric], dict[str, float]]:
+    """Evaluate saved-or-fresh frequency-selection gradients into RFC-style metrics."""
+    gradients = np.asarray(evaluation_data["gradients"], dtype=float)
     cumulative_rms_error = 0.0
+    max_rms_error = 0.0
     num = 0
     for grad_1_idx in range(len(gradients)):
         for grad_2_idx in range(grad_1_idx + 1, len(gradients)):
             grad_1 = gradients[grad_1_idx]
             grad_2 = gradients[grad_2_idx]
-
-            cumulative_rms_error += np.sqrt(np.mean((grad_1 - grad_2) ** 2))
+            pair_rms_error = float(np.sqrt(np.mean((grad_1 - grad_2) ** 2)))
+            cumulative_rms_error += pair_rms_error
+            max_rms_error = max(max_rms_error, pair_rms_error)
             num += 1
 
     avg_rms_error = cumulative_rms_error / num
+    regression_metrics = [
+        condition_metric("gradients_finite", bool(np.all(np.isfinite(gradients)))),
+        Metric(
+            name="average_pairwise_gradient_rms_error",
+            observed=float(avg_rms_error),
+            expected=1e-8,
+            comparator="lte",
+        ),
+    ]
+    observation_metrics = [
+        Metric(
+            name="max_pairwise_gradient_rms_error",
+            observed=float(max_rms_error),
+            expected=0.0,
+            comparator="gte",
+        ),
+        Metric(
+            name="num_gradient_pairs",
+            observed=float(num),
+            expected=0.0,
+            comparator="gte",
+        ),
+    ]
+    diagnostics = {
+        "avg_rms_error": float(avg_rms_error),
+        "max_rms_error": float(max_rms_error),
+        "num_gradient_pairs": float(num),
+    }
+    return regression_metrics, observation_metrics, diagnostics
 
+
+def _print_frequency_selection_summary(
+    mode_data_test_parameters: FrequencySelectionTestParameters,
+    diagnostics: dict[str, float],
+) -> None:
+    """Print the original frequency-selection diagnostic summary."""
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Geometry size: {geometry_size_wvl}")
-    print(f"Average RMS Error: {avg_rms_error}")
+    print(f"Numerical test #{mode_data_test_parameters.test_number}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{mode_data_test_parameters.mesh_wvl_um}, {mode_data_test_parameters.adj_wvl_um}"
+    )
+    print(f"Geometry size: {mode_data_test_parameters.geometry_size_wvl}")
+    print(f"Average RMS Error: {diagnostics['avg_rms_error']}")
     print("-" * 20)
     print("\n" * 3)
 
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{test_number}.npy"
 
-    try:
-        assert np.isclose(avg_rms_error, 0.0), "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "mode_data_test_parameters",
+    mode_data_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="freq-selection"),
+)
+def test_finite_difference_mode_data_polyslab(
+    request: pytest.FixtureRequest,
+    mode_data_test_parameters: FrequencySelectionTestParameters,
+    rng: np.random.Generator,
+    monkeypatch: pytest.MonkeyPatch,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    """Test that extra unselected monitor frequencies do not affect adjoint gradients."""
+    monkeypatch.setattr(
+        config.adjoint,
+        "solver_freq_chunk_size",
+        mode_data_test_parameters.solver_freq_chunk_size,
+    )
+
+    case_identity = _case_identity(mode_data_test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_frequency_selection_evaluation_data(
+            mode_data_test_parameters, rng, numerical_case_dir
+        ),
+    )
+
+    if PLOT_ADJ_COMPARISON:
+        for grad in np.asarray(evaluation_data["gradients"], dtype=float):
+            plt.plot(grad)
+        plt.xlabel("vertex")
+        plt.ylabel("gradient")
+        plt.show()
+
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_frequency_selection_evaluation_data(evaluation_data)
+    )
+    _print_frequency_selection_summary(mode_data_test_parameters, diagnostics)
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Frequency-selection gradient mismatch; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

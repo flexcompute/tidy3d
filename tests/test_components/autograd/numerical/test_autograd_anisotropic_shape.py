@@ -2,28 +2,60 @@
 
 from __future__ import annotations
 
-import operator
 import sys
+from pathlib import Path
 
 import autograd as ag
 import autograd.numpy as anp
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    evaluate_fd_adjoint_gradient_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+
 PLOT_FD_ADJ_COMPARISON = False
-NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_anisotropic_shape_test"
 
 RMS_THRESHOLD = 0.25
+
+
+class AnisotropicShapeCaseIdentity(BaseModel):
+    """Semantic identity for one anisotropic PolySlab diffraction-gradient case."""
+
+    case_name: str
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_bg_index: float
+    pw_angle_deg: float
+    order_x: tuple[int, ...]
+    order_y: tuple[int, ...]
+    grating_mode: str
+    polyslab_medium_kind: str
+    polyslab_eps_vals: tuple[float, float, float]
+    encasing_medium_kind: str
+    encasing_eps_vals: tuple[float, float, float]
+    rms_threshold: float
+
+
+class AnisotropicShapeTestParameters(AnisotropicShapeCaseIdentity):
+    """Full parameter bundle for one anisotropic shape test invocation."""
+
+    test_number: int
+
 
 if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
@@ -210,7 +242,11 @@ def create_objective_function(
             simulation_dict[f"numerical_aniso_shape_testing_{idx}"] = sim_with_polyslab.copy()
 
         sim_data = web.run_async(
-            simulation_dict, path_dir=sim_path_dir, local_gradient=LOCAL_GRADIENT, verbose=VERBOSE
+            simulation_dict,
+            path_dir=sim_path_dir,
+            local_gradient=LOCAL_GRADIENT,
+            verbose=VERBOSE,
+            lazy=False,
         )
 
         objective_vals = []
@@ -231,103 +267,78 @@ WG_INDEX = 3.5
 
 NUM_VERTICES = 4
 
-background_indices = [1.0]
-mesh_wvls_um = [MESH_ADJ_WVL]
-adj_wvls_um = [MESH_ADJ_WVL]
-orders_x = (0,)
-orders_y = (0,)
-pw_angles_deg = [0.0]
-grating_modes = ["transmission"]
-
-periodic_test_parameters = [
-    {
-        "case_name": "polyslab_aniso_encasing_iso",
-        "mesh_wvl_um": MESH_ADJ_WVL,
-        "adj_wvl_um": MESH_ADJ_WVL,
-        "monitor_bg_index": 1.0,
-        "pw_angle_deg": 0.0,
-        "order_x": (0,),
-        "order_y": (0,),
-        "grating_mode": "transmission",
-        "polyslab_medium_kind": "anisotropic",
-        "polyslab_eps_vals": (WG_INDEX**2, WG_INDEX**2 - 4.0, WG_INDEX**2 - 2.0),
-        "encasing_medium_kind": "isotropic",
-        "encasing_eps_vals": (1.8, 1.8, 1.8),
-        "test_number": 0,
-    },
-    {
-        "case_name": "polyslab_iso_encasing_aniso",
-        "mesh_wvl_um": MESH_ADJ_WVL,
-        "adj_wvl_um": MESH_ADJ_WVL,
-        "monitor_bg_index": 1.0,
-        "pw_angle_deg": 0.0,
-        "order_x": (0,),
-        "order_y": (0,),
-        "grating_mode": "transmission",
-        "polyslab_medium_kind": "isotropic",
-        "polyslab_eps_vals": (WG_INDEX**2, WG_INDEX**2, WG_INDEX**2),
-        "encasing_medium_kind": "anisotropic",
-        "encasing_eps_vals": (1.6, 2.3, 1.65),
-        "test_number": 1,
-    },
-    {
-        "case_name": "polyslab_aniso_encasing_aniso",
-        "mesh_wvl_um": MESH_ADJ_WVL,
-        "adj_wvl_um": MESH_ADJ_WVL,
-        "monitor_bg_index": 1.0,
-        "pw_angle_deg": 0.0,
-        "order_x": (0,),
-        "order_y": (0,),
-        "grating_mode": "transmission",
-        "polyslab_medium_kind": "anisotropic",
-        "polyslab_eps_vals": (WG_INDEX**2 - 4.0, WG_INDEX**2, WG_INDEX**2 - 0.2),
-        "encasing_medium_kind": "anisotropic",
-        "encasing_eps_vals": (1.6, 2.3, 1.65),
-        "test_number": 2,
-    },
+ANISOTROPIC_SHAPE_PARAMETERS = [
+    AnisotropicShapeTestParameters(
+        case_name="polyslab_aniso_encasing_iso",
+        mesh_wvl_um=MESH_ADJ_WVL,
+        adj_wvl_um=MESH_ADJ_WVL,
+        monitor_bg_index=1.0,
+        pw_angle_deg=0.0,
+        order_x=(0,),
+        order_y=(0,),
+        grating_mode="transmission",
+        polyslab_medium_kind="anisotropic",
+        polyslab_eps_vals=(WG_INDEX**2, WG_INDEX**2 - 4.0, WG_INDEX**2 - 2.0),
+        encasing_medium_kind="isotropic",
+        encasing_eps_vals=(1.8, 1.8, 1.8),
+        rms_threshold=RMS_THRESHOLD,
+        test_number=0,
+    ),
+    AnisotropicShapeTestParameters(
+        case_name="polyslab_iso_encasing_aniso",
+        mesh_wvl_um=MESH_ADJ_WVL,
+        adj_wvl_um=MESH_ADJ_WVL,
+        monitor_bg_index=1.0,
+        pw_angle_deg=0.0,
+        order_x=(0,),
+        order_y=(0,),
+        grating_mode="transmission",
+        polyslab_medium_kind="isotropic",
+        polyslab_eps_vals=(WG_INDEX**2, WG_INDEX**2, WG_INDEX**2),
+        encasing_medium_kind="anisotropic",
+        encasing_eps_vals=(1.6, 2.3, 1.65),
+        rms_threshold=RMS_THRESHOLD,
+        test_number=1,
+    ),
+    AnisotropicShapeTestParameters(
+        case_name="polyslab_aniso_encasing_aniso",
+        mesh_wvl_um=MESH_ADJ_WVL,
+        adj_wvl_um=MESH_ADJ_WVL,
+        monitor_bg_index=1.0,
+        pw_angle_deg=0.0,
+        order_x=(0,),
+        order_y=(0,),
+        grating_mode="transmission",
+        polyslab_medium_kind="anisotropic",
+        polyslab_eps_vals=(WG_INDEX**2 - 4.0, WG_INDEX**2, WG_INDEX**2 - 0.2),
+        encasing_medium_kind="anisotropic",
+        encasing_eps_vals=(1.6, 2.3, 1.65),
+        rms_threshold=RMS_THRESHOLD,
+        test_number=2,
+    ),
 ]
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize(
-    "periodic_test_parameters", periodic_test_parameters, ids=lambda p: p["case_name"]
-)
-def test_finite_difference_anisotropic_shape(
-    periodic_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Compare FD vs adjoint diffraction-based shape gradients for anisotropic PolySlab cases."""
+def _case_identity(
+    anisotropic_shape_parameters: AnisotropicShapeTestParameters,
+) -> AnisotropicShapeCaseIdentity:
+    return case_identity_from_parameters(AnisotropicShapeCaseIdentity, anisotropic_shape_parameters)
 
-    test_results = np.zeros((2, 2))
 
-    (
-        case_name,
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_bg_index,
-        _pw_angle_deg,
-        order_x,
-        order_y,
-        _grating_mode,
-        polyslab_medium_kind,
-        polyslab_eps_vals,
-        encasing_medium_kind,
-        encasing_eps_vals,
-        test_number,
-    ) = operator.itemgetter(
-        "case_name",
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_bg_index",
-        "pw_angle_deg",
-        "order_x",
-        "order_y",
-        "grating_mode",
-        "polyslab_medium_kind",
-        "polyslab_eps_vals",
-        "encasing_medium_kind",
-        "encasing_eps_vals",
-        "test_number",
-    )(periodic_test_parameters)
+def _collect_anisotropic_shape_evaluation_data(
+    anisotropic_shape_parameters: AnisotropicShapeTestParameters,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    case_name = anisotropic_shape_parameters.case_name
+    mesh_wvl_um = anisotropic_shape_parameters.mesh_wvl_um
+    adj_wvl_um = anisotropic_shape_parameters.adj_wvl_um
+    monitor_bg_index = anisotropic_shape_parameters.monitor_bg_index
+    order_x = anisotropic_shape_parameters.order_x
+    order_y = anisotropic_shape_parameters.order_y
+    polyslab_medium_kind = anisotropic_shape_parameters.polyslab_medium_kind
+    polyslab_eps_vals = anisotropic_shape_parameters.polyslab_eps_vals
+    encasing_medium_kind = anisotropic_shape_parameters.encasing_medium_kind
+    encasing_eps_vals = anisotropic_shape_parameters.encasing_eps_vals
 
     box_for_override = td.Box(
         center=(0, 0, 0), size=(np.inf, np.inf, POLYSLAB_HEIGHT_WVL * adj_wvl_um + mesh_wvl_um)
@@ -337,12 +348,9 @@ def test_finite_difference_anisotropic_shape(
     sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     def eval_fn(sim_data):
-        amps = sim_data["monitor_diffraction"].amps.sel(orders_x=0, orders_y=0)
-        amp_s = amps.sel(polarization="s").data
-        amp_p = amps.sel(polarization="p").data
         total = 0.0
-        for order_x_val in orders_x:
-            for order_y_val in orders_y:
+        for order_x_val in order_x:
+            for order_y_val in order_y:
                 amp_p = (
                     sim_data["monitor_diffraction"]
                     .amps.sel(polarization="p", orders_x=order_x_val, orders_y=order_y_val)
@@ -409,56 +417,131 @@ def test_finite_difference_anisotropic_shape(
     fd_grad = np.zeros(2)
     fd_grad[0] = (all_obj[0] - all_obj[1]) / (2 * fd_step)
     fd_grad[1] = (all_obj[2] - all_obj[3]) / (2 * fd_step)
-    rms_error = np.linalg.norm(fd_grad - adj_grad)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(adj_grad)
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - adj_grad) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+
+    return {
+        "fd_grad": np.asarray(fd_grad, dtype=float),
+        "adj_grad_projected": np.asarray(adj_grad[0], dtype=float),
+        "fd_step": np.asarray(fd_step, dtype=float),
+        "params0": np.asarray(params0, dtype=float),
+    }
+
+
+def _evaluate_anisotropic_shape_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"], dtype=float),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"], dtype=float),
+        relative_rms_threshold=RMS_THRESHOLD,
     )
+
+
+def _print_anisotropic_shape_summary(
+    anisotropic_shape_parameters: AnisotropicShapeTestParameters,
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
+    adj_grad = np.asarray(evaluation_data["adj_grad_projected"], dtype=float)
 
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{test_number}: {case_name}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Orders: x={order_x}, y={order_y}, output polarization='p'")
-    print(f"PolySlab medium: {polyslab_medium_kind} {polyslab_eps_vals}")
-    print(f"Encasing medium: {encasing_medium_kind} {encasing_eps_vals}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
     print(
-        f"[{case_name}] width_fd={fd_grad[0]:.6e} height_fd={fd_grad[1]:.6e}",
+        f"Numerical test #{anisotropic_shape_parameters.test_number}: {anisotropic_shape_parameters.case_name}"
+    )
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{anisotropic_shape_parameters.mesh_wvl_um}, {anisotropic_shape_parameters.adj_wvl_um}"
+    )
+    print(
+        f"Orders: x={anisotropic_shape_parameters.order_x}, "
+        f"y={anisotropic_shape_parameters.order_y}, output polarization='p'"
+    )
+    print(
+        "PolySlab medium: "
+        f"{anisotropic_shape_parameters.polyslab_medium_kind} "
+        f"{anisotropic_shape_parameters.polyslab_eps_vals}"
+    )
+    print(
+        "Encasing medium: "
+        f"{anisotropic_shape_parameters.encasing_medium_kind} "
+        f"{anisotropic_shape_parameters.encasing_eps_vals}"
+    )
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
+    print(
+        f"[{anisotropic_shape_parameters.case_name}] width_fd={fd_grad[0]:.6e} "
+        f"height_fd={fd_grad[1]:.6e}",
         file=sys.stderr,
     )
     print(
-        f"[{case_name}] width_adj={adj_grad[0][0]:.6e} height_adj={adj_grad[0][1]:.6e}",
+        f"[{anisotropic_shape_parameters.case_name}] width_adj={adj_grad[0]:.6e} "
+        f"height_adj={adj_grad[1]:.6e}",
         file=sys.stderr,
     )
     print("-" * 20)
     print("\n" * 3)
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = adj_grad[0]
 
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
+def _plot_anisotropic_shape_comparison(
+    anisotropic_shape_parameters: AnisotropicShapeTestParameters, evaluation_data: EvaluationData
+) -> None:
+    plt.plot(evaluation_data["adj_grad_projected"], color="g", linewidth=2.0)
+    plt.plot(evaluation_data["fd_grad"], color="b", linewidth=1.5, linestyle="--")
+    plt.title(f"Width/Height Gradient: {anisotropic_shape_parameters.case_name}")
+    plt.legend(["Adjoint", "Finite difference"])
+    plt.xlabel("Parameter index")
+    plt.ylabel("Gradient value")
+    plt.legend()
+    plt.show()
 
-    try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "anisotropic_shape_parameters",
+    ANISOTROPIC_SHAPE_PARAMETERS,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="aniso-shape"),
+)
+def test_finite_difference_anisotropic_shape(
+    request: pytest.FixtureRequest,
+    anisotropic_shape_parameters: AnisotropicShapeTestParameters,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Compare FD vs adjoint diffraction-based shape gradients for anisotropic PolySlab cases."""
+    case_identity = _case_identity(anisotropic_shape_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_anisotropic_shape_evaluation_data(
+            anisotropic_shape_parameters, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_anisotropic_shape_evaluation_data(evaluation_data)
+    )
+    _print_anisotropic_shape_summary(
+        anisotropic_shape_parameters,
+        evaluation_data,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(adj_grad, color="g", linewidth=2.0)
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
-        plt.title(f"Width/Height Gradient: {case_name}")
-        plt.legend(["Adjoint", "Finite difference"])
-        plt.xlabel("Parameter index")
-        plt.ylabel("Gradient value")
-        plt.legend()
-        plt.show()
+        _plot_anisotropic_shape_comparison(anisotropic_shape_parameters, evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Anisotropic shape RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

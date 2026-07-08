@@ -431,6 +431,40 @@ def test_multistep_job_run_chains_parent_tasks(mock_multistep_task_api, tmp_path
     assert job.status == "success"
 
 
+def test_multistep_job_run_prints_upload_estimates_when_verbose(mock_multistep_task_api, tmp_path):
+    job = Job(
+        simulation=FULL_STEADY_HEAT,
+        task_name="workflow_job",
+        folder_name="default",
+        verbose=True,
+    )
+
+    job.run(path=tmp_path / "solve.hdf5")
+
+    assert [
+        upload_call["kwargs"]["verbose_estimate_cost"]
+        for upload_call in mock_multistep_task_api["upload"]
+    ] == [True, True]
+
+
+def test_multistep_job_run_to_file_honors_verbose_estimate_override(
+    mock_multistep_task_api, tmp_path
+):
+    job = Job(
+        simulation=FULL_STEADY_HEAT,
+        task_name="workflow_job",
+        folder_name="default",
+        verbose=False,
+    )
+
+    job._run_to_file(path=tmp_path / "solve.hdf5", verbose_estimate_cost=True)
+
+    assert [
+        upload_call["kwargs"]["verbose_estimate_cost"]
+        for upload_call in mock_multistep_task_api["upload"]
+    ] == [True, True]
+
+
 def test_single_step_cacheable_false_skips_local_cache(
     monkeypatch, mock_multistep_task_api, tmp_path
 ):
@@ -1147,6 +1181,42 @@ def test_multistep_cache_only_final_step_survives_job_serialization(
     assert sum(not isinstance(call, VolumeMesher) for call in restore_calls) == 2
 
 
+def test_multistep_cache_only_final_step_step_error_suggests_load_or_run(
+    monkeypatch, mock_multistep_task_api, tmp_path
+):
+    def _fake_restore(simulation, path, **kwargs):
+        if isinstance(simulation, VolumeMesher):
+            return None, None
+        Path(path).write_text("cached final")
+        return path, None
+
+    monkeypatch.setattr("tidy3d.web.api.task_api.restore_simulation_if_cached", _fake_restore)
+
+    job = Job(
+        simulation=FULL_STEADY_HEAT,
+        task_name="workflow_job",
+        folder_name="default",
+        verbose=False,
+    )
+    job.run(path=tmp_path / "solve.hdf5")
+
+    job_path = tmp_path / "job.json"
+    job.to_file(job_path)
+    loaded = Job.from_file(job_path)
+    loaded.load(path=tmp_path / "loaded.hdf5")
+    upload_count = len(mock_multistep_task_api["upload"])
+
+    with pytest.raises(DataError) as exc_info:
+        loaded.step(path=tmp_path / "unused.hdf5")
+
+    message = str(exc_info.value)
+    assert "Job.step() only advances an incomplete workflow one step" in message
+    assert "Job.load()" in message
+    assert "Job.run()" in message
+    assert "local cache" in message
+    assert len(mock_multistep_task_api["upload"]) == upload_count
+
+
 def test_multistep_cache_only_final_step_cache_miss_reruns_after_job_serialization(
     monkeypatch, mock_multistep_task_api, tmp_path
 ):
@@ -1461,6 +1531,7 @@ def test_uniform_multistep_batch_run_orchestrates_by_workflow_steps(
     assert {call["kwargs"]["task_name"] for call in uploads[:2]} == {"a_mesh", "b_mesh"}
     assert {call["kwargs"]["task_name"] for call in uploads[2:]} == {"a_solve", "b_solve"}
     assert all(call["kwargs"]["verbose"] is False for call in uploads)
+    assert all(call["kwargs"]["verbose_estimate_cost"] is True for call in uploads)
     assert all(call["kwargs"]["parent_tasks"] is None for call in uploads[:2])
     assert {
         call["kwargs"]["task_name"]: call["kwargs"]["parent_tasks"] for call in uploads[2:]
@@ -1588,7 +1659,7 @@ def test_uniform_multistep_batch_step_checkpoints_and_resumes(mock_multistep_tas
     batch = Batch(
         simulations={"a": FULL_STEADY_HEAT, "b": FULL_STEADY_HEAT},
         folder_name="default",
-        verbose=False,
+        verbose=True,
         num_workers=1,
     )
 
@@ -1618,6 +1689,65 @@ def test_uniform_multistep_batch_step_checkpoints_and_resumes(mock_multistep_tas
         loaded.jobs["a"].task_ids["solve"],
         loaded.jobs["b"].task_ids["solve"],
     }
+    assert all(
+        upload_call["kwargs"]["verbose_estimate_cost"] is True
+        for upload_call in mock_multistep_task_api["upload"]
+    )
+
+
+def test_uniform_multistep_batch_step_complete_error_suggests_load_or_run(
+    mock_multistep_task_api, tmp_path
+):
+    batch = Batch(
+        simulations={"heat": FULL_STEADY_HEAT},
+        folder_name="default",
+        verbose=False,
+        num_workers=1,
+    )
+    batch.run(path_dir=tmp_path)
+    upload_count = len(mock_multistep_task_api["upload"])
+
+    with pytest.raises(DataError) as exc_info:
+        batch.step(path_dir=tmp_path)
+
+    message = str(exc_info.value)
+    assert "Batch.step() only advances an incomplete batch workflow one step" in message
+    assert "Batch.load()" in message
+    assert "Batch.run()" in message
+    assert "local cache" in message
+    assert len(mock_multistep_task_api["upload"]) == upload_count
+
+
+def test_uniform_multistep_batch_step_cache_restored_complete_error_suggests_load_or_run(
+    monkeypatch, mock_multistep_task_api, tmp_path
+):
+    def _fake_restore(simulation, path, **kwargs):
+        if isinstance(simulation, VolumeMesher):
+            return None, None
+        Path(path).write_text("cached final")
+        return path, None
+
+    monkeypatch.setattr("tidy3d.web.api.task_api.restore_simulation_if_cached", _fake_restore)
+
+    batch = Batch(
+        simulations={"heat": FULL_STEADY_HEAT},
+        folder_name="default",
+        verbose=False,
+        num_workers=1,
+    )
+    batch.run(path_dir=tmp_path)
+    loaded = Batch.from_file(tmp_path / "batch.hdf5")
+    upload_count = len(mock_multistep_task_api["upload"])
+
+    with pytest.raises(DataError) as exc_info:
+        loaded.step(path_dir=tmp_path)
+
+    message = str(exc_info.value)
+    assert "Batch.step() only advances an incomplete batch workflow one step" in message
+    assert "Batch.load()" in message
+    assert "Batch.run()" in message
+    assert "local cache" in message
+    assert len(mock_multistep_task_api["upload"]) == upload_count
 
 
 def test_uniform_multistep_batch_estimate_cost_reports_mesh_frontier(
@@ -1876,8 +2006,7 @@ def test_mixed_batch_run_keeps_single_step_batch_pipeline(monkeypatch, tmp_path)
             return "success"
 
         def _run_to_file(self, path, **kwargs):
-            del kwargs
-            events.append("multi_run")
+            events.append(("multi_run", kwargs))
             self.task_ids["solve"] = "multi-solve-id"
             Path(path).write_text("multi")
 
@@ -1897,7 +2026,9 @@ def test_mixed_batch_run_keeps_single_step_batch_pipeline(monkeypatch, tmp_path)
     ) in events
     assert ("single_estimate", {"verbose": False}) in events
     assert ("single_download", str(tmp_path / "single-task-id.hdf5")) in events
-    assert "multi_run" in events
+    multi_run_kwargs = next(event[1] for event in events if event[0] == "multi_run")
+    assert multi_run_kwargs["verbose_estimate_cost"] is True
+    assert multi_run_kwargs["priority"] == 7
     assert data.task_ids == {"heat": "multi-solve-id", "single": "single-task-id"}
     assert warning_messages == [
         "Batches containing both regular jobs and workflow jobs run those groups separately. "

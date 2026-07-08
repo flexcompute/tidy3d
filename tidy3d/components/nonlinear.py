@@ -348,7 +348,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     >>> medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
     """
 
-    models: tuple[NonlinearModelType, ...] = Field(
+    models: tuple[discriminated_union(NonlinearModelType), ...] = Field(
         (),
         title="Nonlinear models",
         description="The nonlinear models present in this nonlinear spec. "

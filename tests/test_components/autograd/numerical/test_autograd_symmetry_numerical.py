@@ -1,23 +1,31 @@
 # test autograd for field sources when symmetry is used in the simulation
 from __future__ import annotations
 
-import operator
 from pathlib import Path
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.types.base import Size
+
+from .numerical_test_helpers import (
+    EvalFn,
+    EvaluationData,
+    case_identity_from_parameters,
+    case_identity_id,
+    condition_metric,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 PLOT_SYMMETRY_COMPARISON = False
-NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = False
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
-LOCAL_GRADIENT = False
+LOCAL_GRADIENT = True
 VERBOSE = False
 
 RMS_THRESHOLD = 0.25
@@ -170,9 +178,8 @@ def make_eval_fns(monitor_size_wvl):
 
     def intensity(sim_data):
         field_data = sim_data["monitor_fields"]
-        _shape_x, _shape_y, _shape_z, *_ = field_data.Ex.values.shape
 
-        return np.sum(np.abs(field_data.Ex.values) ** 2 + np.abs(field_data.Ey.values) ** 2)
+        return np.sum(field_data.field_intensity(components=("Ex", "Ey")).values)
 
     eval_fns = [intensity]
     eval_fn_names = ["intensity"]
@@ -195,7 +202,25 @@ mesh_wvls_um = [1.55]
 adj_wvls_um = [1.55]
 monitor_sizes_3d_wvl = [(0.5, 0.5, 0)]
 
-field_symmetry_test_parameters = []
+
+class FieldSymmetryCaseIdentity(BaseModel):
+    """Semantic identity for one field-source symmetry gradient comparison."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_size_wvl: Size
+    monitor_bg_index: float
+    eval_fn_name: str
+
+
+class FieldSymmetryTestParameters(FieldSymmetryCaseIdentity):
+    """Full parameter bundle for one symmetry test invocation."""
+
+    eval_fn: EvalFn
+    test_number: int
+
+
+field_symmetry_test_parameters: list[FieldSymmetryTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -208,53 +233,36 @@ for idx in range(len(mesh_wvls_um)):
         for monitor_bg_index in background_indices:
             for eval_fn_idx, eval_fn in enumerate(eval_fns):
                 field_symmetry_test_parameters.append(
-                    {
-                        "mesh_wvl_um": mesh_wvl_um,
-                        "adj_wvl_um": adj_wvl_um,
-                        "monitor_size_wvl": monitor_size_wvl,
-                        "monitor_bg_index": monitor_bg_index,
-                        "eval_fn": eval_fn,
-                        "eval_fn_name": eval_fn_names[eval_fn_idx],
-                        "test_number": test_number,
-                    }
+                    FieldSymmetryTestParameters(
+                        mesh_wvl_um=mesh_wvl_um,
+                        adj_wvl_um=adj_wvl_um,
+                        monitor_size_wvl=monitor_size_wvl,
+                        monitor_bg_index=monitor_bg_index,
+                        eval_fn=eval_fn,
+                        eval_fn_name=eval_fn_names[eval_fn_idx],
+                        test_number=test_number,
+                    )
                 )
 
                 test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("field_symmetry_test_parameters", field_symmetry_test_parameters)
-def test_adjoint_difference_symmetry(
-    field_symmetry_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test the gradient is not affected by symmetry when using field sources."""
+def _case_identity(parameters: FieldSymmetryTestParameters) -> FieldSymmetryCaseIdentity:
+    """Build the semantic case identity used for eval-only replay validation."""
+    return case_identity_from_parameters(FieldSymmetryCaseIdentity, parameters)
 
-    num_tests = 0
-    for monitor_size_wvl in monitor_sizes_3d_wvl:
-        eval_fns, _ = make_eval_fns(monitor_size_wvl)
-        num_tests += len(eval_fns) * len(background_indices) * len(mesh_wvls_um)
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
-
-    test_number = field_symmetry_test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_size_wvl,
-        monitor_bg_index,
-        eval_fn,
-        eval_fn_name,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_size_wvl",
-        "monitor_bg_index",
-        "eval_fn",
-        "eval_fn_name",
-        "test_number",
-    )(field_symmetry_test_parameters)
+def _collect_field_symmetry_evaluation_data(
+    field_symmetry_test_parameters: FieldSymmetryTestParameters,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    """Collect objective values and gradients for all symmetry settings."""
+    mesh_wvl_um = field_symmetry_test_parameters.mesh_wvl_um
+    adj_wvl_um = field_symmetry_test_parameters.adj_wvl_um
+    monitor_size_wvl = field_symmetry_test_parameters.monitor_size_wvl
+    monitor_bg_index = field_symmetry_test_parameters.monitor_bg_index
+    eval_fn = field_symmetry_test_parameters.eval_fn
+    test_number = field_symmetry_test_parameters.test_number
 
     dim_um = mesh_wvl_um
     dim_um = mesh_wvl_um
@@ -269,8 +277,6 @@ def test_adjoint_difference_symmetry(
     box_for_override = td.Box(
         center=(0, 0, 0), size=(*sim_geometry.size[0:2], thickness_um + mesh_wvl_um)
     )
-
-    eval_fns, _eval_fn_names = make_eval_fns(monitor_size_wvl)
 
     sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
     sim_path_dir.mkdir(parents=True, exist_ok=True)
@@ -321,39 +327,148 @@ def test_adjoint_difference_symmetry(
         objs.append(obj)
         adj_grads.append(np.array(adj_grad))
 
+    return {
+        "objective_values": np.asarray(objs, dtype=float),
+        "adjoint_gradients": np.asarray(adj_grads, dtype=float),
+    }
+
+
+def _evaluate_field_symmetry_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric], dict[str, float]]:
+    """Evaluate saved-or-fresh symmetry gradients into RFC-style metrics."""
+    objs = np.asarray(evaluation_data["objective_values"], dtype=float)
+    adj_grads = np.asarray(evaluation_data["adjoint_gradients"], dtype=float)
+    symmetries = ["none", "x", "y", "xy"]
+
+    regression_metrics = [
+        condition_metric("objective_values_finite", bool(np.all(np.isfinite(objs)))),
+        condition_metric("adjoint_gradients_finite", bool(np.all(np.isfinite(adj_grads)))),
+    ]
+    observation_metrics: list[Metric] = []
+    diagnostics: dict[str, float] = {}
+
     grad_data_base = adj_grads[0] / objs[0]
     for idx in range(1, len(adj_grads)):
-        # field magnitudes can be different for different symmetries so we expect the gradients
-        # to scale with the objecive values
+        # Field magnitudes can differ across symmetries, so compare objective-normalized gradients.
         grad_data = adj_grads[idx] / objs[idx]
 
         mag_base = np.sqrt(np.mean(grad_data_base**2))
         mag_compare = np.sqrt(np.mean(grad_data**2))
         rms_error = np.sqrt(np.mean((grad_data_base - grad_data) ** 2))
-
-        print(f"Testing {eval_fn_name} objective")
-        print(f"Symmetry comparison: {symmetries[0]}, {symmetries[idx]}")
-        print(f"RMS error (normalized): {rms_error / np.sqrt(mag_base * mag_compare)}")
-
-        assert np.isclose(rms_error / np.sqrt(mag_base * mag_compare), 0.0, atol=0.075), (
-            "Expected adjoint gradients to be the same with and without symmetry"
+        normalization = np.sqrt(mag_base * mag_compare)
+        normalized_rms_error = (
+            float(rms_error / normalization)
+            if normalization > 0
+            else float(np.finfo(np.float64).max)
         )
 
-        if PLOT_SYMMETRY_COMPARISON:
-            plot_grad_data_base = np.squeeze(grad_data_base)
-            plot_grad_data = np.squeeze(grad_data)
-            plot_diff = plot_grad_data - plot_grad_data_base
+        regression_metrics.append(
+            Metric(
+                name=f"symmetry_{symmetries[idx]}_normalized_rms_error",
+                observed=normalized_rms_error,
+                expected=0.075,
+                comparator="lte",
+            )
+        )
+        diagnostics[f"{symmetries[idx]}_normalized_rms_error"] = normalized_rms_error
+        observation_metrics.extend(
+            [
+                Metric(
+                    name=f"symmetry_{symmetries[idx]}_base_gradient_rms",
+                    observed=float(mag_base),
+                    expected=0.0,
+                    comparator="gte",
+                ),
+                Metric(
+                    name=f"symmetry_{symmetries[idx]}_comparison_gradient_rms",
+                    observed=float(mag_compare),
+                    expected=0.0,
+                    comparator="gte",
+                ),
+            ]
+        )
 
-            plt.subplot(1, 3, 1)
-            plt.imshow(plot_grad_data_base[:, :, plot_grad_data_base.shape[2] // 2])
-            plt.title(f"Symmetry: {symmetries[0]}")
-            plt.colorbar()
-            plt.subplot(1, 3, 2)
-            plt.imshow(plot_grad_data[:, :, plot_grad_data.shape[2] // 2])
-            plt.title(f"Symmetry: {symmetries[idx]}")
-            plt.colorbar()
-            plt.subplot(1, 3, 3)
-            plt.imshow(plot_diff[:, :, plot_diff.shape[2] // 2])
-            plt.title("Difference")
-            plt.colorbar()
-            plt.show()
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def _print_field_symmetry_summary(
+    field_symmetry_test_parameters: FieldSymmetryTestParameters,
+    diagnostics: dict[str, float],
+) -> None:
+    """Print the original symmetry-comparison diagnostics."""
+    for symmetry in ("x", "y", "xy"):
+        print(f"Testing {field_symmetry_test_parameters.eval_fn_name} objective")
+        print(f"Symmetry comparison: none, {symmetry}")
+        print(f"RMS error (normalized): {diagnostics[f'{symmetry}_normalized_rms_error']}")
+
+
+def _plot_field_symmetry_comparison(evaluation_data: EvaluationData) -> None:
+    """Plot symmetry gradient comparisons when interactive plotting is enabled."""
+    objs = np.asarray(evaluation_data["objective_values"], dtype=float)
+    adj_grads = np.asarray(evaluation_data["adjoint_gradients"], dtype=float)
+    symmetries = ["none", "x", "y", "xy"]
+    grad_data_base = adj_grads[0] / objs[0]
+    plot_grad_data_base = np.squeeze(grad_data_base)
+
+    for idx in range(1, len(adj_grads)):
+        grad_data = adj_grads[idx] / objs[idx]
+        plot_grad_data = np.squeeze(grad_data)
+        plot_diff = plot_grad_data - plot_grad_data_base
+
+        plt.subplot(1, 3, 1)
+        plt.imshow(plot_grad_data_base[:, :, plot_grad_data_base.shape[2] // 2])
+        plt.title(f"Symmetry: {symmetries[0]}")
+        plt.colorbar()
+        plt.subplot(1, 3, 2)
+        plt.imshow(plot_grad_data[:, :, plot_grad_data.shape[2] // 2])
+        plt.title(f"Symmetry: {symmetries[idx]}")
+        plt.colorbar()
+        plt.subplot(1, 3, 3)
+        plt.imshow(plot_diff[:, :, plot_diff.shape[2] // 2])
+        plt.title("Difference")
+        plt.colorbar()
+        plt.show()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "field_symmetry_test_parameters",
+    field_symmetry_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="symmetry"),
+)
+def test_adjoint_difference_symmetry(
+    request: pytest.FixtureRequest,
+    field_symmetry_test_parameters: FieldSymmetryTestParameters,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr,
+):
+    """Test the gradient is not affected by symmetry when using field sources."""
+    case_identity = _case_identity(field_symmetry_test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_field_symmetry_evaluation_data(
+            field_symmetry_test_parameters, numerical_case_dir
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = _evaluate_field_symmetry_evaluation_data(
+        evaluation_data
+    )
+    _print_field_symmetry_summary(field_symmetry_test_parameters, diagnostics)
+
+    if PLOT_SYMMETRY_COMPARISON:
+        _plot_field_symmetry_comparison(evaluation_data)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Expected adjoint gradients to be the same with and without symmetry; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

@@ -14,9 +14,6 @@ from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
-from tests.test_components.autograd.numerical.test_autograd_box_polyslab_numerical import (
-    angled_overlap_deg,
-)
 from tests.test_components.autograd.test_autograd_triangle_mesh import subdivide_triangles
 from tidy3d import config
 from tidy3d.components.autograd import get_static
@@ -757,8 +754,8 @@ def test_grad_insensitive_to_face_splitting(
     print("grad_subdiv_2   \t", grad_subdiv_2.tolist())
 
     # Optional angles for log inspection.
-    angle_base_vs_1 = angled_overlap_deg(grad_base, grad_subdiv_1)
-    angle_base_vs_2 = angled_overlap_deg(grad_base, grad_subdiv_2)
+    angle_base_vs_1 = gradient_angle_deg(grad_base, grad_subdiv_1)
+    angle_base_vs_2 = gradient_angle_deg(grad_base, grad_subdiv_2)
     print(
         f"Base vs subdiv-1 angle: {angle_base_vs_1:.3f}°; "
         f"Base vs subdiv-2 angle: {angle_base_vs_2:.3f}°"

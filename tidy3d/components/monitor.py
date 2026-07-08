@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -1987,6 +1988,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
     medium: MediumType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Projection medium",
         description="Medium through which to project fields. Generally, the fields should be "
         "projected through the same medium as the one in which this monitor is placed, and "

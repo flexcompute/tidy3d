@@ -23,6 +23,7 @@ from tidy3d.components.microwave.path_integrals.specs.voltage import (
     AxisAlignedVoltageIntegralSpec,
     Custom2DVoltageIntegralSpec,
 )
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import SetupError, ValidationError, format_chained_exception_message
 
 if TYPE_CHECKING:
@@ -54,9 +55,9 @@ def make_voltage_integral(path_spec: VoltagePathSpecType) -> VoltageIntegralType
     """
     v_integral = None
     if isinstance(path_spec, AxisAlignedVoltageIntegralSpec):
-        v_integral = AxisAlignedVoltageIntegral(**path_spec.model_dump(exclude={"type"}))
+        v_integral = AxisAlignedVoltageIntegral(**path_spec.model_dump(exclude={TYPE_TAG_STR}))
     elif isinstance(path_spec, Custom2DVoltageIntegralSpec):
-        v_integral = Custom2DVoltageIntegral(**path_spec.model_dump(exclude={"type"}))
+        v_integral = Custom2DVoltageIntegral(**path_spec.model_dump(exclude={TYPE_TAG_STR}))
     else:
         raise ValidationError(f"Unsupported voltage path specification type: {type(path_spec)}")
     return v_integral
@@ -78,11 +79,11 @@ def make_current_integral(path_spec: CurrentPathSpecType) -> CurrentIntegralType
     """
     i_integral = None
     if isinstance(path_spec, AxisAlignedCurrentIntegralSpec):
-        i_integral = AxisAlignedCurrentIntegral(**path_spec.model_dump(exclude={"type"}))
+        i_integral = AxisAlignedCurrentIntegral(**path_spec.model_dump(exclude={TYPE_TAG_STR}))
     elif isinstance(path_spec, Custom2DCurrentIntegralSpec):
-        i_integral = Custom2DCurrentIntegral(**path_spec.model_dump(exclude={"type"}))
+        i_integral = Custom2DCurrentIntegral(**path_spec.model_dump(exclude={TYPE_TAG_STR}))
     elif isinstance(path_spec, CompositeCurrentIntegralSpec):
-        i_integral = CompositeCurrentIntegral(**path_spec.model_dump(exclude={"type"}))
+        i_integral = CompositeCurrentIntegral(**path_spec.model_dump(exclude={TYPE_TAG_STR}))
     else:
         raise ValidationError(f"Unsupported current path specification type: {type(path_spec)}")
     return i_integral

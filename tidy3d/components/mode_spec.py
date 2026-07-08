@@ -18,6 +18,7 @@ from pydantic import (
 )
 
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -402,7 +403,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
     sampling_spec: UniformSampling | ChebSampling | CustomSampling = Field(
         title="Sampling Specification",
         description="Specification for frequency sampling points.",
-        discriminator="type",
+        discriminator=TYPE_TAG_STR,
     )
 
     method: Literal["linear", "cubic", "poly"] = Field(

@@ -18,7 +18,7 @@ from tidy3d.components.microwave.path_integrals.specs.base import (
 )
 from tidy3d.components.microwave.path_integrals.viz import ARROW_CURRENT, plot_params_current_path
 from tidy3d.components.types import ArrayFloat2D
-from tidy3d.components.types.base import Direction
+from tidy3d.components.types.base import Direction, discriminated_union
 from tidy3d.components.validators import assert_plane
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import MICROMETER, fp_eps
@@ -337,7 +337,9 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     ... )
     """
 
-    path_specs: tuple[AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec, ...] = Field(
+    path_specs: tuple[
+        discriminated_union(AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec), ...
+    ] = Field(
         title="Path Specifications",
         description="Definition of the disjoint path specifications for each isolated contour integral.",
     )

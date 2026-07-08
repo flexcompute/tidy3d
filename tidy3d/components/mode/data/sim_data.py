@@ -12,6 +12,7 @@ from tidy3d.components.data.monitor_data import MediumData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.components.viz.layout import estimate_field_components_figsize
 from tidy3d.exceptions import SetupError
@@ -44,7 +45,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         discriminator=TYPE_TAG_STR,
     )
 
-    data: tuple[ModeSimulationMonitorDataType, ...] = Field(
+    data: tuple[discriminated_union(ModeSimulationMonitorDataType), ...] = Field(
         (),
         title="Monitor Data",
         description="List of monitor data "

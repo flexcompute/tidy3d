@@ -117,6 +117,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         values_type: type = IndexedDataArray,
         expect_complex: bool = False,
         ignore_invalid_cells: bool = False,
+        warn_unused_points: bool = True,
     ) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -174,7 +175,12 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
                 points=points, values=values, cells=cells
             )
 
-        return cls(points=points, cells=cells, values=values)
+        return cls._construct_from_vtk_arrays(
+            warn_unused_points=warn_unused_points,
+            points=points,
+            cells=cells,
+            values=values,
+        )
 
     """ Grid operations """
 

@@ -139,6 +139,47 @@ def _make_di(paths, freq):
     )
 
 
+def test_custom_medium_real_eps_dataset_derivative_is_real():
+    """Real-valued eps_dataset components must produce real VJPs."""
+    freq = 2.0e14
+    coords = {"x": [0.0], "y": [0.0], "z": [0.0], "f": [freq]}
+    eps_component = td.ScalarFieldDataArray(np.full((1, 1, 1, 1), 2.0), coords=coords)
+    medium = td.CustomMedium(
+        eps_dataset=td.PermittivityDataset(
+            eps_xx=eps_component,
+            eps_yy=eps_component,
+            eps_zz=eps_component,
+        )
+    )
+
+    complex_field = td.ScalarFieldDataArray(
+        np.full((1, 1, 1, 1), 1.0 + 2.0j),
+        coords=coords,
+    )
+    zero_field = td.ScalarFieldDataArray(np.zeros((1, 1, 1, 1), dtype=complex), coords=coords)
+    info = DerivativeInfo(
+        paths=[("eps_dataset", "eps_xx")],
+        E_der_map={"Ex": complex_field, "Ey": zero_field, "Ez": zero_field},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: eps_component,
+    )
+
+    grad = medium._compute_derivatives(info)[("eps_dataset", "eps_xx")]
+
+    assert np.isrealobj(grad)
+    assert grad.dtype == eps_component.values.dtype
+    assert np.any(grad)
+
+
 """ simulation configuration """
 
 WVL = 1.0
@@ -271,7 +312,7 @@ def use_emulated_run(monkeypatch):
             else:
                 return run_emulated(simulation, task_name=task_name), task_name_fwd
 
-        def emulated_get_autograd_flux_forward_data(task_id_fwd, verbose):
+        def emulated_get_autograd_flux_forward_data(task_id_fwd, verbose, **kwargs):
             """Return hidden flux helper data that remote runs download from the parent task."""
             return autograd_io_utils.flux_monitor_forward_data(
                 cache[task_id_fwd]["context"].simulation_data_forward
@@ -3867,7 +3908,7 @@ def test_custom_sellmeier(monkeypatch):
         return 1.0 + B * lam2 / (lam2 - C)
 
     eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values) + 0j
-    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+    dJ = ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr)
 
     _patch_cmp_custom_to_const(monkeypatch, td.CustomSellmeier, dJ)
 
@@ -3921,7 +3962,7 @@ def test_custom_lorentz(monkeypatch):
         + term(de1.values, f01.values, dl1.values)
         + term(de2.values, f02.values, dl2.values)
     )
-    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+    dJ = ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr)
 
     _patch_cmp_custom_to_const(monkeypatch, td.CustomLorentz, dJ)
 
@@ -4001,7 +4042,7 @@ def test_custom_drude(monkeypatch):
         return -(fp**2) / den
 
     eps_arr = eps_inf.values + term(fp1.values, dl1.values) + term(fp2.values, dl2.values)
-    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+    dJ = ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr)
 
     _patch_cmp_custom_to_const(monkeypatch, td.CustomDrude, dJ)
 
@@ -4069,7 +4110,7 @@ def test_custom_debye(monkeypatch):
         return de / den
 
     eps_arr = eps_inf.values + term(de1.values, tau1.values) + term(de2.values, tau2.values)
-    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+    dJ = ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr)
 
     _patch_cmp_custom_to_const(monkeypatch, td.CustomDebye, dJ)
 

@@ -55,8 +55,13 @@ def test_config_group_commands_are_namespaced():
 def test_diagnose_connection_command_prints_support_text(monkeypatch):
     calls = {}
 
-    def fake_diagnose_connection(*, api_samples, timeout, verbose):
-        calls.update(api_samples=api_samples, timeout=timeout, verbose=verbose)
+    def fake_diagnose_connection(*, api_samples, timeout, verbose, include_private_network_details):
+        calls.update(
+            api_samples=api_samples,
+            timeout=timeout,
+            verbose=verbose,
+            include_private_network_details=include_private_network_details,
+        )
         return _diagnostic_report()
 
     monkeypatch.setattr(
@@ -70,9 +75,35 @@ def test_diagnose_connection_command_prints_support_text(monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    assert calls == {"api_samples": 2, "timeout": 3.5, "verbose": False}
+    assert calls == {
+        "api_samples": 2,
+        "timeout": 3.5,
+        "verbose": False,
+        "include_private_network_details": False,
+    }
     assert "Tidy3D connection diagnostics" in result.output
     assert "api_latency: pass" in result.output
+
+
+def test_diagnose_connection_command_can_include_private_network_details(monkeypatch):
+    calls = {}
+
+    def fake_diagnose_connection(*, api_samples, timeout, verbose, include_private_network_details):
+        calls.update(include_private_network_details=include_private_network_details)
+        return _diagnostic_report()
+
+    monkeypatch.setattr(
+        "tidy3d.web.cli.diagnostics.diagnose_connection",
+        fake_diagnose_connection,
+    )
+
+    result = CliRunner().invoke(
+        tidy3d_cli,
+        ["diagnose-connection", "--private-network-details"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls == {"include_private_network_details": True}
 
 
 def test_diagnose_connection_command_can_print_json(monkeypatch):

@@ -75,6 +75,7 @@ class BeamProfile(Box):
 
     background_medium: MediumType = Field(
         default_factory=Medium,
+        discriminator=TYPE_TAG_STR,
         title="Background Medium",
         description="Background medium in which the beam is embedded.",
     )

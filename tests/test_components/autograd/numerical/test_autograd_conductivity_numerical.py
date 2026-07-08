@@ -18,27 +18,60 @@ validation for conductivity gradients in CustomMedium.
 
 from __future__ import annotations
 
-import operator
+from pathlib import Path
 
 import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from pydantic import BaseModel
 from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.types.base import Size
+
+from .numerical_test_helpers import (
+    EvalFn,
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_from_parameters,
+    case_identity_id,
+    coords_for_bounds,
+    evaluate_fd_adjoint_gradient_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = True
-SAVE_FD_LOC = 0
-SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
 NUMERICAL_RESULTS_SUBDIR = "numerical_conductivity_test"
 
 RMS_THRESHOLD = 0.6
+
+
+class ConductivityCaseIdentity(BaseModel):
+    """Semantic identity for one CustomMedium conductivity numerical case."""
+
+    mesh_wvl_um: float
+    adj_wvl_um: float
+    monitor_size_wvl: Size
+    monitor_bg_index: float
+    conductivity_scale: float
+    eval_fn_name: str
+    num_finite_difference: int
+    rms_threshold: float
+
+
+class ConductivityTestParameters(ConductivityCaseIdentity):
+    """Full parameter bundle for one conductivity finite-difference test."""
+
+    eval_fn: EvalFn
+    test_number: int
+
 
 if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
@@ -192,11 +225,7 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir, 
             # Get bounds and create coordinates
             bounds = geometry.bounds
             nx, ny, nz = dims
-            coords = {
-                "x": np.linspace(bounds[0][0], bounds[1][0], nx),
-                "y": np.linspace(bounds[0][1], bounds[1][1], ny),
-                "z": np.linspace(bounds[0][2], bounds[1][2], nz),
-            }
+            coords = coords_for_bounds(bounds, (nx, ny, nz))
 
             # Create CustomMedium with constant permittivity and variable conductivity
             custom_medium = td.CustomMedium(
@@ -222,7 +251,11 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir, 
             simulation_dict[f"numerical_conductivity_testing_{idx}"] = sim_with_block.copy()
 
         sim_data = web.run_async(
-            simulation_dict, path_dir=sim_path_dir, local_gradient=LOCAL_GRADIENT, verbose=VERBOSE
+            simulation_dict,
+            path_dir=sim_path_dir,
+            local_gradient=LOCAL_GRADIENT,
+            verbose=VERBOSE,
+            lazy=False,
         )
 
         objective_vals = []
@@ -289,7 +322,7 @@ monitor_sizes_3d_wvl = [(0.5, 0.5, 0)]
 # Different conductivity ranges to test
 conductivity_scales = [0.1]
 
-conductivity_data_test_parameters = []
+conductivity_data_test_parameters: list[ConductivityTestParameters] = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
@@ -303,84 +336,43 @@ for idx in range(len(mesh_wvls_um)):
             for conductivity_scale in conductivity_scales:
                 for eval_fn_idx, eval_fn in enumerate(eval_fns):
                     conductivity_data_test_parameters.append(
-                        {
-                            "mesh_wvl_um": mesh_wvl_um,
-                            "adj_wvl_um": adj_wvl_um,
-                            "monitor_size_wvl": monitor_size_wvl,
-                            "monitor_bg_index": monitor_bg_index,
-                            "conductivity_scale": conductivity_scale,
-                            "eval_fn": eval_fn,
-                            "eval_fn_name": eval_fn_names[eval_fn_idx],
-                            "test_number": test_number,
-                        }
+                        ConductivityTestParameters(
+                            mesh_wvl_um=mesh_wvl_um,
+                            adj_wvl_um=adj_wvl_um,
+                            monitor_size_wvl=monitor_size_wvl,
+                            monitor_bg_index=monitor_bg_index,
+                            conductivity_scale=conductivity_scale,
+                            eval_fn=eval_fn,
+                            eval_fn_name=eval_fn_names[eval_fn_idx],
+                            num_finite_difference=NUM_FINITE_DIFFERENCE,
+                            rms_threshold=RMS_THRESHOLD,
+                            test_number=test_number,
+                        )
                     )
 
                     test_number += 1
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("conductivity_data_test_parameters", conductivity_data_test_parameters)
-def test_finite_difference_conductivity_data(
-    conductivity_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
-):
-    """Test autograd conductivity gradients by comparing to numerical finite difference.
+def _case_identity(
+    conductivity_data_test_parameters: ConductivityTestParameters,
+) -> ConductivityCaseIdentity:
+    return case_identity_from_parameters(
+        ConductivityCaseIdentity, conductivity_data_test_parameters
+    )
 
-    This test validates that the autograd implementation correctly computes gradients
-    with respect to conductivity arrays in CustomMedium. It uses finite difference
-    approximation as the ground truth and ensures the autograd gradients match within
-    a specified tolerance.
 
-    The test procedure:
-    1. Create a CustomMedium with constant permittivity and variable conductivity
-    2. Compute objective function and its gradient using autograd
-    3. Compute finite difference gradients by perturbing conductivity
-    4. Compare the two gradients using RMS error
-
-    Parameters
-    ----------
-    conductivity_data_test_parameters : dict
-        Test parameters including wavelengths, monitor configuration, etc.
-    rng : numpy.random.Generator
-        Random number generator for creating perturbation patterns
-    numerical_case_dir : pathlib.Path
-        Case-specific artifact directory for simulation and result files
-    """
-
-    # Create directory for plots if plotting is enabled
-    results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
-    if PLOT_FD_ADJ_COMPARISON or SAVE_FD_ADJ_DATA:
-        results_dir.mkdir(parents=True, exist_ok=True)
-
-    num_tests = 0
-    for monitor_size_wvl in monitor_sizes_3d_wvl:
-        eval_fns, _ = make_eval_fns(monitor_size_wvl)
-        num_tests += (
-            len(eval_fns) * len(background_indices) * len(mesh_wvls_um) * len(conductivity_scales)
-        )
-
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
-
-    test_number = conductivity_data_test_parameters["test_number"]
-
-    (
-        mesh_wvl_um,
-        adj_wvl_um,
-        monitor_size_wvl,
-        monitor_bg_index,
-        conductivity_scale,
-        eval_fn,
-        eval_fn_name,
-        test_number,
-    ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "monitor_size_wvl",
-        "monitor_bg_index",
-        "conductivity_scale",
-        "eval_fn",
-        "eval_fn_name",
-        "test_number",
-    )(conductivity_data_test_parameters)
+def _collect_conductivity_evaluation_data(
+    conductivity_data_test_parameters: ConductivityTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+) -> EvaluationData:
+    mesh_wvl_um = conductivity_data_test_parameters.mesh_wvl_um
+    adj_wvl_um = conductivity_data_test_parameters.adj_wvl_um
+    monitor_size_wvl = conductivity_data_test_parameters.monitor_size_wvl
+    monitor_bg_index = conductivity_data_test_parameters.monitor_bg_index
+    conductivity_scale = conductivity_data_test_parameters.conductivity_scale
+    eval_fn = conductivity_data_test_parameters.eval_fn
+    test_number = conductivity_data_test_parameters.test_number
 
     dim_um = mesh_wvl_um
     thickness_um = 0.5 * mesh_wvl_um
@@ -394,8 +386,6 @@ def test_finite_difference_conductivity_data(
     box_for_override = td.Box(
         center=(0, 0, 0), size=(*sim_geometry.size[0:2], thickness_um + mesh_wvl_um)
     )
-
-    eval_fns, _eval_fn_names = make_eval_fns(monitor_size_wvl)
 
     sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
     sim_path_dir.mkdir(parents=True, exist_ok=True)
@@ -456,58 +446,128 @@ def test_finite_difference_conductivity_data(
 
         fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
 
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - pattern_dot_adj_gradient) / np.abs(fd_grad + np.finfo(np.float64).eps)
+    return {
+        "fd_grad": fd_grad,
+        "adj_grad_projected": pattern_dot_adj_gradient,
+        "fd_step": np.asarray(fd_step, dtype=float),
+        "conductivity_init_shape": np.asarray(conductivity_init.shape, dtype=int),
+    }
+
+
+def _evaluate_conductivity_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    return evaluate_fd_adjoint_gradient_agreement(
+        fd_grad=np.asarray(evaluation_data["fd_grad"], dtype=float),
+        adj_grad_projected=np.asarray(evaluation_data["adj_grad_projected"], dtype=float),
+        relative_rms_threshold=RMS_THRESHOLD,
     )
 
+
+def _print_conductivity_summary(
+    conductivity_data_test_parameters: ConductivityTestParameters,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print("\n" * 3)
     print("-" * 20)
-    print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Monitor size: {monitor_size_wvl}")
-    print(f"Background index for monitor: {monitor_bg_index}")
-    print(f"Conductivity scale: {conductivity_scale}")
-    print(f"Eval function: {eval_fn_name}")
-    print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
+    print(f"Numerical test #{conductivity_data_test_parameters.test_number}")
+    print(f"Evaluation mode: {mode_label}")
+    print(
+        "Mesh and adjoint wavelengths: "
+        f"{conductivity_data_test_parameters.mesh_wvl_um}, "
+        f"{conductivity_data_test_parameters.adj_wvl_um}"
+    )
+    print(f"Monitor size: {conductivity_data_test_parameters.monitor_size_wvl}")
+    print(f"Background index for monitor: {conductivity_data_test_parameters.monitor_bg_index}")
+    print(f"Conductivity scale: {conductivity_data_test_parameters.conductivity_scale}")
+    print(f"Eval function: {conductivity_data_test_parameters.eval_fn_name}")
+    print(f"RMS Error: {diagnostics['rms_error']}")
+    print(f"FD, Adj magnitudes: {diagnostics['fd_mag']}, {diagnostics['adj_mag']}")
+    print(f"Percentage Error: {diagnostics['percentage_error']}")
     print("-" * 20)
     print("\n" * 3)
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
 
-    save_idx = test_number + 1
-    save_path = None
-    if SAVE_FD_ADJ_DATA:
-        results_dir.mkdir(parents=True, exist_ok=True)
-        save_path = results_dir / f"results_{save_idx}.npy"
+def _plot_conductivity_comparison(
+    conductivity_data_test_parameters: ConductivityTestParameters,
+    evaluation_data: EvaluationData,
+    numerical_case_dir: Path,
+) -> None:
+    results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
+    results_dir.mkdir(parents=True, exist_ok=True)
+    fd_grad = np.asarray(evaluation_data["fd_grad"], dtype=float)
+    adj_grad_projected = np.asarray(evaluation_data["adj_grad_projected"], dtype=float)
 
-    try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-    finally:
-        if save_path is not None:
-            np.save(save_path, test_results)
+    plt.figure(figsize=(10, 6))
+    plt.plot(adj_grad_projected, color="g", linewidth=2.0, label="Adjoint")
+    plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--", label="Finite difference")
+    plt.title(
+        f"Gradient comparison for {conductivity_data_test_parameters.eval_fn_name} "
+        f"(Test #{conductivity_data_test_parameters.test_number})"
+    )
+    plt.xlabel("Sample number")
+    plt.ylabel("Gradient value")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
 
-    test_number += 1
+    plot_filename = results_dir / (
+        "gradient_comparison_test_"
+        f"{conductivity_data_test_parameters.test_number}_{conductivity_data_test_parameters.eval_fn_name}.png"
+    )
+    plt.savefig(plot_filename, dpi=150, bbox_inches="tight")
+    print(f"Plot saved to: {plot_filename}")
+
+    plt.show()
+    plt.close()
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "conductivity_data_test_parameters",
+    conductivity_data_test_parameters,
+    ids=lambda params: case_identity_id(_case_identity(params), prefix="conductivity"),
+)
+def test_finite_difference_conductivity_data(
+    request: pytest.FixtureRequest,
+    conductivity_data_test_parameters: ConductivityTestParameters,
+    rng: np.random.Generator,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    redirect_stdout_to_stderr: None,
+) -> None:
+    """Compare CustomMedium conductivity adjoint gradients to finite differences."""
+    case_identity = _case_identity(conductivity_data_test_parameters)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_conductivity_evaluation_data(
+            conductivity_data_test_parameters, rng, numerical_case_dir
+        ),
+    )
+
+    regression_metrics, observation_metrics, diagnostics = _evaluate_conductivity_evaluation_data(
+        evaluation_data
+    )
+    _print_conductivity_summary(
+        conductivity_data_test_parameters,
+        diagnostics,
+        eval_only=numerical_eval_only,
+    )
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.figure(figsize=(10, 6))
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0, label="Adjoint")
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--", label="Finite difference")
-        plt.title(f"Gradient comparison for {eval_fn_name} (Test #{test_number})")
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        _plot_conductivity_comparison(
+            conductivity_data_test_parameters, evaluation_data, numerical_case_dir
+        )
 
-        # Save the plot
-        plot_filename = results_dir / (f"gradient_comparison_test_{test_number}_{eval_fn_name}.png")
-        plt.savefig(plot_filename, dpi=150, bbox_inches="tight")
-        print(f"Plot saved to: {plot_filename}")
-
-        plt.show()
-        plt.close()
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Conductivity RMS error magnitude too large; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

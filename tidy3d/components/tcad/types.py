@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from tidy3d.components.tcad.bandgap import SlotboomBandGapNarrowing
-from tidy3d.components.tcad.bandgap_energy import (
+from tidy3d.components.tcad.bandgap import (
     ConstantEnergyBandGap,
+    SlotboomBandGapNarrowing,
     VarshniEnergyBandGap,
 )
 from tidy3d.components.tcad.boundary.charge import (

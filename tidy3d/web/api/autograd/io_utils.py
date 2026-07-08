@@ -20,12 +20,18 @@ if TYPE_CHECKING:
 
 
 VJP_CACHE_ARTIFACT_TYPE = "autograd_vjp"
+FLUX_FORWARD_CACHE_ARTIFACT_TYPE = "autograd_flux_forward"
+_CACHE_LOAD_ERRORS = (
+    OSError,
+    ValueError,
+    KeyError,
+)
 
 
-def _vjp_cache_context(
+def _artifact_cache_context(
     simulation: WorkflowType | None,
 ) -> tuple[LocalCache, str, str] | None:
-    """Return cache, workflow type, and simulation hash for VJP cache lookups."""
+    """Return cache, workflow type, and simulation hash for autograd artifact lookups."""
     simulation_cache = resolve_local_cache()
     if simulation_cache is None or simulation is None:
         return None
@@ -44,7 +50,7 @@ def get_cached_vjp_traced_fields(
     simulation: WorkflowType | None, verbose: bool = True
 ) -> AutogradFieldMap | None:
     """Load cached adjoint VJP fields without using the normal result cache namespace."""
-    cache_context = _vjp_cache_context(simulation)
+    cache_context = _artifact_cache_context(simulation)
     if cache_context is None:
         return None
     simulation_cache, workflow_type, simulation_hash = cache_context
@@ -69,7 +75,7 @@ def get_cached_vjp_traced_fields(
 def _store_vjp_cache_entry(
     task_id_adj: str, *, artifact_path: str, simulation: WorkflowType | None
 ) -> None:
-    cache_context = _vjp_cache_context(simulation)
+    cache_context = _artifact_cache_context(simulation)
     if cache_context is None:
         return
     simulation_cache, workflow_type, simulation_hash = cache_context
@@ -83,6 +89,55 @@ def _store_vjp_cache_entry(
         )
     except Exception as e:
         td.log.error(f"Could not store VJP cache entry: {e}")
+
+
+def get_cached_flux_forward_data(
+    task_id_fwd: str, simulation: WorkflowType | None, verbose: bool = True
+) -> td.SimulationData | None:
+    """Load cached hidden FluxMonitor forward data without using the normal result cache."""
+    cache_context = _artifact_cache_context(simulation)
+    if cache_context is None:
+        return None
+    simulation_cache, workflow_type, simulation_hash = cache_context
+
+    entry = simulation_cache.try_fetch_with_hash(
+        simulation_hash=simulation_hash,
+        workflow_type=workflow_type,
+        verbose=verbose,
+        artifact_type=f"{FLUX_FORWARD_CACHE_ARTIFACT_TYPE}:{task_id_fwd}",
+    )
+    if entry is None:
+        return None
+
+    if not entry.artifact_path.is_file():
+        td.log.error("Could not load FluxMonitor helper cache entry: artifact file is missing.")
+        simulation_cache.invalidate(entry.key)
+        return None
+
+    try:
+        return td.SimulationData.from_file(entry.artifact_path)
+    except _CACHE_LOAD_ERRORS as e:
+        td.log.error(f"Could not load FluxMonitor helper cache entry: {e}")
+        simulation_cache.invalidate(entry.key)
+        return None
+
+
+def _store_flux_forward_cache_entry(
+    task_id_fwd: str, *, artifact_path: str, simulation: WorkflowType | None
+) -> None:
+    cache_context = _artifact_cache_context(simulation)
+    if cache_context is None:
+        return
+    simulation_cache, workflow_type, simulation_hash = cache_context
+    stored = simulation_cache.store_result_with_hash(
+        task_id=task_id_fwd,
+        path=artifact_path,
+        workflow_type=workflow_type,
+        simulation_hash=simulation_hash,
+        artifact_type=f"{FLUX_FORWARD_CACHE_ARTIFACT_TYPE}:{task_id_fwd}",
+    )
+    if not stored:
+        td.log.error("Could not store FluxMonitor helper cache entry.")
 
 
 def upload_sim_fields_keys(
@@ -121,13 +176,28 @@ def flux_monitor_forward_data(sim_data_fwd: td.SimulationData) -> td.SimulationD
     return sim_data_fwd.updated_copy(simulation=helper_sim, data=helper_data, deep=False)
 
 
-def get_autograd_flux_forward_data(task_id_fwd: str, verbose: bool) -> td.SimulationData:
+def get_autograd_flux_forward_data(
+    task_id_fwd: str,
+    verbose: bool,
+    *,
+    cache_simulation: WorkflowType | None = None,
+) -> td.SimulationData:
     """Download hidden FluxMonitor helper data for adjoint source construction."""
+    cached_data = get_cached_flux_forward_data(task_id_fwd, cache_simulation, verbose=verbose)
+    if cached_data is not None:
+        return cached_data
+
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)
     try:
         download_file(task_id_fwd, SIM_FWD_FLUX_DATA_FILE, to_file=fname, verbose=verbose)
-        return td.SimulationData.from_file(fname)
+        sim_data = td.SimulationData.from_file(fname)
+        _store_flux_forward_cache_entry(
+            task_id_fwd,
+            artifact_path=fname,
+            simulation=cache_simulation,
+        )
+        return sim_data
     except Exception as e:
         raise td.exceptions.AdjointError(
             f"Could not load hidden FluxMonitor forward data artifact '{SIM_FWD_FLUX_DATA_FILE}' "

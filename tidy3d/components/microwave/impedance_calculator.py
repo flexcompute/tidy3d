@@ -25,6 +25,7 @@ from tidy3d.components.microwave.path_integrals.integrals.voltage import (
     Custom2DVoltageIntegral,
 )
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
@@ -72,12 +73,14 @@ class ImpedanceCalculator(MicrowaveBaseModel):
 
     voltage_integral: VoltageIntegralType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Voltage Integral",
         description="Definition of path integral for computing voltage.",
     )
 
     current_integral: CurrentIntegralType | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Current Integral",
         description="Definition of contour integral for computing current.",
     )

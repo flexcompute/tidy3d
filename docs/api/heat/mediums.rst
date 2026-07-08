@@ -13,6 +13,8 @@ Material Thermal
    FluidSpec
    SolidSpec
 
+   AnisotropicConductivity
+
 
 Thermal Perturbation Specification
 ------------------------------------

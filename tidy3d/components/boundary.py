@@ -1031,12 +1031,14 @@ class Boundary(Tidy3dBaseModel):
 
     plus: BoundaryEdgeType = Field(
         default_factory=PML,
+        discriminator=TYPE_TAG_STR,
         title="Plus BC",
         description="Boundary condition on the plus side along a dimension.",
     )
 
     minus: BoundaryEdgeType = Field(
         default_factory=PML,
+        discriminator=TYPE_TAG_STR,
         title="Minus BC",
         description="Boundary condition on the minus side along a dimension.",
     )

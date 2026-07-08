@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import autograd.numpy as anp
 import numpy as np
-import numpy.testing as npt
 import pytest
 from autograd import value_and_grad
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    case_identity_id,
+    condition_metric,
+    evaluate_allclose_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 
 @pytest.fixture(autouse=True)
@@ -33,6 +44,13 @@ VALUE_RTOL = 5e-3
 VALUE_ATOL = 1e-6
 GRAD_RTOL = 5e-2
 GRAD_ATOL = 1e-5
+
+
+class FluxMonitorCaseIdentity(BaseModel):
+    """Semantic identity for the FluxMonitor online adjoint equivalence case."""
+
+    wavelength: float
+    permittivity: float
 
 
 def _make_simulation(permittivity: float, *, include_flux_monitor: bool) -> td.Simulation:
@@ -80,9 +98,14 @@ def _make_simulation(permittivity: float, *, include_flux_monitor: bool) -> td.S
     )
 
 
-@pytest.mark.numerical
-def test_flux_monitor_adjoint_matches_field_monitor_flux_online(numerical_case_dir):
-    """Compare native FluxMonitor value and gradient against FieldMonitor.flux online."""
+FLUX_MONITOR_CASE = FluxMonitorCaseIdentity(
+    wavelength=WAVELENGTH,
+    permittivity=float(PARAMS0[0]),
+)
+
+
+def _collect_flux_monitor_evaluation_data(numerical_case_dir: Path) -> EvaluationData:
+    """Collect raw values and gradients needed to compare FluxMonitor and FieldMonitor flux."""
     forward_values = {}
 
     def flux_objective(params):
@@ -116,11 +139,93 @@ def test_flux_monitor_adjoint_matches_field_monitor_flux_online(numerical_case_d
     flux_value, flux_grad = value_and_grad(flux_objective)(PARAMS0)
     field_value, field_grad = value_and_grad(field_objective)(PARAMS0)
 
-    flux_value = float(flux_value)
-    field_value = float(field_value)
-    flux_grad = np.asarray(flux_grad, dtype=float)
-    field_grad = np.asarray(field_grad, dtype=float)
     flux_run_value, flux_run_field_value = forward_values["flux_run"]
+
+    return {
+        "flux_value": float(flux_value),
+        "field_value": float(field_value),
+        "flux_grad": np.asarray(flux_grad, dtype=float),
+        "field_grad": np.asarray(field_grad, dtype=float),
+        "flux_run_value": flux_run_value,
+        "flux_run_field_value": flux_run_field_value,
+    }
+
+
+def _evaluate_flux_monitor_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric], dict[str, float]]:
+    """Evaluate saved-or-fresh FluxMonitor equivalence data into regression metrics."""
+    flux_value = float(np.asarray(evaluation_data["flux_value"], dtype=float))
+    field_value = float(np.asarray(evaluation_data["field_value"], dtype=float))
+    flux_run_value = float(np.asarray(evaluation_data["flux_run_value"], dtype=float))
+    flux_run_field_value = float(np.asarray(evaluation_data["flux_run_field_value"], dtype=float))
+    flux_grad = np.asarray(evaluation_data["flux_grad"], dtype=float)
+    field_grad = np.asarray(evaluation_data["field_grad"], dtype=float)
+
+    regression_metrics = [
+        condition_metric("flux_gradient_finite", bool(np.all(np.isfinite(flux_grad)))),
+        condition_metric("field_gradient_finite", bool(np.all(np.isfinite(field_grad)))),
+        condition_metric("flux_gradient_nonzero", not np.allclose(flux_grad, 0.0)),
+        condition_metric("field_gradient_nonzero", not np.allclose(field_grad, 0.0)),
+    ]
+
+    for metrics in (
+        evaluate_allclose_agreement(
+            flux_run_value,
+            flux_run_field_value,
+            rtol=VALUE_RTOL,
+            atol=VALUE_ATOL,
+            metric_name="same_run_flux_value_scaled_error",
+        ),
+        evaluate_allclose_agreement(
+            flux_value,
+            field_value,
+            rtol=VALUE_RTOL,
+            atol=VALUE_ATOL,
+            metric_name="separate_run_flux_value_scaled_error",
+        ),
+        evaluate_allclose_agreement(
+            flux_grad,
+            field_grad,
+            rtol=GRAD_RTOL,
+            atol=GRAD_ATOL,
+            metric_name="flux_gradient_scaled_error",
+        ),
+    ):
+        agreement_regression_metrics, _observation_metrics, _diagnostics = metrics
+        regression_metrics.extend(agreement_regression_metrics)
+
+    observation_metrics = [
+        Metric(
+            name="flux_gradient_norm",
+            observed=float(np.linalg.norm(flux_grad)),
+            expected=0.0,
+            comparator="gte",
+        ),
+        Metric(
+            name="field_gradient_norm",
+            observed=float(np.linalg.norm(field_grad)),
+            expected=0.0,
+            comparator="gte",
+        ),
+    ]
+    diagnostics = {
+        "flux_value": flux_value,
+        "field_value": field_value,
+        "flux_run_field_value": flux_run_field_value,
+        "flux_grad_norm": float(np.linalg.norm(flux_grad)),
+        "field_grad_norm": float(np.linalg.norm(field_grad)),
+    }
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def _print_flux_monitor_summary(evaluation_data: EvaluationData) -> None:
+    """Print the original FluxMonitor equivalence summary."""
+    flux_value = float(np.asarray(evaluation_data["flux_value"], dtype=float))
+    field_value = float(np.asarray(evaluation_data["field_value"], dtype=float))
+    flux_run_field_value = float(np.asarray(evaluation_data["flux_run_field_value"], dtype=float))
+    flux_grad = np.asarray(evaluation_data["flux_grad"], dtype=float)
+    field_grad = np.asarray(evaluation_data["field_grad"], dtype=float)
 
     print(
         "[flux-monitor-equivalence] "
@@ -130,10 +235,37 @@ def test_flux_monitor_adjoint_matches_field_monitor_flux_online(numerical_case_d
         file=sys.stderr,
     )
 
-    assert np.all(np.isfinite(flux_grad))
-    assert np.all(np.isfinite(field_grad))
-    assert not np.allclose(flux_grad, 0.0)
-    assert not np.allclose(field_grad, 0.0)
-    npt.assert_allclose(flux_run_value, flux_run_field_value, rtol=VALUE_RTOL, atol=VALUE_ATOL)
-    npt.assert_allclose(flux_value, field_value, rtol=VALUE_RTOL, atol=VALUE_ATOL)
-    npt.assert_allclose(flux_grad, field_grad, rtol=GRAD_RTOL, atol=GRAD_ATOL)
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case_identity",
+    [FLUX_MONITOR_CASE],
+    ids=lambda case_identity: case_identity_id(case_identity, prefix="flux-monitor"),
+)
+def test_flux_monitor_adjoint_matches_field_monitor_flux_online(
+    request: pytest.FixtureRequest,
+    case_identity: FluxMonitorCaseIdentity,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+):
+    """Compare native FluxMonitor value and gradient against FieldMonitor.flux online."""
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_flux_monitor_evaluation_data(numerical_case_dir),
+    )
+    _print_flux_monitor_summary(evaluation_data)
+    regression_metrics, observation_metrics, _diagnostics = _evaluate_flux_monitor_evaluation_data(
+        evaluation_data
+    )
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "FluxMonitor online adjoint equivalence failed; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
+    )

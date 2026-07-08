@@ -175,7 +175,7 @@ def _make_adjoint_sources_from_modal_amps(
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
     from os import PathLike
     from typing import Literal, SupportsComplex
 
@@ -296,7 +296,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         | PermittivityMonitor
         | ModeMonitor
         | MediumMonitor
-    )
+    ) = Field(discriminator=TYPE_TAG_STR)
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = Field(
         (0, 0, 0),
@@ -863,14 +863,48 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
-        self._check_fields_stored(["Ex", "Ey", "Ez"])
+        return self.field_intensity()
 
+    def field_intensity(
+        self, components: str | Sequence[str] = ("Ex", "Ey", "Ez")
+    ) -> ScalarFieldDataArray:
+        """Return the sum of the squared absolute selected electric field components.
+
+        The selected components must be stored in the data, and the intensity is evaluated using
+        the same symmetry-expanded and colocated fields as :attr:`intensity`. For non-colocated
+        monitors, fields are interpolated to the colocated grid before they are summed.
+        """
+        components = (components,) if isinstance(components, str) else tuple(components)
+        if not components:
+            raise ValueError("At least one electric field component must be specified.")
+
+        valid_components = ("Ex", "Ey", "Ez")
+        invalid_components = tuple(cmp for cmp in components if cmp not in valid_components)
+        if invalid_components:
+            raise ValueError(
+                "Invalid electric field component(s) for intensity: "
+                f"{invalid_components}. Valid components are {valid_components}."
+            )
+        duplicate_components = tuple(
+            cmp for idx, cmp in enumerate(components) if cmp in components[:idx]
+        )
+        if duplicate_components:
+            raise ValueError(
+                "Duplicate electric field component(s) for intensity: "
+                f"{duplicate_components}. Each component may be specified at most once."
+            )
+
+        self._check_fields_stored(list(components))
         drop_dims = ["xyz"[dim] for dim in self.monitor.zero_dims]
         fields = self._colocated_fields
-        components = ("Ex", "Ey", "Ez")
         if any(cmp not in fields for cmp in components):
-            raise KeyError("Can't compute intensity, all E field components must be present.")
-        intensity = sum(fields[cmp].abs ** 2 for cmp in components)
+            raise KeyError(
+                "Can't compute intensity, all selected E field components must be present."
+            )
+
+        intensity = fields[components[0]].abs ** 2
+        for cmp in components[1:]:
+            intensity = intensity + fields[cmp].abs ** 2
         return intensity.squeeze(dim=drop_dims, drop=True)
 
     @property
@@ -2248,7 +2282,7 @@ class ElectromagneticSurfaceFieldData(
 ):
     """Collection of vector fields on a surface with some symmetry properties."""
 
-    monitor: SurfaceFieldMonitor | SurfaceFieldTimeMonitor
+    monitor: SurfaceFieldMonitor | SurfaceFieldTimeMonitor = Field(discriminator=TYPE_TAG_STR)
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
@@ -2539,7 +2573,7 @@ class AbstractOverlapData(ElectromagneticFieldData):
 
 class FieldOverlapData(AbstractOverlapData):
     monitor: GaussianOverlapMonitor | AstigmaticGaussianOverlapMonitor = Field(
-        title="Monitor", description="Monitor associated with the data."
+        discriminator=TYPE_TAG_STR, title="Monitor", description="Monitor associated with the data."
     )
 
     def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:

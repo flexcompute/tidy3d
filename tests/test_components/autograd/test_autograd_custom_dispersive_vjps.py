@@ -65,6 +65,41 @@ def _J(eps):
     return anp.sum(anp.abs(eps))
 
 
+def test_custom_dispersive_complex_weight_matches_autograd_chain_rule(monkeypatch):
+    """Regression for the complex sensitivity convention used by custom dispersive media."""
+    coords = _coords((1, 1, 1))
+    eps_inf = SpatialDataArray(np.full((1, 1, 1), 2.3), coords=coords)
+    de = SpatialDataArray(np.full((1, 1, 1), 0.7), coords=coords)
+    f0 = SpatialDataArray(np.full((1, 1, 1), 2.3e14), coords=coords)
+    delta = SpatialDataArray(np.full((1, 1, 1), 0.2e14), coords=coords)
+    med = CustomLorentz(eps_inf=eps_inf, coeffs=[(de, f0, delta)])
+
+    freq = 2.4e14
+    den = f0.values**2 - 2j * freq * delta.values - freq**2
+
+    def objective(de_values):
+        eps = eps_inf.values + de_values * f0.values**2 / den
+        return anp.sum(anp.abs(eps))
+
+    eps_arr = eps_inf.values + de.values * f0.values**2 / den
+    dJ = ag.holomorphic_grad(lambda eps: anp.sum(anp.abs(eps)))(eps_arr)
+    monkeypatch.setattr(
+        CustomLorentz,
+        "_derivative_field_cmp_custom",
+        _patch_derivative_field_cmp_custom(CustomLorentz, dJ),
+    )
+
+    paths = [("coeffs", 0, 0)]
+    grads = med._compute_derivatives(DerivativeInfo(paths=paths, **_deriv_info(freq)))
+
+    weight = Lorentz._w_de(freq, f0.values, delta.values)
+    expected = ag.grad(objective)(de.values)
+    conjugated_weight_result = np.real(dJ * np.conj(weight))
+
+    assert not np.allclose(expected, conjugated_weight_result)
+    np.testing.assert_allclose(grads[("coeffs", 0, 0)], expected, rtol=5e-6, atol=5e-7)
+
+
 def test_custom_sellmeier_vjp():
     rng = np.random.RandomState(0)
     shape = (2, 3, 2)
@@ -81,7 +116,7 @@ def test_custom_sellmeier_vjp():
     eps_arr = (
         1.0 + B1.values * lam2 / (lam2 - C1.values) + B2.values * lam2 / (lam2 - C2.values) + 0j
     )
-    dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
+    dJ = ag.holomorphic_grad(_J)(eps_arr)
 
     # Monkeypatch derivative provider
     from tidy3d.components import medium as medium_mod
@@ -97,10 +132,10 @@ def test_custom_sellmeier_vjp():
         grads = med._compute_derivatives(di)
 
         # Expected gradients via weight statics
-        gB1 = np.real(dJ * np.conj(Sellmeier._w_B(freq, C1.values)))
-        gC1 = np.real(dJ * np.conj(Sellmeier._w_C(freq, B1.values, C1.values)))
-        gB2 = np.real(dJ * np.conj(Sellmeier._w_B(freq, C2.values)))
-        gC2 = np.real(dJ * np.conj(Sellmeier._w_C(freq, B2.values, C2.values)))
+        gB1 = np.real(dJ * Sellmeier._w_B(freq, C1.values))
+        gC1 = np.real(dJ * Sellmeier._w_C(freq, B1.values, C1.values))
+        gB2 = np.real(dJ * Sellmeier._w_B(freq, C2.values))
+        gC2 = np.real(dJ * Sellmeier._w_C(freq, B2.values, C2.values))
 
         np.testing.assert_allclose(grads[("coeffs", 0, 0)], gB1, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 0, 1)], gC1, rtol=5e-6, atol=5e-7)
@@ -132,7 +167,7 @@ def test_custom_lorentz_vjp():
         + (de1.values * (f01.values**2)) / den1
         + (de2.values * (f02.values**2)) / den2
     ) + 0j
-    dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
+    dJ = ag.holomorphic_grad(_J)(eps_arr)
 
     from tidy3d.components import medium as medium_mod
 
@@ -155,12 +190,12 @@ def test_custom_lorentz_vjp():
         grads = med._compute_derivatives(di)
 
         g_ei = np.real(dJ)
-        g_de1 = np.real(dJ * np.conj(Lorentz._w_de(freq, f01.values, dl1.values)))
-        g_f01 = np.real(dJ * np.conj(Lorentz._w_f0(freq, de1.values, f01.values, dl1.values)))
-        g_dl1 = np.real(dJ * np.conj(Lorentz._w_delta(freq, de1.values, f01.values, dl1.values)))
-        g_de2 = np.real(dJ * np.conj(Lorentz._w_de(freq, f02.values, dl2.values)))
-        g_f02 = np.real(dJ * np.conj(Lorentz._w_f0(freq, de2.values, f02.values, dl2.values)))
-        g_dl2 = np.real(dJ * np.conj(Lorentz._w_delta(freq, de2.values, f02.values, dl2.values)))
+        g_de1 = np.real(dJ * Lorentz._w_de(freq, f01.values, dl1.values))
+        g_f01 = np.real(dJ * Lorentz._w_f0(freq, de1.values, f01.values, dl1.values))
+        g_dl1 = np.real(dJ * Lorentz._w_delta(freq, de1.values, f01.values, dl1.values))
+        g_de2 = np.real(dJ * Lorentz._w_de(freq, f02.values, dl2.values))
+        g_f02 = np.real(dJ * Lorentz._w_f0(freq, de2.values, f02.values, dl2.values))
+        g_dl2 = np.real(dJ * Lorentz._w_delta(freq, de2.values, f02.values, dl2.values))
 
         np.testing.assert_allclose(grads[("eps_inf",)], g_ei, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 0, 0)], g_de1, rtol=5e-6, atol=5e-7)
@@ -189,7 +224,7 @@ def test_custom_drude_vjp():
     den1 = Drude._den(freq, dl1.values)
     den2 = Drude._den(freq, dl2.values)
     eps_arr = eps_inf.values - (fp1.values**2) / den1 - (fp2.values**2) / den2 + 0j
-    dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
+    dJ = ag.holomorphic_grad(_J)(eps_arr)
 
     from tidy3d.components import medium as medium_mod
 
@@ -210,10 +245,10 @@ def test_custom_drude_vjp():
         grads = med._compute_derivatives(di)
 
         g_ei = np.real(dJ)
-        g_fp1 = np.real(dJ * np.conj(Drude._w_fp(freq, fp1.values, dl1.values)))
-        g_dl1 = np.real(dJ * np.conj(Drude._w_delta(freq, fp1.values, dl1.values)))
-        g_fp2 = np.real(dJ * np.conj(Drude._w_fp(freq, fp2.values, dl2.values)))
-        g_dl2 = np.real(dJ * np.conj(Drude._w_delta(freq, fp2.values, dl2.values)))
+        g_fp1 = np.real(dJ * Drude._w_fp(freq, fp1.values, dl1.values))
+        g_dl1 = np.real(dJ * Drude._w_delta(freq, fp1.values, dl1.values))
+        g_fp2 = np.real(dJ * Drude._w_fp(freq, fp2.values, dl2.values))
+        g_dl2 = np.real(dJ * Drude._w_delta(freq, fp2.values, dl2.values))
 
         np.testing.assert_allclose(grads[("eps_inf",)], g_ei, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 0, 0)], g_fp1, rtol=5e-6, atol=5e-7)
@@ -240,7 +275,7 @@ def test_custom_debye_vjp():
     den1 = Debye._den(freq, tau1.values)
     den2 = Debye._den(freq, tau2.values)
     eps_arr = eps_inf.values + de1.values / den1 + de2.values / den2 + 0j
-    dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
+    dJ = ag.holomorphic_grad(_J)(eps_arr)
 
     from tidy3d.components import medium as medium_mod
 
@@ -261,10 +296,10 @@ def test_custom_debye_vjp():
         grads = med._compute_derivatives(di)
 
         g_ei = np.real(dJ)
-        g_de1 = np.real(dJ * np.conj(Debye._w_de(freq, tau1.values)))
-        g_tau1 = np.real(dJ * np.conj(Debye._w_tau(freq, de1.values, tau1.values)))
-        g_de2 = np.real(dJ * np.conj(Debye._w_de(freq, tau2.values)))
-        g_tau2 = np.real(dJ * np.conj(Debye._w_tau(freq, de2.values, tau2.values)))
+        g_de1 = np.real(dJ * Debye._w_de(freq, tau1.values))
+        g_tau1 = np.real(dJ * Debye._w_tau(freq, de1.values, tau1.values))
+        g_de2 = np.real(dJ * Debye._w_de(freq, tau2.values))
+        g_tau2 = np.real(dJ * Debye._w_tau(freq, de2.values, tau2.values))
 
         np.testing.assert_allclose(grads[("eps_inf",)], g_ei, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 0, 0)], g_de1, rtol=5e-6, atol=5e-7)

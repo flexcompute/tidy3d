@@ -8,6 +8,7 @@ from pydantic import Field
 
 from tidy3d.components.spice.sources.types import CurrentSourceType, VoltageSourceType
 from tidy3d.components.tcad.boundary.abstract import HeatChargeBC
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import CURRENT_DENSITY, VOLT
 
 ContactModelType = Literal["ohmic", "schottky_mott"]
@@ -45,6 +46,7 @@ class VoltageBC(HeatChargeBC):
     """
 
     source: VoltageSourceType = Field(
+        discriminator=TYPE_TAG_STR,
         title="Voltage",
         description="Electric potential to be applied at the specified boundary.",
         json_schema_extra={"units": VOLT},

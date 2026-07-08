@@ -42,6 +42,7 @@ class AutogradContext:
     simulation_data_original: td.SimulationData | None = None
     simulation_data_forward: td.SimulationData | None = None
     forward_task_id: str | None = None
+    forward_task_from_cache: bool = False
     parallel_adjoint_state: ParallelAdjointState | None = None
 
 

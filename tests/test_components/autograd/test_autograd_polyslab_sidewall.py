@@ -32,6 +32,21 @@ def make_square(L=1.0):
     return np.array([[0, 0], [L, 0], [L, L], [0, L]], float)
 
 
+def expected_square_sidewall_angle_vjp(P, theta, u_min, u_max, *, integrand="constant"):
+    """Closed form for a square sidewall using the true offset-polygon perimeter."""
+    tan_theta = np.tan(theta)
+    inv_cos2 = 1.0 / (np.cos(theta) ** 2)
+    if integrand == "constant":
+        integral = -P * (u_max**2 - u_min**2) / 2.0
+        integral += 8.0 * tan_theta * (u_max**3 - u_min**3) / 3.0
+    elif integrand == "linear":
+        integral = -P * (u_max**3 - u_min**3) / 3.0
+        integral += 8.0 * tan_theta * (u_max**4 - u_min**4) / 4.0
+    else:
+        raise ValueError(f"Unknown integrand {integrand!r}.")
+    return inv_cos2 * integral
+
+
 # ---- fixtures ----
 @pytest.fixture
 def geom():
@@ -51,15 +66,16 @@ def sim_bounds():
 # ---- tests ----
 
 
-def test_constant_g_zero(geom, sim_bounds):
-    ps, H, _theta, P = geom
+def test_constant_g_matches_closed_form(geom, sim_bounds):
+    ps, H, theta, P = geom
     sim_min, sim_max = sim_bounds
     g = lambda xyz: np.ones(xyz.shape[0], dtype=float)
     di = FakeDerivativeInfo(g, dx=H / 50)
     val = ps._compute_derivative_sidewall_angle(
         di, sim_min, sim_max, is_2d=False, interpolators=None
     )
-    assert abs(val) < 1e-8 * max(1.0, P * H)  # essentially zero
+    expected = expected_square_sidewall_angle_vjp(P, theta, -H / 2.0, H / 2.0, integrand="constant")
+    assert np.isclose(val, expected, rtol=5e-3, atol=1e-10)
 
 
 def test_linear_z_matches_closed_form(geom, sim_bounds):
@@ -71,7 +87,7 @@ def test_linear_z_matches_closed_form(geom, sim_bounds):
     val = ps._compute_derivative_sidewall_angle(
         di, sim_min, sim_max, is_2d=False, interpolators=None
     )
-    expected = -(P / (np.cos(theta) ** 2)) * (H**3) / 12.0
+    expected = expected_square_sidewall_angle_vjp(P, theta, -H / 2.0, H / 2.0, integrand="linear")
     assert np.isclose(val, expected, rtol=5e-3, atol=1e-10)
 
 
@@ -111,6 +127,30 @@ def test_vertex_order_invariance(geom, sim_bounds):
     assert np.isclose(val_ccw, val_cw, rtol=1e-4, atol=1e-10)
 
 
+def test_vertex_vjp_order_invariance(geom, sim_bounds):
+    ps, H, _theta, _P = geom
+    sim_min, sim_max = sim_bounds
+    z0 = ps.center_axis
+    g = lambda xyz: 1.0 + 0.7 * xyz[:, 0] - 0.2 * xyz[:, 1] + 0.3 * (xyz[:, 2] - z0)
+    di = FakeDerivativeInfo(g, dx=H / 80)
+
+    val_ccw = ps._compute_derivative_vertices(di, sim_min, sim_max, is_2d=False, interpolators=None)
+
+    ps_rev = PolySlab(
+        vertices=ps.vertices[::-1],
+        axis=ps.axis,
+        slab_bounds=ps.slab_bounds,
+        sidewall_angle=ps.sidewall_angle,
+        dilation=ps.dilation,
+        reference_plane=ps.reference_plane,
+    )
+    val_cw = ps_rev._compute_derivative_vertices(
+        di, sim_min, sim_max, is_2d=False, interpolators=None
+    )
+
+    assert np.allclose(val_ccw, val_cw[::-1], rtol=1e-4, atol=1e-10)
+
+
 def test_z_clipping_interval(geom):
     ps, H, theta, P = geom
     # clip to upper quarter: [0, H/4] in z_local
@@ -125,7 +165,7 @@ def test_z_clipping_interval(geom):
     )
 
     a, b = 0.0, H / 4
-    expected = -(P / (np.cos(theta) ** 2)) * (b**3 - a**3) / 3.0
+    expected = expected_square_sidewall_angle_vjp(P, theta, a, b, integrand="linear")
     assert np.isclose(val, expected, rtol=1e-3, atol=1e-10)
 
 
@@ -139,7 +179,7 @@ def test_convergence_on_dx(geom, sim_bounds, dx_factor):
     val = ps._compute_derivative_sidewall_angle(
         di, sim_min, sim_max, is_2d=False, interpolators=None
     )
-    expected = -(P / (np.cos(theta) ** 2)) * (H**3) / 12.0
+    expected = expected_square_sidewall_angle_vjp(P, theta, -H / 2.0, H / 2.0, integrand="linear")
     # allow tighter tolerance as dx shrinks
     tol = {1 / 20: 2e-2, 1 / 40: 1.0e-2, 1 / 80: 5e-3}[dx_factor]
     assert np.isclose(val, expected, rtol=tol, atol=1e-10)
@@ -173,7 +213,8 @@ def test_hinge_reference_plane_constant_g(geom, ref_plane):
         di, sim_min, sim_max, is_2d=False, interpolators=None
     )
 
-    # closed form: -(P / cos^2(theta)) * 0.5 * [ (b - z_ref)^2 - (a - z_ref)^2 ]
     z_ref = ps.reference_axis_pos
-    expected = -(P / (np.cos(theta) ** 2)) * 0.5 * ((b - z_ref) ** 2 - (a - z_ref) ** 2)
+    expected = expected_square_sidewall_angle_vjp(
+        P, theta, a - z_ref, b - z_ref, integrand="constant"
+    )
     assert np.isclose(val, expected, rtol=1e-2, atol=1e-10)

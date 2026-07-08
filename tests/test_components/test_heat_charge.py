@@ -2641,6 +2641,34 @@ class TestCharge:
             sim.updated_copy(medium=moving_background)
         assert_single_value_error_loc(excinfo, ("medium",), "SolidMedium.velocity")
 
+        # Anisotropic conductivity on a structure's solid medium -> error at that structure.
+        aniso_p_side = p_side.updated_copy(
+            medium=Si_p.updated_copy(
+                heat=td.SolidMedium(
+                    conductivity=td.AnisotropicConductivity(xx=1.0, yy=2.0, zz=3.0),
+                    capacity=1,
+                    density=1,
+                )
+            )
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(structures=[oxide, aniso_p_side, n_side])
+        assert_single_value_error_loc(excinfo, ("structures", 1), "AnisotropicConductivity")
+
+        # Anisotropic conductivity on the background medium -> error at ("medium",).
+        aniso_background = td.MultiPhysicsMedium(
+            heat=td.SolidMedium(
+                conductivity=td.AnisotropicConductivity(xx=1.0, yy=2.0, zz=3.0),
+                capacity=1,
+                density=1,
+            ),
+            charge=td.ChargeConductorMedium(conductivity=1),
+            name="air",
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(medium=aniso_background)
+        assert_single_value_error_loc(excinfo, ("medium",), "AnisotropicConductivity")
+
         # Resistive interface between the two solids -> error at that boundary_spec entry.
         contact_resistance_bc = td.HeatChargeBoundarySpec(
             condition=td.ThermalContactResistance(resistance=3e3),
@@ -2658,6 +2686,11 @@ class TestCharge:
         # Advection velocity is accepted under an isothermal charge analysis.
         sim.updated_copy(
             structures=[oxide, moving_p_side, n_side],
+            analysis_spec=isothermal_spec,
+        )
+        # Anisotropic conductivity is likewise accepted under an isothermal charge analysis.
+        sim.updated_copy(
+            structures=[oxide, aniso_p_side, n_side],
             analysis_spec=isothermal_spec,
         )
         # The resistive interface is likewise accepted. Including it makes the simulation
@@ -3536,6 +3569,42 @@ def test_palankovski_quay():
     _ = td.ShockleyReedHallRecombination(tau_n=pq, tau_p=4e-6)
 
 
+def test_energy_bandgap_evaluate():
+    """Regression test for the energy band-gap ``band_gap_energy(temperature)`` values."""
+
+    # Constant band gap is temperature-independent.
+    constant = td.ConstantEnergyBandGap(eg=1.11)
+    assert constant.band_gap_energy(temperature=400.0) == 1.11
+    np.testing.assert_allclose(
+        constant.band_gap_energy(temperature=np.array([100.0, 300.0, 500.0])), [1.11, 1.11, 1.11]
+    )
+
+    # Varshni formula E_g(T) = E_g(0) - alpha * T^2 / (T + beta) for Silicon.
+    eg_0, alpha, beta = 1.17, 4.73e-4, 636.0
+    varshni = td.VarshniEnergyBandGap(eg_0=eg_0, alpha=alpha, beta=beta)
+
+    # At 0 K the band gap equals eg_0.
+    assert varshni.band_gap_energy(temperature=0.0) == pytest.approx(eg_0)
+
+    temperatures = np.array([0.0, 300.0, 400.0])
+    expected = eg_0 - alpha * temperatures**2 / (temperatures + beta)
+    np.testing.assert_allclose(varshni.band_gap_energy(temperature=temperatures), expected)
+
+    # Well-known Silicon value at room temperature.
+    assert varshni.band_gap_energy(temperature=300.0) == pytest.approx(1.1245, abs=1e-4)
+
+    # Scalar input returns a Python float, not a 0-d array.
+    assert isinstance(varshni.band_gap_energy(temperature=300.0), float)
+
+    # Python lists are accepted and treated like arrays.
+    for model in (constant, varshni):
+        result = model.band_gap_energy(temperature=[100.0, 300.0])
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_allclose(
+            result, model.band_gap_energy(temperature=np.array([100.0, 300.0]))
+        )
+
+
 @pytest.mark.parametrize("symmetry", [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0)])
 def test_symmetry_capacitance(symmetry):
     """Check that symmetry_expanded_copy works as expected"""
@@ -3644,6 +3713,51 @@ def test_unsteady_heat_analysis(heat_simulation):
         )
         _ = unsteady_sim.updated_copy(analysis_spec=mew_spex)
     assert_single_value_error_loc(excinfo, ("analysis_spec",), "number of time-steps")
+
+
+def test_transient_all_neumann_bcs(heat_simulation):
+    """All-Neumann heat BCs are ill-posed for steady state but well-posed for transient.
+
+    A steady-state solution is only defined up to a constant when every boundary is
+    Neumann-type, so it must be rejected. For a transient (``UnsteadyHeatAnalysis``)
+    simulation the time derivative and initial condition pin down the solution, so the
+    same boundary conditions must be accepted (regression for tidy3d issue #1956).
+    """
+    flux_bc = td.HeatFluxBC(flux=20)
+    all_neumann_bcs = [
+        td.HeatChargeBoundarySpec(
+            condition=flux_bc,
+            placement=td.StructureBoundary(structure="solid_structure"),
+        ),
+        td.HeatChargeBoundarySpec(
+            condition=flux_bc,
+            placement=td.StructureStructureInterface(
+                structures=["fluid_structure", "solid_structure"]
+            ),
+        ),
+    ]
+
+    # Steady-state (default analysis): all-Neumann BCs leave the solution undefined.
+    with pytest.raises(ValidationError) as excinfo:
+        _ = heat_simulation.updated_copy(boundary_spec=all_neumann_bcs)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "only Neumann-type")
+
+    # Transient: initial condition + time derivative make it well-posed, so no error.
+    unsteady_analysis_spec = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+    temp_mnt = td.TemperatureMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, td.inf),
+        name="temperature",
+        unstructured=True,
+    )
+    _ = heat_simulation.updated_copy(
+        boundary_spec=all_neumann_bcs,
+        analysis_spec=unsteady_analysis_spec,
+        monitors=(temp_mnt,),
+    )
 
 
 def test_heat_conduction_simulations():

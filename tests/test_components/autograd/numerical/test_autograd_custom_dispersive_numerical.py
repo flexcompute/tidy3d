@@ -3,16 +3,31 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import autograd.numpy as anp
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from autograd import value_and_grad
+from pydantic import BaseModel
 
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
+
+from .numerical_test_helpers import (
+    EvaluationData,
+    GradientComparisonDiagnostics,
+    MetricGroups,
+    case_identity_id,
+    condition_metric,
+    coords_for_bounds,
+    evaluate_gradient_angle_agreement,
+    finalize_result,
+    load_or_collect_evaluation_data,
+)
+from .result_models import Metric
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +41,7 @@ GRID_STEPS_PER_WVL = 40
 RUN_TIME = 2e-13
 FD_STEP = 5e-3
 ANGLE_TOL = 5.0
+PLOT_FD_STEP_SWEEP = False
 
 FREQS = np.array([1.7e14, 2.4e14])
 FREQ_WEIGHTS = np.array([1.0, 0.6])
@@ -93,6 +109,65 @@ TEST_CASES = [
 ]
 
 
+class CustomDispersiveCaseIdentity(BaseModel):
+    """Semantic identity for one custom dispersive finite-difference case."""
+
+    name: str
+    kind: str
+    eps_inf: float | None = None
+    param0: float
+    f0: float | None = None
+    delta: float | None = None
+    c_val: float | None = None
+    param_scale: float | None = None
+    tau: float | None = None
+    a_val: float | None = None
+    freqs: tuple[float, ...]
+    freq_weights: tuple[float, ...]
+    param_shape_2d: tuple[int, int]
+    param_shape: tuple[int, int, int]
+    fd_step: float
+    angle_tol: float
+
+
+class CustomDispersiveStepSweepCaseIdentity(CustomDispersiveCaseIdentity):
+    """Semantic identity for the CustomLorentz finite-difference step sweep."""
+
+    fd_sweep_steps: tuple[float, ...]
+
+
+def _case_identity(case: dict[str, object]) -> CustomDispersiveCaseIdentity:
+    return CustomDispersiveCaseIdentity(
+        name=str(case["name"]),
+        kind=str(case["kind"]),
+        eps_inf=_optional_float(case.get("eps_inf")),
+        param0=float(case["param0"]),
+        f0=_optional_float(case.get("f0")),
+        delta=_optional_float(case.get("delta")),
+        c_val=_optional_float(case.get("c_val")),
+        param_scale=_optional_float(case.get("param_scale")),
+        tau=_optional_float(case.get("tau")),
+        a_val=_optional_float(case.get("a_val")),
+        freqs=tuple(float(value) for value in FREQS),
+        freq_weights=tuple(float(value) for value in FREQ_WEIGHTS),
+        param_shape_2d=PARAM_SHAPE_2D,
+        param_shape=PARAM_SHAPE,
+        fd_step=FD_STEP,
+        angle_tol=ANGLE_TOL,
+    )
+
+
+def _step_sweep_case_identity(case: dict[str, object]) -> CustomDispersiveStepSweepCaseIdentity:
+    return CustomDispersiveStepSweepCaseIdentity(
+        **_case_identity(case).model_dump(),
+        fd_sweep_steps=tuple(float(step) for step in FD_SWEEP_STEPS),
+    )
+
+
+def _optional_float(value: object) -> float | None:
+    return None if value is None else float(value)
+
+
 def _build_base_sim(freqs: np.ndarray) -> tuple[td.Simulation, str, float]:
     wavelength_min = td.C_0 / np.max(freqs)
     sim_size = tuple(scale * wavelength_min for scale in SIM_SIZE_SCALE)
@@ -138,17 +213,9 @@ def _box_geometry(wavelength_min: float) -> td.Box:
     return td.Box(size=size, center=(0.0, 0.0, 0.0))
 
 
-def _coords_for_bounds(bounds, shape):
-    return {
-        "x": np.linspace(bounds[0][0], bounds[1][0], shape[0]),
-        "y": np.linspace(bounds[0][1], bounds[1][1], shape[1]),
-        "z": np.linspace(bounds[0][2], bounds[1][2], shape[2]),
-    }
-
-
 def _custom_medium(case, param_vals: anp.ndarray, box_geom: td.Box):
     bounds = box_geom.bounds
-    coords = _coords_for_bounds(bounds, param_vals.shape)
+    coords = coords_for_bounds(bounds, param_vals.shape)
     kind = case["kind"]
     param_scale = case.get("param_scale", 1.0)
     scaled = param_scale * param_vals
@@ -189,6 +256,18 @@ def _add_medium(
     return sim.updated_copy(structures=[structure])
 
 
+def _base_fixed_grid_spec(
+    base_sim: td.Simulation,
+    box_geom: td.Box,
+    case: dict[str, object],
+    params0: anp.ndarray,
+) -> td.GridSpec:
+    """Use the unperturbed medium grid for all finite-difference simulations."""
+    base_param_vals = _expand_params(np.asarray(params0, dtype=float))
+    base_param_sim = _add_medium(base_sim, box_geom, case, base_param_vals)
+    return td.GridSpec.from_grid(base_param_sim.grid)
+
+
 def _metric_value(dataset) -> float:
     ex_vals = dataset.Ex.values
     ey_vals = dataset.Ey.values
@@ -196,15 +275,6 @@ def _metric_value(dataset) -> float:
     intensity = anp.abs(ex_vals) ** 2 + anp.abs(ey_vals) ** 2 + anp.abs(ez_vals) ** 2
     weighted = intensity * anp.asarray(FREQ_WEIGHTS)
     return anp.real(anp.mean(weighted))
-
-
-def _angle_deg(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
-    norm_a = np.linalg.norm(vec_a)
-    norm_b = np.linalg.norm(vec_b)
-    if norm_a == 0 or norm_b == 0:
-        return np.nan
-    cos_theta = np.clip(np.dot(vec_a, vec_b) / (norm_a * norm_b), -1.0, 1.0)
-    return float(np.degrees(np.arccos(cos_theta)))
 
 
 def _expand_params(params: anp.ndarray) -> anp.ndarray:
@@ -229,19 +299,21 @@ def _run_simulation(
     return _metric_value(sim_data[monitor_name])
 
 
-@pytest.mark.numerical
-@pytest.mark.parametrize("case", TEST_CASES, ids=lambda c: c["name"])
-def test_custom_dispersive_multifreq_grad_matches_fd(
-    case, numerical_case_dir, tmp_path, _enable_local_cache
-):
+def _collect_custom_dispersive_evaluation_data(
+    case: dict[str, object],
+    numerical_case_dir: Path,
+    tmp_path: Path,
+) -> EvaluationData:
     base_sim, monitor_name, wavelength_min = _build_base_sim(FREQS)
     box_geom = _box_geometry(wavelength_min)
 
     params0 = anp.full(PARAM_SHAPE_2D, case["param0"]).reshape(-1)
+    fixed_grid_spec = _base_fixed_grid_spec(base_sim, box_geom, case, params0)
+    base_sim_fixed = base_sim.updated_copy(grid_spec=fixed_grid_spec, validate=True)
 
     def objective(param_vec):
         param_vals = _expand_params(param_vec)
-        sim = _add_medium(base_sim, box_geom, case, param_vals)
+        sim = _add_medium(base_sim_fixed, box_geom, case, param_vals)
         return _run_simulation(
             sim=sim,
             monitor_name=monitor_name,
@@ -259,14 +331,15 @@ def test_custom_dispersive_multifreq_grad_matches_fd(
         delta[idx] = FD_STEP
         plus_vals = _expand_params(params0 + delta)
         minus_vals = _expand_params(params0 - delta)
-        fd_sims[f"plus_{idx}"] = _add_medium(base_sim, box_geom, case, plus_vals)
-        fd_sims[f"minus_{idx}"] = _add_medium(base_sim, box_geom, case, minus_vals)
+        fd_sims[f"plus_{idx}"] = _add_medium(base_sim_fixed, box_geom, case, plus_vals)
+        fd_sims[f"minus_{idx}"] = _add_medium(base_sim_fixed, box_geom, case, minus_vals)
 
     fd_results = web.run_async(
         fd_sims,
         path_dir=str(numerical_case_dir / f"{case['name']}"),
         local_gradient=False,
         verbose=False,
+        lazy=False,
     )
 
     grad_fd = np.zeros_like(grad_adj)
@@ -275,32 +348,100 @@ def test_custom_dispersive_multifreq_grad_matches_fd(
         val_minus = _metric_value(fd_results[f"minus_{idx}"][monitor_name])
         grad_fd[idx] = (val_plus - val_minus) / (2.0 * FD_STEP)
 
-    angle_deg = _angle_deg(grad_adj, grad_fd)
+    return {
+        "grad_adj": np.asarray(grad_adj, dtype=float),
+        "grad_fd": np.asarray(grad_fd, dtype=float),
+        "params0": np.asarray(params0, dtype=float),
+    }
+
+
+def _evaluate_custom_dispersive_evaluation_data(evaluation_data: EvaluationData) -> MetricGroups:
+    return evaluate_gradient_angle_agreement(
+        np.asarray(evaluation_data["grad_fd"], dtype=float),
+        np.asarray(evaluation_data["grad_adj"], dtype=float),
+        angle_threshold_deg=ANGLE_TOL,
+        metric_name="angle_deg",
+    )
+
+
+def _print_custom_dispersive_summary(
+    case: dict[str, object],
+    evaluation_data: EvaluationData,
+    diagnostics: GradientComparisonDiagnostics,
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
+    grad_adj = np.asarray(evaluation_data["grad_adj"], dtype=float)
+    grad_fd = np.asarray(evaluation_data["grad_fd"], dtype=float)
+    angle_deg = diagnostics["gradient_overlap_deg"]
     print(
         (
-            f"[custom-dispersive-multifreq:{case['name']}] adjoint={grad_adj}, "
+            f"[custom-dispersive-multifreq:{case['name']}] mode={mode_label}, "
+            f"adjoint={grad_adj}, "
             f"finite-difference={grad_fd}, angle_deg={angle_deg:.3f}"
         ),
         file=sys.stderr,
     )
 
-    assert angle_deg <= ANGLE_TOL or np.isnan(angle_deg), (
-        f"Multi-frequency CustomDispersive gradient mismatch for {case['name']}. "
-        f"angle_deg={angle_deg:.3f}, adj={grad_adj}, fd={grad_fd}"
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "case",
+    TEST_CASES,
+    ids=lambda case: case_identity_id(_case_identity(case), prefix="custom-disp"),
+)
+def test_custom_dispersive_multifreq_grad_matches_fd(
+    request: pytest.FixtureRequest,
+    case: dict[str, object],
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    tmp_path: Path,
+    _enable_local_cache: None,
+) -> None:
+    case_identity = _case_identity(case)
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_custom_dispersive_evaluation_data(
+            case, numerical_case_dir, tmp_path
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_custom_dispersive_evaluation_data(evaluation_data)
+    )
+    _print_custom_dispersive_summary(
+        case, evaluation_data, diagnostics, eval_only=numerical_eval_only
+    )
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "Multi-frequency CustomDispersive gradient angle exceeds tolerance; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
     )
 
 
-@pytest.mark.numerical
-def test_custom_lorentz_fd_step_sweep(numerical_case_dir, tmp_path, _enable_local_cache):
+def _collect_custom_lorentz_step_sweep_evaluation_data(
+    numerical_case_dir: Path,
+    tmp_path: Path,
+) -> EvaluationData:
     base_sim, monitor_name, wavelength_min = _build_base_sim(FREQS)
     box_geom = _box_geometry(wavelength_min)
 
     case = TEST_CASES[0]
     params0 = anp.full(PARAM_SHAPE_2D, case["param0"]).reshape(-1)
+    fixed_grid_spec = _base_fixed_grid_spec(base_sim, box_geom, case, params0)
+    base_sim_fixed = base_sim.updated_copy(grid_spec=fixed_grid_spec, validate=True)
 
     def objective(de_params):
         de_vals = _expand_params(de_params)
-        sim = _add_medium(base_sim, box_geom, case, de_vals)
+        sim = _add_medium(base_sim_fixed, box_geom, case, de_vals)
         return _run_simulation(
             sim=sim,
             monitor_name=monitor_name,
@@ -317,14 +458,19 @@ def test_custom_lorentz_fd_step_sweep(numerical_case_dir, tmp_path, _enable_loca
     for step_label, step in zip(step_labels, FD_SWEEP_STEPS):
         plus_vals = _expand_params(params0 + step)
         minus_vals = _expand_params(params0 - step)
-        sweep_runs[f"step_{step_label}_plus"] = _add_medium(base_sim, box_geom, case, plus_vals)
-        sweep_runs[f"step_{step_label}_minus"] = _add_medium(base_sim, box_geom, case, minus_vals)
+        sweep_runs[f"step_{step_label}_plus"] = _add_medium(
+            base_sim_fixed, box_geom, case, plus_vals
+        )
+        sweep_runs[f"step_{step_label}_minus"] = _add_medium(
+            base_sim_fixed, box_geom, case, minus_vals
+        )
 
     sweep_results = web.run_async(
         sweep_runs,
         path_dir=str(numerical_case_dir / f"fd_sweep_{case['name']}"),
         local_gradient=False,
         verbose=False,
+        lazy=False,
     )
 
     fd_sweep = []
@@ -336,11 +482,58 @@ def test_custom_lorentz_fd_step_sweep(numerical_case_dir, tmp_path, _enable_loca
         fd_sweep.append((plus_val - minus_val) / (2.0 * step))
 
     fd_sweep = np.array(fd_sweep, dtype=float)
+
+    return {
+        "grad_adj": np.asarray(grad_adj, dtype=float),
+        "fd_sweep": fd_sweep,
+        "fd_sweep_steps": np.asarray(FD_SWEEP_STEPS, dtype=float),
+        "params0": np.asarray(params0, dtype=float),
+    }
+
+
+def _evaluate_custom_lorentz_step_sweep_evaluation_data(
+    evaluation_data: EvaluationData,
+) -> tuple[list[Metric], list[Metric], dict[str, float]]:
+    grad_adj = np.asarray(evaluation_data["grad_adj"], dtype=float)
+    fd_sweep = np.asarray(evaluation_data["fd_sweep"], dtype=float)
     fd_min = float(np.min(fd_sweep))
     fd_max = float(np.max(fd_sweep))
+    grad_adj_mean = float(np.mean(grad_adj))
+    fd_sweep_span = float(fd_max - fd_min)
+    fd_sweep_abs_max = float(np.max(np.abs(fd_sweep)))
+    grad_adj_abs_mean = float(np.mean(np.abs(grad_adj)))
+
+    regression_metrics = [
+        condition_metric("adjoint_gradient_finite", np.all(np.isfinite(grad_adj))),
+        condition_metric("fd_step_sweep_finite", np.all(np.isfinite(fd_sweep))),
+    ]
+    observation_metrics = [
+        Metric(name="fd_sweep_span", observed=fd_sweep_span, expected=0.0, comparator="gte"),
+        Metric(name="fd_sweep_abs_max", observed=fd_sweep_abs_max, expected=0.0, comparator="gte"),
+        Metric(
+            name="adjoint_gradient_abs_mean",
+            observed=grad_adj_abs_mean,
+            expected=0.0,
+            comparator="gte",
+        ),
+    ]
+    diagnostics = {
+        "fd_min": fd_min,
+        "fd_max": fd_max,
+        "grad_adj_mean": grad_adj_mean,
+    }
+    return regression_metrics, observation_metrics, diagnostics
+
+
+def _plot_custom_lorentz_step_sweep(
+    evaluation_data: EvaluationData, numerical_case_dir: Path
+) -> None:
+    grad_adj = np.asarray(evaluation_data["grad_adj"], dtype=float)
+    fd_sweep = np.asarray(evaluation_data["fd_sweep"], dtype=float)
+    fd_sweep_steps = np.asarray(evaluation_data["fd_sweep_steps"], dtype=float)
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(FD_SWEEP_STEPS, fd_sweep, marker="o", label="FD")
+    ax.plot(fd_sweep_steps, fd_sweep, marker="o", label="FD")
     ax.axhline(
         np.mean(grad_adj),
         color=ax.get_lines()[-1].get_color(),
@@ -359,11 +552,58 @@ def test_custom_lorentz_fd_step_sweep(numerical_case_dir, tmp_path, _enable_loca
     fig.savefig(fig_path, dpi=200)
     plt.close(fig)
 
+
+def _print_custom_lorentz_step_sweep_summary(
+    evaluation_data: EvaluationData,
+    diagnostics: dict[str, float],
+    *,
+    eval_only: bool,
+) -> None:
+    mode_label = "saved-artifact re-evaluation" if eval_only else "fresh data collection"
     print(
         (
-            "[custom-dispersive-fd-sweep] "
-            f"grad_adj={grad_adj} "
-            f"fd_grad[min,max]=({fd_min:.6e},{fd_max:.6e})"
+            f"[custom-dispersive-fd-sweep] mode={mode_label}, "
+            f"grad_adj={np.asarray(evaluation_data['grad_adj'], dtype=float)} "
+            f"fd_grad[min,max]=({diagnostics['fd_min']:.6e},{diagnostics['fd_max']:.6e})"
         ),
         file=sys.stderr,
+    )
+
+
+@pytest.mark.numerical
+def test_custom_lorentz_fd_step_sweep(
+    request: pytest.FixtureRequest,
+    numerical_case_dir: Path,
+    numerical_eval_only: bool,
+    tmp_path: Path,
+    _enable_local_cache: None,
+) -> None:
+    case_identity = _step_sweep_case_identity(TEST_CASES[0])
+    evaluation_data = load_or_collect_evaluation_data(
+        numerical_case_dir=numerical_case_dir,
+        numerical_eval_only=numerical_eval_only,
+        case_identity=case_identity,
+        collect_evaluation_data=lambda: _collect_custom_lorentz_step_sweep_evaluation_data(
+            numerical_case_dir, tmp_path
+        ),
+    )
+    regression_metrics, observation_metrics, diagnostics = (
+        _evaluate_custom_lorentz_step_sweep_evaluation_data(evaluation_data)
+    )
+    _print_custom_lorentz_step_sweep_summary(
+        evaluation_data, diagnostics, eval_only=numerical_eval_only
+    )
+
+    if PLOT_FD_STEP_SWEEP:
+        _plot_custom_lorentz_step_sweep(evaluation_data, numerical_case_dir)
+
+    finalize_result(
+        pytest_nodeid=request.node.nodeid,
+        numerical_case_dir=numerical_case_dir,
+        regression_metrics=regression_metrics,
+        observation_metrics=observation_metrics,
+        failure_message=(
+            "CustomLorentz finite-difference step sweep produced nonfinite data; inspect "
+            f"{numerical_case_dir / 'evaluation_data.npz'} and {numerical_case_dir / 'result.json'}"
+        ),
     )

@@ -22,6 +22,7 @@ from .numerical_test_helpers import (
     condition_metric,
     finalize_result,
     load_or_collect_evaluation_data,
+    scale_length_by_wavelength,
 )
 from .result_models import Metric
 
@@ -157,12 +158,6 @@ def _medium_case_identity(case) -> MediumGradientCaseIdentity:
     )
 
 
-def _scale_monitor_dim(dim: float, wavelength: float) -> float:
-    if np.isinf(dim):
-        return np.inf
-    return dim * wavelength
-
-
 def _box_geometry(case) -> td.Box:
     size = tuple(scale * case["wavelength"] for scale in BOX_SIZE_SCALE)
     return td.Box(size=size, center=(0.0, 0.0, 0.0))
@@ -182,7 +177,9 @@ def _build_base_sim(case):
     )
 
     monitor_center = (0.0, 0.0, sim_size[2] / 2 * 0.75)
-    monitor_size = tuple(_scale_monitor_dim(dim, wavelength) for dim in case["monitor_size"])
+    monitor_size = tuple(
+        scale_length_by_wavelength(dim, wavelength) for dim in case["monitor_size"]
+    )
     monitor_name = f"{case['name']}_monitor"
     monitor = td.FieldMonitor(
         center=monitor_center,

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqModeDataArray, _make_current_data_array
@@ -19,6 +20,8 @@ from tidy3d.components.microwave.path_integrals.specs.current import (
     CompositeCurrentIntegralSpec,
     Custom2DCurrentIntegralSpec,
 )
+from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
@@ -84,7 +87,7 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
         integral around the surface defined by ``self.size``."""
         path_specs = self._to_path_integral_specs(h_horizontal=h_horizontal, h_vertical=h_vertical)
         path_integrals = tuple(
-            AxisAlignedPathIntegral(**path_spec.model_dump(exclude={"type"}))
+            AxisAlignedPathIntegral(**path_spec.model_dump(exclude={TYPE_TAG_STR}))
             for path_spec in path_specs
         )
         return path_integrals
@@ -134,6 +137,23 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
     >>> spec2 = AxisAlignedCurrentIntegralSpec(center=(2, 0, 0), size=(1, 1, 0), sign="+")
     >>> composite = CompositeCurrentIntegral(path_specs=(spec1, spec2), sum_spec="sum")
     """
+
+    # Client-side compute object: accept either path specifications or already-built path
+    # integrals (the integral classes subclass their spec). The server-bound
+    # ``CompositeCurrentIntegralSpec`` stays spec-only.
+    path_specs: tuple[
+        discriminated_union(
+            AxisAlignedCurrentIntegralSpec
+            | Custom2DCurrentIntegralSpec
+            | AxisAlignedCurrentIntegral
+            | Custom2DCurrentIntegral
+        ),
+        ...,
+    ] = Field(
+        title="Path Specifications",
+        description="Disjoint path specifications -- or already-built path integrals -- for each "
+        "isolated contour integral.",
+    )
 
     @cached_property
     def current_integrals(

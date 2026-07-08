@@ -97,6 +97,114 @@ def test_heat_medium():
         _ = solid_from_si.optical
 
 
+def _tensor_matrix(components):
+    """Rebuild the symmetric 3x3 from the packed [kxx,kyy,kzz,kxy,kxz,kyz]."""
+    kxx, kyy, kzz, kxy, kxz, kyz = components
+    return np.array([[kxx, kxy, kxz], [kxy, kyy, kyz], [kxz, kyz, kzz]])
+
+
+def test_anisotropic_conductivity_to_tensor():
+    """AnisotropicConductivity resolves principal values + optional rotation to the six
+    packed symmetric tensor components [kxx,kyy,kzz,kxy,kxz,kyz]."""
+    # diagonal (no rotation): principals on the diagonal, zero off-diagonals
+    aniso = td.AnisotropicConductivity(xx=1.0, yy=2.0, zz=3.0)
+    assert aniso.to_tensor() == (1.0, 2.0, 3.0, 0.0, 0.0, 0.0)
+
+    # a 90-degree rotation about z swaps the xx and yy principals
+    rot_z90 = td.AnisotropicConductivity(
+        xx=1.0, yy=2.0, zz=3.0, rotation=td.RotationAroundAxis(axis=2, angle=np.pi / 2)
+    )
+    assert np.allclose(rot_z90.to_tensor(), (2.0, 1.0, 3.0, 0.0, 0.0, 0.0))
+
+    # general rotation: the reconstructed tensor equals R @ diag @ R.T, and is
+    # symmetric positive-definite (SPD by construction from positive principals)
+    rotation = td.RotationAroundAxis(axis=(1, 2, 3), angle=0.9)
+    aniso_rot = td.AnisotropicConductivity(xx=1.0, yy=2.0, zz=3.0, rotation=rotation)
+    matrix = _tensor_matrix(aniso_rot.to_tensor())
+    expected = rotation.matrix @ np.diag([1.0, 2.0, 3.0]) @ rotation.matrix.T
+    assert np.allclose(matrix, expected)
+    assert np.allclose(matrix, matrix.T)  # symmetric
+    assert np.all(np.linalg.eigvalsh(matrix) > 0)  # positive-definite
+    # eigenvalues are invariant under rotation -> the principals are preserved
+    assert np.allclose(sorted(np.linalg.eigvalsh(matrix)), [1.0, 2.0, 3.0])
+
+
+def test_anisotropic_conductivity_rotation_invariance():
+    """Rotating an isotropic tensor (equal principals) leaves it isotropic: no
+    off-diagonals appear and the diagonal is unchanged for any rotation."""
+    for axis, angle in [(2, np.pi / 2), ((1, 1, 0), 0.7), ((1, 2, 3), 1.23)]:
+        iso = td.AnisotropicConductivity(
+            xx=5.0, yy=5.0, zz=5.0, rotation=td.RotationAroundAxis(axis=axis, angle=angle)
+        )
+        assert np.allclose(iso.to_tensor(), (5.0, 5.0, 5.0, 0.0, 0.0, 0.0), atol=1e-12)
+
+
+def test_anisotropic_conductivity_validation():
+    """Principal conductivities must be positive."""
+    for bad in ((-1.0, 1.0, 1.0), (1.0, 0.0, 1.0)):
+        with pytest.raises(ValidationError):
+            td.AnisotropicConductivity(xx=bad[0], yy=bad[1], zz=bad[2])
+
+
+def test_anisotropic_conductivity_from_components():
+    """from_components diagonalizes the six symmetric components into the equivalent
+    principal-values-plus-rotation form, round-tripping through to_tensor exactly."""
+    # general SPD tensor with all three off-diagonals nonzero
+    comps = (2.0, 3.0, 5.0, 0.7, -0.4, 0.9)  # [kxx,kyy,kzz,kxy,kxz,kyz]
+    aniso = td.AnisotropicConductivity.from_components(*comps)
+    assert np.allclose(aniso.to_tensor(), comps)
+    # principals are the eigenvalues of the input matrix
+    assert np.allclose(
+        sorted([aniso.xx, aniso.yy, aniso.zz]),
+        sorted(np.linalg.eigvalsh(_tensor_matrix(comps))),
+    )
+    # a purely diagonal input needs no rotation
+    diag = td.AnisotropicConductivity.from_components(kxx=1.0, kyy=2.0, kzz=3.0)
+    assert diag.rotation is None
+    assert diag.to_tensor() == (1.0, 2.0, 3.0, 0.0, 0.0, 0.0)
+
+
+def test_anisotropic_conductivity_from_components_rejects_non_spd():
+    """from_components only accepts symmetric positive-definite tensors."""
+    from tidy3d.exceptions import ValidationError as Tidy3dValidationError
+
+    # indefinite: large off-diagonal drives a negative eigenvalue
+    with pytest.raises(Tidy3dValidationError):
+        td.AnisotropicConductivity.from_components(kxx=1.0, kyy=1.0, kzz=1.0, kxy=5.0)
+    # negative diagonal
+    with pytest.raises(Tidy3dValidationError):
+        td.AnisotropicConductivity.from_components(kxx=-1.0, kyy=2.0, kzz=3.0)
+
+
+def test_solid_medium_accepts_anisotropic_conductivity():
+    """SolidMedium.conductivity accepts both an isotropic scalar and an
+    AnisotropicConductivity tensor."""
+    scalar = td.SolidMedium(capacity=2, conductivity=3)
+    assert scalar.conductivity == 3
+
+    aniso = td.AnisotropicConductivity(xx=1.0, yy=2.0, zz=3.0)
+    tensor = td.SolidMedium(capacity=2, conductivity=aniso)
+    assert isinstance(tensor.conductivity, td.AnisotropicConductivity)
+    assert tensor.conductivity.to_tensor() == (1.0, 2.0, 3.0, 0.0, 0.0, 0.0)
+
+
+def test_solid_medium_from_si_units_anisotropic():
+    """from_si_units accepts an AnisotropicConductivity given in SI units and converts its
+    principals to tidy3d units (W/m/K -> W/um/K); the rotation is unitless and preserved."""
+    rot = td.RotationAroundAxis(axis=2, angle=0.5)
+    aniso_si = td.AnisotropicConductivity(xx=7.0, yy=1.5, zz=3.0, rotation=rot)
+    solid = td.SolidMedium.from_si_units(conductivity=aniso_si, capacity=1)
+
+    assert isinstance(solid.conductivity, td.AnisotropicConductivity)
+    assert solid.conductivity.rotation == rot
+    # principals scaled by 1e-6 -> eigenvalues of the resolved tensor scale likewise
+    matrix = _tensor_matrix(solid.conductivity.to_tensor())
+    assert np.allclose(sorted(np.linalg.eigvalsh(matrix)), [1.5e-6, 3.0e-6, 7.0e-6])
+
+    # scalar path is unchanged
+    assert td.SolidMedium.from_si_units(conductivity=1.0).conductivity == 1e-6
+
+
 def test_solid_medium_velocity_requires_capacity_and_density():
     """A nonzero advection velocity requires both capacity and density (the
     convection coefficient rho*cp = capacity*density must be well defined)."""

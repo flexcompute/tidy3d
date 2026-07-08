@@ -13,6 +13,7 @@ from tidy3d.components.data.monitor_data import ModeData, ModeSolverData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
@@ -321,6 +322,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
 
     coeffs: EMECoefficientData | EMECoefficientDataset | None = Field(
         None,
+        discriminator=TYPE_TAG_STR,
         title="Coefficients",
         description="Coefficients from the EME simulation. Useful for debugging and optimization.",
     )

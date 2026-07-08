@@ -11,7 +11,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium
 from tidy3d.components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
-from tidy3d.components.tcad.bandgap_energy import ConstantEnergyBandGap
+from tidy3d.components.tcad.bandgap import ConstantEnergyBandGap
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -20,6 +20,7 @@ from tidy3d.components.tcad.types import (
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
@@ -156,6 +157,7 @@ class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
 
     medium: PoleResidue | MultiPhysicsMedium = Field(
+        discriminator=TYPE_TAG_STR,
         title="Material dispersion model",
         description="A dispersive medium described by the pole-residue pair model.",
     )
