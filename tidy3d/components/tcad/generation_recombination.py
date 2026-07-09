@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-from pydantic import Field, PositiveFloat, model_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -437,6 +437,111 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         "semiconductors :math:`\\sigma` is typically 2.0, while for indirect "
         "semiconductors :math:`\\sigma` is typically 2.5.",
     )
+
+
+class SurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
+    """
+    Surface Shockley-Read-Hall (SRH) recombination at a single trap level.
+
+    Notes
+    -----
+
+        Extended SRH form evaluated per unit area at a semiconductor interface:
+
+        .. math::
+
+           R_s = \\frac{n p - n_{i,\\mathrm{eff}}^2}
+                       {(n + n_1)/S_p + (p + p_1)/S_n}
+
+        with :math:`n_1 = n_{i,\\mathrm{eff}}\\,e^{(E_t - E_F^i)/kT}` and
+        :math:`p_1 = n_{i,\\mathrm{eff}}\\,e^{(E_F^i - E_t)/kT}`, where
+        ``E_t`` is the trap level relative to the intrinsic Fermi level
+        :math:`E_F^i`.  The default ``E_t = 0`` (mid-gap) is the
+        velocity-form shorthand used in most low-injection passivation
+        analyses, for which :math:`n_1 = p_1 = n_{i,\\mathrm{eff}}`.
+
+        Conventions follow Altermatt 2011 (J. Comput. Electron. 10:314):
+        :math:`n_{i,\\mathrm{eff}}` is the bandgap-narrowing-corrected
+        effective intrinsic concentration, and the same value enters both the
+        numerator and the trap-level concentrations :math:`n_1, p_1`.
+
+        Typical surface recombination velocities for crystalline silicon:
+
+        * ideal Al2O3 / SiNx passivation: ``S < 10`` cm/s
+        * thermal SiO2: ``S ~ 10 - 100`` cm/s
+        * bare Si surface (no passivation): ``S ~ 1e6`` cm/s
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> # Si/SiO2 interface, mid-gap traps (default), moderate passivation
+        >>> sr = td.SurfaceShockleyReedHallRecombination(S_n=1e3, S_p=1e3)
+        >>> # Same interface with explicit near-mid-gap trap energy
+        >>> sr = td.SurfaceShockleyReedHallRecombination(S_n=1e3, S_p=1e3, E_t=0.05)
+
+    References
+    ----------
+        .. [1] P. P. Altermatt, "Models for numerical device simulations of
+               crystalline silicon solar cells - a review," J. Comput. Electron.
+               10:314 (2011).
+    """
+
+    S_n: NonNegativeFloat = Field(
+        title="Electron surface recombination velocity",
+        description="Electron surface recombination velocity at the interface. "
+        "Zero corresponds to ideal passivation on the electron channel.",
+        json_schema_extra={"units": "cm/s"},
+    )
+    S_p: NonNegativeFloat = Field(
+        title="Hole surface recombination velocity",
+        description="Hole surface recombination velocity at the interface. "
+        "Zero corresponds to ideal passivation on the hole channel.",
+        json_schema_extra={"units": "cm/s"},
+    )
+    E_t: float = Field(
+        0.0,
+        title="Trap level relative to intrinsic Fermi",
+        description="Energy of the interface trap level relative to the "
+        "intrinsic Fermi level. ``0`` corresponds to mid-gap (the most common "
+        "case); positive values are above intrinsic. Must lie inside the "
+        "band gap for the recombination rate to be physical.",
+        json_schema_extra={"units": "eV"},
+    )
+
+    @model_validator(mode="after")
+    def _validate_trap_level_in_gap(self) -> Self:
+        """Warn if the trap energy is outside any physically reasonable
+        band gap. ``E_t`` is referenced to the intrinsic Fermi level in
+        eV, so values much larger than half a typical bandgap are almost
+        certainly a unit mistake (eV vs. Joules) or a sign convention
+        error, producing unphysical ``n_1``, ``p_1`` values."""
+        if abs(self.E_t) > 1.5:
+            log.warning(
+                f"SurfaceShockleyReedHallRecombination 'E_t' = {self.E_t:.3e} eV "
+                "is outside the typical semiconductor band gap (|E_t| > 1.5 eV). "
+                "'E_t' is referenced to the intrinsic Fermi level in eV; "
+                "double-check units and sign convention."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_at_least_one_velocity_positive(self) -> Self:
+        """Warn if both surface recombination velocities are zero. The
+        BC then contributes no recombination flux and reduces to an
+        electrostatic interface; use this only for a charged
+        ``SurfaceRecombinationBC`` with no carrier recombination flux.
+        Otherwise prefer ``InsulatingBC``."""
+        if self.S_n == 0.0 and self.S_p == 0.0:
+            log.warning(
+                "SurfaceShockleyReedHallRecombination has S_n = S_p = 0 and "
+                "will not contribute any recombination flux. Use this only "
+                "for a charged 'SurfaceRecombinationBC' with no carrier "
+                "recombination flux; otherwise prefer 'InsulatingBC'."
+            )
+        return self
+
+
+SurfaceRecombinationModelType = SurfaceShockleyReedHallRecombination
 
 
 class SelberherrImpactIonization(Tidy3dBaseModel):

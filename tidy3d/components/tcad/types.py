@@ -10,6 +10,7 @@ from tidy3d.components.tcad.bandgap import (
 from tidy3d.components.tcad.boundary.charge import (
     CurrentBC,
     InsulatingBC,
+    SurfaceRecombinationBC,
     VoltageBC,
 )
 from tidy3d.components.tcad.boundary.heat import (
@@ -85,4 +86,5 @@ HeatChargeBCType = (
     | VoltageBC
     | CurrentBC
     | InsulatingBC
+    | SurfaceRecombinationBC
 )

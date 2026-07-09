@@ -74,6 +74,7 @@ from tidy3d.components.tcad.types import (
     HeatFromElectricSource,
     HeatSource,
     InsulatingBC,
+    SurfaceRecombinationBC,
     TemperatureBC,
     ThermalContactResistance,
     UniformHeatSource,
@@ -112,7 +113,7 @@ HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC, ThermalContactResistance)
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
-ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
+ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC, SurfaceRecombinationBC)
 ChargeTypes = (
     SteadyChargeDCAnalysis,
     IsothermalSteadyChargeDCAnalysis,
@@ -558,10 +559,13 @@ class HeatChargeSimulation(AbstractSimulation):
                 ("structures",), self._check_charge_simulation_semiconductors
             )
             self._call_with_validation_loc(("structures",), self._check_masetti_mobility_models)
-            # Schottky contacts apply only to charge simulations, so validate
-            # their supported modes inside the charge guard; heat-only and
-            # conduction-only simulations skip this check.
+            # Schottky contacts and surface recombination apply only to
+            # charge simulations, so validate them inside the charge guard;
+            # heat-only and conduction-only simulations skip these checks.
             self._call_with_validation_loc(("boundary_spec",), self._check_schottky_supported_modes)
+            self._call_with_validation_loc(
+                ("boundary_spec",), self._check_surface_recombination_bcs
+            )
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
@@ -1042,11 +1046,197 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
         return self
 
+    def _check_surface_recombination_bcs(self) -> Self:
+        """Run all ``SurfaceRecombinationBC`` setup checks."""
+        self._check_surface_recombination_requires_accelerated()
+        self._check_surface_recombination_not_stacked_with_current_bc()
+        self._check_surface_recombination_not_stacked_with_insulating_bc()
+        self._check_surface_recombination_not_stacked_with_schottky()
+        self._check_surface_recombination_qf_on_voltage_overlay()
+        self._check_surface_recombination_no_duplicate_placement()
+        return self
+
+    def _check_surface_recombination_requires_accelerated(self) -> Self:
+        """Reject ``SurfaceRecombinationBC`` when the accelerated charge solver is off."""
+        has_sr = any(isinstance(bc.condition, SurfaceRecombinationBC) for bc in self.boundary_spec)
+        if not has_sr:
+            return self
+        # May raise if the user forced an unsupported configuration; let it propagate.
+        if not self._resolve_use_accelerated_solver:
+            raise SetupError(
+                "'SurfaceRecombinationBC' is supported only by the "
+                "accelerated charge solver. Either remove the surface "
+                "recombination boundary condition or set "
+                "'use_accelerated_solver=True'."
+            )
+        return self
+
+    def _check_surface_recombination_not_stacked_with_current_bc(self) -> Self:
+        """Reject ``SurfaceRecombinationBC`` sharing a placement with ``CurrentBC``,
+        which would prescribe the carrier flux on the same face twice."""
+        for i, sr_bc in enumerate(self.boundary_spec):
+            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
+                continue
+            for j, other_bc in enumerate(self.boundary_spec):
+                if i == j or not isinstance(other_bc.condition, CurrentBC):
+                    continue
+                if self._placements_overlap(sr_bc.placement, other_bc.placement):
+                    raise SetupError(
+                        "'SurfaceRecombinationBC' cannot share a placement with "
+                        "'CurrentBC'. CurrentBC prescribes the normal carrier "
+                        "flux; composing it with a Robin SR contribution is "
+                        "deferred."
+                    )
+        return self
+
+    def _check_surface_recombination_not_stacked_with_schottky(self) -> Self:
+        """Reject ``SurfaceRecombinationBC`` sharing a placement with a Schottky
+        contact, which does not support a surface recombination overlay."""
+        for i, sr_bc in enumerate(self.boundary_spec):
+            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
+                continue
+            for j, other_bc in enumerate(self.boundary_spec):
+                if i == j or not self._bc_is_schottky(other_bc):
+                    continue
+                if self._placements_overlap(sr_bc.placement, other_bc.placement):
+                    raise SetupError(
+                        "'SurfaceRecombinationBC' cannot share a placement with a "
+                        "Schottky contact ('VoltageBC' with model=\"schottky_mott\"). "
+                        "Contact surface recombination overlays are supported only "
+                        'for ohmic contacts (model="ohmic").'
+                    )
+        return self
+
+    def _check_surface_recombination_qf_on_voltage_overlay(self) -> Self:
+        """Reject non-zero ``Q_f`` on a placement shared with ``VoltageBC``,
+        where the contact screens fixed sheet charge."""
+        for i, sr_bc in enumerate(self.boundary_spec):
+            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
+                continue
+            if not sr_bc.condition.Q_f:
+                continue
+            for j, other_bc in enumerate(self.boundary_spec):
+                if i == j or not isinstance(other_bc.condition, VoltageBC):
+                    continue
+                if self._placements_overlap(sr_bc.placement, other_bc.placement):
+                    raise SetupError(
+                        "'SurfaceRecombinationBC' with a non-zero 'Q_f' "
+                        "cannot share a placement with 'VoltageBC'. The "
+                        "metal contact pins the electrostatic potential and "
+                        "screens fixed sheet charge, so the Poisson "
+                        "contribution from Q_f would be ignored on the "
+                        "overlay nodes."
+                    )
+        return self
+
+    def _check_surface_recombination_not_stacked_with_insulating_bc(self) -> Self:
+        """Reject ``SurfaceRecombinationBC`` sharing a placement with ``InsulatingBC``,
+        whose zero-flux condition it already replaces."""
+        for i, sr_bc in enumerate(self.boundary_spec):
+            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
+                continue
+            for j, other_bc in enumerate(self.boundary_spec):
+                if i == j or not isinstance(other_bc.condition, InsulatingBC):
+                    continue
+                if self._placements_overlap(sr_bc.placement, other_bc.placement):
+                    raise SetupError(
+                        "'SurfaceRecombinationBC' cannot share a placement "
+                        "with 'InsulatingBC'. The SR Robin term already "
+                        "replaces the natural zero-flux BC; drop the "
+                        "'InsulatingBC' spec on this face."
+                    )
+        return self
+
+    def _check_surface_recombination_no_duplicate_placement(self) -> Self:
+        """Reject two ``SurfaceRecombinationBC`` entries on the same placement."""
+        for i, bc_i in enumerate(self.boundary_spec):
+            if not isinstance(bc_i.condition, SurfaceRecombinationBC):
+                continue
+            for j in range(i + 1, len(self.boundary_spec)):
+                bc_j = self.boundary_spec[j]
+                if not isinstance(bc_j.condition, SurfaceRecombinationBC):
+                    continue
+                if self._placements_overlap(bc_i.placement, bc_j.placement):
+                    raise SetupError(
+                        "Two 'SurfaceRecombinationBC' entries share the same "
+                        "placement. Use distinct placements (e.g. one "
+                        "'MediumMediumInterface' per semiconductor face) so "
+                        "each interface picks up its own kinetic model."
+                    )
+        return self
+
+    def _medium_pair_for_structure_pair(self, structures: tuple[str, str]) -> frozenset[str] | None:
+        """Return the medium-pair key for a structure pair, if it is unambiguous."""
+        structure_to_medium = {
+            structure.name: structure.medium.name
+            for structure in self.structures
+            if structure.name is not None and structure.medium.name is not None
+        }
+        medium_names = tuple(structure_to_medium.get(name) for name in structures)
+        if None in medium_names or medium_names[0] == medium_names[1]:
+            return None
+        return frozenset(medium_names)
+
+    def _placements_overlap(self, first: Any, second: Any) -> bool:
+        """Conservatively detect placement overlaps used by SR validation.
+
+        Interface pairs are treated as unordered, ``MediumMediumInterface``
+        is treated as a material-wide superset of matching structure
+        interfaces, and simulation-boundary surface lists are considered
+        overlapping if they share any surface.
+        """
+        if first == second:
+            return True
+
+        if isinstance(first, StructureStructureInterface) and isinstance(
+            second, StructureStructureInterface
+        ):
+            return frozenset(first.structures) == frozenset(second.structures)
+
+        if isinstance(first, MediumMediumInterface) and isinstance(second, MediumMediumInterface):
+            return frozenset(first.mediums) == frozenset(second.mediums)
+
+        if isinstance(first, StructureStructureInterface) and isinstance(
+            second, MediumMediumInterface
+        ):
+            return self._medium_pair_for_structure_pair(first.structures) == frozenset(
+                second.mediums
+            )
+
+        if isinstance(first, MediumMediumInterface) and isinstance(
+            second, StructureStructureInterface
+        ):
+            return self._placements_overlap(second, first)
+
+        if isinstance(first, SimulationBoundary) and isinstance(second, SimulationBoundary):
+            return bool(set(first.surfaces) & set(second.surfaces))
+
+        if isinstance(first, StructureSimulationBoundary) and isinstance(
+            second, StructureSimulationBoundary
+        ):
+            return first.structure == second.structure and bool(
+                set(first.surfaces) & set(second.surfaces)
+            )
+
+        if isinstance(first, SimulationBoundary) and isinstance(
+            second, StructureSimulationBoundary
+        ):
+            return bool(set(first.surfaces) & set(second.surfaces))
+
+        if isinstance(first, StructureSimulationBoundary) and isinstance(
+            second, SimulationBoundary
+        ):
+            return self._placements_overlap(second, first)
+
+        return False
+
     def _not_all_neumann(self) -> Self:
         """Make sure not all BCs are of Neumann type"""
 
         NeumannBCsHeat = (HeatFluxBC, ThermalContactResistance)
-        NeumannBCsCharge = (CurrentBC, InsulatingBC)
+        # SurfaceRecombinationBC is Robin in the carrier rows, but it does
+        # not anchor the electrostatic potential.
+        NeumannBCsCharge = (CurrentBC, InsulatingBC, SurfaceRecombinationBC)
 
         simulation_types = self._check_simulation_types()
 

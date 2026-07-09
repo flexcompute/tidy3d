@@ -8,6 +8,7 @@ from pydantic import Field
 
 from tidy3d.components.spice.sources.types import CurrentSourceType, VoltageSourceType
 from tidy3d.components.tcad.boundary.abstract import HeatChargeBC
+from tidy3d.components.tcad.generation_recombination import SurfaceRecombinationModelType
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import CURRENT_DENSITY, VOLT
 
@@ -97,3 +98,48 @@ class InsulatingBC(HeatChargeBC):
     -------
     >>> bc = InsulatingBC()
     """
+
+
+class SurfaceRecombinationBC(HeatChargeBC):
+    """Surface recombination at a semiconductor boundary or zone interface.
+
+    Notes
+    -----
+
+        Adds a Robin-type recombination flux to the carrier continuity equations,
+
+        .. math::
+
+           \\mathbf{J}_n \\cdot \\hat{\\mathbf{n}} = -q\\,R_s(n,p),
+           \\qquad
+           \\mathbf{J}_p \\cdot \\hat{\\mathbf{n}} = +q\\,R_s(n,p),
+
+        The kinetic kernel :math:`R_s(n,p)` is supplied by ``model``. A
+        separate :class:`VoltageBC` may share the same contact face; in that
+        composition the contact pins the potential and this BC supplies the
+        finite surface-recombination carrier exchange.
+
+    Example
+    -------
+
+        >>> import tidy3d as td
+        >>> sr_bc = td.SurfaceRecombinationBC(
+        ...     model=td.SurfaceShockleyReedHallRecombination(S_n=1e3, S_p=1e3),
+        ... )
+    """
+
+    model: SurfaceRecombinationModelType = Field(
+        ...,
+        title="Surface recombination model",
+        description="Kinetic recombination model.",
+    )
+
+    Q_f: float = Field(
+        0.0,
+        title="Fixed interface sheet charge density",
+        description="Signed fixed interface sheet charge density "
+        "[C/cm^2]. Negative values (e.g. for Al2O3 on Si) attract holes "
+        "and deplete electrons at the interface (field-effect "
+        "passivation); positive values do the inverse.",
+        json_schema_extra={"units": "C/cm^2"},
+    )

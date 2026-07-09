@@ -95,6 +95,7 @@ from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, Gaussian
 from tidy3d.components.tcad.generation_recombination import (
     FossumCarrierLifetime,
     PalankovskiQuayApproxCarrierLifetime,
+    SurfaceShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
@@ -138,6 +139,7 @@ from tidy3d.components.tcad.types import (
     SelberherrImpactIonization,
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
+    SurfaceRecombinationBC,
     TemperatureBC,
     ThermalContactResistance,
     UniformHeatSource,
@@ -952,6 +954,8 @@ __all__ = [
     "SurfaceFieldTimeMonitor",
     "SurfaceImpedance",
     "SurfaceImpedanceFitterParam",
+    "SurfaceRecombinationBC",
+    "SurfaceShockleyReedHallRecombination",
     "TemperatureBC",
     "TemperatureData",
     "TemperatureMonitor",

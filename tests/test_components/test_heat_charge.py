@@ -4271,3 +4271,187 @@ def test_polyslab_arc_unsupported(geometry, expect_error):
             td.HeatChargeSimulation(**kwargs)
     else:
         td.HeatChargeSimulation(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# SurfaceRecombinationBC setup-time validators
+# ---------------------------------------------------------------------------
+
+
+def _sr_base_sim(*extra_specs, use_accelerated_solver=True, sr_voltage_overlay=False):
+    """Build a minimal HeatChargeSimulation suitable for exercising the
+    SurfaceRecombinationBC setup-time validators. Two metal/Si ohmic
+    contacts span the simulation and pin psi; the central Si block is
+    where ``SurfaceRecombinationBC`` is meaningful.
+    """
+    metal = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+    structures = [
+        td.Structure(
+            geometry=td.Box(center=(-2, 0, 0), size=(2, 2, 2)),
+            medium=metal,
+            name="cathode",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+            medium=CHARGE_SIMULATION.intrinsic_Si,
+            name="silicon",
+        ),
+        td.Structure(
+            geometry=td.Box(center=(2, 0, 0), size=(2, 2, 2)),
+            medium=metal,
+            name="anode",
+        ),
+    ]
+    boundary_spec = [
+        td.HeatChargeBoundarySpec(
+            placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.5)),
+        ),
+        *extra_specs,
+    ]
+    return td.HeatChargeSimulation(
+        size=(8, 4, 4),
+        center=(0, 0, 0),
+        structures=structures,
+        boundary_spec=boundary_spec,
+        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
+        use_accelerated_solver=use_accelerated_solver,
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="voltage",
+                unstructured=False,
+            )
+        ],
+    )
+
+
+def _sr_bc(S_n=1.0, S_p=1.0, Q_f=0.0):
+    return td.SurfaceRecombinationBC(
+        model=td.SurfaceShockleyReedHallRecombination(S_n=S_n, S_p=S_p),
+        Q_f=Q_f,
+    )
+
+
+def test_sr_validator_requires_accelerated_solver():
+    sr_spec = td.HeatChargeBoundarySpec(
+        condition=_sr_bc(),
+        placement=td.MediumMediumInterface(mediums=["Si_intrinsic", "metal"]),
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec, use_accelerated_solver=False)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "accelerated charge solver")
+
+
+def test_sr_validator_rejects_stacked_current_bc():
+    contact = td.StructureStructureInterface(structures=["anode", "silicon"])
+    sr_spec = td.HeatChargeBoundarySpec(condition=_sr_bc(), placement=contact)
+    current_spec = td.HeatChargeBoundarySpec(
+        condition=td.CurrentBC(source=td.DCCurrentSource(current=0.0)), placement=contact
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec, current_spec)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "CurrentBC")
+
+
+def test_sr_validator_rejects_stacked_current_bc_reversed_interface():
+    sr_contact = td.StructureStructureInterface(structures=["anode", "silicon"])
+    current_contact = td.StructureStructureInterface(structures=["silicon", "anode"])
+    sr_spec = td.HeatChargeBoundarySpec(condition=_sr_bc(), placement=sr_contact)
+    current_spec = td.HeatChargeBoundarySpec(
+        condition=td.CurrentBC(source=td.DCCurrentSource(current=0.0)),
+        placement=current_contact,
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec, current_spec)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "CurrentBC")
+
+
+def test_sr_validator_rejects_stacked_insulating_bc():
+    contact = td.StructureStructureInterface(structures=["anode", "silicon"])
+    sr_spec = td.HeatChargeBoundarySpec(condition=_sr_bc(), placement=contact)
+    insulating_spec = td.HeatChargeBoundarySpec(condition=td.InsulatingBC(), placement=contact)
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec, insulating_spec)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "InsulatingBC")
+
+
+def test_sr_validator_rejects_stacked_insulating_bc_surface_overlap():
+    sr_spec = td.HeatChargeBoundarySpec(
+        condition=_sr_bc(),
+        placement=td.SimulationBoundary(surfaces=("x+",)),
+    )
+    insulating_spec = td.HeatChargeBoundarySpec(
+        condition=td.InsulatingBC(),
+        placement=td.SimulationBoundary(surfaces=("x+", "y+")),
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec, insulating_spec)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "InsulatingBC")
+
+
+def test_sr_validator_rejects_schottky_overlay():
+    sim = _make_schottky_charge_sim()
+    sr_spec = td.HeatChargeBoundarySpec(
+        condition=_sr_bc(),
+        placement=td.StructureStructureInterface(structures=["silicon", "anode"]),
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        sim.updated_copy(boundary_spec=[*sim.boundary_spec, sr_spec])
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "schottky_mott")
+
+
+def test_sr_validator_rejects_qf_on_voltage_overlay():
+    contact = td.StructureStructureInterface(structures=["anode", "silicon"])
+    sr_spec = td.HeatChargeBoundarySpec(condition=_sr_bc(Q_f=1e-8), placement=contact)
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "Q_f")
+
+
+def test_sr_validator_rejects_qf_on_voltage_overlay_medium_structure_overlap():
+    sr_spec = td.HeatChargeBoundarySpec(
+        condition=_sr_bc(Q_f=1e-8),
+        placement=td.MediumMediumInterface(mediums=["metal", "Si_intrinsic"]),
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "Q_f")
+
+
+def test_sr_validator_rejects_duplicate_placement():
+    iface = td.MediumMediumInterface(mediums=["Si_intrinsic", "metal"])
+    sr_spec_a = td.HeatChargeBoundarySpec(condition=_sr_bc(S_n=1.0), placement=iface)
+    sr_spec_b = td.HeatChargeBoundarySpec(condition=_sr_bc(S_n=2.0), placement=iface)
+    with pytest.raises(ValidationError) as excinfo:
+        _sr_base_sim(sr_spec_a, sr_spec_b)
+    assert_single_value_error_loc(excinfo, ("boundary_spec",), "SurfaceRecombinationBC")
+
+
+def test_sr_validator_accepts_voltage_overlay_without_qf():
+    """Positive case: the two-spec idiom (VoltageBC + SR on the same
+    contact) must remain accepted as long as Q_f stays zero.
+    """
+    contact = td.StructureStructureInterface(structures=["anode", "silicon"])
+    sr_spec = td.HeatChargeBoundarySpec(condition=_sr_bc(), placement=contact)
+    sim = _sr_base_sim(sr_spec)
+    assert sim is not None
+
+
+def test_sr_validator_accepts_distinct_structure_interfaces_with_same_media():
+    left = td.StructureStructureInterface(structures=["cathode", "silicon"])
+    right = td.StructureStructureInterface(structures=["anode", "silicon"])
+    sr_spec_left = td.HeatChargeBoundarySpec(condition=_sr_bc(), placement=left)
+    sr_spec_right = td.HeatChargeBoundarySpec(condition=_sr_bc(), placement=right)
+    sim = _sr_base_sim(sr_spec_left, sr_spec_right)
+    assert sim is not None
