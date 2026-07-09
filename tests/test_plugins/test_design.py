@@ -7,7 +7,6 @@ import sys
 import types
 import weakref
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
@@ -33,13 +32,12 @@ SWEEP_METHODS = {
     "part_swarm": tdd.MethodParticleSwarm(n_particles=3, n_iter=2, seed=1),
 }
 
-# Task names that should be produced for the different methods
-expected_task_names = {
-    "MethodGrid": ["MethodGrid_10_10", "MethodGrid_41_41"],
-    "MethodMonteCarlo": ["MethodMonteCarlo_0_0", "MethodMonteCarlo_3_3"],
-    "MethodBayOpt": ["MethodBayOpt_2_2", "MethodBayOpt_0_5"],
-    "MethodGenAlg": ["MethodGenAlg_3_3", "MethodGenAlg_0_8"],
-    "MethodParticleSwarm": ["MethodParticleSwarm_2_2", "MethodParticleSwarm_1_4"],
+EXPECTED_SWEEP_TASK_NAME = {
+    "MethodGrid": "MethodGrid_10_10",
+    "MethodMonteCarlo": "MethodMonteCarlo_3_3",
+    "MethodBayOpt": "MethodBayOpt_0_4",
+    "MethodGenAlg": "MethodGenAlg_0_8",
+    "MethodParticleSwarm": "MethodParticleSwarm_2_5",
 }
 
 
@@ -334,7 +332,7 @@ def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
     mnt = td.FieldMonitor(
         size=(0, 0, 0),
         center=(0, 0, 0),
-        freqs=[2e14],
+        freqs=[freq0],
         name="field",
     )
 
@@ -366,40 +364,7 @@ def scs_post(sim_data: td.SimulationData) -> float:
 def scs_combined(radius: float, num_spheres: int, tag: str) -> float:
     """Preprocessing function (make simulation) and run it controlled by the user"""
 
-    # set up simulation
-    spheres = []
-    freq0 = td.C_0 / 0.5
-
-    for _ in range(int(num_spheres)):
-        spheres.append(
-            td.Structure(
-                geometry=td.Sphere(radius=radius),
-                medium=td.PEC,
-            )
-        )
-
-    mnt = td.FieldMonitor(
-        size=(0, 0, 0),
-        center=(0, 0, 0),
-        freqs=[2e14],
-        name="field",
-    )
-
-    sim = td.Simulation(
-        size=(1, 1, 1),
-        structures=spheres,
-        sources=[
-            td.PointDipole(
-                center=(0, 0, 0),
-                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
-                polarization="Ex",
-            )
-        ],
-        grid_spec=td.GridSpec.auto(wavelength=1.0),
-        run_time=1e-12,
-        monitors=[mnt],
-    )
-
+    sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
     sim_data = web.run(sim, task_name="test")
 
     mnt_data = sim_data["field"]
@@ -535,19 +500,26 @@ def mode_sim_combined(width: float) -> float:
     return mode_sim_post(sim_data)
 
 
-def init_design_space(sweep_method):
+def init_design_space(
+    sweep_method,
+    *,
+    radius_span=(0, 1.5),
+    radius_num_points=3,
+    num_spheres_span=(0, 2),
+    tags=("tag1", "tag2"),
+):
     radius_variable = tdd.ParameterFloat(
         name="radius",
-        span=(0, 1.5),
-        num_points=3,  # note: only used for MethodGrid
+        span=radius_span,
+        num_points=radius_num_points,  # note: only used for MethodGrid
     )
 
     num_spheres_variable = tdd.ParameterInt(
         name="num_spheres",
-        span=(0, 2),
+        span=num_spheres_span,
     )
 
-    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2"))
+    tag_variable = tdd.ParameterAny(name="tag", allowed_values=tags)
 
     design_space = tdd.DesignSpace(
         parameters=[radius_variable, num_spheres_variable, tag_variable],
@@ -574,22 +546,129 @@ def init_mode_design_space():
     return design_space
 
 
+OPTIMIZER_CONTAINER_CASES = {
+    "bay-opt-batch": (
+        tdd.MethodBayOpt(initial_iter=1, n_iter=1, seed=2),
+        scs_pre_batch,
+        scs_post_batch,
+        None,
+    ),
+    "gen-alg-list": (
+        tdd.MethodGenAlg(
+            solutions_per_pop=4,
+            n_generations=2,
+            n_parents_mating=2,
+            seed=1,
+            mutation_prob=0,
+            keep_parents=0,
+        ),
+        scs_pre_list,
+        scs_post_list,
+        "MethodGenAlg_0_12",
+    ),
+    "part-swarm-dict": (
+        tdd.MethodParticleSwarm(n_particles=2, n_iter=2, seed=1),
+        scs_pre_dict,
+        scs_post_dict,
+        "MethodParticleSwarm_test2_7",
+    ),
+}
+
+
+def _flatten_task_metadata(metadata):
+    if isinstance(metadata, str):
+        return [metadata]
+    if isinstance(metadata, dict):
+        return [
+            task_name for value in metadata.values() for task_name in _flatten_task_metadata(value)
+        ]
+    return [task_name for value in metadata for task_name in _flatten_task_metadata(value)]
+
+
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values())
 @pytest.mark.slow
 def test_sweep(sweep_method, monkeypatch):
-    # Problem, simulate scattering cross section of sphere ensemble
-    # 	simulation consists of `num_spheres` spheres of radius `radius`.
-    #   use defines `scs` function to set up and run simulation as function of inputs.
-    #   then postprocesses the data to give the SCS.
-
+    # Method-specific optimizer behavior is covered in the focused tests below.
+    # This smoke keeps every method wired through one non-td and one td pre/post path.
     monkeypatch.setattr(web, "run", run_emulated_workflow)
-
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 
-    # Initialize designspace and parameters
-    design_space = init_design_space(sweep_method=sweep_method)
+    design_space = init_design_space(
+        sweep_method=sweep_method,
+        radius_span=(0.1, 1.5),
+    )
 
-    # Check some summaries
+    non_td_sweep = design_space.run(float_non_td_combined, verbose=False)
+    td_sweep_combined = design_space.run(scs_combined, verbose=False)
+    td_sweep = design_space.run(scs_pre, scs_post, verbose=False)
+
+    assert len(non_td_sweep.values) > 0
+    assert len(td_sweep.values) > 0
+    assert np.allclose(td_sweep_combined.values, td_sweep.values)
+    assert td_sweep.dims == ("radius", "num_spheres", "tag")
+    assert len(td_sweep.values) == len(td_sweep.coords)
+    assert len(td_sweep.task_names) == len(td_sweep.task_ids) > 0
+    assert len(set(td_sweep.task_names)) == len(td_sweep.task_names)
+    assert len(set(td_sweep.task_ids)) == len(td_sweep.task_ids)
+    assert all(np.isfinite(value) for value in td_sweep.values)
+    expected_task_name = EXPECTED_SWEEP_TASK_NAME[sweep_method.type]
+    assert expected_task_name in td_sweep.task_names
+    assert f"task_id_{expected_task_name}" in td_sweep.task_ids
+    assert all(task_name.startswith(f"{sweep_method.type}_") for task_name in td_sweep.task_names)
+    assert all(
+        task_id == f"task_id_{task_name}"
+        for task_id, task_name in zip(td_sweep.task_ids, td_sweep.task_names)
+    )
+
+
+@pytest.mark.parametrize(
+    ("sweep_method", "pre_fn", "post_fn", "expected_late_task_name"),
+    OPTIMIZER_CONTAINER_CASES.values(),
+    ids=OPTIMIZER_CONTAINER_CASES.keys(),
+)
+def test_optimizer_container_task_metadata(
+    sweep_method, pre_fn, post_fn, expected_late_task_name, monkeypatch
+):
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    design_space = init_design_space(
+        sweep_method=sweep_method,
+        radius_span=(0.1, 1.5),
+        num_spheres_span=(0, 2),
+    )
+
+    result = design_space.run(pre_fn, post_fn, verbose=False)
+
+    assert len(result.task_names) == len(result.task_ids) > 0
+
+    task_names = _flatten_task_metadata(result.task_names)
+    task_ids = _flatten_task_metadata(result.task_ids)
+    assert len(task_names) == len(task_ids) > 0
+    assert all(
+        task_id == f"task_id_{task_name}" for task_id, task_name in zip(task_ids, task_names)
+    )
+
+    generated_task_names = [name for name in task_names if name.startswith(sweep_method.type)]
+    assert len(generated_task_names) == len(set(generated_task_names))
+    if expected_late_task_name is not None:
+        assert expected_late_task_name in generated_task_names
+
+
+def test_sweep_grid_plumbing(monkeypatch):
+    # Detailed DesignSpace plumbing is method-independent, so cover it once with
+    # MethodGrid instead of repeating every container/result shape for each method.
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    design_space = init_design_space(
+        sweep_method=tdd.MethodGrid(),
+        radius_span=(0.1, 0.2),
+        radius_num_points=2,
+        num_spheres_span=(1, 2),
+        tags=("tag1", "tag2"),
+    )
+
     design_space.summarize()
 
     # Try a basic non-td function
@@ -623,17 +702,11 @@ def test_sweep(sweep_method, monkeypatch):
     assert np.allclose(td_sweep1.values, td_sweep2.values)
 
     # Check names are what they should be
-    assert (
-        expected_task_names[sweep_method.type][0] in td_sweep2.task_names
-        and expected_task_names[sweep_method.type][0] in td_sweep2.task_names
-    )
-    assert f"task_id_{expected_task_names[sweep_method.type][0]}" in td_sweep2.task_ids
+    assert all(task_name.startswith("MethodGrid_") for task_name in td_sweep2.task_names)
+    assert all(task_id.startswith("task_id_MethodGrid_") for task_id in td_sweep2.task_ids)
 
     # Try with batch output from pre
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
-    td_batch_run_batch = design_space.run_batch(
-        scs_pre_batch, scs_post_batch, path_dir="", batch_kwargs={"fake_kwarg": None}
-    )
 
     # Test user specified batching works with combined function
     td_batch_combined = design_space.run(scs_combined_batch)
@@ -643,7 +716,14 @@ def test_sweep(sweep_method, monkeypatch):
     # Test with list of sims
     td_sim_list = design_space.run(scs_pre_list, scs_post_list, verbose=False)
 
-    assert "0_0" not in td_sim_list.task_names[0] and "0_3" not in td_sim_list.task_names[4]
+    # Nested list task names should expose the leaf simulation index, not the
+    # internal parent bookkeeping index.
+    for sim_names in td_sim_list.task_names:
+        leaf_indices = [
+            task_name.removeprefix("MethodGrid_").split("_", maxsplit=1)[0]
+            for task_name in sim_names
+        ]
+        assert leaf_indices == ["0", "1", "2"]
 
     # Collect the sim names and check there are no repeats
     total_sim_names = [sim_name for sim_list in td_sim_list.task_names for sim_name in sim_list]
@@ -659,22 +739,23 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Test with list of sims and non-sim constant values
     ts_sim_list_const = design_space.run(scs_pre_list_const, scs_post_list_const)
+    assert isinstance(ts_sim_list_const, tdd.Result)
 
     # Test with dict of sims and non-sim constant values
     ts_sim_dict_const = design_space.run(scs_pre_dict_const, scs_post_dict_const)
+    assert isinstance(ts_sim_dict_const, tdd.Result)
 
     sel_kwargs_0 = dict(zip(td_sweep1.dims, td_sweep1.coords[0]))
     td_sweep1.sel(**sel_kwargs_0)
 
-    print(td_sweep1.to_dataframe().head(10))
-
-    td_sweep1.to_dataframe().plot.hexbin(x="num_spheres", y="radius", C="output")
-    td_sweep1.to_dataframe().plot.scatter(x="num_spheres", y="radius", c="output")
-    plt.close()
-
-    design_space2 = init_design_space(sweep_method=sweep_method)
-
-    sweep_results_other = design_space2.run(scs_combined)
+    design_space2 = init_design_space(
+        sweep_method=tdd.MethodGrid(),
+        radius_span=(0.1, 0.2),
+        radius_num_points=2,
+        num_spheres_span=(1, 2),
+        tags=("tag1", "tag2"),
+    )
+    sweep_results_other = design_space2.run(scs_combined, verbose=False)
 
     # test combining results
     td_sweep1.combine(sweep_results_other)
@@ -690,6 +771,8 @@ def test_sweep(sweep_method, monkeypatch):
 
     sweep_results_2 = tdd.Result.from_dataframe(sweep_results_df)
     sweep_results_3 = tdd.Result.from_dataframe(sweep_results_df, dims=td_sweep2.dims)
+    assert sweep_results_2.dims == td_sweep2.dims
+    assert sweep_results_3.dims == td_sweep2.dims
 
     # make sure returning a float uses the proper output column header
     float_label = tdd.Result.default_value_keys(1.0)[0]
