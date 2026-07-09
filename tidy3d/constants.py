@@ -58,6 +58,11 @@ GRAV_ACC = 9.80665 * 1e6
 Gravitational acceleration (g) [um/s^2].",
 """
 
+STEFAN_BOLTZMANN = 5.670374419e-20
+"""
+Stefan-Boltzmann constant [W/(um^2*K^4)]
+"""
+
 M_E_C_SQUARE = 0.51099895069e6
 """
 Electron rest mass energy (m_e * c^2) [eV]

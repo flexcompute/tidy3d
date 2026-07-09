@@ -17,6 +17,7 @@ Physical Constants
    constants.EPSILON_0
    constants.MU_0
    constants.K_B
+   constants.STEFAN_BOLTZMANN
 
 
 Tidy3D Special Constants

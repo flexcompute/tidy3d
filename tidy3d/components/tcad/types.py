@@ -16,6 +16,7 @@ from tidy3d.components.tcad.boundary.charge import (
 from tidy3d.components.tcad.boundary.heat import (
     ConvectionBC,
     HeatFluxBC,
+    RadiationBC,
     TemperatureBC,
     ThermalContactResistance,
 )
@@ -82,6 +83,7 @@ HeatChargeBCType = (
     TemperatureBC
     | HeatFluxBC
     | ConvectionBC
+    | RadiationBC
     | ThermalContactResistance
     | VoltageBC
     | CurrentBC

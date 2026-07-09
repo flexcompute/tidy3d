@@ -74,6 +74,7 @@ from tidy3d.components.tcad.types import (
     HeatFromElectricSource,
     HeatSource,
     InsulatingBC,
+    RadiationBC,
     SurfaceRecombinationBC,
     TemperatureBC,
     ThermalContactResistance,
@@ -110,7 +111,7 @@ if TYPE_CHECKING:
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 
-HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC, ThermalContactResistance)
+HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC, RadiationBC, ThermalContactResistance)
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC, SurfaceRecombinationBC)
@@ -1642,12 +1643,13 @@ class HeatChargeSimulation(AbstractSimulation):
         """Reject heat-only-solver features in non-isothermal charge simulations.
 
         Solid-medium advection ('SolidMedium.velocity'), anisotropic thermal conductivity
-        ('AnisotropicConductivity') and resistive interfaces ('ThermalContactResistance')
-        are honored by the heat solver, including when it is coupled with electrical
-        conduction. The coupled thermal solve that runs alongside a non-isothermal charge
-        analysis does not apply any of them, so a setup that requests them would silently
-        produce a result that ignores them. Flag them here instead. Heat, conduction+heat,
-        and isothermal charge analyses (the latter runs no thermal solve) are unaffected."""
+        ('AnisotropicConductivity'), resistive interfaces ('ThermalContactResistance'), and
+        gray-body surface radiation ('RadiationBC', 'ConvectionBC.emissivity') are honored by
+        the heat solver, including when it is coupled with electrical conduction. The coupled
+        thermal solve that runs alongside a non-isothermal charge analysis does not support any
+        of them, so a setup that requests them would silently produce a result that ignores
+        them. Flag them here instead. Heat, conduction+heat, and isothermal charge analyses
+        (the latter runs no thermal solve) are unaffected."""
         if not self._thermal_solver_active:
             return self
 
@@ -1681,7 +1683,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     *loc,
                 )
 
-        # Resistive interfaces.
+        # Resistive interfaces and surface radiation.
         for i, bc in enumerate(self.boundary_spec):
             if isinstance(bc.condition, ThermalContactResistance):
                 self._raise_validation_error_at_loc(
@@ -1689,6 +1691,18 @@ class HeatChargeSimulation(AbstractSimulation):
                     "non-isothermal charge (coupled charge+heat) simulations: the coupled "
                     "thermal solve does not apply the interfacial thermal resistance, so this "
                     "boundary condition would be silently ignored. Remove it to run this "
+                    "charge simulation.",
+                    "boundary_spec",
+                    i,
+                )
+            if isinstance(bc.condition, RadiationBC) or (
+                isinstance(bc.condition, ConvectionBC) and bc.condition.emissivity
+            ):
+                self._raise_validation_error_at_loc(
+                    "Gray-body surface radiation ('RadiationBC', or 'ConvectionBC' with a "
+                    "positive 'emissivity') is not yet supported in non-isothermal charge "
+                    "(coupled charge+heat) simulations; it is available in heat and "
+                    "conduction+heat simulations. Remove the radiative term to run this "
                     "charge simulation.",
                     "boundary_spec",
                     i,
@@ -1947,7 +1961,7 @@ class HeatChargeSimulation(AbstractSimulation):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_TEMPERATURE)
         elif isinstance(condition, (HeatFluxBC, CurrentBC, ThermalContactResistance)):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_FLUX)
-        elif isinstance(condition, ConvectionBC):
+        elif isinstance(condition, (ConvectionBC, RadiationBC)):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_CONVECTION)
         elif isinstance(condition, InsulatingBC):
             plot_params = plot_params.updated_copy(facecolor=CHARGE_BC_INSULATOR)

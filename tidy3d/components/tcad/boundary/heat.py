@@ -175,6 +175,63 @@ class ConvectionBC(HeatChargeBC):
         json_schema_extra={"units": HEAT_TRANSFER_COEFF},
     )
 
+    emissivity: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        title="Surface Emissivity",
+        description=(
+            "Optional surface emissivity. When set to a positive value, a gray-body "
+            "radiative exchange term is added to the convective flux, using the same "
+            "ambient temperature. An emissivity of 0 adds no radiative flux and is "
+            "equivalent to leaving the field unset. "
+            "See :class:`RadiationBC` for the definition of the radiative term and "
+            "the simulation types that support it."
+        ),
+    )
+
+
+class RadiationBC(HeatChargeBC):
+    """Gray-body surface radiation thermal boundary condition.
+
+    Notes
+    -----
+
+    The boundary radiates to (and absorbs from) a far-field ambient at
+    ``ambient_temperature`` following the Stefan-Boltzmann law
+
+    .. math::
+
+        q = \\varepsilon \\sigma \\left( T^4 - T_{amb}^4 \\right),
+
+    where :math:`\\varepsilon` is the surface emissivity and :math:`\\sigma` the
+    Stefan-Boltzmann constant. This boundary condition is applied by the heat solver
+    (heat and conduction+heat simulations). It is not yet supported in non-isothermal
+    charge (coupled charge+heat) simulations, which reject it at validation.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> bc = td.RadiationBC(ambient_temperature=300, emissivity=0.9)
+    """
+
+    ambient_temperature: PositiveFloat = Field(
+        title="Ambient Temperature",
+        description="Far-field ambient temperature the surface radiates to.",
+        json_schema_extra={"units": KELVIN},
+    )
+
+    emissivity: float = Field(
+        gt=0.0,
+        le=1.0,
+        title="Surface Emissivity",
+        description=(
+            "Surface emissivity (dimensionless, between 0 and 1). Must be strictly "
+            "positive: a zero-emissivity surface exchanges no radiative flux, so the "
+            "boundary condition would not constrain the temperature."
+        ),
+    )
+
 
 class ThermalContactResistance(HeatChargeBC):
     """Interfacial thermal resistance (thermal contact / Kapitza resistance) between two

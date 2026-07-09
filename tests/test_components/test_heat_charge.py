@@ -888,6 +888,11 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     with pytest.raises(ValidationError):
         td.ConvectionBC(ambient_temperature=400, transfer_coeff=-0.2)
 
+    # Invalid RadiationBC: zero emissivity exchanges no flux, so the boundary
+    # would not constrain the temperature
+    with pytest.raises(ValidationError):
+        td.RadiationBC(ambient_temperature=300, emissivity=0.0)
+
     # Invalid VoltageBC: infinite voltage
     with pytest.raises(ValidationError):
         td.VoltageBC(source=td.DCVoltageSource(voltage=[td.inf]))
@@ -2605,8 +2610,9 @@ class TestCharge:
         bc_p,
         charge_tolerance,
     ):
-        """Advection velocity and resistive interfaces are heat-only; they must raise a
-        setup error in a non-isothermal charge analysis but be accepted when isothermal."""
+        """Advection velocity, resistive interfaces, and surface radiation are heat-only
+        features; they must raise a setup error in a non-isothermal charge analysis but
+        be accepted when isothermal."""
         non_isothermal_spec = td.SteadyChargeDCAnalysis(tolerance_settings=charge_tolerance)
         sim = td.HeatChargeSimulation(
             structures=[oxide, p_side, n_side],
@@ -2678,6 +2684,38 @@ class TestCharge:
             sim.updated_copy(boundary_spec=[bc_n, bc_p, contact_resistance_bc])
         assert_single_value_error_loc(excinfo, ("boundary_spec", 2), "ThermalContactResistance")
 
+        # Surface radiation is not yet supported by the coupled thermal solve, so both
+        # RadiationBC and ConvectionBC with a positive emissivity are rejected in a
+        # non-isothermal charge analysis, with the error at that boundary_spec entry.
+        temp_mnt = td.TemperatureMonitor(
+            center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="temp_mnt", unstructured=True
+        )
+        monitors_with_temp = [charge_global_mnt, potential_global_mnt, temp_mnt]
+        radiation_bc = td.HeatChargeBoundarySpec(
+            condition=td.RadiationBC(ambient_temperature=300, emissivity=0.9),
+            placement=td.StructureStructureInterface(structures=[p_side.name, n_side.name]),
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(boundary_spec=[bc_n, bc_p, radiation_bc], monitors=monitors_with_temp)
+        assert_single_value_error_loc(excinfo, ("boundary_spec", 2), "radiation")
+        radiating_convection_bc = td.HeatChargeBoundarySpec(
+            condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=1, emissivity=0.9),
+            placement=td.StructureStructureInterface(structures=[p_side.name, n_side.name]),
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            sim.updated_copy(
+                boundary_spec=[bc_n, bc_p, radiating_convection_bc], monitors=monitors_with_temp
+            )
+        assert_single_value_error_loc(excinfo, ("boundary_spec", 2), "emissivity")
+        # A zero-emissivity ConvectionBC adds no radiative flux and stays accepted.
+        linear_convection_bc = td.HeatChargeBoundarySpec(
+            condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=1, emissivity=0.0),
+            placement=td.StructureStructureInterface(structures=[p_side.name, n_side.name]),
+        )
+        sim.updated_copy(
+            boundary_spec=[bc_n, bc_p, linear_convection_bc], monitors=monitors_with_temp
+        )
+
         # The guard is scoped to non-isothermal: an isothermal charge analysis runs no
         # thermal solve, so neither feature raises a setup error there.
         isothermal_spec = td.IsothermalSteadyChargeDCAnalysis(
@@ -2700,12 +2738,16 @@ class TestCharge:
             condition=td.TemperatureBC(temperature=300),
             placement=td.SimulationBoundary(),
         )
-        temp_mnt = td.TemperatureMonitor(
-            center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="temp_mnt", unstructured=True
-        )
         sim.updated_copy(
             boundary_spec=[bc_n, bc_p, contact_resistance_bc, temp_bc],
-            monitors=[charge_global_mnt, potential_global_mnt, temp_mnt],
+            monitors=monitors_with_temp,
+            analysis_spec=isothermal_spec,
+        )
+        # Surface radiation is likewise accepted there: the standalone heat solver
+        # applies it.
+        sim.updated_copy(
+            boundary_spec=[bc_n, bc_p, radiation_bc],
+            monitors=monitors_with_temp,
             analysis_spec=isothermal_spec,
         )
 

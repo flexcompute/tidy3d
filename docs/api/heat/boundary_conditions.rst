@@ -23,6 +23,7 @@ Types
 
    TemperatureBC
    ConvectionBC
+   RadiationBC
    HeatFluxBC
    ThermalContactResistance
 
