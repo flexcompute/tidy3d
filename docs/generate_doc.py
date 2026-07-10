@@ -20,6 +20,30 @@ LOW_LOSS_THRESHOLD = 2e-5
 
 MATERIAL_LIBRARY_NOTES = {
     "cSi": f".. note::\n\n   {csi_default_migration_message(rst=True)}\n\n",
+    "Au": (
+        ".. note::\n\n"
+        "   For infrared-only simulations, the ``'Olmon2012evaporated_IR'`` variant keeps the previous "
+        "3-pole coefficients over 3.5 - 24.93 :math:`{\\mu}m`, where they match the reference data "
+        "as accurately as the default; fewer poles means lower simulation cost.\n\n"
+    ),
+    "Ag": (
+        ".. note::\n\n"
+        "   For infrared-only simulations, the ``'Rakic1998BB_IR'`` variant keeps the previous "
+        "3-pole coefficients over 1.4 - 12.4 :math:`{\\mu}m`, where they match the reference data "
+        "as accurately as the default; fewer poles means lower simulation cost.\n\n"
+    ),
+    "Cr": (
+        ".. note::\n\n"
+        "   For infrared-only simulations, the ``'Rakic1998BB_IR'`` variant keeps the previous "
+        "3-pole coefficients over 3.2 - 62 :math:`{\\mu}m`, where they match the reference data "
+        "as accurately as the default; fewer poles means lower simulation cost.\n\n"
+    ),
+    "Be": (
+        ".. note::\n\n"
+        "   For infrared-only simulations, the ``'Rakic1998BB_IR'`` variant keeps the previous "
+        "4-pole coefficients over 1 - 62 :math:`{\\mu}m`, where they match the reference data "
+        "as accurately as the default; fewer poles means lower simulation cost.\n\n"
+    ),
 }
 
 PREFERRED_VARIANT_ORDER = {

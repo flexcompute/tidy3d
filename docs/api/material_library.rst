@@ -43,16 +43,23 @@ Silver ("Ag")
    Variant                     Valid for                  Model Info    Reference                                                                                                
    =========================== ========================== ============= =========================================================================================================
    ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Johnson.yml>`__ 
-   ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Rakic-BB.yml>`__
+   ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Rakic-BB.yml>`__
+   ``'Rakic1998BB_IR'``        1.4 - 12.4 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Rakic-BB.yml>`__
    ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Rakic-LD.yml>`__
    ``'Yang2015Drude'``         0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Yang.yml>`__    
    =========================== ========================== ============= =========================================================================================================
+
+.. note::
+
+   For infrared-only simulations, the ``'Rakic1998BB_IR'`` variant keeps the previous 3-pole coefficients over 1.4 - 12.4 :math:`{\mu}m`, where they match the reference data as accurately as the default; fewer poles means lower simulation cost.
 
 Examples:
 
 >>> medium = material_library['Ag']['JohnsonChristy1972']
 
 >>> medium = material_library['Ag']['Rakic1998BB']
+
+>>> medium = material_library['Ag']['Rakic1998BB_IR']
 
 >>> medium = material_library['Ag']['RakicLorentzDrude1998']
 
@@ -73,7 +80,7 @@ Aluminum ("Al")
    =========================== ============================ ============= =========================================================================================================
    Variant                     Valid for                    Model Info    Reference                                                                                                
    =========================== ============================ ============= =========================================================================================================
-   ``'Rakic1995'`` (default)   0.02 - 1.97 :math:`{\mu}m`   4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Al/Rakic.yml>`__   
+   ``'Rakic1995'`` (default)   0.02 - 1.97 :math:`{\mu}m`   5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Al/Rakic.yml>`__   
    ``'RakicLorentzDrude1998'`` 0.06 - 247.97 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Al/Rakic-LD.yml>`__
    =========================== ============================ ============= =========================================================================================================
 
@@ -247,10 +254,15 @@ Gold ("Au")
    ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m`  5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Johnson.yml>`__ 
    ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-sc.yml>`__
    ``'Olmon2012Drude'``                1.24 - 24.93 :math:`{\mu}m` 3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-sc.yml>`__
-   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-ev.yml>`__
+   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-ev.yml>`__
+   ``'Olmon2012evaporated_IR'``        3.5 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-ev.yml>`__
    ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-ts.yml>`__
    ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`   7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Rakic-LD.yml>`__
    =================================== =========================== ============= =========================================================================================================
+
+.. note::
+
+   For infrared-only simulations, the ``'Olmon2012evaporated_IR'`` variant keeps the previous 3-pole coefficients over 3.5 - 24.93 :math:`{\mu}m`, where they match the reference data as accurately as the default; fewer poles means lower simulation cost.
 
 Examples:
 
@@ -261,6 +273,8 @@ Examples:
 >>> medium = material_library['Au']['Olmon2012Drude']
 
 >>> medium = material_library['Au']['Olmon2012evaporated']
+
+>>> medium = material_library['Au']['Olmon2012evaporated_IR']
 
 >>> medium = material_library['Au']['Olmon2012stripped']
 
@@ -281,13 +295,20 @@ Beryllium ("Be")
    =========================== =========================== ============= =========================================================================================================
    Variant                     Valid for                   Model Info    Reference                                                                                                
    =========================== =========================== ============= =========================================================================================================
-   ``'Rakic1998BB'`` (default) 0.25 - 61.99 :math:`{\mu}m` 4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Be/Rakic-BB.yml>`__
+   ``'Rakic1998BB'`` (default) 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Be/Rakic-BB.yml>`__
+   ``'Rakic1998BB_IR'``        1.0 - 61.99 :math:`{\mu}m`  4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Be/Rakic-BB.yml>`__
    ``'RakicLorentzDrude1998'`` 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Be/Rakic-LD.yml>`__
    =========================== =========================== ============= =========================================================================================================
+
+.. note::
+
+   For infrared-only simulations, the ``'Rakic1998BB_IR'`` variant keeps the previous 4-pole coefficients over 1 - 62 :math:`{\mu}m`, where they match the reference data as accurately as the default; fewer poles means lower simulation cost.
 
 Examples:
 
 >>> medium = material_library['Be']['Rakic1998BB']
+
+>>> medium = material_library['Be']['Rakic1998BB_IR']
 
 >>> medium = material_library['Be']['RakicLorentzDrude1998']
 
@@ -364,13 +385,20 @@ Chromium ("Cr")
    =========================== =========================== ============= =========================================================================================================
    Variant                     Valid for                   Model Info    Reference                                                                                                
    =========================== =========================== ============= =========================================================================================================
-   ``'Rakic1998BB'`` (default) 0.25 - 62.0 :math:`{\mu}m`  3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cr/Rakic-BB.yml>`__
+   ``'Rakic1998BB'`` (default) 0.25 - 62.0 :math:`{\mu}m`  6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cr/Rakic-BB.yml>`__
+   ``'Rakic1998BB_IR'``        3.2 - 62.0 :math:`{\mu}m`   3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cr/Rakic-BB.yml>`__
    ``'RakicLorentzDrude1998'`` 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cr/Rakic-LD.yml>`__
    =========================== =========================== ============= =========================================================================================================
+
+.. note::
+
+   For infrared-only simulations, the ``'Rakic1998BB_IR'`` variant keeps the previous 3-pole coefficients over 3.2 - 62 :math:`{\mu}m`, where they match the reference data as accurately as the default; fewer poles means lower simulation cost.
 
 Examples:
 
 >>> medium = material_library['Cr']['Rakic1998BB']
+
+>>> medium = material_library['Cr']['Rakic1998BB_IR']
 
 >>> medium = material_library['Cr']['RakicLorentzDrude1998']
 
@@ -986,7 +1014,7 @@ Platinum ("Pt")
    Variant                     Valid for                  Model Info    Reference                                                                                                
    =========================== ========================== ============= =========================================================================================================
    ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pt/Rakic-LD.yml>`__
-   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pt/Werner.yml>`__  
+   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pt/Werner.yml>`__  
    =========================== ========================== ============= =========================================================================================================
 
 Examples:
@@ -1212,7 +1240,7 @@ Titanium ("Ti")
    Variant                     Valid for                  Model Info    Reference                                                                                                
    =========================== ========================== ============= =========================================================================================================
    ``'RakicLorentzDrude1998'`` 0.25 - 31.0 :math:`{\mu}m` 7-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ti/Rakic-LD.yml>`__
-   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ti/Werner.yml>`__  
+   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ti/Werner.yml>`__  
    =========================== ========================== ============= =========================================================================================================
 
 Examples:

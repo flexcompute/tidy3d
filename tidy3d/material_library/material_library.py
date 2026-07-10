@@ -410,6 +410,43 @@ LiNbO3_Zelmon1997 = VariantItemUniaxial(
 Ag_Rakic1998BB = VariantItem(
     medium=PoleResidue(
         name="Ag_Rakic1998BB",
+        eps_inf=1.0,
+        poles=[
+            (
+                (-2.483370555410649e16 + 1j * 0.0),
+                (1.5744113130000786e16 + 1j * 0.0),
+            ),
+            (
+                (-427051442026657.8 - 1j * 7267130897123369.0),
+                (285966966530009.5 - 1j * 259085203357223.06),
+            ),
+            (
+                (-458495605638445.94 - 1j * 6501478008755004.0),
+                (950826754614684.4 + 1j * 1709069477589139.5),
+            ),
+            (
+                (-200096391057984.5 + 1j * 0.0),
+                (868238077367508.6 + 1j * 0.0),
+            ),
+            (
+                (-18638609734.40867 + 1j * 0.0),
+                (1.033846354957434e18 + 1j * 0.0),
+            ),
+            (
+                (-74449645789281.8 + 1j * 0.0),
+                (-1.0335652795499411e18 + 1j * 0.0),
+            ),
+        ],
+        frequency_range=(24179892422719.273, 1208994621135963.5),
+    ),
+    reference=[material_refs["Rakic1998"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Ag/Rakic-BB.yml",
+)
+
+Ag_Rakic1998BB_IR = VariantItem(
+    medium=PoleResidue(
+        name="Ag_Rakic1998BB_IR",
         eps_inf=2.080628548409516,
         poles=[
             (
@@ -425,7 +462,7 @@ Ag_Rakic1998BB = VariantItem(
                 (936046890626063.0 + 1j * 1966533189396127.8),
             ),
         ],
-        frequency_range=(24179892422719.273, 1208994621135963.5),
+        frequency_range=(24179892422719.273, 214137470000000.0),
     ),
     reference=[material_refs["Rakic1998"]],
     data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
@@ -516,20 +553,24 @@ Al_Rakic1995 = VariantItem(
         eps_inf=1.0,
         poles=[
             (
-                (-176076476399307.25 - 1j * 0.0),
-                (-2.0497198166085053e17 - 1j * 0.0),
+                (-3478273083283395.0 - 1j * 2663678407664229.5),
+                (-1.7387584269061222e16 - 1j * 4351056211589479.5),
             ),
             (
-                (-55958309702844.36 - 1j * 0.0),
-                (-1.9328759376610138e18 - 1j * 0.0),
+                (-357768743237230.5 - 1j * 2218498642414248.8),
+                (9464952935418408.0 + 1j * 1.0850783579943464e16),
             ),
             (
-                (-32886941985772.406 - 1j * 0.0),
-                (2.985600009810314e17 - 1j * 0.0),
+                (-242766411045799.88 - 1j * 1820240789275247.2),
+                (-1362328161533225.2 + 1j * 1583869480765488.2),
             ),
             (
-                (-836904963.7321033 - 1j * 0.0),
-                (1.9664479588602982e18 - 1j * 0.0),
+                (-8704513168412.099 - 1j * 0.0),
+                (1.2660614263809472e18 - 1j * 0.0),
+            ),
+            (
+                (-160944103454154.38 - 1j * 0.0),
+                (-1.2565462108051812e18 - 1j * 0.0),
             ),
         ],
         frequency_range=(151926744799612.75, 1.5192674479961274e16),
@@ -652,6 +693,39 @@ Aminoacid_Horiba = VariantItem(
 Au_Olmon2012evaporated = VariantItem(
     medium=PoleResidue(
         name="Au_Olmon2012evaporated",
+        eps_inf=1.0,
+        poles=[
+            (
+                (-1520562960691848.0 - 1j * 3928154716170055.0),
+                (1.1174011615554154e16 + 1j * 1251700157597656.8),
+            ),
+            (
+                (-1507358279340936.5 + 1j * 0.0),
+                (3408362175303679.0 + 1j * 0.0),
+            ),
+            (
+                (-44944854555.44156 - 1j * 104969866980268.64),
+                (-1875596504315.7332 - 1j * 2796754031259.1025),
+            ),
+            (
+                (-85925833547817.62 + 1j * 0.0),
+                (-7.855548809693609e17 + 1j * 0.0),
+            ),
+            (
+                (-190719132146.27554 - 1j * 2277191501416.505),
+                (7.852261343792833e17 + 1j * 8.554273616444449e18),
+            ),
+        ],
+        frequency_range=(12025369359446.29, 999308193769986.8),
+    ),
+    reference=[material_refs["Olmon2012"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Au/Olmon-ev.yml",
+)
+
+Au_Olmon2012evaporated_IR = VariantItem(
+    medium=PoleResidue(
+        name="Au_Olmon2012evaporated_IR",
         eps_inf=5.632132676065586,
         poles=(
             (
@@ -667,7 +741,7 @@ Au_Olmon2012evaporated = VariantItem(
                 (895004078070708.5 + 5.346045584373232e18j),
             ),
         ),
-        frequency_range=(12025369359446.29, 999308193769986.8),
+        frequency_range=(12025369359446.29, 85654988000000.0),
     ),
     reference=[material_refs["Olmon2012"]],
     data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
@@ -823,6 +897,51 @@ Be_Rakic1998BB = VariantItem(
         eps_inf=1.0,
         poles=[
             (
+                (-4793730492700408.0 - 1j * 5850528104977031.0),
+                (-4.2135306149588344e16 + 1j * 3.4517986755194536e16),
+            ),
+            (
+                (-3524988896441455.5 - 1j * 0.0),
+                (2.6127316531938252e16 - 1j * 0.0),
+            ),
+            (
+                (-982200146551476.4 - 1j * 0.0),
+                (5522570243163596.0 - 1j * 0.0),
+            ),
+            (
+                (-10935721489917.447 - 1j * 58713070368029.39),
+                (16347856591442.65 + 1j * 6140980155310.667),
+            ),
+            (
+                (-15335088367.172012 - 1j * 0.0),
+                (6.053398252993956e17 - 1j * 0.0),
+            ),
+            (
+                (-54087838046595.13 - 1j * 0.0),
+                (-6.790592340263299e17 - 1j * 0.0),
+            ),
+            (
+                (-61355594698420.5 - 1j * 0.0),
+                (8.1642489720691e16 - 1j * 0.0),
+            ),
+            (
+                (-306968735452312.44 - 1j * 0.0),
+                (2633724857568732.0 - 1j * 0.0),
+            ),
+        ],
+        frequency_range=(4835978484543.8545, 1208994621135963.5),
+    ),
+    reference=[material_refs["Rakic1998"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Be/Rakic-BB.yml",
+)
+
+Be_Rakic1998BB_IR = VariantItem(
+    medium=PoleResidue(
+        name="Be_Rakic1998BB_IR",
+        eps_inf=1.0,
+        poles=[
+            (
                 (-1737739552967275.2 - 1j * 0.0),
                 (2.3924381023090224e16 - 1j * 0.0),
             ),
@@ -839,7 +958,7 @@ Be_Rakic1998BB = VariantItem(
                 (6.055916356024831e17 - 1j * 0.0),
             ),
         ],
-        frequency_range=(4835978484543.8545, 1208994621135963.5),
+        frequency_range=(4835978484543.8545, 299792458000000.0),
     ),
     reference=[material_refs["Rakic1998"]],
     data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
@@ -895,6 +1014,43 @@ Cr_Rakic1998BB = VariantItem(
         eps_inf=1.0,
         poles=[
             (
+                (-1.7008332048761648e16 - 1j * 0.0),
+                (-2933671096810391.0 - 1j * 0.0),
+            ),
+            (
+                (-2005256053898001.5 - 1j * 2381844289356685.0),
+                (-9650588319181022.0 + 1j * 5.668939669664152e16),
+            ),
+            (
+                (-220104169827627.3 - 1j * 0.0),
+                (3249240187754787.0 - 1j * 0.0),
+            ),
+            (
+                (-5697781842.205581 - 1j * 0.0),
+                (2.8278212440731635e17 - 1j * 0.0),
+            ),
+            (
+                (-21648484807783.637 - 1j * 0.0),
+                (4446929285969332.0 - 1j * 0.0),
+            ),
+            (
+                (-73023335173331.34 - 1j * 0.0),
+                (-2.7744487842401034e17 - 1j * 0.0),
+            ),
+        ],
+        frequency_range=(4835362227919.29, 1208840556979822.5),
+    ),
+    reference=[material_refs["Rakic1998"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Cr/Rakic-BB.yml",
+)
+
+Cr_Rakic1998BB_IR = VariantItem(
+    medium=PoleResidue(
+        name="Cr_Rakic1998BB_IR",
+        eps_inf=1.0,
+        poles=[
+            (
                 (-73056488139432.73 - 1j * 0.0),
                 (-2.7457982793225763e17 - 1j * 0.0),
             ),
@@ -907,7 +1063,7 @@ Cr_Rakic1998BB = VariantItem(
                 (5846984237158586.0 + 1j * 9.545555973191486e16),
             ),
         ],
-        frequency_range=(4835362227919.29, 1208840556979822.5),
+        frequency_range=(4835362227919.29, 93685143125000.0),
     ),
     reference=[material_refs["Rakic1998"]],
     data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
@@ -1682,16 +1838,24 @@ Pt_Werner2009 = VariantItem(
         eps_inf=1.0,
         poles=[
             (
-                (-9288886703545810.0 - 1j * 1.9809701816539028e16),
-                (-2559720539992317.0 + 1j * 2.619854823299511e16),
+                (-7275744144059393.0 - 1j * 9955657528822276.0),
+                (1.4662671453199282e16 + 1j * 2.984423192519277e16),
             ),
             (
-                (-113303296165008.06 - 1j * 132666543091888.84),
-                (5059991338597539.0 + 1j * 1.459321906232765e18),
+                (-970134238553685.2 - 1j * 6795364286984015.0),
+                (-217022068099918.25 + 1j * 2348231691221299.0),
             ),
             (
-                (-525913270217765.06 - 1j * 4665172268701287.0),
-                (4280438237239983.5 + 1j * 1882099733932914.8),
+                (-588183430601066.2 - 1j * 5374967881680110.0),
+                (-486571495902717.4 + 1j * 3447358361444697.0),
+            ),
+            (
+                (-2600194242881.716 + 1j * 0.0),
+                (8.307089446211048e17 + 1j * 0.0),
+            ),
+            (
+                (-250977399463139.06 + 1j * 0.0),
+                (-8.305157912555209e17 + 1j * 0.0),
             ),
         ],
         frequency_range=(120884055879414.03, 2997924585809468.0),
@@ -1924,19 +2088,31 @@ Ta2O5_Horiba = VariantItem(
 Ti_Werner2009 = VariantItem(
     medium=PoleResidue(
         name="Ti_Werner2009",
-        eps_inf=1.0,
+        eps_inf=1.1169666751532588,
         poles=[
             (
-                (-1316659173032264.2 - 1j * 4853426451943540.0),
-                (6846803510207887.0 + 1j * 3451315459947241.5),
+                (-7499149193091210.0 - 1j * 1.2408737021591132e16),
+                (2094198081127931.8 + 1j * 1.623942919672785e16),
             ),
             (
-                (-234898849175817.28 - 1j * 1643952885872075.5),
-                (-1039094910406333.4 + 1j * 2786587583155544.5),
+                (-2354831105417196.0 - 1j * 8085421034651400.0),
+                (-140823625142081.7 + 1j * 5567280255011079.0),
             ),
             (
-                (-9631968003009.37 - 1j * 107553157768951.47),
-                (5856843593653923.0 + 1j * 1.1954179403843133e18),
+                (-920843403539743.6 - 1j * 5513453042989389.0),
+                (-28870755188206.27 + 1j * 4663773279612380.0),
+            ),
+            (
+                (-2211596411771.0137 + 1j * 0.0),
+                (3.6436335858752307e18 + 1j * 0.0),
+            ),
+            (
+                (-38985398241158.02 + 1j * 0.0),
+                (-3.643594667795836e18 + 1j * 0.0),
+            ),
+            (
+                (-379374981045792.8 - 1j * 1471699416157019.0),
+                (-9274224477696.99 + 1j * 6138254498624140.0),
             ),
         ],
         frequency_range=(120884055879414.03, 2997924585809468.0),
@@ -2340,6 +2516,7 @@ material_library = MaterialLibrary(
         name="Silver",
         variants={
             "Rakic1998BB": Ag_Rakic1998BB,
+            "Rakic1998BB_IR": Ag_Rakic1998BB_IR,
             "JohnsonChristy1972": Ag_JohnsonChristy1972,
             "RakicLorentzDrude1998": Ag_RakicLorentzDrude1998,
             "Yang2015Drude": Ag_Yang2015Drude,
@@ -2403,6 +2580,7 @@ material_library = MaterialLibrary(
             "Olmon2012crystal": Au_Olmon2012crystal,
             "Olmon2012stripped": Au_Olmon2012stripped,
             "Olmon2012evaporated": Au_Olmon2012evaporated,
+            "Olmon2012evaporated_IR": Au_Olmon2012evaporated_IR,
             "Olmon2012Drude": Au_Olmon2012Drude,
             "JohnsonChristy1972": Au_JohnsonChristy1972,
             "RakicLorentzDrude1998": Au_RakicLorentzDrude1998,
@@ -2420,6 +2598,7 @@ material_library = MaterialLibrary(
         name="Beryllium",
         variants={
             "Rakic1998BB": Be_Rakic1998BB,
+            "Rakic1998BB_IR": Be_Rakic1998BB_IR,
             "RakicLorentzDrude1998": Be_RakicLorentzDrude1998,
         },
         default="Rakic1998BB",
@@ -2442,6 +2621,7 @@ material_library = MaterialLibrary(
         name="Chromium",
         variants={
             "Rakic1998BB": Cr_Rakic1998BB,
+            "Rakic1998BB_IR": Cr_Rakic1998BB_IR,
             "RakicLorentzDrude1998": Cr_RakicLorentzDrude1998,
         },
         default="Rakic1998BB",
