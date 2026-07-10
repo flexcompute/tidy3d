@@ -12,10 +12,11 @@ from .field import (
     GaussianBeam,
     ModeSource,
     PlaneWave,
+    ThinLensBeam,
 )
 
 # Gaussian-like beam sources.
-GaussianBeamType = GaussianBeam | AstigmaticGaussianBeam
+GaussianBeamType = GaussianBeam | AstigmaticGaussianBeam | ThinLensBeam
 
 # sources allowed in Simulation.sources
 SourceType = (
@@ -23,6 +24,7 @@ SourceType = (
     | PointDipole
     | GaussianBeam
     | AstigmaticGaussianBeam
+    | ThinLensBeam
     | ModeSource
     | PlaneWave
     | CustomFieldSource

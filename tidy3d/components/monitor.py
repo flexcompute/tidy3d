@@ -49,6 +49,7 @@ from .diffraction import (
 from .medium import MediumType
 from .microwave.base import MicrowaveBaseModel
 from .mode_spec import ModeSpec
+from .thin_lens import AbstractThinLens
 from .types import (
     ArrayFloat1D,
     ArrayFloat2D,
@@ -718,7 +719,11 @@ class AbstractGaussianOverlapMonitor(AbstractOverlapMonitor):
         """Size of monitor storage given the number of points after discretization."""
         # store complex amplitudes for +/- directions
         num_dirs = 2
-        return BYTES_COMPLEX * len(self.freqs) * num_dirs
+        amps_size = BYTES_COMPLEX * len(self.freqs) * num_dirs
+        fields_size = 0
+        if self.store_fields_direction is not None:
+            fields_size = BYTES_COMPLEX * num_cells * len(self.freqs) * 6
+        return amps_size + fields_size
 
 
 class GaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
@@ -802,6 +807,10 @@ class AstigmaticGaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
         "negative values place the waist in front of the monitor plane.",
         json_schema_extra={"units": MICROMETER},
     )
+
+
+class ThinLensOverlapMonitor(AbstractThinLens, AbstractGaussianOverlapMonitor):
+    """:class:`~tidy3d.Monitor` that records amplitudes from decomposition onto a thin-lens beam."""
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):

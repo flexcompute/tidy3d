@@ -26,6 +26,7 @@ from tidy3d.components.monitor import (
     PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
+    ThinLensOverlapMonitor,
 )
 
 # types of monitors that are accepted by simulation
@@ -49,6 +50,7 @@ MonitorType = (
     | MicrowaveModeSolverMonitor
     | GaussianOverlapMonitor
     | AstigmaticGaussianOverlapMonitor
+    | ThinLensOverlapMonitor
     | DipoleEmissionMonitor
     | PointCloudFieldMonitor
     | PointCloudPermittivityMonitor

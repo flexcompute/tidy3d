@@ -38,6 +38,7 @@ if TYPE_CHECKING:
         FieldMonitor,
         GaussianOverlapMonitor,
         ModeMonitor,
+        ThinLensOverlapMonitor,
     )
     from tidy3d.components.simulation import Simulation
     from tidy3d.components.source.utils import GaussianBeamType
@@ -92,14 +93,18 @@ def mode_source_from_monitor(
 
 
 def gaussian_source_from_monitor(
-    monitor: GaussianOverlapMonitor | AstigmaticGaussianOverlapMonitor,
+    monitor: GaussianOverlapMonitor | AstigmaticGaussianOverlapMonitor | ThinLensOverlapMonitor,
     freq: float,
     direction: str | DataArray,
     coefficient: complex,
     fwidth: float,
 ) -> GaussianBeamType:
     """Build a Gaussian-like adjoint source from overlap monitor metadata and coefficient."""
-    from tidy3d.components.monitor import AstigmaticGaussianOverlapMonitor, GaussianOverlapMonitor
+    from tidy3d.components.monitor import (
+        AstigmaticGaussianOverlapMonitor,
+        GaussianOverlapMonitor,
+        ThinLensOverlapMonitor,
+    )
 
     k0 = 2 * np.pi * freq / C_0
     grad_const = k0 / 4 / ETA_0
@@ -136,8 +141,16 @@ def gaussian_source_from_monitor(
             num_freqs=1,
         )
 
+    if isinstance(monitor, ThinLensOverlapMonitor):
+        raise NotImplementedError(
+            "Adjoint source construction for 'ThinLensOverlapMonitor' is not implemented yet. "
+            "Use a supported overlap monitor for adjoint workflows, or defer thin-lens overlap "
+            "objectives until thin-lens adjoint wiring is added."
+        )
+
     raise TypeError(
-        "Expected GaussianOverlapMonitor or AstigmaticGaussianOverlapMonitor, "
+        "Expected GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor, "
+        "or ThinLensOverlapMonitor, "
         f"got '{type(monitor).__name__}'."
     )
 

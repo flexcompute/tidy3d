@@ -238,6 +238,15 @@ def _dipole_emission_monitor_names(simulation: td.Simulation) -> list[str]:
     ]
 
 
+def _thin_lens_overlap_monitor_names(simulation: td.Simulation) -> list[str]:
+    """Exact thin-lens overlap monitor names present in the simulation."""
+    return [
+        monitor.name
+        for monitor in simulation.monitors
+        if isinstance(monitor, td.ThinLensOverlapMonitor)
+    ]
+
+
 def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
     """Validate that an autograd run has differentiable frequency-domain monitor data."""
 
@@ -247,6 +256,14 @@ def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
             "Point-cloud frequency-domain monitor data is present, but adjoint objectives "
             "depending on PointCloudFieldData or PointCloudPermittivityData are currently "
             f"unsupported. Point-cloud monitor(s): {', '.join(point_cloud_monitor_names)}."
+        )
+
+    thin_lens_overlap_monitor_names = _thin_lens_overlap_monitor_names(simulation)
+    if thin_lens_overlap_monitor_names:
+        raise AdjointError(
+            "ThinLensOverlapMonitor data is present, but adjoint objectives depending on "
+            "thin-lens overlap amplitudes are not implemented yet. ThinLensOverlapMonitor(s): "
+            f"{', '.join(thin_lens_overlap_monitor_names)}."
         )
 
     # if no frequency-domain data (e.g. only field time monitors), raise an error

@@ -20,6 +20,9 @@ from .grid.grid import Coords, Grid, _compute_1d_cell_sizes
 from .medium import Medium, MediumType
 from .monitor import FieldMonitor
 from .source.field import FixedAngleSpec, FixedInPlaneKSpec
+from .thin_lens import (
+    AbstractThinLens,
+)
 from .transformation import rotate_points_around_axis
 from .types import TYPE_TAG_STR, Direction, FreqArray
 from .validators import assert_plane, warn_backward_waist_distance
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 DEFAULT_RESOLUTION = 200
+_THIN_LENS_ARBITRARY_POINT_CHUNK_SIZE = 512
 
 
 @dataclass(frozen=True)
@@ -432,6 +436,38 @@ def _gaussian_like_prepare_points(
     return freqs, points_prop_z
 
 
+def _beam_flux_normalization(
+    *,
+    e_xyz: NDArray,
+    h_xyz: NDArray,
+    coords: tuple[NDArray, NDArray, NDArray],
+    normal_axis: int,
+) -> NDArray:
+    """Return per-frequency normalization from discrete beam-plane flux."""
+    tangential_axes = [idx for idx in range(3) if idx != normal_axis]
+    ax1, ax2 = tangential_axes
+
+    def _normal_plane(values: NDArray) -> NDArray:
+        if normal_axis == 0:
+            return values[0, :, :, :]
+        if normal_axis == 1:
+            return values[:, 0, :, :]
+        return values[:, :, 0, :]
+
+    e1 = _normal_plane(e_xyz[ax1])
+    e2 = _normal_plane(e_xyz[ax2])
+    h1 = _normal_plane(h_xyz[ax1])
+    h2 = _normal_plane(h_xyz[ax2])
+
+    complex_poynting = 0.5 * (e1 * np.conj(h2) - e2 * np.conj(h1))
+    c1 = _compute_1d_cell_sizes(np.asarray(coords[ax1]))
+    c2 = _compute_1d_cell_sizes(np.asarray(coords[ax2]))
+    d_area = c1[:, np.newaxis] * c2[np.newaxis, :]
+    flux = np.real(np.sum(complex_poynting * d_area[:, :, np.newaxis], axis=(0, 1)))
+    flux_safe = np.maximum(np.abs(flux), 1e-30)
+    return np.sqrt(flux_safe).reshape((1, 1, 1, -1))
+
+
 def _gaussian_like_fields_from_scalar(
     *,
     scalar_field: NDArray,
@@ -476,28 +512,12 @@ def _gaussian_like_fields_from_scalar(
     if not normalize:
         return fields
 
-    tangential_axes = [idx for idx in range(3) if idx != pose.injection_axis]
-    ax1, ax2 = tangential_axes
-
-    def _normal_plane(values: NDArray) -> NDArray:
-        if pose.injection_axis == 0:
-            return values[0, :, :, :]
-        if pose.injection_axis == 1:
-            return values[:, 0, :, :]
-        return values[:, :, 0, :]
-
-    e1 = _normal_plane(e_xyz[ax1])
-    e2 = _normal_plane(e_xyz[ax2])
-    h1 = _normal_plane(h_xyz[ax1])
-    h2 = _normal_plane(h_xyz[ax2])
-
-    complex_poynting = 0.5 * (e1 * np.conj(h2) - e2 * np.conj(h1))
-    c1 = _compute_1d_cell_sizes(np.asarray((x, y, z)[ax1]))
-    c2 = _compute_1d_cell_sizes(np.asarray((x, y, z)[ax2]))
-    d_area = c1[:, np.newaxis] * c2[np.newaxis, :]
-    flux = np.real(np.sum(complex_poynting * d_area[:, :, np.newaxis], axis=(0, 1)))
-    flux_safe = np.maximum(np.abs(flux), 1e-30)
-    norm = np.sqrt(flux_safe).reshape((1, 1, 1, -1))
+    norm = _beam_flux_normalization(
+        e_xyz=e_xyz,
+        h_xyz=h_xyz,
+        coords=(x, y, z),
+        normal_axis=pose.injection_axis,
+    )
 
     return {name: arr / norm for name, arr in fields.items()}
 
@@ -660,6 +680,416 @@ class PlaneWaveBeamProfile(BeamProfile):
             field_vals = self.rotate_points(field_vals, [0, 0, 1], self.angle_phi)
             return field_vals
         return super()._inverse_rotate_field_vals_z(field_vals, background_n)
+
+
+class ThinLensProfile(AbstractThinLens, BeamProfile):
+    """Component for constructing focused beam data using a vectorial thin-lens spectrum.
+
+    The beam is represented as a superposition of plane waves inside the numerical aperture.
+    The normal direction is implicitly defined by the zero entry of ``size``.
+
+    See Also
+    --------
+    :class:`.FieldData`
+    """
+
+    def scalar_field(self, points: NDArray, background_n: float) -> NDArray:
+        """Thin-lens profiles compute vectorial fields directly."""
+        raise NotImplementedError("ThinLensProfile computes vectorial E and H fields directly.")
+
+    def _field_data_on_grid(
+        self,
+        grid: Grid,
+        background_n: NDArray,
+        colocate: bool = True,
+        field_components: tuple[str, ...] | None = None,
+    ) -> dict[str, ScalarFieldDataArray]:
+        """Compute field data arrays on one colocated grid evaluation."""
+        all_field_components = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
+        if field_components is None:
+            field_components = all_field_components
+        else:
+            invalid_components = [
+                field for field in field_components if field not in all_field_components
+            ]
+            if invalid_components:
+                invalid_components_str = ", ".join(invalid_components)
+                raise ValueError(f"Invalid field components requested: {invalid_components_str}")
+
+        if colocate:
+            coords_dict = {key: val[:-1] for key, val in grid.boundaries.to_dict.items()}
+            fields = self._beam_fields_on_component_grid(
+                x=coords_dict["x"],
+                y=coords_dict["y"],
+                z=coords_dict["z"],
+                background_n=background_n,
+                field_components=field_components,
+            )
+            coords = {"x": coords_dict["x"], "y": coords_dict["y"], "z": coords_dict["z"]}
+            coords["f"] = np.array(self.freqs)
+            return {
+                field: ScalarFieldDataArray(fields[field], coords=coords)
+                for field in field_components
+            }
+
+        scalar_fields = {}
+        grid_dict = grid.yee.grid_dict
+        for field in field_components:
+            x, y, z = grid_dict[field].to_list
+            fields = self._beam_fields_on_component_grid(
+                x=x,
+                y=y,
+                z=z,
+                background_n=background_n,
+                field_components=(field,),
+            )
+            coords = {"x": x, "y": y, "z": z, "f": np.array(self.freqs)}
+            scalar_fields[field] = ScalarFieldDataArray(fields[field], coords=coords)
+        return scalar_fields
+
+    def _beam_fields_on_component_grid(
+        self,
+        *,
+        x: NDArray,
+        y: NDArray,
+        z: NDArray,
+        background_n: NDArray,
+        field_components: tuple[str, ...] | None = None,
+        normalize: bool = False,
+    ) -> dict[str, NDArray]:
+        """Compute thin-lens E and H components on one component grid."""
+        x_c, y_c, z_c = (coords - cent for coords, cent in zip((x, y, z), self.center))
+        return self._beam_fields_on_centered_grid(
+            x=x_c,
+            y=y_c,
+            z=z_c,
+            background_n=background_n,
+            field_components=field_components,
+            normalize=normalize,
+        )
+
+    def _beam_fields_on_centered_grid(
+        self,
+        *,
+        x: NDArray,
+        y: NDArray,
+        z: NDArray,
+        background_n: NDArray,
+        field_components: tuple[str, ...] | None = None,
+        normalize: bool = False,
+    ) -> dict[str, NDArray]:
+        """Compute thin-lens E and H components on a source-centered component grid."""
+        if field_components is None:
+            field_components = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
+
+        field_kinds = tuple(dict.fromkeys(field[0] for field in field_components))
+        if normalize:
+            field_kinds = ("E", "H")
+        normal_axis = self.size.index(0.0)
+        z_coords, (x_coords, y_coords) = self.pop_axis((x, y, z), axis=normal_axis)
+        e_vals, h_vals = self._thin_lens_fields_tensor_grid_component_frame(
+            x_coords,
+            y_coords,
+            z_coords,
+            background_n,
+            field_kinds=field_kinds,
+        )
+
+        local_axes = list(range(3))
+        local_normal_axis = local_axes.pop(normal_axis)
+        local_axes.append(local_normal_axis)
+        transpose_axes = (0, *(local_axes.index(axis) + 1 for axis in range(3)), 4)
+
+        e_xyz = None
+        h_xyz = None
+        if "E" in field_kinds:
+            e_vals = self._inverse_rotate_field_vals_z(e_vals, background_n)
+            e_xyz = np.stack(self.unpop_axis(e_vals[2], (e_vals[0], e_vals[1]), axis=normal_axis))
+            e_xyz = np.transpose(e_xyz, transpose_axes)
+        if "H" in field_kinds:
+            h_vals = self._inverse_rotate_field_vals_z(h_vals, background_n)
+            h_xyz = np.stack(self.unpop_axis(h_vals[2], (h_vals[0], h_vals[1]), axis=normal_axis))
+            if normal_axis == 1:
+                h_xyz *= -1
+            h_xyz = np.transpose(h_xyz, transpose_axes)
+
+        if normalize:
+            norm = _beam_flux_normalization(
+                e_xyz=e_xyz,
+                h_xyz=h_xyz,
+                coords=(x, y, z),
+                normal_axis=normal_axis,
+            )
+            e_xyz = e_xyz / norm
+            h_xyz = h_xyz / norm
+
+        fields = {}
+        if e_xyz is not None:
+            fields.update(
+                {
+                    f"E{axis}": e_xyz[i]
+                    for i, axis in enumerate("xyz")
+                    if f"E{axis}" in field_components
+                }
+            )
+        if h_xyz is not None:
+            fields.update(
+                {
+                    f"H{axis}": h_xyz[i]
+                    for i, axis in enumerate("xyz")
+                    if f"H{axis}" in field_components
+                }
+            )
+        return fields
+
+    def analytic_beam(
+        self,
+        x: NDArray,
+        y: NDArray,
+        z: NDArray,
+        background_n: float,
+        field: Literal["E", "H"],
+    ) -> NDArray:
+        """Sample thin-lens vector fields on a Cartesian grid."""
+        axes = ("x", "y", "z")
+        field_components = tuple(f"{field}{axis}" for axis in axes)
+        fields = self._beam_fields_on_centered_grid(
+            x=x,
+            y=y,
+            z=z,
+            background_n=background_n,
+            field_components=field_components,
+        )
+        if field == "E":
+            return np.stack((fields["Ex"], fields["Ey"], fields["Ez"]), axis=0)
+        return np.stack((fields["Hx"], fields["Hy"], fields["Hz"]), axis=0)
+
+    def _angular_spectrum_grid(
+        self, background_n: complex
+    ) -> tuple[NDArray, NDArray, NDArray, float, float, float]:
+        """Return masked direction-cosine samples and spacings for the lens aperture."""
+        n_real = np.real(background_n)
+        if n_real <= 0:
+            n_real = np.abs(background_n)
+        rho_max = self.numerical_aperture / n_real
+        if rho_max >= 1:
+            raise ValueError(
+                "'numerical_aperture' must be less than the real background refractive index."
+            )
+
+        num_x, num_y = self._num_plane_waves_xy
+        d_sigma_x = 2 * rho_max / num_x
+        d_sigma_y = 2 * rho_max / num_y
+        sigma_x = (np.arange(num_x) - num_x / 2 + 0.5) * d_sigma_x
+        sigma_y = (np.arange(num_y) - num_y / 2 + 0.5) * d_sigma_y
+        sigma_x_grid, sigma_y_grid = np.meshgrid(sigma_x, sigma_y, indexing="ij")
+        sigma_sq = sigma_x_grid**2 + sigma_y_grid**2
+        pupil_mask = sigma_sq <= rho_max**2
+
+        sigma_x_flat = sigma_x_grid[pupil_mask]
+        sigma_y_flat = sigma_y_grid[pupil_mask]
+        sigma_z_flat = np.sqrt(1 - sigma_x_flat**2 - sigma_y_flat**2)
+        return sigma_x_flat, sigma_y_flat, sigma_z_flat, d_sigma_x, d_sigma_y, rho_max
+
+    def _pupil_amplitude(self, sigma_x: NDArray, sigma_y: NDArray, rho_max: float) -> NDArray:
+        """Return pupil amplitude on the masked angular-spectrum samples."""
+        sigma_sq = sigma_x**2 + sigma_y**2
+        if self.fill_lens:
+            return np.ones_like(sigma_x, dtype=complex)
+
+        sigma_beam = rho_max * self.beam_diameter / self.lens_diameter / 2
+        return np.exp(-sigma_sq / (2 * sigma_beam**2)).astype(complex)
+
+    def _background_n_per_frequency(self, background_n: NDArray) -> NDArray:
+        """Return background index as one value per beam frequency."""
+        background_n = np.asarray(background_n, dtype=complex)
+        if background_n.ndim == 0:
+            return np.full(len(self.freqs), background_n, dtype=complex)
+
+        background_n = background_n.reshape(-1)
+        if background_n.size == 1:
+            return np.full(len(self.freqs), background_n[0], dtype=complex)
+        if background_n.size != len(self.freqs):
+            raise ValueError(
+                "'background_n' must be scalar-like or contain one value per frequency."
+            )
+        return background_n
+
+    def _lens_offset_phase_distance(
+        self,
+        *,
+        sigma_x: NDArray,
+        sigma_y: NDArray,
+        k_hat_z: NDArray,
+        background_n: complex,
+    ) -> NDArray:
+        """Return local tangential lens offset projected on each angular-spectrum wavevector."""
+        # The component grid has already been remapped so local x/y are the ordered
+        # tangential axes after removing the component normal axis.
+        offset_component = np.array((self.lens_offset[0], self.lens_offset[1], 0.0))
+        offset_prop = self._rotate_points_z(offset_component[:, np.newaxis], background_n)
+        offset_prop = offset_prop.reshape(3)
+        return offset_prop[0] * sigma_x + offset_prop[1] * sigma_y + offset_prop[2] * k_hat_z
+
+    def _angular_spectrum_components(
+        self,
+        *,
+        freq: float,
+        background_n: complex,
+        field_kinds: tuple[str, ...] = ("E", "H"),
+    ) -> tuple[NDArray, NDArray, NDArray, NDArray | None, NDArray | None]:
+        """Build weighted E and H angular-spectrum components."""
+        sigma_x, sigma_y, sigma_z, d_sigma_x, d_sigma_y, rho_max = self._angular_spectrum_grid(
+            background_n
+        )
+        direction_sign = 1.0 if self.direction == "+" else -1.0
+        k_hat_z = direction_sign * sigma_z
+        denom = 1 + sigma_z
+
+        psi_x_inc = np.stack(
+            (
+                1 - sigma_x**2 / denom,
+                -sigma_x * sigma_y / denom,
+                -direction_sign * sigma_x,
+            ),
+            axis=0,
+        )
+        psi_y_inc = np.stack(
+            (
+                -sigma_x * sigma_y / denom,
+                1 - sigma_y**2 / denom,
+                -direction_sign * sigma_y,
+            ),
+            axis=0,
+        )
+
+        pol_x = np.cos(self.pol_angle)
+        pol_y = np.sin(self.pol_angle)
+        e_spectrum = (pol_x * psi_x_inc + pol_y * psi_y_inc) / np.sqrt(sigma_z)
+
+        h_spectrum = None
+        if "H" in field_kinds:
+            h_spectrum = np.stack(
+                (
+                    sigma_y * e_spectrum[2] - k_hat_z * e_spectrum[1],
+                    k_hat_z * e_spectrum[0] - sigma_x * e_spectrum[2],
+                    sigma_x * e_spectrum[1] - sigma_y * e_spectrum[0],
+                ),
+                axis=0,
+            )
+            h_spectrum = h_spectrum.astype(complex) * background_n / ETA_0
+
+        k_medium = 2 * np.pi * freq / C_0 * background_n
+        pupil = self._pupil_amplitude(sigma_x, sigma_y, rho_max)
+        offset_phase_distance = self._lens_offset_phase_distance(
+            sigma_x=sigma_x,
+            sigma_y=sigma_y,
+            k_hat_z=k_hat_z,
+            background_n=background_n,
+        )
+        lens_phase = np.exp(-1j * k_medium * offset_phase_distance)
+        weights = pupil * lens_phase * d_sigma_x * d_sigma_y
+        e_spectrum_weighted = e_spectrum * weights if "E" in field_kinds else None
+        h_spectrum_weighted = h_spectrum * weights if h_spectrum is not None else None
+        return sigma_x, sigma_y, k_hat_z, e_spectrum_weighted, h_spectrum_weighted
+
+    def _thin_lens_fields_tensor_grid_component_frame(
+        self,
+        x_points: NDArray,
+        y_points: NDArray,
+        z_points: NDArray,
+        background_n: NDArray,
+        field_kinds: tuple[str, ...] = ("E", "H"),
+    ) -> tuple[NDArray | None, NDArray | None]:
+        """Evaluate focused E and H fields on a tensor grid in component coordinates."""
+        background_n = self._background_n_per_frequency(background_n)
+
+        shape = (3, len(x_points), len(y_points), len(z_points), len(self.freqs))
+        e_vals = np.zeros(shape, dtype=complex) if "E" in field_kinds else None
+        h_vals = np.zeros(shape, dtype=complex) if "H" in field_kinds else None
+        propagation_basis = self._rotate_points_z(np.eye(3), background_n)
+
+        for freq_ind, (freq, n_medium) in enumerate(zip(self.freqs, background_n)):
+            sigma_x, sigma_y, k_hat_z, e_spectrum, h_spectrum = self._angular_spectrum_components(
+                freq=freq,
+                background_n=n_medium,
+                field_kinds=field_kinds,
+            )
+            k_medium = 2 * np.pi * freq / C_0 * n_medium
+            q_x = (
+                propagation_basis[0, 0] * sigma_x
+                + propagation_basis[1, 0] * sigma_y
+                + propagation_basis[2, 0] * k_hat_z
+            )
+            q_y = (
+                propagation_basis[0, 1] * sigma_x
+                + propagation_basis[1, 1] * sigma_y
+                + propagation_basis[2, 1] * k_hat_z
+            )
+            q_z = (
+                propagation_basis[0, 2] * sigma_x
+                + propagation_basis[1, 2] * sigma_y
+                + propagation_basis[2, 2] * k_hat_z
+            )
+
+            phase_x = np.exp(1j * k_medium * np.outer(x_points, q_x))
+            phase_y = np.exp(1j * k_medium * np.outer(y_points, q_y))
+            phase_z = np.exp(1j * k_medium * np.outer(z_points, q_z))
+            phase_y_t = phase_y.T
+            # waist_distance is measured along the propagation axis; the component-normal
+            # phase already uses q_z through phase_z.
+            waist_phase = np.exp(1j * k_medium * self.waist_distance * k_hat_z)
+
+            for z_ind, z_phase in enumerate(phase_z):
+                axial_phase = waist_phase * z_phase
+                if e_vals is not None:
+                    for comp_ind in range(3):
+                        weighted_phase_x = phase_x * (e_spectrum[comp_ind] * axial_phase)
+                        e_vals[comp_ind, :, :, z_ind, freq_ind] = weighted_phase_x @ phase_y_t
+                if h_vals is not None:
+                    for comp_ind in range(3):
+                        weighted_phase_x = phase_x * (h_spectrum[comp_ind] * axial_phase)
+                        h_vals[comp_ind, :, :, z_ind, freq_ind] = weighted_phase_x @ phase_y_t
+
+        return e_vals, h_vals
+
+    def _thin_lens_fields_propagation_frame(
+        self,
+        points: NDArray,
+        background_n: NDArray,
+        field_kinds: tuple[str, ...] = ("E", "H"),
+    ) -> tuple[NDArray | None, NDArray | None]:
+        """Evaluate focused E and H fields at arbitrary propagation-frame points."""
+        background_n = self._background_n_per_frequency(background_n)
+
+        num_points = points.shape[1]
+        num_freqs = len(self.freqs)
+        e_vals = np.zeros((3, num_points, num_freqs), dtype=complex) if "E" in field_kinds else None
+        h_vals = np.zeros((3, num_points, num_freqs), dtype=complex) if "H" in field_kinds else None
+        x_points, y_points, z_points = points
+        z_points = z_points + self.waist_distance
+
+        for freq_ind, (freq, n_medium) in enumerate(zip(self.freqs, background_n)):
+            sigma_x, sigma_y, k_hat_z, e_spectrum, h_spectrum = self._angular_spectrum_components(
+                freq=freq,
+                background_n=n_medium,
+                field_kinds=field_kinds,
+            )
+            k_medium = 2 * np.pi * freq / C_0 * n_medium
+            for start in range(0, num_points, _THIN_LENS_ARBITRARY_POINT_CHUNK_SIZE):
+                stop = min(start + _THIN_LENS_ARBITRARY_POINT_CHUNK_SIZE, num_points)
+                phase_arg = (
+                    np.outer(x_points[start:stop], sigma_x)
+                    + np.outer(y_points[start:stop], sigma_y)
+                    + np.outer(z_points[start:stop], k_hat_z)
+                )
+                phase = np.exp(1j * k_medium * phase_arg)
+                if e_vals is not None:
+                    e_vals[:, start:stop, freq_ind] = e_spectrum @ phase.T
+                if h_vals is not None:
+                    h_vals[:, start:stop, freq_ind] = h_spectrum @ phase.T
+
+        return e_vals, h_vals
 
 
 class AbstractGaussianBeamProfile(BeamProfile, ABC):

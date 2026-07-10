@@ -231,8 +231,50 @@ Gaussian Overlap
 
    GaussianOverlapMonitor
    AstigmaticGaussianOverlapMonitor
+   ThinLensOverlapMonitor
 
-These monitors decompose fields onto Gaussian beams to record overlap amplitudes.
+These monitors decompose fields onto Gaussian or thin-lens beams to record overlap amplitudes.
+
+Use ``ThinLensOverlapMonitor`` with the same thin-lens parameters as a
+``ThinLensBeam`` source to measure coupling into the corresponding focused beam. The
+monitor uses the same vectorial thin-lens angular spectrum as the source and analytic
+beam profile. The ``numerical_aperture`` may exceed one in high-index media as long as
+it is less than the real background refractive index. Gaussian-like overlap monitor
+planes must lie in a homogeneous, isotropic background medium.
+
+.. code-block:: python
+
+   thin_lens_overlap = ThinLensOverlapMonitor(
+       center=(0, 0, 0),
+       size=(0, td.inf, td.inf),
+       freqs=[f0],
+       name='thin_lens_overlap',
+       numerical_aperture=0.45,
+       waist_distance=0.0,
+       fill_lens=True,
+       num_plane_waves=51,
+       pol_angle=0,
+   )
+
+The monitor plane should be placed on the desired beam cross section, and
+``waist_distance`` should describe that plane's signed axial distance from focus in the
+beam propagation frame. If the monitor is used to analyze fields propagated from a
+``ThinLensBeam`` source, update ``waist_distance`` by the source-to-monitor separation
+along the tilted beam axis. For angled beams, also place the monitor ``center`` on the
+tilted optical axis at the monitor plane. If ``d`` is the signed source-to-monitor
+separation along the monitor normal coordinate, shift the two transverse coordinates by
+``d * tan(angle_theta) * (cos(angle_phi), sin(angle_phi))`` in the monitor transverse-axis
+order.
+
+``lens_offset`` shifts the ideal focal field in the two tangential directions through a
+pupil phase ramp. The entries follow the tangential-axis order obtained by removing the
+normal axis from ``(x, y, z)``; for example, a y-normal monitor uses ``(x, z)``. It does
+not model a decentered finite aperture with clipping or changed pupil amplitude.
+
+For angled monitors, ``angle_theta`` and ``angle_phi`` rotate the ideal focused beam and
+its pupil. As with ``ThinLensBeam``, this describes a tilted optical axis with an ideal
+pupil perpendicular to the axis, not aberrated focusing from an obliquely illuminated
+fixed lens surface.
 
 ~~~~
 

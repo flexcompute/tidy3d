@@ -115,6 +115,7 @@ from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from .monitor import (
     AbstractFieldMonitor,
     AbstractFieldProjectionMonitor,
+    AbstractGaussianOverlapMonitor,
     AbstractModeMonitor,
     AbstractOverlapMonitor,
     AuxFieldTimeMonitor,
@@ -134,6 +135,7 @@ from .monitor import (
     PointCloudFieldMonitor,
     PointCloudPermittivityMonitor,
     SurfaceIntegrationMonitor,
+    ThinLensOverlapMonitor,
     TimeMonitor,
 )
 from .run_time_spec import RunTimeSpec
@@ -149,12 +151,14 @@ from .source.field import (
     GaussianBeam,
     PlanarSource,
     PlaneWave,
+    ThinLensBeam,
 )
 from .source.frame import PECFrame
 from .source.time import ContinuousWave, CustomSourceTime, Pulse
 from .source.utils import SourceType
 from .structure import Structure
 from .subpixel_spec import SubpixelSpec
+from .thin_lens import MAX_THIN_LENS_SETUP_WORK_UNITS, thin_lens_pupil_grid_samples
 from .types import TYPE_TAG_STR, PermittivityComponent, Symmetry
 from .types.monitor import MonitorType, SurfaceMonitorType
 from .validators import (
@@ -266,6 +270,11 @@ FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 # RF frequency warning
 RF_FREQ_WARNING = 300e9
+
+# thin-lens preprocessing path multiplicity
+THIN_LENS_SOURCE_SETUP_EVALUATIONS = 4
+THIN_LENS_MONITOR_SETUP_EVALUATIONS = 2
+THIN_LENS_FIELD_COMPONENTS = 6
 
 
 def validate_boundaries_for_zero_dims(
@@ -4769,7 +4778,10 @@ class Simulation(AbstractYeeGridSimulation):
         cls,
         center: Coordinate,
         size: Coordinate,
-        monitor: FieldMonitor | SurfaceIntegrationMonitor | DiffractionMonitor,
+        monitor: FieldMonitor
+        | SurfaceIntegrationMonitor
+        | DiffractionMonitor
+        | AbstractGaussianOverlapMonitor,
         structures: list[Structure],
     ) -> set[MediumType3D]:
         """Get media intersecting the in-domain portion of a projection surface or monitor."""
@@ -5344,7 +5356,9 @@ class Simulation(AbstractYeeGridSimulation):
                             "sources",
                             source_id,
                         )
-                if isinstance(source, PlaneWave | GaussianBeam | AstigmaticGaussianBeam):
+                if isinstance(
+                    source, PlaneWave | GaussianBeam | AstigmaticGaussianBeam | ThinLensBeam
+                ):
                     mediums = Scene.intersecting_media(source, total_structures)
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
@@ -6141,6 +6155,8 @@ class Simulation(AbstractYeeGridSimulation):
         log.begin_capture()
         self._validate_size()
         self._validate_monitor_size()
+        self._validate_gaussian_like_beam_backgrounds()
+        self._validate_thin_lens_setup_size()
         self._validate_modes_size()
         self._validate_num_cells_in_mode_objects()
         self._validate_datasets_not_none()
@@ -6274,6 +6290,194 @@ class Simulation(AbstractYeeGridSimulation):
                     self._monitor_validation_index(
                         monitor_name=monitor.name, fallback_index=monitor_ind
                     ),
+                )
+
+    def _thin_lens_source_plane_cells(self, source: ThinLensBeam) -> int:
+        """Return discretized tangential source-plane cells for thin-lens setup sizing."""
+        normal_axis = source.size.index(0.0)
+        _, plane_inds = source.pop_axis([0, 1, 2], axis=normal_axis)
+        num_cells = self.discretize(source, extend=True).num_cells
+        return int(num_cells[plane_inds[0]] * num_cells[plane_inds[1]])
+
+    def _thin_lens_setup_work_units(
+        self,
+        *,
+        plane_cells: int,
+        num_plane_waves: int | tuple[int, int],
+        num_freqs: int,
+        num_evaluations: int = 1,
+    ) -> int:
+        """Return conservative thin-lens setup work units."""
+        return (
+            int(plane_cells)
+            * thin_lens_pupil_grid_samples(num_plane_waves)
+            * int(num_freqs)
+            * int(num_evaluations)
+        )
+
+    @staticmethod
+    def _thin_lens_setup_work_limit(*, num_evaluations: int) -> int:
+        """Return path-specific thin-lens setup work cap."""
+        return int(num_evaluations) * MAX_THIN_LENS_SETUP_WORK_UNITS
+
+    @staticmethod
+    def _thin_lens_monitor_setup_evaluations(monitor: ThinLensOverlapMonitor) -> int:
+        """Return number of angular-spectrum evaluations for thin-lens monitor setup."""
+        if monitor.colocate:
+            return THIN_LENS_MONITOR_SETUP_EVALUATIONS
+        return THIN_LENS_MONITOR_SETUP_EVALUATIONS * THIN_LENS_FIELD_COMPONENTS
+
+    @staticmethod
+    def _thin_lens_min_background_index(medium: AbstractMedium, freqs: ArrayFloat1D) -> float:
+        """Return the minimum effective real background index used by the thin-lens profile."""
+        background_n = np.asarray(medium.background_index_from_freqs(freqs), dtype=complex)
+        n_real = np.real(background_n)
+        n_effective = np.where(n_real <= 0, np.abs(background_n), n_real)
+        return float(np.min(n_effective))
+
+    def _validate_gaussian_like_beam_background_medium(
+        self,
+        *,
+        beam_obj: ThinLensBeam | AbstractGaussianOverlapMonitor,
+        mediums: set[MediumType3D],
+        freqs: ArrayFloat1D,
+        loc_root: str,
+        loc_ind: int,
+    ) -> None:
+        """Validate background assumptions used by Gaussian-like beam formulas."""
+        if len(mediums) > 1:
+            self._raise_validation_error_at_loc(
+                f"{len(mediums)} different mediums detected on plane intersecting a "
+                f"{beam_obj.type}. Plane must be homogeneous.",
+                loc_root,
+                loc_ind,
+            )
+        if len(mediums) < 1:
+            self._raise_validation_error_at_loc(
+                f"No medium detected on plane intersecting a {beam_obj.type}, "
+                "indicating an unexpected error. Please create a github issue so "
+                "that the problem can be investigated.",
+                loc_root,
+                loc_ind,
+            )
+
+        medium = next(iter(mediums))
+        if isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium):
+            self._raise_validation_error_at_loc(
+                f"An anisotropic medium is detected on plane intersecting a {beam_obj.type}. "
+                f"{beam_obj.type} currently supports only isotropic background media.",
+                loc_root,
+                loc_ind,
+            )
+        if not medium.is_spatially_uniform:
+            log.warning(
+                f"Nonuniform custom medium detected on plane intersecting a {beam_obj.type}. "
+                "Gaussian-like overlap setup assumes a homogeneous background medium.",
+                custom_loc=[loc_root, loc_ind],
+            )
+
+        if not isinstance(beam_obj, ThinLensBeam | ThinLensOverlapMonitor):
+            return
+        min_background_index = self._thin_lens_min_background_index(medium, freqs)
+        if beam_obj.numerical_aperture >= min_background_index:
+            self._raise_validation_error_at_loc(
+                f"{beam_obj.type} 'numerical_aperture' ({beam_obj.numerical_aperture:.4g}) "
+                "must be less than the real background refractive index on its plane "
+                f"({min_background_index:.4g}).",
+                loc_root,
+                loc_ind,
+                "numerical_aperture",
+            )
+
+    def _validate_gaussian_like_beam_backgrounds(self) -> None:
+        """Validate Gaussian-like beam source and monitor background medium assumptions."""
+        structure_bg = Structure(
+            geometry=Box(size=self.size, center=self.center),
+            medium=self.medium,
+        )
+        total_structures = [structure_bg, *list(self.structures or [])]
+
+        for source_ind, source in enumerate(self.sources):
+            if not isinstance(source, ThinLensBeam):
+                continue
+            mediums = Scene.intersecting_media(source, total_structures)
+            self._validate_gaussian_like_beam_background_medium(
+                beam_obj=source,
+                mediums=mediums,
+                freqs=np.asarray(source.frequency_grid),
+                loc_root="sources",
+                loc_ind=source_ind,
+            )
+
+        for monitor_ind, monitor in enumerate(self.monitors):
+            if not isinstance(monitor, AbstractGaussianOverlapMonitor):
+                continue
+            mediums = self._call_with_validation_loc(
+                ["monitors", monitor_ind],
+                self._projection_monitor_mediums_in_bounds,
+                center=self.center,
+                size=self.size,
+                monitor=monitor,
+                structures=total_structures,
+            )
+            self._validate_gaussian_like_beam_background_medium(
+                beam_obj=monitor,
+                mediums=mediums,
+                freqs=np.asarray(monitor.freqs),
+                loc_root="monitors",
+                loc_ind=monitor_ind,
+            )
+
+    def _validate_thin_lens_setup_size(self) -> None:
+        """Reject thin-lens setups with excessive angular-spectrum preprocessing work."""
+
+        if config.simulation.skip_size_checks:
+            return
+
+        for source_ind, source in enumerate(self.sources):
+            if not isinstance(source, ThinLensBeam):
+                continue
+            num_freqs = max(1, np.asarray(source.frequency_grid).size)
+            plane_cells = self._thin_lens_source_plane_cells(source)
+            work_units = self._thin_lens_setup_work_units(
+                plane_cells=plane_cells,
+                num_plane_waves=source.num_plane_waves,
+                num_freqs=num_freqs,
+                num_evaluations=THIN_LENS_SOURCE_SETUP_EVALUATIONS,
+            )
+            work_limit = self._thin_lens_setup_work_limit(
+                num_evaluations=THIN_LENS_SOURCE_SETUP_EVALUATIONS
+            )
+            if work_units > work_limit:
+                self._raise_validation_error_at_loc(
+                    f"ThinLensBeam source has {work_units:.2e} estimated setup work units, "
+                    f"which exceeds the maximum allowed {work_limit:.2e}. "
+                    "Consider reducing 'num_plane_waves', source plane size, or source "
+                    "'num_freqs'.",
+                    "sources",
+                    source_ind,
+                )
+
+        for monitor_ind, monitor in enumerate(self.monitors):
+            if not isinstance(monitor, ThinLensOverlapMonitor):
+                continue
+            plane_cells = self._monitor_num_cells(monitor)
+            num_evaluations = self._thin_lens_monitor_setup_evaluations(monitor)
+            work_units = self._thin_lens_setup_work_units(
+                plane_cells=plane_cells,
+                num_plane_waves=monitor.num_plane_waves,
+                num_freqs=len(monitor.freqs),
+                num_evaluations=num_evaluations,
+            )
+            work_limit = self._thin_lens_setup_work_limit(num_evaluations=num_evaluations)
+            if work_units > work_limit:
+                self._raise_validation_error_at_loc(
+                    f"ThinLensOverlapMonitor has {work_units:.2e} estimated setup work units, "
+                    f"which exceeds the maximum allowed {work_limit:.2e}. "
+                    "Consider reducing 'num_plane_waves', monitor plane size, or monitor "
+                    "frequencies.",
+                    "monitors",
+                    monitor_ind,
                 )
 
     def _validate_modes_size(self) -> None:

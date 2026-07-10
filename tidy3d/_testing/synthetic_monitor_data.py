@@ -448,7 +448,9 @@ class SyntheticMonitorDataFactory:
 
     def make_gaussian_overlap_data(
         self,
-        monitor: td.GaussianOverlapMonitor | td.AstigmaticGaussianOverlapMonitor,
+        monitor: td.GaussianOverlapMonitor
+        | td.AstigmaticGaussianOverlapMonitor
+        | td.ThinLensOverlapMonitor,
     ) -> td.FieldOverlapData:
         grid = self.simulation.discretize_monitor(monitor)
         coords_amps = {"direction": ["+", "-"], "f": list(monitor.freqs), "mode_index": [0]}
@@ -620,6 +622,7 @@ class SyntheticMonitorDataFactory:
             td.FluxTimeMonitor: self.make_flux_time_data,
             td.GaussianOverlapMonitor: self.make_gaussian_overlap_data,
             td.AstigmaticGaussianOverlapMonitor: self.make_gaussian_overlap_data,
+            td.ThinLensOverlapMonitor: self.make_gaussian_overlap_data,
         }
         return monitor_maker_map[type(monitor)](monitor)
 

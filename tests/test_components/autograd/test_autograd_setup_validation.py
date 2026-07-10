@@ -49,6 +49,58 @@ def test_setup_run_rejects_unsupported_traced_source_type():
     )
 
 
+def test_setup_run_rejects_thin_lens_traced_source_parameters():
+    """Thin-lens source parameter adjoints should fail before adjoint setup runs."""
+
+    source = td.ThinLensBeam(
+        center=(0, 0, -LZ / 2 + WVL),
+        size=(0, WVL, WVL),
+        direction="+",
+        source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FWIDTH),
+        numerical_aperture=0.25,
+        waist_distance=-0.2,
+        num_plane_waves=5,
+    )
+
+    _assert_setup_run_rejects(
+        lambda angle_theta: SIM_BASE.updated_copy(
+            sources=(source.updated_copy(angle_theta=angle_theta, validate=False),),
+            validate=False,
+        ),
+        r"ThinLensBeam.*source-parameter derivatives are not implemented",
+    )
+
+
+def test_setup_run_rejects_thin_lens_overlap_monitor_adjoint_outputs():
+    """Thin-lens overlap monitor adjoints should fail during setup."""
+
+    monitor = td.ThinLensOverlapMonitor(
+        center=(0, 0, 0),
+        size=(0, WVL, WVL),
+        freqs=[FREQ0],
+        name="thin_lens_overlap",
+        numerical_aperture=0.25,
+        num_plane_waves=5,
+    )
+
+    def make_sim(permittivity):
+        structure = SIM_BASE.structures[0].updated_copy(
+            medium=td.Medium(permittivity=permittivity),
+            validate=False,
+        )
+        return SIM_BASE.updated_copy(
+            structures=(structure,),
+            monitors=(*SIM_BASE.monitors, monitor),
+            validate=False,
+        )
+
+    _assert_setup_run_rejects(
+        make_sim,
+        r"ThinLensOverlapMonitor.*not implemented.*thin_lens_overlap",
+        value=2.0,
+    )
+
+
 def test_is_valid_for_autograd_returns_false_for_unsupported_traced_source_type():
     """Autograd validity predicates should not raise for unsupported traced paths."""
 

@@ -155,8 +155,10 @@ Gaussian Beam
 
    GaussianBeam
    AstigmaticGaussianBeam
+   ThinLensBeam
 
 The ``GaussianBeam`` and ``AstigmaticGaussianBeam`` classes implement the paraxial form of the Gaussian beam.
+The ``ThinLensBeam`` class injects a vectorial focused beam from a thin-lens angular spectrum.
 
 .. code-block:: python
 
@@ -174,6 +176,42 @@ The ``GaussianBeam`` and ``AstigmaticGaussianBeam`` classes implement the paraxi
 .. note::
 
    The paraxial approximation to the Gaussian beam is only appropriate when the ``waist_radius`` is larger than the source wavelength.
+
+Use ``ThinLensBeam`` for high-NA focused beams where the paraxial Gaussian approximation
+is not appropriate. The ``numerical_aperture`` may exceed one in high-index media as
+long as it is less than the real background refractive index. The source plane must
+lie in a homogeneous, isotropic background medium.
+
+.. code-block:: python
+
+   # define a focused beam propagating in the +x direction
+   my_thin_lens_beam = ThinLensBeam(
+       center=(-1, 0, 0),
+       size=(0, td.inf, td.inf),
+       direction='+',
+       source_time=my_source_time,
+       numerical_aperture=0.45,
+       waist_distance=-0.8,
+       fill_lens=True,
+       num_plane_waves=51,
+       pol_angle=0,
+   )
+
+``waist_distance`` is the signed axial distance from the focal plane to the source
+plane, measured in the beam propagation frame. Use ``fill_lens=True`` for a uniform
+circular pupil. Use ``fill_lens=False`` with ``lens_diameter`` and ``beam_diameter`` to
+inject an under-filled Gaussian pupil. For broadband simulations, ``num_freqs`` controls
+how many frequency samples are used to approximate the source profile over the source
+bandwidth.
+
+``lens_offset`` shifts the ideal focal field in the two tangential directions through a
+pupil phase ramp. The entries follow the tangential-axis order obtained by removing the
+normal axis from ``(x, y, z)``; for example, a y-normal source uses ``(x, z)``. It does
+not model a decentered finite aperture with clipping or changed pupil amplitude.
+
+For angled ``ThinLensBeam`` sources, ``angle_theta`` and ``angle_phi`` rotate the ideal
+focused beam and its pupil into the requested propagation direction. This is an ideal
+tilted-pupil model, not a model of a fixed lens surface illuminated at oblique incidence.
    
 
 .. seealso::

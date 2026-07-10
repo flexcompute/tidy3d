@@ -7,6 +7,7 @@ import pydantic as pd
 import pytest
 
 import tidy3d as td
+from tidy3d.components.monitor import BYTES_COMPLEX
 from tidy3d.exceptions import SetupError, ValidationError
 
 from ..utils import AssertLogLevel, assert_single_value_error_loc
@@ -727,9 +728,20 @@ FREQS = np.array([1, 2, 3]) * 1e12
 def test_gaussian_overlap_monitors_basic():
     g = td.GaussianOverlapMonitor(size=(1, 1, 0), name="g", freqs=FREQS)
     a = td.AstigmaticGaussianOverlapMonitor(size=(1, 1, 0), name="a", freqs=FREQS)
-    for m in (g, a):
-        s = m.storage_size(num_cells=10, tmesh=[0.0, 1.0])
-        assert isinstance(s, int) and s > 0
+    thin = td.ThinLensOverlapMonitor(
+        size=(1, 1, 0), name="thin", freqs=FREQS, numerical_aperture=0.5
+    )
+    num_cells = 10
+    for m in (g, a, thin):
+        amps_size = BYTES_COMPLEX * len(FREQS) * 2
+        fields_size = BYTES_COMPLEX * num_cells * len(FREQS) * 6
+        assert m.storage_size(num_cells=num_cells, tmesh=[0.0, 1.0]) == amps_size
+        assert (
+            m.updated_copy(store_fields_direction="+").storage_size(
+                num_cells=num_cells, tmesh=[0.0, 1.0]
+            )
+            == amps_size + fields_size
+        )
 
 
 def test_monitor():

@@ -65,6 +65,7 @@ from tidy3d.components.monitor import (
     PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
+    ThinLensOverlapMonitor,
 )
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.field import CustomFieldSource
@@ -2572,8 +2573,12 @@ class AbstractOverlapData(ElectromagneticFieldData):
 
 
 class FieldOverlapData(AbstractOverlapData):
-    monitor: GaussianOverlapMonitor | AstigmaticGaussianOverlapMonitor = Field(
-        discriminator=TYPE_TAG_STR, title="Monitor", description="Monitor associated with the data."
+    monitor: GaussianOverlapMonitor | AstigmaticGaussianOverlapMonitor | ThinLensOverlapMonitor = (
+        Field(
+            discriminator=TYPE_TAG_STR,
+            title="Monitor",
+            description="Monitor associated with the data.",
+        )
     )
 
     def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:

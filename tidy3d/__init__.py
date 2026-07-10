@@ -164,6 +164,7 @@ from .components.beam import (
     AstigmaticGaussianBeamProfile,
     GaussianBeamProfile,
     PlaneWaveBeamProfile,
+    ThinLensProfile,
 )
 
 # boundary
@@ -444,6 +445,7 @@ from .components.monitor import (
     PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
     SurfaceFieldTimeMonitor,
+    ThinLensOverlapMonitor,
 )
 
 # nonlinear
@@ -488,6 +490,7 @@ from .components.source.field import (
     GaussianBeam,
     ModeSource,
     PlaneWave,
+    ThinLensBeam,
 )
 from .components.source.frame import (
     PECFrame,
@@ -963,6 +966,9 @@ __all__ = [
     "TemperatureMonitor",
     "TetrahedralGridDataset",
     "ThermalContactResistance",
+    "ThinLensBeam",
+    "ThinLensOverlapMonitor",
+    "ThinLensProfile",
     "Tidy3dBaseModel",
     "Transformed",
     "TriangleMesh",
