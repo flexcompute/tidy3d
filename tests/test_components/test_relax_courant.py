@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
 import tidy3d as td
+from tidy3d.components import simulation as simulation_module
 
 from ..utils import assert_single_value_error_loc
 
@@ -33,6 +36,27 @@ def test_relax_courant_valid():
     """A basic simulation with relax_courant=True should be accepted."""
     sim = _make_relax_courant_sim()
     assert sim.relax_courant is True
+
+
+def test_relax_courant_dt_does_not_check_client_license(monkeypatch):
+    """Enterprise licensing for relax_courant is enforced by server metadata."""
+
+    def fail_client_license_check(*_args, **_kwargs):
+        raise AssertionError("relax_courant should not use the client-side extras license gate")
+
+    fake_extras = SimpleNamespace(extension=SimpleNamespace(_relax_courant=lambda **_kwargs: 1.0))
+    monkeypatch.setitem(simulation_module.tidy3d_extras, "mod", fake_extras)
+    monkeypatch.setattr(
+        simulation_module,
+        "check_tidy3d_extras_licensed_feature",
+        fail_client_license_check,
+        raising=False,
+    )
+
+    sim = _make_relax_courant_sim()
+
+    assert sim.requires_enterprise_license()
+    assert sim.dt > 0
 
 
 def test_relax_courant_rejects_internal_absorbers():

@@ -97,6 +97,12 @@ per-direction angles are read from the ``DipoleEmissionStudyData.theta`` and
 Notes
 -----
 
+Dipole-emission submissions require EM Enterprise entitlement in cloud
+environments. The entitlement check is performed by the server-side submission
+and estimate flow, so constructing a simulation or calling
+``Simulation.validate_pre_upload()`` may still succeed locally before the server
+rejects an account that does not have access.
+
 Ordinary monitors in ``base_sim`` are copied into every angle and polarization
 task as diagnostics. Their data is available only from the returned batch data,
 for example with ``study.run(..., return_batch_data=True)``.

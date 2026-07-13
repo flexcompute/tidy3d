@@ -41,7 +41,7 @@ from tidy3d.exceptions import (
 )
 from tidy3d.log import log
 from tidy3d.packaging import (
-    check_tidy3d_extras_licensed_feature,
+    _check_tidy3d_extras_available,
     disable_local_subpixel,
     supports_local_subpixel,
     tidy3d_extras,
@@ -5585,6 +5585,13 @@ class Simulation(AbstractYeeGridSimulation):
                 return True
         return False
 
+    def requires_enterprise_license(self) -> bool:
+        """Whether the simulation uses features gated by the Enterprise license."""
+        if self.relax_courant:
+            return True
+
+        return any(isinstance(monitor, DipoleEmissionMonitor) for monitor in self.monitors)
+
     def _warn_rf_license(self) -> None:
         """
         Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
@@ -6165,15 +6172,9 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
         self._validate_microwave_mode_specs()
-        self._validate_dipole_emission_monitor_license()
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
-
-    def _validate_dipole_emission_monitor_license(self) -> None:
-        """Check license for server-reduced dipole-emission monitor data."""
-        if any(isinstance(monitor, DipoleEmissionMonitor) for monitor in self.monitors):
-            check_tidy3d_extras_licensed_feature("dipole_emission")
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -7548,7 +7549,7 @@ class Simulation(AbstractYeeGridSimulation):
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
 
         if self.relax_courant:
-            check_tidy3d_extras_licensed_feature("relax_courant")
+            _check_tidy3d_extras_available()
             boundaries = self.grid.boundaries.to_list
             dl_mins_xyz = [float(np.min(np.diff(b))) for b in boundaries]
             relax_ratio = tidy3d_extras["mod"].extension._relax_courant(

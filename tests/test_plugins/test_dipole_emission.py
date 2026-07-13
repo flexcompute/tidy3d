@@ -865,19 +865,13 @@ def test_run_return_contract(monkeypatch):
     assert calls == ["dipole_emission", "dipole_emission"]
 
 
-def test_raw_dipole_emission_monitor_pre_upload_checks_license(monkeypatch):
+def test_raw_dipole_emission_monitor_requires_enterprise_license():
     study = make_study(angles=make_angles([(0.1, 0.2)]), polarizations=("p",))
     sim = study.to_simulations()[study._task_name(0, "p")]
-    calls = []
-
-    monkeypatch.setattr(
-        "tidy3d.components.simulation.check_tidy3d_extras_licensed_feature",
-        lambda feature_name: calls.append(feature_name),
-    )
 
     sim.validate_pre_upload()
 
-    assert calls == ["dipole_emission"]
+    assert sim.requires_enterprise_license()
 
 
 def test_run_batch_uses_study_simulations_and_batch_api(monkeypatch, tmp_path):
