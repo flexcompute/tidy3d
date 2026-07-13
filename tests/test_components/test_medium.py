@@ -275,6 +275,38 @@ def test_lossy_metal():
         _ = td.AnisotropicMedium(xx=surface_metal, yy=td.Medium(), zz=td.Medium())
 
 
+def test_medium2d_volumetric_equivalent_lossy_metal_normal():
+    """A surface-impedance lossy metal neighboring a ``Medium2D`` (e.g. a 2D lumped element
+    sitting flush on a conductor face) has no volumetric tensor formulation, so it enters the
+    volumetric equivalent in its penetrable form (a regular conductive medium) instead of
+    tripping the ``AnisotropicMedium`` component validator."""
+    sheet = td.Medium2D(ss=td.Medium(conductivity=1.0), tt=td.Medium(conductivity=1.0))
+    surface_metal = td.LossyMetalMedium(conductivity=35.0, frequency_range=(10e9, 40e9))
+    penetrable_metal = surface_metal.updated_copy(penetrable=True)
+    dielectric = td.Medium(permittivity=3.9)
+
+    def assert_no_surface_lossy_metal(aniso):
+        for comp in (aniso.xx, aniso.yy, aniso.zz):
+            if isinstance(comp, td.LossyMetalMedium):
+                assert comp.penetrable
+
+    # a lossy metal on the + side backs the normal (zz) component: its penetrable form,
+    # regardless of the `penetrable` setting of the neighbor itself
+    for metal in (surface_metal, penetrable_metal):
+        aniso = sheet.volumetric_equivalent(
+            axis=2, adjacent_media=(dielectric, metal), adjacent_dls=(0.1, 0.1)
+        )
+        assert type(aniso.zz) is td.LossyMetalMedium
+        assert aniso.zz == metal.updated_copy(penetrable=True)
+        assert_no_surface_lossy_metal(aniso)
+
+    # a lossy metal encountered on either or both sides never yields a non-penetrable component
+    for media in [(surface_metal, dielectric), (surface_metal, surface_metal)]:
+        assert_no_surface_lossy_metal(
+            sheet.volumetric_equivalent(axis=2, adjacent_media=media, adjacent_dls=(0.1, 0.1))
+        )
+
+
 def test_lossy_metal_surface_roughness():
     mat_orig = td.LossyMetalMedium(
         conductivity=41.0,

@@ -7730,7 +7730,12 @@ class Medium2D(AbstractMedium):
 
         def get_background(comp: Axis) -> PoleResidue:
             """Get the background medium appropriate for the ``comp`` component."""
-            meds = [get_component(med=med, comp=comp) for med in adjacent_media]
+            # a surface-impedance lossy metal has no volumetric tensor formulation, so
+            # use its penetrable form, which is solved as a regular conductive medium
+            meds = [
+                bg.updated_copy(penetrable=True) if isinstance(bg, LossyMetalMedium) else bg
+                for bg in (get_component(med=med, comp=comp) for med in adjacent_media)
+            ]
             # the Yee site for the E field in the normal direction is fully contained
             # in the medium on the + side
             if comp == axis:
