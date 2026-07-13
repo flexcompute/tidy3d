@@ -8,6 +8,7 @@ from tidy3d.plugins.autograd.invdes.symmetries import expand_mirror_symmetry
 from tidy3d.plugins.autograd.types import PaddingType
 
 
+@pytest.mark.usefixtures("ignore_size_px_precedence_warning")
 @pytest.mark.parametrize("radius", [1, 2, (1, 2)])
 @pytest.mark.parametrize("dl", [0.1, 0.2, (0.1, 0.2)])
 @pytest.mark.parametrize("size_px", [None, 5, (5, 7)])

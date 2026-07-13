@@ -22,6 +22,13 @@ from tidy3d.exceptions import DataError
 from ..utils import AssertLogLevel, assert_single_value_error_loc
 
 
+def uniform_unstructured_grid(**kwargs):
+    """Construct a uniform TCAD grid while preserving current local-refinement defaults."""
+    return td.UniformUnstructuredGrid(
+        **{"min_edges_per_circumference": 15, "min_edges_per_side": 2, **kwargs}
+    )
+
+
 class CHARGE_SIMULATION:
     """This class contains all elements to be tested."""
 
@@ -986,7 +993,7 @@ def test_freqs_validation():
                 condition=td.VoltageBC(source=td.GroundVoltage()),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         monitors=[volt_monitor],
         analysis_spec=isothermal_spec,
     )
@@ -1117,7 +1124,7 @@ def test_vertical_natural_convection():
                 condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
             )
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         monitors=[
             td.TemperatureMonitor(
                 center=(0, 0, 0),
@@ -1585,7 +1592,7 @@ def test_plot_mesh_2d_auto_sel():
         structures=[structure],
         center=(0, 0, 0),
         size=(1, 0, 1),
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         sources=[td.HeatSource(rate=1, structures=["box"])],
         boundary_spec=[
             td.HeatChargeBoundarySpec(
@@ -1717,7 +1724,7 @@ def test_ssac_accepts_fermi_dirac():
                 condition=td.VoltageBC(source=td.GroundVoltage()),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         monitors=[
             td.SteadyPotentialMonitor(
                 center=(0, 0, 0),
@@ -1870,7 +1877,7 @@ def test_ssac_bias_selection_requires_accelerated_solver():
                 condition=td.VoltageBC(source=td.GroundVoltage()),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         monitors=[
             td.SteadyPotentialMonitor(
                 center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage", unstructured=True
@@ -1954,7 +1961,7 @@ def test_masetti_requires_accelerated_solver():
                 condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0.1])),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        grid_spec=uniform_unstructured_grid(dl=0.5),
         analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
     )
 
@@ -2045,7 +2052,7 @@ def test_palankovski_quay_requires_accelerated_solver():
                 condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0.1])),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        grid_spec=uniform_unstructured_grid(dl=0.5),
         analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
     )
 
@@ -2158,7 +2165,7 @@ def _make_schottky_charge_sim(
                 condition=td.VoltageBC(source=td.GroundVoltage()),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.2),
+        grid_spec=uniform_unstructured_grid(dl=0.2),
         monitors=[
             td.SteadyPotentialMonitor(
                 center=(0, 0, 0),
@@ -2334,7 +2341,7 @@ def _build_residual_charge_sim():
                 condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0.1])),
             ),
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        grid_spec=uniform_unstructured_grid(dl=0.5),
         analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
     )
 
@@ -2622,7 +2629,7 @@ class TestCharge:
             monitors=[charge_global_mnt, potential_global_mnt],
             center=(0, 0, 0),
             size=CHARGE_SIMULATION.sim_size,
-            grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+            grid_spec=uniform_unstructured_grid(dl=0.05),
             boundary_spec=[bc_n, bc_p],
             analysis_spec=non_isothermal_spec,
         )
@@ -2781,7 +2788,7 @@ class TestCharge:
             monitors=[charge_global_mnt, potential_global_mnt, capacitance_global_mnt],
             center=(0, 0, 0),
             size=CHARGE_SIMULATION.sim_size,
-            grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+            grid_spec=uniform_unstructured_grid(dl=0.05),
             boundary_spec=[bc_n, bc_p],
             analysis_spec=isothermal_spec,
         )
@@ -3088,7 +3095,7 @@ def test_sim_structure_extent(box_size, log_level):
                     condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1])),
                 )
             ],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=uniform_unstructured_grid(dl=0.1),
             monitors=[
                 td.SteadyPotentialMonitor(
                     center=(0, 0, 0),
@@ -3571,7 +3578,7 @@ def test_additional_edge_cases():
         center=(0, 0, 0),
         size=(2, 2, 2),
         boundary_spec=[],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         sources=[],
         monitors=[],
     )
@@ -3846,7 +3853,7 @@ def test_heat_conduction_simulations():
         center=(0, 0, 0),
         size=(3, 3, 3),
         boundary_spec=[thermal_bc, electric_bc],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         sources=[],
         monitors=[temp_monitor, voltage_monitor],
     )
@@ -4029,7 +4036,7 @@ def test_heat_only_simulation_with_semiconductor():
         center=(0, 0, 0),
         size=(3, 3, 3),
         boundary_spec=[thermal_bc],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         sources=[heat_source],
         monitors=[temp_monitor],
     )
@@ -4092,7 +4099,7 @@ def test_heat_charge_simulation_plot():
         center=(0, 0, 0),
         size=(2, 2, 2),
         boundary_spec=[bc_temp],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        grid_spec=uniform_unstructured_grid(dl=0.1),
         sources=[heat_source],
         monitors=[temp_monitor],
     )
@@ -4154,7 +4161,7 @@ def test_heat_charge_simulation_plot():
         monitors=[volt_monitor],
         center=(0, 0, 0),
         size=(2, 2, 2),
-        grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+        grid_spec=uniform_unstructured_grid(dl=0.05),
         boundary_spec=[bc_v1, bc_v2],
         analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
     )
@@ -4202,7 +4209,7 @@ def test_cylinder_small_radius_warning():
             size=(2, 2, 2),
             medium=background,
             structures=[tiny_cylinder],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=uniform_unstructured_grid(dl=0.1),
             monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
         )
 
@@ -4220,7 +4227,7 @@ def test_cylinder_small_radius_warning():
             size=(2, 2, 2),
             medium=background,
             structures=[tiny_cylinder_transformed],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=uniform_unstructured_grid(dl=0.1),
             monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
         )
 
@@ -4243,7 +4250,7 @@ def test_cylinder_small_radius_warning():
             size=(2, 2, 2),
             medium=background,
             structures=[tapered_cylinder],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=uniform_unstructured_grid(dl=0.1),
             monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
         )
 
@@ -4304,7 +4311,7 @@ def test_polyslab_arc_unsupported(geometry, expect_error):
         "size": (2, 2, 2),
         "medium": background,
         "structures": [structure],
-        "grid_spec": td.UniformUnstructuredGrid(dl=0.1),
+        "grid_spec": uniform_unstructured_grid(dl=0.1),
         "monitors": [td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
     }
 

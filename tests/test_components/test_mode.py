@@ -22,7 +22,7 @@ from ..test_data.test_data_arrays import (
     make_scalar_mode_field_data_array,
 )
 from ..test_data.test_monitor_data import GRID_CORRECTION, N_COMPLEX
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, AssertLogStr
 
 MODE_MONITOR_WITH_FIELDS = td.ModeSolverMonitor(
     size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FS, store_fields_direction="+"
@@ -911,7 +911,8 @@ def test_track_freq_deprecation():
         _ = td.ModeSpec(num_modes=3, track_freq="central")
 
     # Deprecated value still takes precedence (backwards compatibility)
-    ms = td.ModeSpec(num_modes=3, track_freq="lowest", sort_spec=td.ModeSortSpec())
+    with AssertLogLevel("WARNING", contains_str="deprecated"):
+        ms = td.ModeSpec(num_modes=3, track_freq="lowest", sort_spec=td.ModeSortSpec())
     assert ms._track_freq == "lowest"
 
     # Tracking can be turned off in ModeSortSpec
@@ -994,26 +995,29 @@ def test_filter_pol_with_default_sort_spec():
     assert ms.filter_pol == "te"
 
     # filter_pol should fail with custom sort_spec
-    with pytest.raises(pd.ValidationError):
-        td.ModeSpec(
-            num_modes=3,
-            filter_pol="te",
-            sort_spec=td.ModeSortSpec(sort_key="k_eff"),
-        )
+    with AssertLogStr("WARNING", contains_str="deprecated"):
+        with pytest.raises(pd.ValidationError):
+            td.ModeSpec(
+                num_modes=3,
+                filter_pol="te",
+                sort_spec=td.ModeSortSpec(sort_key="k_eff"),
+            )
 
-    with pytest.raises(pd.ValidationError):
-        td.ModeSpec(
-            num_modes=3,
-            filter_pol="te",
-            sort_spec=td.ModeSortSpec(filter_key="TE_fraction"),
-        )
+    with AssertLogStr("WARNING", contains_str="deprecated"):
+        with pytest.raises(pd.ValidationError):
+            td.ModeSpec(
+                num_modes=3,
+                filter_pol="te",
+                sort_spec=td.ModeSortSpec(filter_key="TE_fraction"),
+            )
 
-    with pytest.raises(pd.ValidationError):
-        td.ModeSpec(
-            num_modes=3,
-            filter_pol="te",
-            sort_spec=td.ModeSortSpec(sort_reference=1.5),
-        )
+    with AssertLogStr("WARNING", contains_str="deprecated"):
+        with pytest.raises(pd.ValidationError):
+            td.ModeSpec(
+                num_modes=3,
+                filter_pol="te",
+                sort_spec=td.ModeSortSpec(sort_reference=1.5),
+            )
 
 
 def _make_tensorial_mode_sim():

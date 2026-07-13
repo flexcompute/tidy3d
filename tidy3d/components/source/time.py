@@ -293,7 +293,10 @@ class GaussianPulse(Pulse):
 
     def _rel_amp_freq(self, freq: float) -> complex:
         """Complex-valued source spectrum in frequency domain normalized by peak amplitude."""
-        return self.amp_freq(freq) / self._peak_freq_amp
+        peak_amp = self._peak_freq_amp
+        if peak_amp == 0:
+            return 0j
+        return self.amp_freq(freq) / peak_amp
 
     @property
     def peak_frequency(self) -> float:

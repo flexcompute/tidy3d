@@ -238,7 +238,7 @@ def test_unsupported_modulated_medium_types():
     with pytest.raises(ValidationError):
         td.Medium(
             permittivity=2,
-            nonlinear_spec=td.NonlinearSusceptibility(chi3=1),
+            nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1)]),
             modulation_spec=modulation_spec,
         )
 

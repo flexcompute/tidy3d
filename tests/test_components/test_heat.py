@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 from matplotlib import pyplot as plt
@@ -63,11 +65,15 @@ def test_heat_medium():
     # advection velocity defaults to None (pure conduction)
     assert solid_medium.heat_spec.velocity is None
 
-    # velocity can be set as a 3-vector (tidy3d units, um/s); tuple, list, and
-    # np.ndarray inputs all normalize to the same tuple
-    for vel in [(1.0, 0.0, -2.0), [1.0, 0.0, -2.0], np.array([1.0, 0.0, -2.0])]:
-        moving_solid = solid_medium.heat_spec.updated_copy(velocity=vel)
-        assert moving_solid.velocity == (1.0, 0.0, -2.0)
+    # List and ndarray inputs are intentional coverage. `updated_copy()` should normalize
+    # accepted sequence inputs to tuples before Pydantic serializes the copied model.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        # velocity can be set as a 3-vector (tidy3d units, um/s); tuple, list, and
+        # np.ndarray inputs all normalize to the same tuple
+        for vel in [(1.0, 0.0, -2.0), [1.0, 0.0, -2.0], np.array([1.0, 0.0, -2.0])]:
+            moving_solid = solid_medium.heat_spec.updated_copy(velocity=vel)
+            assert moving_solid.velocity == (1.0, 0.0, -2.0)
 
     # check we can create solid medium from  SI units; list/array inputs normalize too
     for vel in [(1.0, 0.0, -2.0), [1.0, 0.0, -2.0], np.array([1.0, 0.0, -2.0])]:
@@ -344,7 +350,9 @@ def test_thermal_contact_resistance():
         size=(3, 2, 2),
         medium=td.Medium(heat_spec=td.FluidSpec(), name="fluid"),
         structures=[slab1, slab2],
-        grid_spec=UniformUnstructuredGrid(dl=0.2),
+        grid_spec=UniformUnstructuredGrid(
+            dl=0.2, min_edges_per_circumference=15, min_edges_per_side=2
+        ),
         boundary_spec=[bc_anchor, bc_interface],
         monitors=[TemperatureMonitor(size=(3, 2, 2), name="temperature")],
     )
@@ -787,7 +795,9 @@ def test_sim_structure_extent(box_size, log_level):
                     unstructured=True,
                 )
             ],
-            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            grid_spec=td.UniformUnstructuredGrid(
+                dl=0.1, min_edges_per_circumference=15, min_edges_per_side=2
+            ),
         )
 
 
@@ -836,7 +846,12 @@ def test_relative_min_dl_warning():
         _ = td.HeatSimulation(
             size=(1, 1, 1),
             medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
-            grid_spec=td.UniformUnstructuredGrid(dl=0.0001, relative_min_dl=1e-2),
+            grid_spec=td.UniformUnstructuredGrid(
+                dl=0.0001,
+                min_edges_per_circumference=15,
+                min_edges_per_side=2,
+                relative_min_dl=1e-2,
+            ),
             boundary_spec=[
                 td.HeatBoundarySpec(
                     placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)

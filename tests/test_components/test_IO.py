@@ -24,7 +24,7 @@ from ..test_data.test_sim_data import make_sim_data
 from ..utils import SIM_FULL as SIM
 from ..utils import SIM_FULL_FIELD_PROJECTION as SIM_PROJECTION
 from ..utils import SIM_MONITORS as SIM2
-from ..utils import run_emulated
+from ..utils import AssertLogLevel, run_emulated
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -611,7 +611,17 @@ SIM_FILES = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
 @pytest.mark.parametrize("sim_file", SIM_FILES)
 def test_simulation_updater(sim_file):
     """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
-    if "fdtd" in sim_file:
+    expects_legacy_nonlinear_warning = os.path.basename(sim_file) in {
+        "full_fdtd.h5",
+        "full_fdtd.json",
+        "full_fdtd_field_projection.h5",
+        "full_fdtd_field_projection.json",
+    }
+
+    if expects_legacy_nonlinear_warning:
+        with AssertLogLevel("WARNING", contains_str="nonlinear_spec=model"):
+            sim_loaded = td.Simulation.from_file(sim_file)
+    elif "fdtd" in sim_file:
         sim_loaded = td.Simulation.from_file(sim_file)
     else:
         sim_loaded = td.HeatChargeSimulation.from_file(sim_file)

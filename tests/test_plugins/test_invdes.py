@@ -392,12 +392,12 @@ def test_invdes_multi_same_length():
     invdes = make_invdes_multi()
     n = len(invdes.simulations)
 
-    output_monitor_names = (n + 1) * [("test",)]
+    output_monitor_names = (n + 1) * (("test",),)
 
     with pytest.raises(ValueError):
         _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-    output_monitor_names = [((MNT_NAME1, MNT_NAME2), None)[i % 2] for i in range(n)]
+    output_monitor_names = tuple(((MNT_NAME1, MNT_NAME2), None)[i % 2] for i in range(n))
     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
     _ = invdes.designs

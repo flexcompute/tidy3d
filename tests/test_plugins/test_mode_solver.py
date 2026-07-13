@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import get_args
+from typing import Literal, get_args
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,7 +23,7 @@ from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 
-from ..utils import AssertLogLevel, cartesian_to_unstructured
+from ..utils import AssertLogLevel, AssertLogStr, cartesian_to_unstructured
 
 
 def assert_property_vs_runtime(mode_solver, mode_data):
@@ -72,6 +72,16 @@ MODESOLVER_NAME = "mode_solver"
 PROJECT_ID = "Project-ID"
 TASK_ID = "Task-ID"
 SOLVER_ID = "Solver-ID"
+
+
+def sort_spec_for_pol(filter_pol: str, track_freq: str | None = "central") -> td.ModeSortSpec:
+    """Replacement for deprecated ModeSpec.filter_pol in mode-solver tests."""
+    return td.ModeSortSpec(
+        filter_key="TE_fraction",
+        filter_reference=0.5,
+        filter_order="over" if filter_pol == "te" else "under",
+        track_freq=track_freq,
+    )
 
 
 def make_fill_fraction_mode_data():
@@ -155,9 +165,8 @@ def mock_remote_api(monkeypatch):
         mode_spec = td.ModeSpec(
             num_modes=3,
             target_neff=2.0,
-            filter_pol="tm",
             precision="double",
-            track_freq="lowest",
+            sort_spec=sort_spec_for_pol("tm", track_freq="lowest"),
         )
         ms = ModeSolver(
             simulation=simulation,
@@ -303,11 +312,15 @@ def compare_colocation(ms):
             assert np.allclose(coords1, field_at_boundaries.coords[dim])
 
 
-def verify_pol_fraction(ms):
+def verify_pol_fraction(ms, expected_pol: Literal["te", "tm"]):
     """Verify that polarization fraction was successfully filtered."""
     pol_frac = ms.data.pol_fraction
     pol_frac_wg = ms.data.pol_fraction_waveguide
-    filter_pol = ms.mode_spec.filter_pol
+    sort_spec = ms.mode_spec.sort_spec
+    assert sort_spec is not None
+    assert sort_spec.filter_key == "TE_fraction"
+    assert sort_spec.filter_reference == 0.5
+    assert sort_spec.filter_order == ("over" if expected_pol == "te" else "under")
 
     # print(pol_frac.isel(mode_index=0))
     # print(pol_frac_wg.isel(mode_index=0))
@@ -320,15 +333,14 @@ def verify_pol_fraction(ms):
     #     ms.plot_field("Ez", "abs", mode_index=mode_index, f=ms.freqs[0], ax=ax[mode_index, 2])
     # plt.show()
 
-    if filter_pol is not None:
-        assert np.all(pol_frac[filter_pol].isel(mode_index=0) > 0.5)
-        other_pol = "te" if filter_pol == "tm" else "tm"
-        # There is no guarantee that the waveguide polarization fraction is also predominantly
-        # the same as the standard definition, but it is true in the cases we test here
-        assert np.all(
-            pol_frac_wg[filter_pol].isel(mode_index=0).values
-            > pol_frac_wg[other_pol].isel(mode_index=0).values
-        )
+    assert np.all(pol_frac[expected_pol].isel(mode_index=0) > 0.5)
+    other_pol = "te" if expected_pol == "tm" else "tm"
+    # There is no guarantee that the waveguide polarization fraction is also predominantly
+    # the same as the standard definition, but it is true in the cases we test here
+    assert np.all(
+        pol_frac_wg[expected_pol].isel(mode_index=0).values
+        > pol_frac_wg[other_pol].isel(mode_index=0).values
+    )
 
 
 def verify_dtype(ms):
@@ -492,9 +504,8 @@ def test_mode_solver_simple(mock_remote_api, local, tmp_path):
     mode_spec = td.ModeSpec(
         num_modes=3,
         target_neff=2.0,
-        filter_pol="tm",
         precision="double" if local else "single",
-        track_freq="lowest",
+        sort_spec=sort_spec_for_pol("tm", track_freq="lowest"),
     )
     if local:
         freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
@@ -510,7 +521,7 @@ def test_mode_solver_simple(mock_remote_api, local, tmp_path):
 
     if local:
         compare_colocation(ms)
-        verify_pol_fraction(ms)
+        verify_pol_fraction(ms, "tm")
         verify_dtype(ms)
         _ = ms.data.to_dataframe()
         check_ms_reduction(ms)
@@ -546,8 +557,7 @@ def test_mode_solver_remote_after_local(mock_remote_api, tmp_path):
     mode_spec = td.ModeSpec(
         num_modes=3,
         target_neff=2.0,
-        filter_pol="tm",
-        track_freq="lowest",
+        sort_spec=sort_spec_for_pol("tm", track_freq="lowest"),
     )
 
     ms = ModeSolver(
@@ -751,10 +761,9 @@ def test_mode_solver_2D():
     """Run mode solver in 2D simulations."""
     mode_spec = td.ModeSpec(
         num_modes=3,
-        filter_pol="te",
         precision="double",
         num_pml=(0, 10),
-        track_freq="central",
+        sort_spec=sort_spec_for_pol("te", track_freq="central"),
     )
     simulation = td.Simulation(
         size=(0, SIM_SIZE[1], SIM_SIZE[2]),
@@ -768,16 +777,16 @@ def test_mode_solver_2D():
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
     )
     compare_colocation(ms)
-    verify_pol_fraction(ms)
+    verify_pol_fraction(ms, "te")
     verify_dtype(ms)
     _ = ms.data.to_dataframe()
     check_ms_reduction(ms)
 
     mode_spec = td.ModeSpec(
         num_modes=3,
-        filter_pol="te",
         precision="double",
         num_pml=(10, 0),
+        sort_spec=sort_spec_for_pol("te"),
     )
     simulation = td.Simulation(
         size=(SIM_SIZE[0], SIM_SIZE[1], 0),
@@ -805,7 +814,7 @@ def test_mode_solver_2D():
     )
     ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     compare_colocation(ms)
-    verify_pol_fraction(ms)
+    verify_pol_fraction(ms, "te")
     check_ms_reduction(ms)
 
 
@@ -973,9 +982,8 @@ def test_mode_solver_nan_pol_fraction():
     mode_spec = td.ModeSpec(
         num_modes=10,
         target_neff=3.48,
-        filter_pol="tm",
+        sort_spec=sort_spec_for_pol("tm", track_freq="central"),
         precision="single",
-        track_freq="central",
     )
 
     freqs = [td.C_0 / 1.55]
@@ -1000,8 +1008,7 @@ def test_mode_solver_nan_pol_fraction():
         nan_fields[field_name] = field.copy(data=data)
 
     md = md.updated_copy(**nan_fields)
-    md = ms._filter_polarization(md)
-    assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [9]
+    assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [5]
 
 
 def test_mode_solver_method_defaults():
@@ -1020,9 +1027,8 @@ def test_mode_solver_method_defaults():
     mode_spec = td.ModeSpec(
         num_modes=10,
         target_neff=3.48,
-        filter_pol="tm",
         precision="single",
-        track_freq="central",
+        sort_spec=sort_spec_for_pol("tm", track_freq="central"),
     )
 
     freqs = [td.C_0 / 1.55]
@@ -1120,9 +1126,8 @@ def test_mode_solver_relative():
     mode_spec = td.ModeSpec(
         num_modes=3,
         target_neff=2.0,
-        filter_pol="tm",
         precision="double",
-        track_freq="lowest",
+        sort_spec=sort_spec_for_pol("tm", track_freq="lowest"),
     )
     freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
     ms = ModeSolver(
@@ -1677,16 +1682,23 @@ def test_translated_dot():
 def test_mode_spec_filter_pol_sort_spec_exclusive():
     """Ensure ModeSpec errors when both filter_pol and sort_spec are set."""
     # Using a non-default sort_key triggers the exclusivity check
-    with pytest.raises(pd.ValidationError, match="simultaneously"):
-        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="k_eff"))
+    with AssertLogStr("WARNING", contains_str="'filter_pol' is deprecated"):
+        with pytest.raises(pd.ValidationError, match="simultaneously"):
+            _ = td.ModeSpec(
+                num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="k_eff")
+            )
     # Using a sort_reference also triggers the exclusivity check
-    with pytest.raises(pd.ValidationError, match="simultaneously"):
-        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_reference=1.5))
+    with AssertLogStr("WARNING", contains_str="'filter_pol' is deprecated"):
+        with pytest.raises(pd.ValidationError, match="simultaneously"):
+            _ = td.ModeSpec(
+                num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_reference=1.5)
+            )
     # Using a filter_key also triggers the exclusivity check
-    with pytest.raises(pd.ValidationError, match="simultaneously"):
-        _ = td.ModeSpec(
-            num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(filter_key="TE_fraction")
-        )
+    with AssertLogStr("WARNING", contains_str="'filter_pol' is deprecated"):
+        with pytest.raises(pd.ValidationError, match="simultaneously"):
+            _ = td.ModeSpec(
+                num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(filter_key="TE_fraction")
+            )
 
 
 def test_modes_filter_sort():
@@ -1873,16 +1885,18 @@ def test_sort_spec_track_freq():
     modes_lowest = ms.solve()
 
     # TODO remove this when track_freq is removed
-    mode_spec = td.ModeSpec(
-        num_modes=5,
-        target_neff=2.0,
-        sort_spec=sort_spec,
-        track_freq="lowest",
-        num_pml=(10, 10),
-        group_index_step=True,
-    )
-    ms = ms.updated_copy(mode_spec=mode_spec)
-    modes_lowest_legacy = ms.solve()
+    with AssertLogLevel("WARNING", contains_str="ModeSpec.track_freq"):
+        mode_spec = td.ModeSpec(
+            num_modes=5,
+            target_neff=2.0,
+            sort_spec=sort_spec,
+            track_freq="lowest",
+            num_pml=(10, 10),
+            group_index_step=True,
+        )
+    with AssertLogLevel("WARNING", contains_str="ModeSpec.track_freq"):
+        ms = ms.updated_copy(mode_spec=mode_spec)
+        modes_lowest_legacy = ms.solve()
 
     assert modes_lowest == modes_lowest_legacy
 

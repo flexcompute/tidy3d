@@ -102,7 +102,9 @@ def make_heat_charge_sim_data_with_device_characteristics(size=(1, 1, 1)):
                 placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
             )
         ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        grid_spec=td.UniformUnstructuredGrid(
+            dl=0.5, min_edges_per_circumference=15, min_edges_per_side=2
+        ),
         sources=[],
         monitors=[td.TemperatureMonitor(size=monitor_size, name="temp", unstructured=True)],
     )

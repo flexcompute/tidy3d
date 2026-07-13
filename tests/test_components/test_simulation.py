@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import warnings
 
 import gdstk
 import matplotlib.pyplot as plt
@@ -380,8 +381,10 @@ def _with_normalize_index_zero_amplitude(sim):
 def test_simulation_validation_error_locs(
     fdtd_base_sim, sim_updater, expected_loc, message_contains
 ):
-    with pytest.raises(ValidationError) as excinfo:
-        _ = sim_updater(fdtd_base_sim)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        with pytest.raises(ValidationError) as excinfo:
+            _ = sim_updater(fdtd_base_sim)
 
     assert_single_value_error_loc(excinfo, expected_loc, message_contains)
 
@@ -569,14 +572,13 @@ def test_validate_normalize_index():
     )
 
     # normalize by zero-amplitude source
-    with pytest.warns(
-        RuntimeWarning,
-        match=r"invalid value encountered in scalar divide",
-    ):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
         src0 = td.UniformCurrentSource(
             source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12, amplitude=0),
             size=(0, 0, 0),
             polarization="Ex",
+            current_amplitude_definition="total",
         )
         with pytest.raises(ValidationError):
             td.Simulation(

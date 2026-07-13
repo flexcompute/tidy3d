@@ -848,10 +848,19 @@ def test_nonlinear_medium():
 
     assert med._nonlinear_num_iters == 20
     assert td.Medium()._nonlinear_num_iters == 0
-    assert td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))._nonlinear_num_iters == 1
     assert (
         td.Medium(
-            nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=2)
+            nonlinear_spec=td.NonlinearSpec(
+                models=[td.NonlinearSusceptibility(chi3=1.5)], num_iters=1
+            )
+        )._nonlinear_num_iters
+        == 1
+    )
+    assert (
+        td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[td.NonlinearSusceptibility(chi3=1.5)], num_iters=2
+            )
         )._nonlinear_num_iters
         == 2
     )
@@ -869,17 +878,24 @@ def test_nonlinear_medium():
         )
 
     # dispersive support
-    med = td.PoleResidue(poles=[(-1, 1)], nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
+    med = td.PoleResidue(
+        poles=[(-1, 1)],
+        nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1.5)]),
+    )
 
     # unsupported material types
     with pytest.raises(pd.ValidationError):
         med = td.AnisotropicMedium(
-            xx=med, yy=med, zz=med, nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5)
+            xx=med,
+            yy=med,
+            zz=med,
+            nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1.5)]),
         )
 
     # numiters too large
-    with pytest.raises(pd.ValidationError):
-        med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=200))
+    with AssertLogLevel("ERROR", contains_str="numiters"):
+        with pytest.raises(pd.ValidationError):
+            med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=200))
     with pytest.raises(pd.ValidationError):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(
@@ -1020,7 +1036,8 @@ def test_empty_nonlinear_spec_dict_loads_as_none_from_file_without_errors(caplog
 
 
 def test_legacy_nonlinear_spec_dicts_validate_without_explicit_type():
-    medium = td.Medium(nonlinear_spec={"chi3": 1.0})
+    with AssertLogLevel("WARNING", contains_str="nonlinear_spec=model"):
+        medium = td.Medium(nonlinear_spec={"chi3": 1.0})
     assert isinstance(medium.nonlinear_spec, td.NonlinearSusceptibility)
     assert medium.nonlinear_spec.chi3 == 1.0
 

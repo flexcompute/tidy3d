@@ -694,7 +694,7 @@ class Tidy3dBaseModel(BaseModel):
                 return True, get_tuple_element_type(annotation)
 
             # Union types containing tuple
-            if origin is Union:
+            if origin in (Union, UnionType):
                 args = get_args(annotation)
                 for arg in args:
                     if get_origin(arg) is tuple:
@@ -766,7 +766,7 @@ class Tidy3dBaseModel(BaseModel):
                             return annotation(**value)
                     except (TypeError, AttributeError):
                         pass
-                elif origin is Union:
+                elif origin in (Union, UnionType):
                     # For Union types, try to convert to the first matching Tidy3dBaseModel type
                     args = get_args(annotation)
                     for arg in args:

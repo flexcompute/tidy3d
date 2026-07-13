@@ -36,6 +36,7 @@ def test_get_kernel_size_invalid_arguments():
         _get_kernel_size(None, None, None)
 
 
+@pytest.mark.usefixtures("ignore_size_px_precedence_warning")
 @pytest.mark.parametrize("radius", [1, 2, (1, 2)])
 @pytest.mark.parametrize("dl", [0.1, 0.2, (0.1, 0.2)])
 @pytest.mark.parametrize("size_px", [None, 5, (5, 7)])

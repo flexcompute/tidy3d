@@ -678,7 +678,9 @@ SIM_FULL = td.Simulation(
                 center=(-3.0, 0.5, 0.5),
             ),
             medium=td.Medium(
-                nonlinear_spec=td.NonlinearSusceptibility(chi3=0.1, numiters=20),
+                nonlinear_spec=td.NonlinearSpec(
+                    models=[td.NonlinearSusceptibility(chi3=0.1)], num_iters=20
+                ),
             ),
         ),
         td.Structure(
@@ -995,7 +997,9 @@ FULL_STEADY_HEAT = td.HeatChargeSimulation(
         )
     ],
     sources=[td.HeatSource(rate=1.0, structures=["solid_box"])],
-    grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+    grid_spec=td.UniformUnstructuredGrid(
+        dl=0.05, min_edges_per_circumference=15, min_edges_per_side=2
+    ),
     symmetry=(1, 0, 0),
 )
 
@@ -1130,7 +1134,9 @@ FULL_CHARGE = td.HeatChargeSimulation(
             max_iters=400,
         ),
     ),
-    grid_spec=td.UniformUnstructuredGrid(dl=0.05, relative_min_dl=0),
+    grid_spec=td.UniformUnstructuredGrid(
+        dl=0.05, min_edges_per_circumference=15, min_edges_per_side=2, relative_min_dl=0
+    ),
 )
 
 SAMPLE_SIMULATIONS = {
@@ -1254,10 +1260,6 @@ def assert_log_level(
         None
     """
 
-    import sys
-
-    sys.stderr.write(str(records) + "\n")
-
     if log_level_expected is None:
         log_level_expected_int = None
     else:
@@ -1326,10 +1328,6 @@ def assert_str_in_log(
         None
     """
 
-    import sys
-
-    sys.stderr.write(str(records) + "\n")
-
     # do nothing for None log level
     if log_level_test is None:
         return
@@ -1369,6 +1367,8 @@ class AbstractAssertLog:
     log_level_expected: str | None
     contains_str: str = None
     handler_key: ClassVar[str] = "assert_log_level"
+    console_handler_key: ClassVar[str] = "console"
+    console_handler_was_present: bool = dataclasses.field(init=False, default=False)
 
     @property
     def records(self):
@@ -1383,17 +1383,25 @@ class AbstractAssertLog:
     def __enter__(self):
         # Create and register handler
         self.handler = AssertLogLevelHandler()
+        self.console_handler_was_present = self.console_handler_key in td.log.handlers
+        self.console_handler = td.log.handlers.pop(self.console_handler_key, None)
         td.log.handlers[self.handler_key] = self.handler
         return self
 
     def _remove_handler(self):
         """Remove the handler registered by this context manager."""
         try:
-            handler = td.log.handlers.pop(self.handler_key)
-        except KeyError as exc:
-            raise RuntimeError("AssertLog handler was removed during context.") from exc
-        if handler is not self.handler:
-            raise RuntimeError("AssertLog handler was replaced during context.")
+            try:
+                handler = td.log.handlers.pop(self.handler_key)
+            except KeyError as exc:
+                raise RuntimeError("AssertLog handler was removed during context.") from exc
+            if handler is not self.handler:
+                raise RuntimeError("AssertLog handler was replaced during context.")
+        finally:
+            if self.console_handler_was_present:
+                td.log.handlers[self.console_handler_key] = self.console_handler
+            else:
+                td.log.handlers.pop(self.console_handler_key, None)
 
 
 @dataclasses.dataclass

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -433,8 +435,16 @@ def test_ports_union_discriminated_on_type(tmp_path):
         "mode_spec": {"type": "MicrowaveModeSpec", "num_modes": 1},
         "not_a_real_field": True,
     }
-    with pytest.raises(ValidationError) as excinfo:
-        modeler.updated_copy(ports=[bad_waveport])
+    # `updated_copy()` serializes before validation, so this intentionally invalid dict
+    # produces a Pydantic serializer warning before surfacing the validation error.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Pydantic serializer warnings:.*",
+            category=UserWarning,
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            modeler.updated_copy(ports=(bad_waveport,))
     errors = excinfo.value.errors(include_input=False, include_url=False)
     assert len(errors) == 1
     assert errors[0]["type"] == "extra_forbidden"
