@@ -2091,6 +2091,8 @@ def test_multistep_batch_run_removes_temp_file_on_tolerable_error(monkeypatch, t
 
     assert result.task_paths == {}
     assert result.cached_tasks == {}
+    with pytest.raises(DataError, match=r"heat.*no loaded result"):
+        _ = result["heat"]
     assert failing_job.status_calls == 1
     assert batch._terminal_status_by_task["heat"] == "blocked"
     assert not list(tmp_path.glob(".multi_step_*.tmp.hdf5"))

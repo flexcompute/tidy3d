@@ -2437,6 +2437,8 @@ def test_batch_run_multistep_tolerates_task_errors(monkeypatch, tmp_path):
     assert data.task_ids == {"good": "good_id"}
     assert "bad" not in data.task_ids
     assert (tmp_path / "good_id.hdf5").is_file()
+    with pytest.raises(DataError, match=r"bad.*no loaded result"):
+        _ = data["bad"]
 
 
 def test_batch_run_multistep_still_raises_fatal_errors(monkeypatch, tmp_path):
@@ -3302,6 +3304,9 @@ def test_batch_load_nested_partial_failure_returns_none(monkeypatch, tmp_path):
     data = batch.load(path_dir=str(tmp_path), skip_download=True)
 
     assert isinstance(data, BatchData)
+    assert task_names[0] in data
+    assert task_names[1] not in data
+    assert data.get(task_names[1], "fallback") == "fallback"
     assert data["group"][1] is None
     assert f"Not loading '{task_names[1]}' as the task errored." in warning_messages
     assert error_messages == [
@@ -3309,7 +3314,7 @@ def test_batch_load_nested_partial_failure_returns_none(monkeypatch, tmp_path):
     ]
 
 
-def test_batch_load_flat_partial_failure_keeps_keyerror(monkeypatch, tmp_path):
+def test_batch_load_flat_partial_failure_raises_data_error(monkeypatch, tmp_path):
     warning_messages = []
     monkeypatch.setattr(
         "tidy3d.web.api.container.log.warning",
@@ -3334,8 +3339,16 @@ def test_batch_load_flat_partial_failure_keeps_keyerror(monkeypatch, tmp_path):
     data = batch.load(path_dir=str(tmp_path), skip_download=True)
 
     assert data.task_tree is None
-    with pytest.raises(KeyError):
+    assert "unavailable_tasks" not in data.model_dump()
+    assert "bad_task" not in data
+    assert "typo_task" not in data
+    assert data.get("bad_task") is None
+    assert data.get("bad_task", "fallback") == "fallback"
+    assert data.get("typo_task", "fallback") == "fallback"
+    with pytest.raises(DataError, match=r"bad_task.*no loaded result"):
         _ = data["bad_task"]
+    with pytest.raises(KeyError):
+        _ = data["typo_task"]
     assert "Not loading 'bad_task' as the task errored." in warning_messages
 
 
@@ -3460,6 +3473,8 @@ def test_batch_load_multistep_skips_error_states(monkeypatch, tmp_path, status):
     assert data.task_ids == {"ok_task": "ok_task_solve_id"}
     assert set(data.task_paths.keys()) == {"ok_task"}
     assert warning_messages == ["Not loading 'bad_task' as the task errored."]
+    with pytest.raises(DataError, match=r"bad_task.*no loaded result"):
+        _ = data["bad_task"]
 
 
 def test_batch_download_mixed_multistep_uses_cached_single_step_without_upload(
@@ -4160,6 +4175,8 @@ def test_batch_data_mapping_views_for_nested_sequence(monkeypatch):
 
     assert len(keys) == 2
     assert 0 in keys
+    assert task_names[0] in batch_data
+    assert task_names[1] in batch_data
     assert list(keys) == [0, 1]
     assert list(items) == [(0, "loaded_task_a"), (1, "loaded_task_b")]
     assert list(items) == [(0, "loaded_task_a"), (1, "loaded_task_b")]

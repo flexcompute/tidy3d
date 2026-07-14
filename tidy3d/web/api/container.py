@@ -2076,6 +2076,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
     _cache_enabled: bool | None = PrivateAttr(default=None)
     _cache_simulations: dict[TaskName, WorkflowOperationType] | None = PrivateAttr(default=None)
     _cacheable_tasks: dict[TaskName, bool] | None = PrivateAttr(default=None)
+    _unavailable_tasks: dict[TaskName, str] = PrivateAttr(default_factory=dict)
 
     @field_validator("task_tree", mode="before")
     @classmethod
@@ -2124,6 +2125,15 @@ class BatchData(Tidy3dBaseModel, Mapping):
         files stays under the configured threshold, the loaded object is cached in
         memory for subsequent accesses.
         """
+        if task_name not in self.task_paths or task_name not in self.task_ids:
+            reason = self._unavailable_tasks.get(task_name)
+            if reason is None:
+                raise KeyError(task_name)
+            raise DataError(
+                f"Task '{task_name}' has no loaded result available in this batch. "
+                f"Reason: {reason}."
+            )
+
         cache_enabled = self._should_cache_data()
 
         def _load() -> WorkflowDataType:
@@ -2194,6 +2204,31 @@ class BatchData(Tidy3dBaseModel, Mapping):
         if isinstance(key, str):
             return self.load_sim_data(key)
         raise KeyError(key)
+
+    def __contains__(self, key: object) -> bool:
+        """Return whether a result is directly available for ``key``."""
+        if isinstance(key, str) and key in self.task_paths:
+            return True
+        if isinstance(self.task_tree, dict):
+            return key in self.task_tree
+        if isinstance(self.task_tree, tuple):
+            return isinstance(key, int) and 0 <= key < len(self.task_tree)
+        return key in self.task_paths
+
+    def get(self, key: Hashable, default: Any = None) -> Any:
+        """Return ``default`` for unavailable or missing keys, like a mapping."""
+        is_nested_dict_key = isinstance(self.task_tree, dict) and key in self.task_tree
+        if (
+            isinstance(key, str)
+            and key not in self.task_paths
+            and key in self._unavailable_tasks
+            and not is_nested_dict_key
+        ):
+            return default
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     def __iter__(self) -> Iterator[Hashable]:
         """Iterate over top-level container keys, or flat task names for flat batches."""
@@ -3942,6 +3977,7 @@ class Batch(WebContainer):
         if self.jobs is None:
             raise DataError("Can't load batch results, hasn't been uploaded.")
 
+        unavailable_tasks = {}
         if any(job.is_multi_step for job in self.jobs.values()):
             task_paths = {}
             task_ids = {}
@@ -3959,6 +3995,7 @@ class Batch(WebContainer):
                     if status in ERROR_STATES:
                         if task_name not in self._tolerable_error_warning_tasks:
                             log.warning(f"Not loading '{task_name}' as the task errored.")
+                        unavailable_tasks[task_name] = f"task status is '{status}'"
                         continue
                     final_task_id = self._known_multi_step_result_task_id(
                         task_name, job, path_dir=path_dir, status=status
@@ -3974,11 +4011,15 @@ class Batch(WebContainer):
                                 f"Not loading '{task_name}' as the workflow diverged before "
                                 "the final step completed."
                             )
+                        unavailable_tasks[task_name] = (
+                            "workflow diverged before the final step completed"
+                        )
                         continue
                     if final_task_id is None:
                         log.warning(
                             f"Not loading '{task_name}' as the final workflow step hasn't completed."
                         )
+                        unavailable_tasks[task_name] = "final workflow step has not completed"
                         continue
                     task_paths[task_name] = str(
                         self._job_data_path(task_id=final_task_id, path_dir=path_dir)
@@ -4011,6 +4052,7 @@ class Batch(WebContainer):
                             log.warning(
                                 f"Not loading '{task_name}' as the task hasn't been uploaded."
                             )
+                            unavailable_tasks[task_name] = "task has not been uploaded"
                             continue
                         else:
                             status = job.status
@@ -4018,9 +4060,11 @@ class Batch(WebContainer):
                         self._terminal_status_by_task[task_name] = status
                     if status in ERROR_STATES:
                         log.warning(f"Not loading '{task_name}' as the task errored.")
+                        unavailable_tasks[task_name] = f"task status is '{status}'"
                         continue
                     if task_id is None and not loaded_from_cache_job:
                         log.warning(f"Not loading '{task_name}' as the task hasn't been uploaded.")
+                        unavailable_tasks[task_name] = "task has not been uploaded"
                         continue
                     task_id_str = (
                         self._cached_fallback_task_id(task_name, job)
@@ -4058,6 +4102,7 @@ class Batch(WebContainer):
                         status = "success"
                     elif task_id is None:
                         log.warning(f"Not loading '{task_name}' as the task hasn't been uploaded.")
+                        unavailable_tasks[task_name] = "task has not been uploaded"
                         continue
                     else:
                         status = job.status
@@ -4067,10 +4112,12 @@ class Batch(WebContainer):
 
                 if status in ERROR_STATES:
                     log.warning(f"Not loading '{task_name}' as the task errored.")
+                    unavailable_tasks[task_name] = f"task status is '{status}'"
                     continue
 
                 if task_id is None and not loaded_from_cache_job:
                     log.warning(f"Not loading '{task_name}' as the task hasn't been uploaded.")
+                    unavailable_tasks[task_name] = "task has not been uploaded"
                     continue
 
                 task_id_str = (
@@ -4102,6 +4149,7 @@ class Batch(WebContainer):
                 else None
             ),
         )
+        data._unavailable_tasks = unavailable_tasks
         cache_simulations = {}
         cacheable_tasks = {}
         for task_name, job in self.jobs.items():
