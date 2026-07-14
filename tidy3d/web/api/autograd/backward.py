@@ -188,7 +188,7 @@ def _get_freq_coords(field_data: td.FieldData) -> np.ndarray:
 
 def _estimate_dataset_bytes(dataset: td.PermittivityData | td.FieldData) -> int:
     """Estimate total byte size of field components in a dataset."""
-    return int(sum(np.asarray(comp.values).nbytes for comp in dataset.field_components.values()))
+    return sum(np.asarray(comp.values).nbytes for comp in dataset.field_components.values())
 
 
 def _require_freq_ascending(
@@ -444,8 +444,8 @@ def _warn_if_nonuniform_gaussian_source_background(
     """Warn if Gaussian source bounds contain non-uniform epsilon at sampled frequencies."""
     lower, upper = bounds_intersect
     source_box = td.Box(
-        center=tuple(0.5 * (float(lower[axis]) + float(upper[axis])) for axis in range(3)),
-        size=tuple(float(upper[axis]) - float(lower[axis]) for axis in range(3)),
+        center=tuple(0.5 * (lower[axis] + upper[axis]) for axis in range(3)),
+        size=tuple(upper[axis] - lower[axis] for axis in range(3)),
     )
     for freq in source_freqs:
         eps_volume = np.asarray(
@@ -540,8 +540,7 @@ def _process_source_gradients(
     bounds_intersect = bounds_intersection(sim_data_orig.simulation.bounds, bounds)
 
     center = tuple(
-        0.5 * (float(bounds_intersect[0][axis]) + float(bounds_intersect[1][axis]))
-        for axis in range(3)
+        0.5 * (bounds_intersect[0][axis] + bounds_intersect[1][axis]) for axis in range(3)
     )
     point_box = td.Box(center=center, size=(0.0, 0.0, 0.0))
     source_freqs = np.asarray(next(iter(e_adj.values())).coords["f"].data).reshape(-1)

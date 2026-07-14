@@ -222,7 +222,7 @@ def _search_best_scale(
     initial_candidate: np.ndarray,
 ) -> np.ndarray:
     """Search a scale family without assuming validity is monotone in the scale."""
-    best_scale = float(initial_scale)
+    best_scale = initial_scale
     best_candidate = np.asarray(initial_candidate, dtype=float)
     if max_trials <= 0:
         return best_candidate
@@ -241,7 +241,7 @@ def _van_der_corput(index: int) -> float:
     """Return the base-2 van der Corput sample in ``(0, 1)`` for a 1-based index."""
     scale = 0.0
     denominator = 2.0
-    value = int(index)
+    value = index
     while value > 0:
         value, remainder = divmod(value, 2)
         scale += remainder / denominator
@@ -251,7 +251,7 @@ def _van_der_corput(index: int) -> float:
 
 def _ring_is_simple(vertices: np.ndarray) -> bool:
     polygon = Polygon(np.asarray(vertices, dtype=float))
-    return bool(polygon.is_valid and polygon.is_simple and polygon.area > 0.0)
+    return polygon.is_valid and polygon.is_simple and polygon.area > 0.0
 
 
 def _edges_are_adjacent(edge_i: int, edge_j: int, num_vertices: int) -> bool:
@@ -277,9 +277,9 @@ def _apply_subset_scale(
     scale: float,
 ) -> np.ndarray:
     candidate = np.asarray(base_vertices + delta_vertices, dtype=float)
-    candidate[list(vertex_set)] = np.asarray(base_vertices[list(vertex_set)], dtype=float) + float(
-        scale
-    ) * np.asarray(delta_vertices[list(vertex_set)], dtype=float)
+    candidate[list(vertex_set)] = np.asarray(
+        base_vertices[list(vertex_set)], dtype=float
+    ) + scale * np.asarray(delta_vertices[list(vertex_set)], dtype=float)
     return candidate
 
 

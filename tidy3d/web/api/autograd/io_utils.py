@@ -9,7 +9,7 @@ from tidy3d.components.autograd.field_map import FieldMap, TracerKeys
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.cache import resolve_local_cache
-from tidy3d.web.core.s3utils import download_file, upload_file  # type: ignore
+from tidy3d.web.core.s3utils import download_file, upload_file
 
 from .constants import SIM_FIELDS_KEYS_FILE, SIM_FWD_FLUX_DATA_FILE, SIM_VJP_FILE
 

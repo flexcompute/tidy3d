@@ -1510,7 +1510,7 @@ class PolySlab(base.Planar):
         position: float,
         axis: int,
         exclude_on_vertices: bool = False,
-    ) -> tuple[NDArray, NDArray, NDArray]:
+    ) -> tuple[NDArray, NDArray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For unslanted polyslab).
@@ -1606,7 +1606,7 @@ class PolySlab(base.Planar):
 
     def _find_intersecting_ys_angle_slant(
         self, vertices: NDArray, position: float, axis: int
-    ) -> tuple[NDArray, NDArray, NDArray]:
+    ) -> tuple[NDArray, NDArray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For slanted polyslab)

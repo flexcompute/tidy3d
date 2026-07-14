@@ -806,7 +806,7 @@ class AbstractAutoGrid(GridSpec1d):
         wavelength: float,
         symmetry: Symmetry,
         snapping_points: tuple[CoordinateOptional, ...],
-    ) -> tuple[np.ndarray, np.ndarray, Box, list]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Compute interval coordinates and max dl list from mesher.parse_structures
 
         Parameters

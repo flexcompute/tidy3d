@@ -211,7 +211,7 @@ def _trial_basis_mode_inds(s_block: DataArray, sweep_index: int, f: np.ndarray) 
     """
     s_block = s_block.sel(f=f)
     if "sweep_index" in s_block.dims:
-        s_block = s_block.isel(sweep_index=int(sweep_index))
+        s_block = s_block.isel(sweep_index=sweep_index)
     diag_nan = np.isnan(np.diagonal(s_block.to_numpy(), axis1=-2, axis2=-1))
     return [
         int(mode_index_value)

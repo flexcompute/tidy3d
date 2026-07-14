@@ -340,7 +340,7 @@ class TimeMonitor(Monitor, ABC):
         # If monitor.stop is None, record until the end
         t_stop = self.stop
         if t_stop is None:
-            tind_end = int(tmesh.size)
+            tind_end = tmesh.size
             t_stop = tmesh[-1]
         else:
             tend = np.nonzero(tmesh <= t_stop)[0]
@@ -1009,7 +1009,7 @@ class PointCloudFieldMonitor(FreqMonitor):
     @property
     def num_points(self) -> int:
         """Number of points sampled by this monitor."""
-        return int(self.points.sizes["index"])
+        return self.points.sizes["index"]
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of point-cloud samples."""
@@ -1374,7 +1374,7 @@ class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
     @property
     def num_points(self) -> int:
         """Number of points sampled by this monitor."""
-        return int(self.points.sizes["index"])
+        return self.points.sizes["index"]
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of point-cloud samples."""
@@ -1703,7 +1703,7 @@ class ModeMonitor(AbstractModeMonitor):
         self, simulation: Simulation, monitor_index: int
     ) -> list[ParallelAdjointBasis]:
         """Return parallel adjoint bases for mode monitor amplitudes."""
-        freqs = [float(freq) for freq in self._stored_freqs]
+        freqs = list(self._stored_freqs)
         directions = ("+", "-")
         mode_indices = range(self.mode_spec.num_modes)
         return _build_mode_bases(

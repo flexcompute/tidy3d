@@ -134,8 +134,8 @@ def yee_primal_dual_widths_1d(
         return np.array([1.0]), np.array([1.0])
 
     valid_min, valid_max = valid_bounds if valid_bounds is not None else boundaries[[0, -1]]
-    integration_min = max(float(mnt_min), float(valid_min))
-    integration_max = min(float(mnt_max), float(valid_max))
+    integration_min = max(mnt_min, float(valid_min))
+    integration_max = min(mnt_max, float(valid_max))
 
     field_centers = (boundaries[:-1] + boundaries[1:]) / 2
     centers = np.concatenate([[integration_min], field_centers])

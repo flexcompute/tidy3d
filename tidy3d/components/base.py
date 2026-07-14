@@ -85,6 +85,7 @@ TYPE_TO_CLASS_MAP: dict[str, type[Tidy3dBaseModel]] = {}
 _LAZY_PROXY_UNHANDLED = object()
 
 _CacheReturn = TypeVar("_CacheReturn")
+Tidy3dBaseModelT = TypeVar("Tidy3dBaseModelT", bound="Tidy3dBaseModel")
 
 
 def cache(prop: Callable[[Any], _CacheReturn]) -> Callable[[Any], _CacheReturn]:
@@ -409,7 +410,7 @@ class Tidy3dBaseModel(BaseModel):
         # add docstring once pydantic is done constructing the class
         if _DOCSTRING_RAW_ATTR not in cls.__dict__:
             setattr(cls, _DOCSTRING_RAW_ATTR, cls.__doc__ or "")
-        cls.__doc__ = cls.generate_docstring()
+        cls.__doc__ = cls.generate_docstring()  # pyrefly: ignore[implicitly-defined-attribute]
 
     @classmethod
     def model_rebuild(
@@ -428,7 +429,7 @@ class Tidy3dBaseModel(BaseModel):
         )
         if _DOCSTRING_RAW_ATTR not in cls.__dict__:
             setattr(cls, _DOCSTRING_RAW_ATTR, cls.__doc__ or "")
-        cls.__doc__ = cls.generate_docstring()
+        cls.__doc__ = cls.generate_docstring()  # pyrefly: ignore[implicitly-defined-attribute]
         return rebuilt
 
     @model_validator(mode="wrap")
@@ -525,7 +526,7 @@ class Tidy3dBaseModel(BaseModel):
         if isinstance(value, (xr.DataArray, xr.Dataset)):
             # we choose to not hash data arrays as this would require a lot of careful handling of units, metadata.
             # technically this is incorrect, but should never lead to bugs in current implementation
-            return hash(str(value.__class__.__name__))
+            return hash(value.__class__.__name__)
         if isinstance(value, str):
             # this if-case is necessary because length-1 string would lead to infinite recursion in sequence case below
             return hash(value)
@@ -1007,7 +1008,7 @@ class Tidy3dBaseModel(BaseModel):
 
         return sorted(found_paths_set)
 
-    def find_submodels(self, target_type: Self) -> list[Self]:
+    def find_submodels(self, target_type: type[Tidy3dBaseModelT]) -> list[Tidy3dBaseModelT]:
         """
         Finds all unique nested instances of a specific Tidy3D model type within this model.
 
@@ -1048,7 +1049,7 @@ class Tidy3dBaseModel(BaseModel):
         >>> # unless they inherit directly from td.Medium and not just Tidy3dBaseModel or td.AbstractMedium.
         >>> # To find all medium types, one might search for td.AbstractMedium if that's a common base.
         """
-        found_models_dict = {}
+        found_models_dict: dict[Tidy3dBaseModelT, bool] = {}
 
         for sub_model_candidate, _ in Tidy3dBaseModel._core_model_traversal(self, ()):
             if isinstance(sub_model_candidate, target_type):
@@ -1371,12 +1372,12 @@ class Tidy3dBaseModel(BaseModel):
     @staticmethod
     def get_tuple_group_name(index: int) -> str:
         """Get the group name of a tuple element."""
-        return str(int(index))
+        return str(index)
 
     @staticmethod
     def get_tuple_index(key_name: str) -> int:
         """Get the index into the tuple based on its group name."""
-        return int(str(key_name))
+        return int(key_name)
 
     @classmethod
     def tuple_to_dict(cls: type[T], tuple_values: tuple) -> dict:
@@ -1595,8 +1596,8 @@ class Tidy3dBaseModel(BaseModel):
         with h5py.File(path, "w") as f_handle:
             json_str = export_model.model_dump_json()
             for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
-                ind_start = int(ind * MAX_STRING_LENGTH)
-                ind_stop = min(int(ind + 1) * MAX_STRING_LENGTH, len(json_str))
+                ind_start = ind * MAX_STRING_LENGTH
+                ind_stop = min((ind + 1) * MAX_STRING_LENGTH, len(json_str))
                 f_handle[json_string_key(ind)] = json_str[ind_start:ind_stop]
 
             def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
@@ -2028,7 +2029,7 @@ class Tidy3dBaseModel(BaseModel):
                 )
             elif "=" in str(default_val) if default_val is not None else False:
                 default_val = _clean_default_repr(
-                    str(f"{default_val.__class__.__name__}({default_val})")
+                    f"{default_val.__class__.__name__}({default_val})"
                 )
             elif factory_name and default_val is not None and not isinstance(default_val, str):
                 # Collapse verbose defaults (multi-line / very long) produced by named factories
@@ -2220,7 +2221,7 @@ def _make_lazy_proxy(
         if on_load is not None:
             on_load(proxy)
 
-    class _LazyProxy(target_cls):  # type: ignore[misc]
+    class _LazyProxy(target_cls):
         def __init__(
             self,
             fname: PathLike,

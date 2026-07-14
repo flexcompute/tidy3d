@@ -203,12 +203,12 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
         if isinstance(self.eps_real, (list, tuple, np.ndarray)):
             eps_real_avg = float(np.mean(self.eps_real))
         else:
-            eps_real_avg = float(self.eps_real)
+            eps_real_avg = self.eps_real
 
         if isinstance(self.loss_tangent, (list, tuple, np.ndarray)):
             loss_tangent_avg = float(np.mean(self.loss_tangent))
         else:
-            loss_tangent_avg = float(self.loss_tangent)
+            loss_tangent_avg = self.loss_tangent
 
         log.warning(
             f"Requested frequency_range {frequency_range} is outside the stored "

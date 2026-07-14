@@ -42,7 +42,7 @@ _OPTIONAL_CORE_SECTION_NAMES = {"web", "local_cache", "batch_data_cache"}
 class ConfigLoader:
     """Handle reading and writing configuration files."""
 
-    def __init__(self, config_dir: Path | None = None):
+    def __init__(self, config_dir: Path | None = None) -> None:
         self.config_dir = config_dir or resolve_config_directory()
         self.config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._docs: dict[Path, tomlkit.TOMLDocument] = {}

@@ -58,7 +58,9 @@ from .sweep import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from contextlib import AbstractContextManager
     from types import TracebackType
+    from typing import Protocol
 
     from pydantic import NonNegativeInt, PositiveInt
 
@@ -96,6 +98,12 @@ if TYPE_CHECKING:
         EMEStageInterfaceSMatrix,
     )
     from .grid import EMEGrid, EMEGridSpec
+
+    class _ProgressLike(Protocol):
+        def add_task(self, *args: Any, **kwargs: Any) -> object | None: ...
+
+        def update(self, task_id: object | None, *args: Any, **kwargs: Any) -> None: ...
+
 
 # maximum numbers of simulation parameters
 WARN_MONITOR_DATA_SIZE_GB = 10
@@ -171,8 +179,8 @@ class _ProgressContext:
         self._show_progress = show_progress
         self._phases = [(name, total) for name, total in phases if total > 0]
         self._task_ids: dict[str, object | None] = {}
-        self._cm = None
-        self._progress = None
+        self._cm: AbstractContextManager[_ProgressLike] | None = None
+        self._progress: _ProgressLike | None = None
 
     def __enter__(self) -> _ProgressContext:
         # Skip get_logging_console() on the disabled path: that helper auto-installs
@@ -182,9 +190,10 @@ class _ProgressContext:
             self._cm = Progress(console=get_logging_console(), show_progress=True)
         else:
             self._cm = NoOpProgress()
-        self._progress = self._cm.__enter__()
+        progress = self._cm.__enter__()
+        self._progress = progress
         for name, total in self._phases:
-            self._task_ids[name] = self._progress.add_task(description=name, total=total)
+            self._task_ids[name] = progress.add_task(description=name, total=total)
         return self
 
     def __exit__(
@@ -193,10 +202,11 @@ class _ProgressContext:
         exc_val: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        self._cm.__exit__(exc_type, exc_val, tb)
+        if self._cm is not None:
+            self._cm.__exit__(exc_type, exc_val, tb)
 
     def tick(self, phase: str, n: int = 1) -> None:
-        if phase in self._task_ids:
+        if self._progress is not None and phase in self._task_ids:
             self._progress.update(self._task_ids[phase], advance=n)
 
 
@@ -1221,7 +1231,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         real_rotations = cell_center_rotations_from_lengths(
             real_lengths, eme_grid.mode_specs, normal_axis=self.axis
         )
-        virtual_cell_indices = tuple(int(ind) for ind in eme_grid_spec.virtual_cell_indices)
+        virtual_cell_indices = tuple(ind for ind in eme_grid_spec.virtual_cell_indices)
         virtual_lengths = np.asarray(
             [real_lengths[ind] for ind in virtual_cell_indices], dtype=float
         )
@@ -2361,9 +2371,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         )
 
         def _freqs_match(actual: np.ndarray, expected: np.ndarray) -> bool:
-            return actual.shape == expected.shape and bool(
-                np.allclose(actual, expected, rtol=1e-10)
-            )
+            return actual.shape == expected.shape and np.allclose(actual, expected, rtol=1e-10)
 
         data_interp_spec = getattr(modes.monitor.mode_spec, "interp_spec", None)
         cell_interp_spec = cell_mode_spec.interp_spec

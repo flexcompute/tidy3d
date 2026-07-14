@@ -406,7 +406,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         """Position tolerance from scale-based floating-point spacing."""
         span = float(np.max(np.ptp(points, axis=0)))
         scale = max(span, max_extent, ROUND_GEOMETRY_TOL_SCALE_FLOOR)
-        return float(increment_float(scale, 1) - scale)
+        return increment_float(scale, 1) - scale
 
     @staticmethod
     def _edge_directions(points: ArrayFloat2D) -> tuple[ArrayFloat2D, ArrayFloat1D]:

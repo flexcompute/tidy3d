@@ -42,7 +42,7 @@ class WorkflowStepJobAdapter:
 
     is_multi_step = False
     load_if_cached = False
-    task_id_cached = None
+    task_id_cached: None = None
 
     def __init__(
         self,

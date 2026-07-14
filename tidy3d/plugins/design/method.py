@@ -7,7 +7,6 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Annotated, Any, Literal, overload
 
 import numpy as np
-import scipy.stats.qmc as qmc
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -781,7 +780,9 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="The weight or inertia of particles in the optimization.",
     )
 
-    ftol: Annotated[float, Field(ge=0, le=1)] | Literal[-inf] = Field(
+    ftol: (
+        Annotated[float, Field(ge=0, le=1)] | Literal[-inf]  # pyrefly: ignore[invalid-literal]
+    ) = Field(
         default=-inf,
         title="Relative Error for Convergence",
         description="Relative error in ``objective_func(best_solution)`` acceptable for convergence. See the `PySwarms docs <https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html>`_ for details. Off by default.",
@@ -1000,6 +1001,7 @@ class MethodMonteCarlo(AbstractMethodRandom):
 
     def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class."""
+        from scipy.stats import qmc
 
         d = len(parameters)
         return qmc.LatinHypercube(d=d, seed=self.seed)

@@ -81,7 +81,7 @@ class PolySlabSet:
             solid_frame_boundary_vertex_mask=tuple(contour_data.solid_frame_boundary_vertex_mask),
             hole_frame_boundary_vertex_mask=tuple(contour_data.hole_frame_boundary_vertex_mask),
             frame_bounds=contour_data.frame_bounds,
-            in_plane_step=float(contour_data.in_plane_step),
+            in_plane_step=contour_data.in_plane_step,
         )
         return polyslab_set.smooth(smooth_sigma)
 
@@ -278,7 +278,7 @@ class PolySlabSet:
         """Split a flat vertex vector into per-ring ``(N_i, 2)`` arrays."""
         flat = np.array(flat_vertices)
         counts = self.ring_vertex_counts
-        expected = int(2 * sum(counts))
+        expected = 2 * sum(counts)
         if int(flat.shape[0]) != expected:
             raise ValueError(
                 f"Expected flat vertex vector of size {expected}, got {int(flat.shape[0])}."
@@ -305,7 +305,7 @@ class PolySlabSet:
 
     def smooth(self, sigma: float) -> PolySlabSet:
         """Return a copy with all ring vertices Gaussian-smoothed."""
-        sigma_val = float(sigma)
+        sigma_val = sigma
         if sigma_val == 0:
             return self
         return PolySlabSet(

@@ -3864,7 +3864,7 @@ class Simulation(AbstractYeeGridSimulation):
             if (
                 isinstance(source, TFSF)
                 and isinstance(source.angular_spec, FixedAngleSpec)
-                and float(source.angle_theta) == 0.0
+                and source.angle_theta == 0.0
             ):
                 log.warning(
                     f"TFSF source at index '{src_idx}' uses 'FixedAngleSpec' with "
@@ -3886,13 +3886,13 @@ class Simulation(AbstractYeeGridSimulation):
         for src_idx, source in enumerate(self.sources):
             if not (isinstance(source, TFSF) and isinstance(source.angular_spec, FixedAngleSpec)):
                 continue
-            if is_close_to_glancing_angle(float(source.angle_theta), GLANCING_CUTOFF):
+            if is_close_to_glancing_angle(source.angle_theta, GLANCING_CUTOFF):
                 cutoff_deg = float(np.rad2deg(GLANCING_CUTOFF))
                 self._raise_validation_error_at_loc(
                     "Fixed-angle TFSF requires the source's propagation angle to be more "
                     f"than ~{cutoff_deg:.1f}° away from glancing (i.e. |angle_theta| ≤ "
                     f"π/2 − {GLANCING_CUTOFF:g} rad); got "
-                    f"angle_theta = {float(source.angle_theta):.4f} rad.",
+                    f"angle_theta = {source.angle_theta:.4f} rad.",
                     "sources",
                     src_idx,
                 )
@@ -6310,16 +6310,16 @@ class Simulation(AbstractYeeGridSimulation):
     ) -> int:
         """Return conservative thin-lens setup work units."""
         return (
-            int(plane_cells)
+            plane_cells
             * thin_lens_pupil_grid_samples(num_plane_waves)
-            * int(num_freqs)
-            * int(num_evaluations)
+            * num_freqs
+            * num_evaluations
         )
 
     @staticmethod
     def _thin_lens_setup_work_limit(*, num_evaluations: int) -> int:
         """Return path-specific thin-lens setup work cap."""
-        return int(num_evaluations) * MAX_THIN_LENS_SETUP_WORK_UNITS
+        return num_evaluations * MAX_THIN_LENS_SETUP_WORK_UNITS
 
     @staticmethod
     def _thin_lens_monitor_setup_evaluations(monitor: ThinLensOverlapMonitor) -> int:
@@ -7428,7 +7428,7 @@ class Simulation(AbstractYeeGridSimulation):
             )
             gds_precision = Geometry._validate_gds_precision(
                 polygons=polygons,
-                gds_precision=float(gds_precision),
+                gds_precision=gds_precision,
                 context="Simulation.to_gds_file()",
             )
             library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)

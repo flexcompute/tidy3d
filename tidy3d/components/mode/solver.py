@@ -875,7 +875,7 @@ class EigSolver(Tidy3dBaseModel):
                 sp.eye(mat.shape[0], dtype=mat.dtype, format="csr") if M is None else M
             )
             lu = spl.splu(shifted_mat.tocsc(), permc_spec="MMD_AT_PLUS_A")
-            op_inv = spl.LinearOperator(mat.shape, matvec=lu.solve, dtype=mat.dtype)
+            op_inv = spl.LinearOperator(shape=mat.shape, matvec=lu.solve, dtype=mat.dtype)
             values, vectors = spl.eigs(
                 mat,
                 k=num_modes,

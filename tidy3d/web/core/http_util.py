@@ -272,7 +272,7 @@ class HttpSessionManager:
     def __init__(self, session: requests.Session) -> None:
         """Initialize the session."""
         self.session = session
-        self._mounted_ssl_version = None
+        self._mounted_ssl_version: str | None = None
         self._ensure_tls_adapter(config.web.ssl_version)
         self.session.verify = config.web.ssl_verify
 

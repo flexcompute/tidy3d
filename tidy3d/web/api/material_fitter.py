@@ -101,8 +101,7 @@ class MaterialFitterTask(Submittable):
                 headers={"Content-Type": "application/octet-stream"},
                 timeout=60,
             )
-            if resp.raise_for_status():
-                raise resp.raise_for_status()
+            resp.raise_for_status()
             fitter_req = _FitterRequest(
                 fileName=os.path.basename(temp.name),
                 jsonInput=options.model_dump_json(exclude_none=True),

@@ -197,7 +197,7 @@ class GaussianFilter(AbstractFilter):
         if not any(sigma):
             return array
 
-        kwargs: dict[str, Any] = {"mode": mode, "truncate": float(self.truncate)}
+        kwargs: dict[str, Any] = {"mode": mode, "truncate": self.truncate}
         if mode == "constant":
             kwargs["cval"] = 0.0
 

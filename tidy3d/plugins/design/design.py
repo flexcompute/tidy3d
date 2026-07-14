@@ -629,7 +629,7 @@ class DesignSpace(Tidy3dBaseModel):
 
         def _load_post_input(top_key: str, top_value: Any) -> Any:
             """Restore the original top-level fn_pre output shape for fn_post."""
-            post_input = _load_value(top_value, str(top_key))
+            post_input = _load_value(top_value, top_key)
             if was_list:
                 return list(post_input.values())
             return post_input
@@ -666,7 +666,7 @@ class DesignSpace(Tidy3dBaseModel):
             WorkflowOperationType | list[WorkflowOperationType] | dict[str, WorkflowOperationType],
         ],
         fn_post: Callable[
-            WorkflowDataType | list[WorkflowDataType] | dict[str, WorkflowDataType], Any
+            [WorkflowDataType | list[WorkflowDataType] | dict[str, WorkflowDataType]], Any
         ],
         path_dir: str = ".",
         priority: int | None = None,

@@ -69,13 +69,13 @@ dev = [
   "jupyter>=1.1.1,<2.0.0",
   "myst-parser>=4.0.1,<5.0.0",
   "memory_profiler>=0.61.0,<0.62.0",
-  "mypy==2.1.0",
   "nbconvert>=7.17.0,<8.0.0",
   "nbdime>=4.0.2,<5.0.0",
   "nbsphinx>=0.8.7,<0.10.0",
   "networkx>=2.6.3,<4.0.0",
   "psutil>=7.2.1,<8.0.0",
   "pre-commit>=4,<5",
+  "pyrefly==1.1.1",
   "pydata-sphinx-theme>=0.13.3,<0.18.0",
   "pygad==3.6.0",
   "pylint>=4.0.4,<5.0.0",
@@ -350,28 +350,25 @@ filterwarnings = "ignore::DeprecationWarning"
 testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
 
-[tool.mypy]
-python_version = "3.10"
-files = [
-  "tidy3d",
-]
-ignore_missing_imports = true
-follow_imports = "skip"
-disallow_untyped_defs = true
-disable_error_code = [
-  "arg-type",
-  "assignment",
-  "attr-defined",
-  "call-arg",
-  "call-overload",
-  "import-untyped",
-  "index",
-  "misc",
-  "operator",
-  "override",
-  "return-value",
-  "union-attr",
-  "valid-type",
-  "var-annotated",
-]
-enable_error_code = ["no-untyped-def"]
+[tool.pyrefly]
+project-includes = ["tidy3d"]
+python-version = "3.10.0"
+preset = "off"
+ignore-missing-imports = ["*"]
+
+[tool.pyrefly.errors]
+implicit-any-parameter = "error"
+unannotated-return = "error"
+deprecated = "error"
+redundant-cast = "error"
+redundant-condition = "error"
+invalid-literal = "error"
+unnecessary-type-conversion = "error"
+bad-raise = "error"
+bad-keyword-argument = "error"
+invalid-syntax = "error"
+implicit-any-attribute = "error"
+invalid-argument = "error"
+implicitly-defined-attribute = "error"
+bad-override-param-name = "error"
+not-required-key-access = "error"

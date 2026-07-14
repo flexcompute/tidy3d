@@ -33,10 +33,9 @@ if TYPE_CHECKING:
 
 def _ulp(v: float) -> float:
     """Distance from v to the next representable float (1 ULP at v)."""
-    vf = float(v)
-    if not np.isfinite(vf) or vf == 0.0:
+    if not np.isfinite(v) or v == 0.0:
         return 5e-324  # smallest positive float
-    return abs(np.nextafter(vf, np.inf) - vf)
+    return abs(np.nextafter(v, np.inf) - v)
 
 
 def _seam_axis(
@@ -130,7 +129,7 @@ def _near_bound(coord: float, bound: float) -> bool:
     """Return true when ``coord`` is within the 1-ULP shell of ``bound``."""
     if not np.isfinite(bound):
         return False
-    return abs(float(coord) - float(bound)) <= max(_ulp(float(coord)), _ulp(float(bound)))
+    return abs(coord - bound) <= max(_ulp(coord), _ulp(bound))
 
 
 def _axis_side_options(coord: float, lo: float, hi: float) -> set[int]:
@@ -215,7 +214,7 @@ def _box_contrib(
     edge sample for Custom) rather than 0. Interior nodes are unaffected by the clamp.
     """
     if isinstance(box, ConstantDoping):
-        return np.full(len(x), float(box.concentration))
+        return np.full(len(x), box.concentration)
 
     xc = np.clip(x, lo[0], hi[0])
     yc = np.clip(y, lo[1], hi[1])

@@ -202,7 +202,7 @@ class ParameterAny(Parameter):
 
     def sample_random(self, num_samples: int) -> list[Any]:
         """Sample this design variable randomly 'num_samples' times."""
-        return np.random.choice(self.allowed_values, size=int(num_samples)).tolist()
+        return np.random.choice(self.allowed_values, size=num_samples).tolist()
 
     def _sample_grid(self) -> list[Any]:
         """Sample this design variable uniformly, ie just take all allowed values."""

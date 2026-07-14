@@ -119,9 +119,9 @@ def sim_bloch_vecs(
     plus_x = sim.boundary_spec[n_x].plus
     plus_y = sim.boundary_spec[n_y].plus
     if isinstance(plus_x, BlochBoundary):
-        bloch_x_0 = float(np.real(plus_x.bloch_vec))
+        bloch_x_0 = np.real(plus_x.bloch_vec)
     if isinstance(plus_y, BlochBoundary):
-        bloch_y_0 = float(np.real(plus_y.bloch_vec))
+        bloch_y_0 = np.real(plus_y.bloch_vec)
     return bloch_x_0, bloch_y_0
 
 
@@ -213,7 +213,7 @@ def diffraction_order_grid_size(
     """Number of diffraction order combinations in the raw rectangular grid."""
 
     orders_x, orders_y, _, _ = diffraction_order_grid_axes(sim, monitor, medium)
-    return int(orders_x.size * orders_y.size)
+    return orders_x.size * orders_y.size
 
 
 def diffraction_monitor_storage_size(

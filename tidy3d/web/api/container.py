@@ -2460,7 +2460,7 @@ class Batch(WebContainer):
     ) -> dict[TaskName, Job] | None:
         """Return jobs when they form one supported uniform workflow batch."""
         uniform_jobs = self._workflow_batch_runner().uniform_jobs(jobs)
-        return cast(dict[TaskName, Job] | None, uniform_jobs)
+        return uniform_jobs
 
     def _run_uniform_multi_step_batch(
         self,
@@ -2632,7 +2632,7 @@ class Batch(WebContainer):
                     task_id_for_path = (
                         self._cached_fallback_task_id(task_name, job)
                         if task_id is None
-                        else str(task_id)
+                        else task_id
                     )
                     if task_id is not None:
                         self._terminal_task_id_by_task[task_name] = task_id
@@ -2811,7 +2811,7 @@ class Batch(WebContainer):
         self = self.updated_copy(
             task_tree=self._simulation_task_tree if self._has_nested_simulation_container else None
         )
-        super(Batch, self).to_file(fname=fname)  # noqa: UP008
+        super(Batch, self).to_file(fname=fname)  # noqa: UP008  # pyrefly: ignore[invalid-argument]
 
     @classmethod
     def from_file(
@@ -2901,7 +2901,7 @@ class Batch(WebContainer):
         cache_operation, _ = Batch._cache_operation_for_job(job)
         operation = cache_operation if cache_operation is not None else job.simulation
         simulation_hash = operation._hash_self()
-        task_name_hash = hashlib.md5(str(task_name).encode("utf-8")).hexdigest()
+        task_name_hash = hashlib.md5(task_name.encode("utf-8")).hexdigest()
         return f"cached_{simulation_hash}_{task_name_hash}"
 
     @staticmethod
@@ -2997,7 +2997,7 @@ class Batch(WebContainer):
             if isinstance(cached_task_ids, Mapping):
                 final_task_id = cached_task_ids.get(final_step_name)
         if final_task_id is not None:
-            return str(final_task_id)
+            return final_task_id
         return None
 
     @staticmethod
@@ -3041,7 +3041,7 @@ class Batch(WebContainer):
         if final_task_id is not None and self._multi_step_final_step_is_complete(
             job, status=status
         ):
-            return str(final_task_id)
+            return final_task_id
 
         stash_paths = getattr(job, "_step_stash_paths", {})
         if isinstance(stash_paths, Mapping):
@@ -3060,7 +3060,7 @@ class Batch(WebContainer):
     @staticmethod
     def _multi_step_temp_path(task_name: TaskName, path_dir: PathLike) -> Path:
         """Temporary path used while materializing a multi-step batch artifact."""
-        task_name_hash = hashlib.md5(str(task_name).encode("utf-8")).hexdigest()
+        task_name_hash = hashlib.md5(task_name.encode("utf-8")).hexdigest()
         return Path(path_dir) / f".multi_step_{task_name_hash}_{uuid.uuid4().hex}.tmp.hdf5"
 
     @staticmethod
@@ -3345,7 +3345,7 @@ class Batch(WebContainer):
         download_executor: ThreadPoolExecutor | None = None
 
         if download_on_success:
-            self._check_path_dir(path_dir=path_dir)
+            self._check_path_dir(path=path_dir)
             download_executor = ThreadPoolExecutor(max_workers=self.num_workers)
 
         def _remember_terminal_status(task_name: TaskName, job: Job, status: str) -> None:
@@ -3665,7 +3665,7 @@ class Batch(WebContainer):
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
-        self._check_path_dir(path_dir=path_dir)
+        self._check_path_dir(path=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
         if any(job.is_multi_step for job in self.jobs.values()):
@@ -3692,7 +3692,7 @@ class Batch(WebContainer):
                                 continue
                             task_id_for_path = self._cached_fallback_task_id(task_name, job)
                         job_path = self._job_data_path(
-                            task_id=str(task_id_for_path),
+                            task_id=task_id_for_path,
                             path_dir=path_dir,
                         )
                     if os.path.exists(job_path):
@@ -3778,7 +3778,7 @@ class Batch(WebContainer):
                     task_id_for_path = (
                         self._cached_fallback_task_id(task_name, job)
                         if task_id is None
-                        else str(task_id)
+                        else task_id
                     )
                     if task_id is not None:
                         self._terminal_task_id_by_task[task_name] = task_id
@@ -3937,7 +3937,7 @@ class Batch(WebContainer):
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
-        self._check_path_dir(path_dir=path_dir)
+        self._check_path_dir(path=path_dir)
 
         if self.jobs is None:
             raise DataError("Can't load batch results, hasn't been uploaded.")
@@ -4025,14 +4025,14 @@ class Batch(WebContainer):
                     task_id_str = (
                         self._cached_fallback_task_id(task_name, job)
                         if task_id is None
-                        else str(task_id)
+                        else task_id
                     )
                     if task_id is not None:
                         self._terminal_task_id_by_task[task_name] = task_id
                     task_paths[task_name] = str(
                         self._job_data_path(task_id=task_id_str, path_dir=path_dir)
                     )
-                    task_ids[task_name] = None if task_id is None else str(task_id)
+                    task_ids[task_name] = None if task_id is None else task_id
                     loaded_from_cache[task_name] = loaded_from_cache_job
         else:
             task_paths = {}
@@ -4074,16 +4074,14 @@ class Batch(WebContainer):
                     continue
 
                 task_id_str = (
-                    self._cached_fallback_task_id(task_name, job)
-                    if task_id is None
-                    else str(task_id)
+                    self._cached_fallback_task_id(task_name, job) if task_id is None else task_id
                 )
                 if task_id is not None:
                     self._terminal_task_id_by_task[task_name] = task_id
                 task_paths[task_name] = str(
                     self._job_data_path(task_id=task_id_str, path_dir=path_dir)
                 )
-                task_ids[task_name] = None if task_id is None else str(task_id)
+                task_ids[task_name] = None if task_id is None else task_id
                 loaded_from_cache[task_name] = loaded_from_cache_job
 
         if not skip_download:
@@ -4282,14 +4280,14 @@ class Batch(WebContainer):
         return self._estimate_cost_for_jobs(self.jobs, verbose=verbose)
 
     @staticmethod
-    def _check_path_dir(path_dir: PathLike) -> None:
-        """Make sure ``path_dir`` exists and create it if not.
+    def _check_path_dir(path: PathLike) -> None:
+        """Make sure ``path`` exists and create it if not.
 
         Parameters
         ----------
-        path_dir : PathLike
+        path : PathLike
             Directory path where files will be saved.
         """
-        path_dir = Path(path_dir)
+        path_dir = Path(path)
         if path_dir != Path(".") and not path_dir.exists():
             path_dir.mkdir(parents=True, exist_ok=True)

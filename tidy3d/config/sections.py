@@ -596,8 +596,8 @@ class WebConfig(ConfigSection):
     def build_api_url(self, path: str) -> str:
         """Join the configured API endpoint with a request path."""
 
-        base = str(self.api_endpoint or "")
-        path_str = str(path or "")
+        base = self.api_endpoint or ""
+        path_str = path or ""
         if not base:
             return path_str.lstrip("/")
         if not path_str:

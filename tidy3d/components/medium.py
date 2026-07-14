@@ -4251,8 +4251,8 @@ class Sellmeier(DispersiveMedium):
             return {}
 
         # pack parameters into flat vector [B..., C...]
-        B0 = np.array([float(b) for (b, _c) in self.coeffs])
-        C0 = np.array([float(c) for (_b, c) in self.coeffs])
+        B0 = np.array([b for (b, _c) in self.coeffs])
+        C0 = np.array([c for (_b, c) in self.coeffs])
         theta0 = np.concatenate([B0, C0])
 
         def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
@@ -4352,7 +4352,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     @field_validator("coeffs")
     @classmethod
     def _correct_shape_and_sign(
-        cls, val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]
+        cls,
+        val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...],
     ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]:
         """every term in coeffs must have the same shape, and B>=0 and C>0."""
         if len(val) == 0:
@@ -4759,10 +4760,10 @@ class Lorentz(DispersiveMedium):
             return {}
 
         # pack into flat [eps_inf, de..., f0..., delta...]
-        eps_inf0 = float(self.eps_inf)
-        de0 = np.array([float(de) for (de, _f, _d) in self.coeffs]) if N else np.array([])
-        f0 = np.array([float(fi) for (_de, fi, _d) in self.coeffs]) if N else np.array([])
-        d0 = np.array([float(dd) for (_de, _f, dd) in self.coeffs]) if N else np.array([])
+        eps_inf0 = self.eps_inf
+        de0 = np.array([de for (de, _f, _d) in self.coeffs]) if N else np.array([])
+        f0 = np.array([fi for (_de, fi, _d) in self.coeffs]) if N else np.array([])
+        d0 = np.array([dd for (_de, _f, dd) in self.coeffs]) if N else np.array([])
         theta0 = np.concatenate([np.array([eps_inf0]), de0, f0, d0])
 
         def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
@@ -4926,8 +4927,9 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     @field_validator("coeffs")
     @classmethod
     def _coeffs_delta_all_smaller_or_larger_than_fi(
-        cls, val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]
-    ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]:
+        cls,
+        val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType], ...],
+    ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType], ...]:
         """We restrict either all f**2>delta**2 or all f**2<delta**2 for now."""
         for _, f, delta in val:
             f2 = f**2
@@ -5179,9 +5181,9 @@ class Drude(DispersiveMedium):
             return {}
 
         # pack into flat [eps_inf, fp..., delta...]
-        eps_inf0 = float(self.eps_inf)
-        fp0 = np.array([float(fp) for (fp, _d) in self.coeffs]) if N else np.array([])
-        d0 = np.array([float(dd) for (_fp, dd) in self.coeffs]) if N else np.array([])
+        eps_inf0 = self.eps_inf
+        fp0 = np.array([fp for (fp, _d) in self.coeffs]) if N else np.array([])
+        d0 = np.array([dd for (_fp, dd) in self.coeffs]) if N else np.array([])
         theta0 = np.concatenate([np.array([eps_inf0]), fp0, d0])
 
         def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
@@ -5550,9 +5552,9 @@ class Debye(DispersiveMedium):
             return {}
 
         # pack into flat [eps_inf, de..., tau...]
-        eps_inf0 = float(self.eps_inf)
-        de0 = np.array([float(de) for (de, _t) in self.coeffs]) if N else np.array([])
-        tau0 = np.array([float(t) for (_de, t) in self.coeffs]) if N else np.array([])
+        eps_inf0 = self.eps_inf
+        de0 = np.array([de for (de, _t) in self.coeffs]) if N else np.array([])
+        tau0 = np.array([t for (_de, t) in self.coeffs]) if N else np.array([])
         theta0 = np.concatenate([np.array([eps_inf0]), de0, tau0])
 
         def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
@@ -6069,7 +6071,7 @@ class LossyMetalMedium(Medium):
         "useful in some cases.",
     )
 
-    permittivity: Literal[1.0] = Field(
+    permittivity: Literal[1.0] = Field(  # pyrefly: ignore[invalid-literal]
         1.0,
         title="Permittivity",
         description="Relative permittivity.",

@@ -5,10 +5,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import nturl2path
 import os
 import re
 from collections.abc import Iterable
-from nturl2path import url2pathname as windows_url2pathname
 from pathlib import Path
 from typing import Any, TypedDict
 from urllib.parse import unquote, urlparse
@@ -102,7 +102,7 @@ def _local_file_path_text(file: str, *, os_name: str | None = None) -> str | Non
     netloc = "" if parsed.netloc in {"", "localhost"} else parsed.netloc
     if platform == "nt":
         url_path = f"//{netloc}{parsed.path}" if netloc else parsed.path
-        return windows_url2pathname(url_path)
+        return nturl2path.url2pathname(url_path)  # pyrefly: ignore[deprecated]
     path = unquote(parsed.path)
     if netloc:
         return f"//{netloc}{path}"

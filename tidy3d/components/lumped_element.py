@@ -1146,7 +1146,7 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
         """Require freq_range to have 0 < f_min < f_max when set (fitting requires ω > 0)."""
         if v is None:
             return v
-        f_min, f_max = float(v[0]), float(v[1])
+        f_min, f_max = v[0], v[1]
         if f_min <= 0:
             raise ValueError(
                 "freq_range must have a positive minimum frequency (fitting requires ω > 0). "
@@ -1196,9 +1196,9 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
         """Return (f_min, f_max) for fitting. Use frequency_range if provided, else
         self.freq_range; raise if none set."""
         if frequency_range is not None:
-            return (float(frequency_range[0]), float(frequency_range[1]))
+            return (frequency_range[0], frequency_range[1])
         if self.freq_range is not None:
-            return (float(self.freq_range[0]), float(self.freq_range[1]))
+            return (self.freq_range[0], self.freq_range[1])
         raise ValueError(
             f"{type(self).__name__} has no freq_range set. Either provide freq_range at "
             "construction, pass frequency_range when calling _to_medium, or use with "
@@ -1358,7 +1358,7 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
             advanced_param=advanced_param,
         )
 
-        rms_val = float(rms)
+        rms_val = rms
         if rms_val > self.fit_tolerance:
             log.warning(
                 "%s pole-residue fit RMS error (%g) exceeded tolerance (%g); "
@@ -1371,7 +1371,7 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
 
         # Build PoleResidue from fitter output
         pole_pairs = tuple((complex(a), complex(c)) for a, c in zip(poles, residues))
-        medium = PoleResidue(eps_inf=float(eps_inf), poles=pole_pairs)
+        medium = PoleResidue(eps_inf=eps_inf, poles=pole_pairs)
 
         return medium, rms_val
 

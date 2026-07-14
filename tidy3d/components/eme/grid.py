@@ -81,7 +81,7 @@ class EMEModeSpec(ModeSpec):
         "not be ``None``) to ensure consistent mode ordering across frequencies.",
     )
 
-    angle_theta: Literal[0.0] = Field(
+    angle_theta: Literal[0.0] = Field(  # pyrefly: ignore[invalid-literal]
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis. Not currently "
@@ -90,7 +90,7 @@ class EMEModeSpec(ModeSpec):
         json_schema_extra={"units": RADIAN},
     )
 
-    angle_phi: Literal[0.0] = Field(
+    angle_phi: Literal[0.0] = Field(  # pyrefly: ignore[invalid-literal]
         0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "

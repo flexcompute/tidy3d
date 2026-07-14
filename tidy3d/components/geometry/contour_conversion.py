@@ -46,7 +46,7 @@ def validate_optional_finite_float(value: float | None, *, name: str) -> float |
     """Validate an optional finite scalar value."""
     if value is None:
         return None
-    value_f = float(value)
+    value_f = value
     if not np.isfinite(value_f):
         raise ValueError(f"'{name}' must be finite.")
     return value_f
@@ -54,7 +54,7 @@ def validate_optional_finite_float(value: float | None, *, name: str) -> float |
 
 def validate_sigma(value: float, *, name: str = "sigma") -> float:
     """Validate a smoothing sigma."""
-    value_f = float(value)
+    value_f = value
     if not np.isfinite(value_f):
         raise ValueError(f"'{name}' must be finite.")
     if value_f < 0:
@@ -137,9 +137,9 @@ def _resolve_boundary_step(
                 "Could not infer a default 'boundary_step' from in-plane grid coordinates. "
                 "Provide 'boundary_step' explicitly."
             )
-        boundary_step_use = float(min(step_candidates))
+        boundary_step_use = min(step_candidates)
     else:
-        boundary_step_use = float(boundary_step)
+        boundary_step_use = boundary_step
     return boundary_step_use
 
 
@@ -201,9 +201,7 @@ def ordered_ring_refs_by_area(
     for ring_type, polyslabs in (("solid", solid_polyslabs), ("hole", hole_polyslabs)):
         for idx, polyslab in enumerate(polyslabs):
             polygon = ShapelyPolygon(npo.asarray(get_static(polyslab.vertices), dtype=float))
-            ring_records.append(
-                (float(polygon.area), 0 if ring_type == "solid" else 1, ring_type, idx)
-            )
+            ring_records.append((polygon.area, 0 if ring_type == "solid" else 1, ring_type, idx))
     ring_records.sort(key=lambda record: (-record[0], record[1], record[3]))
     return tuple((ring_type, ring_idx) for _, _, ring_type, ring_idx in ring_records)
 
@@ -289,7 +287,7 @@ def contours_to_polyslab_data(
             solid_frame_boundary_vertex_mask=(),
             hole_frame_boundary_vertex_mask=(),
             frame_bounds=frame_bounds,
-            in_plane_step=float(in_plane_step),
+            in_plane_step=in_plane_step,
         )
 
     shapely_polygons = []
@@ -310,7 +308,7 @@ def contours_to_polyslab_data(
             solid_frame_boundary_vertex_mask=(),
             hole_frame_boundary_vertex_mask=(),
             frame_bounds=frame_bounds,
-            in_plane_step=float(in_plane_step),
+            in_plane_step=in_plane_step,
         )
 
     merged = unary_union(shapely_polygons)
@@ -329,7 +327,7 @@ def contours_to_polyslab_data(
     hole_masks = []
 
     for polygon in polygons:
-        if float(polygon.area) < float(min_island_area):
+        if polygon.area < min_island_area:
             continue
 
         exterior = np.asarray(polygon.exterior.coords[:-1], dtype=float)
@@ -349,7 +347,7 @@ def contours_to_polyslab_data(
             hole = np.asarray(interior.coords[:-1], dtype=float)
             if hole.shape[0] < 3:
                 continue
-            if float(ShapelyPolygon(hole).area) < float(min_hole_area):
+            if ShapelyPolygon(hole).area < min_hole_area:
                 continue
             hole = _orient_ring(hole, ccw=True)
             hole = _densify_ring(hole, step=boundary_step)
@@ -369,7 +367,7 @@ def contours_to_polyslab_data(
         solid_frame_boundary_vertex_mask=tuple(solid_masks),
         hole_frame_boundary_vertex_mask=tuple(hole_masks),
         frame_bounds=frame_bounds,
-        in_plane_step=float(in_plane_step),
+        in_plane_step=in_plane_step,
     )
 
 
@@ -496,7 +494,7 @@ def gdstk_contours_from_dataarray(
         if contour_scale is not None:
             if not axis_is_singleton:
                 raise ValueError("'contour_scale' requires a 2D singleton-axis data slice.")
-            scale = float(contour_scale)
+            scale = contour_scale
             if scale <= 0:
                 raise ValueError("'contour_scale' must be > 0.")
             eps_slice = np.real(np.asarray(data)).squeeze(axis=axis)
@@ -557,7 +555,7 @@ def gdstk_contours_from_dataarray(
         ]
         step_candidates = [_coord_step_min(w), _coord_step_min(h)]
         step_candidates = [step for step in step_candidates if np.isfinite(step)]
-        in_plane_step = float(min(step_candidates)) if step_candidates else 1.0
+        in_plane_step = min(step_candidates) if step_candidates else 1.0
         return (
             contours,
             frame_bounds,
@@ -578,7 +576,7 @@ def gdstk_contours_from_dataarray(
     return (
         contours,
         frame_bounds,
-        float(scale),
+        scale,
         permittivity_min,
         permittivity_max,
         permittivity_threshold_use,
@@ -634,7 +632,7 @@ def _custom_medium_slice_dataarray(
     if any(coord.size == 0 for coord in coord_arrays):
         raise ValueError("Permittivity data coordinates must be non-empty on all axes.")
 
-    plane_position_use = float(plane_position)
+    plane_position_use = plane_position
     if pixel_exact:
         coords = Coords(
             x=coord_arrays[0] if axis != 0 else plane_position_use,
@@ -667,7 +665,7 @@ def _custom_medium_slice_dataarray(
             if axis != 2
             else plane_position_use,
         )
-        contour_scale = float(scale)
+        contour_scale = scale
 
     eps_diagonal = medium._interp_eps_diagonal_on_grid(eps_spatial=eps_components, coords=coords)
     return _scalar_permittivity_dataarray_from_eps_diagonal(eps_diagonal, coords), contour_scale
@@ -724,7 +722,7 @@ def _custom_medium_to_polyslab_data_and_permittivity_bounds(
     if frequency is None:
         frequency_eval = float("inf")
     else:
-        frequency_eval = float(frequency)
+        frequency_eval = frequency
         if np.isnan(frequency_eval) or np.isneginf(frequency_eval):
             raise ValueError("'frequency' must be finite or +inf.")
 

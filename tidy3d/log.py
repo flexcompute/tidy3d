@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
     from os import PathLike
     from types import TracebackType
 
@@ -128,16 +128,16 @@ class Logger:
     can then be recovered through 'captured_warnings'.
     """
 
-    _static_cache = set()
+    _static_cache: set[str] = set()
 
     def __init__(self) -> None:
-        self.handlers = {}
+        self.handlers: dict[str, LogHandler] = {}
         self.suppression = True
         self.warn_once = False
-        self._counts = None
-        self._stack = None
+        self._counts: dict[int, int] | None = None
+        self._stack: list[dict[str, Any]] | None = None
         self._capture = False
-        self._captured_warnings = []
+        self._captured_warnings: list[dict[str, Any]] = []
         self._suppress_all = False
 
     def set_capture(self, capture: bool) -> None:
@@ -180,7 +180,7 @@ class Logger:
         return False
 
     @contextmanager
-    def suppress_output(self) -> Iterator[None]:
+    def suppress_output(self) -> Generator[None, None, None]:
         """Context manager to suppress all log output.
 
         This is useful for speculative operations where validation failures are expected
@@ -310,12 +310,12 @@ class Logger:
         # Compose message
         if len(args) > 0:
             try:
-                composed_message = str(message) % args
+                composed_message = message % args
 
             except Exception as e:
                 composed_message = f"{message} % {args}\n{e}"
         else:
-            composed_message = str(message)
+            composed_message = message
 
         # Capture all messages (even if suppressed later)
         if self._stack and capture:
@@ -525,7 +525,9 @@ class NoOpProgress:
 
 
 @contextmanager
-def Progress(console: Console, show_progress: bool) -> Iterator[RichProgress | NoOpProgress]:
+def Progress(
+    console: Console, show_progress: bool
+) -> Generator[RichProgress | NoOpProgress, None, None]:
     """Progress manager that wraps ``rich.Progress`` if ``show_progress`` is ``True``,
     and ``NoOpProgress`` otherwise."""
     if show_progress:

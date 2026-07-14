@@ -6,7 +6,7 @@ def get_available_memory_bytes() -> int:
     try:
         import psutil
 
-        available_bytes = int(psutil.virtual_memory().available)
+        available_bytes = psutil.virtual_memory().available
     except Exception:
         return -1
     return available_bytes if available_bytes > 0 else -1

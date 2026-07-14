@@ -861,7 +861,7 @@ class TriangleMesh(base.Geometry, ABC):
         faces_list: list[np.ndarray] = []
         bary_list: list[np.ndarray] = []
 
-        spacing = max(float(spacing), np.finfo(float).eps)
+        spacing = max(spacing, np.finfo(float).eps)
         triangles_arr = np.asarray(triangles, dtype=dtype)
 
         sim_extents = sim_max - sim_min
@@ -1206,7 +1206,7 @@ class TriangleMesh(base.Geometry, ABC):
     ) -> int:
         """Determine the number of subdivisions needed for the given area and spacing."""
 
-        spacing = max(float(spacing), np.finfo(float).eps)
+        spacing = max(spacing, np.finfo(float).eps)
 
         target = np.sqrt(max(area, 0.0))
         area_based = np.ceil(np.sqrt(2.0) * target / spacing)

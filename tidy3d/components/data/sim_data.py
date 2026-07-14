@@ -1829,7 +1829,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             if len(adj_srcs) > 1:
                 src_freqs = np.array([src.source_time._freq0 for src in adj_srcs], dtype=float)
                 freq_span = float(np.max(src_freqs) - np.min(src_freqs))
-                if freq_span > GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD * float(adj_src_f0):
+                if freq_span > GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD * adj_src_f0:
                     num_freqs = 3
             src_broadband = src_broadband.updated_copy(num_freqs=num_freqs)
 

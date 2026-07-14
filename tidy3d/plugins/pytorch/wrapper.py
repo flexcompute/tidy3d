@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import inspect
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 from autograd import make_vjp
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from torch.autograd.function import FunctionCtx
+
+
+class _AutogradFunctionContext(Protocol):
+    vjp: Callable[[Any], Any]
+    device: torch.device
+    num_args: int
+    grad_argnums: list[int]
 
 
 def to_torch(fun: Callable[..., Any]) -> Callable[..., torch.Tensor]:
@@ -75,10 +81,11 @@ def to_torch(fun: Callable[..., Any]) -> Callable[..., torch.Tensor]:
             _vjp = make_vjp(fun, argnum=grad_argnums)
             vjp, ans = _vjp(*numpy_args)
 
-            ctx.vjp = vjp
-            ctx.device = device
-            ctx.num_args = len(args)
-            ctx.grad_argnums = grad_argnums
+            typed_ctx = cast(_AutogradFunctionContext, ctx)
+            typed_ctx.vjp = vjp
+            typed_ctx.device = device
+            typed_ctx.num_args = len(args)
+            typed_ctx.grad_argnums = grad_argnums
 
             return torch.as_tensor(ans, device=device)
 
@@ -86,11 +93,12 @@ def to_torch(fun: Callable[..., Any]) -> Callable[..., torch.Tensor]:
         def backward(
             ctx: FunctionCtx, grad_output: torch.Tensor
         ) -> tuple[torch.Tensor | None, ...]:
+            typed_ctx = cast(_AutogradFunctionContext, ctx)
             numpy_grad_output = grad_output.detach().cpu().numpy()
-            _grads = ctx.vjp(numpy_grad_output)
-            grads = [None] * ctx.num_args
-            for idx, grad in zip(ctx.grad_argnums, _grads):
-                grads[idx] = torch.as_tensor(grad, device=ctx.device)
+            _grads = typed_ctx.vjp(numpy_grad_output)
+            grads = [None] * typed_ctx.num_args
+            for idx, grad in zip(typed_ctx.grad_argnums, _grads):
+                grads[idx] = torch.as_tensor(grad, device=typed_ctx.device)
             return tuple(grads)
 
     def apply(*args: Any, **kwargs: Any) -> torch.Tensor:

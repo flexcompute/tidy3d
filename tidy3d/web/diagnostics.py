@@ -157,7 +157,7 @@ def _host_from_url(url: str | None) -> str | None:
 
     if not url:
         return None
-    parsed = urlparse(str(url))
+    parsed = urlparse(url)
     host = parsed.hostname
     if not host:
         return None

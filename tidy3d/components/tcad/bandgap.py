@@ -32,7 +32,7 @@ class ConstantEnergyBandGap(Tidy3dBaseModel):
     def band_gap_energy(self, temperature: TemperatureType) -> float | np.ndarray:
         """Energy band gap in eV at the requested temperature(s) in Kelvin."""
         temperature = np.asarray(temperature, dtype=float)
-        eg = np.full(np.shape(temperature), float(self.eg), dtype=float)
+        eg = np.full(np.shape(temperature), self.eg, dtype=float)
         return eg.item() if eg.ndim == 0 else eg
 
 

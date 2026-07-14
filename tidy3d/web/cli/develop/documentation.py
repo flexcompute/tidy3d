@@ -67,7 +67,7 @@ def replace_in_files(
     # Load data from the JSON file
     with open(json_file_path, encoding="utf-8") as json_file:
         data = json.load(json_file)
-        replace_dict = data.get(str(selected_version), {})
+        replace_dict = data.get(selected_version, {})
 
     for root, dirs, files in os.walk(directory):
         # Exclude directories that start with a period ('.')

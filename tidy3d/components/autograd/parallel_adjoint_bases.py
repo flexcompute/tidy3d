@@ -150,9 +150,9 @@ class ModeAdjointBasis(AbstractParallelAdjointBasis):
     def _data_index_from_sim_data(self, sim_data_orig: SimulationData) -> tuple[int, ...]:
         mode_data = sim_data_orig.data[self.monitor_index]
         coord_map = {
-            "f": float(self.freq),
-            "direction": str(self.direction),
-            "mode_index": int(self.mode_index),
+            "f": self.freq,
+            "direction": self.direction,
+            "mode_index": self.mode_index,
         }
         return _index_for_dims(mode_data.amps, coord_map)
 
@@ -184,9 +184,9 @@ class DiffractionAdjointBasis(AbstractParallelAdjointBasis):
         dataset_name = self.data_path[-1]
         field_data = getattr(diff_data, dataset_name)
         coord_map = {
-            "orders_x": int(self.order_x),
-            "orders_y": int(self.order_y),
-            "f": float(self.freq),
+            "orders_x": self.order_x,
+            "orders_y": self.order_y,
+            "f": self.freq,
         }
         return _index_for_dims(field_data, coord_map)
 
@@ -223,7 +223,7 @@ class PointFieldAdjointBasis(AbstractParallelAdjointBasis):
     def _data_index_from_sim_data(self, sim_data_orig: SimulationData) -> tuple[int, ...]:
         field_data = sim_data_orig.data[self.monitor_index]
         field_component = field_data.field_components[self.component]
-        coord_map = {"f": float(self.freq)}
+        coord_map = {"f": self.freq}
         for dim in field_component.dims:
             if dim == "f":
                 continue
@@ -294,7 +294,7 @@ def _build_point_field_bases(
                     monitor_index=monitor_index,
                     monitor_name=monitor_name,
                     freq=float(freq),
-                    component=cast(EMField, component),
+                    component=component,
                     data_path=(*data_path_prefix, component),
                 )
             )
@@ -314,7 +314,7 @@ def _build_diffraction_bases_for_freq(
     bases: list[DiffractionAdjointBasis] = []
     for order_x in orders_x:
         for order_y in orders_y:
-            angle_theta = float(theta_for(int(order_x), int(order_y)))
+            angle_theta = theta_for(int(order_x), int(order_y))
             if not diffraction_angle_is_propagating(angle_theta):
                 continue
             for pol in pols:
@@ -329,10 +329,10 @@ def _build_diffraction_bases_for_freq(
                     DiffractionAdjointBasis(
                         monitor_index=monitor_index,
                         monitor_name=monitor_name,
-                        freq=float(freq),
+                        freq=freq,
                         order_x=int(order_x),
                         order_y=int(order_y),
-                        polarization=cast(DiffractionPolarization, pol_str),
+                        polarization=pol_str,
                         data_path=("data", monitor_index, dataset_name),
                     )
                 )

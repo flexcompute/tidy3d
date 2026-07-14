@@ -136,7 +136,7 @@ class DataArray(xr.DataArray):
     # Always set __slots__ = () to avoid xarray warnings
     __slots__ = ()
     # stores an ordered tuple of strings corresponding to the data dimensions
-    _dims = ()
+    _dims: tuple[str, ...] = ()
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: dict[str, str] = {}
 

@@ -29,7 +29,7 @@ from tidy3d.log import log
 from tidy3d.packaging import requires_vtk, vtk
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from os import PathLike
     from typing import Literal
 
@@ -60,7 +60,7 @@ _WARN_UNUSED_POINTS = ContextVar("tidy3d_warn_unused_unstructured_points", defau
 
 
 @contextmanager
-def _suppress_unstructured_grid_unused_point_warnings() -> Iterator[None]:
+def _suppress_unstructured_grid_unused_point_warnings() -> Generator[None]:
     """Suppress unused-point warnings while rebuilding trusted internal solver datasets."""
     token = _WARN_UNUSED_POINTS.set(False)
     try:

@@ -148,19 +148,32 @@ def test_viewer_file_path_text_preserves_windows_absolute_paths():
     )
 
 
-def test_viewer_file_uri_uses_windows_path_conversion():
+def test_viewer_file_uri_uses_windows_path_conversion(monkeypatch):
+    converted_paths = []
+
+    def fake_windows_url2pathname(url_path):
+        converted_paths.append(url_path)
+        return f"converted:{url_path}"
+
+    monkeypatch.setattr(viewer.nturl2path, "url2pathname", fake_windows_url2pathname)
+
     assert (
         viewer._local_file_path_text("file:///C:/Users/Ada/simulation.py", os_name="nt")
-        == r"C:\Users\Ada\simulation.py"
+        == "converted:/C:/Users/Ada/simulation.py"
     )
     assert (
         viewer._local_file_path_text("file://localhost/C:/Users/Ada/simulation.py", os_name="nt")
-        == r"C:\Users\Ada\simulation.py"
+        == "converted:/C:/Users/Ada/simulation.py"
     )
     assert (
         viewer._local_file_path_text("file://server/share/simulation.py", os_name="nt")
-        == r"\\server\share\simulation.py"
+        == "converted://server/share/simulation.py"
     )
+    assert converted_paths == [
+        "/C:/Users/Ada/simulation.py",
+        "/C:/Users/Ada/simulation.py",
+        "//server/share/simulation.py",
+    ]
 
 
 def test_viewer_inline_payload_passes_workspace_uri_to_bridge():

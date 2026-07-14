@@ -219,9 +219,9 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             payload = {
                 "taskName": task_name,
                 "taskType": task_type,
-                "callbackUrl": callback_url,  # type: ignore[dict-item]
+                "callbackUrl": callback_url,
                 "simulationType": simulation_type,
-                "parentTasks": parent_tasks,  # type: ignore[dict-item]
+                "parentTasks": parent_tasks,
                 "fileType": file_type,
             }
             resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
@@ -447,7 +447,7 @@ class SimulationTask(WebTask):
     # )
 
     @classmethod
-    def get(cls, task_id: str, verbose: bool = True) -> SimulationTask:
+    def get(cls, task_id: str, verbose: bool = True) -> SimulationTask | None:
         """Get task from the server by id.
 
         Parameters
@@ -461,7 +461,8 @@ class SimulationTask(WebTask):
         -------
         :class:`.SimulationTask`
             :class:`.SimulationTask` object containing info about status,
-             size, credits of task and others.
+             size, credits of task and others, or ``None`` if the detail
+             response is empty.
         """
         try:
             resp = http.get(f"tidy3d/tasks/{task_id}/detail")
@@ -495,8 +496,12 @@ class SimulationTask(WebTask):
         TaskInfo
             An object containing the task's latest data.
         """
+        if not self.task_id:
+            raise WebError("Expected field 'task_id' is unset.")
         resp = http.get(f"tidy3d/tasks/{self.task_id}/detail")
-        return TaskInfo(**{"taskId": self.task_id, "taskType": self.task_type, **resp})  # type: ignore[dict-item]
+        if not isinstance(resp, dict):
+            raise WebError("Expected task detail response to be a JSON object.")
+        return TaskInfo(**{"taskId": self.task_id, "taskType": self.task_type, **resp})
 
     def get_simulation_json(self, to_file: PathLike, verbose: bool = True) -> None:
         """Get json file for a :class:`.Simulation` from server.
@@ -842,10 +847,14 @@ class SimulationTask(WebTask):
                 try:
                     # get mesh task info
                     mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
+                    if mesh_task is None:
+                        raise WebError("Unable to fetch parent task details.")
                     assert mesh_task.task_type == "VOLUME_MESH"
                     assert mesh_task.status == "success"
                     # get up-to-date task info
                     task = SimulationTask.get(self.task_id, verbose=False)
+                    if task is None:
+                        raise WebError("Unable to fetch task details.")
                     if task.fileMd5 != mesh_task.childFileMd5:
                         raise ValidationError(
                             "Simulation stored in parent task 'VolumeMesher' does not match the "
@@ -1060,7 +1069,7 @@ class TaskFactory:
         return SimulationTask
 
     @classmethod
-    def get(cls, task_id: str, verbose: bool = True) -> WebTask:
+    def get(cls, task_id: str, verbose: bool = True) -> WebTask | None:
         kind = cls._REGISTRY.get(task_id)
         if kind is BatchTask:
             return BatchTask.get(task_id, verbose=verbose)

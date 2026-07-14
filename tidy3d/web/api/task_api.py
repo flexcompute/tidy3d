@@ -256,7 +256,7 @@ def _build_website_url(path: str) -> str:
     base = str(config.web.website_endpoint or "")
     if not path:
         return base
-    return "/".join([base.rstrip("/"), str(path).lstrip("/")])
+    return "/".join([base.rstrip("/"), path.lstrip("/")])
 
 
 def _get_url(task_id: str) -> str:

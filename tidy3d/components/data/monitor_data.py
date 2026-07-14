@@ -4968,7 +4968,7 @@ class DiffractionData(AbstractFieldProjectionData):
         )
 
     @property
-    def angles(self) -> tuple[DataArray]:
+    def angles(self) -> tuple[DataArray, DataArray]:
         """The (theta, phi) angles corresponding to each allowed pair of diffraction
         orders storeds as data arrays. Disallowed angles are set to ``np.nan``.
         """

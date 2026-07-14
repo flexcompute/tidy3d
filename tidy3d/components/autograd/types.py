@@ -63,7 +63,9 @@ def _iter_pydantic_json_schema_updates(core_schema: Any) -> Any:
 class _TracedAliasJsonSchema:
     """Expose the base alias schema without dropping field-level constraints."""
 
-    def __init__(self, validation_schema: dict[str, Any], serialization_schema: dict[str, Any]):
+    def __init__(
+        self, validation_schema: dict[str, Any], serialization_schema: dict[str, Any]
+    ) -> None:
         self._validation_schema = validation_schema
         self._serialization_schema = serialization_schema
 

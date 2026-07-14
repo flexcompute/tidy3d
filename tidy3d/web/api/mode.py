@@ -417,7 +417,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         resp = http.get(f"{MODESOLVER_API}/{task_id}/{solver_id}")
         task = ModeSolverTask(**resp)
         mode_solver = task.get_modesolver(to_file, sim_file, verbose, progress_callback)
-        return task.copy(update={"mode_solver": mode_solver})
+        return task.model_copy(update={"mode_solver": mode_solver})
 
     def get_info(self) -> ModeSolverTask:
         """Get the current state of this task on the server.

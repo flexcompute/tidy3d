@@ -1346,7 +1346,7 @@ class ModeSolver(Tidy3dBaseModel):
             str, ScalarModeFieldCylindricalDataArray | ModeIndexDataArray
         ],
         solver: ModeSolver,
-    ) -> ModeSolverData:
+    ) -> dict[str, ScalarModeFieldDataArray | ModeIndexDataArray]:
         """Rotate the mode solver solution from the reference plane in cylindrical coordinates
         to the desired monitor plane."""
         rotated_data_arrays = {}

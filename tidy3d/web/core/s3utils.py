@@ -219,7 +219,7 @@ def get_s3_sts_token(
     _S3STSToken
         The S3 STS token.
     """
-    file_name = str(Path(file_name).as_posix())
+    file_name = Path(file_name).as_posix()
     cache_key = f"{resource_id}:{file_name}"
     if cache_key not in _s3_sts_tokens or _s3_sts_tokens[cache_key].is_expired():
         method = f"tidy3d/py/tasks/{resource_id}/file?filename={file_name}"

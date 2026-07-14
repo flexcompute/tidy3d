@@ -77,7 +77,7 @@ def _warn_invalid_version(value: Any) -> int:
 def set_config_version(document: tomlkit.TOMLDocument, version: int) -> None:
     """Set the config version in a TOML document."""
 
-    document[CONFIG_VERSION_KEY] = int(version)
+    document[CONFIG_VERSION_KEY] = version
 
 
 def strip_config_version(data: dict[str, Any]) -> dict[str, Any]:
@@ -94,7 +94,7 @@ def inject_config_version(data: dict[str, Any], version: int) -> dict[str, Any]:
     """Return a copy of ``data`` with the config version key set."""
 
     updated = dict(data)
-    updated[CONFIG_VERSION_KEY] = int(version)
+    updated[CONFIG_VERSION_KEY] = version
     return updated
 
 

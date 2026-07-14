@@ -118,7 +118,7 @@ def point_cloud_sampled_cells_upper_bound(
 
     stencil_rows = POINT_CLOUD_STENCIL_CORNERS_PER_FIELD * num_points * num_fields
     grid_cells = math.prod(point_cloud_stencil_grid_num_cells(num_cells, symmetry))
-    return int(min(stencil_rows, grid_cells))
+    return min(stencil_rows, grid_cells)
 
 
 def point_cloud_nearest_sampled_cells_upper_bound(
@@ -134,7 +134,7 @@ def point_cloud_nearest_sampled_cells_upper_bound(
         return 0
 
     grid_cells = math.prod(point_cloud_stencil_grid_num_cells(num_cells, symmetry))
-    return int(min(num_points * num_components, grid_cells))
+    return min(num_points * num_components, grid_cells)
 
 
 def point_cloud_grid_field(field: str) -> str:

@@ -25,7 +25,7 @@ from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.types import TaskType
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Iterator
 
     from tidy3d.components.mode.mode_solver import ModeSolver
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
@@ -196,7 +196,7 @@ class LocalCache:
             self.sync_stats()
 
     @contextmanager
-    def _with_interprocess_lock(self) -> Iterator[None]:
+    def _with_interprocess_lock(self) -> Generator[None, None, None]:
         depth = getattr(self._file_lock_state, "depth", 0)
         if depth > 0:
             self._file_lock_state.depth = depth + 1
@@ -216,7 +216,7 @@ class LocalCache:
                 self._file_lock_state.depth = 0
 
     @contextmanager
-    def _with_cache_state_lock(self) -> Iterator[None]:
+    def _with_cache_state_lock(self) -> Generator[None, None, None]:
         """Lock boundary for entry-point operations; helpers assume this is held."""
         self._run_pending_sync()
         with self._lock:
@@ -466,7 +466,7 @@ class LocalCache:
         max_size_bytes = int(self.max_size_gb * (1024**3))
 
         try:
-            incoming_size_int = int(incoming_size)
+            incoming_size_int = incoming_size
         except (TypeError, ValueError):
             incoming_size_int = 0
         if incoming_size_int < 0:
@@ -492,7 +492,7 @@ class LocalCache:
 
         existing_size = stats.total_size
         try:
-            replacing_size_int = int(replacing_size)
+            replacing_size_int = replacing_size
         except (TypeError, ValueError):
             replacing_size_int = 0
         if incoming_key and incoming_key in existing_keys:

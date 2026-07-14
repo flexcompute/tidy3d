@@ -54,7 +54,7 @@ asynchronous_webapi = asynchronous
 
 def _resolve_local_gradient(value: bool | None) -> bool:
     if value is not None:
-        return bool(value)
+        return value
 
     return bool(config.adjoint.local_gradient)
 
@@ -672,7 +672,7 @@ def run_custom(
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
 
-    lazy = False if lazy is None else bool(lazy)
+    lazy = False if lazy is None else lazy
 
     if custom_vjp is not None:
         if isinstance(custom_vjp, CustomVJPConfig):
@@ -957,7 +957,7 @@ def run_async_custom(
     if max_num_adjoint_per_fwd is None:
         max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
-    lazy = True if lazy is None else bool(lazy)
+    lazy = True if lazy is None else lazy
 
     def _validate_sequence_elements(
         values: Sequence[Any], expected_type: type, arg_name: str, key_name: str

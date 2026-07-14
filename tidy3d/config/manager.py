@@ -48,7 +48,7 @@ def normalize_profile_name(name: str) -> str:
 class SectionAccessor:
     """Attribute proxy that routes assignments back through the manager."""
 
-    def __init__(self, manager: ConfigManager, path: str):
+    def __init__(self, manager: ConfigManager, path: str) -> None:
         self._manager = manager
         self._path = path
 
@@ -88,7 +88,7 @@ class SectionAccessor:
 class PluginsAccessor:
     """Provides access to registered plugin configurations."""
 
-    def __init__(self, manager: ConfigManager):
+    def __init__(self, manager: ConfigManager) -> None:
         self._manager = manager
 
     def __getattr__(self, plugin: str) -> SectionAccessor:
@@ -103,7 +103,7 @@ class PluginsAccessor:
 class ProfilesAccessor:
     """Read-only profile helper."""
 
-    def __init__(self, manager: ConfigManager):
+    def __init__(self, manager: ConfigManager) -> None:
         self._manager = manager
 
     def list(self) -> dict[str, list[str]]:
@@ -120,7 +120,7 @@ class ConfigManager:
         self,
         profile: str | None = None,
         config_dir: os.PathLike[str] | None = None,
-    ):
+    ) -> None:
         loader_path = None if config_dir is None else Path(config_dir)
         self._loader = ConfigLoader(loader_path)
         self._runtime_overrides: dict[str, dict[str, Any]] = defaultdict(dict)
@@ -358,7 +358,7 @@ class ConfigManager:
 
     def _resolve_initial_profile(self, profile: str | None) -> str:
         if profile:
-            return normalize_profile_name(str(profile))
+            return normalize_profile_name(profile)
 
         # Check environment variables first (highest priority)
         env_profile = (

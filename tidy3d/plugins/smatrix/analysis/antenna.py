@@ -54,7 +54,7 @@ def get_antenna_metrics_data(
     # Use the first port as default if none specified
     if port_amplitudes is None:
         first_port_index = terminal_component_modeler_data.modeler.matrix_indices_source[0]
-        port_amplitudes = {first_port_index: None}  # type: ignore[dict-item]
+        port_amplitudes = {first_port_index: None}
     # Get the radiation monitor, use first as default
     # if none specified
     if monitor_name is None:

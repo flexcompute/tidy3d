@@ -81,7 +81,7 @@ def _remote_forward_rerun_path(
     *, path_dir: str | Path, task_name: str, remote_sim: td.Simulation
 ) -> Path:
     """Return a deterministic, filesystem-safe output path for uncached forward reruns."""
-    task_name_hash = hashlib.md5(str(task_name).encode("utf-8")).hexdigest()
+    task_name_hash = hashlib.md5(task_name.encode("utf-8")).hexdigest()
     return Path(path_dir) / f"autograd_fwd_{remote_sim._hash_self()}_{task_name_hash}.hdf5"
 
 

@@ -23,7 +23,7 @@ from .types import PathType
 from .utils import get_static
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
     import xarray as xr
 
@@ -323,7 +323,7 @@ class DerivativeInfo:
             ("D_adj", self.D_adj),
         ]
         if self.is_medium_pec or self.background_medium_is_pec:
-            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]  # type: ignore[list-item]
+            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]
         for group_key, data_dict in interpolator_groups:
             _make_lazy_interpolator_group(
                 data_dict, f"{group_key}_linear", is_field_group=True, override_method="linear"
@@ -1250,7 +1250,7 @@ class DerivativeInfo:
         return min_spacing
 
     @contextmanager
-    def cache_min_spacing_from_permittivity(self) -> Iterator[None]:
+    def cache_min_spacing_from_permittivity(self) -> Generator[None, None, None]:
         """
         Cache min_spacing_from_permittivity for the duration of the block. Cache
         is always cleared on exit.

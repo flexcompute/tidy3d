@@ -79,7 +79,7 @@ _REMOVED_IMPORT_FINDER_MARKER = "_tidy3d_removed_config_accessor_module"
 class _RemovedConfigAccessorImportFinder:
     """Raise tailored errors for removed names imported as package children."""
 
-    def __init__(self, module_name: str):
+    def __init__(self, module_name: str) -> None:
         self.module_name = module_name
         setattr(self, _REMOVED_IMPORT_FINDER_MARKER, module_name)
 
@@ -116,7 +116,7 @@ def _install_removed_accessor_import_finder() -> None:
 class _ConfigProxy:
     """Stable public config object backed by the active ConfigManager."""
 
-    def __init__(self, manager: ConfigManager):
+    def __init__(self, manager: ConfigManager) -> None:
         object.__setattr__(self, "_manager", manager)
 
     def reset_manager(self, manager: ConfigManager) -> None:

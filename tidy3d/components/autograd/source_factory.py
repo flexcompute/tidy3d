@@ -199,7 +199,7 @@ def point_current_source_from_simulation(
     grid = simulation.discretize_monitor(monitor)
     coords = {}
     spatial_coords = grid.boundaries
-    spatial_coords_dict = spatial_coords.dict()
+    spatial_coords_dict = spatial_coords.model_dump()
     for axis, dim in enumerate("xyz"):
         if monitor.size[axis] == 0:
             coords[dim] = np.array([monitor.center[axis]])
@@ -306,7 +306,7 @@ def diffraction_source_from_data(
 ) -> PlaneWave | None:
     monitor = diff_data.monitor
     theta_data, phi_data = diff_data.angles
-    angle_sel_kwargs = {"orders_x": int(order_x), "orders_y": int(order_y), "f": float(freq)}
+    angle_sel_kwargs = {"orders_x": order_x, "orders_y": order_y, "f": freq}
     angle_theta = float(theta_data.sel(**angle_sel_kwargs))
     angle_phi = float(phi_data.sel(**angle_sel_kwargs))
 
@@ -361,7 +361,7 @@ def diffraction_source_from_angles(
 
 def _diffraction_adjoint_num_freqs(order_x: int, order_y: int) -> int | None:
     """Use center-frequency injection for nonzero diffraction adjoint orders."""
-    if int(order_x) == 0 and int(order_y) == 0:
+    if order_x == 0 and order_y == 0:
         return None
     return 1
 

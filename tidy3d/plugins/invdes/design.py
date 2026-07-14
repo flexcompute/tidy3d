@@ -284,7 +284,7 @@ class InverseDesign(AbstractInverseDesign):
         # construct mesh override structures and a new grid spec, if applicable
         grid_spec = self.simulation.grid_spec
         mesh_override_structure = self.design_region.mesh_override_structure
-        if mesh_override_structure:
+        if mesh_override_structure is not None:
             override_structures = list(self.simulation.grid_spec.override_structures)
             override_structures += [mesh_override_structure]
             grid_spec = grid_spec.updated_copy(override_structures=override_structures)

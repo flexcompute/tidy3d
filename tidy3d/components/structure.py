@@ -103,7 +103,7 @@ def infer_structure_medium(
     if default_permittivity is None:
         raise ValueError(missing_message)
 
-    permittivity_use = float(default_permittivity)
+    permittivity_use = default_permittivity
     if not np.isfinite(permittivity_use):
         raise ValueError(f"'{permittivity_name}' must be finite.")
 
@@ -874,7 +874,7 @@ class Structure(AbstractStructure):
         )
         gds_precision = Geometry._validate_gds_precision(
             polygons=polygons,
-            gds_precision=float(gds_precision),
+            gds_precision=gds_precision,
             context="Structure.to_gds_file()",
         )
         library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
@@ -997,7 +997,7 @@ class Structure(AbstractStructure):
             missing_message=missing_message,
         )
 
-        sigma_val = float(smooth_sigma)
+        sigma_val = smooth_sigma
         return polyslabs_to_structures(
             solid_polyslabs=smooth_polyslabs(contour_data.solid_polyslabs, sigma_val),
             hole_polyslabs=smooth_polyslabs(contour_data.hole_polyslabs, sigma_val),

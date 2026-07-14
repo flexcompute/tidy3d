@@ -99,11 +99,10 @@ async def validate_simulation(
     except (ValueError, RuntimeError) as exc:
         _raise_tool_error(exc)
     summary_status = payload.get("status") or payload.get("error") or "ok"
+    resolved_viewer_id = payload.get("viewer_id") or viewer_id or "<unknown>"
     return ToolResult(
         content=[
-            TextContent(
-                type="text", text=f"Validation for {payload['viewer_id']}: {summary_status}"
-            )
+            TextContent(type="text", text=f"Validation for {resolved_viewer_id}: {summary_status}")
         ],
         structured_content=payload,
     )

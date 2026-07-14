@@ -218,7 +218,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
     @classmethod
     def _validate_store_position_indexes(cls, val: Sequence[int]) -> tuple[int, ...]:
         """Validate optional stored position indexes."""
-        indexes = tuple(int(index) for index in val)
+        indexes = tuple(index for index in val)
         if len(set(indexes)) != len(indexes):
             raise ValidationError("'store_position_indexes' must not contain duplicates.")
         if any(index < 0 for index in indexes):
@@ -452,8 +452,8 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             source_time=self.source_time,
             direction=self._opposite_direction(self.analysis_region.direction),
             injection_axis=self.analysis_region.normal_axis,
-            angle_theta=float(theta),
-            angle_phi=float(phi),
+            angle_theta=theta,
+            angle_phi=phi,
             pol_angle=0.0 if polarization == "p" else np.pi / 2,
             angular_spec=FixedAngleSpec(),
             name=self._source_name(angle_index, polarization),

@@ -809,7 +809,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             ax.annotate(
                 str(it["label"]),
                 xy=(x_conn, y_anchor),
-                xytext=(float(x_text), float(lane_y)),
+                xytext=(x_text, lane_y),
                 arrowprops=arrow_params,
                 annotation_clip=False,
                 **label_params,
@@ -1008,7 +1008,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             return
 
         ylim0, ylim1 = ax.get_ylim()
-        yrange = float(ylim1 - ylim0) if ylim1 != ylim0 else 1.0
+        yrange = ylim1 - ylim0 if ylim1 != ylim0 else 1.0
         lane_margin = 0.08 * yrange
 
         if placement == "top":

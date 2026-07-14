@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
-import scipy.ndimage
 from autograd.extend import defjvp, defvjp, primitive
 
 if TYPE_CHECKING:
@@ -21,7 +20,7 @@ def _normalize_sequence(value: float | Sequence[float], ndim: int) -> tuple[floa
         value_tuple = tuple(value)
         if len(value_tuple) != ndim:
             raise ValueError(f"Sequence length {len(value_tuple)} does not match ndim {ndim}.")
-        return tuple(float(v) for v in value_tuple)
+        return tuple(v for v in value_tuple)
     return (float(value),) * ndim
 
 
@@ -45,6 +44,8 @@ def _gaussian_weight_matrix(
     cval: float,
 ) -> np.ndarray:
     """Return the 1-D Gaussian filter matrix used along a single axis."""
+    import scipy.ndimage
+
     if sigma <= 0.0:
         return np.eye(length)
     eye = np.eye(length, dtype=float)
@@ -71,6 +72,8 @@ def gaussian_filter(
     truncate: float = 4.0,
     **kwargs: Any,
 ) -> NDArray:
+    import scipy.ndimage
+
     return scipy.ndimage.gaussian_filter(
         array,
         sigma,
@@ -110,13 +113,13 @@ def _gaussian_filter_vjp(
     def vjp(g: NDArray) -> NDArray:
         grad = np.asarray(g)
         for axis in reversed(range(ndim)):
-            sigma_axis = float(sigma_seq[axis])
+            sigma_axis = sigma_seq[axis]
             if sigma_axis <= 0.0:
                 continue
             mode_axis = mode_seq[axis]
-            truncate_axis = float(truncate_seq[axis])
+            truncate_axis = truncate_seq[axis]
             order_axis = int(order_seq[axis])
-            cval_axis = float(cval_seq[axis])
+            cval_axis = cval_seq[axis]
             length = grad.shape[axis]
             weights = _gaussian_weight_matrix(
                 length, sigma_axis, mode_axis, truncate_axis, order_axis, cval_axis

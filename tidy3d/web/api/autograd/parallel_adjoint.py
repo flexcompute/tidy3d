@@ -321,7 +321,7 @@ def prepare_parallel_adjoint(
             for basis in basis_specs:
                 if isinstance(basis, ModeAdjointBasis):
                     expected_dir = outgoing_dirs.get(basis.monitor_index)
-                    if expected_dir is not None and str(basis.direction) != expected_dir:
+                    if expected_dir is not None and basis.direction != expected_dir:
                         continue
                 kept.append(basis)
             basis_specs = kept

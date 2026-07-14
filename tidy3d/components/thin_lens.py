@@ -122,8 +122,7 @@ def thin_lens_num_plane_waves_xy(
 ) -> tuple[int, int]:
     """Return angular-spectrum sample counts in the two tangential directions."""
     if isinstance(num_plane_waves, tuple):
-        return int(num_plane_waves[0]), int(num_plane_waves[1])
-    num_plane_waves = int(num_plane_waves)
+        return num_plane_waves[0], num_plane_waves[1]
     return num_plane_waves, num_plane_waves
 
 

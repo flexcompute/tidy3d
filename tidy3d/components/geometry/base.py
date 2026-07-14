@@ -59,7 +59,7 @@ from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable
     from os import PathLike
 
     import pydantic
@@ -854,25 +854,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
         if not any(np.isinf(b) for b in shape.bounds):
             return shape
-
-        def _processed_coords(coords: Sequence[tuple[Any, ...]]) -> list[tuple[float, ...]]:
-            evaluated = Geometry._evaluate_inf(np.array(coords))
-            return [tuple(point) for point in evaluated.tolist()]
-
-        if shape.geom_type == "Polygon":
-            shell = _processed_coords(shape.exterior.coords)
-            holes = [_processed_coords(g.coords) for g in shape.interiors]
-            return shapely.Polygon(shell, holes)
-        if shape.geom_type in {"Point", "LineString", "LinearRing"}:
-            return shape.__class__(Geometry._evaluate_inf(np.array(shape.coords)))
-        if shape.geom_type in {
-            "MultiPoint",
-            "MultiLineString",
-            "MultiPolygon",
-            "GeometryCollection",
-        }:
-            return shape.__class__([Geometry.evaluate_inf_shape(g) for g in shape.geoms])
-        return shape
+        return shapely.transform(shape, Geometry._evaluate_inf, include_z=None)
 
     @staticmethod
     def pop_axis(coord: tuple[Any, Any, Any], axis: int) -> tuple[Any, tuple[Any, Any]]:
@@ -1764,7 +1746,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
         gds_precision = self._validate_gds_precision(
             polygons=polygons,
-            gds_precision=float(gds_precision),
+            gds_precision=gds_precision,
             context="Geometry.to_gds_file()",
         )
         library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
@@ -1805,7 +1787,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if isinstance(other, int):
             return self
         if not isinstance(other, Geometry):
-            return NotImplemented  # type: ignore[return-value]
+            return NotImplemented
         return GeometryGroup(geometries=self._as_union() + other._as_union())
 
     def __radd__(self, other: int | Geometry) -> Self | GeometryGroup:
@@ -1814,7 +1796,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if isinstance(other, int):
             return self
         if not isinstance(other, Geometry):
-            return NotImplemented  # type: ignore[return-value]
+            return NotImplemented
         return GeometryGroup(geometries=other._as_union() + self._as_union())
 
     def __or__(self, other: Geometry) -> GeometryGroup:
@@ -1838,7 +1820,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def __sub__(self, other: Geometry) -> ClipOperation:
         """Difference of geometries"""
         if not isinstance(other, Geometry):
-            return NotImplemented  # type: ignore[return-value]
+            return NotImplemented
         return ClipOperation(operation="difference", geometry_a=self, geometry_b=other)
 
     def __xor__(self, other: Geometry) -> ClipOperation:
