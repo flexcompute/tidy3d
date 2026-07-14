@@ -318,7 +318,6 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         Note
         ----
             For 3D simulations, the 2D mesh shown here would be the result of slicing the underlying unstructured tetrahedral grid with the selected plane.
-            If however the monitor sets `conformal=True`, the simulation mesh has been made to conform to the monitor plane, in which case the visualized mesh is exact.
 
         Returns
         -------

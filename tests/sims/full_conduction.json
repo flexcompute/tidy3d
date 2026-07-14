@@ -171,7 +171,8 @@
                     "type": "SolidMedium",
                     "capacity": 1.0,
                     "conductivity": 1e-6,
-                    "density": 1e-18
+                    "density": 1e-18,
+                    "velocity": null
                 },
                 "charge": {
                     "attrs": {},
@@ -184,7 +185,8 @@
                     "heat_spec": null,
                     "type": "ChargeConductorMedium",
                     "permittivity": 1.0,
-                    "conductivity": 1.0
+                    "conductivity": 1.0,
+                    "work_function": null
                 },
                 "type": "MultiPhysicsMedium"
             }
@@ -218,7 +220,8 @@
                     ],
                     "units": "V",
                     "type": "DCVoltageSource"
-                }
+                },
+                "model": "ohmic"
             },
             "type": "HeatChargeBoundarySpec"
         },
@@ -243,7 +246,8 @@
                     ],
                     "units": "V",
                     "type": "DCVoltageSource"
-                }
+                },
+                "model": "ohmic"
             },
             "type": "HeatChargeBoundarySpec"
         },
@@ -279,8 +283,7 @@
                 1.0
             ],
             "name": "potential_monitor",
-            "unstructured": true,
-            "conformal": false
+            "unstructured": true
         }
     ],
     "grid_spec": {

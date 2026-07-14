@@ -243,19 +243,19 @@ def monitors():
     temp_mnt1 = td.TemperatureMonitor(size=(1.6, 2, 3), name="test", unstructured=False)
     temp_mnt2 = td.TemperatureMonitor(size=(1.6, 2, 3), name="tet", unstructured=True)
     temp_mnt3 = td.TemperatureMonitor(
-        center=(0, 0.9, 0), size=(1.6, 0, 3), name="tri", unstructured=True, conformal=True
+        center=(0, 0.9, 0), size=(1.6, 0, 3), name="tri", unstructured=True
     )
     temp_mnt4 = td.TemperatureMonitor(
-        center=(0, 0.9, 0), size=(1.6, 0, 3), name="empty", unstructured=True, conformal=False
+        center=(0, 0.9, 0), size=(1.6, 0, 3), name="empty", unstructured=True
     )
 
     volt_mnt1 = td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="v_test", unstructured=False)
     volt_mnt2 = td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="v_tet", unstructured=True)
     volt_mnt3 = td.SteadyPotentialMonitor(
-        center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_tri", unstructured=True, conformal=True
+        center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_tri", unstructured=True
     )
     volt_mnt4 = td.SteadyPotentialMonitor(
-        center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_empty", unstructured=True, conformal=False
+        center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_empty", unstructured=True
     )
 
     capacitance_mnt1 = td.SteadyCapacitanceMonitor(size=(1.6, 2, 3), name="cmnt_test")

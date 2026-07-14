@@ -71,7 +71,8 @@
                     "type": "SolidMedium",
                     "capacity": 1.0,
                     "conductivity": 1.0,
-                    "density": 1.0
+                    "density": 1.0,
+                    "velocity": null
                 },
                 "charge": null,
                 "type": "MultiPhysicsMedium"
@@ -124,6 +125,9 @@
                     "eg": 1.0,
                     "type": "ConstantEnergyBandGap"
                 },
+                "electron_affinity": null,
+                "richardson_electron": null,
+                "richardson_hole": null,
                 "mobility_n": {
                     "attrs": {},
                     "mu": 1500.0,
@@ -251,6 +255,9 @@
                     "eg": 1.0,
                     "type": "ConstantEnergyBandGap"
                 },
+                "electron_affinity": null,
+                "richardson_electron": null,
+                "richardson_hole": null,
                 "mobility_n": {
                     "attrs": {},
                     "mu": 1500.0,
@@ -362,7 +369,8 @@
                     ],
                     "units": "V",
                     "type": "DCVoltageSource"
-                }
+                },
+                "model": "ohmic"
             },
             "type": "HeatChargeBoundarySpec"
         },
@@ -387,7 +395,8 @@
                     ],
                     "units": "V",
                     "type": "DCVoltageSource"
-                }
+                },
+                "model": "ohmic"
             },
             "type": "HeatChargeBoundarySpec"
         },
@@ -423,8 +432,7 @@
                 1.0
             ],
             "name": "free_carrier_monitor",
-            "unstructured": true,
-            "conformal": false
+            "unstructured": true
         },
         {
             "attrs": {},
@@ -440,8 +448,7 @@
                 1.0
             ],
             "name": "potential_monitor",
-            "unstructured": true,
-            "conformal": false
+            "unstructured": true
         },
         {
             "attrs": {},
@@ -457,8 +464,7 @@
                 1.0
             ],
             "name": "capacitance_monitor",
-            "unstructured": true,
-            "conformal": false
+            "unstructured": true
         }
     ],
     "grid_spec": {

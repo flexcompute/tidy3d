@@ -171,7 +171,8 @@
                     "type": "SolidMedium",
                     "capacity": 1.0,
                     "conductivity": 1e-6,
-                    "density": 1e-18
+                    "density": 1e-18,
+                    "velocity": null
                 },
                 "charge": {
                     "attrs": {},
@@ -184,7 +185,8 @@
                     "heat_spec": null,
                     "type": "ChargeConductorMedium",
                     "permittivity": 1.0,
-                    "conductivity": 1.0
+                    "conductivity": 1.0,
+                    "work_function": null
                 },
                 "type": "MultiPhysicsMedium"
             }
@@ -275,7 +277,6 @@
             ],
             "name": "temperature_monitor",
             "unstructured": true,
-            "conformal": false,
             "interval": 1
         }
     ],

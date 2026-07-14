@@ -11,6 +11,8 @@ from tidy3d.components.base_sim.monitor import AbstractMonitor
 from tidy3d.log import log
 
 if TYPE_CHECKING:
+    from pydantic import ValidationInfo
+
     from tidy3d.components.types import ArrayFloat1D
 
 BYTES_REAL = 4
@@ -25,27 +27,32 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
         description="Return data on the original unstructured grid.",
     )
 
-    conformal: bool = Field(
-        False,
-        title="Conformal Monitor Meshing",
-        description="If ``True`` the simulation mesh will conform to the monitor's geometry. "
-        "While this can be set for both Cartesian and unstructured monitors, it bears higher "
-        "significance for the latter ones. Effectively, setting ``conformal = True`` for "
-        "unstructured monitors (``unstructured = True``) ensures that returned values "
-        "will not be obtained by interpolation during postprocessing but rather directly "
-        "transferred from the computational grid. Note: if the simulation mesh uses "
-        "``remove_fragments=True``, this option is ignored (treated as ``False``). "
-        "Deprecated: this field will be removed in version 2.12.",
-    )
-
     @model_validator(mode="before")
     @classmethod
-    def _warn_conformal_deprecated(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Warn if deprecated ``conformal`` field is provided."""
-        # Note:  Only warn when the deprecated flag is actually enabled.
-        if isinstance(values, dict) and values.get("conformal"):
-            log.warning("The 'conformal' flag is deprecated and will be removed in version 2.12.")
-        return values
+    def _drop_removed_fields(cls, data: Any, info: ValidationInfo) -> Any:
+        """Drop fields removed from heat-charge monitors when loading legacy files.
+
+        Gated on the ``from_file`` load context so it fires only on real file loads
+        (``from_file``/``from_hdf5``), wherever a monitor appears — standalone, in monitor
+        data, or nested in a simulation/mesher. In-memory construction (object or dict)
+        still raises via ``extra="forbid"``, keeping one consistent validation contract.
+        """
+        context = info.context or {}
+        if context.get("from_file") and hasattr(data, "get") and "conformal" in data:
+            # ``conformal`` was removed in 2.12; drop it so legacy files clear the
+            # ``extra="forbid"`` check instead of failing to load.
+            conformal = data.pop("conformal", None)
+            # Only ``conformal=True`` changed behavior (it requested conformal meshing);
+            # ``conformal=False`` already matched today's interpolation-based behavior, so
+            # drop it quietly and warn only when the loaded config actually differs.
+            if conformal:
+                log.warning(
+                    "The 'conformal' flag was removed from heat-charge monitors in 2.12. "
+                    "This file sets conformal=True, but the flag is now ignored: monitor "
+                    "geometry no longer affects meshing, and recorded data follows the "
+                    "current interpolation-based behavior."
+                )
+        return data
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""

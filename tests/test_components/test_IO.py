@@ -696,6 +696,102 @@ def test_simulation_updater_v2_10_mode_spec_sort_key_none_with_reference(tmp_pat
     assert sim_loaded.version == __version__
 
 
+@pytest.mark.parametrize(
+    "monitor_type",
+    [
+        "TemperatureMonitor",
+        "VolumeMeshMonitor",
+        "SteadyPotentialMonitor",
+        "SteadyFreeCarrierMonitor",
+    ],
+)
+def test_legacy_conformal_flag_dropped_from_standalone_monitor(monitor_type, tmp_path):
+    """A serialized heat-charge monitor carrying the removed ``conformal`` flag still loads
+    from file on its own (no wrapping container or version), across heat, mesh, and charge
+    monitors."""
+    from ..utils import AssertLogStr
+
+    monitor_cls = getattr(td, monitor_type)
+    mnt_dict = json.loads(monitor_cls(size=(1, 2, 3), name="m").model_dump_json())
+    assert "version" not in mnt_dict
+    mnt_dict["conformal"] = True
+
+    path = tmp_path / "monitor.json"
+    path.write_text(json.dumps(mnt_dict), encoding="utf-8")
+    # Dropping the removed flag warns so a stale config is not silently accepted.
+    with AssertLogStr("WARNING", contains_str="conformal"):
+        loaded = monitor_cls.from_file(path)
+    assert not hasattr(loaded, "conformal")
+
+
+@pytest.mark.parametrize(
+    "monitor_type",
+    [
+        "TemperatureMonitor",
+        "VolumeMeshMonitor",
+        "SteadyPotentialMonitor",
+        "SteadyFreeCarrierMonitor",
+    ],
+)
+def test_legacy_conformal_false_dropped_without_warning(monitor_type, tmp_path):
+    """``conformal=False`` already matched today's behavior, so it is dropped silently:
+    the flag is removed but no warning is emitted since nothing about the load differs."""
+    from ..utils import AssertLogLevel
+
+    monitor_cls = getattr(td, monitor_type)
+    mnt_dict = json.loads(monitor_cls(size=(1, 2, 3), name="m").model_dump_json())
+    mnt_dict["conformal"] = False
+
+    path = tmp_path / "monitor.json"
+    path.write_text(json.dumps(mnt_dict), encoding="utf-8")
+    with AssertLogLevel(None):
+        loaded = monitor_cls.from_file(path)
+    assert not hasattr(loaded, "conformal")
+
+
+def test_conformal_kwarg_rejected_outside_file_load():
+    """Outside a file load the removed ``conformal`` keyword still errors, for both object
+    and dict construction, so the validation contract stays consistent."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        td.TemperatureMonitor(size=(1, 2, 3), name="m", conformal=True)
+
+    with pytest.raises(ValidationError):
+        td.TemperatureMonitor.model_validate(
+            {"type": "TemperatureMonitor", "size": [1, 2, 3], "name": "m", "conformal": True}
+        )
+
+
+def test_legacy_conformal_flag_dropped_from_container_files(tmp_path):
+    """The flag is dropped from monitors on file load wherever they appear: nested in a
+    (versioned) simulation and directly on a (versionless) mesher file."""
+    from ..utils import FULL_STEADY_HEAT
+
+    # Simulation: stale flag on nested ``monitors``.
+    sim_dict = json.loads(FULL_STEADY_HEAT.model_dump_json())
+    assert sim_dict["monitors"], "sample heat sim must define monitors"
+    for mnt in sim_dict["monitors"]:
+        mnt["conformal"] = True
+    sim_path = tmp_path / "sim.json"
+    sim_path.write_text(json.dumps(sim_dict), encoding="utf-8")
+    sim_loaded = td.HeatChargeSimulation.from_file(sim_path)
+    assert all(not hasattr(mnt, "conformal") for mnt in sim_loaded.monitors)
+
+    # VolumeMesher: stale flag on its direct ``monitors`` (no top-level version).
+    mesher = td.VolumeMesher(
+        simulation=FULL_STEADY_HEAT,
+        monitors=(td.VolumeMeshMonitor(size=(1, 2, 3), name="mesh"),),
+    )
+    mesher_dict = json.loads(mesher.model_dump_json())
+    assert "version" not in mesher_dict
+    mesher_dict["monitors"][0]["conformal"] = True
+    mesher_path = tmp_path / "mesher.json"
+    mesher_path.write_text(json.dumps(mesher_dict), encoding="utf-8")
+    reloaded_mesher = td.VolumeMesher.from_file(mesher_path)
+    assert not hasattr(reloaded_mesher.monitors[0], "conformal")
+
+
 def _make_mode_solver_for_legacy_sort_spec_tests() -> td.plugins.mode.ModeSolver:
     sim = td.Simulation(
         size=(2, 2, 2),
