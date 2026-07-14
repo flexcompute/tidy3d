@@ -79,6 +79,42 @@ def test_plot_eps_multiphysics():
     s.plot_eps(x=0)
 
 
+def test_plot_eps_unstructured_custom_medium_uses_real_part():
+    points = td.PointDataArray(
+        [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+    cells = td.CellDataArray([[0, 1, 2], [1, 2, 3]], dims=("cell_index", "vertex_index"))
+    permittivity = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=points,
+        cells=cells,
+        values=td.IndexedDataArray([12.0, 12.1, 12.2, 12.3], dims=("index",)),
+    )
+    conductivity = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=points,
+        cells=cells,
+        values=td.IndexedDataArray([0.0, 0.0, 0.0, 0.0], dims=("index",)),
+    )
+    test_scene = td.Scene(
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
+                medium=td.CustomMedium(permittivity=permittivity, conductivity=conductivity),
+            )
+        ],
+    )
+
+    fig, ax = plt.subplots()
+    test_scene.plot_structures_eps(y=0, freq=2e14, ax=ax)
+
+    assert all(np.isrealobj(collection.get_array()) for collection in ax.collections)
+    plt.close(fig)
+
+
 def test_plot_eps_bounds():
     _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
     plt.close()

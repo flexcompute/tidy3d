@@ -1362,6 +1362,8 @@ class Scene(Tidy3dBaseModel):
                         # extract slice if volumetric unstructured data
                         eps = eps.plane_slice(axis=normal_axis_ind, pos=normal_position)
 
+                    eps = eps.real
+
                     # at this point eps_mean is TriangularGridDataset and we just plot it directly
                     # with applying shape mask
                     cmap_name = _get_colormap(reverse=reverse)
