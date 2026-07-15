@@ -10,6 +10,7 @@ from tidy3d.exceptions import Tidy3dKeyError
 from tidy3d.packaging import pyvista
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Callable
     from typing import Any, ParamSpec, TypeVar
 
@@ -213,6 +214,24 @@ def _is_notebook() -> bool:
 _trame_server_launched = False
 
 
+def _get_or_create_event_loop() -> asyncio.AbstractEventLoop:
+    """Return a usable event loop, creating one if none exists or the current one is closed."""
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+    if loop.is_closed():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop
+
+
 def _ensure_trame_server_running() -> None:
     """Pre-launch PyVista's trame Jupyter server using plain ``nest_asyncio``.
 
@@ -229,13 +248,16 @@ def _ensure_trame_server_running() -> None:
     if _trame_server_launched:
         return
     try:
-        import asyncio
-
         import nest_asyncio
         from pyvista.trame.jupyter import launch_server
 
-        nest_asyncio.apply()
-        asyncio.get_event_loop().run_until_complete(launch_server().ready)
+        async def launch_and_wait() -> None:
+            server = launch_server()
+            await server.ready
+
+        loop = _get_or_create_event_loop()
+        nest_asyncio.apply(loop)
+        loop.run_until_complete(launch_and_wait())
         _trame_server_launched = True
     except Exception as exc:
         from tidy3d.log import log

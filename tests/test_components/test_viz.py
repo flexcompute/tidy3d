@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 
@@ -12,6 +13,7 @@ from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.components.viz as viz
+import tidy3d.components.viz.axes_utils as axes_utils
 from tidy3d import Box, Medium, Simulation, Structure
 from tidy3d.components.viz import (
     Polygon,
@@ -500,6 +502,215 @@ def test_add_plotter_if_none_positional_with_extra_kwarg(patch_pyvista):
     assert calls[0]["plotter"] is real_plotter
     assert calls[0]["extra"] == 99
     assert result is real_plotter
+
+
+def test_add_plotter_if_none_prelaunches_trame_before_notebook_show(monkeypatch):
+    """Notebook plotting prelaunches trame before calling PyVista show()."""
+    import tidy3d.packaging as pkg
+
+    events = []
+
+    class NotebookFakePlotter(FakePlotter):
+        def show(self):
+            events.append("show")
+            assert events == ["prelaunch", "show"]
+            return "show_result"
+
+    class NotebookFakePyvista:
+        Plotter = NotebookFakePlotter
+
+    monkeypatch.setitem(pkg.pyvista, "mod", NotebookFakePyvista())
+    monkeypatch.setattr(axes_utils, "_is_notebook", lambda: True)
+    monkeypatch.setattr(
+        axes_utils,
+        "_ensure_trame_server_running",
+        lambda: events.append("prelaunch"),
+    )
+    func, calls = make_decorated_plotter_func()
+
+    result = func("self_arg")
+
+    assert result == "show_result"
+    assert calls[0]["plotter"].init_kwargs["notebook"] is True
+    assert events == ["prelaunch", "show"]
+
+
+@pytest.mark.parametrize(
+    "call_args, call_kwargs",
+    [
+        (("self_arg",), {"plotter": "REAL"}),
+        (("self_arg", "REAL"), {}),
+    ],
+    ids=["plotter_keyword", "plotter_positional"],
+)
+def test_add_plotter_if_none_prelaunches_trame_for_provided_notebook_plotter(
+    monkeypatch, call_args, call_kwargs
+):
+    """Notebook plotting prelaunches trame before returning a provided plotter."""
+    events = []
+    real_plotter = FakePlotter()
+    call_args = tuple(real_plotter if arg == "REAL" else arg for arg in call_args)
+    call_kwargs = {
+        key: real_plotter if value == "REAL" else value for key, value in call_kwargs.items()
+    }
+
+    @add_plotter_if_none
+    def func(self, plotter=None):
+        events.append("plot")
+        assert events == ["prelaunch", "plot"]
+        return plotter
+
+    monkeypatch.setattr(axes_utils, "_is_notebook", lambda: True)
+    monkeypatch.setattr(
+        axes_utils,
+        "_ensure_trame_server_running",
+        lambda: events.append("prelaunch"),
+    )
+
+    result = func(*call_args, **call_kwargs)
+
+    assert result is real_plotter
+    assert not real_plotter.show_called
+    assert events == ["prelaunch", "plot"]
+
+
+def test_get_or_create_event_loop_creates_and_sets_loop_when_current_loop_is_missing(
+    monkeypatch,
+):
+    """The trame prelaunch helper recovers after ``asyncio.run()`` cleared the loop."""
+    created_loops = []
+    set_loops = []
+    loop = object()
+
+    monkeypatch.setattr(
+        asyncio,
+        "get_event_loop",
+        lambda: (_ for _ in ()).throw(RuntimeError("no current event loop")),
+    )
+    monkeypatch.setattr(asyncio, "new_event_loop", lambda: created_loops.append(loop) or loop)
+    monkeypatch.setattr(asyncio, "set_event_loop", lambda event_loop: set_loops.append(event_loop))
+
+    assert axes_utils._get_or_create_event_loop() is loop
+    assert created_loops == [loop]
+    assert set_loops == [loop]
+
+
+def test_get_or_create_event_loop_replaces_closed_current_loop(request):
+    """The trame prelaunch helper recovers when a closed loop is still current."""
+    closed_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(closed_loop)
+    closed_loop.close()
+
+    def cleanup_loop():
+        try:
+            current_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            current_loop = None
+        if current_loop is not None and not current_loop.is_closed():
+            current_loop.close()
+        try:
+            asyncio.set_event_loop(None)
+        except RuntimeError:
+            pass
+
+    request.addfinalizer(cleanup_loop)
+
+    created_loop = axes_utils._get_or_create_event_loop()
+
+    assert created_loop is not closed_loop
+    assert not created_loop.is_closed()
+    assert asyncio.get_event_loop() is created_loop
+
+
+def test_ensure_trame_server_running_bootstraps_loop_after_asyncio_run(monkeypatch, request):
+    """A missing current loop does not send trame prelaunch down the warning path."""
+    asyncio.run(asyncio.sleep(0))
+
+    events = []
+
+    class FakeServer:
+        def __init__(self):
+            self.ready = self._ready()
+
+        async def _ready(self):
+            events.append(asyncio.get_running_loop())
+
+    def launch_server():
+        events.append("launch")
+        return FakeServer()
+
+    pyvista_mod = types.ModuleType("pyvista")
+    pyvista_mod.__path__ = []
+    trame_mod = types.ModuleType("pyvista.trame")
+    trame_mod.__path__ = []
+    jupyter_mod = types.ModuleType("pyvista.trame.jupyter")
+    jupyter_mod.launch_server = launch_server
+    pyvista_mod.trame = trame_mod
+    trame_mod.jupyter = jupyter_mod
+
+    monkeypatch.setitem(sys.modules, "pyvista", pyvista_mod)
+    monkeypatch.setitem(sys.modules, "pyvista.trame", trame_mod)
+    monkeypatch.setitem(sys.modules, "pyvista.trame.jupyter", jupyter_mod)
+    monkeypatch.setattr(axes_utils, "_trame_server_launched", False)
+
+    def cleanup_loop():
+        for event in events:
+            if hasattr(event, "is_closed") and not event.is_closed():
+                event.close()
+        try:
+            asyncio.set_event_loop(None)
+        except RuntimeError:
+            pass
+
+    request.addfinalizer(cleanup_loop)
+
+    axes_utils._ensure_trame_server_running()
+
+    assert axes_utils._trame_server_launched is True
+    assert events[0] == "launch"
+    assert not events[1].is_closed()
+
+
+def test_ensure_trame_server_running_sets_pyvista_show_condition(monkeypatch):
+    """The workaround sets the PyVista condition that skips elegantly_launch()."""
+    pv = pytest.importorskip("pyvista")
+    pytest.importorskip("pyvista.trame.jupyter")
+    trame_views = pytest.importorskip("pyvista.trame.views")
+
+    monkeypatch.setattr(axes_utils, "_trame_server_launched", False)
+
+    axes_utils._ensure_trame_server_running()
+
+    assert axes_utils._trame_server_launched is True
+    assert trame_views.get_server(name=pv.global_theme.trame.jupyter_server_name).running is True
+
+
+def test_ensure_trame_server_running_satisfies_pyvista_show_trame_launch_guard(
+    monkeypatch,
+):
+    """A pre-launched server satisfies PyVista's guard without native rendering."""
+    pv = pytest.importorskip("pyvista")
+    trame_jupyter = pytest.importorskip("pyvista.trame.jupyter")
+    trame_views = pytest.importorskip("pyvista.trame.views")
+
+    monkeypatch.setattr(axes_utils, "_trame_server_launched", False)
+    launch_calls = []
+
+    def fail_elegantly_launch(*args, **kwargs):
+        launch_calls.append((args, kwargs))
+        raise AssertionError("PyVista attempted to synchronously launch trame")
+
+    monkeypatch.setattr(trame_jupyter, "elegantly_launch", fail_elegantly_launch)
+    axes_utils._ensure_trame_server_running()
+
+    server = trame_views.get_server(name=pv.global_theme.trame.jupyter_server_name)
+
+    # Mirror PyVista's show_trame launch guard without creating a VTK render window.
+    if not server.running:
+        trame_jupyter.elegantly_launch(server, wslink_backend="aiohttp")
+
+    assert server.running is True
+    assert launch_calls == []
 
 
 def _patch_fake_ipython(monkeypatch, shell):

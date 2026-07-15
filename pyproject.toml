@@ -44,7 +44,7 @@ dependencies = [
   "joblib>=1.5.3,<2.0.0",
   "typing-extensions>=4.15.0,<5.0.0",
   "filelock>=3.20.1,<4.0.0",
-  "fastmcp==3.2.4",
+  "fastmcp>=3.4.4,<4",
 ]
 
 [project.urls]
@@ -76,8 +76,8 @@ dev = [
   "psutil>=7.2.1,<8.0.0",
   "pre-commit>=4,<5",
   "pyrefly==1.1.1",
-  "pydata-sphinx-theme>=0.13.3,<0.18.0",
-  "pygad==3.6.0",
+  "pydata-sphinx-theme>=0.13.3,<0.20.0",
+  "pygad==3.7.0",
   "pylint>=4.0.4,<5.0.0",
   "pyswarms>=1.3.0,<2.0.0",
   "pytest>=8.1,<10.0.0",
@@ -102,13 +102,13 @@ dev = [
   "tox>=4.33.0,<5.0.0",
   "towncrier>=25.8.0,<26.0.0",
   "trimesh>=4.6,<5.0.0",
-  "scikit-rf>=1.9.0,<2.0.0",
+  "scikit-rf>=1.9.0,<3.0.0",
   "vtk>=9.6.0,<10.0.0",
   "pyvista[jupyter]>=0.45,<0.48.0",
   "jupyter-bokeh>=4.0.5,<5.0.0",
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
-  "trame-vuetify>=2.0.0,<3.0.0",
+  "trame-vuetify>=2.0.0,<4.0.0",
   "nest-asyncio>=1.6.0,<2.0.0",
   "cma>=4.4.1,<5.0.0",
   "diff-cover>=10.1.0,<11.0.0",
@@ -141,7 +141,7 @@ docs = [
   "sphinx-copybutton>=0.5.2,<0.6.0",
   "sphinx-favicon>=1.0.1,<2.0.0",
   "sphinx-book-theme>=1.0.1,<2.0.0",
-  "pydata-sphinx-theme>=0.13.3,<0.18.0",
+  "pydata-sphinx-theme>=0.13.3,<0.20.0",
   "tmm>=0.2.0,<0.3.0",
   "gdstk>=0.9.49,<1.1",
   "grcwa>=0.1.2,<0.2.0",
@@ -157,7 +157,7 @@ docs = [
   "openpyxl>=3.1.5,<4.0.0",
 ]
 gdstk = ["gdstk>=0.9.49,<1.1"]
-scikit-rf = ["scikit-rf>=1.9.0,<2.0.0"]
+scikit-rf = ["scikit-rf>=1.9.0,<3.0.0"]
 trimesh = [
   "trimesh>=4.6,<5.0.0",
   "networkx>=2.6.3,<4.0.0",
@@ -169,7 +169,7 @@ pyvista = [
   "vtk>=9.6.0,<10.0.0",
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
-  "trame-vuetify>=2.0.0,<3.0.0",
+  "trame-vuetify>=2.0.0,<4.0.0",
   "nest-asyncio>=1.6.0,<2.0.0",
 ]
 ruff = ["ruff==0.14.1"]
@@ -185,7 +185,7 @@ pytorch = [
 ]
 design = [
   "bayesian-optimization>=2.0.0,<4.0.0",
-  "pygad==3.6.0",
+  "pygad==3.7.0",
   "pyswarms>=1.3.0,<2.0.0",
 ]
 extras = ["tidy3d-extras==2.12.0.dev3"]

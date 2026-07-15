@@ -363,7 +363,7 @@ def test_run_mcp_server_smoke_uses_real_fastmcp_proxy():
         import asyncio
         import os
 
-        from fastmcp import Client
+        from fastmcp import Client, FastMCP
         from fastmcp.server.providers.proxy import FastMCPProxy, ProxyProvider
         from tidy3d.web.mcp import _dispatcher, python_env
         from tidy3d.web.mcp import server as mcp_server
@@ -397,10 +397,13 @@ def test_run_mcp_server_smoke_uses_real_fastmcp_proxy():
             "projectManager": "uv",
             "detectionSource": "workspace",
         }
-        os.environ.pop(mcp_server.REMOTE_MCP_URL_ENV, None)
-        os.environ["TIDY3D_MCP_USER_AGENT"] = "tidy3d-test"
+        upstream = FastMCP("Upstream")
 
-        mcp_server.run_mcp_server(viewer_bridge=":5123")
+        with run_streamable_http_server(upstream) as mcp_url:
+            os.environ[mcp_server.REMOTE_MCP_URL_ENV] = mcp_url
+            os.environ["TIDY3D_MCP_USER_AGENT"] = "tidy3d-test"
+
+            mcp_server.run_mcp_server(viewer_bridge=":5123")
 
         assert len(run_calls) == 1
         proxy, show_banner, tools, result = run_calls[0]

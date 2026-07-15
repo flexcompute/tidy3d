@@ -277,7 +277,9 @@ class TriangularSurfaceDataset(UnstructuredDataset):
             Whether to display in an external window. If None (default), automatically
             detects environment (inline in notebooks, windowed otherwise). Set to True
             to force external window even when running in a notebook, which provides
-            better interactivity and performance.
+            better interactivity and performance. Inline notebook plots start PyVista's
+            trame server during the plot call, including when ``show=False`` or a plotter
+            is supplied.
         window_size : tuple = (800, 600)
             Size of the window (width, height) when creating new plotter.
         **mesh_kwargs
@@ -404,7 +406,8 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         windowed : bool = None
             Whether to display in an external window. If None (default), automatically
             detects environment (inline in notebooks, windowed otherwise). Set to True
-            to force external window.
+            to force external window. Inline notebook plots start PyVista's trame server
+            during the plot call, including when ``show=False`` or a plotter is supplied.
         window_size : tuple = (800, 600)
             Size of the window (width, height) when creating new plotter.
         **arrow_kwargs
