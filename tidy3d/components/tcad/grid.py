@@ -33,6 +33,20 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
         "Use ``relative_min_dl=0`` to remove this constraint.",
     )
 
+    geometry_tolerance: PositiveFloat = Field(
+        1e-6,
+        title="Geometry Tolerance",
+        description="Absolute distance below which coincident geometric entities are fused when "
+        "building the mesh. Increase this if abutting structures with finely tessellated (e.g. "
+        "curved) boundaries fail to merge into a single conformal interface, which can leave "
+        "duplicated internal surfaces and degenerate elements. Keep it well below the smallest "
+        "geometric feature and the target mesh size: too large a value snaps together unrelated "
+        "vertices and corrupts the mesh. Refinement lines are additionally subject to a built-in "
+        f"{REFINEMENT_LINE_TOLERANCE:.0e} um minimum length, so setting this knob below that value "
+        "does not relax the line-length requirement.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
     remove_fragments: bool = Field(
         False,
         title="Remove Fragments",
@@ -281,6 +295,22 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
                 ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'."),
                 "distance_bulk",
             )
+
+        # A refinement line at or below the fusion tolerance is collapsed during meshing;
+        # reject it at setup time rather than as a meshing-time failure.
+        for ind, ref in enumerate(self.mesh_refinements):
+            if isinstance(ref, GridRefinementLine):
+                line_length = float(np.linalg.norm(np.asarray(ref.r2) - np.asarray(ref.r1)))
+                if line_length <= self.geometry_tolerance:
+                    self._raise_validation_error_at_loc(
+                        ValidationError(
+                            f"Refinement line length ({line_length:.1e} um) must be greater than "
+                            f"'geometry_tolerance' ({self.geometry_tolerance:.1e} um); shorter lines "
+                            "are collapsed when coincident geometry is fused during meshing."
+                        ),
+                        "mesh_refinements",
+                        ind,
+                    )
 
         return self
 

@@ -1066,3 +1066,41 @@ def test_unsteady_setup():
         )
         new_struct = solid_structure.updated_copy(medium=solid_medium)
         _ = heat_sim.updated_copy(structures=(new_struct,))
+
+
+def test_unstructured_grid_geometry_tolerance():
+    """geometry_tolerance defaults to 1e-6, is settable, and round-trips."""
+    grid = DistanceUnstructuredGrid(
+        dl_interface=0.1, dl_bulk=1.0, distance_interface=0.3, distance_bulk=2.0
+    )
+    assert grid.geometry_tolerance == 1e-6
+    grid = grid.updated_copy(geometry_tolerance=1e-5)
+    assert grid.geometry_tolerance == 1e-5
+    assert DistanceUnstructuredGrid.parse_raw(grid.json()).geometry_tolerance == 1e-5
+
+
+def test_refinement_line_shorter_than_geometry_tolerance_errors():
+    """A refinement line at or below geometry_tolerance is rejected at setup time."""
+    # length 5e-5: valid against the 1e-6 floor, but collapsed by a 1e-4 fusion tolerance
+    short_line = td.GridRefinementLine(
+        r1=(0.0, 0.0, 0.0),
+        r2=(5e-5, 0.0, 0.0),
+        dl_near=0.01,
+        distance_near=0.01,
+        distance_bulk=0.02,
+    )
+    grid_kwargs = {
+        "dl_interface": 0.1,
+        "dl_bulk": 1.0,
+        "distance_interface": 0.3,
+        "distance_bulk": 2.0,
+    }
+
+    with pytest.raises(ValidationError) as excinfo:
+        DistanceUnstructuredGrid(
+            **grid_kwargs, geometry_tolerance=1e-4, mesh_refinements=(short_line,)
+        )
+    assert_single_value_error_loc(excinfo, ("mesh_refinements", 0))
+
+    # accepted at the default (finer) tolerance
+    DistanceUnstructuredGrid(**grid_kwargs, mesh_refinements=(short_line,))
