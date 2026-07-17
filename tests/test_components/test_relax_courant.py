@@ -151,34 +151,36 @@ def test_relax_courant_rejects_time_modulated():
     assert_single_value_error_loc(excinfo, ("relax_courant",), "time-modulated medium")
 
 
-def test_relax_courant_rejects_periodic_x():
-    """relax_courant should reject periodic boundary conditions along x."""
+def test_relax_courant_allows_periodic_off_axis():
+    """Periodic/Bloch boundaries are accepted as long as some axis has none."""
+    _make_relax_courant_sim(
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        )
+    )
+
+    _make_relax_courant_sim(
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.bloch(bloch_vec=1.0),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        )
+    )
+
+
+def test_relax_courant_rejects_periodic_all_axes():
+    """Periodic/Bloch boundaries on every axis reject relax_courant."""
     with pytest.raises(ValidationError) as excinfo:
         _make_relax_courant_sim(
             boundary_spec=td.BoundarySpec(
                 x=td.Boundary.periodic(),
-                y=td.Boundary.pml(),
-                z=td.Boundary.pml(),
+                y=td.Boundary.bloch(bloch_vec=1.0),
+                z=td.Boundary.periodic(),
             )
         )
-    assert_single_value_error_loc(
-        excinfo, ("relax_courant",), "Periodic or Bloch boundary condition along x"
-    )
-
-
-def test_relax_courant_rejects_bloch_x():
-    """relax_courant should reject Bloch boundary conditions along x."""
-    with pytest.raises(ValidationError) as excinfo:
-        _make_relax_courant_sim(
-            boundary_spec=td.BoundarySpec(
-                x=td.Boundary.bloch(bloch_vec=1.0),
-                y=td.Boundary.pml(),
-                z=td.Boundary.pml(),
-            )
-        )
-    assert_single_value_error_loc(
-        excinfo, ("relax_courant",), "Periodic or Bloch boundary condition along x"
-    )
+    assert_single_value_error_loc(excinfo, ("relax_courant",), "No axis free of Periodic")
 
 
 @pytest.mark.parametrize("axis", ["x", "y", "z"])

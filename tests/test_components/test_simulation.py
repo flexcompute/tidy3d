@@ -4903,8 +4903,8 @@ def test_relax_courant_validation_error_loc():
         grid_spec=td.GridSpec.uniform(dl=0.1),
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.periodic(),
-            y=td.Boundary.pml(),
-            z=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
         ),
     )
     with pytest.raises(ValidationError) as excinfo:

@@ -4171,6 +4171,21 @@ class Simulation(AbstractYeeGridSimulation):
 
         return self
 
+    @property
+    def _simple_bc(self) -> tuple[bool, bool, bool]:
+        """Per-axis flag: True when the axis carries no Periodic, Bloch, ABC, or ModeABC
+        boundary."""
+        simple = []
+        for axis_name in ("x", "y", "z"):
+            boundary = self.boundary_spec[axis_name]
+            simple.append(
+                not any(
+                    isinstance(b, Periodic | BlochBoundary | ABCBoundary | ModeABCBoundary)
+                    for b in (boundary.plus, boundary.minus)
+                )
+            )
+        return tuple(simple)
+
     def _validate_relax_courant_compatibility(self) -> Self:
         """Error if ``relax_courant`` is enabled with incompatible components."""
 
@@ -4212,11 +4227,11 @@ class Simulation(AbstractYeeGridSimulation):
                 incompatible.append(f"Single-cell {axis_name}-axis (quasi-2D simulation).")
 
         if boundary_spec is not None:
-            x_boundary = boundary_spec.x
-            if isinstance(x_boundary.plus, Periodic | BlochBoundary) or isinstance(
-                x_boundary.minus, Periodic | BlochBoundary
-            ):
-                incompatible.append("Periodic or Bloch boundary condition along x.")
+            if not any(self._simple_bc):
+                incompatible.append(
+                    "No axis free of Periodic, Bloch, ABC, and ModeABC boundary conditions "
+                    "(at least one such axis is required)."
+                )
             for axis_name in ("x", "y", "z"):
                 axis_boundary = boundary_spec[axis_name]
                 if isinstance(axis_boundary.plus, ABCBoundary | ModeABCBoundary) or isinstance(
@@ -7552,9 +7567,11 @@ class Simulation(AbstractYeeGridSimulation):
         if self.relax_courant:
             _check_tidy3d_extras_available()
             boundaries = self.grid.boundaries.to_list
-            dl_mins_xyz = [float(np.min(np.diff(b))) for b in boundaries]
             relax_ratio = tidy3d_extras["mod"].extension._relax_courant(
-                dl_mins=dl_mins_xyz, coord_boundaries=boundaries[0]
+                coord_boundaries_x=boundaries[0],
+                coord_boundaries_y=boundaries[1],
+                coord_boundaries_z=boundaries[2],
+                simple_bc=self._simple_bc,
             )
         else:
             relax_ratio = 1.0
