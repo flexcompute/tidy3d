@@ -1288,6 +1288,35 @@ def test_plot_grid():
     plt.close()
 
 
+def test_plot_grid_finest_region_alpha():
+    """Finest-grid-region markers are off by default (alpha=0) and opt-in via a nonzero alpha."""
+    # localized mesh override creates a finer grid region along x
+    mesh_override = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.5, 0.5, 0.5)), dl=(0.02, 0.02, 0.02)
+    )
+    sim = SIM_FULL.updated_copy(
+        grid_spec=td.GridSpec(wavelength=1.0, override_structures=(mesh_override,))
+    )
+    assert len(sim.grid.fine_mesh_info) > 0
+
+    # the finest-grid regions are drawn as Rectangle patches via ax.add_patch;
+    # plotting normal to y exposes the refined x locations in-plane
+    _, ax = plt.subplots()
+    sim.plot_grid(y=0, ax=ax)
+    assert len(ax.patches) == 0, "finest-grid-region markers should be off by default (alpha=0)"
+    plt.close()
+
+    _, ax = plt.subplots()
+    sim.plot_grid(y=0, ax=ax, finest_grid_region_alpha=0)
+    assert len(ax.patches) == 0, "no finest-grid-region markers should be drawn when alpha=0"
+    plt.close()
+
+    _, ax = plt.subplots()
+    sim.plot_grid(y=0, ax=ax, finest_grid_region_alpha=0.3)
+    assert len(ax.patches) > 0, "finest-grid-region markers should be drawn when alpha>0"
+    plt.close()
+
+
 def test_plot_boundaries():
     bound_spec = td.BoundarySpec(
         x=td.Boundary(plus=td.PECBoundary(), minus=td.PMCBoundary()),

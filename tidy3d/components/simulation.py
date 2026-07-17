@@ -1378,7 +1378,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: tuple[float, float] | None = None,
         override_structures_alpha: float = 1,
         snapping_points_alpha: float = 1,
-        finest_grid_region_alpha: float = 0.1,
+        finest_grid_region_alpha: float = 0,
         **kwargs: Any,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -1399,8 +1399,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the override structures.
         snapping_points_alpha : float = 1
             Opacity of the snapping points.
-        finest_grid_region_alpha : float = 0.1
-            Opacity of the shaded regions highlighting finest grid regions.
+        finest_grid_region_alpha : float = 0
+            Opacity of the shaded regions highlighting finest grid regions. Defaults to ``0``
+            (off); pass a nonzero value to opt in to drawing these regions.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
