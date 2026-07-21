@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.12.0.dev3] - 2026-07-21
+
+### Added
+
+- Added `tidy3d.RadiationBC` gray-body surface radiation boundary condition and an optional `emissivity` field on `tidy3d.ConvectionBC` for combined convective-radiative heat exchange, supported in heat and conduction+heat simulations.
+- Added `SurfaceRecombinationBC` for modeling Shockley-Read-Hall surface recombination and fixed interface sheet charge on semiconductor boundaries and zone interfaces, supported by the accelerated charge solver.
+- Added `ThinLensProfile`, `ThinLensBeam`, and `ThinLensOverlapMonitor` for constructing,
+  injecting, and decomposing vectorial focused beams from a thin-lens angular spectrum.
+- Added `tidy3d.web.diagnose_connection()` and the `tidy3d diagnose-connection` CLI for measuring Tidy3D API reachability, DNS/TCP/TLS connectivity, client SSL/proxy/CA configuration, and storage download throughput.
+- `LumpedResistor`, `LinearLumpedElement`, and `LumpedPort` now accept one-dimensional (line) geometries with two zero-size dimensions, in addition to planar geometries; a line element/port is realized as a single-grid-cell-wide `Medium2D` sheet whose normal axis is chosen at meshing time to straddle any adjacent material interface.
+- `AnisotropicConductivity` for `SolidMedium.conductivity`, specifying an anisotropic (tensor) thermal conductivity via principal values `xx`, `yy`, `zz` plus an optional `rotation`. A scalar `conductivity` remains fully supported for isotropic materials. `SolidMedium.from_si_units` also accepts an `AnisotropicConductivity` (its principals are converted from SI units).
+- Added `ElectromagneticFieldData.field_intensity()` for computing intensity from selected electric field components using the existing colocated intensity semantics.
+- `VarshniEnergyBandGap` and `ConstantEnergyBandGap` now expose a `band_gap_energy(temperature)` method returning the energy band gap (in eV) at the requested temperature(s).
+- Added `geometry_tolerance` to unstructured grid specs, raising the distance below which coincident geometric entities are fused during heat/charge meshing (refinement lines remain subject to a built-in `1e-6` um minimum length).
+
+### Changed
+
+- Gaussian-like overlap monitors now require their monitor plane to lie in a homogeneous, isotropic background medium.
+- The `relax_courant` option is now orientation independent and benefits a wider range of simulations.
+- Consolidated the TCAD band-gap classes into a single module: `ConstantEnergyBandGap` and `VarshniEnergyBandGap` now live in `tidy3d.components.tcad.bandgap` (previously `tidy3d.components.tcad.bandgap_energy`, which has been removed) alongside `SlotboomBandGapNarrowing`. The public import path (`import tidy3d as td; td.ConstantEnergyBandGap`) is unchanged; only code importing directly from the internal `bandgap_energy` module path needs to update its import.
+- Finest grid region visualization in `Simulation.plot_grid()` is now off by default; opt in by passing a nonzero `finest_grid_region_alpha`.
+
+### Fixed
+
+- Fixed autograd runs so unsupported traced source, medium, and geometry parameters are rejected during setup, before simulation submission.
+- Fixed doping behavior at box boundaries in charge simulations, for all doping box types (`ConstantDoping`, `GaussianDoping`, `CustomDoping`): doping near a box edge is no longer dropped, two boxes that abut along a plane no longer double the doping on that shared plane (the later box in the list takes the shared plane), and overlapping boxes (such as a background plus an implant) now add together correctly. Doping plots reflect the same combined doping the simulation uses.
+- Simulations now validate that the grid resolves each lumped element and port before upload: at least two cells are required along every axis transverse to the ``voltage_axis``. A too-coarse grid (for example a single cell across a transverse axis) previously failed during meshing with a cryptic "zero volume", ``IndexError``, or divide-by-zero; it now raises a clear error pointing at the offending axis. This applies to both planar and one-dimensional (line) elements.
+- Fixed loading of solver-generated heat, charge, and mesh results so Tidy3D no longer emits misleading unused-point or missing-value warnings.
+- Union fields on Tidy3D models are now validated against their ``type`` discriminator, so passing an object of the wrong type to a model field raises a clear error at construction instead of being silently accepted and failing later during serialization or a remote run.
+- Fixed local EME staged propagation rejecting `EMEModeSpec.interp_spec` mode data stored on the reduced interpolation frequency grid (`reduce_data=True`); such mode data is now accepted and its overlaps interpolated up to the requested frequencies.
+- Fixed remote autograd gradients to reuse compatible cached forward results when possible and automatically rerun the forward simulation when partial cached data is missing or no longer usable for the backward pass.
+- Transient (`UnsteadyHeatAnalysis`) heat simulations with only Neumann-type boundary conditions (e.g. all `HeatFluxBC`) are no longer incorrectly rejected; the all-Neumann check now applies only to steady-state simulations, where the solution is otherwise undefined up to a constant.
+- Corrected the fixed-angle far-field projection phase so oblique fixed-angle sources with an off-origin center produce the right projected pattern.
+- Fixed `PolySlab` adjoint derivatives to use winding-invariant sidewall sampling based on offset polygon slices.
+- Fixed the Bloch phase application for `DirectivityMonitor` far fields, which was previously dropped at domain-edge cells in simulations with Bloch boundaries.
+- Clarified the `Job.step()` and `Batch.step()` error message when workflow results are already complete, including from the local cache, and restored upload-time cost estimate logs for multi-step workflow jobs.
+- Fixed seven default material models whose coefficients deviated from their reference data: `Al` `'Rakic1995'` (real index was non-physical across the visible/NIR), `Cr` and `Be` `'Rakic1998BB'`, `Au` `'Olmon2012evaporated'` (no interband response in the visible), `Ag` `'Rakic1998BB'`, and `Pt` and `Ti` `'Werner2009'`. Validity ranges are unchanged; results change wherever these variants are used, explicitly or via the material default. For infrared-only simulations, the previous fewer-pole (lower-cost) coefficients remain available as `'Rakic1998BB_IR'` (`Cr`, `Be`, `Ag`) and `'Olmon2012evaporated_IR'` (`Au`) variants, restricted to the infrared bands where they match the reference data.
+- Fixed a validation error caused by `LossyMetalMedium` mistakenly being added directly to the medium conversion of lumped elements.
+- Fixed inline PyVista notebook plots sometimes failing to start interactive views.
+- Fixed heat/charge meshing of abutting structures with finely tessellated (e.g. curved) boundaries, which could leave degenerate zero-volume elements that failed the solver's mesh check.
+- Fixed `Scene.plot_structures_eps()` for unstructured custom-medium data with complex permittivities.
+- Fixed flat `BatchData` result access for known skipped, failed, or incomplete batch tasks to raise a contextual `DataError` instead of a raw `KeyError`.
+
+### Removed
+
+- Removed the deprecated `conformal` flag from heat-charge monitors (`TemperatureMonitor`, `VolumeMeshMonitor`, and the `Steady*` charge monitors). Monitor geometry no longer affects meshing: the simulation mesh is never forced to conform to a monitor. For value-producing monitors (temperature, potential, and the other `Steady*` fields), planar and line monitors now return values interpolated from the computational grid, while volumetric monitors return the grid cells contained in the monitor region. Files saved with older versions load unchanged, as the flag is dropped automatically on load.
+
 ## [2.12.0.dev2] - 2026-06-30
 
 ### Added
@@ -2266,6 +2313,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.12.0.dev3]: https://github.com/flexcompute/tidy3d/compare/v2.12.0.dev2...v2.12.0.dev3
 [2.12.0.dev2]: https://github.com/flexcompute/tidy3d/compare/v2.12.0.dev1...v2.12.0.dev2
 [2.12.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.12.0.dev0...v2.12.0.dev1
 [2.12.0.dev0]: https://github.com/flexcompute/tidy3d/compare/v2.11.2...v2.12.0.dev0
