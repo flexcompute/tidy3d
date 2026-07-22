@@ -300,7 +300,8 @@ class SemiconductorMedium(AbstractChargeMedium):
         None,
         title="Electron affinity",
         description=":math:`\\chi` Electron affinity [eV]. Required on the "
-        "semiconductor side of a Schottky contact.",
+        "semiconductor side of a Schottky contact, and used by the accelerated "
+        "charge solver for semiconductor heterojunction band offsets.",
         json_schema_extra={"units": ELECTRON_VOLT},
     )
 
@@ -308,14 +309,16 @@ class SemiconductorMedium(AbstractChargeMedium):
         None,
         title="Electron Richardson constant",
         description=":math:`A^*_n` Electron Richardson constant "
-        "[A/(cm^2 K^2)]. Required on the semiconductor side of a Schottky contact.",
+        "[A/(cm^2 K^2)]. Used by accelerated charge thermionic transport for "
+        "Schottky contacts and semiconductor heterojunctions.",
     )
 
     richardson_hole: PositiveFloat | None = Field(
         None,
         title="Hole Richardson constant",
         description=":math:`A^*_p` Hole Richardson constant [A/(cm^2 K^2)]. "
-        "Required on the semiconductor side of a Schottky contact.",
+        "Used by accelerated charge thermionic transport for Schottky contacts "
+        "and semiconductor heterojunctions.",
     )
 
     mobility_n: MobilityModelType = Field(

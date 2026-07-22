@@ -2256,6 +2256,78 @@ def test_schottky_rejects_unresolvable_placements(placement):
     assert_single_value_error_loc(excinfo, ("boundary_spec", 0), "StructureBoundary")
 
 
+def test_charge_non_accelerated_warns_electron_affinity_ignored():
+    """Warn if the non-accelerated solver is selected for a semiconductor with electron affinity."""
+    semiconductor = td.MultiPhysicsMedium(
+        charge=td.SemiconductorMedium(
+            permittivity=11.7,
+            electron_affinity=4.05,
+            N_d=0,
+            N_a=0,
+            N_c=ConstantEffectiveDOS(N=2.86e19),
+            N_v=ConstantEffectiveDOS(N=3.1e19),
+            E_g=ConstantEnergyBandGap(eg=1.11),
+            mobility_n=td.ConstantMobilityModel(mu=1400),
+            mobility_p=td.ConstantMobilityModel(mu=450),
+        ),
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        name="semiconductor",
+    )
+    metal = td.MultiPhysicsMedium(
+        charge=td.ChargeConductorMedium(conductivity=3.5e7 * 1e-6),
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        name="metal",
+    )
+    air = td.MultiPhysicsMedium(heat=td.FluidMedium(), name="air")
+
+    with AssertLogLevel(
+        "WARNING", contains_str="non-accelerated charge solver this value is ignored"
+    ):
+        _ = td.HeatChargeSimulation(
+            size=(1.0, 0.4, 0.4),
+            center=(0, 0, 0),
+            medium=air,
+            structures=[
+                td.Structure(
+                    geometry=td.Box(center=(0, 0, 0), size=(0.6, 0.2, 0.2)),
+                    medium=semiconductor,
+                    name="semiconductor",
+                ),
+                td.Structure(
+                    geometry=td.Box(center=(-0.4, 0, 0), size=(0.2, 0.2, 0.2)),
+                    medium=metal,
+                    name="left_contact",
+                ),
+                td.Structure(
+                    geometry=td.Box(center=(0.4, 0, 0), size=(0.2, 0.2, 0.2)),
+                    medium=metal,
+                    name="right_contact",
+                ),
+            ],
+            boundary_spec=[
+                td.HeatChargeBoundarySpec(
+                    placement=td.StructureBoundary(structure="left_contact"),
+                    condition=td.VoltageBC(source=td.GroundVoltage()),
+                ),
+                td.HeatChargeBoundarySpec(
+                    placement=td.StructureBoundary(structure="right_contact"),
+                    condition=td.VoltageBC(source=td.GroundVoltage()),
+                ),
+            ],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.SteadyPotentialMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="potential",
+                    unstructured=True,
+                )
+            ],
+            analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
+            use_accelerated_solver=False,
+        )
+
+
 def test_charge_simulation_voltage_bc_error_loc(heat_simulation):
     with pytest.raises(ValidationError) as excinfo:
         _ = heat_simulation.updated_copy(

@@ -567,6 +567,9 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("boundary_spec",), self._check_surface_recombination_bcs
             )
+            self._call_with_validation_loc(
+                ("structures",), self._warn_non_accelerated_ignores_electron_affinity
+            )
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
@@ -1231,6 +1234,31 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return False
 
+    def _warn_non_accelerated_ignores_electron_affinity(self) -> Self:
+        """Warn when the non-accelerated charge solver path will ignore electron affinity."""
+        try:
+            use_accelerated = self._resolve_use_accelerated_solver
+        except SetupError:
+            # Solver routing itself is invalid; the downstream error will surface
+            # on its own and there is nothing to warn about here.
+            return self
+        if use_accelerated:
+            return self
+
+        for semiconductor in self._semiconductor_charge_media(self.structures):
+            if (
+                semiconductor.electron_affinity is not None
+                and semiconductor.electron_affinity != 0.0
+            ):
+                log.warning(
+                    "'SemiconductorMedium.electron_affinity' is currently supported only "
+                    "when 'use_accelerated_solver=True'. With the non-accelerated charge "
+                    "solver this value is ignored and an electron affinity of 0 eV is used. "
+                    "Set 'use_accelerated_solver=True' to honour the configured value."
+                )
+                break
+        return self
+
     def _not_all_neumann(self) -> Self:
         """Make sure not all BCs are of Neumann type"""
 
@@ -1344,20 +1372,23 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @staticmethod
+    def _semiconductor_charge_media(
+        structures: Iterable[Structure],
+    ) -> Iterable[SemiconductorMedium]:
+        """Yield semiconductor charge media from bare and multiphysics structure media."""
+        for structure in structures:
+            if isinstance(structure.medium, SemiconductorMedium):
+                yield structure.medium
+            elif isinstance(structure.medium, MultiPhysicsMedium):
+                charge_medium = structure.medium.charge
+                if isinstance(charge_medium, SemiconductorMedium):
+                    yield charge_medium
+
+    @staticmethod
     def _check_if_semiconductor_present(structures: Iterable[Structure]) -> bool:
         """Checks whether the simulation object can run a Charge simulation."""
 
-        charge_sim = False
-
-        # make sure mediums with doping have been defined
-        for structure in structures:
-            if isinstance(structure.medium, SemiconductorMedium):
-                charge_sim = True
-            if isinstance(structure.medium, MultiPhysicsMedium):
-                if structure.medium.charge is not None:
-                    if isinstance(structure.medium.charge, SemiconductorMedium):
-                        charge_sim = True
-        return charge_sim
+        return any(HeatChargeSimulation._semiconductor_charge_media(structures))
 
     def _check_simulation_types(
         self,

@@ -18,6 +18,7 @@ the accelerated-only features are covered in the
 
     simulation
     mediums
+    heterojunctions
     boundary_conditions
     source
     monitor
@@ -28,6 +29,7 @@ the accelerated-only features are covered in the
 
 .. include:: /api/charge/simulation.rst
 .. include:: /api/charge/mediums.rst
+.. include:: /api/charge/heterojunctions.rst
 .. include:: /api/charge/boundary_conditions.rst
 .. include:: /api/charge/source.rst
 .. include:: /api/charge/monitor.rst
