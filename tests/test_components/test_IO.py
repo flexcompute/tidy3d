@@ -611,17 +611,7 @@ SIM_FILES = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
 @pytest.mark.parametrize("sim_file", SIM_FILES)
 def test_simulation_updater(sim_file):
     """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
-    expects_legacy_nonlinear_warning = os.path.basename(sim_file) in {
-        "full_fdtd.h5",
-        "full_fdtd.json",
-        "full_fdtd_field_projection.h5",
-        "full_fdtd_field_projection.json",
-    }
-
-    if expects_legacy_nonlinear_warning:
-        with AssertLogLevel("WARNING", contains_str="nonlinear_spec=model"):
-            sim_loaded = td.Simulation.from_file(sim_file)
-    elif "fdtd" in sim_file:
+    if "fdtd" in sim_file:
         sim_loaded = td.Simulation.from_file(sim_file)
     else:
         sim_loaded = td.HeatChargeSimulation.from_file(sim_file)
@@ -629,6 +619,42 @@ def test_simulation_updater(sim_file):
 
     # just make sure the loaded sim does something properly using this version
     assert sim_loaded.scene is not None
+
+
+def test_simulation_updater_legacy_nonlinear_spec_model_warning(tmp_path):
+    """Ensure legacy ``nonlinear_spec=model`` simulation files still update with a warning."""
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(0.5, 0.5, 0.5)),
+                medium=td.Medium(
+                    permittivity=2.0,
+                    nonlinear_spec=td.NonlinearSpec(
+                        models=[td.NonlinearSusceptibility(chi3=0.1)],
+                        num_iters=20,
+                    ),
+                ),
+            )
+        ],
+        run_time=1e-12,
+    )
+    sim_dict = json.loads(sim.model_dump_json())
+    medium = sim_dict["structures"][0]["medium"]
+    nonlinear_spec = medium["nonlinear_spec"]
+    medium["nonlinear_spec"] = nonlinear_spec["models"][0]
+    medium["nonlinear_spec"]["numiters"] = nonlinear_spec["num_iters"]
+    sim_dict["version"] = "2.10.0"
+
+    sim_path = tmp_path / "sim_legacy_nonlinear_spec_model.json"
+    sim_path.write_text(json.dumps(sim_dict), encoding="utf-8")
+
+    with AssertLogLevel("WARNING", contains_str="nonlinear_spec=model"):
+        sim_loaded = td.Simulation.from_file(sim_path)
+
+    assert sim_loaded.version == __version__
+    assert sim_loaded.structures[0].medium.nonlinear_spec.chi3 == 0.1
 
 
 def test_simulation_updater_v2_10_mode_spec_sort_key_none(tmp_path):

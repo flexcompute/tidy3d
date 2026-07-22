@@ -1590,9 +1590,16 @@
                 "allow_gain": false,
                 "nonlinear_spec": {
                     "attrs": {},
-                    "type": "NonlinearSusceptibility",
-                    "chi3": 0.1,
-                    "numiters": 20
+                    "models": [
+                        {
+                            "attrs": {},
+                            "type": "NonlinearSusceptibility",
+                            "chi3": 0.1,
+                            "numiters": null
+                        }
+                    ],
+                    "num_iters": 20,
+                    "type": "NonlinearSpec"
                 },
                 "modulation_spec": null,
                 "viz_spec": null,
@@ -2559,7 +2566,8 @@
                 "type": "ApodizationSpec"
             },
             "normal_dir": "+",
-            "exclude_surfaces": null
+            "exclude_surfaces": null,
+            "enable_adjoint": false
         },
         {
             "attrs": {},
@@ -2923,7 +2931,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.12.0.dev3",
+    "version": "2.12.0",
     "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "lumped_elements": [
