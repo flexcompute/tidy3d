@@ -411,6 +411,53 @@ def test_triangular_dataset(tmp_path, ds_name, values_type, no_vtk=False):
         )
 
 
+def test_triangular_dataset_near_degenerate_cell_does_not_corrupt_interpolation():
+    """CPOHeat regression: reject a degenerate candidate before nearest fallback."""
+    points = td.PointDataArray(
+        [
+            [-5000.0, 1000.0],
+            [5000.0, 1000.0],
+            [0.0, 1100.0],
+            [4813.5517578125, -2.765655517578125],
+            [4812.20947265625, -3.2404086589813232],
+            [4811.9248046875, -1.2976830721100896e-10],
+            [4811.9248046875, -9.348610774395638e-11],
+        ],
+        dims=("index", "axis"),
+    )
+    cells = td.CellDataArray(
+        [[0, 1, 2], [3, 4, 5], [5, 4, 6]],
+        dims=("cell_index", "vertex_index"),
+    )
+    values = td.IndexedDataArray(
+        [
+            300.0,
+            300.0,
+            300.0,
+            334.2263488769531,
+            334.2261657714844,
+            334.2263488769531,
+            334.2263488769531,
+        ],
+        dims=("index",),
+    )
+    dataset = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=points,
+        cells=cells,
+        values=values,
+    )
+
+    interpolated = dataset.interp(
+        x=4812.0300751879695,
+        y=0,
+        z=-1.2290502793296127,
+    )
+
+    assert float(interpolated.squeeze()) == pytest.approx(334.2263488769531)
+
+
 @pytest.mark.parametrize("values_type", TYPE_TO_EXTRA_DIMS.keys())
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_tetrahedral_dataset(tmp_path, ds_name, values_type, no_vtk=False):

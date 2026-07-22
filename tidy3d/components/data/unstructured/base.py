@@ -52,6 +52,9 @@ DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
 DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 
+# Allow boundary roundoff without accepting unstable weights from near-degenerate cells.
+BARYCENTRIC_WEIGHT_TOLERANCE = 1e-6
+
 # Scales with extent (not absolute coordinate) so detection is origin-independent;
 # absolute floor handles degenerate/tiny slices where the relative term underflows.
 PLANAR_ZERO_DIM_TOLERANCE_ABS = 1e-6
@@ -2045,7 +2048,12 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
                 n = np.roll(p01, 1, axis=1)
                 n[:, 0] = -n[:, 0]
             n_norm = np.linalg.norm(n, axis=1)
-            n = n / n_norm[:, None]
+            n = np.divide(
+                n,
+                n_norm[:, None],
+                out=np.zeros_like(n),
+                where=n_norm[:, None] > 0,
+            )
 
             # compute distance to the opposing vertex by taking a dot product between normal
             # and a vector connecting the opposing vertex and the face
@@ -2085,6 +2093,9 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
         interpolated = np.zeros(
             [num_samples_total, *self._non_spatial_shape], dtype=self._double_type
         )
+        weight_min = np.full(num_samples_total, inf)
+        weight_max = np.full(num_samples_total, -inf)
+        weight_sum = np.zeros(num_samples_total)
 
         # coordinates of each sample point
         sample_xyz = np.zeros((num_samples_total, num_dims))
@@ -2120,11 +2131,14 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
             tmp = self._double_type(
                 data_values.sel(index=cell_connections[step_cell_map, face_ind]).data
             )
-            tmp *= np.reshape(d, [num_samples_total] + [1] * len(self._non_spatial_shape))
-            tmp /= np.reshape(
-                dist[face_ind, step_cell_map],
+            weight = d / dist[face_ind, step_cell_map]
+            tmp *= np.reshape(
+                weight,
                 [num_samples_total] + [1] * len(self._non_spatial_shape),
             )
+            weight_min = np.minimum(weight_min, weight)
+            weight_max = np.maximum(weight_max, weight)
+            weight_sum += weight
 
             # ignore degenerate cells
             dist_zero = dist[face_ind, step_cell_map] > 0
@@ -2137,7 +2151,13 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
         # every Cartesian point because bounding boxes of cells overlap.
         # Thus, we need to keep only those that come cell actually containing a given point.
         # This can be easily determined by the sign of the cell SDF sampled at a given point.
-        valid_samples = sdf < sdf_tol
+        valid_weights = (
+            np.isfinite(weight_sum)
+            & (np.abs(weight_sum - 1) <= BARYCENTRIC_WEIGHT_TOLERANCE)
+            & (weight_min >= -BARYCENTRIC_WEIGHT_TOLERANCE)
+            & (weight_max <= 1 + BARYCENTRIC_WEIGHT_TOLERANCE)
+        )
+        valid_samples = (sdf < sdf_tol) & valid_weights
 
         interpolated_valid = interpolated[valid_samples]
         xyz_valid_inds = []
