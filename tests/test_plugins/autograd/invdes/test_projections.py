@@ -55,6 +55,24 @@ def test_smoothed_projection_beta_inf():
     assert np.all(np.isclose(discrete_result, 0) | np.isclose(discrete_result, 1))
 
 
+@pytest.mark.parametrize("d_rel", [-0.9999997693444753, 0.9999997693444753])
+def test_smoothed_projection_stays_in_bounds_near_smoothing_boundary(d_rel):
+    gradient = 0.1
+    smooth_radius = np.sqrt(1 / np.pi)
+    center = 0.5 - gradient * smooth_radius * d_rel
+    array = center + gradient * (np.arange(5)[:, None] - 2) + np.zeros((5, 5))
+
+    result = smoothed_projection(array=array, beta=np.inf, eta=0.5)
+
+    assert np.all(result >= 0)
+    assert np.all(result <= 1)
+
+    def _helper_fn(x):
+        return smoothed_projection(x, beta=np.inf, eta=0.5).mean()
+
+    check_grads(_helper_fn, modes=["fwd", "rev"], order=1)(array)
+
+
 def test_smoothed_projection_beta_non_inf():
     nx, ny = 50, 50
     radius = 10

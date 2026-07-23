@@ -159,15 +159,17 @@ def smoothed_projection(
 
     needs_smoothing = nonzero_norm & (np.abs(distance) < smooth_radius)
 
-    # double where trick
+    # Evaluate the fill fraction from the nearest endpoint to avoid cancellation.
     d_rel = distance / smooth_radius
-    polynom = np.where(
-        needs_smoothing, 0.5 - 15 / 16 * d_rel + 5 / 8 * d_rel**3 - 3 / 16 * d_rel**5, 1.0
+    fill_from_right = (1 - d_rel) ** 3 * (3 * d_rel**2 + 9 * d_rel + 8) / 16
+    fill_from_left = (1 + d_rel) ** 3 * (3 * d_rel**2 - 9 * d_rel + 8) / 16
+    fill_fraction = np.where(
+        d_rel >= 0,
+        fill_from_right,
+        1 - fill_from_left,
     )
-    # F(-d)
-    polynom_neg = np.where(
-        needs_smoothing, 0.5 + 15 / 16 * d_rel - 5 / 8 * d_rel**3 + 3 / 16 * d_rel**5, 1.0
-    )
+    polynom = np.where(needs_smoothing, fill_fraction, 1.0)
+    polynom_neg = np.where(needs_smoothing, 1 - fill_fraction, 1.0)
 
     # two projections, one for lower and one for upper bound
     rho_filtered_minus = array - smooth_radius * filtered_grad_norm_eff * polynom
