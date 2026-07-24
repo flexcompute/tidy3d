@@ -1613,6 +1613,59 @@ def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
     assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
 
 
+@pytest.mark.parametrize("task_type", [TaskType.MODAL_CM, TaskType.TERMINAL_CM])
+@pytest.mark.parametrize("status", ["queued", "preprocess", "running"])
+def test_estimate_batch_cost_does_not_recheck_submitted_task(monkeypatch, task_type, status):
+    batch_task = BatchTask(taskId=TASK_ID, taskType=task_type.name)
+    detail = BatchDetail(
+        status=status,
+        taskType=task_type.name,
+        estFlexUnit=EST_FLEX_UNIT,
+    )
+
+    monkeypatch.setattr(task_api.TaskFactory, "get", lambda *args, **kwargs: batch_task)
+    monkeypatch.setattr(BatchTask, "detail", lambda self: detail)
+    monkeypatch.setattr(
+        BatchTask,
+        "check",
+        lambda *args, **kwargs: pytest.fail("submitted batch tasks must not be checked again"),
+    )
+
+    estimate = task_api.estimate_cost_info(TASK_ID, verbose=False)
+
+    assert estimate.maximum == EST_FLEX_UNIT
+    assert estimate.task_type == task_type.name
+
+
+@pytest.mark.parametrize("status", ["created", "draft"])
+def test_estimate_batch_cost_checks_unsubmitted_task(monkeypatch, status):
+    batch_task = BatchTask(taskId=TASK_ID, taskType=TaskType.MODAL_CM.name)
+    details = iter(
+        [
+            BatchDetail(status=status, taskType=TaskType.MODAL_CM.name),
+            BatchDetail(
+                status="validate_success",
+                taskType=TaskType.MODAL_CM.name,
+                estFlexUnit=EST_FLEX_UNIT,
+            ),
+        ]
+    )
+    check_calls = []
+
+    monkeypatch.setattr(task_api.TaskFactory, "get", lambda *args, **kwargs: batch_task)
+    monkeypatch.setattr(BatchTask, "detail", lambda self: next(details))
+    monkeypatch.setattr(
+        BatchTask,
+        "check",
+        lambda self, **kwargs: check_calls.append(kwargs),
+    )
+
+    estimate = task_api.estimate_cost_info(TASK_ID, verbose=False)
+
+    assert estimate.maximum == EST_FLEX_UNIT
+    assert check_calls == [{"solver_version": None, "check_task_type": "FDTD"}]
+
+
 @responses.activate
 def test_download_json(monkeypatch, mock_get_info, tmp_path):
     sim = make_sim()

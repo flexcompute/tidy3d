@@ -28,6 +28,7 @@ from tidy3d.web.api.states import (
     END_STATES,
     ERROR_STATES,
     MAX_STEPS,
+    PRE_VALIDATE_STATES,
     STATE_PROGRESS_PERCENTAGE,
     status_to_stage,
 )
@@ -1316,13 +1317,14 @@ def estimate_cost_info(
     detail = task.detail()
     if isinstance(task, BatchTask):
         check_task_type = "FDTD" if detail.taskType == "MODAL_CM" else "RF_FDTD"
-        task.check(solver_version=solver_version, check_task_type=check_task_type)
-        detail = task.detail()
         status = detail.status.lower()
-        while status not in ALL_POST_VALIDATE_STATES:
-            time.sleep(REFRESH_TIME)
+        if status in {"created", "draft"}:
+            task.check(solver_version=solver_version, check_task_type=check_task_type)
+        while status in PRE_VALIDATE_STATES:
             detail = task.detail()
             status = detail.status.lower()
+            if status in PRE_VALIDATE_STATES:
+                time.sleep(REFRESH_TIME)
         if status in ERROR_STATES:
             _batch_detail_error(resource_id=task_id)
         est_flex_unit = detail.estFlexUnit
