@@ -2442,70 +2442,140 @@ def test_autograd_speed_num_structures(use_emulated_run):
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 
-@pytest.mark.parametrize("monitor_key", ("mode",))
-def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
-    """Test an objective function through tidy3d autograd."""
+def _force_cylinder_derivative_num_points(monkeypatch, radius, num_pts):
+    """Make Cylinder use the same polygon discretization as its PolySlab twin."""
+    raw_num_pts = num_pts - 0.5
+    wavelength = config.adjoint.points_per_wavelength * 2 * np.pi * radius / raw_num_pts
+    monkeypatch.setattr(
+        "tidy3d.components.geometry.primitives.discretization_wavelength",
+        lambda _derivative_info, _geometry_name: wavelength,
+    )
 
-    t0 = 1.0
-    axis = 0
 
-    num_pts = 819
+def test_autograd_cylinder_radius_center_matches_polyslab(use_emulated_run, monkeypatch):
+    """Cylinder and equivalent PolySlab have matching radius and center gradients."""
 
-    monitor, _postprocess = make_monitors()[monitor_key]
+    axis = 2
+    length = 1.0
+    parameters0 = anp.array([1.0, 0.1, -0.1, 0.2])
+    radius0 = parameters0[0]
+    num_pts = 64
+    _force_cylinder_derivative_num_points(monkeypatch, radius0, num_pts)
 
-    def make_cylinder(radius, x0, y0, t):
+    monitor, postprocess = make_monitors()["field_vol"]
+
+    def make_cylinder(parameters):
+        radius, center_0, center_1, center_axis = parameters
         return td.Cylinder(
-            center=td.Cylinder.unpop_axis(0.0, (x0, y0), axis=axis),
+            center=(center_0, center_1, center_axis),
             radius=radius,
-            length=t,
+            length=length,
             axis=axis,
-        ).to_polyslab(num_pts)
+        )
 
-    def make_polyslab(radius, x0, y0, t):
+    def make_polyslab(parameters):
+        radius, center_0, center_1, center_axis = parameters
         phis = anp.linspace(0, 2 * np.pi, num_pts + 1)[:-1]
+        vertices = anp.stack(
+            (
+                center_0 + radius * anp.cos(phis),
+                center_1 + radius * anp.sin(phis),
+            ),
+            axis=-1,
+        )
 
-        xs = radius * anp.cos(phis) + x0
-        ys = radius * anp.sin(phis) + y0
+        return td.PolySlab(
+            vertices=vertices,
+            axis=axis,
+            slab_bounds=(center_axis - length / 2, center_axis + length / 2),
+        )
 
+    def make_sim(parameters, geo_maker):
+        geo = geo_maker(parameters)
+        structure = td.Structure(geometry=geo, medium=td.Medium(permittivity=2))
+        return SIM_BASE.updated_copy(
+            size=(3.5, 3.15, LZ),
+            structures=(structure,),
+            monitors=(monitor,),
+            boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
+        )
+
+    def make_objective(geo_maker):
+        def objective(parameters):
+            sim = make_sim(parameters, geo_maker=geo_maker)
+            if PLOT_SIM:
+                plot_sim(sim, plot_eps=True)
+            data = run(sim, task_name="autograd_test", verbose=False)
+            return postprocess(data, data[monitor.name])
+
+        return objective
+
+    _, grad_polyslab = ag.value_and_grad(make_objective(make_polyslab))(parameters0)
+    _, grad_cylinder = ag.value_and_grad(make_objective(make_cylinder))(parameters0)
+
+    assert np.all(grad_polyslab != 0.0)
+    assert np.all(grad_cylinder != 0.0)
+    npt.assert_allclose(grad_cylinder, grad_polyslab, rtol=1e-7)
+
+
+def test_autograd_cylinder_length_matches_polyslab(use_emulated_run, monkeypatch):
+    """Cylinder and equivalent PolySlab have matching traced-length gradients."""
+
+    axis = 2
+    radius = 1.0
+    length0 = 1.0
+    num_pts = 64
+    _force_cylinder_derivative_num_points(monkeypatch, radius, num_pts)
+
+    monitor, postprocess = make_monitors()["field_vol"]
+
+    def make_cylinder(length):
+        return td.Cylinder(
+            center=(0.0, 0.0, 0.0),
+            radius=radius,
+            length=length,
+            axis=axis,
+        )
+
+    def make_polyslab(length):
+        phis = anp.linspace(0, 2 * np.pi, num_pts + 1)[:-1]
+        xs = radius * anp.cos(phis)
+        ys = radius * anp.sin(phis)
         vertices = anp.stack((xs, ys), axis=-1)
 
         return td.PolySlab(
             vertices=vertices,
             axis=axis,
-            slab_bounds=(-t / 2, t / 2),
+            slab_bounds=(-length / 2, length / 2),
         )
 
-    def make_sim(params, geo_maker):
-        geo = geo_maker(*params)
+    def make_sim(length, geo_maker):
+        geo = geo_maker(length)
         structure = td.Structure(geometry=geo, medium=td.Medium(permittivity=2))
-
         return SIM_BASE.updated_copy(structures=(structure,), monitors=(monitor,))
 
-    p0 = [1.0, 0.0, 0.0, t0]
-
-    def objective_polyslab(params):
+    def objective_polyslab(length):
         """Objective function."""
-        sim = make_sim(params, geo_maker=make_polyslab)
+        sim = make_sim(length, geo_maker=make_polyslab)
         if PLOT_SIM:
             plot_sim(sim, plot_eps=True)
         data = run(sim, task_name="autograd_test", verbose=False)
-        return anp.sum(anp.abs(data[monitor.name].amps)).item()
+        return postprocess(data, data[monitor.name])
 
-    val_polyslab, grad_polyslab = ag.value_and_grad(objective_polyslab)(p0)
-    print(val_polyslab, grad_polyslab)
-    assert anp.all(grad_polyslab != 0.0), "some gradients are 0"
+    _, grad_polyslab = ag.value_and_grad(objective_polyslab)(length0)
 
-    def objective_cylinder(params):
+    def objective_cylinder(length):
         """Objective function."""
-        sim = make_sim(params, geo_maker=make_cylinder)
+        sim = make_sim(length, geo_maker=make_cylinder)
         if PLOT_SIM:
             plot_sim(sim, plot_eps=True)
         data = run(sim, task_name="autograd_test", verbose=False)
-        return anp.sum(anp.abs(data[monitor.name].amps)).item()
+        return postprocess(data, data[monitor.name])
 
-    val_cylinder, grad_cylinder = ag.value_and_grad(objective_cylinder)(p0)
-    print(val_cylinder, grad_cylinder)
-    assert anp.all(grad_cylinder != 0.0), "some gradients are 0"
+    _, grad_cylinder = ag.value_and_grad(objective_cylinder)(length0)
+    assert grad_polyslab != 0.0
+    assert grad_cylinder != 0.0
+    npt.assert_allclose(grad_cylinder, grad_polyslab, rtol=1e-10)
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", SERVER_TEST_ARGS)

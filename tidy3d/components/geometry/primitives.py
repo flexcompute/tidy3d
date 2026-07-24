@@ -818,9 +818,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         vjps = {}
         for path in derivative_info.paths:
             if path == ("length",):
-                vjp_top = vjps_polyslab.get(("slab_bounds", 0), 0.0)
-                vjp_bot = vjps_polyslab.get(("slab_bounds", 1), 0.0)
-                vjps[path] = vjp_top - vjp_bot
+                vjp_bottom = vjps_polyslab.get(("slab_bounds", 0), 0.0)
+                vjp_top = vjps_polyslab.get(("slab_bounds", 1), 0.0)
+                vjps[path] = 0.5 * (vjp_top - vjp_bottom)
 
             elif path == ("radius",):
                 # transform polyslab vertices derivatives into radius derivative
@@ -849,9 +849,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                         vjps_vertices_ys = vjps_polyslab[("vertices",)][:, 1]
                         vjps[path] = np.sum(vjps_vertices_ys)
                 else:
-                    vjp_top = vjps_polyslab.get(("slab_bounds", 0), 0.0)
-                    vjp_bot = vjps_polyslab.get(("slab_bounds", 1), 0.0)
-                    vjps[path] = vjp_top + vjp_bot
+                    vjp_bottom = vjps_polyslab.get(("slab_bounds", 0), 0.0)
+                    vjp_top = vjps_polyslab.get(("slab_bounds", 1), 0.0)
+                    vjps[path] = vjp_bottom + vjp_top
 
             elif path == ("sidewall_angle",):
                 # direct mapping: cylinder angle equals polyslab angle
