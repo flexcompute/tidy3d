@@ -4,8 +4,6 @@ from __future__ import annotations
 from .documentation import (
     build_documentation,
     # build_documentation_pdf,
-    build_documentation_from_remote_notebooks,
-    commit,
     # convert_all_markdown_to_rst_command,
     replace_in_files_command,
 )
@@ -16,12 +14,10 @@ from .index import develop
 # Import from install.py
 from .install import (
     activate_uv_python,
-    configure_submodules,
     get_install_directory_command,
     install_development_environment,
     install_in_uv,
     uninstall_development_environment,
-    update_submodules_remote,
     verify_development_environment,
     verify_pandoc_is_installed_and_version_less_than_3,
     verify_pipx_is_installed,
@@ -42,9 +38,6 @@ __all__ = [
     "benchmark_timing_operations_command",
     "build_documentation",
     # "build_documentation_pdf",
-    "build_documentation_from_remote_notebooks",
-    "commit",
-    "configure_submodules",
     "develop",
     "echo_and_check_subprocess",
     "echo_and_run_subprocess",
@@ -57,7 +50,6 @@ __all__ = [
     "test_in_environment_command",
     "test_options",
     "uninstall_development_environment",
-    "update_submodules_remote",
     "verify_development_environment",
     "verify_pandoc_is_installed_and_version_less_than_3",
     "verify_pipx_is_installed",

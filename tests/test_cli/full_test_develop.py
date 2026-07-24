@@ -45,21 +45,6 @@ def test_develop_verify_dev_environment(runner):
         assert result.exit_code == 0
 
 
-# Example test for the 'commit' command
-def test_develop_commit(runner):
-    """
-    Test the commit command runs between the relevant submodules included. Hard to assert as depends on the HEAD state.
-    """
-    with runner.isolated_filesystem():
-        with open("test_file", "w") as f:
-            f.write("Test content")
-
-        runner.invoke(
-            tidy3d_cli, ["develop", "commit", "TEST: Update based on test develop cli command"]
-        )
-        # assert result.exit_code == 0 # Not necessary as depends on HEAD state
-
-
 def test_replace_in_files(runner):
     """
     Test the replace-in-files command runs with a little demo file. Asserts that the file has been replaced with a new string.
@@ -92,18 +77,6 @@ def test_replace_in_files(runner):
             )
 
         assert result.exit_code == 0
-
-
-def test_develop_update_submodules(runner):
-    """
-    Test the update-submodules command runs without error. Hard to assert as it depends from a HEAD state.
-    """
-    with runner.isolated_filesystem():
-        with open("test_file", "w") as f:
-            f.write("Test content")
-
-        runner.invoke(tidy3d_cli, ["develop", "update-submodules"])
-        # assert result.exit_code == 0  # Verifies docs build successfully
 
 
 def test_develop_benchmark_timing_average(runner):

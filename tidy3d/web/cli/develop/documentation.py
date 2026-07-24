@@ -4,10 +4,6 @@ These functions are used to build the documentation. They are called from the CL
 
     uv run tidy3d develop build-docs
 
-The functions are also used to update the notebooks submodule and build the documentation using the following command:
-
-    uv run tidy3d develop build-docs-remote-notebooks
-
 The functions are also used to convert all Markdown files to RST format using the following command:
 
     uv run tidy3d develop convert-all-markdown-to-rst
@@ -27,8 +23,6 @@ from .utils import echo_and_check_subprocess, get_install_directory
 __all__ = [
     "build_documentation",
     # "build_documentation_pdf",
-    "build_documentation_from_remote_notebooks",
-    "commit",
     # "convert_all_markdown_to_rst_command",
     "replace_in_files_command",
 ]
@@ -115,54 +109,6 @@ def replace_in_files(
             print(f"An error occurred: {ex}")
 
 
-@develop.command(
-    name="commit",
-    help="Adds and commits the state of the repository and its notebook & faq submodule.",
-)
-@click.argument("message", type=str)  # Specify the type as str for the 'message' argument
-@click.option(
-    "--submodule-path",
-    default=str(get_install_directory() / "docs" / "notebooks"),
-    help="Path to the submodule.",
-    type=str,  # Specify the type as str for the 'submodule-path' option
-)
-def commit(message: str, submodule_path: str) -> int:
-    """
-    Add and commit changes in both the Git repository and its submodule.
-
-    This command performs git commit operations on both the main repository and the specified submodule
-    using the provided commit message.
-
-    Parameters
-    ----------
-    message : str
-        The commit message to use for both commits.
-    submodule_path : str
-        The relative path to the submodule.
-    """
-
-    def commit_repository(repository_path: str, commit_message: str) -> None:
-        """
-        Commit changes in the specified Git repository.
-
-        Args:
-            repo_path: Path to the repository.
-            message: Commit message.
-        """
-
-        echo_and_check_subprocess(["git", "-C", repository_path, "add", "."])
-        echo_and_check_subprocess(
-            ["git", "-C", repository_path, "commit", "--no-verify", "-am", commit_message]
-        )
-
-    # TODO fix errors when committing between the two repos.
-    # Commit to the submodule
-    commit_repository(submodule_path, message)
-    # Commit to the main repository
-    commit_repository("..", message)
-    return 0
-
-
 @develop.command(name="build-docs", help="Builds the sphinx documentation.")
 def build_documentation(args: Any = None) -> None:
     """
@@ -213,36 +159,6 @@ def build_documentation(args: Any = None) -> None:
 #         ["uv", "run", "--frozen", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
 #     )
 #     return 0
-
-
-@develop.command(
-    name="build-docs-remote-notebooks", help="Updates notebooks submodule and builds documentation."
-)
-@click.option(
-    "-nb",
-    "--notebook-branch",
-    default="./docs/notebooks",
-    help="The remote branch from tidy3d-notebooks.",
-)
-def build_documentation_from_remote_notebooks(args: Any = None) -> int:
-    """
-    Update the notebooks submodule and build documentation.
-
-    This command updates the notebook submodule from the remote repository and then builds the Sphinx documentation.
-
-    Parameters
-    ----------
-    args : optional
-        Additional arguments for the process of updating notebooks and building documentation.
-    """
-    # Runs the documentation build from the uv environment.
-    echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
-
-    print("Notebook submodule updated from remote.")
-    echo_and_check_subprocess(
-        ["uv", "run", "--frozen", "python", "-m", "sphinx", "docs/", "_docs/"]
-    )
-    return 0
 
 
 # TODO decide if this is useful in any form.

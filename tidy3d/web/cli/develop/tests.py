@@ -1,6 +1,6 @@
 """
-This module contains the CLI commands for testing the tidy3d package. This includes testing the base package and the
-notebooks in order to achieve reproducibility between hardwares.
+This module contains the CLI commands for testing the tidy3d package. This includes testing the base package and
+linting notebook sources.
 """
 
 from __future__ import annotations
@@ -30,7 +30,13 @@ def test_options(options: list) -> None:
         echo_and_run_subprocess(["uv", "run", "--frozen", "pytest", "-rA", "tests"])
     if "notebooks" in options:
         echo_and_run_subprocess(
-            ["uv", "run", "--frozen", "pytest", "-rA", "tests/full_test_notebooks.py"]
+            [
+                "uv",
+                "run",
+                "--script",
+                "notebooks/scripts/lint_tidy3d_notebooks.py",
+                "--all-notebooks",
+            ]
         )
 
 

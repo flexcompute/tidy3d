@@ -18,12 +18,10 @@ from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_insta
 
 __all__ = [
     "activate_uv_python",
-    "configure_submodules",
     "get_install_directory_command",
     "install_development_environment",
     "install_in_uv",
     "uninstall_development_environment",
-    "update_submodules_remote",
     "verify_development_environment",
     "verify_pandoc_is_installed_and_version_less_than_3",
     "verify_pipx_is_installed",
@@ -35,23 +33,6 @@ __all__ = [
 def activate_uv_python() -> None:
     """Ensure uv is available from the current shell."""
     echo_and_check_subprocess(["uv", "--version"])
-
-
-def configure_submodules(args: Any = None) -> None:
-    """
-    Initialize and update the notebook submodule.
-
-    This command configures the notebook submodule by initializing it and updating it from the remote repository.
-
-    Parameters
-    ----------
-    args : optional
-        Additional arguments for the configuration process.
-    """
-    echo_and_run_subprocess(["git", "submodule", "init"])
-    echo_and_run_subprocess(["git", "submodule", "update", "--remote"])
-    print("Submodules updated from remote.")
-    return 0
 
 
 def verify_pandoc_is_installed_and_version_less_than_3() -> bool:
@@ -228,12 +209,6 @@ def install_development_environment(args: Any = None) -> None:
     echo_and_check_subprocess(["uv", "sync", "--frozen", "--extra", "dev"])
     echo_and_check_subprocess(["uv", "run", "--frozen", "pre-commit", "install"])
 
-    # Configure notebook submodule
-    try:
-        configure_submodules()
-    except:  # NOQA: E722
-        print("Notebook submodule not configured.")
-
     return 0
 
 
@@ -333,23 +308,6 @@ def uninstall_development_environment(args: Any = None) -> int:
         )
     print("pandoc is not found on the PATH. It is already uninstalled from PATH.")
 
-    return 0
-
-
-@develop.command(name="update-submodules", help="Updates notebooks and FAQ submodule from remote")
-def update_submodules_remote(args: Any = None) -> int:
-    """
-    Update the notebooks submodule from the remote repository.
-
-    This command updates the notebook submodule, ensuring it is synchronized with the latest version from the remote repository.
-
-    Parameters
-    ----------
-    args : optional
-        Additional arguments for the update process.
-    """
-    # Updates submodules in the current repository.
-    echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
     return 0
 
 

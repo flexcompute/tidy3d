@@ -268,7 +268,7 @@ packages = ["tidy3d"]
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-extend-exclude = ["docs/faq/", "docs/notebooks/"]
+extend-exclude = ["docs/faq/"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -343,7 +343,6 @@ norecursedirs = [
   "tests/_test_notebooks",
   "tests/_test_tidy3d_extras",
   "tidy3d/web",
-  "docs/notebooks",
   "docs/faq",
 ]
 filterwarnings = "ignore::DeprecationWarning"
