@@ -681,3 +681,367 @@ def test_private_diagnostic_report_includes_warning(monkeypatch):
     assert report.privacy_mode == "private"
     assert report.private_details_warning == diagnostics.PRIVATE_DETAILS_WARNING
     assert diagnostics.PRIVATE_DETAILS_WARNING in report.support_text()
+
+
+# ------ Environment diagnostics ---------------------------------------------------
+
+
+def test_diagnose_environment_populates_core_fields(monkeypatch):
+    """Basic invocation should surface Python, platform, and tidy3d version.
+
+    Fully hermetic: `importlib.metadata.distributions()` and per-package version lookup
+    are stubbed so CI never depends on which distributions happen to be installed on
+    the runner.
+    """
+
+    class _FakeDist:
+        def __init__(self, name: str, version: str) -> None:
+            self.metadata = {"Name": name}
+            self.version = version
+
+    monkeypatch.setattr(
+        diagnostics.importlib_metadata,
+        "distributions",
+        lambda: [_FakeDist("tidy3d", "test-version"), _FakeDist("numpy", "2.0.0")],
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "_package_version",
+        lambda name: {"tidy3d": "test-version"}.get(name),
+    )
+
+    report = diagnostics.diagnose_environment()
+
+    assert report.tidy3d_version
+    assert report.python_version.count(".") == 2
+    assert report.python_executable
+    assert report.platform
+    # `flexcompute_packages` must always list every curated Flexcompute distribution,
+    # with ``version=None`` for the ones that aren't installed.
+    names_versions = {pkg.name: pkg.version for pkg in report.flexcompute_packages}
+    assert names_versions["tidy3d"] == "test-version"
+    assert {"tidy3d-extras", "flex-rf", "photonforge", "flow360"}.issubset(names_versions)
+    # Only the public `flex-rf` distribution is tracked; the internal `flex_rf` alias must not leak.
+    assert "flex_rf" not in names_versions
+    # The pip-freeze view is populated from the stubbed distributions list.
+    installed_names = {pkg.name for pkg in report.installed_packages}
+    assert installed_names == {"tidy3d", "numpy"}
+    # Config information must be present so support can see the endpoint / SSL settings
+    # without running the connection probe.
+    assert report.configuration is not None
+    assert report.configuration.api_endpoint
+
+
+def test_issue_template_and_prompts_stay_consistent():
+    """`SUPPORT_REPORT_PROMPTS` must be a strict projection of the seven-slot template.
+
+    Regression guard: if someone appends a prompt to `SUPPORT_REPORT_PROMPTS` directly
+    (skipping `_ISSUE_TEMPLATE`) or vice versa, this test fails immediately.
+    """
+
+    template = diagnostics._ISSUE_TEMPLATE
+    prompts = diagnostics.SUPPORT_REPORT_PROMPTS
+
+    # Every prompted slot in the template appears in SUPPORT_REPORT_PROMPTS, in order.
+    template_prompted = tuple(
+        (narrative_key, prompt)
+        for _question, narrative_key, prompt in template
+        if narrative_key is not None and prompt is not None
+    )
+    assert prompts == template_prompted
+
+    # The template covers the fixed seven-question Tidy3D Issue Report intake form.
+    assert len(template) == 7
+
+    # Q5 and Q6 are the two out-of-band slots.
+    assert template[4][1] is None and template[4][2] is None
+    assert template[5][2] is None
+
+
+def test_format_issue_template_renders_all_slots():
+    """Every slot must render, with "(not provided)" for anything unfilled."""
+
+    env = diagnostics.EnvironmentDiagnosticReport(
+        generated_at="G",
+        tidy3d_version="1.0.0",
+        python_version="3.13.0",
+        python_full_version="3.13.0",
+        python_executable="/e",
+        platform="Linux",
+        machine="x86_64",
+        processor=None,
+        in_virtualenv=True,
+        in_notebook=False,
+        flexcompute_packages=(),
+        installed_packages=(),
+    )
+    rendered = diagnostics._format_issue_template({}, task_id=None, environment=env)
+
+    header_lines = [line for line in rendered if line and line[0].isdigit()]
+    assert len(header_lines) == 7
+    text = "\n".join(rendered)
+    assert "1. Brief description of the issue:" in text
+    assert "4. Tidy3D version and how you run it" in text
+    assert "tidy3d 1.0.0" in text
+    assert "5. Task ID or task link (if applicable):" in text
+    # Every empty slot uses the "(not provided)" placeholder.
+    assert text.count("(not provided)") == 6
+
+
+def test_package_version_returns_none_for_arbitrary_metadata_errors(monkeypatch):
+    """`_package_version` must swallow every metadata error so one corrupt dist-info
+    cannot abort the whole environment report."""
+
+    def raising(_name):
+        raise OSError("corrupt METADATA")
+
+    monkeypatch.setattr(diagnostics.importlib_metadata, "version", raising)
+    # Both a `_package_version` call and the wrapping `_collect_packages` iteration must
+    # survive the error and report ``version=None``.
+    assert diagnostics._package_version("tidy3d") is None
+    packages = diagnostics._collect_packages(("tidy3d", "flex-rf"))
+    assert [pkg.version for pkg in packages] == [None, None]
+
+
+def test_installed_distributions_skips_bad_metadata(monkeypatch):
+    """One corrupt distribution must not abort the whole package scan."""
+
+    class _GoodDist:
+        version = "1.2.3"
+        metadata = {"Name": "good-pkg"}
+
+    class _BrokenDist:
+        # Raises on metadata access; a known importlib.metadata footgun in the wild.
+        @property
+        def metadata(self):
+            raise ValueError("corrupt METADATA file")
+
+        version = "0"
+
+    class _NamelessDist:
+        version = "0"
+        metadata = None  # e.g. WHEEL-only dist without Name
+
+    monkeypatch.setattr(
+        diagnostics.importlib_metadata,
+        "distributions",
+        lambda: [_BrokenDist(), _GoodDist(), _NamelessDist()],
+    )
+
+    packages = diagnostics._installed_distributions()
+
+    names = [pkg.name for pkg in packages]
+    assert names == ["good-pkg"]
+
+
+def test_installed_distributions_survives_top_level_failure(monkeypatch):
+    """If `distributions()` itself raises we return an empty tuple, not a traceback."""
+
+    def raising():
+        raise OSError("boom")
+
+    monkeypatch.setattr(diagnostics.importlib_metadata, "distributions", raising)
+    assert diagnostics._installed_distributions() == ()
+
+
+def test_diagnose_environment_marks_private_mode():
+    """Private mode must set privacy_mode + surface the warning inline."""
+
+    report = diagnostics.diagnose_environment(include_private_network_details=True)
+    assert report.privacy_mode == "private"
+    assert report.private_details_warning == diagnostics.PRIVATE_DETAILS_WARNING
+    assert diagnostics.PRIVATE_DETAILS_WARNING in report.support_text()
+
+
+def test_diagnose_environment_default_mode_is_shareable():
+    report = diagnostics.diagnose_environment()
+    assert report.privacy_mode == "shareable"
+    assert report.private_details_warning is None
+    assert diagnostics.PRIVATE_DETAILS_WARNING not in report.support_text()
+
+
+def test_environment_support_text_lists_packages_and_config():
+    configuration = diagnostics.ConnectionDiagnosticConfiguration(
+        api_endpoint="https://api.example.com",
+        ssl_verify=True,
+        ssl_version=None,
+        proxy_environment={"HTTPS_PROXY": None},
+        certificate_environment={"REQUESTS_CA_BUNDLE": None},
+        tidy3d_environment={"TIDY3D_WEB__API_ENDPOINT": None},
+        warnings=(),
+    )
+    report = diagnostics.EnvironmentDiagnosticReport(
+        generated_at="2026-06-18T00:00:00+00:00",
+        tidy3d_version="test",
+        python_version="3.13.0",
+        python_full_version="3.13.0",
+        python_executable="/tmp/py",
+        platform="Linux",
+        machine="x86_64",
+        processor="cpu",
+        in_virtualenv=True,
+        in_notebook=False,
+        flexcompute_packages=(
+            diagnostics.EnvironmentPackage(name="tidy3d", version="test"),
+            diagnostics.EnvironmentPackage(name="tidy3d-extras", version="1.0"),
+            diagnostics.EnvironmentPackage(name="flex-rf", version=None),
+        ),
+        installed_packages=(
+            diagnostics.EnvironmentPackage(name="numpy", version="2.0.0"),
+            diagnostics.EnvironmentPackage(name="pydantic", version="2.13.3"),
+        ),
+        configuration=configuration,
+    )
+    text = report.support_text()
+    assert "Flexcompute packages:" in text
+    assert "- tidy3d: test" in text
+    assert "- tidy3d-extras: 1.0" in text
+    assert "- flex-rf: not installed" in text
+    assert "Configuration:" in text
+    assert "api_endpoint: https://api.example.com" in text
+    assert "ssl_verify: True" in text
+    assert "Installed packages (pip freeze):" in text
+    assert "numpy==2.0.0" in text
+    assert "pydantic==2.13.3" in text
+
+
+# ------ Combined support report ---------------------------------------------------
+
+
+def test_diagnose_report_bundles_environment_and_connection(monkeypatch):
+    """`diagnose_report` should stitch env + connection into a single SupportReport."""
+
+    def fake_env(**_kwargs):
+        return diagnostics.EnvironmentDiagnosticReport(
+            generated_at="2026-06-18T00:00:00+00:00",
+            tidy3d_version="test",
+            python_version="3.13.0",
+            python_full_version="3.13.0",
+            python_executable="/tmp/py",
+            platform="Linux",
+            machine="x86_64",
+            processor="cpu",
+            in_virtualenv=True,
+            in_notebook=False,
+            flexcompute_packages=(),
+            installed_packages=(),
+        )
+
+    def fake_conn(**kwargs):
+        return diagnostics.ConnectionDiagnosticReport(
+            generated_at="2026-06-18T00:00:00+00:00",
+            tidy3d_version="test",
+            python_version="3.13.0",
+            platform="Linux",
+            api_endpoint_host="api.example.com",
+            api_key_configured=True,
+            results=(),
+        )
+
+    monkeypatch.setattr(diagnostics, "diagnose_environment", fake_env)
+    monkeypatch.setattr(diagnostics, "diagnose_connection", fake_conn)
+
+    report = diagnostics.diagnose_report(
+        task_id="task-42",
+        narrative={"description": "hello", "run_mode": "Python API", "empty": ""},
+    )
+
+    assert report.task_id == "task-42"
+    # Empty narrative fields must not appear.
+    assert "empty" not in report.narrative
+    assert report.narrative == {"description": "hello", "run_mode": "Python API"}
+    assert report.connection is not None
+
+    text = report.support_text()
+    assert "Tidy3D support report" in text
+    # The seven-question issue template is always rendered so support can read the
+    # user's answers even if some were left blank.
+    assert "Tidy3D Issue Report" in text
+    assert "1. Brief description of the issue:" in text
+    assert "   hello" in text
+    assert "3. Is it reproducible?" in text
+    assert "   (not provided)" in text  # unanswered questions still appear
+    assert "4. Tidy3D version and how you run it" in text
+    assert "   tidy3d test - Python API" in text
+    assert "5. Task ID or task link" in text
+    assert "   task-42" in text
+    assert "7. Could you share a relevant script or model?" in text
+    assert "Tidy3D environment" in text
+    assert "Tidy3D connection diagnostics" in text
+
+
+def test_diagnose_report_marks_private_mode(monkeypatch):
+    """`diagnose_report(include_private_network_details=True)` must propagate the marker."""
+
+    def fake_env(**kwargs):
+        private = kwargs.get("include_private_network_details")
+        return diagnostics.EnvironmentDiagnosticReport(
+            generated_at="2026-06-18T00:00:00+00:00",
+            privacy_mode="private" if private else "shareable",
+            private_details_warning=diagnostics.PRIVATE_DETAILS_WARNING if private else None,
+            tidy3d_version="test",
+            python_version="3.13.0",
+            python_full_version="3.13.0",
+            python_executable="/tmp/py",
+            platform="Linux",
+            machine="x86_64",
+            processor="cpu",
+            in_virtualenv=True,
+            in_notebook=False,
+            flexcompute_packages=(),
+            installed_packages=(),
+        )
+
+    monkeypatch.setattr(diagnostics, "diagnose_environment", fake_env)
+    monkeypatch.setattr(
+        diagnostics,
+        "diagnose_connection",
+        lambda **_: diagnostics.ConnectionDiagnosticReport(
+            generated_at="2026-06-18T00:00:00+00:00",
+            tidy3d_version="test",
+            python_version="3.13.0",
+            platform="Linux",
+            api_endpoint_host="api.example.com",
+            api_key_configured=True,
+            results=(),
+        ),
+    )
+
+    report = diagnostics.diagnose_report(include_private_network_details=True)
+    assert report.privacy_mode == "private"
+    assert report.private_details_warning == diagnostics.PRIVATE_DETAILS_WARNING
+    text = report.support_text()
+    # Warning must surface at the top of the SupportReport, before the environment block.
+    warning_pos = text.find(diagnostics.PRIVATE_DETAILS_WARNING)
+    env_pos = text.find("Tidy3D environment")
+    assert 0 <= warning_pos < env_pos
+
+
+def test_diagnose_report_can_skip_connection(monkeypatch):
+    monkeypatch.setattr(
+        diagnostics,
+        "diagnose_environment",
+        lambda **_: diagnostics.EnvironmentDiagnosticReport(
+            generated_at="2026-06-18T00:00:00+00:00",
+            tidy3d_version="test",
+            python_version="3.13.0",
+            python_full_version="3.13.0",
+            python_executable="/tmp/py",
+            platform="Linux",
+            machine="x86_64",
+            processor="cpu",
+            in_virtualenv=True,
+            in_notebook=False,
+            flexcompute_packages=(),
+            installed_packages=(),
+        ),
+    )
+
+    def _forbidden(**_kwargs):  # pragma: no cover - guard against accidental call
+        raise AssertionError("diagnose_connection must not be called when run_connection=False")
+
+    monkeypatch.setattr(diagnostics, "diagnose_connection", _forbidden)
+
+    report = diagnostics.diagnose_report(run_connection=False)
+    assert report.connection is None
+    assert "Tidy3D connection diagnostics" not in report.support_text()

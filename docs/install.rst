@@ -104,6 +104,10 @@ and the latest version of Tidy3D will be installed in this environment. To test 
 
 If the installation is successful, you should see the client version of Tidy3D being displayed. Now you can open your favorite Python IDE and start creating Tidy3D simulations!
 
+If anything goes wrong during setup or when running a simulation, run
+``tidy3d troubleshoot report`` to produce a paste-ready diagnostic bundle for
+support. See :doc:`troubleshoot` for details.
+
 To get a specific version eg. ``x.y.z`` of tidy3d, including the "pre-release" versions, one may specify the version as follows:
 
 .. code-block:: bash

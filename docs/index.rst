@@ -272,3 +272,4 @@ Contents
   extras/index
   changelog
   About our Solver <https://www.flexcompute.com/tidy3d/solver/>
+  troubleshoot
