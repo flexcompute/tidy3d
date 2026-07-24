@@ -4,6 +4,47 @@ Installation |:wave:|
 
 This page will get you set up with Tidy3D and running a simple example.
 
+Recommended: Tidy3D Agent Plugin |:robot:|
+===========================================
+
+If you work with an AI coding assistant (Claude Code, Codex, Cursor, GitHub Copilot, or VS Code),
+we recommend installing the Tidy3D plugin (``tidy3d@flexcompute``). It equips your assistant with
+Tidy3D skills and a documentation-search MCP server so it can help you build, debug, and review
+Tidy3D simulations using up-to-date Flexcompute guidance instead of pasting docs into every chat.
+
+A single command sets it up:
+
+.. tabs::
+
+    .. group-tab:: macOS / Linux |:computer:|
+
+        .. code-block:: bash
+
+            curl -LsSf https://raw.githubusercontent.com/flexcompute/plugin-marketplace/main/install.sh | bash
+
+    .. group-tab:: Windows PowerShell |:cloud:|
+
+        .. code-block:: powershell
+
+            powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/flexcompute/plugin-marketplace/main/install.ps1 | iex"
+
+The installer asks which AI coding tool you use. It auto-configures the marketplace and plugin for
+Claude Code, Codex, and GitHub Copilot CLI. For Cursor it prints an ``/add-plugin`` command to run
+from Cursor Agent chat, and VS Code is a separate preview flow you enable through ``chat.plugins.*``
+settings. For Claude Code you can also add the plugin directly:
+
+.. code-block:: bash
+
+    claude plugin marketplace add flexcompute/plugin-marketplace
+    claude plugin install tidy3d@flexcompute
+
+The plugin equips your AI assistant; you still install the Tidy3D Python API with
+``pip install tidy3d`` as described below. See the `plugin marketplace
+<https://github.com/flexcompute/plugin-marketplace>`_ for setup on other tools and more details.
+
+For full details on the agent plugin and the FlexAgent MCP server it configures, including
+setup for Claude Code, Codex, and other MCP clients, see :doc:`ai/flex_agent`.
+
 Getting Started
 ===============
 
