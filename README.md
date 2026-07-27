@@ -62,6 +62,20 @@ python -c "import tidy3d; tidy3d.web.test()"
 
 It should pass without any errors if the API key is set up correctly.
 
+### Troubleshooting
+
+If an installation, authentication, upload, or connection problem persists, generate a diagnostic report to share with [Tidy3D support](https://www.flexcompute.com/tidy3d/technical-support/):
+
+```bash
+tidy3d troubleshoot report
+```
+
+The command prompts for a short problem description and collects Python, package, configuration, and connectivity information. Use `--no-connection` for an offline report or `--output tidy3d-support-report.txt` to save it.
+
+Review the report before sharing it. Narrative answers and traceback files are included verbatim, and the environment section contains local paths and installed package versions. Do not share reports created with `--private-network-details` outside your institution.
+
+See the [troubleshooting guide](https://docs.flexcompute.com/projects/tidy3d/en/latest/troubleshoot.html) for the environment-only and connection-only commands and all available options. You can also run `tidy3d troubleshoot --help` or `tidy3d troubleshoot report --help`.
+
 To get started, our documentation has a lot of [examples](https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/docs/index.html) for inspiration.
 
 ## Common Documentation References
