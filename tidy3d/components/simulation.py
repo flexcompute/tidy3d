@@ -271,6 +271,9 @@ FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 # RF frequency warning
 RF_FREQ_WARNING = 300e9
 
+# Reserved name prefix marking the automatically generated modal PEC frames
+MODAL_PEC_FRAME_NAME_PREFIX = "__tidy3d_modal_pec_frame_"
+
 # thin-lens preprocessing path multiplicity
 THIN_LENS_SOURCE_SETUP_EVALUATIONS = 4
 THIN_LENS_MONITOR_SETUP_EVALUATIONS = 2
@@ -2549,32 +2552,34 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         self._validate_finalized()
         log.end_capture(self)
 
-    def _make_pec_frame(self, obj: AbstractModeSource | InternalAbsorber) -> Structure:
-        """Make a pec frame around a mode source or an internal absorber. For mode sources,
-        the frame is added around the injection plane. For internal absorbers, a backing pec
-        plate is also added on the non-absorbing side.
+    def _make_pec_frame(
+        self, obj: AbstractModeSource | InternalAbsorber, name: str | None = None
+    ) -> Structure:
+        """Make the PEC frame around a mode source or internal absorber.
+
+        Mode-source frames are open tubes (both axis caps removed). Internal-absorber
+        frames are closed cups: the cap on the non-absorbing side is kept as the backing
+        plate, only the absorbing-side cap is removed.
         """
 
-        # get pec frame bounding box, object's axis and direction
+        # get pec frame bounding box and object's axis
         (box, axis, direction) = self._pec_frame_box(obj)
 
         surfaces = Box.surfaces(box.size, box.center)
-        if isinstance(obj, AbstractModeSource):
-            del surfaces[2 * axis : 2 * axis + 2]
+        if isinstance(obj, InternalAbsorber):
+            # Keep the backing cap on the non-absorbing side; open the absorbing side.
+            absorbing_cap_index = 2 * axis + 1 if direction == "-" else 2 * axis
+            del surfaces[absorbing_cap_index]
         else:
-            if direction == "-":
-                del surfaces[2 * axis + 1]
-            else:
-                del surfaces[2 * axis]
+            del surfaces[2 * axis : 2 * axis + 2]
 
-        structure = Structure(
+        return Structure(
             geometry=GeometryGroup(
                 geometries=surfaces,
             ),
             medium=PECMedium(),
+            name=name,
         )
-
-        return structure
 
     def _pec_frame_span_inds(
         self, obj: AbstractModeSource | InternalAbsorber
@@ -2632,14 +2637,17 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """Return frames to add around mode sources and internal absorbers."""
 
         pec_frames = [
-            self._make_pec_frame(src)
-            for src in self.sources
+            self._make_pec_frame(src, name=f"{MODAL_PEC_FRAME_NAME_PREFIX}source_{src_index}")
+            for src_index, src in enumerate(self.sources)
             if isinstance(src, AbstractModeSource) and isinstance(src.frame, PECFrame)
         ]
 
-        pec_frames = pec_frames + [
-            self._make_pec_frame(abc) for abc in self._shifted_internal_absorbers
-        ]
+        for absorber_index, absorber in enumerate(self._shifted_internal_absorbers):
+            pec_frames.append(
+                self._make_pec_frame(
+                    absorber, name=f"{MODAL_PEC_FRAME_NAME_PREFIX}absorber_{absorber_index}"
+                )
+            )
 
         return pec_frames
 
