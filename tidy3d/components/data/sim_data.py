@@ -42,15 +42,21 @@ from tidy3d.log import log
 from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
 from .monitor_data import (
     AbstractFieldData,
+    FieldStructureData,
     FieldTimeData,
     PointCloudFieldData,
     PointCloudPermittivityData,
+)
+from .optical_generation import (
+    compute_optical_generation,
+    compute_per_component_optical_generation,
 )
 from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from os import PathLike
+    from typing import Literal
 
     from matplotlib.colors import Colormap
     from numpy.typing import NDArray
@@ -60,6 +66,7 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
 
     from .data_array import DataArray
+    from .optical_generation import OpticalGenerationData
 
 
 def _flatten_monitor_annotation(annotation: Any) -> tuple[type, ...]:
@@ -532,6 +539,69 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             f"'{field_name}'."
         )
 
+    def _get_displacement_field_from_data(
+        self,
+        field_monitor_data: AbstractFieldData,
+        field_name: str,
+        val: FieldVal,
+        phase: float = 0.0,
+    ) -> xr.DataArray:
+        """Return an ``xarray.DataArray`` of the displacement field ``D / epsilon_0 = eps * E``.
+
+        Only available for :class:`.FieldStructureData`. ``'Dx'``/``'Dy'``/``'Dz'`` return the
+        component on its native Yee grid (in electric-field units); ``'D'`` returns the vector
+        magnitude of the three components colocated to the monitor grid boundaries.
+        """
+        if not isinstance(field_monitor_data, FieldStructureData):
+            raise DataError(
+                f"Displacement field '{field_name}' is only available for "
+                "'FieldStructureMonitor' data."
+            )
+
+        if field_name in ("Dx", "Dy", "Dz"):
+            field_component = getattr(field_monitor_data, field_name)
+            field_component.name = field_name
+            field_component = self.apply_phase(data=field_component, phase=phase)
+            return self._field_component_value(field_component, val)
+
+        # 'D' magnitude: colocate Dx/Dy/Dz onto the shared grid boundaries and combine. Reuse the
+        # same ``interval_space``-aware colocation as ``absorbed_power_density`` (``_colocate_axes``)
+        # so ``|D|`` lands on the same grid as the absorption/generation maps; this colocates the
+        # displacement components directly, so the categorical structure-index maps are never
+        # interpolated.
+        colocated = field_monitor_data._colocate_axes(field_monitor_data._displacement_components())
+        # phase each component separately: ``apply_phase`` cannot inspect an ``xr.Dataset`` and
+        # would silently drop the phase (see its docstring)
+        dataset = xr.Dataset(
+            {
+                name: self.apply_phase(data=component, phase=phase)
+                for name, component in colocated.items()
+            }
+        )
+
+        d_components = (dataset[c] for c in ("Dx", "Dy", "Dz"))
+        val = val.lower()
+        if val in ("real", "re"):
+            derived_data = sum(f.real**2 for f in d_components) ** 0.5
+            derived_data.name = "|Re{D}|"
+        elif val in ("imag", "im"):
+            derived_data = sum(f.imag**2 for f in d_components) ** 0.5
+            derived_data.name = "|Im{D}|"
+        elif val == "abs":
+            derived_data = sum(abs(f) ** 2 for f in d_components) ** 0.5
+            derived_data.name = "|D|"
+        elif val == "abs^2":
+            derived_data = sum(abs(f) ** 2 for f in d_components)
+            derived_data.name = "|D|²"
+        elif val == "phase":
+            raise Tidy3dKeyError("Phase is not defined for complex vector 'D'.")
+        else:
+            raise Tidy3dKeyError(
+                f"'val' of {val} not supported. "
+                "Must be one of 'real', 'imag', 'abs', 'abs^2', or 'phase'."
+            )
+        return derived_data
+
     def get_intensity(self, field_monitor_name: str) -> xr.DataArray:
         """return `xarray.DataArray` of the intensity of a field monitor at Yee cell centers.
 
@@ -859,7 +929,12 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
 
     @staticmethod
     def apply_phase(data: xr.DataArray | xr.Dataset, phase: float = 0.0) -> xr.DataArray:
-        """Apply a phase to xarray data."""
+        """Apply a phase to xarray data.
+
+        Note: pass a :class:`xarray.DataArray`. A ``Dataset`` inherits ``Mapping.values``, so the
+        complex check below reads a bound method instead of the underlying arrays and the phase is
+        silently dropped -- phase each data variable individually instead.
+        """
         if phase != 0.0:
             if np.any(np.iscomplex(data.values)):
                 data *= np.exp(1j * phase)
@@ -895,7 +970,10 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_name : str
             Name of ``field`` component to plot (eg. `'Ex'`).
             Also accepts ``'E'`` and ``'H'`` to plot the vector magnitudes of the electric and
-            magnetic fields, and ``'S'`` for the Poynting vector.
+            magnetic fields, and ``'S'`` for the Poynting vector. For
+            :class:`.FieldStructureMonitor` data, also accepts the displacement components
+            ``'Dx'``/``'Dy'``/``'Dz'`` (``D / epsilon_0``, in electric-field units) and ``'D'``
+            for their vector magnitude.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
             Which part of the field to plot.
         scale : Literal['lin', 'dB']
@@ -942,6 +1020,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             field_data = self._get_scalar_field_from_data(
                 field_monitor_data, field_name, val, phase=phase
             )
+        elif field_name in ("D", "Dx", "Dy", "Dz"):
+            # Displacement field (FieldStructureData only)
+            field_data = self._get_displacement_field_from_data(
+                field_monitor_data, field_name, val, phase=phase
+            )
         else:
             # Direct field component (e.g. Ex)
             if field_name not in field_monitor_data.field_components:
@@ -962,6 +1045,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 ("S", "phase"): 1,
                 ("E", "abs^2"): 10,
                 ("H", "abs^2"): 10,
+                ("D", "abs^2"): 10,
             }.get((field_name[0], val), 20)
             field_data = self._apply_log_scale(field_data, vmin=vmin, db_factor=db_factor)
             field_data.name += " (dB)"
@@ -1094,7 +1178,10 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_name : str
             Name of ``field`` component to plot (eg. `'Ex'`).
             Also accepts ``'E'`` and ``'H'`` to plot the vector magnitudes of the electric and
-            magnetic fields, and ``'S'`` for the Poynting vector.
+            magnetic fields, and ``'S'`` for the Poynting vector. For
+            :class:`.FieldStructureMonitor` data, also accepts the displacement components
+            ``'Dx'``/``'Dy'``/``'Dz'`` (``D / epsilon_0``, in electric-field units) and ``'D'``
+            for their vector magnitude.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
             Which part of the field to plot.
         scale : Literal['lin', 'dB']
@@ -1862,6 +1949,90 @@ class SimulationData(AbstractYeeGridSimulationData):
             amps_complex.append(amp_complex)
 
         return xr.DataArray(np.array(amps_complex), coords={"f": freqs})
+
+    def optical_generation(
+        self,
+        monitor_name: str,
+        *,
+        freq: float | None = None,
+        temperature: float = 300.0,
+        power_scale: float = 1.0,
+    ) -> OpticalGenerationData:
+        """Compute optical carrier generation and thermalization heat from a field-medium monitor.
+
+        Converts the absorbed optical power recorded by a :class:`.FieldStructureMonitor` into a
+        band-gap-gated carrier ``generation_rate`` and the accompanying ``thermalization_heat_rate``
+        (see :class:`.OpticalGenerationData`). Band gaps are resolved from each owning structure's
+        ``charge`` medium via the recorded per-component structure-ownership index, so this needs
+        ``self.simulation.structures`` and is a :class:`.SimulationData` method rather than a
+        :class:`.FieldStructureData` property.
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name of the :class:`.FieldStructureMonitor` whose data to use.
+        freq : Optional[float] = None
+            Frequency [Hz] to evaluate. If the monitor recorded a single frequency it is used;
+            otherwise ``freq`` must match a recorded frequency within a small relative tolerance.
+        temperature : float = 300.0
+            Temperature [K] used to evaluate the band-gap models.
+        power_scale : float = 1.0
+            Multiplies the absorbed power (e.g. the physical input power in W for
+            source-normalized data). Caller's responsibility.
+
+        Returns
+        -------
+        :class:`.OpticalGenerationData`
+            Absorbed power, band-gap-gated generation rate, thermalization heat, and pair power.
+        """
+        return compute_optical_generation(
+            self._field_structure_data(monitor_name),
+            list(self.simulation.structures),
+            freq=freq,
+            temperature=temperature,
+            power_scale=power_scale,
+        )
+
+    def per_component_optical_generation(
+        self,
+        monitor_name: str,
+        *,
+        freq: float | None = None,
+        temperature: float = 300.0,
+        power_scale: float = 1.0,
+    ) -> dict[Literal["x", "y", "z"], OpticalGenerationData]:
+        """Per-component optical generation on each native Yee grid (no colocation).
+
+        Same physics as :meth:`optical_generation`, but returns one :class:`.OpticalGenerationData`
+        per electric-field component (keys ``"x"/"y"/"z"``, each instance tagged with its
+        ``component``) on that component's native grid, rather than a single colocated result.
+        Colocation blends the staggered components and smears the band-gap gate at material
+        interfaces; these keep the exact gated per-component values for accuracy-sensitive
+        downstream use (e.g. feeding a charge solver per component). Parameters match
+        :meth:`optical_generation`.
+        """
+        return compute_per_component_optical_generation(
+            self._field_structure_data(monitor_name),
+            list(self.simulation.structures),
+            freq=freq,
+            temperature=temperature,
+            power_scale=power_scale,
+        )
+
+    def _field_structure_data(self, monitor_name: str) -> FieldStructureData:
+        """Fetch and type-check a :class:`.FieldStructureData` by monitor name."""
+        try:
+            field_structure = self[monitor_name]
+        except KeyError as exc:
+            raise DataError(  # blind-chaining: ignore
+                f"Monitor '{monitor_name}' not found in the simulation data."
+            ) from exc
+        if not isinstance(field_structure, FieldStructureData):
+            raise DataError(
+                f"optical generation requires a 'FieldStructureMonitor'; monitor '{monitor_name}' "
+                f"produced '{field_structure.type}'."
+            )
+        return field_structure
 
     def _get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
         """Grab the field or permittivity data for a given structure index."""

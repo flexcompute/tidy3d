@@ -244,6 +244,7 @@ from .components.data.data_array import (
 )
 from .components.data.dataset import (
     FieldDataset,
+    FieldStructureDataset,
     FieldTimeDataset,
     MediumDataset,
     ModeSolverDataset,
@@ -262,6 +263,7 @@ from .components.data.monitor_data import (
     FieldProjectionAngleData,
     FieldProjectionCartesianData,
     FieldProjectionKSpaceData,
+    FieldStructureData,
     FieldTimeData,
     FluxData,
     FluxTimeData,
@@ -275,6 +277,7 @@ from .components.data.monitor_data import (
     SurfaceFieldData,
     SurfaceFieldTimeData,
 )
+from .components.data.optical_generation import OpticalGenerationData
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
 from .components.data.unstructured.surface import TriangularSurfaceDataset
 from .components.data.utils import (
@@ -431,6 +434,7 @@ from .components.monitor import (
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     FieldProjectionSurface,
+    FieldStructureMonitor,
     FieldTimeMonitor,
     FluxMonitor,
     FluxTimeMonitor,
@@ -747,6 +751,9 @@ __all__ = [
     "FieldProjectionKSpaceMonitor",
     "FieldProjectionSurface",
     "FieldProjector",
+    "FieldStructureData",
+    "FieldStructureDataset",
+    "FieldStructureMonitor",
     "FieldTimeData",
     "FieldTimeDataset",
     "FieldTimeMonitor",
@@ -864,6 +871,7 @@ __all__ = [
     "NonlinearModel",
     "NonlinearSpec",
     "NonlinearSusceptibility",
+    "OpticalGenerationData",
     "PECBoundary",
     "PECConformal",
     "PECFrame",

@@ -35,6 +35,7 @@ from .data_array import (
     ScalarFieldTimeDataArray,
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
+    SpatialDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
     _TracedDataset,
@@ -230,15 +231,27 @@ class AbstractFieldDataset(Dataset, ABC):
         """
         return None
 
+    @property
+    def phase_components(self) -> set[str]:
+        """Components a global phase shift applies to (see :meth:`apply_phase`).
+
+        A phase is a property of a field amplitude, so it applies to the electromagnetic field
+        components only. Defaults to all of :attr:`field_components`; datasets that also carry
+        non-field data (permittivity, structure ownership) narrow this so those are left untouched.
+        """
+        return set(self.field_components)
+
     def apply_phase(self, phase: float) -> AbstractFieldDataset:
-        """Create a copy where all elements are phase-shifted by a value (in radians)."""
+        """Create a copy where the :attr:`phase_components` are phase-shifted (in radians)."""
         if phase == 0.0:
             return self
         phasor = np.exp(1j * phase)
-        field_components_shifted = {}
-        for fld_name, fld_cmp in self.field_components.items():
-            fld_cmp_shifted = phasor * fld_cmp
-            field_components_shifted[fld_name] = fld_cmp_shifted
+        phase_components = self.phase_components
+        field_components_shifted = {
+            fld_name: phasor * fld_cmp
+            for fld_name, fld_cmp in self.field_components.items()
+            if fld_name in phase_components
+        }
         return self.updated_copy(**field_components_shifted)
 
     @property
@@ -250,6 +263,14 @@ class AbstractFieldDataset(Dataset, ABC):
     @abstractmethod
     def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
+
+    @property
+    def nearest_neighbor_components(self) -> set[str]:
+        """Components that are categorical (e.g. ownership indices) and must be resampled with
+        nearest-neighbor selection, never linear interpolation (which would blend the values).
+        Honored anywhere fields are regridded: symmetry expansion and zero-dim snapping.
+        """
+        return set()
 
     def package_colocate_results(
         self, centered_fields: dict[str, ScalarFieldDataArray]
@@ -300,6 +321,7 @@ class AbstractFieldDataset(Dataset, ABC):
 
         # dict of data arrays to combine in dataset and return
         centered_fields = {}
+        nearest = self.nearest_neighbor_components
 
         # loop through field components
         for field_name, field_data in self.field_components.items():
@@ -314,7 +336,14 @@ class AbstractFieldDataset(Dataset, ABC):
                         f"supply {coord_name}=None to skip it."
                     )
 
-            if self.solver_field_bounds is not None:
+            if field_name in nearest:
+                # categorical components (e.g. structure-ownership indices) must snap to the
+                # nearest value; linearly interpolating discrete labels would fabricate an index
+                # that owns none of the neighboring cells.
+                centered_fields[field_name] = field_data.interp(
+                    **supplied_coord_map, method="nearest", kwargs={"bounds_error": True}
+                )
+            elif self.solver_field_bounds is not None:
                 centered_fields[field_name] = field_data.interp_within_domain(
                     supplied_coord_map, self.solver_field_bounds, assume_sorted=True
                 )
@@ -687,6 +716,11 @@ class PointCloudPermittivityDataset(AbstractFieldDataset):
             field_name: getattr(self, field_name)
             for field_name in POINT_CLOUD_PERMITTIVITY_COMPONENTS
         }
+
+    @property
+    def phase_components(self) -> set[str]:
+        """Permittivity is not a field amplitude, so a global phase does not apply to it."""
+        return set()
 
     @property
     def grid_locations(self) -> dict[str, str]:
@@ -1076,6 +1110,12 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
 class AbstractMediumPropertyDataset(AbstractFieldDataset, ABC):
     """Dataset storing medium property."""
 
+    @property
+    def phase_components(self) -> set[str]:
+        """Medium properties (permittivity/permeability) are not field amplitudes, so a global
+        phase does not apply to them."""
+        return set()
+
     eps_xx: ScalarFieldDataArray = Field(
         title="Epsilon xx",
         description="Spatial distribution of the xx-component of the relative permittivity.",
@@ -1182,6 +1222,122 @@ class MediumDataset(AbstractMediumPropertyDataset):
             "mu_yy": None,
             "mu_zz": None,
         }
+
+
+# per-component field, permittivity, and structure-ownership component names
+FIELD_STRUCTURE_E_COMPONENTS = ("Ex", "Ey", "Ez")
+FIELD_STRUCTURE_EPS_COMPONENTS = ("eps_xx", "eps_yy", "eps_zz")
+FIELD_STRUCTURE_INDEX_COMPONENTS = (
+    "structure_index_x",
+    "structure_index_y",
+    "structure_index_z",
+)
+
+
+class FieldStructureDataset(AbstractFieldDataset):
+    """Dataset storing matched electric field, permittivity, and structure-ownership components.
+
+    Each of the three constituents lives on its native Yee grid: ``Ex``/``Ey``/``Ez`` are the
+    electric field components, ``eps_xx``/``eps_yy``/``eps_zz`` are the matching diagonal complex
+    relative permittivity components, and ``structure_index_x``/``structure_index_y``/
+    ``structure_index_z`` record which structure owns each Yee point (``-1`` for the background
+    medium, ``i`` for ``simulation.structures[i]``).
+    """
+
+    # All nine primitives are required: the displacement field, absorbed power, and optical
+    # generation need the complete matched set, so partial data (which would silently produce
+    # plausible-but-low results) is rejected at construction rather than skipped downstream.
+    Ex: ScalarFieldDataArray = Field(
+        title="Ex",
+        description="Spatial distribution of the x-component of the electric field.",
+    )
+    Ey: ScalarFieldDataArray = Field(
+        title="Ey",
+        description="Spatial distribution of the y-component of the electric field.",
+    )
+    Ez: ScalarFieldDataArray = Field(
+        title="Ez",
+        description="Spatial distribution of the z-component of the electric field.",
+    )
+    eps_xx: ScalarFieldDataArray = Field(
+        title="Epsilon xx",
+        description="Spatial distribution of the xx-component of the complex relative permittivity, "
+        "on the ``Ex`` Yee grid.",
+    )
+    eps_yy: ScalarFieldDataArray = Field(
+        title="Epsilon yy",
+        description="Spatial distribution of the yy-component of the complex relative permittivity, "
+        "on the ``Ey`` Yee grid.",
+    )
+    eps_zz: ScalarFieldDataArray = Field(
+        title="Epsilon zz",
+        description="Spatial distribution of the zz-component of the complex relative permittivity, "
+        "on the ``Ez`` Yee grid.",
+    )
+    structure_index_x: SpatialDataArray = Field(
+        title="Structure Index (x)",
+        description="Owning structure index at each ``Ex`` Yee point; ``-1`` for the background "
+        "medium, ``i`` for ``simulation.structures[i]``.",
+    )
+    structure_index_y: SpatialDataArray = Field(
+        title="Structure Index (y)",
+        description="Owning structure index at each ``Ey`` Yee point; ``-1`` for the background "
+        "medium, ``i`` for ``simulation.structures[i]``.",
+    )
+    structure_index_z: SpatialDataArray = Field(
+        title="Structure Index (z)",
+        description="Owning structure index at each ``Ez`` Yee point; ``-1`` for the background "
+        "medium, ``i`` for ``simulation.structures[i]``.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the field, permittivity, and structure-index components to their data."""
+        return {
+            name: getattr(self, name)
+            for name in (
+                *FIELD_STRUCTURE_E_COMPONENTS,
+                *FIELD_STRUCTURE_EPS_COMPONENTS,
+                *FIELD_STRUCTURE_INDEX_COMPONENTS,
+            )
+        }
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps each component to the string key of its grid location on the Yee lattice."""
+        return {
+            "Ex": "Ex",
+            "Ey": "Ey",
+            "Ez": "Ez",
+            "eps_xx": "Ex",
+            "eps_yy": "Ey",
+            "eps_zz": "Ez",
+            "structure_index_x": "Ex",
+            "structure_index_y": "Ey",
+            "structure_index_z": "Ez",
+        }
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float] | None]:
+        """Maps components to their symmetry eigenvalues (``None`` = invariant under reflection)."""
+        e_eigenvalues = em_field_symmetry_eigenvalues()
+        eigenvalues = {name: e_eigenvalues[name] for name in FIELD_STRUCTURE_E_COMPONENTS}
+        # permittivity and structure ownership are scalar fields, invariant under reflection
+        for name in (*FIELD_STRUCTURE_EPS_COMPONENTS, *FIELD_STRUCTURE_INDEX_COMPONENTS):
+            eigenvalues[name] = None
+        return eigenvalues
+
+    @property
+    def nearest_neighbor_components(self) -> set[str]:
+        """Structure-ownership indices are categorical, so regridding must snap to the nearest
+        owning structure rather than linearly interpolating (blended) index values."""
+        return set(FIELD_STRUCTURE_INDEX_COMPONENTS)
+
+    @property
+    def phase_components(self) -> set[str]:
+        """Only the electric field carries a phase; the permittivity and structure-ownership
+        components are left untouched by a global phase shift."""
+        return set(FIELD_STRUCTURE_E_COMPONENTS)
 
 
 class TriangleMeshDataset(Dataset):

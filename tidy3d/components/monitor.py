@@ -874,6 +874,68 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         )
 
 
+class FieldStructureMonitor(AbstractFieldMonitor, FreqMonitor):
+    """:class:`~tidy3d.Monitor` that records matched electric field, permittivity, and per-Yee
+    structure-ownership data on their native Yee grids.
+
+    Notes
+    -----
+
+        A composite (frequency-domain) monitor that records, over the same region and frequencies,
+        three matched primitives on their native Yee grids:
+
+        - the electric field components ``Ex``, ``Ey``, ``Ez`` (stored on the Yee grid,
+          ``colocate=False``);
+        - the diagonal, complex relative permittivity ``eps_xx``, ``eps_yy``, ``eps_zz`` (each on
+          the matching ``Ex``/``Ey``/``Ez`` grid);
+        - the per-component structure-ownership maps ``structure_index_x``, ``structure_index_y``,
+          ``structure_index_z``, recording which structure owns each Yee point
+          (``-1`` for the background medium, ``i`` for ``simulation.structures[i]``).
+
+        These primitives serve the derived displacement field ``D`` (see :class:`.FieldStructureData`),
+        the absorbed power density, and optical carrier generation
+        (:meth:`.SimulationData.optical_generation`) from a single monitor. The structure-ownership
+        index records structure ownership rather than deduplicated medium identity, so regions that
+        share an optical medium but carry different ``charge`` media (and hence band gaps) stay
+        distinct.
+
+    Example
+    -------
+    >>> monitor = FieldStructureMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='field_structure')
+    """
+
+    # Fixed to the full electric-field set (in order): the displacement field and absorbed power
+    # sum over all three components and the backend reconstructs Ex/Ey/Ez unconditionally, so a
+    # partial or reordered set would silently undercount absorption. A Literal makes this a
+    # schema-level constraint, so no separate validator is needed.
+    fields: tuple[Literal["Ex"], Literal["Ey"], Literal["Ez"]] = Field(
+        ("Ex", "Ey", "Ez"),
+        title="Field Components",
+        description="Electric field components to record. Fixed to ``Ex``, ``Ey``, and ``Ez``; "
+        "the displacement field and absorbed power require all three.",
+    )
+
+    colocate: Literal[False] = Field(
+        False,
+        title="Colocate Fields",
+        description="Field–medium monitors record their constituents on the native Yee grid. "
+        "Colocation is applied only when a colocated derived quantity is requested from "
+        ":class:`.FieldStructureData`.",
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # per cell, per frequency: one complex E and one complex eps per requested component
+        field_structure_size = BYTES_COMPLEX * num_cells * len(self.freqs) * (2 * len(self.fields))
+        # per cell: one int32 structure-ownership index per requested component (freq-independent)
+        field_structure_size += BYTES_REAL * num_cells * len(self.fields)
+        return field_structure_size
+
+
 class PointCloudFieldMonitor(FreqMonitor):
     """:class:`~tidy3d.Monitor` that records electromagnetic fields at arbitrary points.
 

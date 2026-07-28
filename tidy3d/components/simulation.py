@@ -125,6 +125,7 @@ from .monitor import (
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionKSpaceMonitor,
+    FieldStructureMonitor,
     FieldTimeMonitor,
     FluxMonitor,
     FreqMonitor,
@@ -3493,6 +3494,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_monitor_mediums_frequency_range()
         self._warn_monitor_simulation_frequency_range()
         self._validate_point_cloud_monitor_points_in_bounds()
+        self._validate_field_structure_monitor_overlaps()
         self._projection_monitors_boundaries()
         self._diffraction_monitor_boundaries()
         self._projection_monitors_homogeneous()
@@ -4582,6 +4584,78 @@ class Simulation(AbstractYeeGridSimulation):
                     "points",
                 )
 
+        return self
+
+    def _validate_field_structure_monitor_overlaps(self) -> Self:
+        """Reject a ``FieldStructureMonitor`` overlapping a structure with no public owner.
+
+        The monitor records per-Yee structure-ownership indices into ``simulation.structures``
+        (RFC EMSOLVER-0010). Derived structures carry no such index — 2D materials (converted to
+        volumetric analogues), lumped elements, and the automatic PEC frames around mode sources
+        and internal absorbers — so the monitor is not allowed to intersect them.
+
+        The check runs against both the user-specified geometries and the finalized
+        (grid-snapped) geometries the solver sees: conversion snaps a 2D sheet to the nearest
+        grid boundary — up to half a cell along its normal — so the user geometry alone would
+        miss a monitor that overlaps only the snapped sheet.
+        """
+        field_structure_monitors = [
+            (ind, mnt)
+            for ind, mnt in enumerate(self.monitors)
+            if isinstance(mnt, FieldStructureMonitor)
+        ]
+        if not field_structure_monitors:
+            return self
+
+        # unwrap the optical medium so a MultiPhysicsMedium(optical=Medium2D(...)) is also caught;
+        # its derived volumetric structure likewise has no public ownership index
+        derived = [
+            ("a 2D-material structure", structure.geometry)
+            for structure in self.structures
+            if isinstance(structure._optical_medium, Medium2D | AnisotropicMediumFromMedium2D)
+        ]
+        derived += [("a lumped element", element.geometry) for element in self.lumped_elements]
+        derived += [
+            ("an automatic PEC frame around a mode source or internal absorber", frame.geometry)
+            for frame in self._modal_plane_frames
+        ]
+        if not derived:
+            return self
+
+        if self._contains_converted_volumetric_structures:
+            # The derived structures are exactly the finalized entries with no counterpart in
+            # ``static_structures`` — the same identity rule the solver export uses to assign
+            # 'no public owner' ownership (``public_str_index = -1``).
+            try:
+                kept = {id(structure) for structure in self.static_structures}
+                kept |= {id(frame) for frame in self._modal_plane_frames}
+                derived += [
+                    (
+                        "the grid-snapped volumetric equivalent of a 2D material or lumped element",
+                        structure.geometry,
+                    )
+                    for structure in self._finalized_volumetric_structures
+                    if id(structure) not in kept
+                ]
+            except Tidy3dError:
+                # conversion can fail on degenerate grids (e.g. a sheet snapped to the domain
+                # edge); that failure is diagnosed with a clearer error at export, so fall back
+                # to the user-specified geometries only
+                pass
+
+        for monitor_ind, monitor in field_structure_monitors:
+            region = monitor.geometry
+            for descr, geometry in derived:
+                if region.intersects(geometry):
+                    self._raise_validation_error_at_loc(
+                        f"'FieldStructureMonitor' '{monitor.name}' overlaps {descr}. This monitor "
+                        "records per-Yee structure-ownership indices into 'simulation.structures', "
+                        "which is undefined for structures without a public owner (2D materials, "
+                        "lumped elements, and automatic PEC frames). Move or resize the monitor so "
+                        "it does not intersect these structures.",
+                        "monitors",
+                        monitor_ind,
+                    )
         return self
 
     def _validate_dipole_emission_monitor_sources(self) -> Self:
