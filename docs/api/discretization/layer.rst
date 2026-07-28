@@ -51,7 +51,6 @@ Note that different :class:`.LayerRefinementSpec` instances are recommended for 
    + `Grid Discretization <../discretization.html>`_
    + `Automatic mesh refinement in layered structures <../../notebooks/LayerRefinement.html>`_
 
-   Example applications:
+   Example applications in Flex RF:
 
-   + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
-   + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
+   + `Edge-feed Patch Antenna <https://docs.flexcompute.com/rf/latest/examples/edge-feed-patch-antenna/>`_

@@ -346,7 +346,7 @@ Please see the learning center article below for detailed explanations on additi
 
    + `Mid-IR metalens based on silicon nanopillars <../notebooks/MidIRMetalens.html>`_
    + `Spherical Fresnel lens <../notebooks/FresnelLens.html>`_
-   + `Directivity and S-parameters computation of patch antenna <../notebooks/AntennaCharacteristics.html>`_
+   + `Intro to Antenna Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-antenna/>`_
 
 ~~~~
 

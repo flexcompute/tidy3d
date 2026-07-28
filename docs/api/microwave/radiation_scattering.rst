@@ -93,10 +93,7 @@ Lobe characteristics such as direction, magnitude, and -3 dB beamwidth can be ob
 
 .. seealso::
 
-   For more in-depth discussion and examples, please see the following learning center article:
+   For more in-depth discussion and examples, please see the following Flex RF pages:
 
-   + `Introduction to Antenna Simulation <../../notebooks/AntennaCharacteristics.html>`_
-
-   Example applications:
-
-   + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
+   + `Intro to Antenna Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-antenna/>`_
+   + `Edge-feed Patch Antenna <https://docs.flexcompute.com/rf/latest/examples/edge-feed-patch-antenna/>`_

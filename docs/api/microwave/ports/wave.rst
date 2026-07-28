@@ -128,9 +128,9 @@ Alternatively, use the port's ``get_port_impedance()`` method:
 
    **Tutorials and Examples:**
 
-   + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
-   + `Coplanar waveguide RF photonics <../../notebooks/CPWRFPhotonics1.html>`_
-   + `Through silicon via <../../notebooks/ThroughSiliconVia.html>`_
+   + `Intro to Transmission Line Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-transmission-line/>`_
+   + `CPW in RF Photonics 1: Transmission Line Basics <https://docs.flexcompute.com/rf/latest/examples/cpw-rf-photonics-1/>`_
+   + `Through-silicon Via <https://docs.flexcompute.com/rf/latest/examples/through-silicon-via/>`_
 
 **Terminal Wave Port**
 

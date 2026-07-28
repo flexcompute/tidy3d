@@ -101,8 +101,8 @@ The S-matrix is stored as a :class:`~tidy3d.rf.MicrowaveSMatrixData` whose ``dat
    + `Performing visualization of simulation data <../../notebooks/VizData.html>`_
    + `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
 
-   Please refer to the following example models to see the :class:`~tidy3d.rf.TerminalComponentModeler` in action:
+   For related RF workflows, please refer to the following Flex RF examples:
 
-   + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
-   + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
-   + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
+   + `Intro to Transmission Line Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-transmission-line/>`_
+   + `Edge-feed Patch Antenna <https://docs.flexcompute.com/rf/latest/examples/edge-feed-patch-antenna/>`_
+   + `Designing a Power Divider for Wireless Communications 3: Full Structure <https://docs.flexcompute.com/rf/latest/examples/wpd-harmonic-suppression-3/>`_

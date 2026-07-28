@@ -163,6 +163,5 @@ For standalone mode solving (without a full 3D FDTD simulation), use :class:`~ti
 
    For practical examples:
 
-   + `Computing the characteristic impedance of transmission lines <../../notebooks/CharacteristicImpedanceCalculator.html>`_
-   + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
-   + `Edge-mounted SMA to co-planar waveguide transition <../../notebooks/SMAEdgeMount.html>`_
+   + `Intro to Transmission Line Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-transmission-line/>`_
+   + `Edge-mounted SMA to Co-planar Waveguide Transition <https://docs.flexcompute.com/rf/latest/examples/sma-edge-mount/>`_

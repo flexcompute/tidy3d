@@ -162,4 +162,4 @@ The impedance calculator and path integral classes work with various types of fi
 
    Tutorials and examples:
 
-   + `Computing the characteristic impedance of transmission lines <../../notebooks/CharacteristicImpedanceCalculator.html>`_
+   + `Intro to Transmission Line Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-transmission-line/>`_

@@ -94,11 +94,6 @@ All lumped elements should be added to the ``lumped_elements`` field of the base
 
 .. seealso::
 
-   For more in-depth discussion and examples, please see the following learning center article:
+   For related RF examples, please see the following Flex RF page:
 
-   + `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
-
-   Example applications:
-
-   + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
-   + `Designing a power divider (part 3) <../../notebooks/WPDHarmonicSuppression3.html>`_
+   + `Designing a Power Divider for Wireless Communications 3: Full Structure <https://docs.flexcompute.com/rf/latest/examples/wpd-harmonic-suppression-3/>`_

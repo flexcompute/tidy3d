@@ -237,5 +237,4 @@ These specification classes have the same parameters but are used for configurat
 
    **Practical examples:**
 
-   + `Computing the characteristic impedance of transmission lines <../../notebooks/CharacteristicImpedanceCalculator.html>`_
-   + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
+   + `Intro to Transmission Line Modeling <https://docs.flexcompute.com/rf/latest/examples/intro-transmission-line/>`_
