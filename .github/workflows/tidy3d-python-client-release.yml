@@ -46,7 +46,7 @@ jobs:
       OVERWRITE_EXISTING_TAG: ${{ github.event.inputs.overwrite_existing_tag }}
     steps:
       - name: checkout-target-ref
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.TARGET_REF }}
           fetch-depth: 0
@@ -159,7 +159,7 @@ jobs:
           PY
 
       - name: create-github-release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ env.TARGET_REF }}
