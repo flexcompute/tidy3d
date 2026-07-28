@@ -3248,10 +3248,20 @@ class Transformed(Geometry):
         y = np.array(y)
         z = np.array(z)
         xyz = np.dot(self.inverse, np.vstack((x.flat, y.flat, z.flat, np.ones(x.size))))
-        if xyz.shape[1] == 1:
-            # TODO: This "fix" is required because of a bug in PolySlab.inside (with non-zero sidewall angle)
-            return self.geometry.inside(xyz[0][0], xyz[1][0], xyz[2][0]).reshape(x.shape)
         return self.geometry.inside(xyz[0], xyz[1], xyz[2]).reshape(x.shape)
+
+    def inside_meshgrid(
+        self, x: NDArray[float], y: NDArray[float], z: NDArray[float]
+    ) -> NDArray[bool]:
+        """Perform ``self.inside`` on a set of sorted 1D coordinates."""
+        from tidy3d.components.geometry.polyslab import PolySlab
+
+        if isinstance(self.geometry, PolySlab):
+            result = self.geometry._inside_transformed_meshgrid(self, x, y, z)
+            if result is not NotImplemented:
+                return result
+
+        return super().inside_meshgrid(x, y, z)
 
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume within given bounds."""

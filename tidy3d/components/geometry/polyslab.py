@@ -24,12 +24,14 @@ from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
-from tidy3d.packaging import verify_packages_import
+from tidy3d.packaging import check_import, verify_packages_import
 
 from . import base, triangulation
 from .vertex_utils import remove_adjacent_duplicate_vertices
 
 if TYPE_CHECKING:
+    from types import NotImplementedType
+
     from gdstk import Cell
     from numpy.typing import NDArray
     from pydantic import PositiveFloat
@@ -1168,11 +1170,6 @@ class PolySlab(base.Planar):
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`~tidy3d.Geometry`, and ``False`` otherwise.
 
-        Note
-        ----
-        For slanted sidewalls, this function only works if x, y, and z are arrays produced by a
-        ``meshgrid call``, i.e. 3D arrays and each is constant along one axis.
-
         Parameters
         ----------
         x : np.ndarray[float]
@@ -1187,6 +1184,8 @@ class PolySlab(base.Planar):
         np.ndarray[bool]
             ``True`` for every point that is inside the geometry.
         """
+        # Normalize once so scalar, list, and ndarray inputs share the same vectorized path.
+        x, y, z = tuple(map(np.array, (x, y, z)))
         self._ensure_equal_shape(x, y, z)
 
         z, (x, y) = self.pop_axis((x, y, z), axis=self.axis)
@@ -1203,7 +1202,7 @@ class PolySlab(base.Planar):
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
 
-        if isinstance(x, np.ndarray):
+        if x.ndim > 0:
             inside_polygon = np.zeros_like(inside_height)
             xs_slab = x[inside_height]
             ys_slab = y[inside_height]
@@ -1218,30 +1217,77 @@ class PolySlab(base.Planar):
                 inside_polygon[inside_height] = inside_polygon_slab
             # slanted sidewall, offsetting vertices at each z
             else:
-                # a helper function for moving axis
+                # Helpers below keep the true meshgrid and generic array cases separate.
                 def _move_axis(arr: NDArray) -> NDArray:
                     return np.moveaxis(arr, source=self.axis, destination=-1)
 
-                def _move_axis_reverse(arr: NDArray) -> NDArray:
-                    return np.moveaxis(arr, source=-1, destination=self.axis)
-
-                inside_polygon_axis = _move_axis(inside_polygon)
-                x_axis = _move_axis(x)
-                y_axis = _move_axis(y)
-
-                for z_i in range(z.shape[self.axis]):
-                    if not _move_axis(inside_height)[0, 0, z_i]:
-                        continue
-                    vertices_z = self._shift_vertices(
-                        self.middle_polygon, _move_axis(dist)[0, 0, z_i]
-                    )[0]
-                    face_polygon = shapely.Polygon(vertices_z).buffer(fp_eps)
+                def _make_face_polygon(dist_z: float) -> shapely.Polygon:
+                    vertices_z = self._shift_vertices(self.middle_polygon, dist_z)[0]
+                    face_polygon = self.make_shapely_polygon(vertices_z).buffer(fp_eps)
                     shapely.prepare(face_polygon)
-                    xs = x_axis[:, :, 0].flatten()
-                    ys = y_axis[:, :, 0].flatten()
-                    inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs, y=ys)
-                    inside_polygon_axis[:, :, z_i] = inside_polygon_slab.reshape(x_axis.shape[:2])
-                inside_polygon = _move_axis_reverse(inside_polygon_axis)
+                    return face_polygon
+
+                def _is_meshgrid_like() -> bool:
+                    # Only true meshgrids can reuse one shifted polygon per z slice; transformed
+                    # geometries arrive here as flattened local points with per-point offsets.
+                    if any(arr.ndim != 3 for arr in (x, y, z)):
+                        return False
+                    x_axis, y_axis, z_axis, inside_height_axis = (
+                        get_static(_move_axis(arr)) for arr in (x, y, z, inside_height)
+                    )
+                    return all(
+                        np.array_equal(arr, np.broadcast_to(template, arr.shape))
+                        for arr, template in (
+                            (x_axis, x_axis[:, :, :1]),
+                            (y_axis, y_axis[:, :, :1]),
+                            (z_axis, z_axis[:1, :1, :]),
+                            (inside_height_axis, inside_height_axis[:1, :1, :]),
+                        )
+                    )
+
+                if _is_meshgrid_like():
+                    inside_polygon_axis = _move_axis(inside_polygon)
+                    x_axis, y_axis, dist_axis, inside_height_axis = (
+                        _move_axis(arr) for arr in (x, y, dist, inside_height)
+                    )
+                    xs = get_static(x_axis[:, :, 0].flatten())
+                    ys = get_static(y_axis[:, :, 0].flatten())
+
+                    for z_i in range(z.shape[self.axis]):
+                        if not inside_height_axis[0, 0, z_i]:
+                            continue
+                        face_polygon = _make_face_polygon(dist_axis[0, 0, z_i])
+                        inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs, y=ys)
+                        inside_polygon_axis[:, :, z_i] = inside_polygon_slab.reshape(
+                            x_axis.shape[:2]
+                        )
+                    inside_polygon = np.moveaxis(
+                        inside_polygon_axis, source=-1, destination=self.axis
+                    )
+                else:
+                    dist_slab = np.asarray(get_static(dist[inside_height]), dtype=float)
+                    xs_slab = np.asarray(get_static(xs_slab), dtype=float)
+                    ys_slab = np.asarray(get_static(ys_slab), dtype=float)
+                    inside_polygon_slab = np.zeros(dist_slab.shape, dtype=bool)
+
+                    # Group equal local offsets so repeated z positions reuse the same polygon.
+                    dist_vals, inverse_inds = np.unique(dist_slab, return_inverse=True)
+                    sort_inds = np.argsort(inverse_inds)
+                    group_starts = np.concatenate(
+                        (
+                            np.array([0]),
+                            np.flatnonzero(np.diff(inverse_inds[sort_inds])) + 1,
+                            np.array([sort_inds.size]),
+                        )
+                    )
+
+                    for dist_z, start, end in zip(dist_vals, group_starts[:-1], group_starts[1:]):
+                        dist_inds = sort_inds[start:end]
+                        face_polygon = _make_face_polygon(dist_z)
+                        inside_polygon_slab[dist_inds] = shapely.contains_xy(
+                            face_polygon, x=xs_slab[dist_inds], y=ys_slab[dist_inds]
+                        )
+                    inside_polygon[inside_height] = inside_polygon_slab
         else:
             if math.isclose(self.sidewall_angle, 0):
                 poly_vertices = self._discretized_reference_polygon
@@ -1252,34 +1298,80 @@ class PolySlab(base.Planar):
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
 
-    @verify_packages_import(["trimesh"])
-    def _do_intersections_tilted_plane(
+    def _inside_transformed_meshgrid(
         self,
-        normal: Coordinate,
-        origin: Coordinate,
-        to_2D: MatrixReal4x4,
-        quad_segs: int | None = None,
-    ) -> list[Shapely]:
-        """Return a list of shapely geometries at the plane specified by normal and origin.
+        transformed: base.Transformed,
+        x: NDArray[float],
+        y: NDArray[float],
+        z: NDArray[float],
+    ) -> NDArray[bool] | NotImplementedType:
+        """Check a transformed PolySlab on a meshgrid, if the specialized path applies."""
+        if np.isclose(self.sidewall_angle, 0):
+            return NotImplemented
 
-        Parameters
-        ----------
-        normal : Coordinate
-            Vector defining the normal direction to the plane.
-        origin : Coordinate
-            Vector defining the plane origin.
-        to_2D : MatrixReal4x4
-            Transformation matrix to apply to resulting shapes.
-        quad_segs : Optional[int] = None
-            Number of segments used to discretize circular shapes. Not used for PolySlab geometry.
+        # A general transform destroys the local meshgrid structure that ``PolySlab.inside`` can
+        # batch over, so slanted PolySlabs are instead batched by global z planes here.
+        arrays = tuple(map(np.array, (x, y, z)))
+        if any(arr.ndim != 1 for arr in arrays):
+            raise ValueError("Each of the supplied coordinates (x, y, z) must be 1D.")
+        is_inside = np.zeros(tuple(arr.size for arr in arrays), dtype=bool)
+        inds_inside = transformed._inds_inside_bounds(*arrays)
+        coords_inside = tuple(arr[ind] for ind, arr in zip(inds_inside, arrays))
+        if any(arr.size == 0 for arr in coords_inside):
+            return is_inside
 
-        Returns
-        -------
-        list[shapely.geometry.base.BaseGeometry]
-            List of 2D shapes that intersect plane.
-            For more details refer to
-            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
-        """
+        transform = np.asarray(transformed.transform)
+        normal = tuple(np.dot((0.0, 0.0, 1.0, 0.0), transform)[:3])
+        normal_array = np.asarray(normal)
+        uses_tilted_mesh = np.sum(np.isclose(normal, 0.0)) != 2
+        if uses_tilted_mesh and not check_import("trimesh"):
+            # Preserve the old dependency surface by requesting the pointwise fallback.
+            return NotImplemented
+        mesh = self._make_tilted_plane_mesh() if uses_tilted_mesh else None
+
+        x_inside, y_inside, z_inside = coords_inside
+        x_grid, y_grid = np.meshgrid(x_inside, y_inside, indexing="ij")
+        xs = x_grid.flatten()
+        ys = y_grid.flatten()
+        inside_view = is_inside[inds_inside]
+
+        def inside_z_slice(z_pos: float) -> NDArray[bool]:
+            return transformed.inside(xs, ys, np.full(xs.shape, z_pos)).reshape(x_grid.shape)
+
+        for z_ind, z_pos in enumerate(z_inside):
+            if mesh is None:
+                # Containment needs exact sections; cleanup is only for plotting artifacts.
+                sections = transformed.intersections_plane(z=z_pos, cleanup=False)
+            else:
+                origin = np.dot(transformed.inverse, (0.0, 0.0, z_pos, 1.0))[:3]
+                section = mesh.section(plane_origin=origin, plane_normal=normal)
+                if section is None:
+                    # A plane tangent to an edge or vertex has no polygon section, but
+                    # ``inside`` is boundary-inclusive. Fall back for that degenerate slice only.
+                    signed_dist = np.dot(mesh.vertices - origin, normal_array)
+                    if np.any(np.isclose(signed_dist, 0.0, atol=fp_eps)) and (
+                        np.all(signed_dist >= -fp_eps) or np.all(signed_dist <= fp_eps)
+                    ):
+                        inside_view[:, :, z_ind] = inside_z_slice(z_pos)
+                    continue
+                path, _ = section.to_2D(to_2D=transform)
+                sections = path.polygons_full
+            sections = list(sections)
+            if not sections:
+                # Axis-aligned sections and ``trimesh`` sections can both reduce to only
+                # line/point boundary contact, while ``inside`` is boundary-inclusive.
+                inside_view[:, :, z_ind] = inside_z_slice(z_pos)
+                continue
+            section = shapely.unary_union(sections).buffer(fp_eps)
+            shapely.prepare(section)
+            inside_view[:, :, z_ind] = shapely.contains_xy(section, x=xs, y=ys).reshape(
+                x_grid.shape
+            )
+        return is_inside
+
+    @verify_packages_import(["trimesh"])
+    def _make_tilted_plane_mesh(self) -> Any:
+        """Return a trimesh representation for tilted plane intersections."""
         import trimesh
 
         if math.isclose(self.sidewall_angle, 0):
@@ -1313,8 +1405,37 @@ class PolySlab(base.Planar):
         y = np.hstack((base_poly[:, 1], top_poly[:, 1]))
         z = np.hstack((np.full(n, self.slab_bounds[0]), np.full(n, self.slab_bounds[1])))
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
-        mesh = trimesh.Trimesh(vertices, faces)
+        return trimesh.Trimesh(vertices, faces)
 
+    @verify_packages_import(["trimesh"])
+    def _do_intersections_tilted_plane(
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        quad_segs: int | None = None,
+    ) -> list[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for PolySlab geometry.
+
+        Returns
+        -------
+        list[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        mesh = self._make_tilted_plane_mesh()
         section = mesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
@@ -3317,6 +3438,16 @@ class ComplexPolySlabBase(PolySlab):
     """Interface for dividing a complex polyslab where self-intersecting polygon can
     occur during extrusion. This class should not be used directly. Use instead
     :class:`plugins.polyslab.ComplexPolySlab`."""
+
+    def _inside_transformed_meshgrid(
+        self,
+        transformed: base.Transformed,
+        x: NDArray[float],
+        y: NDArray[float],
+        z: NDArray[float],
+    ) -> NotImplementedType:
+        """Request the generic transformed meshgrid path for complex PolySlabs."""
+        return NotImplemented
 
     @model_validator(mode="after")
     def no_self_intersecting_polygon_during_extrusion(self: Self) -> Self:
