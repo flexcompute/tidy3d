@@ -442,3 +442,16 @@ Apodization
    ApodizationSpec
 
 The ``ApodizationSpec`` is used to specify apodization specifications for frequency-domain monitors. Typically, the default Tidy3D settings are acceptable and it is not necessary to define a custom instance. Please refer to the documentation page for more details.
+
+~~~~
+
+Sampling in time monitors
+-------------------------
+
+**How is the recording cadence specified?** By at most one of three mutually exclusive fields: ``interval`` (an integer number of time steps between samples), ``sampling_dt`` (physical time between samples, in seconds), or ``num_samples`` (a fixed number of uniformly spaced samples over the recording window). ``sampling_dt`` and ``num_samples`` are currently supported on ``FieldTimeMonitor`` and ``FluxTimeMonitor``; other time monitors accept ``interval`` only. When none is provided, ``interval`` defaults to 1 (record every step); the default is materialized into the field, so switching the cadence of an existing monitor requires clearing it in the same update, e.g. ``monitor.updated_copy(interval=None, sampling_dt=...)``.
+
+**Which time instants do the recorded fields correspond to?** In FDTD, field components are natively defined at either integer time steps (``E`` in the standard scheme) or half-integer time steps (``H``). All sampling methods linearly interpolate in time as needed so that every returned component corresponds to the same requested instants. With ``interval``, ``E`` is taken from the simulation directly while ``H`` is interpolated to the integer steps; with ``sampling_dt`` / ``num_samples``, the requested instants generally fall between native time steps and both fields are interpolated. The returned time coordinates match the request exactly — there is no snapping to the nearest time step.
+
+**How is flux recorded in time?** Flux-type monitors first colocate ``E`` and ``H`` to the same sample time and then compute the flux from the colocated fields; the flux is never itself interpolated between time steps.
+
+**Is the number of samples guaranteed?** The schedule covers the ``[start, stop]`` window assuming the simulation runs its full ``run_time``. If the field-decay shutoff ends the run earlier, samples past the shutoff are not recorded. Cadences finer than the simulation time step ``dt`` are clamped to one sample per time step (with a warning).

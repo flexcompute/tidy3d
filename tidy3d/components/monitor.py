@@ -266,7 +266,38 @@ class FreqMonitor(Monitor, ABC):
 
 
 class TimeMonitor(Monitor, ABC):
-    """:class:`~tidy3d.Monitor` that records data in the time-domain."""
+    """:class:`~tidy3d.Monitor` that records data in the time-domain.
+
+    Notes
+    -----
+
+        **How is the recording cadence specified?** By at most one of three mutually exclusive
+        fields: ``interval`` (an integer number of time steps between samples), ``sampling_dt``
+        (physical time between samples, in seconds), or ``num_samples`` (a fixed number of
+        uniformly spaced samples over the recording window). When none is provided, ``interval``
+        defaults to 1 (record every step); the default is materialized into the field, so
+        switching the cadence of an existing monitor requires clearing it in the same update,
+        e.g. ``monitor.updated_copy(interval=None, sampling_dt=...)``.
+
+        **Which time instants do the recorded fields correspond to?** In FDTD, field components
+        are natively defined at either integer time steps (``E`` in the standard scheme) or
+        half-integer time steps (``H``). All sampling methods linearly interpolate in time as
+        needed so that every returned component corresponds to the same requested instants. With
+        ``interval``, ``E`` is taken from the simulation directly while ``H`` is interpolated to
+        the integer steps; with ``sampling_dt`` / ``num_samples``, the requested instants
+        generally fall between native time steps and both fields are interpolated. The returned
+        time coordinates match the request exactly — there is no snapping to the nearest time
+        step.
+
+        **How is flux recorded in time?** Flux-type monitors first colocate ``E`` and ``H`` to
+        the same sample time and then compute the flux from the colocated fields; the flux is
+        never itself interpolated between time steps.
+
+        **Is the number of samples guaranteed?** The schedule covers the ``[start, stop]`` window
+        assuming the simulation runs its full ``run_time``. If the field-decay shutoff ends the
+        run earlier, samples past the shutoff are not recorded. Cadences finer than the
+        simulation time step ``dt`` are clamped to one sample per time step (with a warning).
+    """
 
     start: NonNegativeFloat = Field(
         0.0,
@@ -289,15 +320,97 @@ class TimeMonitor(Monitor, ABC):
         description="Sampling rate of the monitor: number of time steps between each measurement. "
         "Set ``interval`` to 1 for the highest possible resolution in time. "
         "Higher integer values downsample the data by measuring every ``interval`` time steps. "
-        "This can be useful for reducing data storage as needed by the application.",
+        "This can be useful for reducing data storage as needed by the application. "
+        "Mutually exclusive with ``sampling_dt`` and ``num_samples``; defaults to 1 when none of "
+        "the three is provided.",
+    )
+
+    sampling_dt: PositiveFloat | None = Field(
+        None,
+        title="Sampling Time Step",
+        description="Time between recorded samples, in seconds. Unlike ``interval`` (an integer "
+        "number of time steps), this specifies the cadence in physical units. Mutually exclusive "
+        "with ``interval`` and ``num_samples``. If the requested step is finer than the "
+        "simulation time step ``dt``, it is clamped to record every time step.",
+        json_schema_extra={"units": SECOND},
+    )
+
+    num_samples: PositiveInt | None = Field(
+        None,
+        title="Number of Samples",
+        description="Number of samples to record, spaced uniformly over the monitor's "
+        "``[start, stop]`` window. The count is exact when the simulation runs its full "
+        "``run_time``; if the field-decay shutoff ends the run earlier, correspondingly fewer "
+        "samples are recorded. Mutually exclusive with ``interval`` and ``sampling_dt``. If "
+        "more samples than available time steps are requested, the count is reduced to one "
+        "sample per time step.",
     )
 
     @model_validator(mode="after")
-    def _warn_interval_default(self) -> Self:
-        """If all defaults used for time sampler, warn and set ``interval=1`` internally."""
-        val = self.interval
+    def _validate_single_sampling_spec(self) -> Self:
+        """At most one of ``interval`` / ``sampling_dt`` / ``num_samples`` may be set: they are
+        mutually exclusive ways to define the temporal recording cadence."""
+        # A value equal to the field's declared default carries no user signal and is skipped:
+        # subtypes that pin ``interval`` (``ModeTimeMonitor``'s ``Literal[1]``, declared default
+        # ``1``) would otherwise raise this generic error on ``copy()``-revalidated payloads and
+        # shadow their actionable per-field rejection of the physical-sampling fields. The base
+        # ``interval`` declares default ``None``, so the ``1`` materialized by
+        # ``_default_interval_when_unset`` counts as an explicit setting: switching the cadence of
+        # an existing monitor requires clearing it in the same update
+        # (``updated_copy(interval=None, sampling_dt=...)``).
+        set_fields = [
+            name
+            for name, value in (
+                ("interval", self.interval),
+                ("sampling_dt", self.sampling_dt),
+                ("num_samples", self.num_samples),
+            )
+            if value is not None
+            and value != type(self).model_fields[name].default
+            and name in self.model_fields_set
+        ]
+        if len(set_fields) > 1:
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Only one of 'interval', 'sampling_dt', or 'num_samples' may be set to define "
+                    f"the time sampling (these are mutually exclusive); got {set_fields}. To "
+                    "switch the cadence of an existing monitor, clear the previous field in the "
+                    "same update, e.g. 'monitor.updated_copy(interval=None, sampling_dt=...)'."
+                ),
+                set_fields[-1],
+            )
+        return self
 
-        if val is None:
+    def _reject_sampling_spec(self, fixed_interval: bool = False) -> Self:
+        """Reject ``sampling_dt`` / ``num_samples``, for monitors that support only ``interval``.
+
+        With ``fixed_interval``, the monitor records at every step and cannot be downsampled at
+        all, so pointing at ``interval`` would only produce a second failure.
+        """
+        remedy = (
+            "it records at every time step and its sampling cannot be changed"
+            if fixed_interval
+            else "use the integer 'interval' to set the time sampling"
+        )
+        for name, value in (("sampling_dt", self.sampling_dt), ("num_samples", self.num_samples)):
+            if value is not None:
+                self._raise_validation_error_at_loc(
+                    SetupError(f"'{self.type}' does not support '{name}'; {remedy}."),
+                    name,
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _default_interval_when_unset(self) -> Self:
+        """If no sampling spec is given, default to ``interval=1`` (record every time step).
+
+        The default is materialized into the field, so a default-cadence monitor carries the same
+        explicit ``interval=1`` as one where the user typed it — including in serialized payloads
+        and through ``copy()``/``updated_copy()`` re-validation. Consequently, switching any
+        existing monitor to a physical cadence requires clearing the interval in the same update:
+        ``monitor.updated_copy(interval=None, sampling_dt=...)``. The default never conflicts:
+        it is only materialized when all three sampling fields are unset."""
+        if self.interval is None and self.sampling_dt is None and self.num_samples is None:
             start = self.start
             stop = self.stop
             if start == 0.0 and stop is None:
@@ -314,7 +427,6 @@ class TimeMonitor(Monitor, ABC):
                     "by explicitly setting 'interval=1' in the monitor."
                 )
 
-            # set 'interval = 1' for backwards compatibility
             object.__setattr__(self, "interval", 1)
 
         return self
@@ -357,11 +469,77 @@ class TimeMonitor(Monitor, ABC):
             tind_beg = tbeg[0] if tbeg.size > 0 else tind_end
         return (tind_beg, tind_end)
 
-    def num_steps(self, tmesh: ArrayFloat1D) -> int:
-        """Compute number of time steps for a time monitor."""
+    def _time_interval(self, tmesh: ArrayFloat1D) -> tuple[float, float]:
+        """Resolve the physical ``[start, stop]`` recording window, in seconds, capped at the given
+        time mesh: the stop is capped at ``max(tmesh)`` (cannot record past the simulation). Used to
+        place ``sampling_dt`` / ``num_samples`` samples exactly; the integer ``interval`` path uses
+        the integer :meth:`time_inds` window directly. The window is returned as requested with no
+        widening: a degenerate ``start == stop`` collapses to a single sample at ``start`` and a
+        window starting past the mesh end yields no samples, matching :meth:`time_inds`."""
+        tmesh = np.array(tmesh)
+        t_beg = float(self.start)
+        t_end = float(tmesh[-1]) if self.stop is None else min(float(self.stop), float(tmesh[-1]))
+        return (t_beg, t_end)
 
-        tind_beg, tind_end = self.time_inds(tmesh)
-        return int((tind_end - tind_beg) / self.interval)
+    def _time_inds_array(self, tmesh: ArrayFloat1D) -> ArrayFloat1D:
+        """The (possibly fractional) FDTD time-step indices at which the monitor records — the
+        single source of truth for the sampling cadence, from which ``num_steps`` and
+        ``time_coords`` derive."""
+        tmesh = np.array(tmesh)
+        if tmesh.size == 0:
+            return np.array([], dtype=float)
+
+        if self.sampling_dt is None and self.num_samples is None:
+            tind_beg, tind_end = self.time_inds(tmesh)
+            # ``interval`` is materialized to 1 when no cadence is given
+            # (_default_interval_when_unset); the None fallback guards non-validated
+            # construction paths (``model_construct``, ``copy(validate=False)``).
+            interval = 1 if self.interval is None else self.interval
+            return np.arange(tind_beg, tind_end, interval, dtype=float)
+
+        dt = 1e-20 if tmesh.size < 2 else float(tmesh[1] - tmesh[0])
+        t_beg, t_end = self._time_interval(tmesh)
+        span = t_end - t_beg
+        if span < 0.0:  # window starts past the simulation end -> no samples (matches time_inds)
+            return np.array([], dtype=float)
+
+        # ``num_samples`` places N endpoint-inclusive samples (N - 1 gaps); a single sample has no
+        # spacing, so use a ``sample_dt`` wider than the window (the count below then yields one).
+        if self.num_samples is not None:
+            sample_dt = span / (self.num_samples - 1) if self.num_samples > 1 else span + dt
+        else:  # sampling_dt
+            sample_dt = self.sampling_dt
+
+        if sample_dt < dt:  # cannot sample finer than the simulation time step
+            self._warn_finer_than_dt()
+            sample_dt = dt
+
+        n = int(np.floor(span / sample_dt + 1e-9)) + 1
+        times = t_beg + np.arange(n) * sample_dt
+        return (times - float(tmesh[0])) / dt
+
+    def _warn_finer_than_dt(self) -> None:
+        """Warn that this monitor's requested sampling was clamped to the time step ``dt``."""
+        # Naming the monitor also keys the once-per-message suppression to it, so each clamped
+        # monitor is reported exactly once however often its cadence is resolved.
+        log.warning(
+            f"The requested time sampling of monitor '{self.name}' is finer than the simulation "
+            "time step 'dt'; it has been clamped to record at every time step. Specify a larger "
+            "'sampling_dt' or a smaller 'num_samples' to suppress this warning.",
+            log_once=True,
+        )
+
+    def num_steps(self, tmesh: ArrayFloat1D) -> int:
+        """Number of recorded time samples: the length of the resolved sample-index array."""
+        return len(self._time_inds_array(tmesh))
+
+    def time_coords(self, tmesh: ArrayFloat1D) -> ArrayFloat1D:
+        """Time coordinates at which the monitor records, obtained by interpolating the time mesh at
+        the (possibly fractional) sample indices."""
+        tmesh = np.array(tmesh)
+        if tmesh.size == 0:  # np.interp rejects an empty sample-point array
+            return np.array([], dtype=float)
+        return np.interp(self._time_inds_array(tmesh), np.arange(tmesh.size), tmesh)
 
 
 class AbstractFieldMonitor(Monitor, ABC):
@@ -1268,6 +1446,16 @@ class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
     ...     name='aux_monitor')
     """
 
+    @model_validator(mode="after")
+    def _validate_single_sampling_spec(self) -> Self:
+        """Time sampling for this monitor is specified via ``interval`` only.
+
+        Overrides the base mutual-exclusivity check by name so the actionable per-field
+        rejection fires on every path -- construction and ``copy()``/``updated_copy()``
+        re-validation alike -- and is never shadowed by the generic error when the payload
+        carries the materialized ``interval`` alongside a physical-sampling field."""
+        return self._reject_sampling_spec()
+
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 real number per grid cell, per time step, per field
@@ -1897,6 +2085,17 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
         "supported).",
     )
 
+    @field_validator("interval", mode="before")
+    @classmethod
+    def _interval_none_is_default(cls, val: int | None) -> int:
+        """Accept ``interval=None`` as "use the default" (which is the pinned ``1``).
+
+        ``None`` means an unset cadence throughout ``TimeMonitor`` (the base clearing idiom
+        ``updated_copy(interval=None, sampling_dt=...)``); without this coercion the pinned
+        ``Literal[1]`` rejects ``None`` at field parsing, before the model validator can raise
+        the actionable "does not support" error for the physical-sampling fields."""
+        return 1 if val is None else val
+
     colocate: Literal[False] = Field(
         False,
         title="Colocate Fields",
@@ -1911,6 +2110,18 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
         description="Hard-coded to ``False``: overlap weights are built from per-axis primal × "
         "dual cell widths, matching the Yee-staggered field sampling.",
     )
+
+    @model_validator(mode="after")
+    def _validate_single_sampling_spec(self) -> Self:
+        """Time sampling for this monitor is specified via ``interval`` only.
+
+        Overrides the base mutual-exclusivity check by name so the actionable per-field
+        rejection fires on every path -- construction and ``copy()``/``updated_copy()``
+        re-validation alike -- and is never shadowed by the generic error when the payload
+        carries the materialized ``interval`` alongside a physical-sampling field.
+
+        ``interval`` is pinned to 1 here, so the message must not send the user to it."""
+        return self._reject_sampling_spec(fixed_interval=True)
 
     @model_validator(mode="after")
     def _validate_no_rotated_plane(self) -> Self:
@@ -1936,10 +2147,13 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
         num_modes = self.mode_spec.num_modes
         num_dirs = 2
 
-        # Per-point sampled E + H (3 complex components each) plus per-point mode
-        # weights for the feedthrough overlap.
+        # Per-point sampled E + H (3 complex components each), per-point mode weights for the
+        # feedthrough overlap, and one complex-equivalent each for the staggered-area prefactor
+        # pair and the overlap accumulators — in lockstep with the backend estimate
+        # (``tidy3d_backend.memory.monitors_memory``: ``8*num_modes*num_dirs + 4`` floats/point on
+        # top of the curr/snap base).
         per_pt = num_cells * (
-            6 * BYTES_COMPLEX + num_modes * num_dirs * 4 * BYTES_COMPLEX + BYTES_COMPLEX
+            6 * BYTES_COMPLEX + num_modes * num_dirs * 4 * BYTES_COMPLEX + 2 * BYTES_COMPLEX
         )
 
         # Final payload (running modeAmps over all sampled timesteps).
@@ -2742,6 +2956,19 @@ class AbstractSurfaceMonitor(Monitor, ABC):
     _check_volumetic = assert_volumetric()
 
     @model_validator(mode="after")
+    def _check_fields_not_empty(self) -> Self:
+        """A surface monitor with no field components records nothing."""
+        if not self.fields:
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Surface monitors require at least one field component; 'fields' cannot be "
+                    "empty. Specify 'E', 'H', or both."
+                ),
+                "fields",
+            )
+        return self
+
+    @model_validator(mode="after")
     def _warn_beta_stage(self) -> Self:
         """Warn that surface monitors are in beta stage."""
 
@@ -2848,6 +3075,16 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
     ...     name='movie_monitor')
     >>> td.config.logging.level = old_logging_level
     """
+
+    @model_validator(mode="after")
+    def _validate_single_sampling_spec(self) -> Self:
+        """Time sampling for this monitor is specified via ``interval`` only.
+
+        Overrides the base mutual-exclusivity check by name so the actionable per-field
+        rejection fires on every path -- construction and ``copy()``/``updated_copy()``
+        re-validation alike -- and is never shadowed by the generic error when the payload
+        carries the materialized ``interval`` alongside a physical-sampling field."""
+        return self._reject_sampling_spec()
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization.
