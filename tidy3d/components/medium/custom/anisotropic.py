@@ -137,7 +137,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     @cached_property
     def is_spatially_uniform(self) -> bool:
         """Whether the medium is spatially uniform."""
-        return any(comp.is_spatially_uniform for comp in self.components.values())
+        return all(comp.is_spatially_uniform for comp in self.components.values())
 
     @cached_property
     def n_cfl(self) -> float:
