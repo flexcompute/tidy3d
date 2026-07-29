@@ -1922,9 +1922,18 @@ class SimplePlaneIntersection(Geometry, ABC):
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
             def transform(p_array: NDArray) -> NDArray:
-                return np.dot(
-                    np.hstack((p_array, np.ones((p_array.shape[0], 1)))), to_2D_in_plane.T
-                )[:, :2]
+                x_coord, y_coord = p_array.T
+                x_transformed = (
+                    to_2D_in_plane[0, 0] * x_coord
+                    + to_2D_in_plane[0, 1] * y_coord
+                    + to_2D_in_plane[0, 2]
+                )
+                y_transformed = (
+                    to_2D_in_plane[1, 0] * x_coord
+                    + to_2D_in_plane[1, 1] * y_coord
+                    + to_2D_in_plane[1, 2]
+                )
+                return np.stack((x_transformed, y_transformed), axis=-1)
 
             transformed_section = shapely.transform(section, transformation=transform)
             return transformed_section
