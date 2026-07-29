@@ -1,3 +1,3 @@
-# Medium
+# Material
 
-This directory will be renamed to `medium` whenever we've finished the migration from `medium.py` into a more decoupled structure.
+This directory contains multiphysics, thermal, and charge material helpers. Electromagnetic medium models live in the sibling `medium` package.
