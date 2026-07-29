@@ -358,6 +358,9 @@ class CustomMedium(AbstractCustomMedium):
                 )
                 fail_load = True
         if fail_load:
+            data["eps_dataset"] = None
+            data["conductivity"] = None
+            data["modulation_spec"] = None
             data["permittivity"] = SpatialDataArray(
                 np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]}
             )
