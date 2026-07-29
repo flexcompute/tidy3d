@@ -1046,16 +1046,19 @@ class CustomMedium(AbstractCustomMedium):
 
     def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
         """Resolve and validate one traced CustomMedium path for adjoint routing."""
-        if field_path and field_path[0] in ("permittivity", "conductivity"):
+        scalar_data = {
+            "permittivity": self.permittivity,
+            "conductivity": self.conductivity,
+        }
+        active_scalar_data = {name: data for name, data in scalar_data.items() if data is not None}
+
+        if field_path and field_path[0] in active_scalar_data:
             _validate_traced_custom_data_path(
                 type(self).__name__,
                 field_path,
-                scalar_data={
-                    "permittivity": self.permittivity,
-                    "conductivity": self.conductivity,
-                },
+                scalar_data=active_scalar_data,
             )
-        if field_path in self._traced_supported_paths:
+        if field_path in self._traced_supported_paths and field_path[0] in active_scalar_data:
             return AutogradRoute(local_path=field_path)
 
         eps_components = (
@@ -1068,10 +1071,11 @@ class CustomMedium(AbstractCustomMedium):
         ):
             return AutogradRoute(local_path=field_path)
 
+        supported_scalar = tuple(active_scalar_data)
         supported_eps = tuple(f"eps_dataset.{component}" for component in eps_components)
         self._raise_unsupported_traced_path(
             field_path,
-            supported_parameters=("permittivity", "conductivity", *supported_eps),
+            supported_parameters=(*supported_scalar, *supported_eps),
         )
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
