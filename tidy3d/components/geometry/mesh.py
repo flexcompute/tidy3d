@@ -38,6 +38,18 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 
 AREA_SIZE_THRESHOLD = 1e-36
+_TRIMESH_PYTHON_RAY_BACKEND = "trimesh.ray.ray_triangle"
+
+
+def _warn_if_slow_ray_backend(mesh: Trimesh) -> None:
+    """Warn when trimesh is using its pure-Python ray backend."""
+    if type(mesh.ray).__module__ == _TRIMESH_PYTHON_RAY_BACKEND:
+        log.warning(
+            "'TriangleMesh.inside()' is using trimesh's pure-Python ray-triangle backend, "
+            "which can be slow and memory-intensive for large point sets. Install the optional "
+            "Embree backend with 'pip install embreex' to accelerate point-in-mesh queries.",
+            log_once=True,
+        )
 
 
 class TriangleMesh(base.Geometry, ABC):
@@ -726,7 +738,9 @@ class TriangleMesh(base.Geometry, ABC):
         self._ensure_equal_shape(*arrays)
         arrays_flat = map(np.ravel, arrays)
         arrays_stacked = np.stack(tuple(arrays_flat), axis=-1)
-        inside = self.trimesh.contains(arrays_stacked)
+        mesh = self.trimesh
+        _warn_if_slow_ray_backend(mesh)
+        inside = mesh.contains(arrays_stacked)
         return inside.reshape(arrays[0].shape)
 
     @equal_aspect
