@@ -3766,6 +3766,50 @@ wheels = [
 ]
 
 [[package]]
+name = "numpy-typing-compat"
+version = "20251206.2.4"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/42/5f/29fd5f29b0a5d96e2def96ecba3112fc330ecd16e8c97c2b332563c5e201/numpy_typing_compat-20251206.2.4.tar.gz", hash = "sha256:59882d23aaff054a2536da80564012cdce33487657be4d79c5925bb8705fcabc", size = 5011, upload-time = "2025-12-06T20:02:04.942Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/7c/5c2892e6bc0628a2ccf4e938e1e2db22794657ccb374672d66e20d73839e/numpy_typing_compat-20251206.2.4-py3-none-any.whl", hash = "sha256:a82e723bd20efaa4cf2886709d4264c144f1f2b609bda83d1545113b7e47a5b5", size = 6300, upload-time = "2025-12-06T20:01:57.578Z" },
+]
+
+[[package]]
+name = "numpy-typing-compat"
+version = "20260602.2.4"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/73/e331473d3db84a8e8883ac07bfd63a8ce9eb7196acbb672bda1f5b8d3294/numpy_typing_compat-20260602.2.4.tar.gz", hash = "sha256:e4eb661f312a7ad5805677967d5879e04fd7b97627fe910121ce7b1f43aa748c", size = 4603, upload-time = "2026-06-02T15:52:38.572Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/a8/94811eedac4cef5ef7df4b24e06715fa371724782e86a4573f5d172c8473/numpy_typing_compat-20260602.2.4-py3-none-any.whl", hash = "sha256:78d33917d5f6921f8d1c549db347a5b8d9768853e36796b08208c81f5b620977", size = 5879, upload-time = "2026-06-02T15:52:33.214Z" },
+]
+
+[[package]]
 name = "openapi-pydantic"
 version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3799,6 +3843,78 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ae/cc/e4c9584181f86494df0f6bdec1a4f3280c50db44704dc2a407e994fc87bb/opentelemetry_api-1.43.0.tar.gz", hash = "sha256:107d0d03857ea8fc7c5fcbbbd83f800c281f0d560553d61c1d675fccfd1761c1", size = 73476, upload-time = "2026-06-24T15:19:55.323Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/17/83/6dba32b85f31868400440dc7ad2ca1eab94cbbf3a7b0459ed39f8311a9e2/opentelemetry_api-1.43.0-py3-none-any.whl", hash = "sha256:20acf45e9b21851926835292e4045d290acade1edd2ff3de86d2f069687ba1fd", size = 61912, upload-time = "2026-06-24T15:19:35.434Z" },
+]
+
+[[package]]
+name = "optype"
+version = "0.9.3"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform != 'darwin'",
+]
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/3c/9d59b0167458b839273ad0c4fc5f62f787058d8f5aed7f71294963a99471/optype-0.9.3.tar.gz", hash = "sha256:5f09d74127d316053b26971ce441a4df01f3a01943601d3712dd6f34cdfbaf48", size = 96143, upload-time = "2025-03-31T17:00:08.392Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/d8/ac50e2982bdc2d3595dc2bfe3c7e5a0574b5e407ad82d70b5f3707009671/optype-0.9.3-py3-none-any.whl", hash = "sha256:2935c033265938d66cc4198b0aca865572e635094e60e6e79522852f029d9e8d", size = 84357, upload-time = "2025-03-31T17:00:06.464Z" },
+]
+
+[[package]]
+name = "optype"
+version = "0.17.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version == '3.11.*'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9b/86/e6f1f6f3487492dfcf3b7a2d4e2534d27af6ac05b364b276706906c34865/optype-0.17.1.tar.gz", hash = "sha256:07bfa32b795dea28fba8605a6288d36370d072f25183fb9c29b5a90f4b6f5638", size = 53572, upload-time = "2026-05-17T22:13:28.725Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/d4/c6a2b043e33f0dd012486dcebe0593585588d400175d22aad42049c88321/optype-0.17.1-py3-none-any.whl", hash = "sha256:82f2508ca31cb21e53a41648482d890fe1f5c6cb153720551af41161555adaf1", size = 65954, upload-time = "2026-05-17T22:13:27.549Z" },
+]
+
+[package.optional-dependencies]
+numpy = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy-typing-compat", version = "20251206.2.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+]
+
+[[package]]
+name = "optype"
+version = "0.18.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version == '3.12.*'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/99/51/51dc9b1009e020f44703933d4d1ee3429c647c026ce7806b37ee2b257998/optype-0.18.0.tar.gz", hash = "sha256:ea10dee61b15ca299ed0d97025d362585c4dfc5481159bb999a1d0d414bbcb04", size = 59967, upload-time = "2026-06-07T22:13:17.534Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/91/2b064a117cb2593bc3eb04ee994134ca2a6bf2162c92961769947e3258cc/optype-0.18.0-py3-none-any.whl", hash = "sha256:91822ed8516e7a4f225ba53d30f291776c35f31553fb952d7cda98286679c5a6", size = 73410, upload-time = "2026-06-07T22:13:16.324Z" },
+]
+
+[package.optional-dependencies]
+numpy = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy-typing-compat", version = "20260602.2.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 
 [[package]]
@@ -5878,6 +5994,81 @@ wheels = [
 ]
 
 [[package]]
+name = "scipy-stubs"
+version = "1.15.3.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform != 'darwin'",
+]
+dependencies = [
+    { name = "optype", version = "0.9.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0b/5f/35c43bd7d412add4adcd68475702571b2489b50c40b6564f808b2355e452/scipy_stubs-1.15.3.0.tar.gz", hash = "sha256:e8f76c9887461cf9424c1e2ad78ea5dac71dd4cbb383dc85f91adfe8f74d1e17", size = 275699, upload-time = "2025-05-08T16:58:35.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/42/cd8dc81f8060de1f14960885ad5b2d2651f41de8b93d09f3f919d6567a5a/scipy_stubs-1.15.3.0-py3-none-any.whl", hash = "sha256:a251254cf4fd6e7fb87c55c1feee92d32ddbc1f542ecdf6a0159cdb81c2fb62d", size = 459062, upload-time = "2025-05-08T16:58:33.356Z" },
+]
+
+[package.optional-dependencies]
+scipy = [
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+]
+
+[[package]]
+name = "scipy-stubs"
+version = "1.17.1.5"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "optype", version = "0.17.1", source = { registry = "https://pypi.org/simple" }, extra = ["numpy"], marker = "python_full_version == '3.11.*'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/30/7a2e621918d1317ab972f797161131f2635648ad5d92baf0695dd009e4f9/scipy_stubs-1.17.1.5.tar.gz", hash = "sha256:284b1dd1dd46107a614971d170030d310cd88b2ac6b483f85285ee0ff87720bd", size = 399933, upload-time = "2026-05-25T21:34:33.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/26/d4bc2ba3427a623f79a6c10c8f427c7a55b56eb8b3eddc369319d97f741b/scipy_stubs-1.17.1.5-py3-none-any.whl", hash = "sha256:58ebf054a86c000c72e8982e121c4ead0d3d9ba7a6c38aa5fa71b07f96a427fd", size = 607388, upload-time = "2026-05-25T21:34:32.073Z" },
+]
+
+[package.optional-dependencies]
+scipy = [
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+]
+
+[[package]]
+name = "scipy-stubs"
+version = "1.18.0.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and sys_platform == 'darwin'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
+dependencies = [
+    { name = "optype", version = "0.18.0", source = { registry = "https://pypi.org/simple" }, extra = ["numpy"], marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a0/c6/c4c80bd13c0eec99121922c50cd1c72600672307b28e4ba67f636d6b298d/scipy_stubs-1.18.0.1.tar.gz", hash = "sha256:761cb35106200c90a37034d3c8120d3899d673de1e5879d3a2ac1d6816c62327", size = 410862, upload-time = "2026-07-12T21:09:29.993Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/0c/78404528783677077f072288724ff8ef8381bbc219b110e3147e60361b6d/scipy_stubs-1.18.0.1-py3-none-any.whl", hash = "sha256:704408c5f03a33924c9fed6dc9e25926dc331ed508d52f1beece0188525cebad", size = 616217, upload-time = "2026-07-12T21:09:28.45Z" },
+]
+
+[package.optional-dependencies]
+scipy = [
+    { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[[package]]
 name = "scooby"
 version = "0.11.2"
 source = { registry = "https://pypi.org/simple" }
@@ -6470,6 +6661,9 @@ dev = [
     { name = "rtree" },
     { name = "ruff" },
     { name = "scikit-rf" },
+    { name = "scipy-stubs", version = "1.15.3.0", source = { registry = "https://pypi.org/simple" }, extra = ["scipy"], marker = "python_full_version < '3.11'" },
+    { name = "scipy-stubs", version = "1.17.1.5", source = { registry = "https://pypi.org/simple" }, extra = ["scipy"], marker = "python_full_version == '3.11.*'" },
+    { name = "scipy-stubs", version = "1.18.0.1", source = { registry = "https://pypi.org/simple" }, extra = ["scipy"], marker = "python_full_version >= '3.12'" },
     { name = "signac" },
     { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "sphinx", version = "8.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -6677,6 +6871,7 @@ requires-dist = [
     { name = "scikit-rf", marker = "extra == 'dev'", specifier = ">=1.9.0,<3.0.0" },
     { name = "scikit-rf", marker = "extra == 'scikit-rf'", specifier = ">=1.9.0,<3.0.0" },
     { name = "scipy", specifier = ">=1.14,!=1.15.0,!=1.15.1,!=1.15.2,<2.0" },
+    { name = "scipy-stubs", extras = ["scipy"], marker = "extra == 'dev'", specifier = ">=1.15.3,<2.0" },
     { name = "shapely", specifier = ">=2.1.0,<3.0" },
     { name = "signac", marker = "extra == 'dev'", specifier = ">=2.3.0,<3.0.0" },
     { name = "signac", marker = "extra == 'docs'", specifier = ">=2.3.0,<3.0.0" },
