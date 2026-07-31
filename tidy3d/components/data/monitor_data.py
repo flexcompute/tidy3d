@@ -1203,7 +1203,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         .. math:
 
-           \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
+           \frac{1}{4} \int \left( E_0^* \times H_1 - H_0^* \times E_1 \right) \, {\rm d}S
 
         If ``bidirectional=False``, the dot product is instead:
 
@@ -1220,7 +1220,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             is similar, but without the complex conjugation of the fields.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
-            ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
+            ``1/4 * integral(E1* x H2 - H1* x E2) dS``.
             If ``False``, computes just: ``1/2 * integral(E1* x H2) dS``.
 
         Returns
@@ -1448,7 +1448,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         .. math:
 
-           \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
+           \frac{1}{4} \int \left( E_0^* \times H_1 - H_0^* \times E_1 \right) \, {\rm d}S
 
         If ``bidirectional=False``, the dot product is instead:
 
@@ -1465,7 +1465,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             is similar, but without the complex conjugation of the fields.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
-            ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
+            ``1/4 * integral(E1* x H2 - H1* x E2) dS``.
             If ``False``, computes just: ``1/2 * integral(E1* x H2) dS``.
         truncate_to_monitor_bounds : bool = False
             Only used in the non-colocated integration path (when ``colocate=False``).
