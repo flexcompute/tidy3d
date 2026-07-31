@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from flex_em.numerical.raw import microwave as microwave_numerics
+
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -55,8 +57,7 @@ def path_integrals_from_lumped_element(
     # The exact position of the lumped element after any possible snapping
     lumped_element_box = lumped_element._create_box_for_network(grid=grid)
 
-    V_size = [0, 0, 0]
-    V_size[V_axis] = lumped_element_box.size[V_axis]
+    V_size = microwave_numerics.axis_size_vector(V_axis, lumped_element_box.size)
     voltage_integral = AxisAlignedVoltageIntegral(
         center=lumped_element_box.center,
         size=V_size,
@@ -73,12 +74,11 @@ def path_integrals_from_lumped_element(
     snap_behavior[V_axis] = SnapBehavior.Off
     snap_spec = SnappingSpec(location=snap_location, behavior=snap_behavior)
 
-    I_size = [0, 0, 0]
-    I_size[I_axis] = lumped_element_box.size[I_axis]
+    I_size = microwave_numerics.axis_size_vector(I_axis, lumped_element_box.size)
     current_box = Box(center=lumped_element_box.center, size=I_size)
     current_box = snap_box_to_grid(grid, current_box, snap_spec)
     # Convention is current flows from plus to minus terminals
-    current_sign = "-" if polarity == "+" else "+"
+    current_sign = microwave_numerics.path_integral_current_sign(polarity)
     current_integral = AxisAlignedCurrentIntegral(
         center=current_box.center,
         size=current_box.size,

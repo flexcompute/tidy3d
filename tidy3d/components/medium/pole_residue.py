@@ -59,8 +59,15 @@ if TYPE_CHECKING:
     from .base import ArrayComplex, ArrayFloat, ComplexArrayOrScalar
 
 
-from .base import AbstractMedium, ensure_freq_in_range
-from .isotropic import Medium
+def _medium_numerics() -> Any:
+    """Import shared medium kernels after Pydantic model rebuilds finish."""
+    from flex_em.numerical.raw import medium as medium_numerics
+
+    return medium_numerics
+
+
+from .base import AbstractMedium, ensure_freq_in_range  # noqa: E402
+from .isotropic import Medium  # noqa: E402
 
 T = TypeVar("T")
 
@@ -327,14 +334,7 @@ class PoleResidue(DispersiveMedium):
     def _eps_model(eps_inf: PositiveFloat, poles: PolesAndResidues, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        omega = 2 * np.pi * frequency
-        eps = eps_inf + 0 * frequency + 0.0j
-        for a, c in poles:
-            a_cc = np.conj(a)
-            c_cc = np.conj(c)
-            eps = eps - c / (1j * omega + a)
-            eps = eps - c_cc / (1j * omega + a_cc)
-        return eps
+        return _medium_numerics().pole_residue_eps_model(eps_inf, poles, frequency)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -426,12 +426,7 @@ class PoleResidue(DispersiveMedium):
         complex
             The complex permittivity of the given LO-TO model at the given frequency.
         """
-        omega = 2 * np.pi * frequency
-        eps = eps_inf
-        for omega_lo, gamma_lo, omega_to, gamma_to in poles:
-            eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
-            eps /= omega_to**2 - omega**2 - 1j * omega * gamma_to
-        return eps
+        return _medium_numerics().lo_to_eps_model(poles, eps_inf, frequency)
 
     @classmethod
     def from_lo_to(

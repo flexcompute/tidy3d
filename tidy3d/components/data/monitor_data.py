@@ -11,6 +11,11 @@ from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 import autograd.numpy as np
 import xarray as xr
+from flex_em.numerical.raw import diffraction as diffraction_numerics
+from flex_em.numerical.raw import field_data as field_data_numerics
+from flex_em.numerical.raw import grid as grid_numerics
+from flex_em.numerical.raw import mode as mode_numerics
+from flex_em.numerical.raw import source_normalization as source_normalization_numerics
 from pydantic import Field, model_validator
 
 from tidy3d.components.autograd.source_factory import (
@@ -29,12 +34,8 @@ from tidy3d.components.base_sim.data.monitor_data import (
     AbstractUnstructuredMonitorData,
 )
 from tidy3d.components.data.utils import (
-    _complex_power_flow_numpy,
-    _dot_numpy,
     _get_broadcast_selection,
     _get_intersection_selection,
-    _instantaneous_power_flow_numpy,
-    _outer_dot_numpy,
 )
 from tidy3d.components.diffraction import diffraction_amplitude_norm
 from tidy3d.components.geometry.base import Box
@@ -935,11 +936,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         h1 = tan_fields["H" + dim1]
         h2 = tan_fields["H" + dim2]
 
-        e1_h2 = e1 * h2.conj()
-        e2_h1 = e2 * h1.conj()
-
-        e_x_h_star = e1_h2 - e2_h1
-        return 0.5 * e_x_h_star
+        return field_data_numerics.complex_poynting(e1, e2, h1, h2)
 
     @property
     def poynting(self) -> ScalarFieldDataArray:
@@ -996,7 +993,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         E = (prepped_fields["E" + u], prepped_fields["E" + v])
         H = (prepped_fields["H" + u], prepped_fields["H" + v])
 
-        flux_result = _complex_power_flow_numpy(E, H, dS_numpy)
+        flux_result = field_data_numerics.complex_power_flow(E, H, dS_numpy)
 
         if "mode_index" in final_coords:
             return FreqModeDataArray(flux_result, coords=final_coords)
@@ -1254,9 +1251,23 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             In the non-conjugated definition, modes are orthogonal, but the interpretation of the
             dot product as power carried by a given mode is no longer valid.
         """
-        use_colocated = getattr(
-            self.monitor, "use_colocated_integration", self.monitor.colocate
-        ) or getattr(field_data.monitor, "use_colocated_integration", field_data.monitor.colocate)
+        use_colocated = mode_numerics.resolve_colocated_default(
+            (
+                {
+                    "colocate": self.monitor.colocate,
+                    "use_colocated_integration": getattr(
+                        self.monitor, "use_colocated_integration", False
+                    ),
+                },
+                {
+                    "colocate": field_data.monitor.colocate,
+                    "use_colocated_integration": getattr(
+                        field_data.monitor, "use_colocated_integration", False
+                    ),
+                },
+            ),
+            None,
+        )
         if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
@@ -1290,7 +1301,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         E2 = (prepped_fields_other["E" + u], prepped_fields_other["E" + v])
         H2 = (prepped_fields_other["H" + u], prepped_fields_other["H" + v])
 
-        dot_result = _dot_numpy(
+        dot_result = field_data_numerics.dot(
             E1, H1, E2, H2, dS_numpy, conjugate=conjugate, bidirectional=bidirectional
         )
 
@@ -1508,9 +1519,23 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
             raise DataError("Tangential dimensions must match between the two monitors.")
 
-        use_colocated = getattr(
-            self.monitor, "use_colocated_integration", self.monitor.colocate
-        ) or getattr(field_data.monitor, "use_colocated_integration", field_data.monitor.colocate)
+        use_colocated = mode_numerics.resolve_colocated_default(
+            (
+                {
+                    "colocate": self.monitor.colocate,
+                    "use_colocated_integration": getattr(
+                        self.monitor, "use_colocated_integration", False
+                    ),
+                },
+                {
+                    "colocate": field_data.monitor.colocate,
+                    "use_colocated_integration": getattr(
+                        field_data.monitor, "use_colocated_integration", False
+                    ),
+                },
+            ),
+            None,
+        )
         if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
@@ -1543,7 +1568,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         H1 = (prepped_fields_self["H" + u], prepped_fields_self["H" + v])
         E2 = (prepped_fields_other["E" + u], prepped_fields_other["E" + v])
         H2 = (prepped_fields_other["H" + u], prepped_fields_other["H" + v])
-        numpy_result = _outer_dot_numpy(
+        numpy_result = field_data_numerics.outer_dot(
             E1, H1, E2, H2, dS_numpy, conjugate=conjugate, bidirectional=bidirectional
         )
 
@@ -2201,7 +2226,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         Hu = np.real(fields["H" + dim1].transpose(..., *tangential_dims).to_numpy())
         Hv = np.real(fields["H" + dim2].transpose(..., *tangential_dims).to_numpy())
 
-        flux_result = _instantaneous_power_flow_numpy((Eu, Ev), (Hu, Hv), dS_numpy)
+        flux_result = field_data_numerics.instantaneous_power_flow((Eu, Ev), (Hu, Hv), dS_numpy)
 
         return FluxTimeDataArray(
             flux_result, coords={"t": fields["E" + dim1].coords["t"].to_numpy()}
@@ -3676,56 +3701,22 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         num_freqs = data.n_eff["f"].size
         num_modes = data.n_eff["mode_index"].size
 
-        all_inds = np.arange(num_modes)
-
-        # Helper to compute ordered indices within a subset
-        def _order_indices(
-            indices: NDArray, vals_all: DataArray, sort_order: Literal["ascending", "descending"]
-        ) -> NDArray:
-            if indices.size == 0:
-                return indices
-            vals = vals_all.isel(mode_index=indices)
-            order = np.argsort(vals)
-            if sort_order == "descending":
-                order = order[::-1]
-            return indices[order]
-
-        # Precompute metrics
         filter_metric = None
         if sort_spec is not None and sort_spec.filter_key is not None:
-            filter_metric = getattr(data, sort_spec.filter_key)
+            filter_metric = getattr(data, sort_spec.filter_key).values
         # sort_key is always set (defaults to "n_eff")
-        sort_metric = getattr(data, sort_spec.sort_key) if sort_spec is not None else None
+        sort_metric = getattr(data, sort_spec.sort_key).values if sort_spec is not None else None
         identity = np.arange(num_modes)
-        sort_inds_2d = np.tile(identity, (num_freqs, 1))
-
-        for ifreq in range(num_freqs):
-            # Build groups according to filter if requested
-            if filter_metric is not None:
-                vals_filt = filter_metric.isel(f=ifreq).values
-                if sort_spec.filter_order == "over":
-                    mask_first = vals_filt >= sort_spec.filter_reference
-                else:
-                    mask_first = vals_filt <= sort_spec.filter_reference
-                group1 = all_inds[mask_first]
-                group2 = all_inds[~mask_first]
-            else:
-                group1 = all_inds
-                group2 = np.array([], dtype=int)
-
-            # Sort within each group
-            if sort_metric is not None:
-                vals_sort = sort_metric.isel(f=ifreq)
-                if sort_spec.sort_reference is not None:
-                    vals_sort = np.abs(vals_sort - sort_spec.sort_reference)
-                g1 = _order_indices(group1, vals_sort, sort_spec.sort_order)
-                g2 = _order_indices(group2, vals_sort, sort_spec.sort_order)
-                sort_inds = np.concatenate([g1, g2])
-            else:
-                # only filtering applied, keep original ordering within groups
-                sort_inds = np.concatenate([group1, group2])
-
-            sort_inds_2d[ifreq, : len(sort_inds)] = sort_inds
+        sort_inds_2d = mode_numerics.mode_sort_indices(
+            num_freqs=num_freqs,
+            num_modes=num_modes,
+            filter_metric=filter_metric,
+            sort_metric=sort_metric,
+            filter_order=sort_spec.filter_order if sort_spec is not None else "over",
+            filter_reference=sort_spec.filter_reference if sort_spec is not None else None,
+            sort_order=sort_spec.sort_order if sort_spec is not None else "descending",
+            sort_reference=sort_spec.sort_reference if sort_spec is not None else None,
+        )
 
         if np.all(sort_inds_2d == np.tile(identity, (num_freqs, 1))):
             if sort_spec is not None:
@@ -3760,16 +3751,11 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
                     filter_metric_sorted = data_sorted.fill_fraction_box
                 else:
                     filter_metric_sorted = getattr(data_sorted, sort_spec.filter_key)
-                masks_after = []
-                for ifreq in range(num_freqs):
-                    vals = filter_metric_sorted.isel(f=ifreq).values
-                    if sort_spec.filter_order == "over":
-                        mask = vals >= sort_spec.filter_reference
-                    else:
-                        mask = vals <= sort_spec.filter_reference
-                    masks_after.append(mask)
-
-                keep_mask = np.all(np.stack(masks_after, axis=0), axis=0)
+                keep_mask = mode_numerics.filtered_mode_keep_mask(
+                    filter_metric=filter_metric_sorted.values,
+                    filter_order=sort_spec.filter_order,
+                    filter_reference=sort_spec.filter_reference,
+                )
             if keep_modes == "filtered":
                 # keep_mask and filter_metric_sorted will not be None here
                 # because we validate that filter_key is not None when
@@ -3942,15 +3928,14 @@ class ModeSolverData(ModeData):
         distances_primal = xr.DataArray(primal_distances, coords={normal_dim: primal_distances})
         distances_dual = xr.DataArray(dual_distances, coords={normal_dim: dual_distances})
 
-        # Propagation phase at the primal and dual locations. The k-vector is along the propagation
-        # direction, so angle_theta has to be taken into account. The distance along the propagation
-        # direction is the distance along the normal direction over cosine(theta).
-        cos_theta = np.cos(mode_spec.angle_theta)
-        k_vec = cos_theta * 2 * np.pi * n_complex * n_complex.f / C_0
-        if direction == "-":
-            k_vec *= -1
-        phase_primal = np.exp(1j * k_vec * distances_primal)
-        phase_dual = np.exp(1j * k_vec * distances_dual)
+        phase_primal, phase_dual = grid_numerics.mode_grid_correction_factors(
+            distances_primal,
+            distances_dual,
+            n_complex,
+            n_complex.f,
+            angle_theta=mode_spec.angle_theta,
+            direction=direction,
+        )
 
         # Fields are modified by a linear interpolation to the exact monitor position
         if distances_primal.size > 1:
@@ -4200,8 +4185,7 @@ class FluxData(MonitorData):
     def normalize(self, source_spectrum_fn: Callable[[DataArray], NDArray]) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.flux.f)
-        source_power = abs(source_freq_amps) ** 2
-        new_flux = (self.flux / source_power).astype(self.flux.dtype)
+        new_flux = source_normalization_numerics.normalize_flux(self.flux, source_freq_amps)
         return self.copy(deep=False, update={"flux": new_flux})
 
 
@@ -4435,7 +4419,9 @@ class AbstractFieldProjectionData(MonitorData):
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
             src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
+            fields_norm[field_name] = source_normalization_numerics.normalize_frequency_component(
+                field_data, src_amps
+            )
 
         return self.copy(deep=False, update=fields_norm)
 
@@ -4882,11 +4868,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         h1 = fc["H" + dim1]
         h2 = fc["H" + dim2]
 
-        e1_h2 = e1 * h2.conj()
-        e2_h1 = e2 * h1.conj()
-
-        e_x_h_star = e1_h2 - e2_h1
-        return 0.5 * np.real(e_x_h_star)
+        return np.real(field_data_numerics.complex_poynting(e1, e2, h1, h2))
 
     @cached_property
     def flux(self) -> FluxDataArray:
@@ -5137,7 +5119,7 @@ class DiffractionData(AbstractFieldProjectionData):
     @staticmethod
     def shifted_orders(orders: tuple[int, ...], bloch_vec: float | np.ndarray) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
-        return bloch_vec + np.atleast_2d(orders).T
+        return diffraction_numerics.shifted_orders(orders, bloch_vec)
 
     @staticmethod
     def reciprocal_coords(
@@ -5148,11 +5130,9 @@ class DiffractionData(AbstractFieldProjectionData):
         medium: MediumType,
     ) -> np.ndarray:
         """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
-        if size == 0:
-            return np.atleast_2d(0)
-        epsilon = medium.eps_model(f)
-        bloch_array = DiffractionData.shifted_orders(orders, bloch_vec)
-        return bloch_array / size * C_0 / f / np.real(np.sqrt(epsilon))
+        return diffraction_numerics.reciprocal_coords_from_epsilon(
+            orders, size=size, bloch_vec=bloch_vec, frequency=f, epsilon=medium.eps_model(f)
+        )
 
     @staticmethod
     def compute_angles(
@@ -5470,12 +5450,13 @@ class DirectivityData(FieldProjectionAngleData):
         fields_norm = {}
         for field_name, field_data in self.field_components.items():
             src_amps = source_spectrum_fn(field_data.f)
-            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
+            fields_norm[field_name] = source_normalization_numerics.normalize_frequency_component(
+                field_data, src_amps
+            )
 
         # Normalize flux
         source_freq_amps = source_spectrum_fn(self.flux.f)
-        source_power = abs(source_freq_amps) ** 2
-        new_flux = (self.flux / source_power).astype(self.flux.dtype)
+        new_flux = source_normalization_numerics.normalize_flux(self.flux, source_freq_amps)
 
         return self.copy(deep=False, update=dict(fields_norm, flux=new_flux))
 

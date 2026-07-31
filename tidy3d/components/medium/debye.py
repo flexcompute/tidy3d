@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 from pydantic import (
@@ -42,8 +42,15 @@ if TYPE_CHECKING:
     from .base import ArrayComplex, ArrayFloat
 
 
-from .base import ensure_freq_in_range
-from .pole_residue import DispersiveMedium
+def _medium_numerics() -> Any:
+    """Import shared medium kernels after Pydantic model rebuilds finish."""
+    from flex_em.numerical.raw import medium as medium_numerics
+
+    return medium_numerics
+
+
+from .base import ensure_freq_in_range  # noqa: E402
+from .pole_residue import DispersiveMedium  # noqa: E402
 
 
 class Debye(DispersiveMedium):
@@ -127,10 +134,7 @@ class Debye(DispersiveMedium):
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        eps = self.eps_inf + 0.0j
-        for de, tau in self.coeffs:
-            eps = eps + de / (1 - 1j * frequency * tau)
-        return eps
+        return _medium_numerics().debye_eps_model(self.eps_inf, self.coeffs, frequency)
 
     # --- unified helpers for autograd + tests ---
 

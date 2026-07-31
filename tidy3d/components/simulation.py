@@ -16,6 +16,7 @@ from pydantic import (
     NonNegativeInt,
     PositiveFloat,
     field_validator,
+    model_serializer,
     model_validator,
 )
 from pydantic import (
@@ -3429,6 +3430,20 @@ class Simulation(AbstractYeeGridSimulation):
         description="The low frequency smoothing parameters for the simulation.",
     )
 
+    parameter_A_tidy3d: str | None = Field(
+        None,
+        title="Parameter A Tidy3D",
+        description="Migration demo public Simulation parameter.",
+    )
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_optional_parameter_A_tidy3d(self, handler: Any) -> Any:
+        """Omit unset migration demo public fields from normal public artifacts."""
+        payload = handler(self)
+        if self.parameter_A_tidy3d is None:
+            payload.pop("parameter_A_tidy3d", None)
+        return payload
+
     """ Validating setup """
 
     @model_validator(mode="before")
@@ -3450,6 +3465,7 @@ class Simulation(AbstractYeeGridSimulation):
         call_wrapped_validator(validate_boundaries_for_zero_dims, self)
         self._validate_auto_grid_wavelength()
         super()._run_after_validators()
+        self._validate_parameter_A_tidy3d()
         self._warn_3d_structures_missing_2d_yee_sampling_plane()
         call_wrapped_validator(
             assert_objects_in_sim_bounds, self, "sources", strict_inequality=True
@@ -3514,6 +3530,14 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_source_monitor_normalization_grid()
         self._validate_scene()
         return self
+
+    def _validate_parameter_A_tidy3d(self) -> None:
+        """Validate the M0 migration demo public task parameter."""
+        if self.parameter_A_tidy3d == "":
+            self._raise_validation_error_at_loc(
+                "parameter_A_tidy3d must not be empty.",
+                "parameter_A_tidy3d",
+            )
 
     def _warn_3d_structures_missing_2d_yee_sampling_plane(self) -> Self:
         """Warn if a 3D structure in a 2D simulation misses the tangential E-field Yee plane."""

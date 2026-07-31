@@ -6,6 +6,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, cast, get_args
 
 import numpy as np
+from flex_em.numerical.raw import diffraction as diffraction_numerics
 
 from tidy3d.components.types.base import DiffractionPolarization
 from tidy3d.constants import C_0, EPSILON_0, MU_0, fp_eps
@@ -31,7 +32,7 @@ DIFFRACTION_POLARIZATIONS = cast(
 def shifted_orders(orders: tuple[int, ...], bloch_vec: float | np.ndarray) -> np.ndarray:
     """Diffraction orders shifted by the Bloch vector."""
 
-    return bloch_vec + np.atleast_2d(orders).T
+    return diffraction_numerics.shifted_orders(orders, bloch_vec)
 
 
 def reciprocal_coords(
@@ -43,11 +44,9 @@ def reciprocal_coords(
 ) -> np.ndarray:
     """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
 
-    if size == 0:
-        return np.atleast_2d(0)
-    epsilon = medium.eps_model(f)
-    bloch_array = shifted_orders(tuple(int(order) for order in np.atleast_1d(orders)), bloch_vec)
-    return bloch_array / size * C_0 / f / np.real(np.sqrt(epsilon))
+    return diffraction_numerics.reciprocal_coords_from_epsilon(
+        orders, size=size, bloch_vec=bloch_vec, frequency=f, epsilon=medium.eps_model(f)
+    )
 
 
 def compute_angles(
@@ -67,23 +66,19 @@ def compute_angles(
 def diffraction_amplitude_norm(theta_data: np.ndarray, eta: np.ndarray | complex) -> np.ndarray:
     """Amplitude normalization used by diffraction monitor power amplitudes."""
 
-    cos_theta = np.cos(np.nan_to_num(theta_data))
-    cos_theta[cos_theta <= COS_THETA_THRESH] = np.inf
-    return 1.0 / np.sqrt(2.0 * np.asarray(eta)) / np.sqrt(cos_theta)
+    return diffraction_numerics.amplitude_norm(theta_data, eta)
 
 
 def diffraction_angle_is_propagating(angle_theta: float) -> bool:
     """Return whether a diffraction angle is valid for a propagating order."""
 
-    return bool(np.isfinite(angle_theta) and np.cos(angle_theta) > COS_THETA_THRESH)
+    return diffraction_numerics.angle_is_propagating(angle_theta)
 
 
 def bloch_vec_at_freq(bloch_vec: float | np.ndarray, freq_index: int) -> float:
     """Return scalar Bloch vector for a specific monitor frequency index."""
 
-    if np.ndim(bloch_vec) == 0:
-        return float(bloch_vec)
-    return float(np.asarray(bloch_vec)[freq_index])
+    return diffraction_numerics.bloch_vec_at_freq(bloch_vec, freq_index)
 
 
 def diffraction_monitor_medium(sim: Simulation, monitor: DiffractionMonitor) -> MediumType:

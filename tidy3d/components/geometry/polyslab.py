@@ -1341,7 +1341,15 @@ class PolySlab(base.Planar):
         for z_ind, z_pos in enumerate(z_inside):
             if mesh is None:
                 # Containment needs exact sections; cleanup is only for plotting artifacts.
-                sections = transformed.intersections_plane(z=z_pos, cleanup=False)
+                try:
+                    sections = transformed.intersections_plane(z=z_pos, cleanup=False)
+                except shapely.errors.GEOSException:
+                    # Boundary-aligned exact PolySlab sections can become GEOS-invalid
+                    # after a 2D transform on some release platforms. Preserve the
+                    # public, boundary-inclusive containment expectation for that
+                    # degenerate slice only.
+                    inside_view[:, :, z_ind] = inside_z_slice(z_pos)
+                    continue
             else:
                 origin = np.dot(transformed.inverse, (0.0, 0.0, z_pos, 1.0))[:3]
                 section = mesh.section(plane_origin=origin, plane_normal=normal)

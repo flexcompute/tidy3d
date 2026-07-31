@@ -45,8 +45,15 @@ if TYPE_CHECKING:
     from .base import ArrayComplex, ArrayFloat
 
 
-from .base import AbstractMedium, ensure_freq_in_range
-from .pole_residue import DispersiveMedium
+def _medium_numerics() -> Any:
+    """Import shared medium kernels after Pydantic model rebuilds finish."""
+    from flex_em.numerical.raw import medium as medium_numerics
+
+    return medium_numerics
+
+
+from .base import AbstractMedium, ensure_freq_in_range  # noqa: E402
+from .pole_residue import DispersiveMedium  # noqa: E402
 
 
 class Lorentz(DispersiveMedium):
@@ -138,10 +145,7 @@ class Lorentz(DispersiveMedium):
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        eps = self.eps_inf + 0.0j
-        for de, f, delta in self.coeffs:
-            eps = eps + (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
-        return eps
+        return _medium_numerics().lorentz_eps_model(self.eps_inf, self.coeffs, frequency)
 
     def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""

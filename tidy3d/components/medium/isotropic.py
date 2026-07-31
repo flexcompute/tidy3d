@@ -45,7 +45,14 @@ if TYPE_CHECKING:
     from .lorentz import Lorentz
 
 
-from .base import (
+def _medium_numerics() -> Any:
+    """Import shared medium kernels after Pydantic model rebuilds finish."""
+    from flex_em.numerical.raw import medium as medium_numerics
+
+    return medium_numerics
+
+
+from .base import (  # noqa: E402
     _EPS_SIGMA_TRACED_PATHS,
     AbstractMedium,
     _constant_over_frequency,
@@ -301,7 +308,7 @@ class Medium(AbstractMedium):
     def _eps_model(permittivity: float, conductivity: float, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        return AbstractMedium.eps_sigma_to_eps_complex(permittivity, conductivity, frequency)
+        return _medium_numerics().medium_eps_model(permittivity, conductivity, frequency)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:

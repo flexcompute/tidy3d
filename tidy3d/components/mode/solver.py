@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flex_em.numerical.raw import field_data as field_data_numerics
 from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.utils import _complex_power_flow_numpy, _dot_numpy, _outer_dot_numpy
 from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 
 from .derivatives import create_d_matrices as d_mats
@@ -501,7 +501,7 @@ class EigSolver(Tidy3dBaseModel):
                 # and broadcast cleanly against dS in _complex_power_flow_numpy.
                 E_tan = (np.moveaxis(E[0], -1, 0), np.moveaxis(E[1], -1, 0))
                 H_tan = (np.moveaxis(H[0], -1, 0), np.moveaxis(H[1], -1, 0))
-                power_flow = _complex_power_flow_numpy(E_tan, H_tan, dS)
+                power_flow = field_data_numerics.complex_power_flow(E_tan, H_tan, dS)
 
                 expected_sign = 1.0 if direction == "+" else -1.0
                 abs_pz = np.abs(power_flow)
@@ -1223,7 +1223,7 @@ class EigSolver(Tidy3dBaseModel):
         E2 = (E[0, ..., mode_2], E[1, ..., mode_2])
         H2 = (H[0, ..., mode_2], H[1, ..., mode_2])
 
-        return _dot_numpy(E1, H1, E2, H2, dS, conjugate=False)
+        return field_data_numerics.dot(E1, H1, E2, H2, dS, conjugate=False)
 
     @staticmethod
     def _cauchy_schwarz_dot_bound(
@@ -1300,7 +1300,7 @@ class EigSolver(Tidy3dBaseModel):
         # Make the differential area elements
         dS = (np.outer(dl_primal[0], dl_dual[1]), np.outer(dl_dual[0], dl_primal[1]))
 
-        return _outer_dot_numpy(E_tan, H_tan, E_tan, H_tan, dS, conjugate=False)
+        return field_data_numerics.outer_dot(E_tan, H_tan, E_tan, H_tan, dS, conjugate=False)
 
     @staticmethod
     def _normalize_modes(

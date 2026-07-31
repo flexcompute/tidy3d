@@ -7,6 +7,7 @@ from math import isclose
 from typing import TYPE_CHECKING
 
 import shapely
+from flex_em.numerical.raw import microwave as microwave_numerics
 from pydantic import Field
 from shapely.geometry import LineString, Polygon
 
@@ -57,7 +58,7 @@ class ModePlaneAnalyzer(Box):
         location = [SnapLocation.Center] * 3
         behavior[self._normal_axis] = SnapBehavior.Off
         # To avoid interpolated H field near metal surface
-        margin = (2, 2, 2) if self.field_data_colocated else (0, 0, 0)
+        margin = microwave_numerics.snap_margin_for_field_colocation(self.field_data_colocated)
         return SnappingSpec(location=location, behavior=behavior, margin=margin)
 
     def _get_mode_symmetry(

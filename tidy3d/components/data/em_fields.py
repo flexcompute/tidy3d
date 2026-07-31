@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast, get_args
 
+from flex_em.numerical.raw import source_normalization as source_normalization_numerics
+from flex_em.numerical.raw import symmetry as symmetry_numerics
+
 from tidy3d.components.types import EMField, PointCloudFieldComponent
 
 if TYPE_CHECKING:
@@ -19,10 +22,7 @@ POINT_CLOUD_FIELD_COMPONENTS = cast(
 
 def field_symmetry_eigenvalue(field: str, dim: int) -> int:
     """Positive field-component eigenvalue under reflection in a coordinate dimension."""
-    component_axis = "xyz".index(field[-1])
-    if field[0] in ("E", "D"):
-        return -1 if component_axis == dim else 1
-    return 1 if component_axis == dim else -1
+    return symmetry_numerics.field_symmetry_eigenvalue(field, dim)
 
 
 def em_field_symmetry_eigenvalues() -> dict[str, Callable[[int], int]]:
@@ -48,6 +48,8 @@ def frequency_normalized_field_components(
     fields_norm = {}
     for field_name, field_data in field_components.items():
         src_amps = source_spectrum_fn(field_data.f)
-        fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
+        fields_norm[field_name] = source_normalization_numerics.normalize_frequency_component(
+            field_data, src_amps
+        )
 
     return fields_norm

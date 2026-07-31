@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "pyroots>=0.5.0,<0.6.0",
+  "flex-em==0.1.0",
   "xarray>=2023.08,<2026.5.0",
   "importlib-metadata>=6.0.0,<10.0.0",
   "h5netcdf>=1.0.2,<2.0.0",
@@ -216,7 +217,8 @@ torch = [
   { index = "pypi", marker = "sys_platform == 'darwin'" },
   { index = "torch-cpu", marker = "sys_platform != 'darwin'" },
 ]
-tidy3d-extras = { index = "codeartifact" }
+tidy3d-extras = { path = "../../../src/Tidy3DCore/tidy3d_extras" }
+flex-em = { path = "../flex-em" }
 
 [tool.towncrier]
 directory = "changelog.d"

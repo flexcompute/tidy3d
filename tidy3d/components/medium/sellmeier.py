@@ -40,8 +40,15 @@ if TYPE_CHECKING:
     from .base import ArrayFloat
 
 
-from .base import AbstractMedium, ensure_freq_in_range
-from .pole_residue import DispersiveMedium
+def _medium_numerics() -> Any:
+    """Import shared medium kernels after Pydantic model rebuilds finish."""
+    from flex_em.numerical.raw import medium as medium_numerics
+
+    return medium_numerics
+
+
+from .base import AbstractMedium, ensure_freq_in_range  # noqa: E402
+from .pole_residue import DispersiveMedium  # noqa: E402
 
 
 class Sellmeier(DispersiveMedium):
@@ -134,19 +141,13 @@ class Sellmeier(DispersiveMedium):
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
 
-        wvl = C_0 / np.array(frequency)
-        wvl2 = wvl**2
-        n_squared = 1.0
-        for B, C in self.coeffs:
-            n_squared = n_squared + B * wvl2 / (wvl2 - C)
-        return np.sqrt(n_squared + 0j)
+        return _medium_numerics().sellmeier_n_model(self.coeffs, frequency)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        n = self._n_model(frequency)
-        return AbstractMedium.nk_to_eps_complex(n)
+        return _medium_numerics().sellmeier_eps_model(self.coeffs, frequency)
 
     def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model"""

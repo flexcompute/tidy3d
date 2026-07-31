@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin
 import h5py
 import numpy as np
 import xarray as xr
-from pydantic import Field
+from flex_em.numerical.raw import source_normalization as source_normalization_numerics
+from pydantic import Field, model_validator
 
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.components.autograd.utils import split_list
@@ -1451,6 +1452,22 @@ class SimulationData(AbstractYeeGridSimulationData):
         description="A boolean flag denoting whether the simulation run diverged.",
     )
 
+    parameter_B_tidy3d: str | None = Field(
+        None,
+        title="Parameter B Tidy3D",
+        description="Migration demo public SimulationData parameter.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_parameter_B_tidy3d(self) -> Self:
+        """Validate the M0 migration demo public result parameter."""
+        if self.parameter_B_tidy3d == "":
+            self._raise_validation_error_at_loc(
+                "parameter_B_tidy3d must not be empty.",
+                "parameter_B_tidy3d",
+            )
+        return self
+
     @cached_property
     def field_decay(self) -> TimeDataArray:
         """Returns a TimeDataArray of field decay values over time steps."""
@@ -1491,11 +1508,9 @@ class SimulationData(AbstractYeeGridSimulationData):
             """Source amplitude as function of frequency."""
             spectrum = source_time.spectrum(times, freqs, dt)
 
-            # Remove user defined amplitude and phase from the normalization
-            # such that they would still have an effect on the output fields.
-            # In other words, we are only normalizing out the arbitrary part of the spectrum
-            # that depends on things like freq0, fwidth and offset.
-            return spectrum / source_time.amplitude / np.exp(1j * source_time.phase)
+            return source_normalization_numerics.normalized_source_spectrum(
+                spectrum, amplitude=source_time.amplitude, phase=source_time.phase
+            )
 
         return source_spectrum_fn
 

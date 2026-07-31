@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator
+from pydantic import Field, PositiveFloat, field_validator, model_serializer
 from pyroots import Brentq
 
 from tidy3d.components.base import cached_property
@@ -224,6 +224,28 @@ class GaussianPulse(Pulse):
         "pulse spectrum which can have a nonzero DC component.",
     )
 
+    parameter_C_tidy3d: str | None = Field(
+        None,
+        title="Parameter C Tidy3D",
+        description="Migration demo public GaussianPulse parameter.",
+    )
+
+    @field_validator("parameter_C_tidy3d")
+    @classmethod
+    def _validate_parameter_C_tidy3d(cls, value: str | None) -> str | None:
+        """Validate the M0 migration demo public nested task parameter."""
+        if value == "":
+            raise ValueError("parameter_C_tidy3d must not be empty.")
+        return value
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_optional_parameter_C_tidy3d(self, handler: Any) -> Any:
+        """Omit unset migration demo public fields from normal public artifacts."""
+        payload = handler(self)
+        if self.parameter_C_tidy3d is None:
+            payload.pop("parameter_C_tidy3d", None)
+        return payload
+
     @property
     def peak_time(self) -> float:
         """Peak time in seconds, defined by ``offset``."""
@@ -246,25 +268,19 @@ class GaussianPulse(Pulse):
     def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
-        omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset_time
+        from flex_em.numerical.raw import source_time as source_time_numerics
 
-        offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted**2) / 2 / self.twidth**2) * self.amplitude
-
-        pulse_amp = offset * oscillation * amp
-
-        # subtract out DC component
-        if self.remove_dc_component:
-            pulse_amp = pulse_amp * (1j * omega0 + time_shifted / self.twidth**2)
-            # normalize by peak frequency instead of omega0, as for small omega0, omega0 approaches 0 faster
-            pulse_amp /= 2 * np.pi * self.peak_frequency
-        else:
-            # 1j to make it agree in large omega0 limit
-            pulse_amp = pulse_amp * 1j
-
-        return np.atleast_1d(pulse_amp)
+        return source_time_numerics.gaussian_pulse_amp_time(
+            time,
+            freq0=self.freq0,
+            fwidth=self.fwidth,
+            offset_time=self.offset_time,
+            twidth=self.twidth,
+            amplitude=self.amplitude,
+            phase=self.phase,
+            peak_frequency=self.peak_frequency,
+            remove_dc_component=self.remove_dc_component,
+        )
 
     def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
@@ -457,16 +473,16 @@ class ContinuousWave(Pulse):
     def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
-        omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset_time
+        from flex_em.numerical.raw import source_time as source_time_numerics
 
-        const = 1.0
-        offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * time)
-        amp = 1 / (1 + np.exp(-time_shifted / twidth)) * self.amplitude
-
-        return np.atleast_1d(const * offset * oscillation * amp)
+        return source_time_numerics.continuous_wave_amp_time(
+            time,
+            freq0=self.freq0,
+            fwidth=self.fwidth,
+            offset_time=self.offset_time,
+            amplitude=self.amplitude,
+            phase=self.phase,
+        )
 
     def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
@@ -618,31 +634,18 @@ class CustomSourceTime(Pulse):
         if self.source_time_dataset is None:
             raise SetupError("'source_time_dataset' must be provided to use this method.")
 
-        # make time a numpy array for uniform handling
-        times = np.atleast_1d(np.asarray(time))
-        data_times = self.data_times
+        from flex_em.numerical.raw import source_time as source_time_numerics
 
-        # shift time
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
-        time_shifted = times - self.offset * twidth
-
-        # mask times that are out of range
-        mask = (time_shifted < min(data_times)) | (time_shifted > max(data_times))
-
-        # get envelope
-        envelope = np.zeros(len(time_shifted), dtype=complex)
-        values = self.source_time_dataset.values
-        envelope[mask] = values.sel(t=time_shifted[mask], method="nearest").to_numpy()
-        if not all(mask):
-            envelope[~mask] = values.interp(t=time_shifted[~mask]).to_numpy()
-
-        # modulation, phase, amplitude
-        omega0 = 2 * np.pi * self.freq0
-        offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * times)
-        amp = self.amplitude
-
-        return offset * oscillation * amp * envelope
+        return source_time_numerics.custom_source_time_amp_time(
+            time,
+            freq0=self.freq0,
+            fwidth=self.fwidth,
+            offset=self.offset,
+            amplitude=self.amplitude,
+            phase=self.phase,
+            data_times=self.data_times,
+            data_values=self.source_time_dataset.values.to_numpy(),
+        )
 
     def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
