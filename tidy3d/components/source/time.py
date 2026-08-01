@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator, model_serializer
+from pydantic import Field, PositiveFloat, field_validator
 from pyroots import Brentq
 
 from tidy3d.components.base import cached_property
@@ -223,28 +223,6 @@ class GaussianPulse(Pulse):
         "near zero frequency. Setting this to ``False`` results in an unmodified Gaussian "
         "pulse spectrum which can have a nonzero DC component.",
     )
-
-    parameter_C_tidy3d: str | None = Field(
-        None,
-        title="Parameter C Tidy3D",
-        description="Migration demo public GaussianPulse parameter.",
-    )
-
-    @field_validator("parameter_C_tidy3d")
-    @classmethod
-    def _validate_parameter_C_tidy3d(cls, value: str | None) -> str | None:
-        """Validate the M0 migration demo public nested task parameter."""
-        if value == "":
-            raise ValueError("parameter_C_tidy3d must not be empty.")
-        return value
-
-    @model_serializer(mode="wrap")
-    def _serialize_with_optional_parameter_C_tidy3d(self, handler: Any) -> Any:
-        """Omit unset migration demo public fields from normal public artifacts."""
-        payload = handler(self)
-        if self.parameter_C_tidy3d is None:
-            payload.pop("parameter_C_tidy3d", None)
-        return payload
 
     @property
     def peak_time(self) -> float:

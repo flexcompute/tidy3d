@@ -1345,9 +1345,8 @@ class PolySlab(base.Planar):
                     sections = transformed.intersections_plane(z=z_pos, cleanup=False)
                 except shapely.errors.GEOSException:
                     # Boundary-aligned exact PolySlab sections can become GEOS-invalid
-                    # after a 2D transform on some release platforms. Preserve the
-                    # public, boundary-inclusive containment expectation for that
-                    # degenerate slice only.
+                    # after a 2D transform on some release platforms. Regression:
+                    # test_polyslab_transformed_geos_fallback.
                     inside_view[:, :, z_ind] = inside_z_slice(z_pos)
                     continue
             else:

@@ -13,29 +13,9 @@ from tidy3d.flex_em.translate.base import (
     validate_public_data,
 )
 
-PUBLIC_TO_SCHEMA_TYPE_FIELD_MAP = {
-    "SimulationData": {
-        "parameter_B_tidy3d": "parameter_B_flex_em",
-    },
-    "Simulation": {
-        "parameter_A_tidy3d": "parameter_A_flex_em",
-    },
-    "GaussianPulse": {
-        "parameter_C_tidy3d": "parameter_C_flex_em",
-    },
-}
+PUBLIC_TO_SCHEMA_TYPE_FIELD_MAP: dict[str, dict[str, str]] = {}
 
-SCHEMA_TO_PUBLIC_TYPE_FIELD_MAP = {
-    "SimulationData": {
-        "parameter_B_flex_em": "parameter_B_tidy3d",
-    },
-    "Simulation": {
-        "parameter_A_flex_em": "parameter_A_tidy3d",
-    },
-    "GaussianPulse": {
-        "parameter_C_flex_em": "parameter_C_tidy3d",
-    },
-}
+SCHEMA_TO_PUBLIC_TYPE_FIELD_MAP: dict[str, dict[str, str]] = {}
 
 
 def from_data(data: Any) -> SimulationDataOutput:

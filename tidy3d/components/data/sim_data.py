@@ -16,7 +16,7 @@ import h5py
 import numpy as np
 import xarray as xr
 from flex_em.numerical.raw import source_normalization as source_normalization_numerics
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.components.autograd.utils import split_list
@@ -1451,22 +1451,6 @@ class SimulationData(AbstractYeeGridSimulationData):
         title="Diverged",
         description="A boolean flag denoting whether the simulation run diverged.",
     )
-
-    parameter_B_tidy3d: str | None = Field(
-        None,
-        title="Parameter B Tidy3D",
-        description="Migration demo public SimulationData parameter.",
-    )
-
-    @model_validator(mode="after")
-    def _validate_parameter_B_tidy3d(self) -> Self:
-        """Validate the M0 migration demo public result parameter."""
-        if self.parameter_B_tidy3d == "":
-            self._raise_validation_error_at_loc(
-                "parameter_B_tidy3d must not be empty.",
-                "parameter_B_tidy3d",
-            )
-        return self
 
     @cached_property
     def field_decay(self) -> TimeDataArray:
