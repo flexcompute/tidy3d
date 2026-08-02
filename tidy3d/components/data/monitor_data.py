@@ -1256,13 +1256,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 {
                     "colocate": self.monitor.colocate,
                     "use_colocated_integration": getattr(
-                        self.monitor, "use_colocated_integration", False
+                        self.monitor, "use_colocated_integration", None
                     ),
                 },
                 {
                     "colocate": field_data.monitor.colocate,
                     "use_colocated_integration": getattr(
-                        field_data.monitor, "use_colocated_integration", False
+                        field_data.monitor, "use_colocated_integration", None
                     ),
                 },
             ),
@@ -1524,13 +1524,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 {
                     "colocate": self.monitor.colocate,
                     "use_colocated_integration": getattr(
-                        self.monitor, "use_colocated_integration", False
+                        self.monitor, "use_colocated_integration", None
                     ),
                 },
                 {
                     "colocate": field_data.monitor.colocate,
                     "use_colocated_integration": getattr(
-                        field_data.monitor, "use_colocated_integration", False
+                        field_data.monitor, "use_colocated_integration", None
                     ),
                 },
             ),
