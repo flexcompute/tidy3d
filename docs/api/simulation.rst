@@ -26,10 +26,8 @@ Batch Jobs
 ----------
 
 .. autosummary::
-   :toctree: _autosummary/
-   :template: module.rst
 
-   web.api.container.Batch
+   web.Batch
 
 ~~~~
 

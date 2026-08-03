@@ -24,8 +24,10 @@ import inspect
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import get_args, get_origin
 
@@ -35,10 +37,23 @@ import tidy3d
 
 full_build = True
 
+LEGACY_API_DOC_REDIRECTS = {
+    "api/_autosummary/tidy3d.web.api.asynchronous.run_async": (
+        "api/_autosummary/tidy3d.web.run_async"
+    ),
+    "api/_autosummary/tidy3d.web.api.container.Batch": "api/_autosummary/tidy3d.web.Batch",
+    "api/_autosummary/tidy3d.web.api.container.BatchData": (
+        "api/_autosummary/tidy3d.web.BatchData"
+    ),
+    "api/_autosummary/tidy3d.web.api.container.Job": "api/_autosummary/tidy3d.web.Job",
+}
+
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, os.path.abspath("_ext"))
+sys.path.insert(0, here)
+sys.path.insert(0, os.path.join(here, "_ext"))
 from docs_version import is_public_docs_version_tag, normalize_docs_version  # noqa: E402
+from generate_faq_docs import generate_for_sphinx  # noqa: E402
 
 # sys.path.insert(0, os.path.abspath("source"))
 # sys.path.insert(0, os.path.abspath("notebooks"))
@@ -94,6 +109,7 @@ exclude_patterns = [
     "**.ipynb_checkpoints",
     ".DS_Store",
     "Thumbs.db",
+    "faq/README.md",
     "faq/_faqs/*",
     "scripts/*",
     "tests/*",
@@ -349,6 +365,7 @@ _ALIAS_TYPE_DOCS: dict[str, str] | None = None
 _ALIAS_ROLE_RE = re.compile(r":class:`([^`]+)`")
 _TIDY3D_CLASS_MAP: dict[str, str] | None = None
 _DOC_TARGETS: set[str] | None = None
+_DOC_TARGETS_ROOT: Path | None = None
 _MAX_ALIAS_REWRITE_DEPTH = 8
 
 
@@ -432,13 +449,15 @@ def _get_tidy3d_class_map() -> dict[str, str]:
     return class_map
 
 
-def _get_doc_targets() -> set[str]:
+def _get_doc_targets(source_root: Path | str | None = None) -> set[str]:
     """Collect documented object names to avoid emitting dead xrefs."""
-    global _DOC_TARGETS
-    if _DOC_TARGETS is not None:
+    global _DOC_TARGETS, _DOC_TARGETS_ROOT
+    docs_root = Path(source_root) if source_root is not None else Path(here)
+    docs_root = docs_root.resolve()
+    if _DOC_TARGETS is not None and _DOC_TARGETS_ROOT == docs_root:
         return _DOC_TARGETS
     targets: set[str] = set()
-    api_root = Path(here) / "api"
+    api_root = docs_root / "api"
     for path in api_root.rglob("_autosummary/*.rst"):
         stem = path.stem.lstrip("\ufeff")
         targets.add(stem)
@@ -449,6 +468,7 @@ def _get_doc_targets() -> set[str]:
             if stripped.startswith("tidy3d."):
                 targets.add(stripped)
     _DOC_TARGETS = targets
+    _DOC_TARGETS_ROOT = docs_root
     return targets
 
 
@@ -482,7 +502,7 @@ def autodoc_process_docstring(app, what, name, obj, options, lines):
 
     owner_module = sys.modules.get(obj_module)
     class_map = _get_tidy3d_class_map()
-    doc_targets = _get_doc_targets()
+    doc_targets = _get_doc_targets(app.srcdir)
 
     def _format_annotation_value(value: object) -> str | None:
         try:
@@ -605,7 +625,60 @@ def autodoc_process_docstring(app, what, name, obj, options, lines):
         lines[idx] = _substitute_roles(line)
 
 
+def _stage_faq_sources(app, _config):
+    """Point Sphinx at a temporary source tree containing generated FAQs."""
+
+    temporary_root = Path(tempfile.mkdtemp(prefix="tidy3d-sphinx-sources-"))
+    staged_package_root = temporary_root / "package"
+    staged_docs_root = staged_package_root / "docs"
+    try:
+        generate_for_sphinx(Path(app.srcdir), staged_package_root)
+    except BaseException:
+        shutil.rmtree(temporary_root)
+        raise
+    app.srcdir = type(app.srcdir)(staged_docs_root)
+    app._tidy3d_staged_sources = temporary_root
+
+
+def _cleanup_staged_faq_sources(app, _exception):
+    temporary_root = getattr(app, "_tidy3d_staged_sources", None)
+    if temporary_root is not None:
+        shutil.rmtree(temporary_root)
+        del app._tidy3d_staged_sources
+
+
+def _write_legacy_api_doc_redirects(app, exception):
+    """Preserve API URLs whose canonical autosummary targets have moved."""
+
+    if exception is not None or app.builder.format != "html":
+        return
+
+    for legacy_docname, canonical_docname in LEGACY_API_DOC_REDIRECTS.items():
+        legacy_path = Path(app.builder.get_outfilename(legacy_docname))
+        canonical_path = Path(app.builder.get_outfilename(canonical_docname))
+        relative_target = os.path.relpath(canonical_path, legacy_path.parent).replace(os.sep, "/")
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text(
+            "<!doctype html>\n"
+            '<html lang="en">\n'
+            "<head>\n"
+            '<meta charset="utf-8">\n'
+            f'<meta http-equiv="refresh" content="0; url={relative_target}">\n'
+            f'<link rel="canonical" href="{relative_target}">\n'
+            "<title>Page moved</title>\n"
+            "</head>\n"
+            "<body>\n"
+            f'<p>This page moved to <a href="{relative_target}">{canonical_docname}</a>.</p>\n'
+            "</body>\n"
+            "</html>\n",
+            encoding="utf-8",
+        )
+
+
 def setup(app):
+    app.connect("config-inited", _stage_faq_sources, priority=100)
+    app.connect("build-finished", _write_legacy_api_doc_redirects)
+    app.connect("build-finished", _cleanup_staged_faq_sources)
     # Apply the custom filter early in the build process
     app.connect("builder-inited", add_autosummary_filter)
     app.connect("builder-inited", add_import_warning_filter)

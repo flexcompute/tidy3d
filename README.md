@@ -151,7 +151,6 @@ For raw MCP client config, run the same command:
 |-------------------|-------------------------------------------------|
 | Source Code       | https://github.com/flexcompute/tidy3d           |
 | Notebooks Source  | https://github.com/flexcompute/tidy3d-notebooks |
-| FAQ Source Code   | https://github.com/flexcompute/tidy3d-faq       |
 
 ## Issues / Feedback / Bug Reporting
 

@@ -33,10 +33,8 @@ The ``BatchData`` Object
 ------------------------
 
 .. autosummary::
-   :toctree: _autosummary/
-   :template: module.rst
 
-   web.api.container.BatchData
+   web.BatchData
 
 
 ~~~~

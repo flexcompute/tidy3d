@@ -19,7 +19,7 @@ Core Workflow
    web.monitor
    web.download
    web.load
-   web.api.asynchronous.run_async
+   web.run_async
 
 Download Utilities
 ~~~~~~~~~~~~~~~~~~

@@ -248,8 +248,6 @@ Github Repositories
      - https://github.com/flexcompute/tidy3d
    * - Example Notebooks
      - https://github.com/flexcompute/tidy3d-notebooks
-   * - FAQ Source Code
-     - https://github.com/flexcompute/tidy3d-faq
 
 These repositories are a very good way to interact with the relevant tool developers. We encourage you to ask questions or request features through the "Discussions" or "Issues" tabs of each repository accordingly.
 

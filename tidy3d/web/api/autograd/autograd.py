@@ -39,7 +39,16 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.path_utils import AutogradRoute
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.eme.simulation import EMESimulation
+    from tidy3d.components.mode.simulation import ModeSimulation
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.tcad.mesher import VolumeMesher
+    from tidy3d.components.tcad.simulation.heat import HeatSimulation
+    from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
+    from tidy3d.plugins.mode import ModeSolver
+    from tidy3d.plugins.smatrix import ModalComponentModeler, TerminalComponentModeler
     from tidy3d.web.api.container import BatchData
     from tidy3d.web.core.types import PayType
 
@@ -824,7 +833,41 @@ def run_custom(
 
 
 def run_async_custom(
-    simulations: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
+    simulations: dict[
+        str,
+        Simulation
+        | HeatChargeSimulation
+        | HeatSimulation
+        | EMESimulation
+        | ModeSolver
+        | ModeSimulation
+        | VolumeMesher
+        | ModalComponentModeler
+        | TerminalComponentModeler,
+    ]
+    | tuple[
+        Simulation
+        | HeatChargeSimulation
+        | HeatSimulation
+        | EMESimulation
+        | ModeSolver
+        | ModeSimulation
+        | VolumeMesher
+        | ModalComponentModeler
+        | TerminalComponentModeler,
+        ...,
+    ]
+    | list[
+        Simulation
+        | HeatChargeSimulation
+        | HeatSimulation
+        | EMESimulation
+        | ModeSolver
+        | ModeSimulation
+        | VolumeMesher
+        | ModalComponentModeler
+        | TerminalComponentModeler
+    ],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
     callback_url: str | None = None,
@@ -848,16 +891,15 @@ def run_async_custom(
     custom_vjp: CustomVJPSpec | None = None,
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
-) -> BatchData:
-    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
-    starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
-
-    .. TODO add example and see also reference.
+) -> BatchData | dict[str, SimulationData]:
+    """Submit and run a workflow batch with optional custom differentiation hooks.
 
     Parameters
     ----------
-    simulations : Union[Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]], tuple[Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]], list[Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]]
-        Mapping of task name to simulation or list of simulations.
+    simulations : dict | tuple | list
+        Tidy3D simulations, mode solvers, volume meshers, or component modelers to
+        run. Dictionary keys become task names; list and tuple inputs receive
+        generated task names.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
     path_dir : PathLike
@@ -872,8 +914,7 @@ def run_async_custom(
     simulation_type : Optional[str] = None
         Internal simulation type label; external users should leave unset.
     solver_version: Optional[str] = None
-        Deprecated direct argument for internal use only. Internal workflows should set
-        ``td.config.run.solver_version`` instead; external users should leave unset.
+        Deprecated solver-version override. External users should leave unset.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculations locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -883,8 +924,7 @@ def run_async_custom(
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type : Optional[Union[PayType, str]] = None
-        Deprecated direct argument for internal use only. Internal workflows should set
-        ``td.config.run.pay_type`` instead; external users should leave unset.
+        Deprecated payment-type override. External users should leave unset.
     priority: Optional[int] = None
         Queue priority for vGPU simulations (1=lowest, 10=highest).
     lazy: Optional[bool] = None
@@ -907,6 +947,7 @@ def run_async_custom(
         A single config is broadcast to all simulations. A dict or sequence with single configs sets one
         config for each simulation. Multiple custom VJPs can be specified for each
         simulation by specifying a dict with sequence values or a sequence of sequences.
+        Custom VJPs require every batch entry to be an FDTD :class:`.Simulation`.
     vgpu_allocation : Optional[int] = None
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, uses
@@ -920,9 +961,10 @@ def run_async_custom(
 
     Returns
     ------
-    :class:`BatchData`
-        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
-        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+    BatchData | dict[str, SimulationData]
+        Ordinary workflow batches return :class:`.BatchData`. A batch containing
+        traced FDTD parameters returns a dictionary from task names to
+        :class:`.SimulationData`.
 
     See Also
     --------
@@ -935,10 +977,11 @@ def run_async_custom(
 
     Notes
     -----
-    Passing ``solver_version``, ``pay_type``, ``priority``, and vGPU options
-    directly is deprecated. Set defaults via ``td.config.run`` and
-    ``td.config.vgpu`` instead. Non-``None`` values passed here override the
-    config for this call.
+    A batch containing traced FDTD :class:`.Simulation` tasks cannot be mixed with
+    other workflow types. Run the traced FDTD simulations in a separate batch.
+
+    Passing ``solver_version``, ``pay_type``, ``priority``, and vGPU options directly
+    is deprecated. External users should leave these unset.
     """
     # validate priority if specified
     if priority is not None and (priority < 1 or priority > 10):
@@ -970,8 +1013,8 @@ def run_async_custom(
 
     def _expand_spec(
         fn_arg: Any | None,
-        orig_sim_arg: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
-        sim_dict: dict[str, td.Simulation],
+        orig_sim_arg: dict[str, Any] | tuple[Any, ...] | list[Any],
+        sim_dict: dict[str, Any],
         item_type: type,
         arg_name: str,
     ) -> dict[str, tuple[Any, ...]] | None:
@@ -1059,6 +1102,14 @@ def run_async_custom(
         item_type=CustomVJPConfig,
         arg_name="custom_vjp",
     )
+    fdtd_sim_dict = {
+        sim_key: sim for sim_key, sim in sim_dict.items() if isinstance(sim, td.Simulation)
+    }
+    all_simulations_are_fdtd = len(fdtd_sim_dict) == len(sim_dict)
+    if custom_vjp and any(custom_vjp.values()) and not all_simulations_are_fdtd:
+        raise AdjointError(
+            "custom_vjp is only supported for 'Simulation' workflows in run_async_custom."
+        )
 
     path_dir = Path(path_dir)
 
@@ -1066,10 +1117,6 @@ def run_async_custom(
         has_traced_numerical_structures(numerical_structure)
         for _, numerical_structure in numerical_structures.items()
     )
-    fdtd_sim_dict = {
-        sim_key: sim for sim_key, sim in sim_dict.items() if isinstance(sim, td.Simulation)
-    }
-    all_simulations_are_fdtd = len(fdtd_sim_dict) == len(sim_dict)
     (
         needs_autograd,
         expanded_custom_vjp_dict,
@@ -1206,7 +1253,41 @@ def run(
 
 
 def run_async(
-    simulations: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
+    simulations: dict[
+        str,
+        Simulation
+        | HeatChargeSimulation
+        | HeatSimulation
+        | EMESimulation
+        | ModeSolver
+        | ModeSimulation
+        | VolumeMesher
+        | ModalComponentModeler
+        | TerminalComponentModeler,
+    ]
+    | tuple[
+        Simulation
+        | HeatChargeSimulation
+        | HeatSimulation
+        | EMESimulation
+        | ModeSolver
+        | ModeSimulation
+        | VolumeMesher
+        | ModalComponentModeler
+        | TerminalComponentModeler,
+        ...,
+    ]
+    | list[
+        Simulation
+        | HeatChargeSimulation
+        | HeatSimulation
+        | EMESimulation
+        | ModeSolver
+        | ModeSimulation
+        | VolumeMesher
+        | ModalComponentModeler
+        | TerminalComponentModeler
+    ],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
     callback_url: str | None = None,
@@ -1223,8 +1304,85 @@ def run_async(
     lazy: bool | None = None,
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
-) -> BatchData:
-    """Wrapper for run_async_custom for usage without numerical_structures or custom_vjp for public facing API."""
+) -> BatchData | dict[str, SimulationData]:
+    """Submit and run multiple simulations in parallel.
+
+    This public batch entry point uploads the supplied simulations, starts and monitors
+    their cloud tasks, and returns their data. It also supports automatic
+    differentiation when the inputs contain traced FDTD parameters.
+
+    Parameters
+    ----------
+    simulations : dict | tuple | list
+        Tidy3D simulations, mode solvers, volume meshers, or component modelers to
+        run. Dictionary keys become task names; list and tuple inputs receive
+        generated task names.
+    folder_name : str = "default"
+        Folder in which to create the tasks on the web UI.
+    path_dir : PathLike = DEFAULT_DATA_DIR
+        Directory in which to store the batch checkpoint and downloaded task data.
+    callback_url : str | None = None
+        HTTP PUT URL that receives task-finish events.
+    num_workers : int | None = None
+        Number of worker threads used by configurable batch stages. ``None`` uses
+        the batch default.
+    verbose : bool = True
+        Whether to display upload, monitoring, and download progress.
+    simulation_type : str | None = None
+        Internal simulation type label; external users should leave this unset.
+    solver_version : str | None = None
+        Deprecated solver-version override. External users should leave this unset.
+    parent_tasks : dict[str, list[str]] | None = None
+        Optional parent task IDs for each named simulation.
+    local_gradient : bool | None = None
+        Whether to compute automatic-differentiation gradients locally. ``None`` uses
+        ``td.config.adjoint``.
+    max_num_adjoint_per_fwd : int | None = None
+        Maximum number of adjoint simulations allowed per forward run. ``None`` uses
+        the adjoint configuration.
+    reduce_simulation : {"auto", True, False} = "auto"
+        Whether to reduce structures to the simulation domain. This currently applies
+        to mode-solver tasks.
+    pay_type : PayType | str | None = None
+        Deprecated payment-type override. External users should leave this unset.
+    priority : int | None = None
+        Queue priority for virtual-GPU tasks, from 1 (lowest) to 10 (highest).
+    lazy : bool | None = None
+        Whether ordinary :class:`.BatchData` results load on demand. ``None`` defaults
+        to ``True`` for ordinary batch runs. Traced FDTD batches always return an
+        eagerly materialized dictionary, regardless of this setting.
+    vgpu_allocation : int | None = None
+        Number of virtual GPUs to allocate. ``None`` uses ``td.config.vgpu``.
+    ignore_memory_limit : bool | None = None
+        Whether a virtual-GPU task may exceed its allocation's estimated memory limit.
+        ``None`` uses ``td.config.vgpu``.
+
+    Returns
+    -------
+    BatchData | dict[str, SimulationData]
+        Ordinary workflow batches return :class:`.BatchData`. A batch containing
+        traced FDTD parameters returns a dictionary from task names to
+        :class:`.SimulationData`.
+
+    Notes
+    -----
+    A batch containing traced FDTD :class:`.Simulation` tasks cannot be mixed with
+    other workflow types. Run the traced FDTD simulations in a separate batch.
+
+    Examples
+    --------
+    Run two simulations and access their results by task name.
+
+    .. code-block:: python
+
+        from tidy3d import web
+
+        batch_data = web.run_async(
+            simulations={"coarse": coarse_sim, "fine": fine_sim},
+            path_dir="data/sweep",
+        )
+        fine_data = batch_data["fine"]
+    """
     return run_async_custom(
         simulations=simulations,
         folder_name=folder_name,

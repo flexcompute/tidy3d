@@ -13,12 +13,17 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+import subprocess
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import click
 
 from .index import develop
 from .utils import echo_and_check_subprocess, get_install_directory
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 __all__ = [
     "build_documentation",
@@ -26,6 +31,75 @@ __all__ = [
     # "convert_all_markdown_to_rst_command",
     "replace_in_files_command",
 ]
+
+FAQ_IMAGE_DIRECTORY = Path("docs/faq/_faqs/img")
+FAQ_LFS_INCLUDE = "**/docs/faq/_faqs/img/**"
+LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/v1\n"
+
+
+def _is_lfs_pointer(path: Path) -> bool:
+    """Return whether a file starts with the Git LFS pointer signature."""
+    with path.open("rb") as file:
+        return file.read(len(LFS_POINTER_PREFIX)) == LFS_POINTER_PREFIX
+
+
+def _faq_image_files(image_directory: Path) -> Iterator[Path]:
+    """Yield regular FAQ image files without traversing or opening symlinks."""
+    for root, directory_names, file_names in os.walk(image_directory, followlinks=False):
+        root_path = Path(root)
+        directory_names[:] = [
+            name for name in directory_names if not (root_path / name).is_symlink()
+        ]
+        for name in file_names:
+            path = root_path / name
+            if not path.is_symlink() and path.is_file():
+                yield path
+
+
+def _path_has_symlink_component(root: Path, relative_path: Path) -> bool:
+    """Return whether any path component below ``root`` is a symlink."""
+
+    path = root
+    for part in relative_path.parts:
+        path /= part
+        if path.is_symlink():
+            return True
+    return False
+
+
+def _hydrate_faq_lfs_assets() -> None:
+    """Hydrate imported FAQ images only when the checkout still contains LFS pointers."""
+    install_directory = get_install_directory()
+    image_directory = install_directory / FAQ_IMAGE_DIRECTORY
+    if (
+        _path_has_symlink_component(install_directory, FAQ_IMAGE_DIRECTORY)
+        or not image_directory.is_dir()
+    ):
+        return
+    pointers = tuple(path for path in _faq_image_files(image_directory) if _is_lfs_pointer(path))
+    if not pointers:
+        return
+    command = ["git", "lfs", "pull", f"--include={FAQ_LFS_INCLUDE}"]
+    try:
+        echo_and_check_subprocess(command)
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        raise click.ClickException(
+            "Unable to hydrate FAQ images for the Sphinx build. "
+            f"Run `{' '.join(command)}` from a Git checkout with Git LFS access."
+        ) from exc
+    remaining = tuple(
+        path
+        for path in pointers
+        if not path.is_symlink() and path.is_file() and _is_lfs_pointer(path)
+    )
+    if remaining:
+        relative_paths = ", ".join(
+            path.relative_to(install_directory).as_posix() for path in remaining
+        )
+        raise click.ClickException(
+            "Git LFS completed without hydrating FAQ images: "
+            f"{relative_paths}. Verify repository LFS access."
+        )
 
 
 def replace_in_files(
@@ -121,6 +195,7 @@ def build_documentation(args: Any = None) -> None:
     args : optional
         Additional arguments for the documentation build process.
     """
+    _hydrate_faq_lfs_assets()
     # Runs a clean doc build to avoid stale doctrees after refactors.
     echo_and_check_subprocess(
         [
