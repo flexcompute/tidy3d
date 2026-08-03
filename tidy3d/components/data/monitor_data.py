@@ -1950,7 +1950,10 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         )
 
     def _make_adjoint_sources(
-        self, dataset_names: list[str], fwidth: float
+        self,
+        dataset_names: list[str],
+        fwidth: float,
+        simulation_bounds: tuple[Coordinate, Coordinate] | None = None,
     ) -> list[CustomCurrentSource]:
         """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
 
@@ -1981,25 +1984,230 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                     src_field_components[name] = source_data
 
             # dont include this source if no data
-            if all(fld_cmp is None for fld_cmp in src_field_components.values()):
+            if not src_field_components:
                 continue
 
-            # construct custom Current source
-            dataset = FieldDataset(**src_field_components)
-            custom_source = CustomCurrentSource(
-                center=source_geo.center,
-                size=source_geo.size,
-                source_time=GaussianPulse(
-                    freq0=freq0,
-                    fwidth=fwidth,
-                ),
-                current_dataset=dataset,
-                interpolate=True,
-            )
+            component_groups = [src_field_components]
+            if not self._adjoint_source_union_is_safe(src_field_components, simulation_bounds):
+                component_groups = [
+                    {component: source_data}
+                    for component, source_data in src_field_components.items()
+                ]
 
-            sources.append(custom_source)
+            for component_group in component_groups:
+                center, size, fitted_components = self._fit_adjoint_source_support(
+                    component_group, simulation_bounds
+                )
+                sources.append(
+                    CustomCurrentSource(
+                        center=center,
+                        size=size,
+                        source_time=GaussianPulse(
+                            freq0=freq0,
+                            fwidth=fwidth,
+                        ),
+                        current_dataset=FieldDataset(**fitted_components),
+                        interpolate=True,
+                        confine_to_bounds=True,
+                    )
+                )
 
         return sources
+
+    def _adjoint_source_union_is_safe(
+        self,
+        field_components: dict[str, ScalarFieldDataArray],
+        simulation_bounds: tuple[Coordinate, Coordinate] | None = None,
+    ) -> bool:
+        """Whether one union box adds no Yee samples outside any component's support."""
+        if len(field_components) <= 1:
+            return True
+
+        source_geo = self.monitor.geometry
+        single_sample_bounds = self._adjoint_single_sample_support_bounds(
+            field_components=field_components, simulation_bounds=simulation_bounds
+        )
+        component_sample_bounds = {
+            name: {
+                dim: (
+                    float(field.coords[dim].min()),
+                    float(field.coords[dim].max()),
+                )
+                for dim in "xyz"
+            }
+            for name, field in field_components.items()
+        }
+        union_sample_bounds = {
+            dim: (
+                min(bounds[dim][0] for bounds in component_sample_bounds.values()),
+                max(bounds[dim][1] for bounds in component_sample_bounds.values()),
+            )
+            for dim in "xyz"
+        }
+        component_support_bounds = {
+            name: {
+                dim: self._adjoint_component_support_bounds(
+                    field=field,
+                    dim=dim,
+                    single_sample_bounds=single_sample_bounds,
+                )
+                for axis, dim in enumerate("xyz")
+            }
+            for name, field in field_components.items()
+        }
+        union_support_bounds = {
+            dim: (
+                min(bounds[dim][0] for bounds in component_support_bounds.values()),
+                max(bounds[dim][1] for bounds in component_support_bounds.values()),
+            )
+            for dim in "xyz"
+        }
+
+        component_bounds_match_union = all(
+            np.allclose(
+                component_sample_bounds[name][dim],
+                union_sample_bounds[dim],
+                rtol=0.0,
+                atol=1e-12,
+            )
+            and np.allclose(
+                component_support_bounds[name][dim],
+                union_support_bounds[dim],
+                rtol=0.0,
+                atol=1e-12,
+            )
+            for name in field_components
+            for axis, dim in enumerate("xyz")
+            if source_geo.size[axis] != 0
+        )
+
+        if self.grid_expanded is None or self.monitor.colocate:
+            return component_bounds_match_union
+
+        for name in field_components:
+            yee_coords = self.grid_expanded[self.grid_locations[name]].to_dict
+            for axis, dim in enumerate("xyz"):
+                if source_geo.size[axis] == 0:
+                    continue
+                lower_union, upper_union = union_support_bounds[dim]
+                lower_component, upper_component = component_sample_bounds[name][dim]
+                scale = max(
+                    1.0,
+                    abs(lower_union),
+                    abs(upper_union),
+                    abs(lower_component),
+                    abs(upper_component),
+                )
+                tolerance = 1e-12 * scale
+                coords_local = np.asarray(yee_coords[dim], dtype=float) - source_geo.center[axis]
+                in_union = (coords_local >= lower_union - tolerance) & (
+                    coords_local <= upper_union + tolerance
+                )
+                union_yee_coords = coords_local[in_union]
+                if np.any(union_yee_coords < lower_component - tolerance) or np.any(
+                    union_yee_coords > upper_component + tolerance
+                ):
+                    return False
+        return True
+
+    def _fit_adjoint_source_support(
+        self,
+        field_components: dict[str, ScalarFieldDataArray],
+        simulation_bounds: tuple[Coordinate, Coordinate] | None = None,
+    ) -> tuple[Coordinate, Coordinate, dict[str, ScalarFieldDataArray]]:
+        """Fit and rebase a current source to the union of component cell supports."""
+        source_geo = self.monitor.geometry
+        center = list(source_geo.center)
+        size = list(source_geo.size)
+        midpoints = [0.0, 0.0, 0.0]
+        single_sample_bounds = self._adjoint_single_sample_support_bounds(
+            field_components=field_components, simulation_bounds=simulation_bounds
+        )
+
+        for axis, dim in enumerate("xyz"):
+            if source_geo.size[axis] == 0:
+                continue
+            component_bounds = [
+                self._adjoint_component_support_bounds(
+                    field=field,
+                    dim=dim,
+                    single_sample_bounds=single_sample_bounds,
+                )
+                for field in field_components.values()
+            ]
+            lower = min(bounds[0] for bounds in component_bounds)
+            upper = max(bounds[1] for bounds in component_bounds)
+            midpoints[axis] = 0.5 * (lower + upper)
+            center[axis] += midpoints[axis]
+            size[axis] = upper - lower
+
+        fitted_components = {}
+        for name, field in field_components.items():
+            new_coords = {}
+            for axis, dim in enumerate("xyz"):
+                if source_geo.size[axis] != 0:
+                    new_coords[dim] = np.asarray(field.coords[dim], dtype=float) - midpoints[axis]
+            fitted_field = field.assign_coords(new_coords) if new_coords else field
+            fitted_components[name] = fitted_field
+
+        return tuple(center), tuple(size), fitted_components
+
+    def _adjoint_single_sample_support_bounds(
+        self,
+        field_components: dict[str, ScalarFieldDataArray],
+        simulation_bounds: tuple[Coordinate, Coordinate] | None,
+    ) -> dict[str, tuple[float, float]]:
+        """Resolve physical support bounds for source axes with one sample."""
+        source_geo = self.monitor.geometry
+        support_bounds = {}
+        for axis, dim in enumerate("xyz"):
+            has_single_sample = any(
+                np.asarray(field.coords[dim]).size == 1 for field in field_components.values()
+            )
+            if not has_single_sample:
+                continue
+
+            if np.isfinite(source_geo.size[axis]):
+                lower = float(source_geo.bounds[0][axis] - source_geo.center[axis])
+                upper = float(source_geo.bounds[1][axis] - source_geo.center[axis])
+                single_coords = []
+                for field in field_components.values():
+                    coords = np.asarray(field.coords[dim], dtype=float)
+                    if coords.size == 1:
+                        single_coords.append(float(coords[0]))
+                lower = min(lower, *single_coords)
+                upper = max(upper, *single_coords)
+            else:
+                if simulation_bounds is None:
+                    raise AdjointError(
+                        "Cannot determine adjoint current-source support for a single-sample "
+                        f"infinite FieldMonitor axis '{dim}' without simulation bounds. "
+                        "Build adjoint sources through SimulationData or pass simulation_bounds."
+                    )
+                lower = float(simulation_bounds[0][axis] - source_geo.center[axis])
+                upper = float(simulation_bounds[1][axis] - source_geo.center[axis])
+
+            support_bounds[dim] = (lower, upper)
+        return support_bounds
+
+    @staticmethod
+    def _adjoint_component_support_bounds(
+        field: ScalarFieldDataArray,
+        dim: str,
+        single_sample_bounds: dict[str, tuple[float, float]],
+    ) -> tuple[float, float]:
+        """Return physical support bounds for one component along a source axis."""
+        coords = np.asarray(field.coords[dim], dtype=float)
+        if coords.size == 1:
+            return single_sample_bounds[dim]
+
+        cell_sizes = Coords(
+            **{axis_dim: np.asarray(field.coords[axis_dim], dtype=float) for axis_dim in "xyz"}
+        ).cell_sizes
+        widths = np.asarray(cell_sizes[dim], dtype=float)
+        lower_edges = coords - 0.5 * widths
+        upper_edges = coords + 0.5 * widths
+        return float(np.min(lower_edges)), float(np.max(upper_edges))
 
 
 class PointCloudFieldData(MonitorData, PointCloudFieldDataset):

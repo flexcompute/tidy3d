@@ -783,6 +783,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         grid_cfg = config.adjoint
         num_pts_circumference = int(np.ceil(grid_cfg.points_per_wavelength * wvls_in_circumference))
         num_pts_circumference = max(3, num_pts_circumference)
+        # Preserve antipodal and coordinate-axis reflection pairs in the circle quadrature.
+        num_pts_circumference += num_pts_circumference % 2
 
         # construct equivalent polyslab and compute the derivatives
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)

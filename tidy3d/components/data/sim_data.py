@@ -19,6 +19,9 @@ from flex_em.numerical.raw import source_normalization as source_normalization_n
 from pydantic import Field
 
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
+from tidy3d.components.autograd.source_factory import (
+    fold_adjoint_current_source_samples_outside_bounds,
+)
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import (
     _LAZY_PROXY_UNHANDLED,
@@ -43,6 +46,7 @@ from tidy3d.log import log
 from .data_array import FreqDataArray, TimeDataArray, _TracedDataset
 from .monitor_data import (
     AbstractFieldData,
+    FieldData,
     FieldStructureData,
     FieldTimeData,
     PointCloudFieldData,
@@ -1708,9 +1712,18 @@ class SimulationData(AbstractYeeGridSimulationData):
         sources_adj_all = defaultdict(list)
         for data_index, dataset_names in adj_src_map.items():
             mnt_data = self.data[data_index]
-            sources_adj = mnt_data._make_adjoint_sources(
-                dataset_names=dataset_names, fwidth=self._fwidth_adj
-            )
+            source_kwargs = {"dataset_names": dataset_names, "fwidth": self._fwidth_adj}
+            if isinstance(mnt_data, FieldData):
+                source_kwargs["simulation_bounds"] = self.simulation.bounds
+            sources_adj = mnt_data._make_adjoint_sources(**source_kwargs)
+            sources_adj = [
+                fold_adjoint_current_source_samples_outside_bounds(
+                    source,
+                    simulation_bounds=self.simulation.bounds,
+                    num_pml_layers=self.simulation.num_pml_layers,
+                )
+                for source in sources_adj
+            ]
             log.info(
                 f"Created {len(sources_adj)} adjoint sources for monitor '{mnt_data.monitor.name}'."
             )

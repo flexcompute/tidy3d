@@ -26,7 +26,8 @@ from tidy3d.components.source.field import (
     PlaneWave,
 )
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.constants import C_0, EPSILON_0, ETA_0
+from tidy3d.constants import C_0, EPSILON_0, ETA_0, fp_eps
+from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
     from tidy3d import Source
@@ -186,6 +187,98 @@ def current_component_data_array(
     if np.all(values == 0):
         return None
     return ScalarFieldDataArray(values, coords=coords)
+
+
+def fold_adjoint_current_source_samples_outside_bounds(
+    source: Source,
+    *,
+    simulation_bounds: tuple[tuple[float, float, float], tuple[float, float, float]],
+    num_pml_layers: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
+) -> Source:
+    """Fold exterior custom-current samples onto the nearest retained Yee coordinate.
+
+    Component-specific Yee coordinates can extend slightly beyond a simulation bound.
+    On axes with absorbing simulation boundaries, accumulate those samples onto the
+    closest coordinate that is not exterior so their contribution is not discarded.
+    Coordinates within floating-point tolerance of the interface are retained in place.
+    """
+    if not isinstance(source, CustomCurrentSource):
+        return source
+
+    folded_components = {}
+    for component, field in source.current_dataset.field_components.items():
+        fold_axes = []
+        for axis, dim in enumerate("xyz"):
+            global_coords = np.asarray(field.coords[dim], dtype=float) + source.center[axis]
+            lower_exterior = np.zeros(global_coords.shape, dtype=bool)
+            upper_exterior = np.zeros(global_coords.shape, dtype=bool)
+            if num_pml_layers[axis][0] > 0:
+                lower_exterior = global_coords < simulation_bounds[0][axis] - fp_eps
+            if num_pml_layers[axis][1] > 0:
+                upper_exterior = global_coords > simulation_bounds[1][axis] + fp_eps
+
+            exterior = lower_exterior | upper_exterior
+            if not np.any(exterior):
+                continue
+
+            retained_indices = np.flatnonzero(~exterior)
+            fold_axes.append((dim, lower_exterior, upper_exterior, retained_indices))
+
+        if not fold_axes:
+            continue
+
+        values = np.asarray(field).copy()
+        cell_sizes = Coords(
+            **{dim: np.asarray(field.coords[dim], dtype=float) for dim in "xyz"}
+        ).cell_sizes
+        for dim, lower_exterior, upper_exterior, retained_indices in fold_axes:
+            if not retained_indices.size:
+                raise AdjointError(
+                    "Cannot fold adjoint current source samples outside the simulation bounds: "
+                    f"all '{component}' samples are exterior along the '{dim}' axis for an "
+                    "absorbing simulation boundary. Move the field monitor farther inside the "
+                    "simulation domain or provide source data with at least one in-domain sample."
+                )
+
+            values_by_axis = np.moveaxis(values, field.dims.index(dim), 0)
+            widths_1d = np.asarray(cell_sizes[dim], dtype=float)
+            if widths_1d.ndim == 0:
+                widths_1d = np.ones(values_by_axis.shape[0], dtype=float) * widths_1d
+            width_shape = (widths_1d.size,) + (1,) * (values_by_axis.ndim - 1)
+            widths_by_axis = np.reshape(widths_1d, width_shape)
+            if np.any(lower_exterior):
+                retained_width = widths_1d[retained_indices[0]]
+                values_by_axis[retained_indices[0]] += (
+                    np.sum(
+                        values_by_axis[lower_exterior] * widths_by_axis[lower_exterior],
+                        axis=0,
+                    )
+                    / retained_width
+                )
+                values_by_axis[lower_exterior] = 0
+            if np.any(upper_exterior):
+                retained_width = widths_1d[retained_indices[-1]]
+                values_by_axis[retained_indices[-1]] += (
+                    np.sum(
+                        values_by_axis[upper_exterior] * widths_by_axis[upper_exterior],
+                        axis=0,
+                    )
+                    / retained_width
+                )
+                values_by_axis[upper_exterior] = 0
+            values = np.moveaxis(values_by_axis, 0, field.dims.index(dim))
+
+        folded_components[component] = field.copy(data=values)
+
+    if not folded_components:
+        if source.confine_to_bounds:
+            return source
+        return source.updated_copy(confine_to_bounds=True)
+
+    return source.updated_copy(
+        current_dataset=source.current_dataset.updated_copy(**folded_components),
+        confine_to_bounds=True,
+    )
 
 
 def point_current_source_from_simulation(

@@ -108,27 +108,45 @@ class SyntheticMonitorDataFactory:
 
         for source in self.simulation.sources:
             source_time = source.source_time
-            source_scale = source_time.amplitude * np.exp(1j * source_time.phase)
+            source_scale_base = source_time.amplitude * np.exp(1j * source_time.phase)
+            source_time_norm = source_time.updated_copy(amplitude=1.0, phase=0.0)
             if isinstance(source, td.CustomCurrentSource) and source.current_dataset is not None:
-                components = list(source.current_dataset.field_components.values())
-                if components:
-                    dataset_scale = np.sum([np.mean(comp.values) for comp in components])
-                    if dataset_scale != 0:
-                        source_scale *= dataset_scale
+                for component_name, component in sorted(
+                    source.current_dataset.field_components.items()
+                ):
+                    component_values = np.asarray(component.values)
+                    if np.all(component_values == 0):
+                        continue
+                    component_scale = np.mean(component_values)
+                    if component_scale == 0:
+                        component_scale = 1.0
+                    source_scale = source_scale_base * component_scale
+                    if not is_complex:
+                        source_scale = abs(source_scale)
+
+                    component_signature = (
+                        component_name,
+                        tuple(component.dims),
+                        tuple(component.shape),
+                    )
+                    src_hash = (
+                        f"{type(source).__name__}:{source.center}:{source.size}:"
+                        f"{component_signature}:{source_time_norm._hash_self()}"
+                    )
+                    seed = int(hashlib.md5(src_hash.encode("utf-8")).hexdigest()[:8], 16)
+                    np.random.seed(seed)
+                    contrib = self.data_gen_fn(data_shape)
+                    contrib = (1 + 0.5j) * contrib if is_complex else contrib
+                    contrib = gaussian_filter(contrib, sigma=1.0)
+                    data += contrib * source_scale
+                continue
+
+            source_scale = source_scale_base
             if not is_complex:
                 source_scale = abs(source_scale)
 
-            source_time_norm = source_time.updated_copy(amplitude=1.0, phase=0.0)
-            if isinstance(source, td.CustomCurrentSource) and source.current_dataset is not None:
-                src_hash = (
-                    f"{type(source).__name__}:{source.center}:{source.size}:"
-                    f"{source_time_norm._hash_self()}"
-                )
-                seed = int(hashlib.md5(src_hash.encode("utf-8")).hexdigest()[:8], 16)
-            else:
-                source_norm = source.updated_copy(source_time=source_time_norm)
-                seed = int(source_norm._hash_self()[:8], 16)
-
+            source_norm = source.updated_copy(source_time=source_time_norm)
+            seed = int(source_norm._hash_self()[:8], 16)
             np.random.seed(seed)
             contrib = self.data_gen_fn(data_shape)
             contrib = (1 + 0.5j) * contrib if is_complex else contrib
