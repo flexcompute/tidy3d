@@ -477,8 +477,8 @@ class TimeMonitor(Monitor, ABC):
         widening: a degenerate ``start == stop`` collapses to a single sample at ``start`` and a
         window starting past the mesh end yields no samples, matching :meth:`time_inds`."""
         tmesh = np.array(tmesh)
-        t_beg = float(self.start)
-        t_end = float(tmesh[-1]) if self.stop is None else min(float(self.stop), float(tmesh[-1]))
+        t_beg = self.start
+        t_end = float(tmesh[-1]) if self.stop is None else min(self.stop, float(tmesh[-1]))
         return (t_beg, t_end)
 
     def _time_inds_array(self, tmesh: ArrayFloat1D) -> ArrayFloat1D:
