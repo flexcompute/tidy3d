@@ -217,8 +217,8 @@ torch = [
   { index = "pypi", marker = "sys_platform == 'darwin'" },
   { index = "torch-cpu", marker = "sys_platform != 'darwin'" },
 ]
-tidy3d-extras = { path = "../../../src/Tidy3DCore/tidy3d_extras" }
-flex-em = { path = "../flex-em" }
+tidy3d-extras = { index = "codeartifact" }
+flex-em = { index = "codeartifact" }
 
 [tool.towncrier]
 directory = "changelog.d"
