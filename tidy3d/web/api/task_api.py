@@ -36,16 +36,13 @@ from tidy3d.web.cache import resolve_local_cache
 from tidy3d.web.core.constants import (
     CM_DATA_HDF5_GZ,
     MODE_DATA_HDF5_GZ,
-    MODE_FILE_HDF5_GZ,
-    MODELER_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
-    SIM_FILE_HDF5_GZ,
     SIMULATION_DATA_HDF5_GZ,
 )
 from tidy3d.web.core.s3utils import upload_file
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
-from tidy3d.web.core.types import PayType, TaskType
+from tidy3d.web.core.types import MODELER_GROUP_TASK_TYPE, MODELER_TASK_TYPES, PayType, TaskType
 from tidy3d.web.execution_cost_limit import (
     execution_flexcredit_cost_reserved,
     execution_flexcredit_limit_enabled,
@@ -115,9 +112,7 @@ DEFAULT_DATA_FILENAME = {
     TaskType.VOLUME_MESH.name: "simulation_data.hdf5",
     TaskType.MODAL_CM.name: "cm_data.hdf5",
     TaskType.TERMINAL_CM.name: "cm_data.hdf5",
-    "COMPONENT_MODELER": "cm_data.hdf5",
-    "TERMINAL_COMPONENT_MODELER": "cm_data.hdf5",
-    "RF": "cm_data.hdf5",
+    MODELER_GROUP_TASK_TYPE: "cm_data.hdf5",
 }
 
 
@@ -221,7 +216,7 @@ def _task_type_from_task(task: WebTask, task_type: str | None = None) -> str | N
     if isinstance(task_type, TaskType):
         task_type = task_type.name
     if isinstance(task, BatchTask):
-        return task_type or "RF"
+        return task_type or MODELER_GROUP_TASK_TYPE
     return task_type
 
 
@@ -286,7 +281,7 @@ def _get_task_urls(
     group_id: str | None = None,
 ) -> tuple[str, str | None]:
     """Log task and folder links to the web UI."""
-    if task_type in ["RF", "TERMINAL_CM", "MODAL_CM"]:
+    if task_type in MODELER_TASK_TYPES:
         url = _get_url_rf(group_id or resource_id)
     else:
         url = _get_url(resource_id)
@@ -623,17 +618,10 @@ def _upload(
             console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
             console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
 
-    remote_sim_file = SIM_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER":
-        remote_sim_file = MODE_FILE_HDF5_GZ
-    elif task_type in ["RF", "TERMINAL_CM", "MODAL_CM"]:
-        remote_sim_file = MODELER_FILE_HDF5_GZ
-
     task.upload_simulation(
         stub=stub,
         verbose=verbose,
         progress_callback=progress_callback,
-        remote_sim_file=remote_sim_file,
     )
     if _sidecar_artifacts is not None:
         _upload_sidecar_artifacts(resource_id, _sidecar_artifacts, verbose=verbose)
@@ -1223,19 +1211,10 @@ def download_simulation(
     if isinstance(task, BatchTask):
         raise NotImplementedError("Operation not implemented for modeler batches.")
 
-    task_type = _task_type_from_task(task)
-    if task_type is None:
-        info = get_info(task_id, verbose=False)
-        task_type = getattr(info, "taskType", None)
-
-    remote_sim_file = (
-        MODE_FILE_HDF5_GZ if task_type == TaskType.MODE_SOLVER.name else SIM_FILE_HDF5_GZ
-    )
     task.get_simulation_hdf5(
         path,
         verbose=verbose,
         progress_callback=progress_callback,
-        remote_sim_file=remote_sim_file,
     )
 
 

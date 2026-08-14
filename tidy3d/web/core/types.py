@@ -60,6 +60,21 @@ class TaskType(str, Enum):
     TERMINAL_CM = "TERMINAL_CM"
 
 
+# Server-side type of an RF-product group (batch) task, reported by the
+# ``rf/task`` endpoints. The client never uploads with this type — it only
+# reads it back — so it is deliberately not a TaskType member.
+MODELER_GROUP_TASK_TYPE = "RF"
+
+# Modeler task types the platform's rf/task endpoints recognize.
+MODELER_TASK_TYPES = frozenset(
+    {
+        TaskType.MODAL_CM.value,
+        TaskType.TERMINAL_CM.value,
+        MODELER_GROUP_TASK_TYPE,
+    }
+)
+
+
 class PayType(str, Enum):
     CREDITS = "FLEX_CREDIT"
     VGPU = "GPU_RESERVED"

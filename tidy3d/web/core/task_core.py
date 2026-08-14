@@ -20,6 +20,8 @@ from tidy3d.exceptions import ValidationError, format_chained_exception_message
 from . import http_util
 from .cache import FOLDER_CACHE
 from .constants import (
+    MODE_FILE_HDF5_GZ,
+    MODELER_FILE_HDF5_GZ,
     SIM_ERROR_FILE,
     SIM_FILE_HDF5_GZ,
     SIM_LOG_FILE,
@@ -33,7 +35,15 @@ from .http_util import get_version as _get_protocol_version
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .task_info import BatchDetail, TaskInfo
-from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
+from .types import (
+    MODELER_TASK_TYPES,
+    PayType,
+    Queryable,
+    ResourceLifecycle,
+    Submittable,
+    TaskType,
+    Tidy3DResource,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -52,6 +62,16 @@ def _serialize_additional_payload(
     if additional_payload is None or isinstance(additional_payload, str):
         return additional_payload
     return json.dumps(additional_payload)
+
+
+def remote_spec_file(task_type: str | None) -> str:
+    """Remote name a task's specification is stored under, determined by its task
+    type; unknown task types fall back to the standard simulation artifact."""
+    if task_type == TaskType.MODE_SOLVER.value:
+        return MODE_FILE_HDF5_GZ
+    if task_type in MODELER_TASK_TYPES:
+        return MODELER_FILE_HDF5_GZ
+    return SIM_FILE_HDF5_GZ
 
 
 class Folder(Tidy3DResource, Queryable, extra="allow"):
@@ -207,7 +227,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             simulation_type = "tidy3d"
 
         folder = Folder.get(folder_name, create=True)
-        if task_type in ["RF", "TERMINAL_CM", "MODAL_CM"]:
+        if task_type in MODELER_TASK_TYPES:
             payload = {
                 "groupName": task_name,
                 "folderId": folder.folder_id,
@@ -541,7 +561,7 @@ class SimulationTask(WebTask):
         stub: TaskStub,
         verbose: bool = True,
         progress_callback: Callable[[float], None] | None = None,
-        remote_sim_file: PathLike = SIM_FILE_HDF5_GZ,
+        remote_sim_file: PathLike | None = None,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
 
@@ -553,11 +573,16 @@ class SimulationTask(WebTask):
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called while uploading the data.
+        remote_sim_file : PathLike | None = None
+            Remote name to store the specification under; resolved from the
+            task type when ``None``.
         """
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
         if not stub:
             raise WebError("Expected field 'simulation' is unset.")
+        if remote_sim_file is None:
+            remote_sim_file = remote_spec_file(self.task_type)
         # Also upload hdf5.gz containing all data.
         file, file_name = tempfile.mkstemp()
         os.close(file)
@@ -708,7 +733,7 @@ class SimulationTask(WebTask):
         to_file: PathLike,
         verbose: bool = True,
         progress_callback: Callable[[float], None] | None = None,
-        remote_sim_file: PathLike = SIM_FILE_HDF5_GZ,
+        remote_sim_file: PathLike | None = None,
     ) -> pathlib.Path:
         """Get simulation.hdf5 file from Server.
 
@@ -720,6 +745,9 @@ class SimulationTask(WebTask):
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called while downloading the data.
+        remote_sim_file : PathLike | None = None
+            Remote name the specification is stored under; resolved from the
+            task type when ``None``.
 
         Returns
         -------
@@ -728,6 +756,8 @@ class SimulationTask(WebTask):
         """
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
+        if remote_sim_file is None:
+            remote_sim_file = remote_spec_file(self.task_type)
 
         target_path = pathlib.Path(to_file)
 
