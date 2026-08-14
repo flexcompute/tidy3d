@@ -21,10 +21,55 @@ from tidy3d.plugins.klayout.drc.defaults import (
     DEFAULT_RESULTSFILE,
     DEFAULT_VERBOSE,
 )
-from tidy3d.plugins.klayout.drc.results import DRCResults
+from tidy3d.plugins.klayout.drc.results import DRCResults, _validate_result_limits
 from tidy3d.plugins.klayout.util import check_installation
 
 SUPPORTED_DRC_SUFFIXES: frozenset[str] = frozenset({".drc", ".lydrc"})
+
+
+def _validate_drc_args(value: Any) -> dict[str, str]:
+    """Coerce DRC arguments to strings and reject reserved keys."""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValidationError("drc_args must be a mapping of keys to values.")
+    try:
+        drc_args = {str(key): str(item) for key, item in value.items()}
+    except Exception as error:
+        raise ValidationError(
+            format_chained_exception_message(
+                "Could not coerce keys and values of drc_args to strings",
+                error,
+            )
+        ) from error
+
+    reserved_keys = {"gdsfile", "resultsfile"}
+    conflicts = reserved_keys.intersection(drc_args)
+    if conflicts:
+        conflict_str = ", ".join(sorted(conflicts))
+        raise ValidationError(
+            f"Invalid DRC argument key(s) {conflict_str}: these names are reserved and "
+            "automatically managed by Tidy3D."
+        )
+    return drc_args
+
+
+def _validate_drc_runset_format(drc_runset: Path) -> None:
+    """Validate the source and report declarations required by the DRC runner."""
+    with drc_runset.open("r") as file:
+        content = file.read()
+    if not re.search(r"source\(\s*\$gdsfile\s*\)", content):
+        raise ValidationError(
+            "DRC runset is not formatted correctly. The GDS source must be loaded with "
+            "'source($gdsfile)'. Please refer to the documentation at "
+            "'tidy3d/plugins/klayout/drc/README.md' for more details."
+        )
+    if not re.search(r"""report\(['"](.*?)['"],\s*\$resultsfile\)""", content):
+        raise ValidationError(
+            "DRC runset is not formatted correctly. The report must be defined as "
+            "'report(\"<your report name>\", $resultsfile)'. Please refer to the documentation at "
+            "'tidy3d/plugins/klayout/drc/README.md' for more details."
+        )
 
 
 class DRCConfig(Tidy3dBaseModel):
@@ -78,51 +123,14 @@ class DRCConfig(Tidy3dBaseModel):
         1. The GDS source must be loaded with 'source($gdsfile)'.
         2. The report must be defined as 'report("<your string>", $resultsfile)'.
         """
-        with Path(v).open("r") as f:
-            content = f.read()
-            if not re.search(r"source\(\s*\$gdsfile\s*\)", content):
-                raise ValidationError(
-                    "DRC runset is not formatted correctly. The GDS source must be loaded with 'source($gdsfile)'. Please refer to the documentation at 'tidy3d/plugins/klayout/drc/README.md' for more details."
-                )
-            if not re.search(r"""report\(['"](.*?)['"],\s*\$resultsfile\)""", content):
-                raise ValidationError(
-                    "DRC runset is not formatted correctly. The report must be defined as 'report(\"<your report name>\", $resultsfile)'. Please refer to the documentation at 'tidy3d/plugins/klayout/drc/README.md' for more details."
-                )
+        _validate_drc_runset_format(Path(v))
         return v
 
     @field_validator("drc_args", mode="before")
     @classmethod
-    def _validate_drc_args_stringable(cls, v: Any) -> dict[str, str]:
-        """Coerce all keys and values in drc_args to strings."""
-        if v is None:
-            return {}
-        if not isinstance(v, Mapping):
-            raise ValidationError("drc_args must be a mapping of keys to values.")
-        try:
-            v = {str(k): str(v) for k, v in v.items()}
-        except Exception as e:
-            raise ValidationError(
-                format_chained_exception_message(
-                    "Could not coerce keys and values of drc_args to strings", e
-                )
-            ) from e
-        return v
-
-    @field_validator("drc_args")
-    @classmethod
-    def _validate_drc_args_reserved(cls, v: dict[str, str]) -> dict[str, str]:
-        """Ensure user arguments do not override the reserved keys."""
-
-        reserved_keys = {"gdsfile", "resultsfile"}
-        conflicts = reserved_keys.intersection(v)
-        if conflicts:
-            conflict_str = ", ".join(sorted(conflicts))
-            raise ValidationError(
-                f"Invalid DRC argument key(s) {conflict_str}: these names are reserved and automatically "
-                "managed by Tidy3D."
-            )
-
-        return v
+    def _validate_drc_args_field(cls, value: Any) -> dict[str, str]:
+        """Apply the shared DRC argument validation contract."""
+        return _validate_drc_args(value)
 
 
 class DRCRunner(Tidy3dBaseModel):
@@ -169,6 +177,7 @@ class DRCRunner(Tidy3dBaseModel):
         resultsfile: Path = DEFAULT_RESULTSFILE,
         drc_args: dict[str, str] | None = None,
         max_results: int | None = None,
+        max_results_per_cell: int | None = None,
         **to_gds_file_kwargs: Any,
     ) -> DRCResults:
         """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a
@@ -189,6 +198,9 @@ class DRCRunner(Tidy3dBaseModel):
         max_results : Optional[int]
             Maximum number of markers to load from the results file. ``None`` (default) loads all
             markers.
+        max_results_per_cell : Optional[int]
+            Maximum number of markers to load for each cell. Cannot be combined
+            with ``max_results``.
         **to_gds_file_kwargs
             Additional keyword arguments to pass to the Tidy3D object-specific ``to_gds_file()`` method.
 
@@ -214,6 +226,11 @@ class DRCRunner(Tidy3dBaseModel):
         >>> results = runner.run(source=geom, z=0.1, gds_layer=0, gds_dtype=0) # doctest: +SKIP
         >>> print(results) # doctest: +SKIP
         """
+        _validate_result_limits(
+            max_results=max_results,
+            max_results_per_cell=max_results_per_cell,
+        )
+
         if isinstance(source, (Geometry, Structure, Simulation)):
             gdsfile = td_object_gds_savefile
             if self.verbose:
@@ -233,10 +250,15 @@ class DRCRunner(Tidy3dBaseModel):
         return run_drc_on_gds(
             config=config,
             max_results=max_results,
+            max_results_per_cell=max_results_per_cell,
         )
 
 
-def run_drc_on_gds(config: DRCConfig, max_results: int | None = None) -> DRCResults:
+def run_drc_on_gds(
+    config: DRCConfig,
+    max_results: int | None = None,
+    max_results_per_cell: int | None = None,
+) -> DRCResults:
     """Runs KLayout's DRC on a GDS file.
 
     Parameters
@@ -246,6 +268,9 @@ def run_drc_on_gds(config: DRCConfig, max_results: int | None = None) -> DRCResu
     max_results : Optional[int]
         Maximum number of markers to load from the results file. ``None`` (default) loads all
         markers.
+    max_results_per_cell : Optional[int]
+        Maximum number of markers to load for each cell. Cannot be combined
+        with ``max_results``.
 
     Returns
     -------
@@ -259,6 +284,10 @@ def run_drc_on_gds(config: DRCConfig, max_results: int | None = None) -> DRCResu
     >>> results = run_drc_on_gds(config) # doctest: +SKIP
     >>> print(results) # doctest: +SKIP
     """
+    _validate_result_limits(
+        max_results=max_results,
+        max_results_per_cell=max_results_per_cell,
+    )
     klayout_cmd = check_installation(raise_error=True)
 
     if config.verbose:
@@ -292,4 +321,5 @@ def run_drc_on_gds(config: DRCConfig, max_results: int | None = None) -> DRCResu
     return DRCResults.load(
         resultsfile=config.resultsfile,
         max_results=max_results,
+        max_results_per_cell=max_results_per_cell,
     )

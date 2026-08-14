@@ -48,6 +48,7 @@ from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffM
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
 from tidy3d.components.tcad.generation_recombination import (
     PalankovskiQuayApproxCarrierLifetime,
+    SelberherrImpactIonization,
     ShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.grid import (
@@ -57,10 +58,12 @@ from tidy3d.components.tcad.grid import (
 )
 from tidy3d.components.tcad.mobility import MasettiMobility
 from tidy3d.components.tcad.monitors.charge import (
+    SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyFreeCarrierMonitor,
+    SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
@@ -127,6 +130,8 @@ ChargeMonitorTypes = (
     SteadyCapacitanceMonitor,
     SteadyCurrentDensityMonitor,
     SteadyChargeResidualMonitor,
+    SteadyGenerationRecombinationMonitor,
+    SelfHeatingMonitor,
 )
 
 AnalysisSpecType = ElectricalAnalysisType | UnsteadyHeatAnalysis
@@ -550,7 +555,12 @@ class HeatChargeSimulation(AbstractSimulation):
             ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
         )
         simulation_types = self._check_simulation_types()
-        self._call_with_validation_loc(("monitors",), self._validate_residual_monitor_requirements)
+        self._call_with_validation_loc(
+            ("monitors",), self._validate_accelerated_only_monitor_requirements
+        )
+        self._call_with_validation_loc(
+            ("monitors",), self._validate_self_heating_monitor_requirements
+        )
         if TCADAnalysisTypes.CHARGE in simulation_types:
             self._call_with_validation_loc(
                 ("boundary_spec",), self._check_charge_simulation_voltage_bcs
@@ -570,12 +580,16 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._warn_non_accelerated_ignores_electron_affinity
             )
+        # Ahead of '_not_all_neumann', whose generic message would hide the real mistake when
+        # a 'HeatFromElectricSource' has no heat BCs.
+        self._call_with_validation_loc(("sources",), self._check_charge_heat_coupling_unsupported)
+        self._call_with_validation_loc(("sources",), self._check_coupling_source_can_be_applied)
+        self._call_with_validation_loc(("sources",), self._warn_coupling_source_is_no_op)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
         self._call_with_validation_loc(("sources",), self._names_exist_sources)
         self._call_with_validation_loc(("structures",), self._check_medium_specs)
-        self._call_with_validation_loc(("sources",), self._check_coupling_source_can_be_applied)
         if TCADAnalysisTypes.HEAT in simulation_types:
             self._call_with_validation_loc(("monitors",), self._check_heat_sim)
         if TCADAnalysisTypes.CONDUCTION in simulation_types:
@@ -961,7 +975,7 @@ class HeatChargeSimulation(AbstractSimulation):
         if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in self.monitors):
             raise SetupError(
                 "Charge simulations require the definition of, at least, one of these monitors: "
-                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor, SteadyChargeResidualMonitor]' "
+                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor, SteadyChargeResidualMonitor, SteadyGenerationRecombinationMonitor, SelfHeatingMonitor]' "
                 "but none have been defined."
             )
         # NOTE: in Charge we're only supporting unstructured monitors.
@@ -975,16 +989,21 @@ class HeatChargeSimulation(AbstractSimulation):
                     )
         return self
 
-    def _validate_residual_monitor_requirements(self) -> Self:
-        """SteadyChargeResidualMonitor requires charge analysis and the accelerated solver."""
+    def _validate_accelerated_only_monitor_requirements(self) -> Self:
+        """Validate monitors that exist only on the accelerated charge solver.
+
+        ``SteadyChargeResidualMonitor`` and ``SteadyGenerationRecombinationMonitor``
+        require a configured charge analysis and the accelerated solver."""
+        accelerated_only = (SteadyChargeResidualMonitor, SteadyGenerationRecombinationMonitor)
         simulation_types = self._check_simulation_types()
         charge_configured = TCADAnalysisTypes.CHARGE in simulation_types
         for idx, mnt in enumerate(self.monitors):
-            if not isinstance(mnt, SteadyChargeResidualMonitor):
+            if not isinstance(mnt, accelerated_only):
                 continue
+            mnt_type = type(mnt).__name__
             if not charge_configured:
                 self._raise_validation_error_at_loc(
-                    "'SteadyChargeResidualMonitor' is only available when a charge analysis "
+                    f"'{mnt_type}' is only available when a charge analysis "
                     "is configured (the simulation must include voltage BCs and a "
                     "'SteadyChargeDCAnalysis' or derivative analysis spec).",
                     "monitors",
@@ -992,7 +1011,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
             if self.use_accelerated_solver is False:
                 self._raise_validation_error_at_loc(
-                    f"'SteadyChargeResidualMonitor' (monitor '{mnt.name}') is only available "
+                    f"'{mnt_type}' (monitor '{mnt.name}') is only available "
                     "through the accelerated charge solver, but 'use_accelerated_solver=False' "
                     "was set. Remove the monitor or use the accelerated solver (the default).",
                     "monitors",
@@ -1419,25 +1438,121 @@ class HeatChargeSimulation(AbstractSimulation):
                     simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         for source in self.sources:
-            if isinstance(source, HeatSourceTypes):
-                simulation_types.append(TCADAnalysisTypes.HEAT)
+            if not isinstance(source, HeatSourceTypes):
+                continue
+            # A non-isothermal charge analysis ignores 'HeatFromElectricSource'
+            # (_warn_coupling_source_is_no_op), so it must not contribute a HEAT type
+            # either: that would subject the user to the heat-only checks -- a required
+            # 'TemperatureMonitor', not-all-Neumann -- on account of a source that does
+            # nothing, right after being told it is ignored.
+            if isinstance(source, HeatFromElectricSource) and self._thermal_solver_active:
+                continue
+            simulation_types.append(TCADAnalysisTypes.HEAT)
 
         return set(simulation_types)
 
     def _check_coupling_source_can_be_applied(self) -> Self:
-        """Error if material doesn't have the right specifications"""
+        """Error if 'HeatFromElectricSource' has no conduction solve to draw heating from."""
 
         HeatSourceTypes_noCoupling = (UniformHeatSource, HeatSource)
 
+        # Exclude the source itself: it must not establish the HEAT type it is validated
+        # against.
         simulation_types = self._check_simulation_types(HeatSourceTypes=HeatSourceTypes_noCoupling)
-        simulation_types = list(simulation_types)
 
-        for source in self.sources:
-            if isinstance(source, HeatFromElectricSource) and len(simulation_types) < 2:
-                raise SetupError(
-                    f"Using 'HeatFromElectricSource' requires the definition of both "
-                    f"{TCADAnalysisTypes.CONDUCTION.name} and {TCADAnalysisTypes.HEAT.name}. "
-                    f"The current simulation setup contains only conditions of type {simulation_types[0].name}"
+        # Charge is rejected with a specific message elsewhere; let that one win.
+        if TCADAnalysisTypes.CHARGE in simulation_types:
+            return self
+
+        if (
+            TCADAnalysisTypes.HEAT in simulation_types
+            and TCADAnalysisTypes.CONDUCTION in simulation_types
+        ):
+            return self
+
+        for index, source in enumerate(self.sources):
+            if not isinstance(source, HeatFromElectricSource):
+                continue
+            present = ", ".join(sorted(sim_type.name for sim_type in simulation_types)) or "none"
+            self._raise_validation_error_at_loc(
+                f"Using 'HeatFromElectricSource' requires both "
+                f"{TCADAnalysisTypes.CONDUCTION.name} and {TCADAnalysisTypes.HEAT.name}, "
+                "since the conduction solve supplies the volumetric heating the heat solve "
+                f"consumes. The current simulation setup defines: {present}.",
+                "sources",
+                index,
+            )
+
+        return self
+
+    def _check_charge_heat_coupling_unsupported(self) -> Self:
+        """Reject 'HeatFromElectricSource' in a charge simulation; the bias is ambiguous.
+
+        Non-isothermal specs are excluded: there the source is redundant rather than
+        ambiguous, and ``_warn_coupling_source_is_no_op`` warns instead.
+        """
+        if not isinstance(self.analysis_spec, ChargeTypes) or self._thermal_solver_active:
+            return self
+
+        for index, source in enumerate(self.sources):
+            if not isinstance(source, HeatFromElectricSource):
+                continue
+            self._raise_validation_error_at_loc(
+                "'HeatFromElectricSource' cannot drive a heat simulation from a charge "
+                "simulation. A charge simulation solves at a list of bias points while a "
+                "heat simulation solves once, so the bias the temperature would correspond "
+                "to is ambiguous. Record the charge simulation's self-heating with a "
+                "'SelfHeatingMonitor' instead, then pass the bias point you want to a "
+                "separate heat simulation: "
+                '\'HeatSource(rate=data["self_heat"].to_spatial_data_array('
+                "bounds=..., resolution=..., voltage=...), structures=[...])'.",
+                "sources",
+                index,
+            )
+
+        return self
+
+    def _warn_coupling_source_is_no_op(self) -> Self:
+        """Warn that 'HeatFromElectricSource' does nothing on a non-isothermal charge sim."""
+        if not self._thermal_solver_active:
+            return self
+        if not any(isinstance(source, HeatFromElectricSource) for source in self.sources):
+            return self
+
+        log.warning(
+            "'HeatFromElectricSource' is ignored in a non-isothermal charge simulation. "
+            f"'{type(self.analysis_spec).__name__}' already couples self-heating to the "
+            "temperature field self-consistently, so the source adds nothing. It can be "
+            "removed."
+        )
+        return self
+
+    def _validate_self_heating_monitor_requirements(self) -> Self:
+        """'SelfHeatingMonitor' requires an electric (charge or conduction) analysis."""
+        simulation_types = self._check_simulation_types()
+        charge_configured = TCADAnalysisTypes.CHARGE in simulation_types
+        electric_configured = charge_configured or TCADAnalysisTypes.CONDUCTION in simulation_types
+
+        for index, mnt in enumerate(self.monitors):
+            if not isinstance(mnt, SelfHeatingMonitor):
+                continue
+            if not electric_configured:
+                self._raise_validation_error_at_loc(
+                    f"'SelfHeatingMonitor' (monitor '{mnt.name}') records the volumetric "
+                    "heating produced by an electric solve, so it is only available when a "
+                    f"{TCADAnalysisTypes.CHARGE.name} or {TCADAnalysisTypes.CONDUCTION.name} "
+                    "analysis is configured. A heat-only simulation generates no self-heating.",
+                    "monitors",
+                    index,
+                )
+            if charge_configured and self.use_accelerated_solver is False:
+                self._raise_validation_error_at_loc(
+                    f"'SelfHeatingMonitor' (monitor '{mnt.name}') is only available in a "
+                    f"{TCADAnalysisTypes.CHARGE.name} simulation through the accelerated "
+                    "charge solver, but 'use_accelerated_solver=False' was set. Remove the "
+                    "monitor or use the accelerated solver (the default).",
+                    "monitors",
+                    index,
                 )
 
         return self
@@ -2701,6 +2816,14 @@ class HeatChargeSimulation(AbstractSimulation):
                 for tau in (model.tau_n, model.tau_p):
                     if isinstance(tau, PalankovskiQuayApproxCarrierLifetime):
                         return True
+        return False
+
+    def _uses_impact_ionization(self) -> bool:
+        """Whether any semiconductor medium enables an impact-ionization model."""
+        for _loc, charge in self._iter_semiconductor_charge_media():
+            for model in charge.R:
+                if isinstance(model, SelberherrImpactIonization):
+                    return True
         return False
 
     def _check_masetti_mobility_models(self) -> Self:

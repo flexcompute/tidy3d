@@ -12,6 +12,7 @@ import subprocess
 from typing import Any
 
 import click
+import toml
 
 from .index import develop
 from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_install_directory
@@ -33,6 +34,112 @@ __all__ = [
 def activate_uv_python() -> None:
     """Ensure uv is available from the current shell."""
     echo_and_check_subprocess(["uv", "--version"])
+
+
+def _canonicalize_package_name(package_name: str) -> str:
+    """Return the normalized spelling used to compare Python distribution names."""
+    return re.sub(r"[-_.]+", "-", package_name).lower()
+
+
+def _declared_requirement(package_name: str, *, extra: str | None = None) -> str:
+    """Return one package requirement declared by the Tidy3D project."""
+    pyproject_path = get_install_directory() / "pyproject.toml"
+    if not pyproject_path.is_file():
+        raise OSError(
+            f"Could not find {pyproject_path}. Run this development command from a Tidy3D "
+            "source checkout."
+        )
+
+    pyproject = toml.load(pyproject_path)
+    if extra is None:
+        requirements = pyproject.get("project", {}).get("dependencies", [])
+        declaration_location = "project.dependencies"
+    else:
+        requirements = pyproject.get("project", {}).get("optional-dependencies", {}).get(extra, [])
+        declaration_location = f"project.optional-dependencies.{extra}"
+
+    canonical_package_name = _canonicalize_package_name(package_name)
+    matches = []
+    for requirement in requirements:
+        name_match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", requirement)
+        if name_match and _canonicalize_package_name(name_match.group(1)) == canonical_package_name:
+            matches.append(requirement)
+
+    if len(matches) != 1:
+        raise OSError(
+            f"Expected exactly one {package_name} requirement in {declaration_location}, "
+            f"found {matches!r}."
+        )
+    return matches[0]
+
+
+def _get_uv_project_python() -> str:
+    """Return the Python executable from the already-synchronized uv environment."""
+    result = echo_and_run_subprocess(
+        ["uv", "run", "--frozen", "--no-sync", "python", "-c", "import sys; print(sys.executable)"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    project_python = result.stdout.strip()
+    if not project_python:
+        raise OSError("uv did not report a Python executable for the Tidy3D environment.")
+    return project_python
+
+
+def _install_internal_dependencies(*, include_extras: bool = False) -> str:
+    """Install dependencies intentionally excluded from ``uv.lock`` and validate the result."""
+    project_python = _get_uv_project_python()
+    flex_em_source = get_install_directory().parent / "flex-em"
+
+    if (flex_em_source / "pyproject.toml").is_file():
+        flex_em_install = [
+            "--no-sources",
+            "--no-config",
+            "--editable",
+            str(flex_em_source),
+        ]
+    else:
+        flex_em_install = [_declared_requirement("flex-em")]
+
+    echo_and_check_subprocess(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            project_python,
+            "--no-deps",
+            "--reinstall-package",
+            "flex-em",
+            *flex_em_install,
+        ]
+    )
+
+    if include_extras:
+        echo_and_check_subprocess(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                project_python,
+                "--no-deps",
+                "--reinstall-package",
+                "tidy3d-extras",
+                _declared_requirement("tidy3d-extras", extra="extras"),
+            ]
+        )
+
+    _verify_uv_environment(project_python)
+    return project_python
+
+
+def _verify_uv_environment(project_python: str | None = None) -> None:
+    """Check required dependencies, including packages excluded from ``uv.lock``."""
+    if project_python is None:
+        project_python = _get_uv_project_python()
+    echo_and_check_subprocess(["uv", "pip", "check", "--python", project_python])
 
 
 def verify_pandoc_is_installed_and_version_less_than_3() -> bool:
@@ -204,10 +311,14 @@ def install_development_environment(args: Any = None) -> None:
             "command again. You can also follow our detailed instructions under the development guide."
         )
 
-    # Install all development dependencies from the lockfile.
+    # Internal dependencies are deliberately outside uv.lock. Run an exact public sync, then
+    # reinstall and validate the excluded packages explicitly.
     activate_uv_python()
-    echo_and_check_subprocess(["uv", "sync", "--frozen", "--extra", "dev"])
-    echo_and_check_subprocess(["uv", "run", "--frozen", "pre-commit", "install"])
+    echo_and_check_subprocess(
+        ["uv", "sync", "--frozen", "--extra", "dev", "--no-install-package", "flex-em"]
+    )
+    _install_internal_dependencies()
+    echo_and_check_subprocess(["uv", "run", "--frozen", "--no-sync", "pre-commit", "install"])
 
     return 0
 
@@ -234,7 +345,19 @@ def install_in_uv(env: str = "dev") -> int:
         The extra option to pass to uv for installation. Defaults to 'dev'.
     """
     activate_uv_python()
-    echo_and_run_subprocess(["uv", "sync", "--frozen", "--extra", env])
+    sync_command = [
+        "uv",
+        "sync",
+        "--frozen",
+        "--extra",
+        env,
+        "--no-install-package",
+        "flex-em",
+    ]
+    if env == "extras":
+        sync_command.extend(["--no-install-package", "tidy3d-extras"])
+    echo_and_check_subprocess(sync_command)
+    _install_internal_dependencies(include_extras=env == "extras")
     return 0
 
 
@@ -335,9 +458,20 @@ def verify_development_environment(args: Any = None) -> int:
     verify_pandoc_is_installed_and_version_less_than_3()
     # Dry run uv sync to verify lockfile compatibility.
     activate_uv_python()
-    echo_and_check_subprocess(["uv", "sync", "--frozen", "--extra", "dev", "--dry-run"])
+    echo_and_check_subprocess(
+        [
+            "uv",
+            "sync",
+            "--frozen",
+            "--extra",
+            "dev",
+            "--no-install-package",
+            "flex-em",
+            "--dry-run",
+        ]
+    )
     print(
-        "'uv sync --frozen --extra dev' dry run on the 'uv.lock' complete.\n"
-        "Manually verify packages are properly installed."
+        "'uv sync --frozen --extra dev --no-install-package flex-em' dry run on the "
+        "'uv.lock' complete."
     )
     return 0

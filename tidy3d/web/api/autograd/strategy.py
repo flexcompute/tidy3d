@@ -305,14 +305,14 @@ def _execute_prepared_adjoint_batch(
     return prepared.sim_fields_vjp_dict
 
 
-def _postprocess_adj_for_task_context(
+def _postprocess_adj_with_inputs(
     *,
-    task_context: AdjointTaskContext,
+    postprocess_inputs: AdjointPostprocessInputs,
     sim_data_adj: td.SimulationData,
 ) -> AutogradFieldMap:
     return postprocess_adj(
         sim_data_adj=sim_data_adj,
-        postprocess_inputs=AdjointPostprocessInputs.from_adjoint_task_context(task_context),
+        postprocess_inputs=postprocess_inputs,
     )
 
 
@@ -581,9 +581,10 @@ class LocalGradientStrategy(GradientStrategy):
                 **run_kwargs_local,
             )
             td.log.info("Completed local batch adjoint simulations")
+            postprocess_inputs = AdjointPostprocessInputs.from_adjoint_task_context(task_context)
             return {
-                task_name_adj: _postprocess_adj_for_task_context(
-                    task_context=task_context,
+                task_name_adj: _postprocess_adj_with_inputs(
+                    postprocess_inputs=postprocess_inputs,
                     sim_data_adj=sim_data_adj,
                 )
                 for task_name_adj, sim_data_adj in batch_data_adj.items()
@@ -617,9 +618,16 @@ class LocalGradientStrategy(GradientStrategy):
                 path_dir=path_dir_adj,
                 **run_async_kwargs_local,
             )
+            task_names = set(task_name_mapping.values())
+            postprocess_inputs = {
+                task_name: AdjointPostprocessInputs.from_adjoint_task_context(
+                    batch_context[task_name]
+                )
+                for task_name in task_names
+            }
             return {
-                adj_task_name: _postprocess_adj_for_task_context(
-                    task_context=batch_context[task_name_mapping[adj_task_name]],
+                adj_task_name: _postprocess_adj_with_inputs(
+                    postprocess_inputs=postprocess_inputs[task_name_mapping[adj_task_name]],
                     sim_data_adj=sim_data_adj,
                 )
                 for adj_task_name, sim_data_adj in batch_data_adj.items()

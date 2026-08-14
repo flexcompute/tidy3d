@@ -84,6 +84,11 @@ class EMEMonitor(AbstractMonitor, ABC):
         "and is hard-coded for other monitors depending on their specific function.",
     )
 
+    @property
+    def _record_colocated(self) -> bool:
+        """Whether the recorded field samples are colocated to primal grid nodes."""
+        return self.colocate
+
     @abstractmethod
     def storage_size(
         self,

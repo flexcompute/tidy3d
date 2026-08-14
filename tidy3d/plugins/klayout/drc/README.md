@@ -12,6 +12,7 @@ For a full quickstart example, please see [this quickstart notebook](https://git
 - Load DRC results into a `DRCResults` data structure with `DRCResults.load()`.
 - Limit how many violation markers are loaded by passing `max_results` to `DRCRunner.run()`,
   `run_drc_on_gds()`, or `DRCResults.load()`.
+- Evaluate a complete optimizer line search with one KLayout process using `BatchedDRCChecker`.
 
 ## Prerequisites
 
@@ -148,3 +149,74 @@ argument to `DRCRunner.run()`, `run_drc_on_gds()`, or `DRCResults.load()` to ret
 100,000 markers are present so you can set an appropriate limit. When the option is set and more
 total violations are present than the limit allows, a warning indicates that the results were
 truncated before parsing individual markers.
+
+Use `max_results_per_cell` instead when every violating cell must remain represented. For example,
+`max_results_per_cell=1` loads one marker from each violating cell even when early cells contain
+many violations. `max_results` and `max_results_per_cell` are mutually exclusive.
+
+### Faster DRC Checks for Multiple Designs
+
+Starting a separate KLayout process for every design can be slow. `BatchedDRCChecker` checks
+multiple designs in one KLayout invocation and returns one validity boolean for each design. The
+designs may be controlled by different parameter values, as in an optimization line search, but
+the checker can also be used by any workflow that can export each design to GDS.
+
+Internally, the checker places each flattened layout in a uniquely named GDS subcell. It creates a
+temporary copy of the `.drc` or `.lydrc` runset beside the original containing the `deep` directive,
+leaving the user's runset unchanged while preserving relative rule-file references. A runset that
+already enables `deep` is used directly. Otherwise, its containing directory must be writable for
+the duration of the check. Hierarchical result cell names are then mapped back to the corresponding
+designs:
+
+```python
+from tidy3d.plugins.klayout import BatchedDRCChecker
+
+def export_design(design_parameters, gds_path):
+    make_geometry(design_parameters).to_gds_file(
+        fname=gds_path,
+        z=0,
+        gds_layer=1,
+        gds_dtype=0,
+    )
+
+drc_checker = BatchedDRCChecker(
+    export_design,
+    "foundry_rules.drc",
+    max_results_per_cell=1,
+)
+
+valid = drc_checker([design_a_parameters, design_b_parameters])
+# valid contains one boolean for each input design.
+```
+
+The same checker can be passed to `BacktrackingLineSearch` when the designs are candidate updates
+from an optimization. It implements the autograd plugin's `ConstraintChecker` interface, so the
+line search delegates candidate evaluation to it directly.
+
+The checker arranges candidates in a near-square grid to limit the stitched layout's coordinate
+range. It automatically separates rows and columns by
+`max(min(candidate_width, candidate_height))` across the batch. For standard distance-based checks,
+the checker detects an edge-pair whose edges belong to different candidate cells and raises instead
+of reporting either candidate as invalid. It also raises if KLayout reports a marker in `TOP` or
+another unknown cell. If the automatic separation is insufficient for a runset, use scalar checks
+instead. Because arbitrary runsets can emit custom marker geometry, this cannot diagnose every
+possible cross-candidate interaction. Per-cell result truncation can also omit a later
+cross-candidate marker after an earlier marker has been retained for that cell.
+
+Set `debug_dir` to audit failed checks. Whenever at least one candidate is invalid or checking
+raises, the checker copies the individual candidate GDS files, stitched layout, raw KLayout
+`.lyrdb`, and effective runset into a unique child of that directory. The raw report is not altered
+by `max_results_per_cell`, so it can be inspected for a suspected cross-candidate marker. The path
+is logged and is also available as `drc_checker.last_debug_dir`. Clean batches do not leave debug
+artifacts. Failed batches can produce large files, so enable this option only while diagnosing a
+problem and remove artifacts that are no longer needed.
+
+This implementation uses GDS files and the KLayout command line interface; it does not require or
+enable the `klayout.db` Python module.
+
+Spatial batching is intended for local, translation-invariant rules with a finite interaction
+distance. Whole-layout rules such as global density, connectivity, or aggregate geometry checks can
+couple otherwise separated candidates and should not use `BatchedDRCChecker`. Such rules can still
+be used with `BacktrackingLineSearch`: provide a scalar checker that runs KLayout separately for one
+parameterization and returns `results.is_clean`. Scalar checking is the line search default and
+stops after the first valid candidate.

@@ -18,16 +18,27 @@ from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.simulation import Simulation
 from tidy3d.config import config
-from tidy3d.exceptions import SetupError, WebError, format_chained_exception_message
+from tidy3d.exceptions import (
+    FlexCreditLimitExceededError,
+    SetupError,
+    WebError,
+    format_chained_exception_message,
+)
 from tidy3d.log import get_logging_console, log
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from tidy3d.version import __version__
+from tidy3d.web.api import task_api
 from tidy3d.web.api.run_options import log_deprecated_run_args, resolve_pay_type
 from tidy3d.web.core.core_config import get_logger_console
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.s3utils import download_file, download_gz_file, upload_file
 from tidy3d.web.core.task_core import Folder
-from tidy3d.web.core.types import ResourceLifecycle, Submittable
+from tidy3d.web.core.types import PayType, ResourceLifecycle, Submittable
+from tidy3d.web.execution_cost_limit import (
+    execution_flexcredit_cost_reserved,
+    execution_flexcredit_limit_enabled,
+    reserve_execution_flexcredit_costs,
+)
 
 if TYPE_CHECKING:
     import pathlib
@@ -38,7 +49,6 @@ if TYPE_CHECKING:
     import requests
     from rich.progress import TaskID
 
-    from tidy3d.web.core.types import PayType
 
 SIMULATION_JSON = "simulation.json"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
@@ -54,6 +64,84 @@ MODESOLVER_RESULT_GZ = "output/mode_solver_data.hdf5.gz"
 DEFAULT_NUM_WORKERS = 10
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 10  # in seconds
+
+
+def _create_and_upload_mode_solver_task(
+    mode_solver: ModeSolver,
+    task_name: str,
+    mode_solver_name: str,
+    folder_name: str,
+    verbose: bool,
+    progress_callback_upload: Callable[[float], None] | None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+) -> ModeSolverTask:
+    """Create and upload a legacy remote mode task without starting it."""
+    if reduce_simulation == "auto":
+        sim_mediums = mode_solver.simulation.scene.mediums
+        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
+        reduce_simulation = contains_custom
+
+        if reduce_simulation:
+            log.warning(
+                "The associated 'Simulation' object contains custom mediums. It will be "
+                "automatically restricted to the mode solver plane to reduce data for uploading. "
+                "To force uploading the original 'Simulation' object use 'reduce_simulation=False'."
+                " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
+                " silence this warning."
+            )
+
+    if reduce_simulation:
+        mode_solver = mode_solver.reduced_simulation_copy
+
+    task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
+    if verbose:
+        get_logging_console().log(
+            f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
+        )
+    task.upload(verbose=verbose, progress_callback=progress_callback_upload)
+    return task
+
+
+def _start_and_monitor_mode_solver_task(
+    task: ModeSolverTask,
+    results_file: PathLike,
+    verbose: bool,
+    progress_callback_download: Callable[[float], None] | None,
+    pay_type: PayType | str | None = None,
+) -> ModeSolverData:
+    """Start, monitor, and download an already-uploaded legacy mode task."""
+    log_level = "DEBUG" if verbose else "INFO"
+    if verbose:
+        console = get_logging_console()
+
+    task.submit(pay_type=pay_type)
+
+    # Wait for task to finish
+    prev_status = "draft"
+    status = task.status
+    while status not in ("success", "error", "diverged", "deleted"):
+        if status != prev_status:
+            log.log(log_level, f"Mode solver status: {status}")
+            if verbose:
+                console.log(f"Mode solver status: {status}")
+            prev_status = status
+        time.sleep(0.5)
+        status = task.get_info().status
+
+    if status == "error":
+        raise WebError("Error running mode solver.")
+
+    log.log(log_level, f"Mode solver status: {status}")
+    if verbose:
+        console.log(f"Mode solver status: {status}")
+
+    if status != "success":
+        # Our cache discards None, so the user is able to re-run
+        return None
+
+    return task.get_result(
+        to_file=results_file, verbose=verbose, progress_callback=progress_callback_download
+    )
 
 
 def run(
@@ -101,61 +189,21 @@ def run(
         Mode solver data with the calculated results.
     """
     log_deprecated_run_args(pay_type=pay_type)
-
-    log_level = "DEBUG" if verbose else "INFO"
-    if verbose:
-        console = get_logging_console()
-
-    if reduce_simulation == "auto":
-        sim_mediums = mode_solver.simulation.scene.mediums
-        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
-        reduce_simulation = contains_custom
-
-        if reduce_simulation:
-            log.warning(
-                "The associated 'Simulation' object contains custom mediums. It will be "
-                "automatically restricted to the mode solver plane to reduce data for uploading. "
-                "To force uploading the original 'Simulation' object use 'reduce_simulation=False'."
-                " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
-                " silence this warning."
-            )
-
-    if reduce_simulation:
-        mode_solver = mode_solver.reduced_simulation_copy
-
-    task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
-    if verbose:
-        console.log(
-            f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
-        )
-    task.upload(verbose=verbose, progress_callback=progress_callback_upload)
-    task.submit(pay_type=pay_type)
-
-    # Wait for task to finish
-    prev_status = "draft"
-    status = task.status
-    while status not in ("success", "error", "diverged", "deleted"):
-        if status != prev_status:
-            log.log(log_level, f"Mode solver status: {status}")
-            if verbose:
-                console.log(f"Mode solver status: {status}")
-            prev_status = status
-        time.sleep(0.5)
-        status = task.get_info().status
-
-    if status == "error":
-        raise WebError("Error running mode solver.")
-
-    log.log(log_level, f"Mode solver status: {status}")
-    if verbose:
-        console.log(f"Mode solver status: {status}")
-
-    if status != "success":
-        # Our cache discards None, so the user is able to re-run
-        return None
-
-    return task.get_result(
-        to_file=results_file, verbose=verbose, progress_callback=progress_callback_download
+    task = _create_and_upload_mode_solver_task(
+        mode_solver=mode_solver,
+        task_name=task_name,
+        mode_solver_name=mode_solver_name,
+        folder_name=folder_name,
+        verbose=verbose,
+        progress_callback_upload=progress_callback_upload,
+        reduce_simulation=reduce_simulation,
+    )
+    return _start_and_monitor_mode_solver_task(
+        task=task,
+        results_file=results_file,
+        verbose=verbose,
+        progress_callback_download=progress_callback_download,
+        pay_type=pay_type,
     )
 
 
@@ -216,23 +264,63 @@ def run_batch(
     if results_files is None:
         results_files = [f"mode_solver_batch_results_{i}.hdf5" for i in range(num_mode_solvers)]
 
-    def handle_mode_solver(index: int, progress: Progress, pbar: TaskID | None) -> Parallel | None:
+    if verbose:
+        console.log(f"[cyan]Running a batch of [deep_pink4]{num_mode_solvers} mode solvers.\n")
+
+        # Create the common folder before running the parallel computation
+        _ = Folder.create(folder_name=folder_name)
+
+    prepared_tasks: list[ModeSolverTask] | None = None
+    if execution_flexcredit_limit_enabled() and resolve_pay_type(None) != PayType.VGPU:
+        prepared_tasks = Parallel(n_jobs=max_workers, backend="threading")(
+            delayed(_create_and_upload_mode_solver_task)(
+                mode_solver=mode_solvers[i],
+                task_name=f"{task_name}_{i}",
+                mode_solver_name=f"mode_solver_batch_{i}",
+                folder_name=folder_name,
+                verbose=False,
+                progress_callback_upload=progress_callback_upload,
+            )
+            for i in range(num_mode_solvers)
+        )
+        reservations: dict[str, float] = {}
+        for task in prepared_tasks:
+            solver_id = task._execution_flexcredit_task_id()
+            reservations[solver_id] = task._estimate_cost_info(verbose=False).maximum
+        reserve_execution_flexcredit_costs(reservations)
+
+    def handle_mode_solver(
+        index: int, progress: Progress | None, pbar: TaskID | None
+    ) -> ModeSolverData | None:
+        prepared_task = None if prepared_tasks is None else prepared_tasks[index]
         retries = 0
         while retries <= max_retries:
             try:
-                result = run(
-                    mode_solver=mode_solvers[index],
-                    task_name=f"{task_name}_{index}",
-                    mode_solver_name=f"mode_solver_batch_{index}",
-                    folder_name=folder_name,
-                    results_file=results_files[index],
-                    verbose=False,
-                    progress_callback_upload=progress_callback_upload,
-                    progress_callback_download=progress_callback_download,
-                )
+                if prepared_task is None:
+                    result = run(
+                        mode_solver=mode_solvers[index],
+                        task_name=f"{task_name}_{index}",
+                        mode_solver_name=f"mode_solver_batch_{index}",
+                        folder_name=folder_name,
+                        results_file=results_files[index],
+                        verbose=False,
+                        progress_callback_upload=progress_callback_upload,
+                        progress_callback_download=progress_callback_download,
+                    )
+                else:
+                    task = prepared_task
+                    prepared_task = None
+                    result = _start_and_monitor_mode_solver_task(
+                        task=task,
+                        results_file=results_files[index],
+                        verbose=False,
+                        progress_callback_download=progress_callback_download,
+                    )
                 if verbose:
                     progress.update(pbar, advance=1)
                 return result
+            except FlexCreditLimitExceededError:
+                raise
             except Exception as e:
                 console.log(f"Error in mode solver {index}: {e!s}")
                 if retries < max_retries:
@@ -246,11 +334,6 @@ def run_batch(
         return None
 
     if verbose:
-        console.log(f"[cyan]Running a batch of [deep_pink4]{num_mode_solvers} mode solvers.\n")
-
-        # Create the common folder before running the parallel computation
-        _ = Folder.create(folder_name=folder_name)
-
         with Progress(console=console) as progress:
             pbar = progress.add_task("Status:", total=num_mode_solvers)
             results = Parallel(n_jobs=max_workers, backend="threading")(
@@ -486,12 +569,32 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
+        resolved_pay_type = resolve_pay_type(pay_type)
+        if execution_flexcredit_limit_enabled() and resolved_pay_type != PayType.VGPU:
+            solver_id = self._execution_flexcredit_task_id()
+            if not execution_flexcredit_cost_reserved(solver_id):
+                estimate = self._estimate_cost_info(verbose=False)
+                reserve_execution_flexcredit_costs({solver_id: estimate.maximum})
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
             {
                 "enableCaching": config.web.enable_caching,
-                "payType": resolve_pay_type(pay_type).value,
+                "payType": resolved_pay_type.value,
             },
+        )
+
+    def _execution_flexcredit_task_id(self) -> str:
+        """Return the billable mode task id used by estimation and reservation."""
+        if self.solver_id is None:
+            raise WebError("Cannot enforce the execution FlexCredit limit without a solver id.")
+        return self.solver_id
+
+    def _estimate_cost_info(self, verbose: bool = True) -> task_api.FlexCreditEstimate:
+        """Estimate the maximum cost of the billable mode task before it starts."""
+        return task_api.estimate_cost_info(
+            self._execution_flexcredit_task_id(),
+            verbose=verbose,
+            is_final_billed_cost=True,
         )
 
     def delete(self) -> None:

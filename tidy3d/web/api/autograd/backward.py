@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.spacing import SamplingResolution
     from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.geometry.utils import GeometryType
@@ -83,6 +84,24 @@ def _resolve_freq_chunk_size(
             log_once=True,
         )
     return max(1, min(n_freqs, max_freqs_by_budget))
+
+
+def _sampling_resolution_fields(
+    sampling_resolution: SamplingResolution | None,
+) -> dict[str, float | None]:
+    """Return resolved ``DerivativeInfo`` sampling fields from optional precomputed data."""
+
+    if sampling_resolution is None:
+        return {
+            "resolved_adaptive_vjp_spacing": None,
+            "resolved_material_length_scale": None,
+            "resolved_material_wavelength": None,
+        }
+    return {
+        "resolved_adaptive_vjp_spacing": sampling_resolution.spacing,
+        "resolved_material_length_scale": sampling_resolution.material_length_scale,
+        "resolved_material_wavelength": sampling_resolution.material_wavelength,
+    }
 
 
 def setup_adj(
@@ -344,6 +363,9 @@ def postprocess_adj(
                     sim_data_fwd,
                     component_index,
                     component_paths,
+                    sampling_resolution=postprocess_inputs.sampling_resolutions.get(
+                        component_index
+                    ),
                     custom_vjp=custom_vjp_lookup.get(component_index),
                 )
             )
@@ -367,6 +389,9 @@ def postprocess_adj(
                     sim_data_fwd,
                     component_index,
                     structure_paths=[],
+                    sampling_resolution=postprocess_inputs.sampling_resolutions.get(
+                        component_index
+                    ),
                     custom_vjp=None,
                     numerical_structure=numerical_structure,
                     numerical_paths=component_paths,
@@ -600,6 +625,7 @@ def _process_structure_gradients(
     sim_data_fwd: td.SimulationData,
     structure_index: int,
     structure_paths: list[tuple],
+    sampling_resolution: SamplingResolution | None,
     custom_vjp: dict[tuple[str, str], Callable[..., Any]] | None = None,
     numerical_structure: NumericalStructureConfig | None = None,
     numerical_paths: list[tuple] | None = None,
@@ -858,6 +884,7 @@ def _process_structure_gradients(
             background_medium_is_pec=structure.background_medium
             and structure.background_medium.is_pec,
             clipped_geometry=clipped_geometry,
+            **_sampling_resolution_fields(sampling_resolution),
         )
 
         if structure_paths:
@@ -939,6 +966,29 @@ def _process_structure_gradients(
                 # Numerical VJP helpers can request paths that did not go through setup_run().
                 for helper_path in helper_derivative_info.paths:
                     target_structure._resolve_autograd_route(tuple(helper_path))
+                substitutes_structure = derivative_view is not None and (
+                    derivative_view.geometry is not None or derivative_view.medium is not None
+                )
+                helper_sampling_resolution = None
+                if "geometry" in requested_sections:
+                    if not substitutes_structure and sampling_resolution is not None:
+                        # Differentiating the structure as-is, so the precomputed resolution
+                        # already describes this simulation and structure index. Reuse it: each
+                        # recompute would rebuild target_sim with a cold volumetric_structures
+                        # cache and rescan every overlapping medium, once per helper call.
+                        helper_sampling_resolution = sampling_resolution
+                    else:
+                        from tidy3d.components.autograd.spacing import adjoint_sampling_resolution
+
+                        target_structures = list(sim_orig.structures)
+                        target_structures[structure_index] = target_structure
+                        target_sim = sim_orig.updated_copy(
+                            structures=tuple(target_structures),
+                            validate=False,
+                        )
+                        helper_sampling_resolution = adjoint_sampling_resolution(
+                            target_sim, structure_index
+                        )
                 shared_interpolators = helper_derivative_info.interpolators
                 if shared_interpolators is None:
                     # Reuse per-chunk interpolators to avoid rebuilding in helper loops.
@@ -958,6 +1008,7 @@ def _process_structure_gradients(
                         if _geometry_contains_clip_operation(target_structure.geometry)
                         else None
                     ),
+                    **_sampling_resolution_fields(helper_sampling_resolution),
                     interpolators=shared_interpolators,
                     deep=False,
                 )

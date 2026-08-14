@@ -191,7 +191,7 @@ def _dot_numpy(
 ) -> np.ndarray:
     """Compute modal overlap integral.
 
-    By default computes the bidirectional overlap: 1/4 * integral(E1* x H2 + H1* x E2) dS.
+    By default computes the bidirectional overlap: 1/4 * integral(E1* x H2 + E2 x H1*) dS.
     With bidirectional=False, computes just: 1/2 * integral(E1* x H2) dS.
 
     Parameters
@@ -210,7 +210,7 @@ def _dot_numpy(
     conjugate : bool
         If True, conjugate the first set of fields (E1, H1) before computing overlap.
     bidirectional : bool
-        If True (default), computes symmetric overlap 1/4 * (E1* x H2 + H1* x E2).
+        If True (default), computes symmetric overlap 1/4 * (E1* x H2 + E2 x H1*).
         If False, computes just 1/2 * (E1* x H2).
 
     Returns
@@ -277,7 +277,7 @@ def _outer_dot_numpy(
     """Compute pairwise modal overlap matrix.
 
     Computes all elements of the overlap matrix S[i,j] = <mode_i | mode_j>.
-    By default computes the bidirectional overlap: 1/4 * integral(E1* x H2 + H1* x E2) dS.
+    By default computes the bidirectional overlap: 1/4 * integral(E1* x H2 + E2 x H1*) dS.
     With bidirectional=False, computes just: 1/2 * integral(E1* x H2) dS.
 
     Parameters
@@ -297,7 +297,7 @@ def _outer_dot_numpy(
     conjugate : bool
         If True, conjugate the first set of fields (E1, H1) before computing overlap.
     bidirectional : bool
-        If True (default), computes symmetric overlap 1/4 * (E1* x H2 + H1* x E2).
+        If True (default), computes symmetric overlap 1/4 * (E1* x H2 + E2 x H1*).
         If False, computes just 1/2 * (E1* x H2).
 
     Returns

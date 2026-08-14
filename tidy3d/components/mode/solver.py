@@ -324,6 +324,27 @@ class EigSolver(Tidy3dBaseModel):
 
         return fields, neff + 1j * keff, eps_spec
 
+    @staticmethod
+    def replace_pec_with_good_conductor(
+        material_response: ArrayComplex, pec_scaled_val: float
+    ) -> ArrayComplex:
+        """Replace the PEC entries of a permittivity or permeability tensor by a
+        high-conductivity model.
+
+        PEC is encoded as the sentinel ``pec_val``, which is real, and stays real up to rounding
+        under the real-valued Jacobian of the angled and bend coordinate transforms. A physical
+        good conductor instead reaches a large magnitude through its imaginary part
+        ``sigma / (omega * eps_0)``, which grows without bound toward low frequency. Requiring an
+        imaginary part negligible against the real one therefore selects the sentinel entries
+        alone, no matter how conductive the physical media on the plane are.
+        """
+        material_response = material_response.astype(complex)
+        is_pec = (np.abs(material_response) >= GOOD_CONDUCTOR_THRESHOLD * abs(pec_val)) & (
+            np.abs(material_response.imag) <= fp_eps * np.abs(material_response.real)
+        )
+        material_response[is_pec] = 1 + 1j * pec_scaled_val
+        return material_response
+
     @classmethod
     def solver_em(
         cls,
@@ -392,17 +413,8 @@ class EigSolver(Tidy3dBaseModel):
         pec_scaling = max(1, max([np.max(abs(f)) for f in der_mats]) ** 2)
         pec_scaled_val = min(GOOD_CONDUCTOR_CUT_OFF, pec_scaling * abs(pec_val))
 
-        # use a high-conductivity model for locations associated with a good conductor
-        def conductivity_model_for_good_conductor(
-            eps: ArrayComplex, threshold: complex = GOOD_CONDUCTOR_THRESHOLD * pec_val
-        ) -> ArrayComplex:
-            """Entries associated with 'eps' are converted to a high-conductivity model."""
-            eps = eps.astype(complex)
-            eps[np.abs(eps) >= abs(threshold)] = 1 + 1j * pec_scaled_val
-            return eps
-
-        eps_tensor = conductivity_model_for_good_conductor(eps_tensor)
-        mu_tensor = conductivity_model_for_good_conductor(mu_tensor)
+        eps_tensor = cls.replace_pec_with_good_conductor(eps_tensor, pec_scaled_val)
+        mu_tensor = cls.replace_pec_with_good_conductor(mu_tensor, pec_scaled_val)
 
         # Determine if ``eps`` and ``mu`` are diagonal or tensorial
         off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)

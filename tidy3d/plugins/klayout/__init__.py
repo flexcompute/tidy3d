@@ -4,10 +4,17 @@ This module provides integration between Tidy3D and KLayout.
 
 from __future__ import annotations
 
-from .drc import DRCConfig, DRCResults, DRCRunner, run_drc_on_gds
+from .drc import (
+    BatchedDRCChecker,
+    DRCConfig,
+    DRCResults,
+    DRCRunner,
+    run_drc_on_gds,
+)
 from .util import check_installation
 
 __all__ = [
+    "BatchedDRCChecker",
     "DRCConfig",
     "DRCResults",
     "DRCRunner",

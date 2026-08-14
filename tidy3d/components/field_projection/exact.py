@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import autograd.numpy as anp
 import numpy as np
+import xarray as xr
 from autograd import make_vjp
 from autograd.extend import defvjp, primitive
 
@@ -18,13 +19,11 @@ from .common import (
     EXACT_PROJECTION_BATCH_SIZE,
     _frequency_chunk_slices,
     _track_if_verbose,
-    _trapz_weights_1d,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    import xarray as xr
     from numpy.typing import NDArray
 
     from tidy3d.components.medium import MediumType
@@ -47,7 +46,6 @@ class _ExactProjectionStatic:
     i_omega: ArrayLikeN2F
     wavenumber: ArrayLikeN2F
     epsilon: ArrayLikeN2F
-    integration_weights: ArrayLikeN2F
 
     @property
     def num_frequencies(self) -> int:
@@ -64,7 +62,6 @@ class _ExactProjectionPrepared:
     i_omega: ArrayLikeN2F
     wavenumber: ArrayLikeN2F
     epsilon: ArrayLikeN2F
-    integration_weights: ArrayLikeN2F
     green: ArrayLikeN2F
     d_green: ArrayLikeN2F
     d_perp: ArrayLikeN2F
@@ -181,20 +178,17 @@ def _prepare_exact_surface_projection_static(
     medium: MediumType,
     frequencies: ArrayLikeN2F,
 ) -> _ExactProjectionStatic:
-    """Build point-independent exact-projection data for one source surface."""
+    """Build point-independent exact-projection data for one source surface.
+
+    The currents carry their differential areas (element currents), so the exact projection
+    is a plain sum over source points.
+    """
 
     freqs = anp.asarray(frequencies)
     pts = tuple(currents[name].values for name in ("x", "y", "z"))
 
     idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
     idx_u, idx_v = idx_uv
-
-    integration_weights = anp.ones((*tuple(len(pt) for pt in pts), 1), dtype=float)
-    for axis in (idx_u, idx_v):
-        axis_weights = _trapz_weights_1d(pts[axis])
-        reshape = [1, 1, 1, 1]
-        reshape[axis] = axis_weights.size
-        integration_weights = integration_weights * axis_weights.reshape(reshape)
 
     wavenumber = AbstractFieldProjectionData.wavenumber(frequency=freqs, medium=medium)
     wavenumber = wavenumber[None, None, None, :]
@@ -209,7 +203,6 @@ def _prepare_exact_surface_projection_static(
         i_omega=1j * 2.0 * np.pi * freqs[None, None, None, :],
         wavenumber=wavenumber,
         epsilon=EPSILON_0 * medium.eps_model(frequency=freqs)[None, None, None, :],
-        integration_weights=integration_weights,
     )
 
 
@@ -239,7 +232,6 @@ def _prepare_exact_surface_projection_point(
         i_omega=prepared.i_omega,
         wavenumber=prepared.wavenumber,
         epsilon=prepared.epsilon,
-        integration_weights=prepared.integration_weights,
         green=geometry.green,
         d_green=geometry.d_green,
         d_perp=geometry.d_perp,
@@ -284,7 +276,6 @@ def _prepare_exact_surface_projection_batch(
         i_omega=prepared.i_omega[..., None],
         wavenumber=wavenumber,
         epsilon=prepared.epsilon[..., None],
-        integration_weights=prepared.integration_weights[..., None],
         green=geometry.green,
         d_green=geometry.d_green,
         d_perp=geometry.d_perp,
@@ -326,6 +317,39 @@ def _prepare_exact_surface_currents(
             currents[f"H{cmp_2}"].data,
         ]
     )
+
+
+def _noncolocated_exact_surface_datasets(
+    surface: FieldProjectionSurface, currents: dict
+) -> list[xr.Dataset]:
+    """Split per-component non-colocated currents into the two Yee-staggered groups.
+
+    The four tangential current components live on two distinct in-plane grids: ``E{cmp_1}`` (built
+    from H along cmp_2) and ``H{cmp_2}`` (built from E along cmp_1) share one grid; ``E{cmp_2}`` and
+    ``H{cmp_1}`` share the other. The exact projection is linear in the currents, so each group is
+    returned as its own :class:`xarray.Dataset` (the complementary components zeroed) placed on its
+    own grid, and summing the two group projections -- each evaluated with the Green's function at
+    its own source positions -- reconstructs the full non-colocated result. The box-rule area is
+    already folded into the current values.
+    """
+
+    _, (cmp_1, cmp_2) = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
+    keys = (f"E{cmp_1}", f"E{cmp_2}", f"H{cmp_1}", f"H{cmp_2}")
+    groups = ((f"E{cmp_1}", f"H{cmp_2}"), (f"E{cmp_2}", f"H{cmp_1}"))
+
+    datasets = []
+    for group in groups:
+        reference = currents[group[0]]
+        variables = {}
+        for key in keys:
+            if key in group:
+                # the two components in a group share one Yee grid; reuse the reference
+                # coordinates so the Dataset aligns exactly (no float-epsilon mismatch)
+                variables[key] = reference.copy(data=currents[key].transpose(*reference.dims).data)
+            else:
+                variables[key] = xr.zeros_like(reference)
+        datasets.append(xr.Dataset(variables))
+    return datasets
 
 
 def _prepare_exact_surface_projection_chunk(
@@ -411,10 +435,7 @@ def _integrate_exact_surface_quantity(
 ) -> ArrayLikeN2F:
     """Integrate a surface quantity over the two tangential monitor axes."""
 
-    integrated = anp.sum(
-        quantity * prepared.integration_weights,
-        axis=(prepared.static.idx_u, prepared.static.idx_v),
-    )
+    integrated = anp.sum(quantity, axis=(prepared.static.idx_u, prepared.static.idx_v))
     if prepared.static.normal_axis_size == 1:
         integrated = integrated[0]
     return integrated
@@ -575,8 +596,8 @@ def _fields_for_surface_exact_vjp_impl(
     g_electric = _sph_2_car_field_components(g[0], g[1], g[2], prepared.theta_out, prepared.phi_out)
     g_magnetic = _sph_2_car_field_components(g[3], g[4], g[5], prepared.theta_out, prepared.phi_out)
 
-    g_electric_integrand = [prepared.integration_weights * item for item in g_electric]
-    g_magnetic_integrand = [prepared.integration_weights * item for item in g_magnetic]
+    g_electric_integrand = list(g_electric)
+    g_magnetic_integrand = list(g_magnetic)
     return _stack_exact_surface_current_gradients(
         *_exact_surface_adjoint_terms(g_electric_integrand, g_magnetic_integrand, prepared),
         prepared,
@@ -651,8 +672,8 @@ def _fields_for_surface_exact_batch_vjp_impl(
     g_electric = _sph_2_car_field_components(g[0], g[1], g[2], prepared.theta_out, prepared.phi_out)
     g_magnetic = _sph_2_car_field_components(g[3], g[4], g[5], prepared.theta_out, prepared.phi_out)
 
-    g_electric_integrand = [prepared.integration_weights * item for item in g_electric]
-    g_magnetic_integrand = [prepared.integration_weights * item for item in g_magnetic]
+    g_electric_integrand = list(g_electric)
+    g_magnetic_integrand = list(g_magnetic)
     return _stack_exact_surface_current_gradients(
         *_exact_surface_adjoint_terms(g_electric_integrand, g_magnetic_integrand, prepared),
         prepared,
@@ -772,13 +793,25 @@ class _ExactFieldProjectionMixin:
         y = np.reshape(y, (-1,))
         z = np.reshape(z, (-1,))
         frequencies = np.atleast_1d(self.frequencies)
+
+        # Non-colocated currents arrive as a per-component dict; split each surface into its two
+        # Yee-staggered groups so the (linear) exact projection sums their per-grid contributions.
+        # Both schemes carry the differential area baked into the currents (element currents).
+        expanded_surface_currents = []
+        for surface, currents in surface_currents:
+            if isinstance(currents, dict):
+                for group_currents in _noncolocated_exact_surface_datasets(surface, currents):
+                    expanded_surface_currents.append((surface, group_currents))
+            else:
+                expanded_surface_currents.append((surface, currents))
+
         exact_surface_currents = [
             _ExactSurfaceCurrentData(
                 surface=surface,
                 currents=currents,
                 currents_tangential=_prepare_exact_surface_currents(surface, currents),
             )
-            for surface, currents in surface_currents
+            for surface, currents in expanded_surface_currents
         ]
         freq_slices = _frequency_chunk_slices(frequencies, freq_chunk_size)
 

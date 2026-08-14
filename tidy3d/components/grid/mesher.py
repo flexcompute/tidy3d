@@ -54,6 +54,7 @@ class Mesher(Tidy3dBaseModel, ABC):
         min_steps_per_wvl: NonNegativeInt,
         dl_min: NonNegativeFloat,
         dl_max: NonNegativeFloat,
+        snapping_points: tuple[CoordinateOptional, ...] = (),
     ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
@@ -155,6 +156,39 @@ class GradedMesher(Mesher):
         else:
             min_step = np.amin(max_dl_list) / 2
 
+        # The insertion is done on lists, where inserting is a memmove rather than a reallocation
+        interval_coords = interval_coords.tolist()
+        max_dl_list = max_dl_list.tolist()
+        self._insert_snapping_points(
+            min_step=min_step,
+            axis=axis,
+            interval_coords=interval_coords,
+            max_dl_list=max_dl_list,
+            snapping_points=snapping_points,
+        )
+        return np.array(interval_coords), np.array(max_dl_list)
+
+    def _insert_snapping_points(
+        self,
+        min_step: float,
+        axis: Axis,
+        interval_coords: list[float],
+        max_dl_list: list[float],
+        snapping_points: list[CoordinateOptional],
+        interval_structs: list[list[int]] | None = None,
+    ) -> None:
+        """Insert snapping points into the interval lists in place.
+
+        ``interval_coords``, ``max_dl_list``, and, when supplied, ``interval_structs`` are
+        modified in place. Splitting an interval duplicates its structure membership, as in
+        ``insert_bbox``.
+        Interval boundaries closer than ``min_step`` to a snapping point are replaced by it
+        rather than kept alongside it.
+        """
+
+        if len(snapping_points) < 1 or len(interval_coords) == 1:
+            return
+
         for point in snapping_points:
             new_coord = point[axis]
             if new_coord is None:
@@ -163,7 +197,7 @@ class GradedMesher(Mesher):
             if new_coord >= interval_coords[-1] or new_coord <= interval_coords[0]:
                 continue
             # search insertion location
-            ind = np.searchsorted(interval_coords, new_coord, side="left")
+            ind = bisect.bisect_left(interval_coords, new_coord)
             d_1 = abs(new_coord - interval_coords[ind - 1])
             d_2 = abs(new_coord - interval_coords[ind])
             # Skip snapping_points if the distances to existing interval boundaries are
@@ -187,9 +221,10 @@ class GradedMesher(Mesher):
                 interval_coords[ind] = new_coord
                 continue
             # otherwise add the snapping point directly since there is sufficient space
-            interval_coords = np.insert(interval_coords, ind, new_coord)
-            max_dl_list = np.insert(max_dl_list, ind - 1, max_dl_list[ind - 1])
-        return interval_coords, max_dl_list
+            interval_coords.insert(ind, new_coord)
+            max_dl_list.insert(ind - 1, max_dl_list[ind - 1])
+            if interval_structs is not None:
+                interval_structs.insert(ind, interval_structs[ind - 1].copy())
 
     def parse_structures(
         self,
@@ -199,6 +234,7 @@ class GradedMesher(Mesher):
         min_steps_per_wvl: NonNegativeInt,
         dl_min: NonNegativeFloat,
         dl_max: NonNegativeFloat,
+        snapping_points: tuple[CoordinateOptional, ...] = (),
     ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
@@ -219,6 +255,10 @@ class GradedMesher(Mesher):
             Lower bound of grid size.
         dl_max: NonNegativeFloat
             Upper bound of grid size.
+        snapping_points : tuple[CoordinateOptional, ...]
+            Points made available as interval boundaries before unshadowed overrides are inserted.
+            Only consumed when the structure list contains unshadowed overrides; the full
+            insertion is done by the caller on the returned intervals.
 
         Returns
         -------
@@ -266,6 +306,10 @@ class GradedMesher(Mesher):
             isinstance(structure, MeshOverrideStructure) and not structure.shadow
             for structure in structures_ordered
         ]
+        # ``reorder_structures`` places ``shadow=False`` overrides in one contiguous block right
+        # after the simulation structure, so the reverse loop below reaches that block last; this
+        # is the index at which it starts (0 when there are no unshadowed overrides).
+        unshadowed_pass_start_ind = sum(skip_containment)
 
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(
@@ -315,6 +359,24 @@ class GradedMesher(Mesher):
 
         with log:
             for str_ind in range(len(structures_ordered) - 1, -1, -1):
+                # Make the snapping points available as interval boundaries before the unshadowed
+                # overrides are inserted, so that an override edge landing very close to one of
+                # them wide-snaps onto it (see ``insert_bbox``) instead of leaving a sliver
+                # interval beside it.
+                if unshadowed_pass_start_ind > 0 and str_ind == unshadowed_pass_start_ind:
+                    self._insert_snapping_points(
+                        # Same tolerance as in ``insert_snapping_points``, except that
+                        # ``intervals["min_steps"]`` is only filled in as structures get inserted
+                        # and can still be all ``inf`` here, so use the per-structure steps it is
+                        # built from.
+                        min_step=dl_min if dl_min != 0.0 else np.amin(structure_steps) / 2,
+                        axis=axis,
+                        interval_coords=intervals["coords"],
+                        max_dl_list=intervals["min_steps"],
+                        snapping_points=snapping_points,
+                        interval_structs=intervals["structs"],
+                    )
+
                 # 3D and 2D bounding box of current structure
                 bbox = struct_bbox[str_ind]
                 if bbox is None:

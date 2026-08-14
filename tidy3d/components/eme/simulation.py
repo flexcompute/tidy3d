@@ -931,6 +931,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         super()._run_after_validators()
         self._validate_grid()
         self._validate_eme_grid()
+        self._validate_mode_sort_spec_bounding_boxes()
         self._validate_mode_solver_monitors()
         self._validate_cell_index_pairs()
         self._validate_too_close_to_edges()
@@ -949,6 +950,23 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_eme_grid(self) -> Self:
         _ = self.eme_grid
+        return self
+
+    def _validate_mode_sort_spec_bounding_boxes(self) -> Self:
+        """Validate authored cell fill-fraction boxes against the tangential bounds."""
+        for mode_spec, mode_spec_loc in self.eme_grid_spec._mode_specs_with_locs():
+            if not mode_spec.sort_spec._bounding_box_intersects_tangentially(
+                self.bounds, self.axis
+            ):
+                self._raise_validation_error_at_loc(
+                    "'ModeSortSpec.bounding_box' must intersect the "
+                    "simulation domain along both axes tangential to the normal axis. "
+                    "Please move or resize the bounding box in the tangential directions.",
+                    "eme_grid_spec",
+                    *mode_spec_loc,
+                    "sort_spec",
+                    "bounding_box",
+                )
         return self
 
     def _validate_mode_solver_monitors(self) -> Self:
@@ -1491,6 +1509,22 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _validate_monitor_setup(self) -> Self:
         """Check monitor setup."""
         for i, monitor in enumerate(self.monitors):
+            if isinstance(monitor, ModeSolverMonitor):
+                mode_plane_bounds = Box.bounds_intersection(monitor.bounds, self.bounds)
+                sort_spec = getattr(monitor.mode_spec, "sort_spec", None)
+                if sort_spec is not None and not sort_spec._bounding_box_intersects_tangentially(
+                    mode_plane_bounds, monitor.normal_axis
+                ):
+                    self._raise_validation_error_at_loc(
+                        "'ModeSortSpec.bounding_box' must intersect the effective mode plane "
+                        "along both tangential axes. Please move or resize the bounding box in "
+                        "the tangential directions.",
+                        "monitors",
+                        i,
+                        "mode_spec",
+                        "sort_spec",
+                        "bounding_box",
+                    )
             if isinstance(monitor, EMEMonitor):
                 _ = self._call_with_validation_loc(
                     ["monitors", i], self._monitor_eme_cell_indices, monitor=monitor
@@ -1569,14 +1603,22 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_interp_specs(self) -> Self:
         """Require that the interp_specs are identical."""
-        interp_specs = []
-        for mode_spec in self.eme_grid.mode_specs:
-            interp_specs.append(mode_spec.interp_spec)
+        mode_specs_with_locs = tuple(self.eme_grid_spec._mode_specs_with_locs())
+        interp_specs = [mode_spec.interp_spec for mode_spec, _ in mode_specs_with_locs]
         if len(set(interp_specs)) > 1:
+            reference_interp_spec = interp_specs[0]
+            mismatch_index = next(
+                index
+                for index, interp_spec in enumerate(interp_specs[1:], start=1)
+                if interp_spec != reference_interp_spec
+            )
+            _, mode_spec_loc = mode_specs_with_locs[mismatch_index]
             self._raise_validation_error_at_loc(
                 "All of the 'mode_spec.interp_spec' in the EME grid must be identical. "
                 f"Currently, they are {set(interp_specs)}.",
                 "eme_grid_spec",
+                *mode_spec_loc,
+                "interp_spec",
             )
         return self
 

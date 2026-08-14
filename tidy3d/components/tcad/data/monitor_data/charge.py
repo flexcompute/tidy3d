@@ -17,17 +17,20 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.charge import (
+    SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
+    SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
 )
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import VOLUMETRIC_HEAT_RATE
 from tidy3d.exceptions import DataError
 
 if TYPE_CHECKING:
@@ -465,6 +468,68 @@ class SteadyChargeResidualData(HeatChargeMonitorData):
         return components
 
 
+class SelfHeatingData(HeatChargeMonitorData):
+    """
+    Stores the volumetric self-heating rate :math:`q` from a Charge/Conduction simulation.
+
+    Notes
+    -----
+        ``heat_rate`` is the *total* volumetric heat generation rate in
+        :math:`W/\\mu m^3`: Joule heating :math:`\\vec{J} \\cdot \\vec{E}` for a
+        ``Conduction`` simulation, and Joule plus recombination heating for a ``Charge``
+        simulation. Positive values generate heat, matching the sign convention of
+        :class:`HeatSource`, so the field can be handed straight to a ``Heat``
+        simulation through ``to_spatial_data_array``.
+    """
+
+    monitor: SelfHeatingMonitor = Field(
+        title="Self-heating monitor",
+        description="Self-heating monitor associated with a Charge/Conduction simulation.",
+    )
+
+    heat_rate: FieldDataset | None = Field(
+        None,
+        title="Volumetric heat rate",
+        description="Contains the computed total volumetric heat generation rate.",
+        json_schema_extra={"units": VOLUMETRIC_HEAT_RATE},
+    )
+
+    @property
+    def field_components(self) -> dict[str, FieldDataset | None]:
+        """Maps the field components to their associated data."""
+        return {"heat_rate": self.heat_rate}
+
+    def total_power(self, voltage: float | None = None) -> float:
+        """Integrate the heat rate over the recorded region.
+
+        Returns watts in 3D, and watts per micron of depth in 2D, where the mesh cells are
+        areas. Useful either side of ``to_spatial_data_array``: the resampling and the
+        second interpolation onto the consuming simulation's mesh both cost accuracy, and
+        comparing the total before and after is the cheapest way to see how much.
+
+        Parameters
+        ----------
+        voltage : float = None
+            Bias point to integrate. Required when the data holds more than one bias.
+
+        Returns
+        -------
+        float
+            The integrated heat generation rate.
+        """
+        data = self._resolve_field(field="heat_rate")
+        if isinstance(data, SpatialDataArray):
+            raise DataError(
+                f"The data for monitor '{self.monitor.name}' is already Cartesian; integrate "
+                "it directly with xarray rather than through 'total_power'."
+            )
+
+        data = self._select_voltage(data=data, voltage=voltage)
+        cell_values = np.asarray(data.get_cell_values(), dtype=float)
+        cell_volumes = np.asarray(data.get_cell_volumes(), dtype=float)
+        return float((cell_values * cell_volumes).sum())
+
+
 class SteadyCurrentDensityData(HeatChargeMonitorData):
     """
     Stores current density :math:`\\vec{J}` from a Charge/Conduction simulation.
@@ -504,4 +569,127 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
                     "defined with IndexedFieldVoltageDataArray or PointDataArray."
                 )
 
+        return self
+
+
+class SteadyGenerationRecombinationData(HeatChargeMonitorData):
+    """Stores per-node generation-recombination rates from a Charge simulation.
+
+    Notes
+    -----
+        ``net_recombination`` is the net generation-recombination rate entering
+        the carrier continuity equations, :math:`U = R - G`, over every
+        generation and recombination mechanism active in the simulation's media.
+        Recombination is positive (removes carriers) and generation is negative
+        (adds carriers). The remaining fields hold the individual mechanism
+        contributions that make it up; of those, only ``impact_ionization`` is
+        reported (when an impact-ionization model is active), and the rest stay
+        ``None``. Rates are in :math:`cm^{-3}\\,s^{-1}`.
+    """
+
+    monitor: SteadyGenerationRecombinationMonitor = Field(
+        title="Generation-recombination monitor",
+        description="Generation-recombination rate monitor associated with a Charge simulation.",
+    )
+
+    net_recombination: UnstructuredFieldType | None = Field(
+        None,
+        title="Net generation-recombination rate",
+        description="Net generation-recombination source term :math:`U = R - G` entering the "
+        "continuity equations, including every generation-recombination mechanism active "
+        "in the simulation's media (recombination positive, generation negative).",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    impact_ionization: UnstructuredFieldType | None = Field(
+        None,
+        title="Impact-ionization generation rate",
+        description="Signed contribution of impact-ionization (avalanche) generation, "
+        ":math:`-G_\\mathrm{ii}` (negative, since generation adds carriers). Present only "
+        "when an impact-ionization model is active.",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    shockley_reed_hall: UnstructuredFieldType | None = Field(
+        None,
+        title="Shockley-Reed-Hall recombination rate",
+        description="Signed contribution of Shockley-Reed-Hall recombination, "
+        ":math:`R_\\mathrm{SRH}` (positive). Not currently reported; stays ``None``.",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    auger: UnstructuredFieldType | None = Field(
+        None,
+        title="Auger recombination rate",
+        description="Signed contribution of Auger recombination, "
+        ":math:`R_\\mathrm{Auger}` (positive). Not currently reported; stays ``None``.",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    radiative: UnstructuredFieldType | None = Field(
+        None,
+        title="Radiative recombination rate",
+        description="Signed contribution of radiative recombination, "
+        ":math:`R_\\mathrm{rad}` (positive). Not currently reported; stays ``None``.",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    band_to_band_tunneling: UnstructuredFieldType | None = Field(
+        None,
+        title="Band-to-band tunneling generation rate",
+        description="Signed contribution of band-to-band tunneling generation, "
+        ":math:`-G_\\mathrm{btbt}` (negative, since generation adds carriers). "
+        "Not currently reported; stays ``None``.",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    distributed_generation: UnstructuredFieldType | None = Field(
+        None,
+        title="Distributed carrier generation rate",
+        description="Signed contribution of distributed carrier generation, "
+        ":math:`-G_\\mathrm{dist}` (negative, since generation adds carriers). "
+        "Not currently reported; stays ``None``.",
+        json_schema_extra={"units": "1/(cm^3 s)"},
+    )
+
+    @property
+    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
+        """Maps the field components to their associated data."""
+        # ``net_recombination`` stays present even when ``None`` so missing data
+        # is reported like other monitors; per-mechanism entries appear only
+        # when populated.
+        components: dict[str, UnstructuredFieldType | None] = {
+            "net_recombination": self.net_recombination
+        }
+        optional = {
+            "impact_ionization": self.impact_ionization,
+            "shockley_reed_hall": self.shockley_reed_hall,
+            "auger": self.auger,
+            "radiative": self.radiative,
+            "band_to_band_tunneling": self.band_to_band_tunneling,
+            "distributed_generation": self.distributed_generation,
+        }
+        components.update({name: data for name, data in optional.items() if data is not None})
+        return components
+
+    @model_validator(mode="after")
+    def check_correct_data_type(self) -> Self:
+        """Issue error if incorrect data type is used"""
+        fields = [
+            "net_recombination",
+            "impact_ionization",
+            "shockley_reed_hall",
+            "auger",
+            "radiative",
+            "band_to_band_tunneling",
+            "distributed_generation",
+        ]
+        field_data = {field: getattr(self, field) for field in fields}
+        for field, data in field_data.items():
+            if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
+                if not isinstance(data.values, IndexedVoltageDataArray):
+                    raise ValueError(
+                        f"In the data associated with monitor {self.monitor}, the "
+                        f"field {field} does not contain data associated to any voltage value."
+                    )
         return self

@@ -18,6 +18,7 @@ import xarray as xr
 from flex_em.numerical.raw import source_normalization as source_normalization_numerics
 from pydantic import Field
 
+from tidy3d.components.autograd.field_source_pca import FieldSourcePCAProcessor
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.components.autograd.source_factory import (
     fold_adjoint_current_source_samples_outside_bounds,
@@ -1785,7 +1786,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         *,
         adjust_fwidth: bool = True,
     ) -> list[AdjointSourceGroup]:
-        """Group adjoint sources by spatial port while preserving optional per-source metadata."""
+        """Group sources by spatial port."""
 
         if not adj_srcs:
             return []
@@ -1813,41 +1814,80 @@ class SimulationData(AbstractYeeGridSimulationData):
             for group in grouped.values()
         ]
 
-    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+    def _field_source_pca_processor(self) -> FieldSourcePCAProcessor:
+        """Build the processor for FieldData adjoint current-source PCA."""
+
+        return FieldSourcePCAProcessor(
+            simulation=self.simulation,
+            make_broadband_source=self._make_broadband_source,
+        )
+
+    def _field_source_pca_adjoint_infos(
+        self,
+        adj_srcs: list[SourceType],
+        *,
+        min_coverage: float,
+    ) -> tuple[list[AdjointSourceInfo], list[SourceType]]:
+        """Build PCA source infos and return sources not handled that way."""
+
+        processor = self._field_source_pca_processor()
+        pca_infos, remaining_sources = processor.adjoint_infos(
+            adj_srcs,
+            min_coverage=min_coverage,
+        )
+        return (
+            [
+                AdjointSourceInfo(
+                    sources=pca_info.sources,
+                    post_norm=pca_info.post_norm,
+                    normalize_sim=True,
+                )
+                for pca_info in pca_infos
+            ],
+            remaining_sources,
+        )
+
+    def _warn_adjoint_source_grouping_with_symmetry(self, num_groups: int) -> None:
+        """Warn when separate adjoint solves may not preserve forward symmetry."""
+
+        if np.any(np.abs(self.simulation.symmetry) > 0) and num_groups > 1:
+            log.warning(
+                "The adjoint simulations for this problem are being broken into "
+                "multiple simulations that may not individually respect the symmetry of the "
+                "initial simulation. Gradients may be unreliable and it is recommended to "
+                "optimize this problem without utilizing symmetry."
+            )
+
+    def _process_adjoint_sources_standard(
+        self,
+        adj_srcs: list[SourceType],
+        *,
+        adjust_fwidth: bool = True,
+    ) -> list[AdjointSourceInfo]:
         """Compute list of final sources along with a post run normalization for adj fields."""
-        port_groups = self._group_adjoint_sources_by_port(adj_srcs)
+        port_groups = self._group_adjoint_sources_by_port(
+            adj_srcs,
+            adjust_fwidth=adjust_fwidth,
+        )
         adj_srcs_process_fwidth = [src for group in port_groups for src in group.sources]
 
         # Group sources by frequency or port, whichever gives fewer groups
         num_ports = len(port_groups)
-        num_unique_freqs = len({src.source_time._freq0 for src in adj_srcs_process_fwidth})
+        num_unique_freqs = len(self._adjoint_sources_by_frequency(adj_srcs_process_fwidth))
 
         log.info(f"Found {num_ports} spatial ports and {num_unique_freqs} unique frequencies.")
 
         adjoint_infos = []
         if num_unique_freqs <= num_ports:
             log.info("Grouping adjoint sources by frequency.")
-            unique_freqs = {src.source_time._freq0 for src in adj_srcs_process_fwidth}
-            for freq0 in unique_freqs:
-                group = [src for src in adj_srcs_process_fwidth if src.source_time._freq0 == freq0]
-                post_norm = xr.DataArray(data=np.array([1 + 0j]), coords={"f": [freq0]})
-                adjoint_infos.append(
-                    AdjointSourceInfo(sources=group, post_norm=post_norm, normalize_sim=True)
-                )
+            adjoint_infos = self._process_adjoint_sources_by_frequency(
+                adj_srcs_process_fwidth,
+                adjust_fwidth=False,
+            )
         else:
             log.info("Grouping adjoint sources by port.")
 
-            #
-            # warn if the forward simulation had symmetry and we are grouping by port, which
-            # which means the individual adjoint simulations may not respect the original symmetry
-            #
-            if np.any(np.abs(self.simulation.symmetry) > 0) and (num_ports > 1):
-                log.warning(
-                    "The adjoint simulations for this problem are being broken into "
-                    "multiple simulations that may not individually respect the symmetry of the "
-                    "initial simulation. Gradients may be unreliable and it is recommended to "
-                    "optimize this problem without utilizing symmetry."
-                )
+            self._warn_adjoint_source_grouping_with_symmetry(num_ports)
 
             for port_group in port_groups:
                 processed_srcs, post_norm = self._process_adjoint_sources_broadband(
@@ -1860,6 +1900,81 @@ class SimulationData(AbstractYeeGridSimulationData):
                 )
 
         log.info(f"Created {len(adjoint_infos)} adjoint source groups.")
+        return adjoint_infos
+
+    @staticmethod
+    def _adjoint_sources_by_frequency(
+        sources: list[SourceType],
+    ) -> dict[float, list[SourceType]]:
+        """Group adjoint sources by center frequency, ordered by first appearance."""
+
+        groups: dict[float, list[SourceType]] = {}
+        for source in sources:
+            groups.setdefault(source.source_time._freq0, []).append(source)
+        return groups
+
+    def _process_adjoint_sources_by_frequency(
+        self,
+        adj_srcs: list[SourceType],
+        *,
+        adjust_fwidth: bool = True,
+    ) -> list[AdjointSourceInfo]:
+        """Create one adjoint source group containing the complete source at each frequency."""
+
+        processed_sources = (
+            self._adjoint_src_width_single(adj_srcs) if adjust_fwidth else list(adj_srcs)
+        )
+        adjoint_infos = []
+        for freq0, group in self._adjoint_sources_by_frequency(processed_sources).items():
+            post_norm = xr.DataArray(data=np.array([1 + 0j]), coords={"f": [freq0]})
+            adjoint_infos.append(
+                AdjointSourceInfo(sources=group, post_norm=post_norm, normalize_sim=True)
+            )
+        return adjoint_infos
+
+    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+        """Compute final adjoint source infos, optionally reducing FieldData current sources."""
+
+        from tidy3d.config import config
+
+        if config.adjoint.field_source_reduction_mode is None:
+            return self._process_adjoint_sources_standard(adj_srcs)
+
+        if any(self.simulation.symmetry):
+            return self._process_adjoint_sources_standard(adj_srcs)
+
+        min_coverage = config.adjoint.field_source_pca_min_energy_coverage
+        processed_sources = self._adjoint_src_width_single(adj_srcs)
+        baseline_infos = self._process_adjoint_sources_standard(
+            processed_sources,
+            adjust_fwidth=False,
+        )
+
+        pca_infos, remaining_sources = self._field_source_pca_adjoint_infos(
+            processed_sources,
+            min_coverage=min_coverage,
+        )
+        adjoint_infos = list(pca_infos)
+        if pca_infos:
+            adjoint_infos.extend(
+                self._process_adjoint_sources_standard(
+                    remaining_sources,
+                    adjust_fwidth=False,
+                )
+            )
+
+        if not pca_infos or len(adjoint_infos) >= len(baseline_infos):
+            log.info(
+                "FieldData adjoint current-source PCA did not reduce the number of adjoint "
+                "source groups; using standard adjoint source grouping."
+            )
+            return baseline_infos
+
+        log.info(
+            "Created "
+            f"{len(adjoint_infos)} adjoint source groups with FieldData PCA reduction "
+            f"(standard grouping would create {len(baseline_infos)})."
+        )
         return adjoint_infos
 
     def _process_adjoint_sources_broadband(

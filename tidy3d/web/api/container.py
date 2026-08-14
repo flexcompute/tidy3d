@@ -46,6 +46,7 @@ from tidy3d.web.api.container_utils import (
     flatten_task_container,
     reconstruct_task_container,
 )
+from tidy3d.web.api.run_options import resolve_pay_type
 from tidy3d.web.api.states import (
     COMPLETED_PERCENT,
     COMPLETED_STATES,
@@ -72,6 +73,10 @@ from tidy3d.web.core.exceptions import WebError as CoreWebError
 from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import BatchDetail
 from tidy3d.web.core.types import PayType
+from tidy3d.web.execution_cost_limit import (
+    execution_flexcredit_limit_enabled,
+    reserve_execution_flexcredit_costs,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterator
@@ -2848,6 +2853,14 @@ class Batch(WebContainer):
         )
         super(Batch, self).to_file(fname=fname)  # noqa: UP008  # pyrefly: ignore[invalid-argument]
 
+    def _rebuild_loaded_model_serializers(self) -> None:
+        """Build serializers for concrete models restored through polymorphic fields."""
+        model_types = {type(simulation) for simulation in self._flat_simulations.values()}
+        if self.jobs_cached is not None:
+            model_types.update(type(job) for job in self.jobs_cached.values())
+        for model_type in model_types:
+            model_type.model_rebuild()
+
     @classmethod
     def from_file(
         cls,
@@ -2865,15 +2878,20 @@ class Batch(WebContainer):
         :meth:`Batch.load`.
         """
         if not lazy:
-            return super().from_file(
+            loaded_batch = super().from_file(
                 fname=fname,
                 group_path=group_path,
                 lazy=lazy,
-                on_load=on_load,
+                on_load=None,
                 **parse_obj_kwargs,
             )
+            loaded_batch._rebuild_loaded_model_serializers()
+            if on_load is not None:
+                on_load(loaded_batch)
+            return loaded_batch
 
         def _set_batch_lazy_and_run_callback(loaded_obj: Any) -> None:
+            loaded_obj._rebuild_loaded_model_serializers()
             # Batch models are frozen; set laziness via object.__setattr__ on materialization.
             object.__setattr__(loaded_obj, "lazy", True)
             if on_load is not None:
@@ -3277,6 +3295,14 @@ class Batch(WebContainer):
         ignore_memory_limit: bool | None = None,
     ) -> None:
         """Start already-filtered single-step jobs using the historical batch pipeline."""
+        if execution_flexcredit_limit_enabled():
+            reserve_execution_flexcredit_costs(
+                {
+                    job.task_id: self._estimate_cost_info_for_job(job).maximum
+                    for job in jobs_to_start
+                    if resolve_pay_type(job.pay_type) != PayType.VGPU
+                }
+            )
         with ThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
             start_futures: dict[concurrent.futures.Future[Any], Job | WorkflowStepJobAdapter] = {}
             for job in jobs_to_start:

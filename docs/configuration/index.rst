@@ -144,6 +144,52 @@ files. The naming pattern is ``TIDY3D_<SECTION>__<FIELD>``, for example::
 Supported variables take effect the next time you import ``tidy3d``. Remove a
 variable or clear the shell environment to restore the lower priority setting.
 
+Limiting Cloud Cost for One Python Execution
+--------------------------------------------
+
+A host can limit the sum of maximum FlexCredit estimates reserved by one Python
+execution::
+
+    export TIDY3D_EXECUTION_FLEXCREDIT_LIMIT=5.0
+    python user_script.py
+
+This dedicated environment variable is not a Tidy3D config field. Tidy3D reads
+it once when its cloud API is imported. It accepts any finite, non-negative
+number; invalid values raise an error at import, and an absent value disables the
+limit.
+
+Before a cloud simulation task that may use FlexCredits starts, Tidy3D obtains
+its maximum estimate and reserves it. The task does not start if the sum of
+existing and proposed reservations would exceed the limit. Reservations are
+maximum possible costs, not billed costs, and are not reduced after a task
+finishes, costs less than estimated, fails, or is aborted. Submissions that
+resolve to vGPU payment are excluded; automatic payment selection is included
+because it may use FlexCredits.
+
+``web.run``, ``web.run_async``, ``Job``, ``Batch``, remote mode solving,
+autograd, and multi-step workflows share the budget. Tidy3D reserves an entire
+known batch before starting any member. When later simulations depend on earlier
+results, a complete upfront total is impossible, so each newly runnable task or
+batch is checked incrementally.
+
+Use ``web.execution_flexcredit_status()`` to inspect the limit, reserved total,
+remaining budget, and per-task reservations.
+
+A confirmed local cache hit starts no cloud task, and a confirmed zero-cost
+estimate reserves ``0`` FlexCredits.
+
+If the limit would be exceeded, Tidy3D raises
+``tidy3d.exceptions.FlexCreditLimitExceededError`` before any proposed task
+starts. Its ``details`` property provides a stable error code and JSON-ready cost
+and task data. The host wrapper is responsible for presenting the error and
+deciding how the process exits.
+
+The reservation ledger belongs to one Python process; use a fresh process for
+each independent budget. This protects against accidental overspending but is
+not a sandbox for untrusted code. It covers simulation task starts only, so
+services without that boundary or a maximum FlexCredit estimate, such as
+web-based material fitting, do not participate.
+
 Command Line Helpers
 --------------------
 

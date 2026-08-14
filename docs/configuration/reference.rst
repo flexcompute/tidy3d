@@ -99,9 +99,29 @@ Options that apply to the microwave solver add-on.
 Adjoint (``config.adjoint``)
 ----------------------------
 
-Parameters for adjoint behavior, including local execution settings and numerical tolerances.
-These overrides apply only when ``local_gradient`` is ``True``; otherwise the service uses its
-remote defaults and emits a warning reminding you to enable local gradients.
+Parameters for adjoint behavior, including local execution settings, source planning, and
+numerical tolerances. Local-gradient overrides apply only when ``local_gradient`` is ``True``;
+field-source PCA options instead apply during client-side adjoint source planning.
+
+Field-source compression is experimental and disabled by default (the mode is ``None``). Set
+``config.adjoint.field_source_reduction_mode = "pca"`` to opt in. The default coverage of ``0.999``
+allows an approximate source reconstruction; set it to ``1.0`` to retain the full numerical rank
+of each compatible source-profile matrix. Coverage applies per current type: electric and magnetic
+current blocks are truncated independently, each in its own physical units, so no material
+sampling is involved and dispersive or lossy backgrounds are supported. The retained energy is
+measured over all sources decomposed together rather than per monitor or per frequency, so a
+monitor carrying only a small share of that energy may be represented coarsely, or dropped, even
+though the requested coverage is met. The retained fraction describes the injected source profiles
+rather than the gradient: the discarded component still contributes through the simulated field
+response, which can amplify it, so coverage constrains gradient error indirectly rather than
+bounding it, and coverage is an energy measure, so ``0.999`` can discard up to roughly 3% of the
+source amplitude. If a weak monitor's own gradient matters — suppressing leakage into a dim
+port, for instance — use ``1.0`` so that every source and frequency is represented exactly. Compression is attempted
+only for point, line, and planar ``FieldData`` current-source batches whose support dimension,
+frequency tuple, and field-component tuple all match exactly; sources that split components across
+monitors on one support are merged beforehand. Simulations with symmetry use the standard adjoint
+grouping path. Oversized or non-reducing blocks also fall back to standard port-versus-frequency
+grouping.
 
 .. list-table::
    :header-rows: 1
@@ -126,7 +146,7 @@ remote defaults and emits a warning reminding you to enable local gradients.
    * - ``minimum_spacing_fraction``
      - ``0.001``
      - No
-     - Smallest normalized spacing allowed when constructing adaptive finite-difference stencils (must be ``>= 0``).
+     - Minimum fraction of the shortest free-space adjoint wavelength used as the lower bound for adaptive shape-gradient surface-sampling spacing (must be ``>= 0``). This remains active when spacing is precomputed per structure.
    * - ``boundary_snapping_fraction``
      - ``1.0``
      - No
@@ -138,7 +158,7 @@ remote defaults and emits a warning reminding you to enable local gradients.
    * - ``local_gradient``
      - ``False``
      - Yes
-     - Enable local gradient evaluation. Remote gradients ignore other adjoint overrides unless this is ``True``.
+     - Enable local gradient evaluation. Remote gradients ignore local-only execution and numerical overrides, while client-side source-planning settings such as field-source PCA still apply.
    * - ``local_adjoint_dir``
      - ``"adjoint_data"``
      - Yes
@@ -151,6 +171,18 @@ remote defaults and emits a warning reminding you to enable local gradients.
      - ``"assume_outgoing"``
      - Yes
      - Policy for selecting mode directions when launching parallel adjoint simulations. Accepts ``"assume_outgoing"`` or ``"run_both_directions"``.
+   * - ``field_source_reduction_mode``
+     - ``None``
+     - No
+     - Strategy for compressing compatible ``FieldData``-derived adjoint current sources before adjoint simulations are launched. ``None`` applies no reduction and uses standard adjoint source grouping; ``"pca"`` compresses sources into principal components, running one adjoint simulation per component.
+   * - ``field_source_pca_min_energy_coverage``
+     - ``0.999``
+     - No
+     - Fraction of weighted source-profile energy retained per current type by the field-source PCA decomposition. Must be between ``0`` and ``1``; ``1.0`` retains the full numerical rank.
+   * - ``field_source_pca_max_matrix_entries``
+     - ``20000000``
+     - Yes
+     - Maximum positive number of dense complex entries in one PCA profile matrix. Oversized blocks use standard port-versus-frequency grouping. This bounds stored entries only: peak memory during the decomposition is several times larger, and decomposition time also grows with the frequency count, so equally sized blocks can take very different times.
    * - ``gradient_precision``
      - ``"single"``
      - No

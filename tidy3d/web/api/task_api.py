@@ -45,7 +45,12 @@ from tidy3d.web.core.constants import (
 from tidy3d.web.core.s3utils import upload_file
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.types import PayType, TaskType
+from tidy3d.web.execution_cost_limit import (
+    execution_flexcredit_cost_reserved,
+    execution_flexcredit_limit_enabled,
+    reserve_execution_flexcredit_costs,
+)
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .run_options import (
@@ -67,7 +72,6 @@ if TYPE_CHECKING:
     from tidy3d.web.cache import CacheEntry
     from tidy3d.web.core.constants import TaskId
     from tidy3d.web.core.task_info import BatchDetail
-    from tidy3d.web.core.types import PayType
 
 
 RUN_REFRESH_TIME = 1.0
@@ -695,6 +699,17 @@ def start(
         resolved_priority = vgpu_options.priority
         resolved_vgpu_allocation = vgpu_options.vgpu_allocation
         resolved_ignore_memory_limit = vgpu_options.ignore_memory_limit
+    if (
+        execution_flexcredit_limit_enabled()
+        and resolved_pay_type != PayType.VGPU
+        and not execution_flexcredit_cost_reserved(task_id)
+    ):
+        estimate = estimate_cost_info(
+            task_id,
+            verbose=False,
+            solver_version=dispatch_options.solver_version,
+        )
+        reserve_execution_flexcredit_costs({task_id: estimate.maximum})
     task.submit(
         solver_version=dispatch_options.solver_version,
         worker_group=dispatch_options.worker_group,

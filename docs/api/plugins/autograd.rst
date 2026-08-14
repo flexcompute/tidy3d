@@ -25,6 +25,12 @@ Optimizers
    :template: module.rst
 
     plugins.autograd.optimizers.Adam
+    plugins.autograd.optimizers.SafeUpdate
+    plugins.autograd.optimizers.SafeUpdateResult
+    plugins.autograd.optimizers.ConstraintChecker
+    plugins.autograd.optimizers.ScalarConstraintChecker
+    plugins.autograd.optimizers.BatchedConstraintChecker
+    plugins.autograd.optimizers.BacktrackingLineSearch
     plugins.autograd.optimizers.adam
     plugins.autograd.optimizers.apply_updates
     plugins.autograd.optimizers.optimize

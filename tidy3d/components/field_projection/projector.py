@@ -14,6 +14,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.yee_areas import colocated_widths_1d
 from tidy3d.components.medium import MediumType
 from tidy3d.components.monitor import (
     FieldProjectionAngleMonitor,
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.data.monitor_data import AbstractFieldProjectionData
     from tidy3d.components.monitor import AbstractFieldProjectionMonitor, FieldMonitor
-    from tidy3d.components.types import Direction
+    from tidy3d.components.types import Bound, Direction
 
 
 class _RawProjectionContext(Tidy3dBaseModel):
@@ -91,7 +92,9 @@ class FieldProjector(
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
         "to discretize the surface monitors for the projection. If ``None``, fields will "
-        "will not resampled, but will still be colocated.",
+        "not be resampled, but will still be colocated. Applies to colocated projection "
+        "only: non-colocated projection (``use_colocated_integration=False``) always "
+        "integrates the fields at their recorded Yee positions without resampling.",
     )
 
     origin: Coordinate | None = Field(
@@ -618,33 +621,83 @@ class FieldProjector(
 
     @cached_property
     def currents(self) -> dict[str, xr.Dataset]:
-        """Sets the surface currents."""
-        surfaces = self.surfaces
-        pts_per_wavelength = self.pts_per_wavelength
-        medium = self.medium
+        """Colocated surface current densities for each projection surface, with the source
+        coordinates shifted relative to the local origin."""
+        return {
+            name: self._shift_coords_to_origin(densities)
+            for name, densities in self._surface_current_densities.items()
+        }
 
-        surface_currents = {}
-        for surface in surfaces:
-            current_source = (
-                self.sim_data
-                if self.sim_data is not None
-                else self._field_data_for_surface(surface)
+    @cached_property
+    def _surface_current_densities(self) -> dict[str, xr.Dataset]:
+        """Colocated surface current densities for each projection surface, on the recorded
+        (global) coordinates, before any differential-area weighting."""
+        return {
+            surface.monitor.name: self.compute_surface_currents(
+                self._surface_current_source(surface),
+                surface,
+                self.medium,
+                self.pts_per_wavelength,
             )
-            current_data = self.compute_surface_currents(
-                current_source, surface, medium, pts_per_wavelength
+            for surface in self.surfaces
+        }
+
+    @cached_property
+    def _colocated_element_currents(self) -> dict[str, xr.Dataset]:
+        """Colocated surface currents for each projection surface, on the recorded (global)
+        coordinates, with the differential area folded in: current densities times their
+        integration boxes -- element currents ready to be windowed, phased, and summed,
+        mirroring :attr:`_noncolocated_element_currents`. The shift to the local origin happens
+        as the last preparation step, in :meth:`_windowed_surface_currents`."""
+        return {
+            surface.monitor.name: self._weight_colocated_currents_by_diff_area(
+                self._surface_current_densities[surface.monitor.name], surface
             )
+            for surface in self.surfaces
+        }
 
-            # shift source coordinates relative to the local origin
-            current_data = current_data.assign_coords(
-                {
-                    name: current_data.coords[name] - origin
-                    for name, origin in zip(["x", "y", "z"], self.origin)
-                }
+    @cached_property
+    def _noncolocated_element_currents(self) -> dict[str, dict[str, xr.DataArray]]:
+        """Non-colocated surface currents for each projection surface, on the recorded (global)
+        coordinates: per surface, a per-component mapping keeping each tangential current at its
+        native Yee in-plane positions, with the box-rule differential area folded in. The shift
+        to the local origin happens as the last preparation step, in
+        :meth:`_windowed_surface_currents`."""
+        self._validate_noncolocated_projection()
+        noncolocated_currents = {}
+        for surface in self.surfaces:
+            field_data = self._grid_corrected_source_data(
+                self._surface_current_source(surface), surface
             )
+            noncolocated_currents[surface.monitor.name] = self._weight_currents_by_diff_area(
+                self._fields_to_currents(field_data, surface), field_data, surface
+            )
+        return noncolocated_currents
 
-            surface_currents[surface.monitor.name] = current_data
+    def _surface_currents(
+        self, surface: FieldProjectionSurface, proj_monitor: AbstractFieldProjectionMonitor
+    ) -> xr.Dataset | dict[str, xr.DataArray]:
+        """Surface currents for one surface, in the integration scheme selected by
+        ``proj_monitor.use_colocated_integration``: a colocated ``xr.Dataset`` from
+        :attr:`_colocated_element_currents` or a per-component ``dict`` from
+        :attr:`_noncolocated_element_currents`."""
+        currents = (
+            self._colocated_element_currents
+            if proj_monitor.use_colocated_integration
+            else self._noncolocated_element_currents
+        )
+        return currents[surface.monitor.name]
 
-        return surface_currents
+    def _surface_current_source(
+        self, surface: FieldProjectionSurface
+    ) -> SimulationData | FieldData:
+        """Return the current source (simulation data or raw field data) for one surface."""
+        return self.sim_data if self.sim_data is not None else self._field_data_for_surface(surface)
+
+    def _shift_coords_to_origin(self, data: xr.Dataset | xr.DataArray) -> xr.Dataset | xr.DataArray:
+        """Shift source coordinates relative to the local origin."""
+        origin = dict(zip(["x", "y", "z"], self.origin))
+        return data.assign_coords({name: data.coords[name] - origin[name] for name in origin})
 
     def _field_data_for_surface(self, surface: FieldProjectionSurface) -> FieldData:
         """Return the source field data associated with a projection surface."""
@@ -656,6 +709,18 @@ class FieldProjector(
         if monitor_name not in self.sim_data.monitor_data:
             raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
         return self.sim_data.monitor_data[monitor_name]
+
+    @staticmethod
+    def _grid_corrected_source_data(
+        sim_data: SimulationData | FieldData, surface: FieldProjectionSurface
+    ) -> FieldData:
+        """Resolve, symmetry-expand, and grid-correct the source field data for one surface."""
+        if isinstance(sim_data, SimulationData):
+            monitor_name = surface.monitor.name
+            if monitor_name not in sim_data.monitor_data:
+                raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
+            sim_data = sim_data.monitor_data[monitor_name]
+        return sim_data.symmetry_expanded.grid_corrected_copy
 
     @staticmethod
     def compute_surface_currents(
@@ -686,18 +751,14 @@ class FieldProjector(
             Colocated surface current densities for the given surface.
         """
 
-        simulation_grid_boundaries = None
-        if isinstance(sim_data, SimulationData):
-            monitor_name = surface.monitor.name
-            if monitor_name not in sim_data.monitor_data:
-                raise SetupError(f"No data for monitor named '{monitor_name}' found in sim_data.")
-            simulation_grid_boundaries = sim_data.simulation.grid.boundaries.to_list
-            field_data = sim_data.monitor_data[monitor_name].symmetry_expanded.grid_corrected_copy
-        else:
-            field_data = sim_data.symmetry_expanded.grid_corrected_copy
-
+        simulation_grid_boundaries = (
+            sim_data.simulation.grid.boundaries.to_list
+            if isinstance(sim_data, SimulationData)
+            else None
+        )
+        field_data = FieldProjector._grid_corrected_source_data(sim_data, surface)
         currents = FieldProjector._fields_to_currents(field_data, surface)
-        currents = FieldProjector._resample_surface_currents(
+        return FieldProjector._resample_surface_currents(
             currents,
             field_data,
             surface,
@@ -706,7 +767,53 @@ class FieldProjector(
             simulation_grid_boundaries=simulation_grid_boundaries,
         )
 
+    @staticmethod
+    def _weight_colocated_currents_by_diff_area(
+        currents: xr.Dataset, surface: FieldProjectionSurface
+    ) -> xr.Dataset:
+        """Weight colocated surface current densities by their differential areas.
+
+        Each in-plane axis contributes the midpoint-box width around the shared source samples,
+        clipped to the exact monitor bounds -- trapezoid-equivalent when the samples span the
+        bounds and truncating anything recorded beyond them. Same convention and helper as the
+        flux ``_diff_area``. The weighted values are element currents (density times area), the
+        direct integrands of the projection kernels.
+        """
+        _, plane_inds = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
+        mnt_bounds = np.array(surface.monitor.bounds)
+        for axis in plane_inds:
+            dim = "xyz"[axis]
+            coords = np.asarray(currents.coords[dim].values)
+            widths = colocated_widths_1d(coords, mnt_bounds[0][axis], mnt_bounds[1][axis])
+            currents = currents * xr.DataArray(widths, dims=[dim], coords={dim: coords})
         return currents
+
+    @staticmethod
+    def _weight_currents_by_diff_area(
+        currents: dict[str, xr.DataArray],
+        field_data: FieldData,
+        surface: FieldProjectionSurface,
+    ) -> dict[str, xr.DataArray]:
+        """Weight raw Yee-staggered surface currents by their box-rule differential areas.
+
+        Each returned component keeps its native in-plane Yee positions (no colocation). The
+        differential-area weighting matches the non-colocated flux/projection scheme: the
+        ``(E_u, H_v)`` Yee positions use ``dS_EuHv`` and the ``(E_v, H_u)`` positions use
+        ``dS_EvHu``. The electric current ``J = n x H`` and magnetic current ``M = -n x E``
+        components built from those fields inherit the corresponding area.
+        """
+
+        dS_EuHv, dS_EvHu, _, _ = field_data._diff_area_at_yee_positions(
+            truncate_to_monitor_bounds=True
+        )
+        _, (cmp_1, cmp_2) = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
+        component_area = {
+            "E" + cmp_1: dS_EuHv,  # electric_u (built from H_v)
+            "H" + cmp_2: dS_EuHv,  # magnetic_v (built from E_u)
+            "E" + cmp_2: dS_EvHu,  # electric_v (built from H_u)
+            "H" + cmp_1: dS_EvHu,  # magnetic_u (built from E_v)
+        }
+        return {key: current * component_area[key] for key, current in currents.items()}
 
     @staticmethod
     def _fields_to_currents(
@@ -816,6 +923,19 @@ class FieldProjector(
             # Skip resampling along dimensions where the current data has only one source
             # coordinate, such as the collapsed axis of a 2D simulation.
             if any(points.size <= 1 for points in data_ranges):
+                continue
+
+            # No resampling (``pts_per_wavelength=None``) with a downsampled recording:
+            # integrate the recorded samples directly -- the differential-area weighting clips
+            # their midpoint boxes to the monitor bounds -- instead of interpolating the strided
+            # samples back onto the full grid. Requires a shared (colocated) source grid;
+            # staggered (``colocate=False``) recordings colocate below as before.
+            if (
+                pts_per_wavelength is None
+                and any(n != 1 for n in field_data.monitor.interval_space)
+                and all(np.array_equal(rng, data_ranges[0]) for rng in data_ranges[1:])
+            ):
+                colocation_points[idx] = data_ranges[0]
                 continue
 
             if simulation_grid_boundaries is not None:
@@ -933,6 +1053,9 @@ class FieldProjector(
     ) -> NDArray:
         """Trapezoidal integration in n dimensions.
 
+        Deprecated: this helper is no longer used by the field projection pipeline and will
+        be removed in Tidy3D 2.13. Use ``numpy.trapezoid`` instead.
+
         Parameters
         ----------
         ary : np.ndarray
@@ -947,6 +1070,11 @@ class FieldProjector(
         np.ndarray
             Integrated array.
         """
+        log.warning(
+            "'FieldProjector.trapezoid' is deprecated and will be removed in Tidy3D 2.13. "
+            "It is no longer used by the field projection pipeline; use 'numpy.trapezoid' "
+            "instead."
+        )
         if not isinstance(axes, Iterable):
             axes = [axes]
             pts = [pts]
@@ -960,27 +1088,79 @@ class FieldProjector(
 
     @staticmethod
     def apply_window_to_currents(
-        proj_monitor: AbstractFieldProjectionMonitor, currents: xr.Dataset
-    ) -> xr.Dataset:
-        """Apply windowing function to the surface currents."""
+        proj_monitor: AbstractFieldProjectionMonitor,
+        currents: xr.Dataset | dict[str, xr.DataArray],
+        custom_bounds: Bound | None = None,
+    ) -> xr.Dataset | dict[str, xr.DataArray]:
+        """Apply windowing function to the surface currents.
+
+        ``custom_bounds`` anchors the window along infinite monitor dimensions (the simulation
+        bounds when projecting from simulation data); when ``None`` it falls back to the extent
+        of the current data."""
         if proj_monitor.size.count(0.0) == 0:
             return currents
         if proj_monitor.window_size == (0, 0):
             return currents
 
+        # the window tapers the two in-plane directions only; ``window_parameters`` leaves the
+        # normal-axis entries at zero, so evaluating there would annihilate the currents
+        _, plane_inds = proj_monitor.pop_axis((0, 1, 2), axis=proj_monitor.size.index(0.0))
+
+        if isinstance(currents, dict):
+            # Non-colocated: ONE window shared by all components -- the window is a single
+            # spatial aperture taper -- evaluated at each component's own native coordinates.
+            # Without explicit bounds, anchor on the union of the staggered component grids.
+            if custom_bounds is None:
+                components = list(currents.values())
+                custom_bounds = [
+                    [min(c.coords[d].values[0] for c in components) for d in "xyz"],
+                    [max(c.coords[d].values[-1] for c in components) for d in "xyz"],
+                ]
+            window_size, window_minus, window_plus = proj_monitor.window_parameters(
+                custom_bounds=custom_bounds
+            )
+            windowed = {}
+            for key, component in currents.items():
+                for dim in plane_inds:
+                    if window_size[dim] == 0:
+                        # untapered axis: native/staggered edge samples can sit slightly outside
+                        # the window bounds, where the degenerate window would zero them
+                        continue
+                    dim_name = "xyz"[dim]
+                    points = np.asarray(component.coords[dim_name].values)
+                    window_fn = proj_monitor.window_function(
+                        points=points,
+                        window_size=window_size,
+                        window_minus=window_minus,
+                        window_plus=window_plus,
+                        dim=dim,
+                    )
+                    component = component * xr.DataArray(
+                        window_fn, dims=[dim_name], coords={dim_name: points}
+                    )
+                windowed[key] = component
+            return windowed
+
         pts = [currents[name].values for name in ["x", "y", "z"]]
 
-        custom_bounds = [
-            [pts[i][0] for i in range(3)],
-            [pts[i][-1] for i in range(3)],
-        ]
+        if custom_bounds is None:
+            custom_bounds = [
+                [pts[i][0] for i in range(3)],
+                [pts[i][-1] for i in range(3)],
+            ]
 
         window_size, window_minus, window_plus = proj_monitor.window_parameters(
             custom_bounds=custom_bounds
         )
 
         new_currents = currents.copy(deep=True)
-        for dim, (dim_name, points) in enumerate(zip("xyz", pts)):
+        for dim in plane_inds:
+            if window_size[dim] == 0:
+                # untapered axis: samples recorded beyond the window bounds would be zeroed by
+                # the degenerate window
+                continue
+            dim_name = "xyz"[dim]
+            points = pts[dim]
             window_fn = proj_monitor.window_function(
                 points=points,
                 window_size=window_size,
@@ -999,16 +1179,54 @@ class FieldProjector(
 
     def _windowed_surface_currents(
         self, proj_monitor: AbstractFieldProjectionMonitor
-    ) -> list[tuple[FieldProjectionSurface, xr.Dataset]]:
-        """Collect projection surfaces together with their windowed currents."""
-
-        return [
-            (
-                surface,
-                self.apply_window_to_currents(proj_monitor, self.currents[surface.monitor.name]),
+    ) -> list[tuple[FieldProjectionSurface, xr.Dataset | dict[str, xr.DataArray]]]:
+        """Collect projection surfaces together with their windowed currents, shifted to the
+        local origin. All physical-space preparation (areas, window) happens on the recorded
+        (global) coordinates -- the window anchored on the simulation bounds when projecting
+        from simulation data -- and the shift into the origin-relative frame the projection
+        kernels expect is the last step."""
+        custom_bounds = (
+            self.sim_data.simulation.simulation_bounds if self.sim_data is not None else None
+        )
+        surface_currents = []
+        for surface in self.surfaces:
+            windowed = self.apply_window_to_currents(
+                proj_monitor, self._surface_currents(surface, proj_monitor), custom_bounds
             )
-            for surface in self.surfaces
-        ]
+            if isinstance(windowed, dict):
+                windowed = {
+                    key: self._shift_coords_to_origin(component)
+                    for key, component in windowed.items()
+                }
+            else:
+                windowed = self._shift_coords_to_origin(windowed)
+            surface_currents.append((surface, windowed))
+        return surface_currents
+
+    def _validate_noncolocated_projection(self) -> None:
+        """Non-colocated projection (``use_colocated_integration=False``) builds the equivalent
+        currents from fields at their native Yee positions, so every source surface must be
+        recorded staggered (``colocate=False``) and carry ``grid_expanded`` for the staggered
+        differential areas. The reverse is fine — staggered recordings can be colocated
+        internally — but colocated recordings cannot be un-colocated after the fact. The check
+        reads the monitor stored with the recorded data, so it cannot be bypassed by passing a
+        modified copy of the near-field monitor."""
+        for surface in self.surfaces:
+            field_data = self._field_data_for_surface(surface)
+            if field_data.monitor.colocate:
+                raise SetupError(
+                    f"Near-field monitor '{surface.monitor.name}' was recorded with "
+                    "'colocate=True', which discards the native Yee positions needed for "
+                    "non-colocated field projection. Re-record the near fields with "
+                    "'colocate=False', or project with the default "
+                    "'use_colocated_integration=True'."
+                )
+            if field_data.grid_expanded is None:
+                raise SetupError(
+                    f"Near-field data for monitor '{surface.monitor.name}' requires "
+                    "'grid_expanded' to compute the Yee-staggered differential areas for "
+                    "non-colocated field projection."
+                )
 
     def project_fields(
         self,
@@ -1039,6 +1257,16 @@ class FieldProjector(
         if freq_chunk_size is not None and freq_chunk_size < 1:
             raise ValueError(f"Expected 'freq_chunk_size >= 1', got {freq_chunk_size}.")
         validate_field_projection_monitors_2d((proj_monitor,), self.effective_simulation_size)
+        if not proj_monitor.use_colocated_integration:
+            if self.pts_per_wavelength not in (None, PTS_PER_WVL):
+                log.warning(
+                    "'pts_per_wavelength' is ignored for non-colocated projection "
+                    "('use_colocated_integration=False'): the fields are integrated at their "
+                    "recorded Yee positions without resampling. To reduce the number of "
+                    "integration points, record the near fields with 'interval_space' "
+                    "downsampling instead."
+                )
+            self._validate_noncolocated_projection()
         if isinstance(proj_monitor, FieldProjectionAngleMonitor):
             return self._project_fields_angular(
                 proj_monitor, verbose=verbose, freq_chunk_size=freq_chunk_size

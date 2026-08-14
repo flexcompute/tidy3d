@@ -33,6 +33,15 @@ DRC Runner
     plugins.klayout.DRCRunner
     plugins.klayout.run_drc_on_gds
 
+Batched DRC
+~~~~~~~~~~~
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+    plugins.klayout.BatchedDRCChecker
+
 DRC Results
 ~~~~~~~~~~~
 

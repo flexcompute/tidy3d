@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from tidy3d.components.tcad.data.monitor_data.charge import (
+    SelfHeatingData,
     SteadyCapacitanceData,
     SteadyChargeResidualData,
     SteadyCurrentDensityData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
     SteadyFreeCarrierData,
+    SteadyGenerationRecombinationData,
     SteadyPotentialData,
 )
 from tidy3d.components.tcad.data.monitor_data.heat import TemperatureData
@@ -22,4 +24,6 @@ TCADMonitorDataType = (
     | SteadyCapacitanceData
     | SteadyCurrentDensityData
     | SteadyChargeResidualData
+    | SteadyGenerationRecombinationData
+    | SelfHeatingData
 )

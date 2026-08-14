@@ -41,7 +41,6 @@ APPROX_PROJECTION_BATCH_SIZE = 512
 EXACT_PROJECTION_BATCH_SIZE = 32
 PROJECTION_FREQ_CHUNK_SIZE = 8
 FIELD_COMPONENT_NAMES = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-AXIS_WEIGHT_SHAPES = ((-1, 1, 1), (1, -1, 1), (1, 1, -1))
 
 # Numpy float array and related array types
 
@@ -71,9 +70,12 @@ def _track_if_verbose(
 
 @dataclass(frozen=True)
 class _FarFieldIntegralSpec:
-    """Static metadata for a separable far-field integral."""
+    """Static integration geometry for a separable far-field integral.
 
-    weights: tuple[np.ndarray, np.ndarray, np.ndarray]
+    Pure geometry: the differential areas are folded into the current values themselves
+    (element currents), so the kernels only phase and sum.
+    """
+
     idx_u: Axis
     idx_v: Axis
     is_2d: bool
@@ -111,17 +113,45 @@ class _FarFieldIntegralSpec:
 
 @dataclass(frozen=True)
 class _FarFieldProjectionKernelSpec:
-    """Static metadata for one prepared far-field projection kernel."""
+    """Static metadata for one prepared far-field projection kernel.
+
+    The four tangential current components share one integration geometry and each index a
+    shared source grid: ``pts_sets`` holds the distinct grids and ``component_pts_inds`` maps
+    each component, in ``(electric_u, electric_v, magnetic_u, magnetic_v)`` order (u/v are the
+    surface's in-plane axes; see :class:`_TangentialSurfaceCurrents`), to its grid, so the
+    expensive per-grid phase factors are evaluated once per distinct grid:
+
+    - colocated projection: one shared grid, ``component_pts_inds = (0, 0, 0, 0)``;
+    - non-colocated projection: two staggered Yee grids — ``electric_u`` and ``magnetic_v``
+      (built from ``H_v`` and ``E_u``) share the ``(dual_u, primal_v)`` grid while
+      ``electric_v`` and ``magnetic_u`` (built from ``H_u`` and ``E_v``) share the
+      ``(primal_u, dual_v)`` grid — giving ``component_pts_inds = (0, 1, 1, 0)``.
+    """
 
     integral: _FarFieldIntegralSpec
-    pts: tuple[np.ndarray, np.ndarray, np.ndarray]
+    pts_sets: tuple[tuple[np.ndarray, np.ndarray, np.ndarray], ...]
+    component_pts_inds: tuple[int, int, int, int]
     propagation_factor: complex
     eta: complex
+
+    def component_pts(self, component_index: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Source grid of one tangential component."""
+
+        return self.pts_sets[self.component_pts_inds[component_index]]
 
 
 @dataclass(frozen=True)
 class _TangentialSurfaceCurrents:
-    """Tangential electric and magnetic current components on a projection surface."""
+    """Tangential electric and magnetic current components on a projection surface.
+
+    ``u`` and ``v`` are the surface's two in-plane axes in ``pop_axis`` order (e.g. ``u=x``,
+    ``v=y`` for a z-normal surface). ``electric_*`` are the equivalent electric current
+    ``J = n x H`` components and ``magnetic_*`` the magnetic current ``M = -n x E`` components.
+    The cross product swaps tangential components, so each current sits at the Yee position of
+    the field it is built from: ``electric_u`` (from ``H_v``) and ``magnetic_v`` (from ``E_u``)
+    share the ``(dual_u, primal_v)`` in-plane grid, while ``electric_v`` (from ``H_u``) and
+    ``magnetic_u`` (from ``E_v``) share the ``(primal_u, dual_v)`` grid.
+    """
 
     electric_u: np.ndarray
     electric_v: np.ndarray
@@ -129,9 +159,15 @@ class _TangentialSurfaceCurrents:
     magnetic_v: np.ndarray
 
     def as_tuple(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Return current components in projected-field order."""
+        """Return current components in the canonical (kernel argument) order."""
 
         return (self.electric_u, self.electric_v, self.magnetic_u, self.magnetic_v)
+
+    @staticmethod
+    def component_index(component_name: _TangentialCurrentComponentName) -> int:
+        """Position of one component in the :meth:`as_tuple` (kernel argument / VJP argnum) order."""
+
+        return {"electric_u": 0, "electric_v": 1, "magnetic_u": 2, "magnetic_v": 3}[component_name]
 
 
 @dataclass(frozen=True)
@@ -162,11 +198,16 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _PreparedFarFieldProjection:
-    """Prepared arrays reused across far-field evaluations at one frequency."""
+    """Prepared arrays reused across far-field evaluations at one frequency.
+
+    ``pts_sets``/``component_pts_inds`` follow the :class:`_FarFieldProjectionKernelSpec`
+    contract (distinct source grids + per-component grid index).
+    """
 
     field_components: _TangentialSurfaceCurrents
     integral: _FarFieldIntegralSpec
-    pts: tuple[np.ndarray, np.ndarray, np.ndarray]
+    pts_sets: tuple[tuple[np.ndarray, np.ndarray, np.ndarray], ...]
+    component_pts_inds: tuple[int, int, int, int]
     propagation_factor: complex
     eta: complex
 
@@ -176,7 +217,8 @@ class _PreparedFarFieldProjection:
 
         return _FarFieldProjectionKernelSpec(
             integral=self.integral,
-            pts=self.pts,
+            pts_sets=self.pts_sets,
+            component_pts_inds=self.component_pts_inds,
             propagation_factor=self.propagation_factor,
             eta=self.eta,
         )
@@ -191,17 +233,29 @@ def _prepare_far_field_projection(
     is_2d_simulation: bool,
     simulation_size: tuple[float, float, float],
 ) -> _PreparedFarFieldProjection:
-    """Prepare raw arrays reused across repeated approximate far-field evaluations."""
+    """Prepare raw arrays reused across repeated approximate far-field evaluations.
 
-    try:
-        currents_f = currents.sel(f=frequency)
-    except Exception as e:
-        raise SetupError(
-            format_chained_exception_message(
-                f"Frequency {frequency} not found in fields for monitor '{surface.monitor.name}'",
-                e,
-            )
-        ) from e
+    ``currents`` is either an :class:`xarray.Dataset` of colocated current components (all
+    sharing one source grid) or, for non-colocated projection, a ``dict`` mapping each tangential
+    component name to its own :class:`xarray.DataArray` carrying that component's native
+    Yee-staggered positions and box-rule area weighting.
+    """
+
+    non_colocated = isinstance(currents, dict)
+
+    def select_frequency(
+        component: xr.Dataset | xr.DataArray,
+    ) -> xr.Dataset | xr.DataArray:
+        try:
+            return component.sel(f=frequency)
+        except Exception as e:
+            raise SetupError(
+                format_chained_exception_message(
+                    f"Frequency {frequency} not found in fields for monitor "
+                    f"'{surface.monitor.name}'",
+                    e,
+                )
+            ) from e
 
     _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
     _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
@@ -230,30 +284,56 @@ def _prepare_far_field_projection(
         medium=medium, frequency=frequency
     )
 
-    pts = tuple(currents[name].values for name in ("x", "y", "z"))
-    weights = tuple(_trapz_weights_1d(pt) for pt in pts)
+    component_keys = ("E" + cmp_1, "E" + cmp_2, "H" + cmp_1, "H" + cmp_2)
 
-    electric_u = currents_f["E" + cmp_1]
-    electric_v = currents_f["E" + cmp_2]
-    magnetic_u = currents_f["H" + cmp_1]
-    magnetic_v = currents_f["H" + cmp_2]
-    field_components = _TangentialSurfaceCurrents(
-        electric_u=anp.reshape(electric_u.data, electric_u.shape),
-        electric_v=anp.reshape(electric_v.data, electric_v.shape),
-        magnetic_u=anp.reshape(magnetic_u.data, magnetic_u.shape),
-        magnetic_v=anp.reshape(magnetic_v.data, magnetic_v.shape),
+    # The differential areas are already folded into the current values for both schemes
+    # (element currents), so the integration metadata is pure geometry shared by all four
+    # components.
+    integral = _FarFieldIntegralSpec(
+        idx_u=idx_u,
+        idx_v=idx_v,
+        is_2d=is_2d_simulation,
+        idx_integration_1d=idx_integration_1d,
     )
+
+    if non_colocated:
+        # Each component keeps its native Yee in-plane positions. Components on the same
+        # staggered grid share one entry of ``pts_sets`` so their phase factors are evaluated
+        # once per distinct grid. The encounter-order dedup over (electric_u, electric_v,
+        # magnetic_u, magnetic_v) pairs them two-and-two (see _FarFieldProjectionKernelSpec),
+        # yielding component_pts_inds == (0, 1, 1, 0).
+        component_data = [select_frequency(currents[key]) for key in component_keys]
+        pts_sets = []
+        component_pts_inds = []
+        seen_pts: dict[tuple[bytes, ...], int] = {}
+        for component in component_data:
+            pts = tuple(np.asarray(component.coords[name].values) for name in ("x", "y", "z"))
+            key = tuple(p.tobytes() for p in pts)
+            if key not in seen_pts:
+                seen_pts[key] = len(pts_sets)
+                pts_sets.append(pts)
+            component_pts_inds.append(seen_pts[key])
+        pts_sets = tuple(pts_sets)
+        component_pts_inds = tuple(component_pts_inds)
+    else:
+        currents_f = select_frequency(currents)
+        component_data = [currents_f[key] for key in component_keys]
+        shared_pts = tuple(np.asarray(currents[name].values) for name in ("x", "y", "z"))
+        # all four components share the single colocated grid and its phase evaluation
+        pts_sets = (shared_pts,)
+        component_pts_inds = (0, 0, 0, 0)
+
+    component_arrays = []
+    for component in component_data:
+        component = component.transpose("x", "y", "z")
+        component_arrays.append(anp.reshape(component.data, component.shape))
+    field_components = _TangentialSurfaceCurrents(*component_arrays)
 
     return _PreparedFarFieldProjection(
         field_components=field_components,
-        integral=_FarFieldIntegralSpec(
-            weights=weights,
-            idx_u=idx_u,
-            idx_v=idx_v,
-            is_2d=is_2d_simulation,
-            idx_integration_1d=idx_integration_1d,
-        ),
-        pts=pts,
+        integral=integral,
+        pts_sets=pts_sets,
+        component_pts_inds=component_pts_inds,
         propagation_factor=propagation_factor,
         eta=ETA_0 / np.sqrt(medium.eps_model(frequency)),
     )
@@ -296,29 +376,6 @@ def _projection_data_from_fields(
     return data_cls.model_construct(**kwargs)
 
 
-def _trapz_weights_1d(points: np.ndarray) -> np.ndarray:
-    """Trapezoidal integration weights for `trapz(y, x=points)`.
-
-    Parameters
-    ----------
-    points : np.ndarray
-        1D array of integration points.
-
-    Returns
-    -------
-    np.ndarray
-        Trapezoidal integration weights with shape ``(len(points),)``.
-    """
-    points = np.asarray(points)
-    num_points = points.size
-    if num_points <= 1:
-        return np.ones((num_points,), dtype=float)
-
-    deltas = np.diff(points)
-    interior = (deltas[:-1] + deltas[1:]) / 2
-    return np.concatenate(([deltas[0] / 2], interior, [deltas[-1] / 2]))
-
-
 def _normalize_far_field_phases(
     phases: tuple[np.ndarray, np.ndarray, np.ndarray],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -330,19 +387,6 @@ def _normalize_far_field_phases(
         trailing_dims = obs_ndim - (phase.ndim - 1)
         normalized.append(phase.reshape(phase.shape + (1,) * trailing_dims))
     return tuple(normalized)
-
-
-def _apply_axis_weights(
-    currents: np.ndarray,
-    weights: tuple[np.ndarray, np.ndarray, np.ndarray],
-    axes: tuple[Axis, ...],
-) -> np.ndarray:
-    """Apply separable trapezoidal weights along the requested source axes."""
-
-    weighted = currents
-    for axis in axes:
-        weighted = weighted * weights[axis].reshape(AXIS_WEIGHT_SHAPES[axis])
-    return weighted
 
 
 def _broadcast_phase_for_source_axis(
@@ -450,18 +494,19 @@ def _far_field_integral(
 ) -> np.ndarray:
     """Evaluate the separable far-field surface/line integral.
 
-    This helper computes the near-to-far integral using precomputed separable phase factors
-    and trapezoidal integration weights, with an implementation tailored for autograd.
+    This helper computes the near-to-far integral using precomputed separable phase factors,
+    with an implementation tailored for autograd. The currents carry their differential areas
+    (element currents), so the integral is a pure phase-weighted sum.
 
     Parameters
     ----------
     currents : np.ndarray
-        Complex surface current values on the monitor grid with shape ``(nx, ny, nz)``.
+        Complex area-weighted current values on the monitor grid with shape ``(nx, ny, nz)``.
     phases : tuple[np.ndarray, np.ndarray, np.ndarray]
         Phase factors along ``x``, ``y``, and ``z``. Observation dimensions may differ by
         trailing singleton axes, which are normalized internally.
     spec : _FarFieldIntegralSpec
-        Static integration metadata, including source-axis weights and dimensionality.
+        Static integration geometry.
 
     Returns
     -------
@@ -470,9 +515,8 @@ def _far_field_integral(
     """
     phases = _normalize_far_field_phases(phases)
     integrated_axes = spec.integrated_axes
-    weighted_currents = _apply_axis_weights(currents, spec.weights, integrated_axes)
     first_axis = max(integrated_axes)
-    result = anp.tensordot(weighted_currents, phases[first_axis], axes=((first_axis,), (0,)))
+    result = anp.tensordot(currents, phases[first_axis], axes=((first_axis,), (0,)))
     remaining_axes = [axis for axis in range(3) if axis != first_axis]
 
     if spec.is_2d:
@@ -504,10 +548,7 @@ def _far_field_integral_pairs(
     phase_0, phase_1, phase_2 = phases
     if spec.is_2d:
         line_axis = spec.line_axis
-        weighted_currents = _apply_axis_weights(currents, spec.weights, (line_axis,))
-        currents_phase = anp.tensordot(
-            weighted_currents, phases[line_axis], axes=((line_axis,), (0,))
-        )
+        currents_phase = anp.tensordot(currents, phases[line_axis], axes=((line_axis,), (0,)))
         remaining_axes = [axis for axis in range(3) if axis != line_axis]
         for source_axis, axis in enumerate(remaining_axes):
             currents_phase = currents_phase * _broadcast_phase_for_source_axis(
@@ -516,17 +557,15 @@ def _far_field_integral_pairs(
         return currents_phase
 
     output_axis = spec.remaining_axis
-    integrated_axes = spec.integrated_axes
-    weighted_currents = _apply_axis_weights(currents, spec.weights, integrated_axes)
 
     if output_axis == 0:
-        currents_phase = anp.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        currents_phase = anp.tensordot(currents, phase_2, axes=((2,), (0,)))
         return anp.sum(currents_phase * phase_1[None, :, :], axis=1) * phase_0
     if output_axis == 1:
-        currents_phase = anp.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        currents_phase = anp.tensordot(currents, phase_2, axes=((2,), (0,)))
         return anp.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_1
 
-    currents_phase = anp.tensordot(weighted_currents, phase_1, axes=((1,), (0,)))
+    currents_phase = anp.tensordot(currents, phase_1, axes=((1,), (0,)))
     return anp.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_2
 
 
@@ -547,17 +586,15 @@ def _far_field_integral_pairs_3d_numpy(
     """
 
     output_axis = spec.remaining_axis
-    integrated_axes = spec.integrated_axes
-    weighted_currents = _apply_axis_weights(currents, spec.weights, integrated_axes)
 
     if output_axis == 0:
-        currents_phase = np.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        currents_phase = np.tensordot(currents, phase_2, axes=((2,), (0,)))
         return np.sum(currents_phase * phase_1[None, :, :], axis=1) * phase_0
     if output_axis == 1:
-        currents_phase = np.tensordot(weighted_currents, phase_2, axes=((2,), (0,)))
+        currents_phase = np.tensordot(currents, phase_2, axes=((2,), (0,)))
         return np.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_1
 
-    currents_phase = np.tensordot(weighted_currents, phase_1, axes=((1,), (0,)))
+    currents_phase = np.tensordot(currents, phase_1, axes=((1,), (0,)))
     return np.sum(currents_phase * phase_0[:, None, :], axis=0) * phase_2
 
 
@@ -578,37 +615,33 @@ def _far_field_integral_pairs_3d_currents_vjp(
 ) -> np.ndarray:
     """Apply the reverse paired far-field integral to an output cotangent."""
 
-    weights = spec.weights
     output_axis = spec.remaining_axis
 
     if output_axis == 0:
-        grad = anp.stack(
+        return anp.stack(
             [
                 _paired_weighted_phase_sum(phase_1, phase_2, weighted_bar)
                 for weighted_bar in g * phase_0
             ],
             axis=0,
         )
-        return grad * weights[1][None, :, None] * weights[2][None, None, :]
 
     if output_axis == 1:
-        grad = anp.stack(
+        return anp.stack(
             [
                 _paired_weighted_phase_sum(phase_0, phase_2, weighted_bar)
                 for weighted_bar in g * phase_1
             ],
             axis=1,
         )
-        return grad * weights[0][:, None, None] * weights[2][None, None, :]
 
-    grad = anp.stack(
+    return anp.stack(
         [
             _paired_weighted_phase_sum(phase_0, phase_1, weighted_bar)
             for weighted_bar in g * phase_2
         ],
         axis=2,
     )
-    return grad * weights[0][:, None, None] * weights[1][None, :, None]
 
 
 def _paired_far_field_phases(
@@ -657,21 +690,26 @@ def _far_fields_from_currents_pairs_3d_components(
 ) -> np.ndarray:
     """Project separate tangential current arrays with component-wise VJPs."""
 
-    pts_0, pts_1, pts_2 = kernel_spec.pts
-    phase_0, phase_1, phase_2 = _paired_far_field_phases(
-        pts_0,
-        pts_1,
-        pts_2,
-        kernel_spec.propagation_factor,
-        angle_trig.sin_theta,
-        angle_trig.cos_theta,
-        angle_trig.sin_phi,
-        angle_trig.cos_phi,
+    # one phase evaluation per distinct source grid, indexed per component
+    phase_sets = tuple(
+        _paired_far_field_phases(
+            *pts,
+            kernel_spec.propagation_factor,
+            angle_trig.sin_theta,
+            angle_trig.cos_theta,
+            angle_trig.sin_phi,
+            angle_trig.cos_phi,
+        )
+        for pts in kernel_spec.pts_sets
     )
 
-    def project_component(component: np.ndarray) -> np.ndarray:
+    def project_component(
+        component: np.ndarray,
+        phases: tuple[np.ndarray, np.ndarray, np.ndarray],
+    ) -> np.ndarray:
         """Project one current component onto the paired observation angles."""
 
+        phase_0, phase_1, phase_2 = phases
         return np.reshape(
             _far_field_integral_pairs_3d_numpy(
                 component, phase_0, phase_1, phase_2, kernel_spec.integral
@@ -680,8 +718,11 @@ def _far_fields_from_currents_pairs_3d_components(
         )
 
     projected_components = [
-        project_component(component)
-        for component in (electric_u, electric_v, magnetic_u, magnetic_v)
+        project_component(component, phase_sets[pts_ind])
+        for component, pts_ind in zip(
+            (electric_u, electric_v, magnetic_u, magnetic_v),
+            kernel_spec.component_pts_inds,
+        )
     ]
 
     return _spherical_far_fields_from_projected_components(
@@ -768,6 +809,8 @@ def _far_fields_from_currents_pairs_3d_component_vjp(
 ) -> _FarFieldsFromCurrentsPairs3DVJPMaker:
     """Build a VJP maker for one tangential current component."""
 
+    component_index = _TangentialSurfaceCurrents.component_index(component_name)
+
     def vjp_maker(
         _ans: np.ndarray,
         _electric_u: np.ndarray,
@@ -780,7 +823,7 @@ def _far_fields_from_currents_pairs_3d_component_vjp(
     ) -> Callable[[np.ndarray], np.ndarray]:
         def vjp(g: np.ndarray) -> np.ndarray:
             spec = kernel_spec.integral
-            pts_0, pts_1, pts_2 = kernel_spec.pts
+            pts_0, pts_1, pts_2 = kernel_spec.component_pts(component_index)
             projected_bar = _projected_component_cotangent_pairs(
                 g,
                 component_name=component_name,

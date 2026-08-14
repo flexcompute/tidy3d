@@ -32,6 +32,7 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
+from .geometry import effective_mode_plane
 from .mode_solver import ModeSolver
 
 if TYPE_CHECKING:
@@ -266,6 +267,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         self._validate_scene()
         super()._run_after_validators()
         self._plane_in_sim_bounds()
+        self._validate_mode_sort_spec_bounding_box()
         self._validate_mode_solver()
         self._validate_grid()
         return self
@@ -277,6 +279,26 @@ class ModeSimulation(AbstractYeeGridSimulation):
             self._raise_validation_error_at_loc(
                 "'ModeSimulation.plane' must intersect 'ModeSimulation.geometry'.",
                 "plane",
+            )
+        return self
+
+    def _validate_mode_sort_spec_bounding_box(self) -> Self:
+        """Validate the fill-fraction box against the effective mode-plane bounds."""
+        sort_spec = getattr(self.mode_spec, "sort_spec", None)
+        if sort_spec is None:
+            return self
+
+        normal_axis = self.plane.zero_dims[0]
+        sim_box = Box(size=self.size, center=self.center)
+        mode_plane = effective_mode_plane(self.plane, sim_box)
+        if not sort_spec._bounding_box_intersects_tangentially(mode_plane.bounds, normal_axis):
+            self._raise_validation_error_at_loc(
+                "'ModeSortSpec.bounding_box' must intersect the effective mode plane along both "
+                "tangential axes. Please move or resize the bounding box in the tangential "
+                "directions.",
+                "mode_spec",
+                "sort_spec",
+                "bounding_box",
             )
         return self
 

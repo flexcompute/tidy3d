@@ -660,8 +660,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             else:
                 # dot/outer_dot: integrate the full grid_expanded extent enclosing the data.
                 bounds_kwargs = {}
+            # A downsampled recording keeps only the monitor's interval_space stride of the grid;
+            # the helper then integrates the kept native positions (identity for stride 1).
+            num_cells = len(full_bounds[dim]) - 1
+            keep_inds = self.monitor.downsample(np.arange(num_cells), axis=axis)
             cell_sizes[dim], dual_sizes[dim] = yee_primal_dual_widths_1d(
-                full_bounds[dim], **bounds_kwargs
+                full_bounds[dim], keep_inds=keep_inds, **bounds_kwargs
             )
 
         dim1 = self._tangential_dims[0]
@@ -1053,28 +1057,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         mask = DataArray(mask_values, coords={dim: coords[dim] for dim in tan_dims}, dims=tan_dims)
         return mask
 
-    def _validate_bounding_box_intersection(self, bounding_box: Box) -> None:
-        """Ensure bounding box intersects the monitor plane."""
-
-        zero_dims = self.monitor.zero_dims
-        if len(zero_dims) != 1:
-            raise DataError("Bounding box fill fraction requires a planar monitor.")
-
-        normal_axis = zero_dims[0]
-        plane_coord = self.monitor.center[normal_axis]
-        lower, upper = bounding_box.bounds
-        lower_bound = lower[normal_axis]
-        upper_bound = upper[normal_axis]
-        tol = fp_eps
-        if plane_coord < lower_bound - tol or plane_coord > upper_bound + tol:
-            raise ValidationError(
-                "Bounding box must intersect the monitor plane when using 'fill_fraction_box'."
-            )
-
     def fill_fraction(self, bounding_box: Box) -> FreqModeDataArray:
         """Return the field-energy fill fraction within ``bounding_box``.
         The fill fraction is defined as the ratio between the integrated field intensity inside
-        the bounding box and the total integrated intensity over the monitor plane.
+        the tangential projection of the bounding box and the total integrated intensity over the
+        monitor plane. The position and extent of the box normal to the monitor are ignored.
 
         Parameters
         ----------
@@ -1088,7 +1075,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """
 
         self._check_fields_stored(["Ex", "Ey", "Ez"])
-        self._validate_bounding_box_intersection(bounding_box)
 
         intensity = self.intensity
         area = self._diff_area
@@ -1105,8 +1091,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def fill_fraction_box(self) -> FreqModeDataArray:
         """Convenience accessor using the :class:`~tidy3d.Box` defined on ``sort_spec``.
 
-        The component of the box along the propagation axis does not influence the fill fraction,
-        but the box must intersect the monitor plane.
+        The position and extent of the box along the monitor's normal axis do not influence the fill
+        fraction.
         """
 
         sort_spec = getattr(self.monitor.mode_spec, "sort_spec", None)
@@ -1213,7 +1199,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         .. math:
 
-           \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
+           \frac{1}{4} \int \left( E_0^* \times H_1 + E_1 \times H_0^* \right) \, {\rm d}S
 
         If ``bidirectional=False``, the dot product is instead:
 
@@ -1230,7 +1216,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             is similar, but without the complex conjugation of the fields.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
-            ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
+            ``1/4 * integral(E1* x H2 + E2 x H1*) dS``.
             If ``False``, computes just: ``1/2 * integral(E1* x H2) dS``.
 
         Returns
@@ -1472,7 +1458,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         .. math:
 
-           \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
+           \frac{1}{4} \int \left( E_0^* \times H_1 + E_1 \times H_0^* \right) \, {\rm d}S
 
         If ``bidirectional=False``, the dot product is instead:
 
@@ -1489,7 +1475,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             is similar, but without the complex conjugation of the fields.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
-            ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
+            ``1/4 * integral(E1* x H2 + E2 x H1*) dS``.
             If ``False``, computes just: ``1/2 * integral(E1* x H2) dS``.
         truncate_to_monitor_bounds : bool = False
             Only used in the non-colocated integration path (when ``colocate=False``).
@@ -3879,6 +3865,13 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         -------
         :class:`.ModeSolverData`
             Copy of self with modes sorted according to ``sort_spec``.
+
+        Notes
+        -----
+        This data-level operation does not validate that ``sort_spec.bounding_box`` intersects the
+        mode data plane tangentially. When ``fill_fraction_box`` is used with a tangentially
+        disjoint box, the metric is zero for every mode. Tangential intersection is validated when
+        constructing a :class:`.ModeSimulation`, :class:`.ModeSolver`, or :class:`.EMESimulation`.
         """
 
         # Return the original data if no new sorting / tracking required

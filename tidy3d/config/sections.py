@@ -184,8 +184,8 @@ class AdjointConfig(ConfigSection):
         1e-3,
         title="Minimum spacing fraction",
         description=(
-            "Minimum normalized spacing allowed when constructing adaptive finite-difference "
-            "stencils for autograd evaluations."
+            "Minimum fraction of the shortest free-space adjoint wavelength used as the lower "
+            "bound for adaptive shape-gradient surface-sampling spacing."
         ),
         ge=0.0,
     )
@@ -214,7 +214,8 @@ class AdjointConfig(ConfigSection):
         title="Enable local gradients",
         description=(
             "When True, autograd runs download intermediate data and compute gradients locally. "
-            "Remote (default) gradients always use server-side limits regardless of other settings."
+            "Remote (default) gradients ignore local-only execution and numerical overrides, "
+            "while client-side source-planning settings such as field-source PCA still apply."
         ),
         json_schema_extra={"persist": True},
     )
@@ -246,6 +247,54 @@ class AdjointConfig(ConfigSection):
             "simulations. 'assume_outgoing' uses the monitor position relative to the simulation "
             "center to choose a single outgoing direction and flips it for the adjoint source. "
             "'run_both_directions' launches adjoint sources for both '+' and '-' mode directions."
+        ),
+        json_schema_extra={"persist": True},
+    )
+
+    field_source_reduction_mode: Literal["pca"] | None = Field(
+        None,
+        title="Field-source adjoint reduction mode",
+        description=(
+            "Strategy for compressing compatible FieldData-derived adjoint current sources. "
+            "None applies no reduction and uses standard adjoint source grouping. 'pca' "
+            "compresses sources into principal components, one adjoint simulation per "
+            "component."
+        ),
+    )
+
+    field_source_pca_min_energy_coverage: float = Field(
+        0.999,
+        title="Field-source PCA minimum energy coverage",
+        description=(
+            "Minimum fraction of weighted current-source profile energy retained per "
+            "current type (electric and magnetic blocks are truncated independently, each "
+            "in its own units) by the field-source PCA spatial decomposition. The fraction "
+            "is measured over all sources decomposed together, so a monitor holding a small "
+            "share of that energy can be represented coarsely, or dropped, while the "
+            "requested coverage is still reported as met. The retained fraction describes "
+            "the injected source profiles, not the gradient: the discarded component still "
+            "contributes through the simulated field response, which can amplify it, so "
+            "this setting constrains gradient error indirectly rather than bounding it, and "
+            "the gradient of such a weak monitor on its own can be inaccurate. Coverage is "
+            "measured in energy, so a target of 0.999 can discard up to roughly 3% of the "
+            "source amplitude. A value of 1.0 keeps the full numerical rank, representing "
+            "every source and frequency exactly."
+        ),
+        ge=0.0,
+        le=1.0,
+    )
+
+    field_source_pca_max_matrix_entries: PositiveInt = Field(
+        20_000_000,
+        title="Field-source PCA max matrix entries",
+        description=(
+            "Maximum number of dense complex entries allowed in an individual field-source "
+            "PCA profile matrix. Larger PCA blocks are skipped and handled by standard "
+            "port-versus-frequency grouping. This is a storage guard, not a runtime one: "
+            "peak memory during the decomposition runs several times the entry count "
+            "because of the singular-value solver's own factors and workspace, and "
+            "decomposition time additionally grows with the number of frequencies, so "
+            "blocks with equal entry counts can take very different times."
         ),
         json_schema_extra={"persist": True},
     )
@@ -356,16 +405,23 @@ class AdjointConfig(ConfigSection):
 
 @register_handler("adjoint")
 def apply_adjoint(config: AdjointConfig) -> None:
-    """Warn when remote gradients will ignore autograd overrides."""
+    """Warn when remote gradients will ignore local-only autograd overrides."""
 
     if config.local_gradient:
         return
 
+    client_side_fields = {
+        "field_source_reduction_mode",
+        "field_source_pca_min_energy_coverage",
+        "field_source_pca_max_matrix_entries",
+    }
     defaults = AdjointConfig()
     overridden = [
         name
         for name in type(config).model_fields
-        if name != "local_gradient" and getattr(config, name) != getattr(defaults, name)
+        if name != "local_gradient"
+        and name not in client_side_fields
+        and getattr(config, name) != getattr(defaults, name)
     ]
     if not overridden:
         return

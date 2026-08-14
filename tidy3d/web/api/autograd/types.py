@@ -228,6 +228,13 @@ class CustomVJPConfig:
     structure depending on if this is a geometry or medium path (see path_key) as the first argument. The second
     argument should accept a DerivativeInfo object that contains important for computing the gradient. The function
     should return a dict object that maps the path to the computed gradient value.
+
+    Geometry sampling metadata on that ``DerivativeInfo`` (``adaptive_vjp_spacing()``,
+    ``discretization_wavelength()``, and the clip-context material length scale) is resolved
+    per structure from the simulation definition, and only for structures with a traced
+    geometry path. A callback on a structure whose traced paths are all under ``medium``
+    therefore raises ``AdjointError`` from those accessors; every other derivative input
+    (fields, permittivity, bounds) is available on any path.
     """
 
     path_key: tuple[str, ...] | None = None

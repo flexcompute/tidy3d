@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from numbers import Integral
 from typing import TYPE_CHECKING
 
 from pydantic import Field
@@ -23,6 +24,25 @@ DRCPolygon = tuple[Coordinate2D, ...]
 DRCMultiPolygon = tuple[DRCPolygon, ...]
 
 UNLIMITED_VIOLATION_WARNING_COUNT = 100_000
+
+
+def _validate_result_limits(
+    max_results: int | None,
+    max_results_per_cell: int | None,
+) -> None:
+    """Validate mutually exclusive global and per-cell result limits."""
+    for name, value in (
+        ("max_results", max_results),
+        ("max_results_per_cell", max_results_per_cell),
+    ):
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, Integral):
+            raise TypeError(f"'{name}' must be an integer or None.")
+        if value <= 0:
+            raise ValueError(f"'{name}' must be a positive integer.")
+    if max_results is not None and max_results_per_cell is not None:
+        raise ValueError("'max_results' and 'max_results_per_cell' are mutually exclusive.")
 
 
 def parse_edge(value: str, *, cell: str) -> EdgeMarker:
@@ -374,6 +394,7 @@ class DRCResults(Tidy3dBaseModel):
         cls,
         resultsfile: str | Path,
         max_results: int | None = None,
+        max_results_per_cell: int | None = None,
     ) -> DRCResults:
         """Create a :class:`.DRCResults` instance from a results file.
 
@@ -384,6 +405,10 @@ class DRCResults(Tidy3dBaseModel):
         max_results : Optional[int]
             Maximum number of markers to load from the file. If ``None`` (default), all markers are
             loaded.
+        max_results_per_cell : Optional[int]
+            Maximum number of markers to load for each cell. This preserves at
+            least one marker for every violating cell when set to ``1``. Cannot
+            be combined with ``max_results``.
 
         Returns
         -------
@@ -406,6 +431,7 @@ class DRCResults(Tidy3dBaseModel):
         violations = violations_from_file(
             resultsfile=resultsfile,
             max_results=max_results,
+            max_results_per_cell=max_results_per_cell,
         )
         return cls.model_construct(violations_by_category=violations)
 
@@ -413,6 +439,7 @@ class DRCResults(Tidy3dBaseModel):
 def violations_from_file(
     resultsfile: str | Path,
     max_results: int | None = None,
+    max_results_per_cell: int | None = None,
 ) -> dict[str, DRCViolation]:
     """Loads a KLayout DRC results file and returns the results as a dictionary of :class:`.DRCViolation` objects.
 
@@ -423,6 +450,9 @@ def violations_from_file(
     max_results : Optional[int]
         Maximum number of markers to load from the file. If ``None`` (default), all markers are
         loaded.
+    max_results_per_cell : Optional[int]
+        Maximum number of markers to load for each cell. Cannot be combined
+        with ``max_results``.
 
     Returns
     -------
@@ -436,8 +466,10 @@ def violations_from_file(
     ET.ParseError
         If the DRC result file is not a valid XML file.
     """
-    if max_results is not None and max_results <= 0:
-        raise ValueError("'max_results' must be a positive integer.")
+    _validate_result_limits(
+        max_results=max_results,
+        max_results_per_cell=max_results_per_cell,
+    )
 
     # Parse the results file
     try:
@@ -454,7 +486,7 @@ def violations_from_file(
         ) from err
 
     # Initialize violations dict with all the categories
-    violations = {}
+    violations: dict[str, list[DRCMarker]] = {}
     for category in xmltree.getroot().findall(".//categories/category/name"):
         category_name = category.text
         if category_name is None:
@@ -463,13 +495,17 @@ def violations_from_file(
         violations[category_name] = []
 
     # Prepare the items and warn if necessary
-    items = list(xmltree.getroot().findall(".//item"))
+    items = xmltree.getroot().findall(".//item")
     total_markers = len(items)
-    if max_results is None and total_markers > UNLIMITED_VIOLATION_WARNING_COUNT:
+    if (
+        max_results is None
+        and max_results_per_cell is None
+        and total_markers > UNLIMITED_VIOLATION_WARNING_COUNT
+    ):
         log.warning(
             f"DRC result file contains many markers ({total_markers}), "
             "which can affect loading performance. "
-            "Pass 'max_results' to limit loaded results."
+            "Pass 'max_results' or 'max_results_per_cell' to limit loaded results."
         )
     elif max_results is not None and total_markers > max_results:
         log.warning(
@@ -477,7 +513,10 @@ def violations_from_file(
             f"only the first {max_results} were loaded due to 'max_results'."
         )
 
-    # Parse markers
+    # Parse markers. Per-cell counts span all rule categories so every cell gets
+    # an equal marker budget.
+    loaded_by_cell: dict[str, int] = {}
+    was_truncated = False
     for idx, item in enumerate(items):
         if max_results is not None and idx >= max_results:
             break
@@ -489,10 +528,22 @@ def violations_from_file(
         if cell_el is None or cell_el.text is None:
             raise FileError("Encountered DRC item without a cell in results file.")
         cell = cell_el.text.strip().strip("'\"")
+        loaded_count = loaded_by_cell.get(cell, 0)
+        if max_results_per_cell is not None and loaded_count >= max_results_per_cell:
+            was_truncated = True
+            continue
         value = item.find("values/value").text
         marker = parse_violation_value(value, cell=cell)
         markers = violations.setdefault(category, [])
         markers.append(marker)
+        loaded_by_cell[cell] = loaded_count + 1
+
+    if was_truncated:
+        log.warning(
+            f"DRC markers were limited to {max_results_per_cell} per cell due to "
+            "'max_results_per_cell'.",
+            log_once=True,
+        )
 
     return {
         category: DRCViolation(category=category, markers=tuple(markers))

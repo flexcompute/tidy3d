@@ -18,6 +18,8 @@ from tidy3d.constants import RADIAN, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from pydantic import NonNegativeFloat, NonNegativeInt
 
     from tidy3d.compat import Self
@@ -224,6 +226,10 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
             by the EME grid spec.
         """
 
+    @abstractmethod
+    def _mode_specs_with_locs(self) -> Iterator[tuple[EMEModeSpec, tuple[Any, ...]]]:
+        """Mode specifications paired with their relative authored field locations."""
+
     @property
     def real_cell_indices(self) -> int:
         """The cell indices inside this EME grid, starting at 0,
@@ -285,6 +291,10 @@ class EMEUniformGrid(EMEGridSpec):
         description="Mode specification for the uniform EME grid.",
     )
 
+    def _mode_specs_with_locs(self) -> Iterator[tuple[EMEModeSpec, tuple[Any, ...]]]:
+        """Mode specification paired with its relative authored field location."""
+        yield self.mode_spec, ("mode_spec",)
+
     def make_grid(self, center: Coordinate, size: Size, axis: Axis) -> EMEGrid:
         """Generate EME grid from the EME grid spec.
 
@@ -344,6 +354,11 @@ class EMEExplicitGrid(EMEGridSpec):
         "The first (last) cell spans the region between the first (last) boundary "
         "and the simulation boundary.",
     )
+
+    def _mode_specs_with_locs(self) -> Iterator[tuple[EMEModeSpec, tuple[Any, ...]]]:
+        """Mode specifications paired with their relative authored field locations."""
+        for mode_index, mode_spec in enumerate(self.mode_specs):
+            yield mode_spec, ("mode_specs", mode_index)
 
     @model_validator(mode="after")
     def _validate_boundaries(self) -> Self:
@@ -499,6 +514,12 @@ class EMECompositeGrid(EMEGridSpec):
         "The first (last) subgrid spans the region between the first (last) subgrid boundary "
         "and the simulation boundary.",
     )
+
+    def _mode_specs_with_locs(self) -> Iterator[tuple[EMEModeSpec, tuple[Any, ...]]]:
+        """Mode specifications paired with their nested authored field locations."""
+        for subgrid_index, subgrid in enumerate(self.subgrids):
+            for mode_spec, loc in subgrid._mode_specs_with_locs():
+                yield mode_spec, ("subgrids", subgrid_index, *loc)
 
     @model_validator(mode="after")
     def _validate_subgrid_boundaries(self) -> Self:

@@ -29,6 +29,7 @@ from .validators import is_close_to_glancing_angle
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.types import Axis, Bound
 
 GROUP_INDEX_STEP = 0.005
 MODE_DATA_KEYS = Literal[
@@ -120,8 +121,9 @@ class ModeSortSpec(Tidy3dBaseModel):
         title="Bounding box",
         description=(
             "Regular 3D tidy3d :class:`~tidy3d.Box` used by metrics such as ``'fill_fraction_box'``. "
-            "The extent along the propagation axis is ignored for the metric, but the box must "
-            "still intersect the monitor plane. Required when filtering or sorting with that key."
+            "The position and extent along the mode-plane normal axis are ignored for the metric. "
+            "For simulation and mode-solver setup, the box must intersect the effective mode plane "
+            "along both tangential axes. Required when filtering or sorting with that key."
         ),
     )
     keep_modes: Literal["all"] | Literal["filtered"] | PositiveInt = Field(
@@ -203,6 +205,24 @@ class ModeSortSpec(Tidy3dBaseModel):
                 "ModeSortSpec.bounding_box must be set when using 'fill_fraction_box'."
             )
         return data
+
+    def _bounding_box_intersects_tangentially(
+        self, simulation_bounds: Bound, normal_axis: Axis
+    ) -> bool:
+        """Whether the fill-fraction box intersects the simulation in both tangential axes."""
+        uses_bounding_box = any(
+            key == "fill_fraction_box" for key in (self.filter_key, self.sort_key)
+        )
+        if not uses_bounding_box or self.bounding_box is None:
+            return True
+
+        sim_min, sim_max = simulation_bounds
+        box_min, box_max = self.bounding_box.bounds
+        tangential_axes = (axis for axis in range(3) if axis != normal_axis)
+        return all(
+            box_min[axis] <= sim_max[axis] and box_max[axis] >= sim_min[axis]
+            for axis in tangential_axes
+        )
 
     @property
     def has_custom_sort_or_filter(self) -> bool:

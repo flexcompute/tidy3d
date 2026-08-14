@@ -206,6 +206,11 @@ class Monitor(AbstractMonitor):
     )
 
     @property
+    def _record_colocated(self) -> bool:
+        """Whether the recorded field samples are colocated to primal grid nodes."""
+        return self.colocate
+
+    @property
     def _to_solver_monitor(self) -> Self:
         """Monitor definition that will be used to define the field recording during the time
         stepping."""
@@ -1657,22 +1662,18 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         "field components stay at their tangential positions.",
     )
 
-    colocate: bool = Field(
+    colocate: Literal[True] = Field(
         True,
         title="Colocate Fields",
-        description="Governed by ``use_colocated_integration`` and not set independently for "
-        "surface-integration monitors: it mirrors that value, so the solver records colocated "
-        "fields exactly when the integration is colocated.",
+        description="Always ``True`` for surface-integration monitors; select the integration "
+        "scheme with ``use_colocated_integration``.",
+        json_schema_extra={"doc_hidden": True},
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def _colocate_follows_integration(cls, data: Any) -> Any:
-        """``colocate`` is derived from ``use_colocated_integration`` for surface-integration
-        monitors (it is not a user knob), giving every consumer a single source of truth."""
-        if isinstance(data, dict):
-            data = {**data, "colocate": data.get("use_colocated_integration", True)}
-        return data
+    @property
+    def _record_colocated(self) -> bool:
+        """Whether the recorded field samples are colocated to primal grid nodes."""
+        return self.use_colocated_integration
 
     normal_dir: Direction | None = Field(
         None,
@@ -2207,22 +2208,6 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     and projects them to a given set of observation points.
     """
 
-    colocate: Literal[True] = Field(
-        True,
-        title="Colocate Fields",
-        description="Field projection evaluates the equivalent surface currents from fields "
-        "colocated to the grid boundaries (i.e. primal grid nodes), so colocation cannot be "
-        "disabled for field-projection monitors.",
-    )
-
-    use_colocated_integration: Literal[True] = Field(
-        True,
-        title="Use Colocated Integration",
-        description="Field projection always integrates colocated surface currents; the "
-        "native-Yee surface integration is not yet supported for field-projection monitors. "
-        "The inherited validator derives ``colocate=True`` from this.",
-    )
-
     custom_origin: Coordinate | None = Field(
         None,
         title="Local Origin",
@@ -2323,7 +2308,9 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
                     size=surface.size,
                     freqs=self.freqs,
                     name=surface.name,
-                    colocate=True,
+                    colocate=self.use_colocated_integration,
+                    use_colocated_integration=self.use_colocated_integration,
+                    interval_space=self.interval_space,
                 ),
                 normal_dir=surface.normal_dir,
             )

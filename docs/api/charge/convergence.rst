@@ -146,6 +146,8 @@ names the offending feature:
 - ``MasettiMobility``
 - SSAC ``at_voltages`` bias-point selection
 - ``SteadyChargeResidualMonitor`` (per-node residual debug monitor)
+- ``SteadyGenerationRecombinationMonitor`` (per-node generation-recombination
+  rates)
 - Schottky contacts (``VoltageBC`` with ``model="schottky_mott"``); supported
   by the charge solver only -- in conduction simulations the ``model`` flag
   has no effect and the boundary applies the plain potential

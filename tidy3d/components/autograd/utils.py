@@ -1,11 +1,13 @@
 # utilities for working with autograd
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
+import numpy as np
 from autograd.tracer import getval, isbox
 
 if TYPE_CHECKING:
@@ -134,3 +136,26 @@ def accumulate_field_map(target: dict, addition: dict) -> None:
                 target[k] = existing + v
         else:
             target[k] = v
+
+
+def array_digest(values: NDArray, digest_size: int = 16) -> str:
+    """Return a fixed-size, session-stable digest of an array's exact contents.
+
+    Arrays are neither hashable nor cheap to compare elementwise, so this reduces one
+    to a short string usable inside dictionary keys and identity comparisons. The
+    digest has three properties worth relying on:
+
+    * *exact*: contents differing in a single bit digest differently, so it expresses
+      identity rather than numerical closeness;
+    * *stable*: unlike ``hash()`` of the same content, it does not vary between
+      processes, so keys built from it can be sorted, logged, or persisted
+      reproducibly;
+    * *layout independent*: contents are canonicalized to C order first, so a strided
+      view and a contiguous copy of the same values agree.
+
+    ``digest_size`` is the digest length in bytes; the default 16 (a 32-character hex
+    string) keeps keys small while leaving collisions far out of practical reach.
+    """
+
+    contiguous = np.ascontiguousarray(values)
+    return hashlib.blake2b(contiguous.tobytes(), digest_size=digest_size).hexdigest()

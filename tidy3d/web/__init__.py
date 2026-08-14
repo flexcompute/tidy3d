@@ -40,6 +40,7 @@ from .api.webapi import (
 from .cli import tidy3d_cli
 from .cli.config import configure_fn as configure
 from .diagnostics import diagnose_connection, diagnose_environment, diagnose_report
+from .execution_cost_limit import execution_flexcredit_status
 from .license import refresh_licenses
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     "download_json",
     "download_log",
     "estimate_cost",
+    "execution_flexcredit_status",
     "get_info",
     "get_run_info",
     "get_tasks",

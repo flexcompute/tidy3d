@@ -7,6 +7,7 @@ For a quickstart example, please see `this notebook <link/to/notebook>`_.
 
 from __future__ import annotations
 
+from .batch import BatchedDRCChecker
 from .drc import (
     DRCConfig,
     DRCRunner,
@@ -15,6 +16,7 @@ from .drc import (
 from .results import DRCResults
 
 __all__ = [
+    "BatchedDRCChecker",
     "DRCConfig",
     "DRCResults",
     "DRCRunner",

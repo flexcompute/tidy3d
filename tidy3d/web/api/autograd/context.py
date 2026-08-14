@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     import tidy3d as td
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.parallel_adjoint_bases import ParallelAdjointBasis
+    from tidy3d.components.autograd.spacing import SamplingResolution
 
     from .types import CustomVJPConfig, NumericalStructureConfig
 
@@ -17,6 +18,51 @@ def _require_sim_data(sim_data: td.SimulationData | None, *, field_name: str) ->
     if sim_data is None:
         raise ValueError(f"Missing required simulation data in context: {field_name}")
     return sim_data
+
+
+def sampling_resolutions_for_traced_fields(
+    simulation: td.Simulation,
+    sim_fields_keys: Sequence[tuple],
+) -> dict[int, SamplingResolution]:
+    """Precompute one geometry sampling resolution per traced structure.
+
+    Structure and numerical VJP paths may contain several traced fields for the
+    same structure. Deduplicating their indices here keeps the simulation-definition
+    material scan outside the per-adjoint-result postprocessing loop. Plain
+    structure paths only need this metadata for geometry derivatives; medium-only
+    paths do not consume geometry sampling resolutions.
+
+    Built-in medium derivatives never read the sampling helpers, so skipping medium-only
+    paths is safe for them. It is deliberately visible to ``custom_vjp`` callbacks, which
+    receive the same ``DerivativeInfo``: a callback on a structure with no traced geometry
+    path gets ``None`` for the resolved fields and an ``AdjointError`` if it asks for them.
+    See ``CustomVJPConfig.compute_derivatives``.
+
+    Numerical paths cannot be filtered that way, because their path tails are defined by
+    the ``NumericalStructureConfig`` and carry no geometry/medium distinction, so they are
+    resolved unconditionally. That keeps a callback reading sampling metadata straight off
+    its ``DerivativeInfo`` working, at the cost of one definition-level material scan for a
+    numerical structure that turns out to want only medium derivatives.
+    """
+
+    from tidy3d.components.autograd.spacing import adjoint_sampling_resolution
+
+    structure_indices = sorted(
+        {
+            component_index
+            for component_type, component_index, *component_path in sim_fields_keys
+            if component_type == "numerical"
+            or (
+                component_type == "structures"
+                and len(component_path) > 0
+                and component_path[0] == "geometry"
+            )
+        }
+    )
+    return {
+        structure_index: adjoint_sampling_resolution(simulation, structure_index)
+        for structure_index in structure_indices
+    }
 
 
 @dataclass(frozen=True)
@@ -144,7 +190,7 @@ class AdjointTaskContext(TaskContextBase):
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class AdjointPostprocessInputs:
     """Typed inputs required by adjoint postprocessing."""
 
@@ -153,6 +199,32 @@ class AdjointPostprocessInputs:
     sim_fields_keys: list[tuple]
     numerical_structure_map: dict[int, NumericalStructureConfig]
     custom_vjp: tuple[CustomVJPConfig, ...] | None
+    sampling_resolutions: Mapping[int, SamplingResolution]
+
+    def __init__(
+        self,
+        *,
+        sim_data_orig: td.SimulationData,
+        sim_data_fwd: td.SimulationData,
+        sim_fields_keys: list[tuple],
+        numerical_structure_map: dict[int, NumericalStructureConfig],
+        custom_vjp: tuple[CustomVJPConfig, ...] | None,
+        sampling_resolutions: Mapping[int, SamplingResolution] | None = None,
+    ) -> None:
+        """Create postprocess inputs, deriving sampling metadata when omitted."""
+
+        if sampling_resolutions is None:
+            sampling_resolutions = sampling_resolutions_for_traced_fields(
+                sim_data_orig.simulation,
+                sim_fields_keys,
+            )
+
+        object.__setattr__(self, "sim_data_orig", sim_data_orig)
+        object.__setattr__(self, "sim_data_fwd", sim_data_fwd)
+        object.__setattr__(self, "sim_fields_keys", sim_fields_keys)
+        object.__setattr__(self, "numerical_structure_map", numerical_structure_map)
+        object.__setattr__(self, "custom_vjp", custom_vjp)
+        object.__setattr__(self, "sampling_resolutions", sampling_resolutions)
 
     @classmethod
     def from_adjoint_task_context(
@@ -165,6 +237,9 @@ class AdjointPostprocessInputs:
             sim_fields_keys=task_context.sim_fields_keys,
             numerical_structure_map=task_context.numerical_structures,
             custom_vjp=task_context.custom_vjp,
+            sampling_resolutions=sampling_resolutions_for_traced_fields(
+                task_context.sim_data_orig.simulation, task_context.sim_fields_keys
+            ),
         )
 
     @classmethod
@@ -184,6 +259,9 @@ class AdjointPostprocessInputs:
             sim_fields_keys=task_context.sim_fields_keys,
             numerical_structure_map=task_context.numerical_structures,
             custom_vjp=task_context.custom_vjp,
+            sampling_resolutions=sampling_resolutions_for_traced_fields(
+                sim_data_orig.simulation, task_context.sim_fields_keys
+            ),
         )
 
 

@@ -225,6 +225,8 @@ Component modelers also participate in the cache. For `MODAL_CM` and `TERMINAL_C
 
 `BatchData` has its own optional in-memory cache controlled by `td.config.batch_data_cache`, but that is separate from the disk cache described here.
 
+The process-wide [execution FlexCredit limit](../../docs/configuration/index.rst#limiting-cloud-cost-for-one-python-execution) is checked after local cache filtering. Confirmed local cache hits do not reserve budget, and a confirmed maximum estimate of zero reserves zero FlexCredits.
+
 ## CLI and Programmatic Inspection
 
 The cache has a small CLI:

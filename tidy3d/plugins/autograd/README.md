@@ -57,7 +57,7 @@ An inverse design optimization loop in Tidy3D generally follows these steps:
 
 * **Geometry + Material coverage**: Optimize most geometries (including `PolySlab` sidewall angles or `TriangleMesh` vertices) and dispersive media without custom wrappers.
 * **Topology-friendly workflows**: `CustomMedium` plus filters/projections in `tidy3d.plugins.autograd` let you impose fabrication constraints while staying differentiable.
-* **Broadband + adjoint throttling**: Adjoint jobs are auto-grouped by frequency or spatial port and limited by `max_num_adjoint_per_fwd`.
+* **Broadband + adjoint throttling**: Adjoint jobs are auto-grouped by frequency or spatial port, can optionally compress compatible `FieldData` sources with PCA, and are limited by `max_num_adjoint_per_fwd`.
 * **S-matrix gradients**: Differentiate objective functions involving supported scattering-matrix modelers when the underlying simulations are autograd-ready.
 * **Far-field aware**: Near-field monitors can feed local `FieldProjector` steps, so you can optimize flux or far-field metrics. Objective functions cannot currently differentiate through server-side projection monitor data directly.
 
@@ -70,6 +70,33 @@ The number of adjoint simulations depends on which simulation outputs the object
 * If an objective uses multiple frequencies and multiple spatial ports, the standard path uses the smaller of the unique frequency count and the spatial-port count.
 
 Unused frequencies in monitors increase forward-run field and permittivity data size, but they do not by themselves create adjoint simulations. Only frequencies that participate in the objective contribute adjoint sources.
+
+### Experimental FieldData PCA Source Compression
+
+Objectives built from `FieldMonitor` data, such as custom flux or field-overlap figures of merit, can generate one `CustomCurrentSource` adjoint source for each frequency. When those source profiles are nearly linearly dependent, Tidy3D can optionally replace the original frequency-indexed source set with a smaller set of broadband principal-component sources. Each retained PCA component is run as one adjoint simulation, and the per-frequency adjoint contribution is reconstructed through the usual post-run normalization coefficients.
+
+Enable this experimental path with:
+
+```python
+td.config.adjoint.field_source_reduction_mode = "pca"
+td.config.adjoint.field_source_pca_min_energy_coverage = 0.999
+```
+
+The coverage controls the retained weighted source-profile energy per current type. Use `1.0` to retain the full numerical rank of each compatible source matrix. Electric and magnetic current blocks are truncated independently, each in its own physical units, and the retained modes share one coefficient basis formed from the union of the two blocks' frequency subspaces. Within a support, samples carry grid-measure weights so the truncation is not biased by nonuniform meshing. No material properties are sampled, so the compression is valid in dispersive, lossy, and anisotropic backgrounds.
+
+The coverage is enforced on the summed energy of everything decomposed together, not monitor by monitor or frequency by frequency. A monitor holding a small share of that energy can therefore be represented coarsely, or dropped, while the requested coverage is still met, and that weak monitor's own gradient may then be inaccurate. Note that the retained fraction describes the injected source profiles, not the gradient: the discarded component still contributes through the simulated field response, which can amplify it, so coverage constrains gradient error indirectly rather than bounding it. Coverage is also an energy measure, so a target of `0.999` can discard up to roughly 3% of the source amplitude. Use `1.0` when a weak monitor's gradient matters in its own right, since the full numerical rank represents every source and frequency exactly.
+
+This compression is intentionally conservative:
+
+* It only applies to `FieldData`-derived point, line, and planar `CustomCurrentSource` objects.
+* Sources are batched only when they share the exact same support dimension (point, line, or plane), frequency tuple, and field-component tuple.
+* Sources that split field components across monitors on one support are merged first, so the plan does not depend on whether components were recorded by one monitor or several.
+* Different monitor supports may be compressed together in one batch, but each support must have a consistent spatial/component layout across its frequencies.
+* Volumetric sources, duplicate frequencies on the same support, unsupported layouts, and oversized PCA matrices fall back to standard grouping.
+* Simulations using symmetry currently use the standard grouping path.
+* The PCA result is used only when the final number of adjoint source groups is strictly smaller than the standard frequency-versus-port grouping result.
+
+For the configuration fields and defaults, see the [configuration reference](https://docs.flexcompute.com/projects/tidy3d/en/latest/configuration/reference.html).
 
 `max_num_adjoint_per_fwd` caps the number of adjoint solves spawned by each forward simulation. Increase it intentionally for objectives that touch many frequencies, components, or spatial ports.
 
@@ -256,6 +283,72 @@ The plugin also offers several general-purpose differentiable functions:
 *   `smooth_max` / `smooth_min`: Differentiable approximations of `max()` and `min()`, useful for creating objectives that depend on the maximum or minimum value in a set of results.
 *   `scalar_objective`: A helper for enforcing scalar objective returns compatible with `grad` and `value_and_grad`.
 *   `Adam`, `adam`, `apply_updates`, and `optimize`: Lightweight optimization helpers for plugin-native optimization loops.
+
+### Constraint-Compatible Optimizer Updates
+
+Some useful design constraints are black-box or non-differentiable and therefore cannot be included
+directly in a gradient-based objective. Examples include geometric validity checks, external
+simulation criteria, fabrication rules, and design rule checking (DRC). `optimize` accepts a general
+`SafeUpdate` strategy that can replace each proposed optimizer step with a constraint-compatible
+one.
+
+`BacktrackingLineSearch` is one such strategy. It requires the current parameters to be valid, then
+checks the full proposed step and up to eight successively smaller nonzero steps by default. If none
+is valid, it keeps the current parameters and returns a rejected update. Constraint candidates can
+be checked in deterministic largest-to-smallest order or randomized order. Deterministic order is
+the default. Randomized order accepts the first valid candidate in a reproducibly shuffled order,
+so it can select a smaller step even when a larger candidate is also valid:
+
+```python
+from tidy3d.plugins.autograd import BacktrackingLineSearch, adam, optimize
+
+def is_valid(params):
+    # Any user-defined, potentially non-differentiable constraint.
+    return bool(check_design(params))
+
+safe_update = BacktrackingLineSearch(
+    is_valid,
+    max_backtracks=8,
+    candidate_order="deterministic",  # or "random"
+)
+params, state, history = optimize(
+    objective_fn,
+    params0,
+    adam(learning_rate=0.01),
+    num_steps=100,
+    safe_update=safe_update,
+)
+```
+
+A `ConstraintChecker` controls how candidates are evaluated. Bare functions are treated as scalar
+checks and are called lazily until an acceptable update is found. Wrap a batch function with
+`BatchedConstraintChecker` to evaluate all candidates in one invocation:
+
+```python
+from tidy3d.plugins.autograd import BatchedConstraintChecker
+
+batch_checker = BatchedConstraintChecker(check_designs)
+safe_update = BacktrackingLineSearch(batch_checker)
+```
+
+KLayout DRC is one example of a batched external constraint. `BatchedDRCChecker` implements the
+same `ConstraintChecker` interface and checks the line-search candidates in one KLayout invocation:
+
+```python
+from tidy3d.plugins.autograd import BacktrackingLineSearch
+from tidy3d.plugins.klayout import BatchedDRCChecker
+
+drc_checker = BatchedDRCChecker(
+    export_design,  # Writes one parameterized design to the supplied GDS path.
+    "foundry_rules.drc",
+)
+safe_update = BacktrackingLineSearch(drc_checker)
+```
+
+For DRC rules that cannot safely check spatially separated designs together, use a scalar checker
+that runs KLayout separately for each candidate. See the
+[KLayout DRC documentation](../klayout/drc/README.md#faster-drc-checks-for-multiple-designs) for the
+complete export workflow and batching limitations.
 
 ## Best Practices and Limitations
 

@@ -857,6 +857,7 @@ class AbstractAutoGrid(GridSpec1d):
             self._min_steps_per_wvl,
             self._dl_min,
             dl_max,
+            snapping_points,
         )
 
         return interval_coords, max_dl_list
@@ -909,7 +910,7 @@ class AbstractAutoGrid(GridSpec1d):
                 axis, structures, wavelength, symmetry, snapping_points
             )
 
-        # insert snapping_points
+        # Insert all snapping points, on top of the (possibly cached) ``parse_structures`` result.
         interval_coords, max_dl_list = self.mesher.insert_snapping_points(
             self._dl_min,
             axis,

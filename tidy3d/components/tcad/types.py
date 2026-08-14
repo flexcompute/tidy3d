@@ -40,12 +40,14 @@ from tidy3d.components.tcad.mobility import (
     MasettiMobility,
 )
 from tidy3d.components.tcad.monitors.charge import (
+    SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
+    SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
@@ -77,6 +79,8 @@ HeatChargeMonitorType = (
     | SteadyCapacitanceMonitor
     | SteadyCurrentDensityMonitor
     | SteadyChargeResidualMonitor
+    | SteadyGenerationRecombinationMonitor
+    | SelfHeatingMonitor
 )
 HeatChargeSourceType = HeatSource | HeatFromElectricSource | UniformHeatSource
 HeatChargeBCType = (

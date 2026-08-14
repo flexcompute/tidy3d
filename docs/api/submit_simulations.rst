@@ -52,6 +52,8 @@ Cost Estimation
 
    web.estimate_cost
    web.real_cost
+   web.execution_flexcredit_status
+   exceptions.FlexCreditLimitExceededError
 
 Task Management
 ~~~~~~~~~~~~~~~
@@ -94,7 +96,6 @@ Information Containers
    :template: module.rst
 
    web.core.task_info.TaskInfo
-
 
 Mode Solver Web API
 --------------------

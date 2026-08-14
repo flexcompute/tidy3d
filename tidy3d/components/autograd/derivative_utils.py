@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import reduce
 from typing import TYPE_CHECKING, Any
@@ -23,7 +22,7 @@ from .types import PathType
 from .utils import get_static
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable
 
     import xarray as xr
 
@@ -183,9 +182,18 @@ class DerivativeInfo:
     sharing the same field data. This significantly improves performance for
     GeometryGroup processing."""
 
-    cached_min_spacing_from_permittivity: float | None = None
-    """Cached `min_spacing_from_permittivity` to be used for objects like GeometryGroup
-    to avoid recomputing this value multiple times in `adaptive_vjp_spacing`."""
+    resolved_adaptive_vjp_spacing: float | None = None
+    """Precomputed adaptive quadrature spacing for shape-gradient sampling.
+
+    Optional because source VJPs also use ``DerivativeInfo`` but do not need
+    geometry sampling. Geometry VJPs must provide this value.
+    """
+
+    resolved_material_length_scale: float | None = None
+    """Precomputed material wavelength or skin-depth length scale for shape sampling."""
+
+    resolved_material_wavelength: float | None = None
+    """Precomputed material wavelength for triangulation-based geometry sampling."""
 
     # private cache for interpolators
     _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)
@@ -359,7 +367,12 @@ class DerivativeInfo:
                 "Clip-context shape gradients require `clipped_geometry` for inside checks."
             )
 
-        probe_eps = CLIP_INSIDE_PROBE_FRACTION * self.min_spacing_from_permittivity
+        if self.resolved_material_length_scale is None:
+            raise AdjointError(
+                "Clip-context shape gradients require `resolved_material_length_scale` "
+                "in DerivativeInfo."
+            )
+        probe_eps = CLIP_INSIDE_PROBE_FRACTION * self.resolved_material_length_scale
         points_minus = spatial_coords - probe_eps * normals
         points_plus = spatial_coords + probe_eps * normals
 
@@ -1214,100 +1227,13 @@ class DerivativeInfo:
                 projected[key] = field_map[key]
         return projected
 
-    @property
-    def min_spacing_from_permittivity(self) -> float:
-        if self.cached_min_spacing_from_permittivity is not None:
-            return self.cached_min_spacing_from_permittivity
-
-        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> float:
-            eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
-
-            dx_candidates = []
-            max_frequency = np.max(self.frequencies)
-
-            # wavelength-based sampling for dielectrics
-            if np.any(eps_real > 0):
-                eps_max = eps_real[eps_real > 0].max()
-                lambda_min = self.wavelength_min / np.sqrt(eps_max)
-                dx_candidates.append(lambda_min)
-
-            # skin depth sampling for metals
-            if np.any(eps_real <= 0):
-                omega = 2 * np.pi * max_frequency
-                eps_neg = eps_real[eps_real <= 0]
-                delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
-                dx_candidates.append(delta_min)
-
-            computed_spacing = min(dx_candidates)
-
-            return computed_spacing
-
-        eps_spacings = [
-            spacing_by_permittivity(eps_array) for _, eps_array in self.eps_data.items()
-        ]
-        min_spacing = np.min(eps_spacings)
-
-        return min_spacing
-
-    @contextmanager
-    def cache_min_spacing_from_permittivity(self) -> Generator[None, None, None]:
-        """
-        Cache min_spacing_from_permittivity for the duration of the block. Cache
-        is always cleared on exit.
-        """
-
-        self.cached_min_spacing_from_permittivity = self.min_spacing_from_permittivity
-        try:
-            yield
-        finally:
-            self.cached_min_spacing_from_permittivity = None
-
-    def adaptive_vjp_spacing(
-        self,
-        wl_fraction: float | None = None,
-        min_allowed_spacing_fraction: float | None = None,
-    ) -> float:
-        """Compute adaptive spacing for finite-difference gradient evaluation.
-
-        Determines an appropriate spatial resolution based on the material
-        properties and electromagnetic wavelength/skin depth.
-
-        Parameters
-        ----------
-        wl_fraction : float, optional
-            Fraction of wavelength/skin depth to use as spacing. Defaults to the configured
-            ``autograd.default_wavelength_fraction`` when ``None``.
-        min_allowed_spacing_fraction : float, optional
-            Minimum allowed spacing fraction of free space wavelength used to
-            prevent numerical issues. Defaults to ``config.adjoint.minimum_spacing_fraction``
-            when not specified.
-
-        Returns
-        -------
-        float
-            Adaptive spacing value for gradient evaluation.
-        """
-        if wl_fraction is None or min_allowed_spacing_fraction is None:
-            from tidy3d.config import config
-
-            if wl_fraction is None:
-                wl_fraction = config.adjoint.default_wavelength_fraction
-            if min_allowed_spacing_fraction is None:
-                min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
-
-        computed_spacing = wl_fraction * self.min_spacing_from_permittivity
-
-        min_allowed_spacing = self.wavelength_min * min_allowed_spacing_fraction
-
-        if computed_spacing < min_allowed_spacing:
-            log.warning(
-                f"Based on the material, the adaptive spacing for integrating the polyslab surface "
-                f"would be {computed_spacing:.3e} μm. The spacing has been clipped to {min_allowed_spacing:.3e} μm "
-                f"to prevent a performance degradation.",
-                log_once=True,
+    def adaptive_vjp_spacing(self) -> float:
+        """Return the precomputed spacing for finite-difference gradient evaluation."""
+        if self.resolved_adaptive_vjp_spacing is None:
+            raise AdjointError(
+                "Geometry VJP sampling requires `resolved_adaptive_vjp_spacing` in DerivativeInfo."
             )
-
-        return max(computed_spacing, min_allowed_spacing)
+        return self.resolved_adaptive_vjp_spacing
 
     @property
     def wavelength_min(self) -> float:

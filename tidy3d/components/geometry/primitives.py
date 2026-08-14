@@ -19,7 +19,7 @@ from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import AdjointError, SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
@@ -98,32 +98,13 @@ _ICOSAHEDRON_VERTS, _ICOSAHEDRON_FACES = _base_icosahedron()
 
 def discretization_wavelength(derivative_info: DerivativeInfo, geometry_label: str) -> float:
     """Choose reference wavelength for surface discretization."""
-    wvl0_min = derivative_info.wavelength_min
-    eps_xx = derivative_info.eps_data["eps_xx"]
-    eps_yy = derivative_info.eps_data["eps_yy"]
-    eps_zz = derivative_info.eps_data["eps_zz"]
-    max_refractive_index = np.max(
-        [
-            1.0,
-            np.max(np.sqrt(abs(eps_xx))),
-            np.max(np.sqrt(abs(eps_yy))),
-            np.max(np.sqrt(abs(eps_zz))),
-        ]
+    if derivative_info.resolved_material_wavelength is not None:
+        return derivative_info.resolved_material_wavelength
+
+    raise AdjointError(
+        f"Geometry VJP sampling for {geometry_label} requires "
+        "`resolved_material_wavelength` in DerivativeInfo."
     )
-    wvl_mat = wvl0_min / max_refractive_index
-
-    grid_cfg = config.adjoint
-
-    min_wvl_mat = grid_cfg.min_wvl_fraction * wvl0_min
-    if wvl_mat < min_wvl_mat:
-        log.warning(
-            f"The minimum wavelength inside the {geometry_label} material is {wvl_mat:.3e} μm, which would "
-            f"create a large number of discretization points for computing the gradient. "
-            f"To prevent performance degradation, the discretization wavelength has "
-            f"been clipped to {min_wvl_mat:.3e} μm.",
-            log_once=True,
-        )
-    return max(wvl_mat, min_wvl_mat)
 
 
 class Sphere(base.Centered, base.Circular):

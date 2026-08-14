@@ -47,6 +47,8 @@ Monitor Data
    SteadyElectricFieldData
    SteadyCurrentDensityData
    SteadyChargeResidualData
+   SteadyGenerationRecombinationData
+   SelfHeatingData
 
 Device Data
 ^^^^^^^^^^^^

@@ -82,12 +82,14 @@ from tidy3d.components.tcad.data.sim_data import (
     VolumeMesherData,
 )
 from tidy3d.components.tcad.data.types import (
+    SelfHeatingData,
     SteadyCapacitanceData,
     SteadyChargeResidualData,
     SteadyCurrentDensityData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
     SteadyFreeCarrierData,
+    SteadyGenerationRecombinationData,
     SteadyPotentialData,
     TemperatureData,
 )
@@ -105,12 +107,14 @@ from tidy3d.components.tcad.grid import (
 )
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.charge import (
+    SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
+    SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
@@ -918,6 +922,8 @@ __all__ = [
     "ScalarModeFieldDataArray",
     "Scene",
     "SelberherrImpactIonization",
+    "SelfHeatingData",
+    "SelfHeatingMonitor",
     "Sellmeier",
     "SemiconductorMedium",
     "ShockleyReedHallRecombination",
@@ -953,6 +959,8 @@ __all__ = [
     "SteadyEnergyBandMonitor",
     "SteadyFreeCarrierData",
     "SteadyFreeCarrierMonitor",
+    "SteadyGenerationRecombinationData",
+    "SteadyGenerationRecombinationMonitor",
     "SteadyPotentialData",
     "SteadyPotentialMonitor",
     "SteadyVoltageDataArray",

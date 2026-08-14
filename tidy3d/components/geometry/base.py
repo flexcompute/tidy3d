@@ -3788,38 +3788,35 @@ class ClipOperation(Geometry):
         # Reuse interpolation data for both operands to avoid duplicate setup.
         interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
 
-        with derivative_info.cache_min_spacing_from_permittivity():
-            for geometry_key, geometry in geometry_map.items():
-                paths = geometry_paths[geometry_key]
-                if not paths:
-                    continue
+        for geometry_key, geometry in geometry_map.items():
+            paths = geometry_paths[geometry_key]
+            if not paths:
+                continue
 
-                geometry_info = derivative_info.updated_copy(
-                    paths=paths,
-                    bounds=geometry.bounds,
-                    bounds_intersect=self.bounds_intersection(
-                        geometry.bounds, derivative_info.simulation_bounds
-                    ),
-                    deep=False,
-                    interpolators=interpolators,
-                )
+            geometry_info = derivative_info.updated_copy(
+                paths=paths,
+                bounds=geometry.bounds,
+                bounds_intersect=self.bounds_intersection(
+                    geometry.bounds, derivative_info.simulation_bounds
+                ),
+                deep=False,
+                interpolators=interpolators,
+            )
 
-                vjp_dict_geometry = geometry._compute_derivatives(geometry_info)
+            vjp_dict_geometry = geometry._compute_derivatives(geometry_info)
 
-                for geo_path, geo_vjp in vjp_dict_geometry.items():
-                    full_path = (geometry_key, *geo_path)
-                    if full_path in grad_vjps:
-                        existing = grad_vjps[full_path]
-                        if isinstance(existing, (list, tuple)) and isinstance(
-                            geo_vjp, (list, tuple)
-                        ):
-                            grad_vjps[full_path] = type(existing)(
-                                x + y for x, y in zip(existing, geo_vjp)
-                            )
-                        else:
-                            grad_vjps[full_path] = existing + geo_vjp
+            for geo_path, geo_vjp in vjp_dict_geometry.items():
+                full_path = (geometry_key, *geo_path)
+                if full_path in grad_vjps:
+                    existing = grad_vjps[full_path]
+                    if isinstance(existing, (list, tuple)) and isinstance(geo_vjp, (list, tuple)):
+                        grad_vjps[full_path] = type(existing)(
+                            x + y for x, y in zip(existing, geo_vjp)
+                        )
                     else:
-                        grad_vjps[full_path] = geo_vjp
+                        grad_vjps[full_path] = existing + geo_vjp
+                else:
+                    grad_vjps[full_path] = geo_vjp
 
         return grad_vjps
 
@@ -4086,28 +4083,27 @@ class GeometryGroup(Geometry):
         # create interpolators once for all geometries to avoid redundant field data conversions
         interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
 
-        with derivative_info.cache_min_spacing_from_permittivity():
-            for field_path in derivative_info.paths:
-                _, index, *geo_path = field_path
+        for field_path in derivative_info.paths:
+            _, index, *geo_path = field_path
 
-                geo = self.geometries[index]
-                # pass pre-computed interpolators if available
-                geo_info = derivative_info.updated_copy(
-                    paths=[tuple(geo_path)],
-                    bounds=geo.bounds,
-                    bounds_intersect=self.bounds_intersection(
-                        geo.bounds, derivative_info.simulation_bounds
-                    ),
-                    deep=False,
-                    interpolators=interpolators,
-                )
+            geo = self.geometries[index]
+            # pass pre-computed interpolators if available
+            geo_info = derivative_info.updated_copy(
+                paths=[tuple(geo_path)],
+                bounds=geo.bounds,
+                bounds_intersect=self.bounds_intersection(
+                    geo.bounds, derivative_info.simulation_bounds
+                ),
+                deep=False,
+                interpolators=interpolators,
+            )
 
-                vjp_dict_geo = geo._compute_derivatives(geo_info)
+            vjp_dict_geo = geo._compute_derivatives(geo_info)
 
-                if len(vjp_dict_geo) != 1:
-                    raise AssertionError("Got multiple gradients for single geometry field.")
+            if len(vjp_dict_geo) != 1:
+                raise AssertionError("Got multiple gradients for single geometry field.")
 
-                grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
+            grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
 
         return grad_vjps
 

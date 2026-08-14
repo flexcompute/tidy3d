@@ -75,24 +75,31 @@ class _ApproximateAngleProjectionMixin:
         sin_phi = np.sin(phi)
         cos_phi = np.cos(phi)
 
-        pts = prepared.pts
         propagation_factor = prepared.propagation_factor
-        phase_0 = np.exp(
-            (propagation_factor * pts[0])[:, None, None]
-            * sin_theta[None, :, None]
-            * cos_phi[None, None, :]
+        # one phase evaluation per distinct source grid, indexed per component
+        phase_sets = tuple(
+            (
+                np.exp(
+                    (propagation_factor * pts[0])[:, None, None]
+                    * sin_theta[None, :, None]
+                    * cos_phi[None, None, :]
+                ),
+                np.exp(
+                    (propagation_factor * pts[1])[:, None, None]
+                    * sin_theta[None, :, None]
+                    * sin_phi[None, None, :]
+                ),
+                np.exp((propagation_factor * pts[2])[:, None] * cos_theta[None, :]),
+            )
+            for pts in prepared.pts_sets
         )
-        phase_1 = np.exp(
-            (propagation_factor * pts[1])[:, None, None]
-            * sin_theta[None, :, None]
-            * sin_phi[None, None, :]
-        )
-        phase_2 = np.exp((propagation_factor * pts[2])[:, None] * cos_theta[None, :])
 
         projected_components = []
-        phases = (phase_0, phase_1, phase_2)
-        for field_component in prepared.field_components.as_tuple():
-            projected = _far_field_integral(field_component, phases, prepared.integral)
+        for field_component, pts_ind in zip(
+            prepared.field_components.as_tuple(),
+            prepared.component_pts_inds,
+        ):
+            projected = _far_field_integral(field_component, phase_sets[pts_ind], prepared.integral)
             projected_components.append(anp.reshape(projected, (len(theta), len(phi))))
 
         return _spherical_far_fields_from_projected_components(

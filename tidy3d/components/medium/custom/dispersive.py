@@ -563,7 +563,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     >>> z = np.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
     >>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> c1 = SpatialDataArray(1 + np.random.random((5, 6, 7)), coords=coords)
     >>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])
     >>> eps = sellmeier_medium.eps_model(200e12)
 

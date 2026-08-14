@@ -42,17 +42,34 @@ from .invdes import (
     symmetrize_rotation,
     tanh_projection,
 )
-from .optimizers import Adam, adam, apply_updates, optimize
+from .optimizers import (
+    Adam,
+    BacktrackingLineSearch,
+    BatchedConstraintChecker,
+    ConstraintChecker,
+    SafeUpdate,
+    SafeUpdateResult,
+    ScalarConstraintChecker,
+    adam,
+    apply_updates,
+    optimize,
+)
 from .primitives import gaussian_filter, interpolate_spline
 from .utilities import chain, get_kernel_size_px, make_kernel, scalar_objective
 
 __all__ = [
     "Adam",
+    "BacktrackingLineSearch",
+    "BatchedConstraintChecker",
     "CircularFilter",
     "ConicFilter",
+    "ConstraintChecker",
     "ErosionDilationPenalty",
     "FilterAndProject",
     "GaussianFilter",
+    "SafeUpdate",
+    "SafeUpdateResult",
+    "ScalarConstraintChecker",
     "adam",
     "add_at",
     "apply_updates",

@@ -40,7 +40,8 @@ It owns:
 - the `FieldProjector` model
 - default projector configuration such as `pts_per_wavelength` and `origin`
 - source-surface current extraction from simulation monitor data or raw `FieldData`
-- current resampling / colocation
+- current resampling / colocation, or per-component staggered current extraction when the
+  projection monitor requests non-colocated integration
 - apodization window application
 - dispatch from `project_fields(...)` to the monitor-specific implementations
 
@@ -127,25 +128,32 @@ The package uses two different styles of internal data depending on the path.
 Approximate projection relies on prepared metadata objects defined in `common.py`:
 
 - `_FarFieldIntegralSpec`
-  - integration weights
   - tangential integration axes
   - 2D vs 3D integral mode
   - optional 1D integration axis for 2D simulations
+
+  Pure geometry: the differential areas are folded into the current values themselves for both
+  integration schemes (element currents), so the kernels only phase and sum.
 - `_PreparedFarFieldProjection`
   - sliced field components for one frequency
-  - the corresponding integral spec
-  - source-grid coordinates
+  - the shared integration geometry (`integral`) and the distinct source grids with a
+    per-component index (`pts_sets`, `component_pts_inds`): colocated projection has one grid
+    shared by the four tangential components; non-colocated projection has two, one per
+    staggered Yee group — the expensive phase factors are evaluated once per distinct grid
   - propagation and impedance factors
 
 These prepared objects are lightweight summaries of the data needed by the approximate kernels.
 
 ### Exact path data
 
-On this branch, the exact path still operates mostly on raw arrays and datasets rather than dedicated exact-path metadata classes.
+The exact path operates mostly on raw arrays and datasets rather than dedicated exact-path metadata classes.
 
 The main pieces passed around are:
 
-- `surface_currents`: a list of `(FieldProjectionSurface, xr.Dataset)` pairs
+- `surface_currents`: a list of `(FieldProjectionSurface, currents)` pairs, where `currents` is an
+  `xr.Dataset` on a shared grid (colocated) or a per-component `dict` of `xr.DataArray`s on
+  staggered grids (non-colocated); both carry the differential area folded into the values
+  (element currents)
 - flattened observation coordinate arrays `x`, `y`, `z`
 - stacked field arrays with leading component dimension
 
@@ -200,7 +208,9 @@ At a high level, a local projection call works as follows.
 
 1. `FieldProjector` validates and stores source-surface information.
 2. Source fields are converted into equivalent electric and magnetic surface currents.
-3. Currents are colocated onto the projection surface grid and optionally resampled.
+3. Currents are colocated onto the projection surface grid and optionally resampled, or kept at
+   their native Yee-staggered positions with box-rule areas when the projection monitor requests
+   non-colocated integration (`use_colocated_integration=False`).
 4. Coordinates are shifted into the projector-local origin.
 5. `project_fields(...)` dispatches by monitor type.
 6. The selected module chooses approximate or exact evaluation based on `proj_monitor.far_field_approx`.

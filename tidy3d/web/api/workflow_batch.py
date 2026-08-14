@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from tidy3d.web.api.container import Batch, BatchData, Job
     from tidy3d.web.core.constants import TaskId, TaskName
     from tidy3d.web.core.task_info import TaskInfo
+    from tidy3d.web.core.types import PayType
 
 
 WORKFLOW_BATCH_PROGRESS_REFRESH_TIME = task_api.REFRESH_TIME
@@ -68,6 +69,11 @@ class WorkflowStepJobAdapter:
     @property
     def task_id(self) -> TaskId:
         return self.job._workflow_required_step_task_id(self.step.name)
+
+    @property
+    def pay_type(self) -> PayType | None:
+        """Return the payment method inherited from the parent workflow job."""
+        return self.job.pay_type
 
     def upload(
         self,

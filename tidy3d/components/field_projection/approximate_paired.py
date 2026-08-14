@@ -24,6 +24,7 @@ from .common import (
     _far_field_integral_pairs,
     _far_fields_from_currents_pairs_3d,
     _frequency_chunk_slices,
+    _paired_far_field_phases,
     _PairedAngleTrig,
     _prepare_far_field_projection,
     _projection_data_from_fields,
@@ -66,7 +67,6 @@ class _ApproximatePairedProjectionMixin:
         sin_phi = np.sin(phi)
         cos_phi = np.cos(phi)
 
-        pts = prepared.pts
         propagation_factor = prepared.propagation_factor
         if not prepared.integral.is_2d:
             return _far_fields_from_currents_pairs_3d(
@@ -81,18 +81,22 @@ class _ApproximatePairedProjectionMixin:
                 ),
             )
 
-        phase_0 = np.exp(
-            (propagation_factor * pts[0])[:, None] * sin_theta[None, :] * cos_phi[None, :]
+        # one phase evaluation per distinct source grid, indexed per component
+        phase_sets = tuple(
+            _paired_far_field_phases(
+                *pts, propagation_factor, sin_theta, cos_theta, sin_phi, cos_phi
+            )
+            for pts in prepared.pts_sets
         )
-        phase_1 = np.exp(
-            (propagation_factor * pts[1])[:, None] * sin_theta[None, :] * sin_phi[None, :]
-        )
-        phase_2 = np.exp((propagation_factor * pts[2])[:, None] * cos_theta[None, :])
 
         projected_components = []
-        phases = (phase_0, phase_1, phase_2)
-        for field_component in prepared.field_components.as_tuple():
-            projected = _far_field_integral_pairs(field_component, phases, prepared.integral)
+        for field_component, pts_ind in zip(
+            prepared.field_components.as_tuple(),
+            prepared.component_pts_inds,
+        ):
+            projected = _far_field_integral_pairs(
+                field_component, phase_sets[pts_ind], prepared.integral
+            )
             projected_components.append(anp.reshape(projected, theta.shape))
 
         return _spherical_far_fields_from_projected_components(

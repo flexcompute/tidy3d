@@ -498,15 +498,8 @@ class Structure(AbstractStructure):
 
         return monitor_name_map[data_type]
 
-    def _make_adjoint_monitors(
-        self,
-        freqs: list[float],
-        index: int,
-        field_keys: list[str],
-        grid: Grid,
-        plane: Box | None = None,
-    ) -> tuple[FieldMonitor, PermittivityMonitor]:
-        """Generate the field and permittivity monitor for this structure."""
+    def _adjoint_monitor_box(self, grid: Grid, plane: Box | None = None) -> Box:
+        """Expanded box covered by this structure's adjoint monitors."""
 
         geometry = self.geometry
         geom_box = geometry.bounding_box
@@ -521,7 +514,7 @@ class Structure(AbstractStructure):
             if len(bounds) == 0:
                 intersections = geom_box.intersections_plane(**{axis_char: plane_position})
                 bounds = [shape.bounds for shape in intersections if not shape.is_empty]
-            if len(bounds) == 0:  # fallback
+            if len(bounds) == 0:
                 return geom_box
 
             min_plane = (min(b[0] for b in bounds), min(b[1] for b in bounds))
@@ -542,7 +535,19 @@ class Structure(AbstractStructure):
         else:
             box = geom_box
 
-        box = _expand_adjoint_monitor_box(box, grid)
+        return _expand_adjoint_monitor_box(box, grid)
+
+    def _make_adjoint_monitors(
+        self,
+        freqs: list[float],
+        index: int,
+        field_keys: list[str],
+        grid: Grid,
+        plane: Box | None = None,
+    ) -> tuple[FieldMonitor, PermittivityMonitor]:
+        """Generate the field and permittivity monitor for this structure."""
+
+        box = self._adjoint_monitor_box(grid=grid, plane=plane)
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
         size = [get_static(x) for x in box.size]

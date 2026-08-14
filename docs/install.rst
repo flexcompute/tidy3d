@@ -225,6 +225,7 @@ Where ``dependency_group`` is one of the following:
 - ``trimesh``: Support for more complex mesh handling and manipulation.
 - ``vtk``: Support for working with unstructured data.
 - ``heatcharge``: Additional dependencies for heat & charge solvers.
+- ``notebooks``: Common optional packages used by Tidy3D example notebooks.
 
 For example, to install Tidy3D with trimesh support:
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, get_args
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 import numpy as np
 import xarray as xr
@@ -41,21 +41,10 @@ from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.utils import (
-    SnapBehavior,
-    SnapLocation,
-    SnappingSpec,
     find_snap_location,
-    snap_box_to_grid,
-)
-from tidy3d.components.material.tensor_rotation import (
-    bend_axis_global_axis,
-    medium_is_rotation_invariant,
-    rotation_matrix_about_local_axis,
 )
 from tidy3d.components.medium import (
-    AnisotropicMedium,
     FullyAnisotropicMedium,
-    IsotropicUniformMediumType,
     LossyMetalMedium,
 )
 from tidy3d.components.microwave.data.dataset import (
@@ -90,6 +79,25 @@ from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
+from .geometry import (
+    bend_axis_3d_from_plane_and_mode_spec,
+    effective_mode_plane,
+    rotation_kwargs,
+    rotation_translate_kwargs,
+    snapped_mode_domain,
+    solver_symmetry,
+)
+from .geometry import (
+    rotation_validation_freqs as get_rotation_validation_freqs,
+)
+from .validation import (
+    make_rotated_structures,
+    validate_microwave_mode_spec,
+    validate_mode_plane_radius,
+    validate_plane_rotation_media,
+    warn_thick_pml,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Literal
@@ -121,7 +129,6 @@ if TYPE_CHECKING:
         EpsSpecType,
         PlotScale,
         Symmetry,
-        TensorReal,
     )
     from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.packaging import (
@@ -158,9 +165,6 @@ MODE_PLANE_TYPE = discriminated_union(Box | ModeSource | ModeMonitor | ModeSolve
 
 # When using ``angle_rotation`` without a bend, use a very large effective radius
 EFFECTIVE_RADIUS_FACTOR = 10_000
-
-# Log a warning when the PML covers more than this portion of the mode plane in any axis
-WARN_THICK_PML_PERCENT = 50
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -266,11 +270,20 @@ class ModeSolver(Tidy3dBaseModel):
 
     @model_validator(mode="after")
     def _validate_mode_spec(self) -> Self:
-        """Validate that num_modes is an integer."""
+        """Validate the mode specification against the solver configuration."""
         if not isinstance(self.mode_spec.num_modes, int):
             self._raise_validation_error_at_loc(
                 ValidationError("num_modes must be an integer."), "mode_spec"
             )
+        if isinstance(self.mode_spec, MicrowaveModeSpec):
+            sim_box = Box(size=self.simulation.size, center=self.simulation.center)
+            mode_plane = self.plane
+            if sim_box.intersects(self.plane):
+                mode_plane = effective_mode_plane(self.plane, sim_box)
+            try:
+                validate_microwave_mode_spec(self.mode_spec, mode_plane)
+            except SetupError as exc:
+                self._raise_validation_error_at_loc(exc, "mode_spec")
         return self
 
     @field_validator("simulation")
@@ -308,6 +321,27 @@ class ModeSolver(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
+    def _validate_mode_sort_spec_bounding_box(self) -> Self:
+        """Validate the fill-fraction box against the effective mode-plane bounds."""
+        sort_spec = getattr(self.mode_spec, "sort_spec", None)
+        if sort_spec is None:
+            return self
+
+        sim_box = Box(size=self.simulation.size, center=self.simulation.center)
+        mode_plane = effective_mode_plane(self.plane, sim_box)
+        normal_axis = self.plane.zero_dims[0]
+        if not sort_spec._bounding_box_intersects_tangentially(mode_plane.bounds, normal_axis):
+            self._raise_validation_error_at_loc(
+                "'ModeSortSpec.bounding_box' must intersect the effective mode plane along both "
+                "tangential axes. Please move or resize the bounding box in the tangential "
+                "directions.",
+                "mode_spec",
+                "sort_spec",
+                "bounding_box",
+            )
+        return self
+
+    @model_validator(mode="after")
     def _warn_plane_crosses_symmetry(self) -> Self:
         """Warn if the mode plane crosses the symmetry plane of the underlying simulation but
         the centers do not match."""
@@ -330,7 +364,7 @@ class ModeSolver(Tidy3dBaseModel):
     @model_validator(mode="after")
     def _validate_warn_thick_pml(self) -> Self:
         """Warn if the pml covers a significant portion of the mode plane."""
-        self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
+        warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
         self._validate_rotate_structures()
         return self
 
@@ -338,7 +372,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _validate_bend_radius(self) -> Self:
         """Validate that the bend radius is not too small."""
         sim_box = Box(size=self.simulation.size, center=self.simulation.center)
-        self._validate_mode_plane_radius(self.mode_spec, self.plane, sim_box)
+        validate_mode_plane_radius(self.mode_spec, self.plane, sim_box)
         return self
 
     @model_validator(mode="after")
@@ -366,65 +400,15 @@ class ModeSolver(Tidy3dBaseModel):
             )
         return self
 
-    @classmethod
-    def _warn_thick_pml(
-        cls,
-        simulation: Simulation,
-        plane: Box,
-        mode_spec: ModeSpec,
-        msg_prefix: str = "'ModeSolver'",
-    ) -> None:
-        """Warn if the pml covers a significant portion of the mode plane."""
-        coord_0, coord_1 = cls._plane_grid(simulation=simulation, plane=plane)
-        num_cells = [len(coord_0), len(coord_1)]
-        effective_num_pml = cls._effective_num_pml(
-            simulation=simulation, plane=plane, mode_spec=mode_spec
-        )
-        for i in (0, 1):
-            if 2 * effective_num_pml[i] > (WARN_THICK_PML_PERCENT / 100) * num_cells[i]:
-                log.warning(
-                    f"{msg_prefix}: "
-                    f"The mode solver pml in tangential axis '{i}' "
-                    f"covers more than '{WARN_THICK_PML_PERCENT}%' of the "
-                    "mode plane cells. Consider using a larger mode plane "
-                    "or smaller 'num_pml'."
-                )
-
-    @staticmethod
-    def _mode_plane(plane: Box, sim_geom: Box) -> Box:
-        """Intersect the mode plane with the sim geometry to get the effective
-        mode plane."""
-        mode_plane_bnds = plane.bounds_intersection(plane.bounds, sim_geom.bounds)
-        return Box.from_bounds(*mode_plane_bnds)
-
-    @classmethod
-    def _validate_mode_plane_radius(cls, mode_spec: ModeSpec, plane: Box, sim_geom: Box) -> None:
-        """Validate that the radius of a mode spec with a bend is not smaller than half the size of
-        the plane along the radial direction."""
-
-        if not mode_spec.bend_radius:
-            return
-
-        mode_plane = cls._mode_plane(plane=plane, sim_geom=sim_geom)
-        # radial axis is the plane axis that is not the bend axis
-        _, plane_axs = mode_plane.pop_axis([0, 1, 2], mode_plane.size.index(0.0))
-        radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
-
-        if np.abs(mode_spec.bend_radius) <= mode_plane.size[radial_ax] / 2 + fp_eps:
-            raise ValueError(
-                "Mode solver bend radius is smaller than half the mode plane size "
-                "along the radial axis, which can produce wrong results."
-            )
-
     def _validate_rotate_structures(self) -> None:
         """Validate that structures can be rotated if angle_rotation is True."""
         if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
-            self._validate_plane_rotation_media(
+            validate_plane_rotation_media(
                 mediums=self._intersecting_media,
                 rotate_kwargs=self._rotation_kwargs,
                 freqs=self._sampling_freqs,
             )
-            _ = self._make_rotated_structures(
+            _ = make_rotated_structures(
                 structures=Scene.intersecting_structures(self.plane, self.simulation.structures),
                 translate_kwargs=self._rotation_translate_kwargs,
                 rotate_kwargs=self._rotation_kwargs,
@@ -432,101 +416,9 @@ class ModeSolver(Tidy3dBaseModel):
             )
 
     @staticmethod
-    def _medium_supports_plane_rotation(
-        medium: object, rotation_matrix: TensorReal, freqs: FreqArray
-    ) -> bool:
-        """Whether ``medium`` is supported by angled-plane structure rotation."""
-        is_uniform_isotropic = isinstance(medium, get_args(IsotropicUniformMediumType))
-        is_rotation_invariant_anisotropic = isinstance(
-            medium, AnisotropicMedium | FullyAnisotropicMedium
-        ) and medium_is_rotation_invariant(
-            medium=medium, rotation_matrix=rotation_matrix, freqs=freqs
-        )
-        return is_uniform_isotropic or is_rotation_invariant_anisotropic
-
-    @classmethod
-    def _validate_plane_rotation_media(
-        cls,
-        mediums: list[object],
-        rotate_kwargs: dict[str, float | Axis],
-        freqs: FreqArray,
-    ) -> None:
-        """Reject angled-plane rotations through unsupported intersecting media."""
-        rotation_matrix = rotation_matrix_about_local_axis(
-            axis=rotate_kwargs["axis"], angle=rotate_kwargs["angle"]
-        )
-        if all(
-            cls._medium_supports_plane_rotation(
-                medium=medium,
-                rotation_matrix=rotation_matrix,
-                freqs=freqs,
-            )
-            for medium in mediums
-        ):
-            return
-
-        raise SetupError(  # post-init-tidy3d-error: ignore
-            "'angle_rotation' set to True but the mode solver plane intersects an unsupported "
-            "medium. Only uniform isotropic media and rotation-invariant anisotropic media are "
-            "supported for the plane rotation."
-        )
-
-    @staticmethod
-    def _make_rotated_structures(
-        structures: list[Structure],
-        translate_kwargs: dict[str, float],
-        rotate_kwargs: dict[str, float | Axis],
-        freqs: FreqArray,
-    ) -> list[Structure]:
-        try:
-            rotated_structures = []
-            rotation_matrix = rotation_matrix_about_local_axis(
-                axis=rotate_kwargs["axis"], angle=rotate_kwargs["angle"]
-            )
-            for structure in structures:
-                medium = structure.medium
-                if not ModeSolver._medium_supports_plane_rotation(
-                    medium=medium,
-                    rotation_matrix=rotation_matrix,
-                    freqs=freqs,
-                ):
-                    raise NotImplementedError(
-                        "Mode solver plane intersects an unsupported medium. "
-                        "Only uniform isotropic media and rotation-invariant anisotropic "
-                        "media are supported for the plane rotation."
-                    )
-
-                # Rotate and apply translations
-                geometry = structure.geometry
-                geometry = (
-                    geometry.translated(**{key: -val for key, val in translate_kwargs.items()})
-                    .rotated(**rotate_kwargs)
-                    .translated(**translate_kwargs)
-                )
-
-                rotated_structures.append(structure.updated_copy(geometry=geometry))
-
-            return rotated_structures
-        except Exception as e:
-            raise SetupError(  # post-init-tidy3d-error: ignore
-                f"'angle_rotation' set to True but could not rotate structures: {e!s}"
-            ) from e
-
-    @staticmethod
     def _rotation_validation_freqs(mode_object: ModeSource | AbstractModeMonitor) -> FreqArray:
         """Frequencies relevant to validating structure rotations for ``angle_rotation``."""
-        if isinstance(mode_object, ModeSource):
-            freqs = np.asarray(mode_object.frequency_grid, dtype=float)
-        else:
-            freqs = np.asarray(mode_object.freqs, dtype=float)
-        return np.asarray(
-            mode_object.mode_spec._sampling_freqs_mode_solver(freqs=freqs), dtype=float
-        )
-
-    @classmethod
-    def _validate_microwave_mode_spec(cls, mode_spec: MicrowaveModeSpec, plane: Box) -> None:
-        """Validate that the microwave mode spec is correctly setup."""
-        mode_spec._check_path_integrals_within_box(plane)
+        return get_rotation_validation_freqs(mode_object)
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -546,21 +438,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         return idx_plane.index(self.normal_axis)
 
-    @staticmethod
-    def _solver_symmetry(simulation: Simulation, plane: Box) -> tuple[Symmetry, Symmetry]:
-        """Get symmetry for solver for propagation along self.normal axis."""
-        normal_axis = plane.size.index(0.0)
-        mode_symmetry = list(simulation.symmetry)
-        for dim in range(3):
-            if not isclose(simulation.center[dim], plane.center[dim]):
-                mode_symmetry[dim] = 0
-        _, solver_sym = plane.pop_axis(mode_symmetry, axis=normal_axis)
-        return tuple(solver_sym)
-
     @cached_property
     def solver_symmetry(self) -> tuple[Symmetry, Symmetry]:
         """Get symmetry for solver for propagation along self.normal axis."""
-        return self._solver_symmetry(simulation=self.simulation, plane=self.plane)
+        return solver_symmetry(simulation=self.simulation, plane=self.plane)
 
     @classmethod
     def _get_output_grid(
@@ -591,7 +472,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         span_inds = simulation._discretize_inds_monitor(plane, colocate=False)
         normal_axis = plane.size.index(0.0)
-        solver_symmetry = cls._solver_symmetry(simulation=simulation, plane=plane)
+        mode_symmetry = solver_symmetry(simulation=simulation, plane=plane)
 
         # Remove extension along monitor normal
         if not keep_additional_layers:
@@ -606,7 +487,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Truncate to symmetry quadrant if symmetry present
         if truncate_symmetry:
             _, plane_inds = Box.pop_axis([0, 1, 2], normal_axis)
-            for dim, sym in enumerate(solver_symmetry):
+            for dim, sym in enumerate(mode_symmetry):
                 if sym != 0:
                     span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]])[0] // 2
 
@@ -636,13 +517,7 @@ class ModeSolver(Tidy3dBaseModel):
         Snapping is disabled on the normal axis and degenerate axes
         (``num_cells <= 1``, arising from 2D simulations).
         """
-        behavior = [SnapBehavior.Off] * 3
-        location = [SnapLocation.Boundary] * 3
-        for ax in range(3):
-            if ax != normal_axis and grid.num_cells[ax] > 1:
-                behavior[ax] = SnapBehavior.Expand
-        snap_spec = SnappingSpec(location=tuple(location), behavior=tuple(behavior))
-        return snap_box_to_grid(grid, box, snap_spec)
+        return snapped_mode_domain(grid=grid, box=box, normal_axis=normal_axis)
 
     @staticmethod
     def _snapped_mode_domain_to_grid_inds(
@@ -943,17 +818,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Converts the 2D bend axis into its corresponding 3D axis for a bend structure.
         For a straight waveguide, the rotated axis is equivalent to the bend axis
         and can be determined using angle_phi."""
-        return self._bend_axis_3d_from_plane_and_mode_spec(self.plane, self.mode_spec)
-
-    @staticmethod
-    def _bend_axis_3d_from_plane_and_mode_spec(plane: Box, mode_spec: ModeSpecType) -> Axis:
-        """3D bend axis used by the angled-mode rotation for ``plane`` and ``mode_spec``."""
-        normal_axis = plane.size.index(0.0)
-        if mode_spec.bend_axis is not None:
-            return bend_axis_global_axis(normal_axis=normal_axis, bend_axis=mode_spec.bend_axis)
-        _, idx_plane = plane.pop_axis((0, 1, 2), axis=normal_axis)
-        rotation_axis_index = int(abs(np.cos(mode_spec.angle_phi)))
-        return idx_plane[rotation_axis_index]
+        return bend_axis_3d_from_plane_and_mode_spec(self.plane, self.mode_spec)
 
     @cached_property
     def rotated_mode_solver_data(self) -> ModeSolverData:
@@ -1056,7 +921,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Rotate the structures intersecting with modal plane by angle theta
         if bend_correction is enabeled for bend simulations."""
         structs_in = Scene.intersecting_structures(self.plane, self.simulation.structures)
-        return self._make_rotated_structures(
+        return make_rotated_structures(
             structures=structs_in,
             translate_kwargs=self._rotation_translate_kwargs,
             rotate_kwargs=self._rotation_kwargs,
@@ -1066,44 +931,12 @@ class ModeSolver(Tidy3dBaseModel):
     @cached_property
     def _rotation_translate_kwargs(self) -> dict[str, float]:
         """Translations applied before and after rotating structures for ``angle_rotation``."""
-        return self._rotation_translate_kwargs_for_plane_and_mode_spec(self.plane, self.mode_spec)
-
-    @classmethod
-    def _rotation_translate_kwargs_for_plane_and_mode_spec(
-        cls, plane: Box, mode_spec: ModeSpecType
-    ) -> dict[str, float]:
-        """Translations applied before and after rotating structures for ``angle_rotation``."""
-        bend_axis_3d = cls._bend_axis_3d_from_plane_and_mode_spec(plane, mode_spec)
-        _, (idx_u, idx_v) = plane.pop_axis((0, 1, 2), axis=bend_axis_3d)
-        translate_coords = [0.0, 0.0, 0.0]
-        translate_coords[idx_u] = plane.center[idx_u]
-        translate_coords[idx_v] = plane.center[idx_v]
-        return dict(zip("xyz", translate_coords))
+        return rotation_translate_kwargs(plane=self.plane, mode_spec=self.mode_spec)
 
     @cached_property
     def _rotation_kwargs(self) -> dict[str, float | Axis]:
         """Rotation applied to intersecting structures for ``angle_rotation``."""
-        return self._rotation_kwargs_for_plane_and_mode_spec(self.plane, self.mode_spec)
-
-    @classmethod
-    def _rotation_kwargs_for_plane_and_mode_spec(
-        cls, plane: Box, mode_spec: ModeSpecType
-    ) -> dict[str, float | Axis]:
-        """Rotation applied to intersecting structures for ``angle_rotation``."""
-        normal_axis = plane.size.index(0.0)
-        bend_axis_3d = cls._bend_axis_3d_from_plane_and_mode_spec(plane, mode_spec)
-        angle_theta = mode_spec.angle_theta
-        angle_phi = mode_spec.angle_phi
-        theta_map = {
-            (0, 2): -angle_theta * np.cos(angle_phi),
-            (0, 1): angle_theta * np.sin(angle_phi),
-            (1, 2): angle_theta * np.cos(angle_phi),
-            (1, 0): -angle_theta * np.sin(angle_phi),
-            (2, 1): -angle_theta * np.cos(angle_phi),
-            (2, 0): angle_theta * np.sin(angle_phi),
-        }
-        theta = theta_map.get((normal_axis, bend_axis_3d), 0.0)
-        return {"angle": theta, "axis": bend_axis_3d}
+        return rotation_kwargs(plane=self.plane, mode_spec=self.mode_spec)
 
     @cached_property
     def rotated_bend_center(self) -> list:
@@ -3399,7 +3232,7 @@ class ModeSolver(Tidy3dBaseModel):
         to the mode plane.
         """
         # Get the mode plane normal axis, center, and limits.
-        solver_symmetry = cls._solver_symmetry(simulation=simulation, plane=plane)
+        mode_symmetry = solver_symmetry(simulation=simulation, plane=plane)
         coord_0, coord_1 = cls._plane_grid(simulation=simulation, plane=plane)
 
         # Number of PML layers in ModeSpec.
@@ -3413,7 +3246,7 @@ class ModeSolver(Tidy3dBaseModel):
         if num_pml_0 > 0:
             pml_thick_0_plus = coord_0[-1] - coord_0[-num_pml_0 - 1]
             pml_thick_0_minus = coord_0[num_pml_0] - coord_0[0]
-            if solver_symmetry[0] != 0:
+            if mode_symmetry[0] != 0:
                 pml_thick_0_minus = pml_thick_0_plus
 
         pml_thick_1_plus = 0
@@ -3421,7 +3254,7 @@ class ModeSolver(Tidy3dBaseModel):
         if num_pml_1 > 0:
             pml_thick_1_plus = coord_1[-1] - coord_1[-num_pml_1 - 1]
             pml_thick_1_minus = coord_1[num_pml_1] - coord_1[0]
-            if solver_symmetry[1] != 0:
+            if mode_symmetry[1] != 0:
                 pml_thick_1_minus = pml_thick_1_plus
 
         return ((pml_thick_0_plus, pml_thick_0_minus), (pml_thick_1_plus, pml_thick_1_minus))

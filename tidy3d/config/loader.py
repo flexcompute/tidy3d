@@ -442,7 +442,8 @@ class ConfigLoader:
             log.warning(
                 f"Configuration file '{path}' targets config_version {version}, "
                 f"which is newer than supported version {CURRENT_CONFIG_VERSION}. "
-                "Falling back to best-effort parsing; unknown keys may be ignored."
+                "Falling back to best-effort parsing; unknown keys may be ignored.",
+                log_once=True,
             )
             filtered = best_effort_filter(data)
             return strip_config_version(filtered)

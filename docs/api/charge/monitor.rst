@@ -4,12 +4,14 @@ Monitors
 ----------
 
 Monitors record steady-state charge quantities over a region: the electrostatic
-potential, free-carrier concentrations, current density, electric field, and
-energy bands. A charge simulation requires at least one of
-``SteadyPotentialMonitor``, ``SteadyFreeCarrierMonitor``,
-``SteadyCapacitanceMonitor`` or ``SteadyCurrentDensityMonitor``;
-``SteadyElectricFieldMonitor`` and ``SteadyEnergyBandMonitor`` are additional
-outputs and do not satisfy this requirement on their own.
+potential, free-carrier concentrations, current density, electric field,
+energy bands, generation-recombination rates, and per-equation residuals. A
+charge simulation requires at least one of ``SteadyPotentialMonitor``,
+``SteadyFreeCarrierMonitor``, ``SteadyCapacitanceMonitor``,
+``SteadyCurrentDensityMonitor``, ``SteadyChargeResidualMonitor`` or
+``SteadyGenerationRecombinationMonitor``; ``SteadyElectricFieldMonitor`` and
+``SteadyEnergyBandMonitor`` are additional outputs and do not satisfy this
+requirement on their own.
 
 .. note::
    ``SteadyCapacitanceMonitor`` reports capacitance from a DC voltage sweep, so it
@@ -27,3 +29,5 @@ outputs and do not satisfy this requirement on their own.
    SteadyElectricFieldMonitor
    SteadyEnergyBandMonitor
    SteadyChargeResidualMonitor
+   SteadyGenerationRecombinationMonitor
+   SelfHeatingMonitor

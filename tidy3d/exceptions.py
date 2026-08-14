@@ -64,6 +64,50 @@ class WebError(Tidy3dError):
     """Error with the webAPI."""
 
 
+class FlexCreditLimitExceededError(WebError):
+    """A cloud task would exceed the cumulative FlexCredit limit for this execution."""
+
+    error_code = "execution_flexcredit_limit_exceeded"
+
+    def __init__(
+        self,
+        *,
+        limit: float,
+        reserved: float,
+        proposed: float,
+        proposed_total: float,
+        task_ids: tuple[str, ...],
+    ) -> None:
+        self.limit = limit
+        self.reserved = reserved
+        self.proposed = proposed
+        self.proposed_total = proposed_total
+        self.task_ids = task_ids
+        task_word = "task" if len(task_ids) == 1 else "tasks"
+        super().__init__(
+            "Tidy3D execution FlexCredit limit exceeded: reserving "
+            f"{proposed:.3f} FlexCredits for {len(task_ids)} proposed {task_word} would bring "
+            f"the cumulative maximum estimate to {proposed_total:.3f} FlexCredits, above the "
+            f"{limit:.3f} FlexCredit limit. No proposed {task_word} started."
+        )
+
+    @property
+    def details(self) -> dict[str, str | float | list[str]]:
+        """Return JSON-ready details.
+
+        Keys are ``code``, ``limit_flexcredits``, ``reserved_flexcredits``,
+        ``proposed_flexcredits``, ``proposed_total_flexcredits``, and ``task_ids``.
+        """
+        return {
+            "code": self.error_code,
+            "limit_flexcredits": self.limit,
+            "reserved_flexcredits": self.reserved,
+            "proposed_flexcredits": self.proposed,
+            "proposed_total_flexcredits": self.proposed_total,
+            "task_ids": list(self.task_ids),
+        }
+
+
 class AuthenticationError(Tidy3dError):
     """Error authenticating a user through webapi webAPI."""
 
