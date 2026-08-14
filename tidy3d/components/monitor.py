@@ -2924,7 +2924,9 @@ class AbstractSurfaceMonitor(Monitor, ABC):
     fields: tuple[EMSurfaceField, ...] = Field(
         ["E", "H"],
         title="Field Components",
-        description="Collection of field components to store in the monitor.",
+        description="Collection of field components to store in the monitor. 'E' must be recorded "
+        "for intensity and Poynting vector calculations, and 'H' for surface current density and "
+        "Poynting vector calculations.",
     )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
@@ -2977,7 +2979,11 @@ class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
         :class:`SurfaceFieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of
         frequencies to perform the calculation "in-place" with the time stepping. These monitors are designed
         to record fields on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) with
-        ``penetrable=False``, storing the normal E and tangential H fields.
+        ``penetrable=False``, storing the full E and/or H field vectors.
+
+        Surface current density is computed from ``H``, field intensity from ``E``, and the Poynting
+        vector from both. Narrowing ``fields`` from the default ``['E', 'H']`` makes the quantities
+        that need the omitted component unavailable.
 
     Example
     -------
@@ -3045,6 +3051,10 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
         be done by using a :class:`SurfaceFieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps
         and grid points. Recording the field at every time step and grid point will result in a large dataset. For
         the purpose of making animations, this is usually unnecessary.
+
+        Surface current density is computed from ``H``, field intensity from ``E``, and the Poynting
+        vector from both. Narrowing ``fields`` from the default ``['E', 'H']`` makes the quantities
+        that need the omitted component unavailable.
 
 
     Example

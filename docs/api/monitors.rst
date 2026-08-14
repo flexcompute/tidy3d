@@ -360,7 +360,7 @@ Surface
    SurfaceFieldMonitor
    SurfaceFieldTimeMonitor
 
-The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``) and lossy metal (``LossyMetalMedium``) with ``penetrable=False`` within a 3D region at specified frequency point(s). The ``SurfaceFieldTimeMonitor`` does the same, except at specified time intervals instead of frequency. These monitors store the normal E and tangential H fields on these surfaces.
+The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``) and lossy metal (``LossyMetalMedium``) with ``penetrable=False`` within a 3D region at specified frequency point(s). The ``SurfaceFieldTimeMonitor`` does the same, except at specified time intervals instead of frequency. These monitors store the full E and/or H field vectors on these surfaces.
 
 .. code-block:: python
 
@@ -387,6 +387,10 @@ The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``
 .. note::
 
    Surface monitors are currently in beta stage. Please exercise caution when analyzing surface monitor data and verify results carefully.
+
+.. note::
+
+   Surface current density is computed from ``H``, field intensity from ``E``, and the Poynting vector from both. Narrowing ``fields`` from the default ``['E', 'H']`` makes the quantities that need the omitted component unavailable.
 
 
 ~~~~
