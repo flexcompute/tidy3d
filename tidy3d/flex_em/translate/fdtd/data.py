@@ -10,6 +10,7 @@ from tidy3d.flex_em.translate.base import (
     apply_type_field_map,
     dump_data_for_public,
     dump_data_for_schema,
+    validate_data,
     validate_public_data,
 )
 
@@ -22,7 +23,7 @@ def from_data(data: Any) -> SimulationDataOutput:
     """Convert public FDTD simulation data to the schema model."""
 
     payload = apply_type_field_map(dump_data_for_schema(data), PUBLIC_TO_SCHEMA_TYPE_FIELD_MAP)
-    return SimulationDataOutput.model_validate(payload)
+    return validate_data(SimulationDataOutput, payload)
 
 
 def to_data(data: Any) -> Any:

@@ -75,6 +75,9 @@ class TaskInfo(TaskBase):
     solverVersion: str | None = None
     """Version of the solver used for the task."""
 
+    protocolVersion: str | None = None
+    """Client protocol identifier recorded for the task."""
+
     createAt: datetime | None = None
     """Timestamp when the task was created."""
 
@@ -282,6 +285,7 @@ class BatchDetail(TaskBase):
     validateErrors: dict | None = None
     taskType: str = None
     version: str | None = None
+    protocolVersion: str | None = None
 
 
 class AsyncJobDetail(TaskBase):

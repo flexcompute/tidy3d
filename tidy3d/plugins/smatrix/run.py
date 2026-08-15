@@ -255,6 +255,7 @@ def _run_local(
             "num_workers",
             "reduce_simulation",
             "pay_type",
+            "protocol_version",
         }
     }
     batch = create_batch(modeler=modeler, **batch_kwargs)

@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 from tidy3d import config
 from tidy3d.log import log
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+from tidy3d.web.core.client_identity import get_client_identity, resolve_protocol_version
 from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.types import TaskType
 
@@ -37,6 +38,24 @@ CACHE_STATS_NAME = "stats.json"
 
 TMP_PREFIX = "tidy3d-cache-"
 TMP_BATCH_PREFIX = "tmp_batch"
+
+
+def _cache_version() -> str | dict[str, str | None]:
+    """Return a cache namespace isolated by active product and solver identity."""
+
+    protocol_version = resolve_protocol_version()
+    if protocol_version is None:
+        return _get_protocol_version()
+    identity = get_client_identity()
+    return {
+        "protocol_version": protocol_version,
+        "solver_version": (
+            identity.solver_version
+            if identity is not None and identity.solver_version is not None
+            else config.run.solver_version
+        ),
+    }
+
 
 _CACHE: LocalCache | None = None
 
@@ -640,10 +659,11 @@ class LocalCache:
         workflow_type: str,
         verbose: bool = False,
         artifact_type: str | None = None,
+        version: Any | None = None,
     ) -> CacheEntry | None:
         """Fetch a cached artifact by explicit workflow hash and namespace."""
         try:
-            versions = _get_protocol_version()
+            versions = _cache_version() if version is None else version
             cache_key = build_cache_key(
                 simulation_hash=simulation_hash,
                 version=versions,
@@ -744,10 +764,11 @@ class LocalCache:
         workflow_type: str,
         simulation_hash: str,
         artifact_type: str | None = None,
+        version: Any | None = None,
     ) -> bool:
         """Store a completed workflow result using a validated explicit origin hash."""
         try:
-            version = _get_protocol_version()
+            version = _cache_version() if version is None else version
 
             cache_key = build_cache_key(
                 simulation_hash=simulation_hash,

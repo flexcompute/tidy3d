@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from botocore.exceptions import ClientError
+from packaging.version import InvalidVersion, Version
 from pydantic import Field, TypeAdapter
 
 import tidy3d as td
@@ -17,8 +18,8 @@ from tidy3d.config import config
 from tidy3d.config.sections import VALID_VGPU_ALLOCATIONS
 from tidy3d.exceptions import ValidationError, format_chained_exception_message
 
-from . import http_util
 from .cache import FOLDER_CACHE
+from .client_identity import resolve_protocol_version
 from .constants import (
     MODE_FILE_HDF5_GZ,
     MODELER_FILE_HDF5_GZ,
@@ -52,6 +53,25 @@ if TYPE_CHECKING:
     import requests
 
     from .stub import TaskStub
+
+
+def validate_protocol_version(protocol_version: str | None) -> str | None:
+    """Validate a client protocol identifier before it reaches a cloud request."""
+    if protocol_version is None:
+        return None
+    family, separator, version = protocol_version.partition(":")
+    if separator and family not in {"tidy3d", "flex-rf"}:
+        version = ""
+    elif not separator:
+        version = family
+    try:
+        Version(version)
+    except InvalidVersion:
+        raise ValueError(
+            "Protocol version must be a version number or use the "
+            "'tidy3d:<version>' or 'flex-rf:<version>' format."
+        ) from None
+    return protocol_version
 
 
 def _serialize_additional_payload(
@@ -182,6 +202,18 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
     )
+
+    def _resolve_request_protocol_version(
+        self,
+        solver_version: str | None,
+        *,
+        use_installed_with_solver: bool = False,
+    ) -> str | None:
+        """Prefer persisted or context-owned protocol identity over Tidy3D defaults."""
+        persisted_protocol = getattr(self, "protocolVersion", None)
+        if resolved_protocol := resolve_protocol_version(persisted=persisted_protocol):
+            return validate_protocol_version(resolved_protocol)
+        return _get_protocol_version() if use_installed_with_solver or not solver_version else None
 
     @classmethod
     def create(
@@ -673,10 +705,7 @@ class SimulationTask(WebTask):
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
-        if solver_version:
-            protocol_version = None
-        else:
-            protocol_version = http_util.get_version()
+        protocol_version = self._resolve_request_protocol_version(solver_version)
 
         payload = {
             "solverVersion": solver_version,
@@ -697,7 +726,10 @@ class SimulationTask(WebTask):
             payload,
         )
 
-    def estimate_cost(self, solver_version: str | None = None) -> float:
+    def estimate_cost(
+        self,
+        solver_version: str | None = None,
+    ) -> float:
         """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
@@ -705,7 +737,6 @@ class SimulationTask(WebTask):
         ----------
         solver_version: str
             target solver version.
-
         Returns
         -------
         flex_unit_cost: float
@@ -714,10 +745,7 @@ class SimulationTask(WebTask):
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
 
-        if solver_version:
-            protocol_version = None
-        else:
-            protocol_version = http_util.get_version()
+        protocol_version = self._resolve_request_protocol_version(solver_version)
 
         resp = http.post(
             f"tidy3d/tasks/{self.task_id}/metadata",
@@ -939,7 +967,13 @@ class BatchTask(WebTask):
         if resp:
             task_type = resp.get("taskType") if isinstance(resp, dict) else None
             status = resp.get("status") if isinstance(resp, dict) else None
-            return BatchTask(taskId=task_id, taskType=task_type, status=status)
+            protocol_version = resp.get("protocolVersion") if isinstance(resp, dict) else None
+            return BatchTask(
+                taskId=task_id,
+                taskType=task_type,
+                status=status,
+                protocolVersion=protocol_version,
+            )
         return None
 
     def detail(self) -> BatchDetail:
@@ -963,7 +997,6 @@ class BatchTask(WebTask):
         self,
         check_task_type: str,
         solver_version: str | None = None,
-        protocol_version: str | None = None,
     ) -> requests.Response:
         """Submits a request to validate the batch configuration on the server.
 
@@ -971,16 +1004,15 @@ class BatchTask(WebTask):
         ----------
         solver_version : Optional[str], default=None
             The version of the solver to use for validation.
-        protocol_version : Optional[str], default=None
-            The data protocol version. Defaults to the current version.
-
         Returns
         -------
         Any
             The server's response to the check request.
         """
-        if protocol_version is None:
-            protocol_version = _get_protocol_version()
+        protocol_version = self._resolve_request_protocol_version(
+            solver_version,
+            use_installed_with_solver=True,
+        )
         return http.post(
             f"rf/task/{self.task_id}/check",
             {
@@ -993,7 +1025,6 @@ class BatchTask(WebTask):
     def submit(
         self,
         solver_version: str | None = None,
-        protocol_version: str | None = None,
         worker_group: str | None = None,
         pay_type: PayType | str = PayType.AUTO,
         priority: int | None = None,
@@ -1007,8 +1038,6 @@ class BatchTask(WebTask):
         ----------
         solver_version : Optional[str], default=None
             The version of the solver to use for execution.
-        protocol_version : Optional[str], default=None
-            The data protocol version. Defaults to the current version.
         worker_group : Optional[str], default=None
             Optional identifier for a specific worker group to run on.
         priority : Optional[int], default=None
@@ -1041,8 +1070,10 @@ class BatchTask(WebTask):
                 "before starting the batch."
             )
 
-        if protocol_version is None:
-            protocol_version = _get_protocol_version()
+        protocol_version = self._resolve_request_protocol_version(
+            solver_version,
+            use_installed_with_solver=True,
+        )
         payload = {
             "solverVersion": solver_version,
             "protocolVersion": protocol_version,

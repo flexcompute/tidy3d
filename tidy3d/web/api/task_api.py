@@ -33,6 +33,7 @@ from tidy3d.web.api.states import (
     status_to_stage,
 )
 from tidy3d.web.cache import resolve_local_cache
+from tidy3d.web.core.client_identity import get_client_identity
 from tidy3d.web.core.constants import (
     CM_DATA_HDF5_GZ,
     MODE_DATA_HDF5_GZ,
@@ -85,6 +86,17 @@ SOLVER_NAME = {
     "HEAT_CHARGE": "HeatCharge",
     "VOLUME_MESH": "VolumeMesher",
 }
+
+_UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE = (
+    "FlexRF protocol tasks do not support autograd-enabled FDTD submissions."
+)
+
+
+def _active_product_protocol() -> str | None:
+    """Return the product protocol owned by the active client context, if any."""
+    identity = get_client_identity()
+    protocol = identity.protocol_version if identity is not None else None
+    return protocol if protocol and protocol.startswith("flex-rf:") else None
 
 
 @dataclass(frozen=True)
@@ -577,6 +589,13 @@ def _upload(
         solver_version=solver_version,
         simulation_type=simulation_type,
     )
+    if _active_product_protocol() and upload_options.simulation_type in {
+        "autograd_fwd",
+        "autograd_bwd",
+        "tidy3d_autograd",
+        "tidy3d_autograd_async",
+    }:
+        raise DataError(_UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE)
 
     if isinstance(simulation, ModeSolver | ModeSimulation):
         simulation = get_reduced_simulation(simulation, reduce_simulation)
@@ -1113,6 +1132,8 @@ def load(
             workflow_type = task_type_name_of(cache_simulation)
         else:
             info = get_info(task_id, verbose=False)
+            if (getattr(info, "protocolVersion", None) or "").startswith("flex-rf:"):
+                return stub_data
             workflow_type = getattr(info, "taskType", None)
         if workflow_type != TaskType.MODE_SOLVER.name:
             simulation, should_store = _cache_simulation_for_load(
@@ -1309,6 +1330,8 @@ def estimate_cost_info(
 
     task = TaskFactory.get(task_id, verbose=False)
     detail = task.detail()
+    if solver_version is None:
+        solver_version = config.run.solver_version
     if isinstance(task, BatchTask):
         check_task_type = "FDTD" if detail.taskType == "MODAL_CM" else "RF_FDTD"
         status = detail.status.lower()

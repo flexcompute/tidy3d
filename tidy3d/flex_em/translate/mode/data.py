@@ -26,4 +26,5 @@ def to_data(data: Any) -> Any:
 
     from tidy3d.components.mode.data.sim_data import ModeSimulationData
 
-    return validate_public_data(ModeSimulationData, dump_data_for_public(data))
+    payload = dump_data_for_public(data)
+    return validate_public_data(ModeSimulationData, payload)

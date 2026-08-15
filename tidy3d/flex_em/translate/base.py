@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -45,34 +46,42 @@ def dump_data_for_public(obj: Any) -> dict[str, Any]:
     return obj.model_dump(mode="python")
 
 
-def _drop_closed_public_log_file_handler() -> bool:
-    """Remove a stale public Tidy3D file log handler left with a closed file."""
+def _drop_closed_file_log_handlers() -> bool:
+    """Remove stale public or copied-schema file handlers left by pipeline logging."""
 
+    removed = False
+    for module_name in ("tidy3d.log", "flex_em.schema.tidy3d.log"):
+        try:
+            log = import_module(module_name).log
+        except (ImportError, AttributeError):
+            continue
+
+        handler = log.handlers.get("file")
+        file_handle = getattr(getattr(handler, "console", None), "file", None)
+        if handler is not None and getattr(file_handle, "closed", False):
+            del log.handlers["file"]
+            removed = True
+    return removed
+
+
+def validate_data(data_type: type[Any], payload: dict[str, Any]) -> Any:
+    """Validate translated result data without stale pipeline file logging."""
+
+    _drop_closed_file_log_handlers()
     try:
-        from tidy3d.log import log
-    except Exception:
-        return False
-
-    handler = log.handlers.get("file")
-    file_handle = getattr(getattr(handler, "console", None), "file", None)
-    if handler is None or not getattr(file_handle, "closed", False):
-        return False
-    del log.handlers["file"]
-    return True
+        return data_type.model_validate(payload)
+    except Exception as exc:
+        if "I/O operation on closed file" not in str(exc):
+            raise
+        if not _drop_closed_file_log_handlers():
+            raise
+        return data_type.model_validate(payload)
 
 
 def validate_public_data(public_type: type[Any], payload: dict[str, Any]) -> Any:
     """Validate schema result payloads as public Tidy3D data without stale file logging."""
 
-    _drop_closed_public_log_file_handler()
-    try:
-        return public_type.model_validate(payload)
-    except Exception as exc:
-        if "I/O operation on closed file" not in str(exc):
-            raise
-        if not _drop_closed_public_log_file_handler():
-            raise
-        return public_type.model_validate(payload)
+    return validate_data(public_type, payload)
 
 
 def dump_for_public(obj: Any, *, type_name: str) -> dict[str, Any]:
