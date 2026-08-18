@@ -13,4 +13,11 @@ The returned radiation intensity is normalized per squared electric dipole
 moment. If a physical dipole moment `d` is expressed in `C*um`, multiplying by
 `|d|^2` gives angular power density in `W/sr`.
 
+Use `angular_radiation_transfer(bulk_refractive_index)` to divide the angular
+radiation intensity by the total power of the same dipole in a homogeneous
+reference medium. The result has units `1/sr`. The supplied index belongs to the
+emitter reference medium; the collection-medium index is detected automatically
+from the TFSF injection face. The legacy `radiation_intensity_transfer(...)`
+method is a deprecated alias.
+
 See `docs/api/plugins/dipole_emission.rst` for the public API reference.

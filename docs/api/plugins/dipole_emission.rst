@@ -15,17 +15,33 @@ The main result is ``radiation_intensity`` with dimensions
 ``("dipole_axis", "polarization", "angle", "f")``:
 
 * ``radiation_intensity`` is stored and includes the study ``source_time`` spectrum.
-* ``radiation_intensity_transfer(bulk_refractive_index)`` is a derived method that
+* ``angular_radiation_transfer(bulk_refractive_index)`` is a derived method that
   normalizes by the total power the same dipoles would emit in a uniform medium at
-  the given refractive index, yielding the cavity transfer in ``1/sr``. Integrating
-  it over the study's collection solid angle gives the half-space radiative
-  contribution; for a bulk emitter a single study integrates to ``1/2`` (the full
-  radiative Purcell factor requires both collection half-spaces).
+  the given refractive index, yielding the angular radiation transfer in ``1/sr``.
+  Integrating it over the study's collection solid angle gives the half-space radiative
+  contribution. For a bulk emitter, a single study integrates to ``1/2`` and the
+  full-sphere integral is ``1``.
 
 Use ``store_position_indexes`` to additionally retain radiation intensity at
 selected individual positions. The stored optional array has dimensions
 ``("index", "dipole_axis", "polarization", "angle", "f")``, with a matching
 derived transfer method.
+
+The transfer is defined by
+
+.. math::
+
+   T(\theta,\phi,f)=\frac{dP/d\Omega}{P_{\mathrm{bulk}}},
+   \qquad
+   \frac{P_{\mathrm{bulk}}}{|d|^2}
+   =\frac{n_{\mathrm{em}}\mu_0\omega^4}{12\pi c}
+   |S_{\mathrm{em}}(f)|^2.
+
+Here, ``bulk_refractive_index`` supplies :math:`n_{\mathrm{em}}`, the refractive
+index of the homogeneous emitter reference medium. It is distinct from the
+collection-medium index. The latter is detected automatically from the single
+real, nondispersive medium on the TFSF injection face and is already included in
+``radiation_intensity``.
 
 Both outputs are normalized per squared electric dipole moment, with dipole
 moment expressed in ``C*um``. The emitted field is linear in the dipole moment
@@ -36,6 +52,20 @@ the ``source_time`` spectrum and the dipole-moment scaling cancel between the
 radiated and bulk emitted powers.
 If the dipole strength varies with position or orientation, include those
 relative ``|d|**2`` factors in ``position_weights``.
+
+``source_time.amplitude`` sets the numerical amplitude of the reciprocal TFSF
+illumination; it is not the emitting dipole moment. The recorded reciprocal field
+scales linearly with this amplitude. The reciprocity normalization divides out
+that squared field scaling, leaving ``radiation_intensity`` per squared emitting
+dipole moment. The emitter spectrum that remains in ``radiation_intensity`` is
+the unit-amplitude, real-field DFT spectrum evaluated by
+``source_time.spectrum(sim.tmesh, freqs, sim.dt)``. The bulk power uses the same
+spectrum. It does not use the analytic ``amp_freq`` representation.
+
+``radiation_intensity_transfer(...)`` and
+``radiation_intensity_transfer_at_positions(...)`` remain as deprecated aliases
+for ``angular_radiation_transfer(...)`` and
+``angular_radiation_transfer_at_positions(...)``, respectively.
 
 Defining a Study
 ----------------
@@ -93,6 +123,9 @@ per-direction angles are read from the ``DipoleEmissionStudyData.theta`` and
    )
 
    data = study.run(folder_name="dipole_emission")
+   angular_transfer = data.angular_radiation_transfer(
+       bulk_refractive_index=1.7,
+   )
 
 Notes
 -----

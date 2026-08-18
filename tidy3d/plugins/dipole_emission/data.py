@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import C_0, MU_0, STERADIAN
 from tidy3d.exceptions import DataError
+from tidy3d.log import log
 from tidy3d.plugins.dipole_emission.data_array import (
     DipoleEmissionStudyDataArray,
     DipoleEmissionStudyPositionDataArray,
@@ -40,7 +41,7 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
     frequency. They represent angular radiation intensity per squared electric
     dipole moment, with dipole moment expressed in C*um, into the collection
     half-space defined by the study.
-    ``radiation_intensity_transfer(...)`` normalizes the stored intensity by the
+    ``angular_radiation_transfer(...)`` normalizes the stored intensity by the
     total power the same dipoles would emit in a uniform medium at the emitter
     refractive index. Optional position-resolved arrays are present only when
     the study ``store_position_indexes`` is nonempty. Raw ``BatchData`` is
@@ -98,7 +99,7 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
     def _validate_stored_position_index(self) -> DipoleEmissionStudyData:
         """Check the position-resolved ``index`` axis matches the stored positions.
 
-        ``radiation_intensity_transfer_at_positions`` aligns a per-stored-position
+        ``angular_radiation_transfer_at_positions`` aligns a per-stored-position
         ``bulk_refractive_index`` to this array's ``index`` coordinate, so that
         coordinate must carry the ``positions`` labels selected by
         ``study.store_position_indexes`` (the labels ``compose`` assigns). Without
@@ -162,10 +163,10 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
             raise DataError("'bulk_refractive_index' must contain finite positive values.")
         return index
 
-    def radiation_intensity_transfer(
+    def angular_radiation_transfer(
         self, bulk_refractive_index: float | ArrayFloat1D
     ) -> DipoleEmissionStudyDataArray:
-        """Position-summed cavity transfer, in 1/sr.
+        """Position-summed angular radiation transfer, in 1/sr.
 
         The stored ``radiation_intensity`` (the ``position_weights``-weighted sum
         over the sampled dipoles) is normalized by the total power the same
@@ -173,9 +174,11 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
         ``T = radiation_intensity / sum_i(w_i * P_bulk_i)`` with
         ``P_bulk_i(omega) = n_i * omega**4 * mu_0 / (12 pi c) * |S(omega)|**2``
         the bulk emitted power of dipole ``i`` per squared dipole moment in C*um.
-        Integrating ``T`` over solid angle gives the radiative Purcell factor; a
-        bulk emitter integrates to 1 over the full sphere, so a single study,
-        which collects one half-space (``abs(theta) < pi/2``), integrates to 1/2.
+        Integrating ``T`` over the angles of one study gives the radiative
+        Purcell contribution into its selected collection half-space. The full
+        radiative Purcell factor requires complementary studies for both
+        collection sides and the sum of their angular integrals. In uniform
+        bulk, each half-space contributes 1/2.
 
         A fully zeroed orientation column in 2D ``position_weights`` (e.g. a
         horizontal-only emitter with no z-dipole) gives ``NaN`` for that
@@ -191,7 +194,8 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
             ``radiation_intensity``, and the two coincide only when emitter and
             collection media match. Provide a scalar, or one value per sampled
             position (length ``positions.sizes["index"]``, in ``positions``
-            order) when positions span different media.
+            order) when positions span different media. The index does not vary
+            with dipole orientation.
 
         Returns
         -------
@@ -217,18 +221,18 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
             coords=self.radiation_intensity.coords,
         )
         transfer.attrs = {
-            "long_name": "angular radiation intensity transfer (cavity / bulk)",
+            "long_name": "angular radiation transfer (collected / bulk)",
             "units": _TRANSFER_UNITS,
         }
         return transfer
 
-    def radiation_intensity_transfer_at_positions(
+    def angular_radiation_transfer_at_positions(
         self, bulk_refractive_index: float | ArrayFloat1D
     ) -> DipoleEmissionStudyPositionDataArray | None:
-        """Position-resolved cavity transfer at the stored positions, in 1/sr.
+        """Position-resolved angular radiation transfer, in 1/sr.
 
         Each stored dipole's radiation intensity is normalized by its own bulk
-        emitted power ``P_bulk_i``; see :meth:`radiation_intensity_transfer`.
+        emitted power ``P_bulk_i``; see :meth:`angular_radiation_transfer`.
         Returns ``None`` when the study stores no individual positions.
 
         Parameters
@@ -237,7 +241,8 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
             Real refractive index of the uniform reference medium. Provide a
             scalar, or one value per stored position (length matching the
             ``index`` dimension of ``radiation_intensity_at_positions``, in its
-            ``index`` coordinate order).
+            ``index`` coordinate order). The index does not vary with dipole
+            orientation.
 
         Returns
         -------
@@ -259,7 +264,31 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
             coords=self.radiation_intensity_at_positions.coords,
         )
         transfer.attrs = {
-            "long_name": "position-resolved angular radiation intensity transfer (cavity / bulk)",
+            "long_name": "position-resolved angular radiation transfer (collected / bulk)",
             "units": _TRANSFER_UNITS,
         }
         return transfer
+
+    def radiation_intensity_transfer(
+        self, bulk_refractive_index: float | ArrayFloat1D
+    ) -> DipoleEmissionStudyDataArray:
+        """Deprecated alias for :meth:`angular_radiation_transfer`."""
+        log.warning(
+            "'radiation_intensity_transfer(...)' is deprecated; use "
+            "'angular_radiation_transfer(...)' instead.",
+            log_once=True,
+        )
+        return self.angular_radiation_transfer(bulk_refractive_index=bulk_refractive_index)
+
+    def radiation_intensity_transfer_at_positions(
+        self, bulk_refractive_index: float | ArrayFloat1D
+    ) -> DipoleEmissionStudyPositionDataArray | None:
+        """Deprecated alias for :meth:`angular_radiation_transfer_at_positions`."""
+        log.warning(
+            "'radiation_intensity_transfer_at_positions(...)' is deprecated; use "
+            "'angular_radiation_transfer_at_positions(...)' instead.",
+            log_once=True,
+        )
+        return self.angular_radiation_transfer_at_positions(
+            bulk_refractive_index=bulk_refractive_index
+        )

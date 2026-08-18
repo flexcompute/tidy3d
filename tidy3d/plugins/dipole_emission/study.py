@@ -12,12 +12,15 @@ from tidy3d.components.data.data_array import PointDataArray, SphericalAngleData
 from tidy3d.components.data.point_cloud import canonicalize_point_cloud_points
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.monitor import DIPOLE_EMISSION_DIPOLE_AXES, DipoleEmissionMonitor
+from tidy3d.components.run_time_spec import RunTimeSpec
 from tidy3d.components.simulation import (
     MAX_SIMULATION_DATA_SIZE_GB,
     WARN_MONITOR_DATA_SIZE_GB,
+    WARN_TIME_STEPS,
     Simulation,
 )
 from tidy3d.components.source.field import TFSF, FixedAngleSpec
+from tidy3d.components.source.time import CustomSourceTime, Pulse
 from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis
 from tidy3d.components.types.time import SourceTimeType
@@ -39,6 +42,8 @@ from tidy3d.plugins.dipole_emission.data_array import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from tidy3d.components.grid.grid_spec import GridSpec
 
 Direction = Literal["+", "-"]
 Polarization = Literal["p", "s"]
@@ -168,8 +173,8 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         title="Source Time",
         description=(
             "Spectral envelope for the emission calculation. The envelope is included in "
-            "``radiation_intensity`` and divided out by the "
-            "``radiation_intensity_transfer(...)`` method."
+            "``radiation_intensity`` and cancels from the bulk-power normalization in "
+            "``angular_radiation_transfer(...)``."
         ),
     )
 
@@ -267,6 +272,32 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             raise ValidationError("'angles' theta values must satisfy abs(theta) < pi/2.")
         return val
 
+    @field_validator("source_time")
+    @classmethod
+    def _validate_source_time_type(cls, val: SourceTimeType) -> SourceTimeType:
+        """Require a source time supported by fixed-angle TFSF."""
+        if isinstance(val, CustomSourceTime):
+            raise ValidationError(
+                "Dipole emission does not support 'CustomSourceTime'; an analytic "
+                "frequency-domain envelope is required. Use a localized 'Pulse' with a "
+                "finite end time (e.g. 'GaussianPulse') instead."
+            )
+        if not isinstance(val, Pulse):
+            raise ValidationError(
+                "Dipole emission requires a 'Pulse' source time (e.g. 'GaussianPulse'); "
+                f"got '{val.type}'."
+            )
+        if val.end_time() is None:
+            raise ValidationError(
+                "Dipole emission requires a localized 'Pulse' with a finite end time "
+                f"(e.g. 'GaussianPulse'); got '{val.type}'."
+            )
+        if not np.isfinite(val.amplitude) or val.amplitude <= 0:
+            raise ValidationError(
+                "Dipole emission requires 'source_time.amplitude' to be positive and finite."
+            )
+        return val
+
     @model_validator(mode="after")
     def _validate_study(self) -> DipoleEmissionStudy:
         """Validate study-level invariants that span fields."""
@@ -304,7 +335,6 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             self._raise_validation_error_at_loc(
                 "'positions' must lie inside 'analysis_region'.", "positions"
             )
-        self._call_with_validation_loc(("source_time",), self._validate_source_spectrum)
         self._call_with_validation_loc(("position_weights",), self._validate_position_weights)
         self._call_with_validation_loc(
             ("store_position_indexes",), self._validate_stored_position_index_range
@@ -327,10 +357,6 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             raise ValidationError("'position_weights' must contain finite nonnegative values.")
         if not np.any(weights > 0):
             raise ValidationError("'position_weights' must not be all zero (no emitters).")
-
-    def _validate_source_spectrum(self) -> None:
-        """Validate source spectrum required by transfer normalization."""
-        _ = self.pulse_spectrum_abs2
 
     def _validate_stored_position_index_range(self) -> None:
         """Validate stored position indexes against the sampled positions."""
@@ -394,14 +420,65 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         """Check that the local dipole-emission feature is licensed."""
         check_tidy3d_extras_licensed_feature(FEATURE_NAME)
 
-    @property
+    def _simulation_grid_spec(self) -> GridSpec:
+        """Grid specification shared by every simulation in the study."""
+        return self.base_sim.grid_spec.updated_copy(
+            override_structures=(
+                *self.base_sim.grid_spec.override_structures,
+                self.analysis_region.mesh_override(MESH_OVERRIDE_NAME),
+            )
+        )
+
+    @cached_property
+    def _pulse_spectrum_sampling(self) -> tuple[float, float]:
+        """Stop time and time step used by the deferred source-spectrum DFT."""
+        spectrum_simulation = self.base_sim.updated_copy(
+            grid_spec=self._simulation_grid_spec(),
+            normalize_index=None,
+        )
+        source_end_time = self.source_time.end_time()
+        if source_end_time is None:
+            raise SetupError(
+                "Dipole emission requires a localized source pulse with a finite end time."
+            )
+        if isinstance(spectrum_simulation.run_time, RunTimeSpec):
+            spectrum_run_time = spectrum_simulation._resolve_run_time([self.source_time])
+        else:
+            spectrum_run_time = spectrum_simulation.run_time
+        return min(spectrum_run_time, source_end_time), spectrum_simulation.dt
+
+    def _warn_pulse_spectrum_dft_size(self, spectrum_stop_time: float, spectrum_dt: float) -> None:
+        """Warn when transfer post-processing will require a large source-spectrum DFT."""
+        num_time_samples = int(np.ceil(spectrum_stop_time / spectrum_dt)) + 1
+        if num_time_samples > WARN_TIME_STEPS:
+            log.warning(
+                "Computing 'angular_radiation_transfer(...)' will evaluate the source "
+                f"spectrum over approximately {num_time_samples:.2e} time samples at "
+                f"{len(self.freqs)} frequencies. This DFT is deferred until transfer "
+                "post-processing is requested and may require significant time and memory."
+            )
+
+    @cached_property
     def pulse_spectrum_abs2(self) -> ArrayFloat1D:
-        """Squared source spectrum magnitude sampled at ``freqs``."""
-        amps = np.asarray([self.source_time.amp_freq(freq) for freq in self.freqs], dtype=complex)
-        values = np.abs(amps) ** 2
+        """Squared unit-amplitude source spectrum represented in raw monitor fields."""
+        source_amplitude = self.source_time.amplitude
+        spectrum_stop_time, spectrum_dt = self._pulse_spectrum_sampling
+        self._warn_pulse_spectrum_dft_size(spectrum_stop_time, spectrum_dt)
+        spectrum_times = np.arange(
+            0.0,
+            spectrum_stop_time + spectrum_dt,
+            spectrum_dt,
+        )
+        spectrum = self.source_time.spectrum(
+            times=spectrum_times,
+            freqs=np.asarray(self.freqs),
+            dt=spectrum_dt,
+        )
+        values = np.abs(np.asarray(spectrum, dtype=complex) / source_amplitude) ** 2
         if not np.all(np.isfinite(values)) or np.any(values <= 0):
             raise SetupError(
-                "Dipole emission requires a nonzero finite source spectrum at every output frequency."
+                "Dipole emission requires a nonzero finite source spectrum at every output "
+                "frequency."
             )
         return values
 
@@ -770,12 +847,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             polarization. The simulations are not submitted by this method.
         """
         theta_values, phi_values = self._angle_values()
-        grid_spec = self.base_sim.grid_spec.updated_copy(
-            override_structures=(
-                *self.base_sim.grid_spec.override_structures,
-                self.analysis_region.mesh_override(MESH_OVERRIDE_NAME),
-            )
-        )
+        grid_spec = self._simulation_grid_spec()
 
         simulations = {}
         for angle_index, (theta, phi) in enumerate(zip(theta_values, phi_values)):
@@ -815,7 +887,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         DipoleEmissionStudyData
             Serializable reduced emission data containing stored ``radiation_intensity`` with
             dimensions ``("dipole_axis", "polarization", "angle", "f")``.
-            ``radiation_intensity_transfer(...)`` normalizes ``radiation_intensity`` by
+            ``angular_radiation_transfer(...)`` normalizes ``radiation_intensity`` by
             the bulk emitted power at a provided reference refractive index.
             Position-resolved arrays are included only when
             ``store_position_indexes`` is nonempty.
