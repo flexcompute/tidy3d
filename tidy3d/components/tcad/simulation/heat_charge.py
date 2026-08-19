@@ -101,7 +101,7 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterator
     from typing import Literal
 
     from pydantic import FiniteFloat
@@ -550,6 +550,9 @@ class HeatChargeSimulation(AbstractSimulation):
             ("boundary_spec",), self._check_thermal_contact_resistance_placement
         )
         self._call_with_validation_loc(("structures",), self._check_heat_only_features_in_charge)
+        self._call_with_validation_loc(
+            ("analysis_spec",), self._check_semiconductor_electric_bcs_require_charge_analysis
+        )
         self._call_with_validation_loc(("boundary_spec",), self._check_freqs_requires_ac_source)
         self._call_with_validation_loc(
             ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
@@ -1021,10 +1024,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _check_charge_simulation_semiconductors(self) -> Self:
         """Validate Charge simulation has at least one semiconductor medium."""
-        sc_present = HeatChargeSimulation._check_if_semiconductor_present(
-            structures=self.structures
-        )
-        if not sc_present:
+        if not any(self._iter_semiconductor_charge_media()):
             raise SetupError(
                 f"{TCADAnalysisTypes.CHARGE} simulations require the definition of at least one semiconductor medium."
             )
@@ -1264,7 +1264,7 @@ class HeatChargeSimulation(AbstractSimulation):
         if use_accelerated:
             return self
 
-        for semiconductor in self._semiconductor_charge_media(self.structures):
+        for _loc, semiconductor in self._iter_semiconductor_charge_media():
             if (
                 semiconductor.electron_affinity is not None
                 and semiconductor.electron_affinity != 0.0
@@ -1390,24 +1390,27 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
-    @staticmethod
-    def _semiconductor_charge_media(
-        structures: Iterable[Structure],
-    ) -> Iterable[SemiconductorMedium]:
-        """Yield semiconductor charge media from bare and multiphysics structure media."""
-        for structure in structures:
-            if isinstance(structure.medium, SemiconductorMedium):
-                yield structure.medium
-            elif isinstance(structure.medium, MultiPhysicsMedium):
-                charge_medium = structure.medium.charge
-                if isinstance(charge_medium, SemiconductorMedium):
-                    yield charge_medium
+    def _check_semiconductor_electric_bcs_require_charge_analysis(self) -> Self:
+        """Require an explicit charge analysis for electrical semiconductor simulations.
 
-    @staticmethod
-    def _check_if_semiconductor_present(structures: Iterable[Structure]) -> bool:
-        """Checks whether the simulation object can run a Charge simulation."""
-
-        return any(HeatChargeSimulation._semiconductor_charge_media(structures))
+        The rule is deliberately not placement-aware: '_check_simulation_types' suppresses
+        the CONDUCTION type from a global 'semiconductor_present' flag, so any electrical
+        boundary anywhere in a model that holds a semiconductor anywhere leaves the
+        simulation unclassified at validation time while the runtime classifier still calls
+        it conduction. Match that predicate here so no such setup slips through."""
+        if isinstance(self.analysis_spec, ChargeTypes):
+            return self
+        if not any(self._iter_semiconductor_charge_media()):
+            return self
+        if any(isinstance(bc.condition, ElectricBCTypes) for bc in self.boundary_spec):
+            raise SetupError(
+                "Simulations that contain a 'SemiconductorMedium' together with electrical "
+                "boundary conditions require a charge 'analysis_spec', such as "
+                "'IsothermalSteadyChargeDCAnalysis'. A charge analysis additionally requires "
+                "at least two 'VoltageBC' contacts, so boundaries of another electrical type "
+                "may need to be converted as well."
+            )
+        return self
 
     def _check_simulation_types(
         self,
@@ -1425,9 +1428,7 @@ class HeatChargeSimulation(AbstractSimulation):
         if isinstance(analysis_spec, ChargeTypes):
             simulation_types.append(TCADAnalysisTypes.CHARGE)
 
-        semiconductor_present = HeatChargeSimulation._check_if_semiconductor_present(
-            structures=self.structures
-        )
+        semiconductor_present = any(self._iter_semiconductor_charge_media())
 
         for boundary in self.boundary_spec:
             if isinstance(boundary.condition, HeatBCTypes):
@@ -1749,29 +1750,40 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     def _check_non_isothermal_is_possible(self) -> Self:
-        """Make sure that when a non-isothermal case is defined the structures
-        have both electrical and thermal properties."""
+        """Make sure that when a non-isothermal case is defined the simulation
+        has both electrical and thermal properties.
+
+        Both halves scan the background 'medium' as well as every structure, since the
+        mesher composes them into the same domain: asking the two questions over
+        different sets of media is what let a background semiconductor satisfy the
+        charge-medium requirement and then be reported here as absent."""
 
         analysis_spec = self.analysis_spec
         if isinstance(analysis_spec, SteadyChargeDCAnalysis) and not isinstance(
             analysis_spec, IsothermalSteadyChargeDCAnalysis
         ):
+            semiconductor_locs = [loc for loc, _ in self._iter_semiconductor_charge_media()]
+            has_elec = bool(semiconductor_locs)
+
             has_heat = False
-            has_elec = False
-            structures = self.structures
-            for struct in structures:
-                if isinstance(struct.medium, MultiPhysicsMedium):
-                    if struct.medium.heat is not None:
-                        if isinstance(struct.medium.heat, SolidMedium):
-                            has_heat = True
-                    if struct.medium.charge is not None:
-                        if isinstance(struct.medium.charge, SemiconductorMedium):
-                            has_elec = True
+            for medium in [self.medium, *(struct.medium for struct in self.structures)]:
+                heat_spec = (
+                    medium
+                    if isinstance(medium, SolidMedium)
+                    else getattr(medium, "heat_spec", None)
+                )
+                if isinstance(heat_spec, SolidMedium):
+                    has_heat = True
+                    break
 
             if not has_heat and has_elec:
-                raise SetupError(
+                # Anchor to the semiconductor that needs the heat spec. The caller's fallback
+                # loc is ('structures',), which points at nothing actionable -- and at nothing
+                # at all -- when the semiconductor sits on the background medium.
+                self._raise_validation_error_at_loc(
                     "The current simulation is defined as non-isothermal but no solid "
-                    "materials with heat properties have been defined. "
+                    "materials with heat properties have been defined. ",
+                    *semiconductor_locs[0],
                 )
             elif not has_elec and has_heat:
                 raise SetupError(
