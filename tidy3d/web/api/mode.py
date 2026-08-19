@@ -29,6 +29,7 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from tidy3d.version import __version__
 from tidy3d.web.api import task_api
 from tidy3d.web.api.run_options import log_deprecated_run_args, resolve_pay_type
+from tidy3d.web.api.states import ERROR_STATES, SUCCESS_STATES
 from tidy3d.web.core.core_config import get_logger_console
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.s3utils import download_file, download_gz_file, upload_file
@@ -94,6 +95,9 @@ def _create_and_upload_mode_solver_task(
         mode_solver = mode_solver.reduced_simulation_copy
 
     task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
+    if task.solver_id is None:
+        raise WebError("Mode solver task did not return a solver id.")
+
     if verbose:
         get_logging_console().log(
             f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
@@ -114,28 +118,28 @@ def _start_and_monitor_mode_solver_task(
     if verbose:
         console = get_logging_console()
 
+    solver_id = task.solver_id
+    if solver_id is None:
+        raise WebError("Mode solver task did not return a solver id.")
+
     task.submit(pay_type=pay_type)
 
-    # Wait for task to finish
-    prev_status = "draft"
-    status = task.status
-    while status not in ("success", "error", "diverged", "deleted"):
-        if status != prev_status:
-            log.log(log_level, f"Mode solver status: {status}")
-            if verbose:
-                console.log(f"Mode solver status: {status}")
-            prev_status = status
-        time.sleep(0.5)
-        status = task.get_info().status
+    # The legacy endpoint returns the companion FDTD task as ``refId``/``task_id`` and
+    # the actual MODE_SOLVER task as ``id``/``solver_id``. Generic task detail and
+    # progress routes therefore require ``solver_id``; the parent has no solver progress.
+    from tidy3d.web.api.webapi import monitor
 
-    if status == "error":
+    monitor(solver_id, verbose=verbose)
+    status = task_api.get_info(solver_id, verbose=False).status
+
+    if status in ERROR_STATES:
         raise WebError("Error running mode solver.")
 
     log.log(log_level, f"Mode solver status: {status}")
     if verbose:
         console.log(f"Mode solver status: {status}")
 
-    if status != "success":
+    if status not in SUCCESS_STATES:
         # Our cache discards None, so the user is able to re-run
         return None
 

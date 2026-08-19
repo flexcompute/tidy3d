@@ -28,8 +28,10 @@ from tidy3d.web.api.states import (
     END_STATES,
     ERROR_STATES,
     MAX_STEPS,
+    POSTPROCESS_STATES,
     PRE_VALIDATE_STATES,
     STATE_PROGRESS_PERCENTAGE,
+    SUCCESS_STATES,
     status_to_stage,
 )
 from tidy3d.web.cache import resolve_local_cache
@@ -77,6 +79,7 @@ SIM_FILE_JSON = "simulation.json"
 
 GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT", "TERMINAL_CM"]
 BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE", "VOLUME_MESH"]
+RUN_PROGRESS_TASK_TYPES = {TaskType.EME.name, TaskType.MODE.name, TaskType.MODE_SOLVER.name}
 SOLVER_NAME = {
     "FDTD": "FDTD",
     "MODE_SOLVER": "Mode",
@@ -982,6 +985,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: str | None = No
             with Progress(console=console) as progress:
                 pbar_pd = progress.add_task("% done", total=100)
                 perc_done, _ = get_run_info(task_id)
+                progress.update(pbar_pd, completed=perc_done or 0, refresh=True)
 
                 while (
                     perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
@@ -991,6 +995,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: str | None = No
                         pbar_pd,
                         completed=perc_done,
                         description=f"solver progress (field decay = {field_decay:.2e})",
+                        refresh=True,
                     )
                     time.sleep(RUN_REFRESH_TIME)
 
@@ -1004,19 +1009,36 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: str | None = No
                     refresh=True,
                     description=f"solver progress (field decay = {field_decay:.2e})",
                 )
-        elif task_type == "EME":
+        elif task_type in RUN_PROGRESS_TASK_TYPES:
             with Progress(console=console) as progress:
                 pbar_pd = progress.add_task("% done", total=100)
                 perc_done, _ = get_run_info(task_id)
+                progress.update(pbar_pd, completed=perc_done or 0, refresh=True)
+                status = get_status(task_id)
 
-                while (
-                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
-                ):
+                while perc_done is not None and perc_done < 100 and status == "running":
                     perc_done, _ = get_run_info(task_id)
-                    progress.update(pbar_pd, completed=perc_done, description="solver progress")
+                    progress.update(
+                        pbar_pd,
+                        completed=perc_done,
+                        description="solver progress",
+                        refresh=True,
+                    )
                     time.sleep(RUN_REFRESH_TIME)
+                    status = get_status(task_id)
 
-                progress.update(pbar_pd, completed=100, refresh=True, description="solver progress")
+                final_perc_done, _ = get_run_info(task_id)
+                if status in POSTPROCESS_STATES | SUCCESS_STATES:
+                    progress.update(
+                        pbar_pd, completed=100, refresh=True, description="solver progress"
+                    )
+                elif final_perc_done is not None:
+                    progress.update(
+                        pbar_pd,
+                        completed=final_perc_done,
+                        refresh=True,
+                        description="solver progress",
+                    )
         else:
             while get_status(task_id) == "running":
                 _ = get_run_info(task_id)
