@@ -8,6 +8,7 @@ from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.monitor import DipoleEmissionMonitor, FreqMonitor
+from tidy3d.config import config
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -54,6 +55,9 @@ def _warn_rf_license(self: Any) -> None:
     Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
     simulation is categorised as RF simulation at the backend.
     """
+    if config.microwave.suppress_rf_license_warning:
+        return
+
     if not self.validate_rf_type():
         return
 

@@ -78,7 +78,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     impedance_specs: ImpedanceSpecType | tuple[ImpedanceSpecType | None, ...] = Field(
-        default_factory=AutoImpedanceSpec._default_without_license_warning,
+        default_factory=AutoImpedanceSpec,
         title="Impedance Specifications",
         description="Field controls how the impedance is calculated for each mode calculated by the mode solver. "
         "Can be a single impedance specification (which will be applied to all modes) or a tuple of specifications "

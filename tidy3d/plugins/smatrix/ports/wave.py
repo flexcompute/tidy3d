@@ -942,7 +942,7 @@ class WavePort(AbstractWavePort):
     """
 
     mode_spec: MicrowaveModeSpec = Field(
-        default_factory=MicrowaveModeSpec._default_without_license_warning,
+        default_factory=MicrowaveModeSpec,
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes and how transmission line "
         "quantities, e.g., characteristic impedance, are computed.",
@@ -1292,7 +1292,7 @@ class TerminalWavePort(AbstractWavePort):
     )
 
     terminal_specs: AutoImpedanceSpec | tuple[CustomImpedanceSpec, ...] = Field(
-        default_factory=AutoImpedanceSpec._default_without_license_warning,
+        default_factory=AutoImpedanceSpec,
         title="Terminal Specification",
         description="Parameters to feed to terminal solver which determine single-ended terminals "
         "and how transmission line "

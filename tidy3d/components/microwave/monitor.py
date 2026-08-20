@@ -24,7 +24,7 @@ class MicrowaveModeMonitorBase(MicrowaveBaseModel):
     """
 
     mode_spec: MicrowaveModeSpecType = Field(
-        default_factory=MicrowaveModeSpec._default_without_license_warning,
+        default_factory=MicrowaveModeSpec,
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
         discriminator=TYPE_TAG_STR,
