@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 import numpy as np
 import xarray as xr
+from flex_em.numerical.raw import grid as grid_numerics
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import (
@@ -311,11 +312,30 @@ class ModeSolver(Tidy3dBaseModel):
 
     @model_validator(mode="after")
     def plane_in_sim_bounds(self) -> Self:
-        """Check that the plane is at least partially inside the simulation bounds."""
+        """Check that the plane intersects the simulation and, along its normal, lies strictly
+        inside it."""
         sim_box = Box(size=self.simulation.size, center=self.simulation.center)
         if not sim_box.intersects(self.plane):
             self._raise_validation_error_at_loc(
                 SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'."),
+                "plane",
+            )
+
+        # Along its normal, the plane must lie strictly inside the domain: the solver samples a
+        # window of grid cells around the plane, and on a domain face that window has no valid
+        # cell. Planes strictly inside are supported all the way to within half a cell of the
+        # boundary, where the finite-grid correction is skipped instead. Simulations with zero
+        # extent along the normal are exempt.
+        normal_axis = self.plane.size.index(0.0)
+        normal_pos = self.plane.center[normal_axis]
+        sim_min, sim_max = sim_box.bounds[0][normal_axis], sim_box.bounds[1][normal_axis]
+        if sim_max > sim_min and not sim_min < normal_pos < sim_max:
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "The mode plane lies on the simulation boundary along its normal "
+                    f"direction, at {normal_pos} with simulation bounds "
+                    f"({sim_min}, {sim_max}). Please move the plane inside the simulation."
+                ),
                 "plane",
             )
         return self
@@ -861,8 +881,11 @@ class ModeSolver(Tidy3dBaseModel):
         for _ in solver.freqs:
             eps_spec.append("tensorial_complex")
         # finite grid corrections
+        # These corrections describe interpolation on the original simulation grid, so they must
+        # be computed against it. The reduced copy is a mode-solve optimization and its narrower
+        # grid is not the grid the resulting data is compared on.
         grid_factors, relative_grid_distances = solver._grid_correction(
-            simulation=solver.simulation,
+            simulation=self.simulation,
             plane=solver.plane,
             mode_spec=solver.mode_spec,
             n_complex=n_complex,
@@ -1484,8 +1507,11 @@ class ModeSolver(Tidy3dBaseModel):
             data_dict[field_name] = scalar_field_data
 
         # finite grid corrections
+        # These corrections describe interpolation on the original simulation grid, so they must
+        # be computed against it. The reduced copy is a mode-solve optimization and its narrower
+        # grid is not the grid the resulting data is compared on.
         grid_factors, relative_grid_distances = solver._grid_correction(
-            simulation=solver.simulation,
+            simulation=self.simulation,
             plane=solver.plane,
             mode_spec=solver.mode_spec,
             n_complex=index_data,
@@ -2529,27 +2555,15 @@ class ModeSolver(Tidy3dBaseModel):
 
         def find_closest_distances_to_grid_points(
             normal_pos: float, grid_coords: ArrayFloat1D
-        ) -> tuple[float, float]:
-            """Find the closest points to the normal position in the grid coordinates."""
+        ) -> list[float]:
+            """Signed offsets from the plane to its adjacent grid pair.
 
-            if grid_coords.size == 1:
-                return [float(grid_coords.data[0] - normal_pos)]
-
-            distances = grid_coords.data - normal_pos
-            # First, find the signed distance to the closest grid point
-            closest_distance_ind = np.argmin(np.abs(distances))
-            closest_distance = distances[closest_distance_ind]
-
-            # Then, if the closest distance is positive, take the previous point, otherwise take the next point
-            if closest_distance > 0:
-                first_dist = distances[closest_distance_ind - 1]
-                second_dist = distances[closest_distance_ind]
-            else:
-                first_dist = distances[closest_distance_ind]
-                second_dist = distances[closest_distance_ind + 1]
-
-            # Return the two closest points
-            return [first_dist, second_dist]
+            The pure pair selection -- closest point, side choice, and the in-range clamp
+            for near-boundary planes -- is shared in ``flex_em.numerical.raw.grid``; an
+            unbracketed clamped pair is detected and declined in
+            ``_grid_correction_factors``.
+            """
+            return list(grid_numerics.closest_adjacent_grid_offsets(grid_coords.data, normal_pos))
 
         primal_closest_distances = find_closest_distances_to_grid_points(normal_pos, normal_primal)
         dual_closest_distances = find_closest_distances_to_grid_points(normal_pos, normal_dual)

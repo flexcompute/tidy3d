@@ -4138,15 +4138,36 @@ class ModeSolverData(ModeData):
             direction=direction,
         )
 
-        # Fields are modified by a linear interpolation to the exact monitor position
-        if distances_primal.size > 1:
-            phase_primal = phase_primal.interp(**{normal_dim: 0}).drop_vars(normal_dim)
-        else:
-            phase_primal = phase_primal.squeeze(dim=normal_dim)
-        if distances_dual.size > 1:
-            phase_dual = phase_dual.interp(**{normal_dim: 0}).drop_vars(normal_dim)
-        else:
-            phase_dual = phase_dual.squeeze(dim=normal_dim)
+        def interp_phase_to_plane(
+            phase: xr.DataArray, distances: xr.DataArray, grid_name: str
+        ) -> xr.DataArray:
+            """Interpolate the phase to the plane, or decline to correct if it is unbracketed.
+
+            The interpolation is only defined when the plane is bracketed by two grid
+            locations; a lone location coinciding with the plane is the exact case. Where
+            no bracketing pair exists -- a lone off-plane location, or a plane within half
+            a cell of the simulation boundary -- the correction has no counterpart on the
+            grid to reproduce: every FDTD path stays on the grid rather than reaching past
+            it, so the correction is declined with a warning instead of extrapolated. The
+            bracketing decision itself is shared in ``flex_em.numerical.raw.grid``.
+            """
+            decision = grid_numerics.classify_plane_offsets(distances.values)
+            if decision == "on_grid":
+                return phase.squeeze(dim=normal_dim)
+            if decision == "unbracketed":
+                log.warning(
+                    f"The mode plane is not bracketed by the {grid_name} grid along the normal "
+                    "direction; this happens when it lies within half a cell of the simulation "
+                    "boundary. The finite-grid correction is undefined there and will not be "
+                    "applied, so mode amplitudes and overlaps at this plane may be slightly "
+                    "inconsistent with field monitor data computed on the same grid. Move the "
+                    "plane further from the simulation boundary to avoid this."
+                )
+                return xr.ones_like(phase.isel({normal_dim: 0}, drop=True))
+            return phase.interp(**{normal_dim: 0}).drop_vars(normal_dim)
+
+        phase_primal = interp_phase_to_plane(phase_primal, distances_primal, "primal")
+        phase_dual = interp_phase_to_plane(phase_dual, distances_dual, "dual")
 
         return FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
 
