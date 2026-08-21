@@ -42,6 +42,7 @@ from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.utils import (
+    filter_intersecting_geometries,
     find_snap_location,
 )
 from tidy3d.components.medium import (
@@ -65,6 +66,7 @@ from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
+from tidy3d.components.structure import Structure
 from tidy3d.components.subpixel_spec import SurfaceImpedance
 from tidy3d.components.types import ArrayComplex3D, Direction, EMField, FreqArray
 from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
@@ -118,7 +120,6 @@ if TYPE_CHECKING:
     from tidy3d.components.mode_spec import ModeSpec
     from tidy3d.components.monitor import AbstractModeMonitor
     from tidy3d.components.source.time import SourceTime
-    from tidy3d.components.structure import Structure
     from tidy3d.components.types import (
         ArrayComplex4D,
         ArrayFloat1D,
@@ -2602,15 +2603,61 @@ class ModeSolver(Tidy3dBaseModel):
         return self.simulation.scene.intersecting_media(self.plane, total_structures)
 
     @cached_property
+    def _subpixel_classification_media(self) -> list:
+        """Media in the region subpixel averaging can draw into the mode plane.
+
+        The plane's own cell plus one layer either side along the normal - exactly the
+        region ``_get_output_grid(keep_additional_layers=True)`` preserves "to ensure
+        there is enough data for subpixel". Material classification keys off this rather
+        than the bare plane intersection, because a conductor or fully anisotropic medium
+        one cell off-plane still enters the plane's subpixel-averaged tensor and so must
+        still drive precision and solver selection.
+
+        This is the same region ``reduced_simulation_copy`` spans, reached from the grid
+        directly: extracting a sub-simulation to answer the same question costs a full
+        ``Simulation.subsection`` per plane, and for an ``EMESimulation`` an EME-to-FDTD
+        conversion on top of it.
+        """
+        extended_grid = self._get_output_grid(
+            simulation=self.simulation,
+            plane=self.plane,
+            keep_additional_layers=True,
+            truncate_symmetry=False,
+        )
+        grids_1d = extended_grid.boundaries
+        region = Box.from_bounds(
+            rmin=(grids_1d.x[0], grids_1d.y[0], grids_1d.z[0]),
+            rmax=(grids_1d.x[-1], grids_1d.y[-1], grids_1d.z[-1]),
+        )
+        total_structures = [self.simulation.scene.background_structure]
+        total_structures += list(self.simulation.volumetric_structures)
+        # Not ``Scene.intersecting_media``: that helper tests only a volume's bounding
+        # surfaces, so a body wholly inside this neighbourhood without touching a face
+        # would be missed. Use the same predicate ``reduced_simulation_copy`` culled with -
+        # ``subsection(remove_outside_structures=True)`` prunes through
+        # ``filter_intersecting_geometries`` - so the media set matches what that copy
+        # would have contained, rather than a conservative approximation of it.
+        pruned = filter_intersecting_geometries(
+            [structure.geometry for structure in total_structures], region
+        )
+        return {
+            structure.medium
+            for structure, geometry in zip(total_structures, pruned)
+            if geometry is not None
+        }
+
+    @cached_property
     def _has_fully_anisotropic_media(self) -> bool:
-        """Check if there are any fully anisotropic media in the plane of the mode."""
-        if np.any(
-            [isinstance(mat, FullyAnisotropicMedium) for mat in self.simulation.scene.mediums]
-        ):
-            for int_mat in self._intersecting_media:
-                if isinstance(int_mat, FullyAnisotropicMedium):
-                    return True
-        return False
+        """Check for fully anisotropic optical media in the mode plane.
+
+        Deliberately the bare plane intersection, matching the pre-existing behaviour and
+        ``_has_complex_eps`` beside it. Only ``_contain_good_conductor`` keyed off the wider
+        subpixel neighbourhood before this change, so only it keeps that region.
+        """
+        return any(
+            isinstance(Structure._get_optical_medium(medium), FullyAnisotropicMedium)
+            for medium in self._intersecting_media
+        )
 
     @cached_property
     def _has_complex_eps(self) -> bool:
@@ -2647,14 +2694,16 @@ class ModeSolver(Tidy3dBaseModel):
         """Whether modal plane might contain structures made of good conductors with large permittivity
         or permeability values.
         """
-        sim = self.reduced_simulation_copy.simulation
-        apply_sibc = isinstance(sim._subpixel.lossy_metal, SurfaceImpedance)
-        for medium in sim.scene.mediums:
-            if medium.is_pec:
+        apply_sibc = isinstance(self.simulation._subpixel.lossy_metal, SurfaceImpedance)
+        for medium in self._subpixel_classification_media:
+            optical_medium = Structure._get_optical_medium(medium)
+            if optical_medium is None:
+                continue
+            if optical_medium.is_pec:
                 return True
-            if medium.is_pmc:
+            if optical_medium.is_pmc:
                 return True
-            if apply_sibc and isinstance(medium, LossyMetalMedium):
+            if apply_sibc and isinstance(optical_medium, LossyMetalMedium):
                 return True
         return False
 
