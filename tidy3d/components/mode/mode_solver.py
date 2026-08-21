@@ -126,6 +126,7 @@ if TYPE_CHECKING:
         Ax,
         Axis,
         Axis2D,
+        Bound,
         BoundOptional,
         EpsSpecType,
         PlotScale,
@@ -3444,12 +3445,16 @@ class ModeSolver(Tidy3dBaseModel):
         """Strip objects not used by the mode solver from simulation object.
         This might significantly reduce upload time in the presence of custom mediums.
         """
+        return self._reduced_simulation_copy()
+
+    def _reduced_simulation_copy(self, additional_bounds: tuple[Bound, ...] = ()) -> Self:
+        """Strip objects outside the mode domain and additional requested output bounds."""
 
         # for now, we handle EME simulation by converting to FDTD simulation
         # because we can't take planar subsection of an EME simulation.
         # eventually, we will convert to ModeSimulation
         if isinstance(self.simulation, EMESimulation):
-            return self.as_fdtd_mode_solver.reduced_simulation_copy
+            return self.as_fdtd_mode_solver._reduced_simulation_copy(additional_bounds)
 
         # we preserve extra cells along the normal direction to ensure there is enough data for
         # subpixel
@@ -3464,6 +3469,8 @@ class ModeSolver(Tidy3dBaseModel):
             rmin=(grids_1d.x[0], grids_1d.y[0], grids_1d.z[0]),
             rmax=(grids_1d.x[-1], grids_1d.y[-1], grids_1d.z[-1]),
         )
+        for bounds in additional_bounds:
+            new_sim_box = Box.from_bounds(*Box.bounds_union(new_sim_box.bounds, bounds))
 
         # remove PML, Absorers, etc, to avoid unnecessary cells
         bspec = self.simulation.boundary_spec

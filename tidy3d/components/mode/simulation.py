@@ -455,9 +455,21 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def reduced_simulation_copy(self) -> ModeSimulation:
         """Strip objects not used by the mode solver from simulation object.
         This might significantly reduce upload time in the presence of custom mediums.
+        Monitors and their complete sampled grids are preserved because they define
+        additional requested output.
         """
-        reduced_mode_solver = self._mode_solver.reduced_simulation_copy
-        return self.from_mode_solver(reduced_mode_solver)
+        monitor_bounds = []
+        for monitor in self.monitors:
+            boundaries = self.discretize_monitor(monitor).boundaries.to_list
+            monitor_bounds.append(
+                (
+                    tuple(coords[0] for coords in boundaries),
+                    tuple(coords[-1] for coords in boundaries),
+                )
+            )
+        reduced_mode_solver = self._mode_solver._reduced_simulation_copy(tuple(monitor_bounds))
+        reduced_simulation = self.from_mode_solver(reduced_mode_solver)
+        return reduced_simulation.updated_copy(monitors=self.monitors, deep=False)
 
     @classmethod
     def from_mode_solver(
