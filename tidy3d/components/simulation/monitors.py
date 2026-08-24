@@ -55,6 +55,7 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.grid.grid import Coords1D
     from tidy3d.components.medium import AbstractMedium, MediumType3D
     from tidy3d.components.monitor import AbstractGaussianOverlapMonitor, FieldMonitor, Monitor
     from tidy3d.components.types import Bound, Coordinate
@@ -839,9 +840,8 @@ def _validate_freq_monitors_freq_range(self: Any) -> None:
             )
 
 
-@cached_property
-def monitors_data_size(self: Any) -> dict[str, float]:
-    """Dictionary mapping monitor names to their estimated storage size in bytes."""
+def _monitors_data_size(self: Any, tmesh: Coords1D) -> dict[str, float]:
+    """Map monitor names to estimated storage sizes for a resolved time mesh."""
     data_size = {}
     for monitor in self.monitors:
         if isinstance(monitor, DiffractionMonitor):
@@ -849,7 +849,7 @@ def monitors_data_size(self: Any) -> dict[str, float]:
             storage_size = float(diffraction_monitor_storage_size(self, monitor, medium))
         else:
             num_cells = self._monitor_num_cells(monitor)
-            storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
+            storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=tmesh))
         if isinstance(monitor, DipoleEmissionMonitor) and self.precision == "double":
             storage_size *= 2
         elif (
@@ -861,6 +861,12 @@ def monitors_data_size(self: Any) -> dict[str, float]:
             storage_size = points_size + 2 * (storage_size - points_size)
         data_size[monitor.name] = storage_size
     return data_size
+
+
+@cached_property
+def monitors_data_size(self: Any) -> dict[str, float]:
+    """Dictionary mapping monitor names to their estimated storage size in bytes."""
+    return self._monitors_data_size(self.tmesh)
 
 
 def _validate_datasets_not_none(self: Any) -> None:

@@ -916,6 +916,7 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_monitor_size = _monitors_methods._validate_monitor_size
     _validate_time_monitors_num_steps = _monitors_methods._validate_time_monitors_num_steps
     _validate_freq_monitors_freq_range = _monitors_methods._validate_freq_monitors_freq_range
+    _monitors_data_size = _monitors_methods._monitors_data_size
     monitors_data_size = _monitors_methods.monitors_data_size
     _validate_datasets_not_none = _monitors_methods._validate_datasets_not_none
     _warn_time_monitors_outside_run_time = _monitors_methods._warn_time_monitors_outside_run_time
