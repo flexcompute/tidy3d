@@ -938,6 +938,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         self._validate_port_offsets()
         self._validate_symmetry()
         self._validate_sweep_spec()
+        self._validate_freq_sweep_capabilities()
         self._validate_bent_custom_media_frames()
         self._validate_anisotropic_bend_repetitions()
         self._validate_monitor_setup()
@@ -950,6 +951,35 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_eme_grid(self) -> Self:
         _ = self.eme_grid
+        return self
+
+    def _validate_freq_sweep_capabilities(self) -> Self:
+        """Reject unsupported options on the deprecated frequency-sweep path."""
+        if not isinstance(self.sweep_spec, EMEFreqSweep):
+            return self
+
+        for mode_spec in self.eme_grid.mode_specs:
+            if mode_spec._is_interp_spec_applied(self.freqs):
+                self._raise_validation_error_at_loc(
+                    "'EMEFreqSweep' is deprecated and is not compatible with an active "
+                    "'EMEModeSpec.interp_spec' that changes the modal solve frequencies. "
+                    "List target frequencies directly in 'EMESimulation.freqs' and remove "
+                    "'EMEFreqSweep'. To keep a legacy 'EMEFreqSweep' temporarily, explicitly "
+                    "set every 'EMEModeSpec.interp_spec' to 'None'.",
+                    "sweep_spec",
+                )
+
+        for monitor_index, monitor in enumerate(self.monitors):
+            if isinstance(monitor, EMEModeSolverMonitor) and monitor.keep_invalid_modes:
+                self._raise_validation_error_at_loc(
+                    "The deprecated 'EMEFreqSweep' is not compatible with "
+                    "'EMEModeSolverMonitor.keep_invalid_modes=True'. Swept relative mode "
+                    "solves require a finite basis and cannot preserve invalid-mode slots. "
+                    "Set 'keep_invalid_modes=False' or remove 'EMEFreqSweep'.",
+                    "monitors",
+                    monitor_index,
+                    "keep_invalid_modes",
+                )
         return self
 
     def _validate_mode_sort_spec_bounding_boxes(self) -> Self:
@@ -1924,19 +1954,19 @@ class EMESimulation(AbstractYeeGridSimulation):
         return list(monitor.freqs)
 
     def _monitor_mode_freqs(self, monitor: EMEModeSolverMonitor) -> list[NonNegativeFloat]:
-        """Monitor frequencies."""
-        freqs = set()
-        cell_inds = self._monitor_eme_cell_indices(monitor=monitor)
-        for cell_ind in cell_inds:
-            interp_spec = self.eme_grid.mode_specs[cell_ind].interp_spec
-            if interp_spec is None:
-                freqs |= set(self.freqs)
-            else:
-                freqs |= set(interp_spec.sampling_points(self.freqs))
-        return sorted(freqs)
+        """Frequencies stored by an EME mode-solver monitor."""
+        # _validate_interp_specs makes this grid common to every cell, so one
+        # monitored cell is sufficient and avoids unioning identical grids.
+        cell_index = self._monitor_eme_cell_indices(monitor=monitor)[0]
+        mode_spec = self._internal_mode_spec(cell_index)
+        return mode_spec._stored_freqs_mode_solver_data(
+            sim_freqs=list(self.freqs), target_freqs=self._monitor_freqs(monitor=monitor)
+        )
 
     def _monitor_num_freqs(self, monitor: Monitor) -> int:
         """Total number of freqs included in monitor."""
+        if isinstance(monitor, EMEModeSolverMonitor):
+            return len(self._monitor_mode_freqs(monitor=monitor))
         return len(self._monitor_freqs(monitor=monitor))
 
     def _monitor_num_modes(self, monitor: Monitor) -> int:

@@ -347,7 +347,9 @@ class CustomSampling(FrequencySamplingSpec):
 
     freqs: FreqArray = Field(
         title="Frequencies",
-        description="Custom array of frequency sampling points.",
+        description="Custom array of frequency sampling points. Requires at least two "
+        "strictly increasing frequencies: stored mode data and its interpolation assume a "
+        "sorted frequency grid.",
     )
 
     @field_validator("freqs")
@@ -357,6 +359,11 @@ class CustomSampling(FrequencySamplingSpec):
         freqs_array = np.asarray(val)
         if freqs_array.size < 2:
             raise ValidationError("Custom sampling requires at least 2 frequency points.")
+        if np.any(np.diff(freqs_array) <= 0):
+            raise ValidationError(
+                "Custom sampling frequencies must be strictly increasing: stored mode "
+                "data and its interpolation assume a sorted frequency grid."
+            )
         return val
 
     def sampling_points(self, freqs: FreqArray) -> FreqArray:
@@ -550,7 +557,9 @@ class ModeInterpSpec(Tidy3dBaseModel):
         Parameters
         ----------
         freqs : FreqArray
-            Custom array of frequency sampling points.
+            Custom array of frequency sampling points. Must contain at least two
+            strictly increasing frequencies: stored mode data and its interpolation
+            assume a sorted frequency grid.
         method : Literal["linear", "cubic", "poly"]
             Interpolation method. Default is 'linear'.
         reduce_data : bool
@@ -926,9 +935,25 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     def _sampling_freqs_mode_solver_data(self, freqs: list[float]) -> list[float]:
         """Frequencies that will be stored in ModeSolverData after group index calculation and, possibly, interpolation is applied."""
         if self.interp_spec is not None and self.interp_spec.reduce_data:
-            # note that if len(freqs) < interp_spec.num_points, the result will be freqs itself
+            # note that if num_points >= len(freqs), the result will be freqs itself
             freqs = self.interp_spec.sampling_points(freqs)
         return freqs
+
+    def _stored_freqs_mode_solver_data(
+        self, sim_freqs: list[float], target_freqs: list[float]
+    ) -> list[float]:
+        """Frequencies stored for a monitor requesting ``target_freqs``.
+
+        A reduced interpolation basis is sampled from the full simulation grid;
+        otherwise mode data is stored directly on the requested monitor grid.
+        """
+        if (
+            self.interp_spec is not None
+            and self.interp_spec.reduce_data
+            and self._is_interp_spec_applied(sim_freqs)
+        ):
+            return self._sampling_freqs_mode_solver_data(freqs=list(sim_freqs))
+        return self._sampling_freqs_mode_solver_data(freqs=list(target_freqs))
 
     def _sampling_freqs_mode_solver(
         self,
@@ -936,7 +961,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     ) -> list[float]:
         """Frequencies that mode solver needs to compute modes at."""
         if self.interp_spec is not None:
-            # note that if len(freqs) < interp_spec.num_points, the result will be freqs itself
+            # note that if num_points >= len(freqs), the result will be freqs itself
             freqs = self.interp_spec.sampling_points(freqs)
 
         if self.group_index_step > 0:
@@ -945,7 +970,14 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return freqs
 
     def _is_interp_spec_applied(self, freqs: FreqArray) -> bool:
-        """Whether interp_spec is used to compute modes at the given frequencies."""
+        """Whether interp_spec is used to compute modes at the given frequencies.
+
+        Exactly the condition under which ``ModeInterpSpec.sampling_points`` resamples:
+        it returns ``freqs`` untouched unless ``num_points < len(freqs)``, so the count
+        comparison here and the actual change of solve grid are the same test. The
+        equivalence is pinned by
+        ``test_eme_interp_spec_applied_matches_actual_resampling``.
+        """
         return self.interp_spec is not None and self.interp_spec.num_points < len(freqs)
 
     def _same_nontrivial_interp_spec(self, other: ModeSpec) -> bool:

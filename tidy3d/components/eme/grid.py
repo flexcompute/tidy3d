@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from numbers import Real
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 import numpy as np
@@ -60,6 +61,8 @@ class EMEModeSpec(ModeSpec):
         - Includes an ``increasing_mode_tolerance`` field for EME-only filtering of
           weakly increasing modes. The default treats roundoff-level negative
           imaginary effective indices as numerical noise.
+        - Does not support ``group_index_step`` because EME propagation neither uses
+          nor stores group-index or dispersion data.
     """
 
     num_modes: PositiveInt = Field(
@@ -135,6 +138,31 @@ class EMEModeSpec(ModeSpec):
         "``0.0`` to apply the strict sign test.",
         ge=0.0,
     )
+
+    group_index_step: Literal[False, 0] = Field(
+        False,
+        title="Frequency step for group index computation",
+        description="Not supported for EME cell modes. EME propagation does not use group "
+        "index, and EME mode data does not store `n_group` or dispersion quantities. "
+        "For broadband EME, list target frequencies in `EMESimulation.freqs` and use "
+        "`EMEModeSpec.interp_spec` to solve fewer modal frequencies and interpolate. "
+        "Use a standalone `ModeSolver` or `ModeSolverMonitor` when group index is needed.",
+    )
+
+    @field_validator("group_index_step", mode="before")
+    @classmethod
+    def _validate_group_index_step(cls, val: Any) -> Any:
+        """Reject group-index work that EME cannot consume or return."""
+        if isinstance(val, (Real, np.bool_)) and val == 0:
+            return False
+        raise SetupError(
+            "'EMEModeSpec.group_index_step' is not supported because EME propagation does "
+            "not use group index and EME mode data does not store 'n_group' or dispersion "
+            "quantities. For broadband EME, list target frequencies in 'EMESimulation.freqs' "
+            "and use 'EMEModeSpec.interp_spec' to solve fewer modal frequencies and "
+            "interpolate. If you need group index itself, use a standalone 'ModeSolver' or "
+            "'ModeSolverMonitor'."
+        )
 
     # this method is not supported because not all ModeSpec features are supported
     # @classmethod
