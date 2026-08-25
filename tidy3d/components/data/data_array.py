@@ -91,6 +91,7 @@ DIM_ATTRS = {
 
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
+HDF5_SHUFFLE_MIN_BYTES = 64 * 1024
 
 
 class _SanitizedPlotProxy:
@@ -347,7 +348,12 @@ class DataArray(xr.DataArray):
     def to_hdf5_handle(self, f_handle: h5py.File, group_path: str) -> None:
         """Save an ``xr.DataArray`` to the hdf5 file handle with a given path to the group."""
         sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
+        values = get_static(self.data)
+        sub_group.create_dataset(
+            DATA_ARRAY_VALUE_NAME,
+            data=values,
+            shuffle=values.nbytes >= HDF5_SHUFFLE_MIN_BYTES,
+        )
         for key in self._dims:
             if key not in self.coords:
                 continue
