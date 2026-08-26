@@ -26,6 +26,7 @@ from tidy3d.components.simulation import (
     Simulation,
     validate_boundaries_for_zero_dims,
 )
+from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, Axis, FreqArray
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.validators import (
@@ -74,7 +75,6 @@ if TYPE_CHECKING:
     from tidy3d.components.mode.simulation import ModeSimulation
     from tidy3d.components.mode_spec import ModeSpec
     from tidy3d.components.monitor import Monitor
-    from tidy3d.components.structure import Structure
     from tidy3d.components.types import (
         ArrayComplex3D,
         ArrayFloat1D,
@@ -472,6 +472,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         medium: StructureMediumType, field_path: str
     ) -> None:
         """Reject non-reciprocal fully anisotropic media in EME."""
+        # ``MultiPhysicsMedium`` forwards attribute access to its optical component but
+        # cannot answer ``isinstance``, so a type test against a raw structure medium
+        # silently misses wrapped media. Normalise before every type test in this module.
+        medium = Structure._get_optical_medium(medium)
         if not isinstance(medium, FullyAnisotropicMedium):
             return
 
@@ -1242,11 +1246,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         """Anisotropic media intersecting ``plane``."""
         total_structures = [self.scene.background_structure, *list(self.volumetric_structures)]
         mediums = self.scene.intersecting_media(plane, total_structures)
+        optical = (Structure._get_optical_medium(medium) for medium in mediums)
         return tuple(
             sorted(
                 (
                     medium
-                    for medium in mediums
+                    for medium in optical
                     if isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium)
                 ),
                 key=hash,
@@ -1258,9 +1263,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         """Custom media intersecting ``plane``."""
         total_structures = [self.scene.background_structure, *list(self.volumetric_structures)]
         mediums = self.scene.intersecting_media(plane, total_structures)
+        optical = (Structure._get_optical_medium(medium) for medium in mediums)
         return tuple(
             sorted(
-                (medium for medium in mediums if isinstance(medium, AbstractCustomMedium)), key=hash
+                (medium for medium in optical if isinstance(medium, AbstractCustomMedium)), key=hash
             )
         )
 
@@ -1327,7 +1333,10 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_bent_custom_media_frames(self) -> Self:
         """Reject global-frame bent EME cells intersecting custom media."""
-        if not any(isinstance(medium, AbstractCustomMedium) for medium in self.scene.mediums):
+        if not any(
+            isinstance(Structure._get_optical_medium(medium), AbstractCustomMedium)
+            for medium in self.scene.mediums
+        ):
             return self
 
         error_msg = (
@@ -1461,7 +1470,10 @@ class EMESimulation(AbstractYeeGridSimulation):
             return self
 
         if not any(
-            isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium)
+            isinstance(
+                Structure._get_optical_medium(medium),
+                AnisotropicMedium | FullyAnisotropicMedium,
+            )
             for medium in self.scene.mediums
         ):
             self._cached_properties[cache_key] = True
