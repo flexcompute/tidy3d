@@ -119,6 +119,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
+    "notebook_markdown",  # Normalize Markdown before nbsphinx converts it to RST
     "notfound.extension",
     "myst_parser",
     # "sphinxcontrib.divparams", # TODO FIX
