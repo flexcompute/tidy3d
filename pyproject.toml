@@ -370,6 +370,7 @@ addopts = """
 """
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
+  "numerical_heavy: marks unusually expensive numerical test cases for even distribution across CI shards and xdist workers",
   "generate_profile: regenerate fixture data required by the performance tests (select with '-m \"generate_profile\"')",
   "performance_profile: enable CPU and memory profiling based on data generated with generate_profile (select with '-m \"performance_profile\"')",
   "perf: marks tests which test the runtime of operations (deselect with '-m \"not perf\"')",
