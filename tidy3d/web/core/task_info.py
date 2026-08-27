@@ -78,6 +78,12 @@ class TaskInfo(TaskBase):
     protocolVersion: str | None = None
     """Client protocol identifier recorded for the task."""
 
+    preprocessCacheCompatibilitySignature: str | None = None
+    """Opaque signature used to compare structural preprocess-cache inputs."""
+
+    storesPreprocessCache: bool | None = None
+    """Whether this task was configured to produce a structural preprocess cache."""
+
     createAt: datetime | None = None
     """Timestamp when the task was created."""
 

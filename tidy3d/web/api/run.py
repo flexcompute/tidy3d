@@ -109,6 +109,7 @@ def run(
     lazy: bool | None = None,
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
+    store_preprocess_cache: bool = False,
 ) -> RunOutput:
     """
     Submit one or many simulations and return results in the same container shape.
@@ -162,7 +163,9 @@ def run(
     simulation_type : Optional[str] = None
         Internal simulation type label; external users should leave unset.
     parent_tasks : Optional[List[str]] = None
-        Parent task IDs, if any.
+        Parent task IDs, if any. For an ordinary FDTD run, exactly one parent identifies a
+        compatible structural preprocess cache to consume. For multiple simulations, the same
+        parent IDs apply to every submitted task.
     local_gradient : Optional[bool] = None
         Compute gradients locally (more downloads; useful for experimental features).
         Defaults to ``config.adjoint.local_gradient`` when not provided. Remote gradients
@@ -192,6 +195,8 @@ def run(
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
         vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
+    store_preprocess_cache : bool = False
+        Whether an ordinary FDTD task should store its structural preprocessing for reuse.
 
     Returns
     -------
@@ -253,6 +258,18 @@ def run(
     h2sim = _collect_by_hash(simulation)
     if not h2sim:
         raise ValueError("No simulation data found in simulation input.")
+    if (
+        store_preprocess_cache
+        and len(
+            flatten_container(
+                simulation,
+                is_leaf=lambda value: isinstance(value, WorkflowOperationType),
+                validate_dict_key=_validate_run_mapping_key,
+            )
+        )
+        != 1
+    ):
+        raise ValueError("'store_preprocess_cache=True' is supported only for a single simulation.")
 
     if local_gradient is None:
         local_gradient = bool(config.adjoint.local_gradient)
@@ -286,6 +303,7 @@ def run(
                 worker_group=worker_group,
                 simulation_type=simulation_type,
                 parent_tasks=parent_tasks,
+                store_preprocess_cache=store_preprocess_cache,
                 local_gradient=local_gradient,
                 max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
                 reduce_simulation=reduce_simulation,
@@ -299,6 +317,7 @@ def run(
     else:
         key_prefix = f"{task_name}_" if task_name else ""
         sims = {f"{key_prefix}{h}": s for h, s in h2sim.items()}
+        batch_parent_tasks = dict.fromkeys(sims, parent_tasks) if parent_tasks else None
         path_dir = Path(path) if path is not None else Path(DEFAULT_DATA_DIR)
         data = run_async(
             simulations=sims,
@@ -309,7 +328,7 @@ def run(
             verbose=verbose,
             simulation_type=simulation_type,
             solver_version=solver_version,
-            parent_tasks=parent_tasks,
+            parent_tasks=batch_parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             reduce_simulation=reduce_simulation,

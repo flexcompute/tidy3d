@@ -16,6 +16,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.simulation import Simulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation, TCADAnalysisTypes
 from tidy3d.components.workflow import resolve_workflow
 from tidy3d.config import config
@@ -93,6 +94,53 @@ SOLVER_NAME = {
 _UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE = (
     "FlexRF protocol tasks do not support autograd-enabled FDTD submissions."
 )
+
+
+def _preprocess_cache_mode(
+    simulation: WorkflowOperationType,
+    *,
+    simulation_type: str | None,
+    parent_tasks: list[str] | tuple[str, ...] | None,
+    store_preprocess_cache: bool,
+) -> str:
+    """Resolve the task mode for an explicit ordinary-FDTD cache request."""
+    ordinary_fdtd = (
+        isinstance(simulation, Simulation)
+        and simulation.simulation_type == "tidy3d"
+        and simulation_type in {None, "tidy3d"}
+    )
+
+    if store_preprocess_cache:
+        if parent_tasks:
+            raise DataError(
+                "A preprocess-cache producer cannot also consume a parent preprocess cache."
+            )
+        if not ordinary_fdtd:
+            raise DataError(
+                "'store_preprocess_cache=True' is supported only for ordinary, non-autograd "
+                "FDTD simulations."
+            )
+        return "export"
+
+    if parent_tasks and ordinary_fdtd:
+        if len(parent_tasks) != 1:
+            raise DataError(
+                "An ordinary FDTD preprocess-cache consumer requires exactly one parent task ID."
+            )
+        return "load"
+
+    return "off"
+
+
+def _validate_preprocess_cache_eligibility(simulation: WorkflowOperationType, mode: str) -> None:
+    """Reject unsupported producer and consumer simulations before task allocation."""
+    if mode == "off":
+        return
+    error = simulation._preprocess_cache_ineligibility()
+    if error is not None:
+        message, location = error
+        suffix = "".join(f"[{part}]" if isinstance(part, int) else f".{part}" for part in location)
+        raise DataError(f"Invalid preprocess-cache simulation{suffix}: {message}")
 
 
 def _active_product_protocol() -> str | None:
@@ -537,6 +585,7 @@ def upload(
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose_estimate_cost: bool | None = None,
     _workflow_step: bool = False,
+    store_preprocess_cache: bool = False,
 ) -> TaskId:
     return _upload(
         simulation=simulation,
@@ -551,6 +600,7 @@ def upload(
         solver_version=solver_version,
         reduce_simulation=reduce_simulation,
         verbose_estimate_cost=verbose_estimate_cost,
+        store_preprocess_cache=store_preprocess_cache,
         _workflow_step=_workflow_step,
     )
 
@@ -571,6 +621,7 @@ def _upload(
     verbose_estimate_cost: bool | None = None,
     _workflow_step: bool = False,
     _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+    store_preprocess_cache: bool = False,
 ) -> TaskId:
     """Private upload implementation with optional internal sidecar artifacts."""
     _raise_if_upload_container(simulation)
@@ -600,6 +651,15 @@ def _upload(
     }:
         raise DataError(_UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE)
 
+    preprocess_cache_mode = _preprocess_cache_mode(
+        simulation,
+        simulation_type=upload_options.simulation_type,
+        parent_tasks=parent_tasks,
+        store_preprocess_cache=store_preprocess_cache,
+    )
+    if not _workflow_step:
+        _validate_preprocess_cache_eligibility(simulation, preprocess_cache_mode)
+
     if isinstance(simulation, ModeSolver | ModeSimulation):
         simulation = get_reduced_simulation(simulation, reduce_simulation)
 
@@ -620,6 +680,7 @@ def _upload(
         upload_options.simulation_type,
         parent_tasks,
         "Gz",
+        preprocess_cache_mode=preprocess_cache_mode,
     )
 
     group_id = getattr(task, "groupId", None)
@@ -655,7 +716,10 @@ def _upload(
         verbose=verbose_estimate_cost,
     )
 
-    task.validate_post_upload(parent_tasks=parent_tasks)
+    task.validate_post_upload(
+        parent_tasks=parent_tasks,
+        preprocess_cache_mode=preprocess_cache_mode,
+    )
 
     return resource_id
 

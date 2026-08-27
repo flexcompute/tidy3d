@@ -15,7 +15,7 @@ from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.geometry.utils import GeometryType
 from tidy3d.components.medium import MediumType
 from tidy3d.config import config
-from tidy3d.exceptions import AdjointError
+from tidy3d.exceptions import AdjointError, DataError
 from tidy3d.web.api import asynchronous, webapi
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.run_options import log_deprecated_run_args
@@ -543,6 +543,7 @@ def run_custom(
     custom_vjp: CustomVJPConfig | tuple[CustomVJPConfig, ...] | None = None,
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
+    store_preprocess_cache: bool = False,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -616,6 +617,8 @@ def run_custom(
         If ``True``, allows the simulation to run even when estimated vGPU memory
         exceeds the allocation limit (up to 2x the limit). Only applies to
         vGPU license users. If ``None``, uses ``td.config.vgpu.ignore_memory_limit``.
+    store_preprocess_cache : bool = False
+        Whether an ordinary FDTD task should store its structural preprocessing for reuse.
 
     Returns
     -------
@@ -666,6 +669,10 @@ def run_custom(
         Monitor progress of each of the running tasks.
     """
     local_gradient = _resolve_local_gradient(local_gradient)
+    if store_preprocess_cache and not isinstance(simulation, td.Simulation):
+        raise DataError(
+            "'store_preprocess_cache=True' is supported only for ordinary FDTD simulations."
+        )
     log_deprecated_run_args(
         solver_version=solver_version,
         worker_group=worker_group,
@@ -768,6 +775,11 @@ def run_custom(
         should_use_autograd = _setup_result_needs_autograd(setup_result)
 
     if should_use_autograd:
+        if parent_tasks or store_preprocess_cache:
+            raise DataError(
+                "Structural preprocess cache reuse is not supported for autograd FDTD simulations."
+            )
+
         if (custom_vjp is not None) and (not local_gradient):
             raise AdjointError("custom_vjp specified for a remote gradient not supported.")
 
@@ -789,6 +801,7 @@ def run_custom(
             worker_group=worker_group,
             simulation_type="tidy3d_autograd",
             parent_tasks=parent_tasks,
+            store_preprocess_cache=store_preprocess_cache,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             numerical_structures=numerical_structures,
@@ -823,6 +836,7 @@ def run_custom(
         worker_group=worker_group,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        store_preprocess_cache=store_preprocess_cache,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
@@ -915,6 +929,9 @@ def run_async_custom(
         Internal simulation type label; external users should leave unset.
     solver_version: Optional[str] = None
         Deprecated solver-version override. External users should leave unset.
+    parent_tasks : Optional[dict[str, list[str]]] = None
+        Parent task IDs for each named simulation. Preprocess-cache parents are not supported for
+        autograd FDTD simulations.
     local_gradient: Optional[bool] = None
         Whether to perform gradient calculations locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
@@ -1142,6 +1159,11 @@ def run_async_custom(
     ) or traced_numerical_structures
 
     if should_use_autograd_async:
+        if parent_tasks:
+            raise DataError(
+                "Structural preprocess cache reuse is not supported for autograd FDTD simulations."
+            )
+
         if (custom_vjp is not None) and (not local_gradient):
             raise AdjointError("custom_vjp specified for a remote gradient not supported.")
 
@@ -1224,6 +1246,7 @@ def run(
     lazy: bool | None = None,
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
+    store_preprocess_cache: bool = False,
 ) -> WorkflowDataType:
     """Wrapper for run_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_custom(
@@ -1239,6 +1262,7 @@ def run(
         worker_group=worker_group,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        store_preprocess_cache=store_preprocess_cache,
         local_gradient=local_gradient,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         reduce_simulation=reduce_simulation,
@@ -1333,7 +1357,8 @@ def run_async(
     solver_version : str | None = None
         Deprecated solver-version override. External users should leave this unset.
     parent_tasks : dict[str, list[str]] | None = None
-        Optional parent task IDs for each named simulation.
+        Optional parent task IDs for each named simulation. Preprocess-cache parents are not
+        supported for autograd FDTD simulations.
     local_gradient : bool | None = None
         Whether to compute automatic-differentiation gradients locally. ``None`` uses
         ``td.config.adjoint``.

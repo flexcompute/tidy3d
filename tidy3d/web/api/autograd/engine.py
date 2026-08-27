@@ -6,6 +6,7 @@ from typing import Any
 import tidy3d as td
 from tidy3d.components.autograd.field_map import TracerKeys
 from tidy3d.components.workflow import Workflow
+from tidy3d.exceptions import DataError
 from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
 
@@ -36,6 +37,8 @@ def _build_batch(
     simulations: dict[str, td.Simulation], *, num_workers: int | None, **kwargs: Any
 ) -> Batch:
     """Construct ``Batch`` while preserving the model default when ``num_workers`` is omitted."""
+    if kwargs.pop("store_preprocess_cache", False):
+        raise DataError("Preprocess-cache export is not supported for autograd batches.")
     batch_kwargs = dict(simulations=simulations, **kwargs)
     if num_workers is not None:
         batch_kwargs["num_workers"] = num_workers

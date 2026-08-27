@@ -25,8 +25,13 @@ from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.medium import AnisotropicMediumFromMedium2D, Medium, Medium2D, MediumType3D
 from tidy3d.components.monitor import (
     AbstractFieldProjectionMonitor,
+    AbstractMediumPropertyMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionKSpaceMonitor,
+    FieldStructureMonitor,
+    PointCloudFieldMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 )
 from tidy3d.components.run_time_spec import RunTimeSpec
 from tidy3d.components.source.utils import SourceType
@@ -1244,6 +1249,44 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
         return val
+
+    def _preprocess_cache_ineligibility(self) -> tuple[str, tuple[str | int, ...]] | None:
+        """Return why preprocess caching is unsupported and the location of the cause."""
+        if self.simulation_type != "tidy3d":
+            return "Preprocess caching is not supported for autograd simulations.", ()
+
+        if self.medium.is_custom:
+            return "Preprocess caching does not support custom media.", ("medium",)
+        for index, structure in enumerate(self.structures):
+            if structure.medium.is_custom:
+                return "Preprocess caching does not support custom media.", (
+                    "structures",
+                    index,
+                    "medium",
+                )
+
+        unsupported_monitor_types = (
+            AbstractMediumPropertyMonitor,
+            FieldStructureMonitor,
+            SurfaceFieldMonitor,
+            SurfaceFieldTimeMonitor,
+        )
+        for index, monitor in enumerate(self.monitors):
+            if isinstance(monitor, unsupported_monitor_types):
+                return (
+                    f"Preprocess caching does not support '{type(monitor).__name__}' monitors.",
+                    ("monitors", index),
+                )
+            # E/H point-cloud data needs only replayed coefficients; D also needs material data.
+            if isinstance(monitor, PointCloudFieldMonitor) and any(
+                field.startswith("D") for field in monitor.fields
+            ):
+                return (
+                    "Preprocess caching does not support displacement fields in "
+                    "'PointCloudFieldMonitor' monitors.",
+                    ("monitors", index),
+                )
+        return None
 
     # Pre-upload validation.
 

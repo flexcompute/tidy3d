@@ -82,6 +82,7 @@ def upload(
     solver_version: str | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose_estimate_cost: bool | None = None,
+    store_preprocess_cache: bool = False,
 ) -> str:
     """
     Upload a simulation to the server without starting it.
@@ -113,6 +114,8 @@ def upload(
         Whether to reduce structures to the simulation domain when supported.
     verbose_estimate_cost : Optional[bool] = None
         Whether to print cost estimation. If omitted, follows ``verbose``.
+    store_preprocess_cache : bool = False
+        Whether an ordinary FDTD task should store its structural preprocessing for reuse.
 
     Returns
     -------
@@ -132,6 +135,7 @@ def upload(
         solver_version=solver_version,
         reduce_simulation=reduce_simulation,
         verbose_estimate_cost=verbose_estimate_cost,
+        store_preprocess_cache=store_preprocess_cache,
     )
 
 
@@ -245,6 +249,7 @@ def run(
     lazy: bool = False,
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
+    store_preprocess_cache: bool = False,
 ) -> WorkflowDataType:
     """
     Submit a simulation-like object, run it to completion, download results, and load data.
@@ -283,6 +288,8 @@ def run(
     parent_tasks : list[str] = None
         Existing upstream task IDs associated with this run. For Heat/HeatCharge runs,
         this may contain one existing volume-mesh task ID to reuse for the solver step.
+        For an ordinary FDTD run, exactly one parent identifies a compatible structural
+        preprocess cache to consume.
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures to the simulation domain when supported. Currently
         only implemented for mode-solver uploads.
@@ -302,6 +309,8 @@ def run(
         If ``True``, allow the simulation to run even when estimated vGPU memory exceeds
         the allocation limit (up to 2x the limit). If ``None``, uses
         ``td.config.vgpu.ignore_memory_limit``.
+    store_preprocess_cache : bool = False
+        Whether an ordinary FDTD task should store its structural preprocessing for reuse.
 
     Returns
     -------
@@ -356,6 +365,7 @@ def run(
         solver_version=solver_version,
         simulation_type=simulation_type,
         parent_tasks=tuple(parent_tasks) if parent_tasks else None,
+        store_preprocess_cache=store_preprocess_cache,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         lazy=lazy,

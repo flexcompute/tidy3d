@@ -379,7 +379,15 @@ class Job(WebContainer):
     parent_tasks: tuple[TaskId, ...] | None = Field(
         None,
         title="Parent Tasks",
-        description="Tuple of parent task ids, used internally only.",
+        description="Tuple of parent task IDs. For an ordinary FDTD job, exactly one compatible "
+        "cache-producing task enables structural preprocessing reuse. Other dependency uses are "
+        "internal.",
+    )
+
+    store_preprocess_cache: bool = Field(
+        False,
+        title="Store Preprocess Cache",
+        description="Store structural preprocessing for reuse by compatible FDTD child tasks.",
     )
 
     task_id_cached: TaskId | None = Field(
@@ -425,6 +433,7 @@ class Job(WebContainer):
             "verbose",
             "simulation_type",
             "parent_tasks",
+            "store_preprocess_cache",
             "solver_version",
             "reduce_simulation",
         )
@@ -443,7 +452,35 @@ class Job(WebContainer):
         """Resolve workflow and initialize runtime state."""
         self._resolved_workflow = resolve_workflow(self.simulation, self.workflow)
         self._validate_supported_workflow_dependencies()
+        self._validate_preprocess_cache_request()
         self._state = self._initialize_state()
+
+    def _validate_preprocess_cache_request(self) -> None:
+        """Validate the public producer/consumer request with locations on the job model."""
+        if self.store_preprocess_cache and self.is_multi_step:
+            self._raise_validation_error_at_loc(
+                "'store_preprocess_cache=True' is supported only for single-step FDTD jobs.",
+                "store_preprocess_cache",
+            )
+
+        operation = self.steps[0].operation
+        try:
+            mode = task_api._preprocess_cache_mode(
+                operation,
+                simulation_type=self.simulation_type,
+                parent_tasks=self.parent_tasks,
+                store_preprocess_cache=self.store_preprocess_cache,
+            )
+        except DataError as error:
+            location = "store_preprocess_cache" if self.store_preprocess_cache else "parent_tasks"
+            self._raise_validation_error_at_loc(str(error), location)
+
+        if mode == "off":
+            return
+        error = operation._preprocess_cache_ineligibility()
+        if error is not None:
+            message, location = error
+            self._raise_validation_error_at_loc(message, "simulation", *location)
 
     @property
     def steps(self) -> tuple[Step, ...]:
@@ -875,6 +912,16 @@ class Job(WebContainer):
 
     def _restore_step_if_cached(self, step: Step, *, force: bool = False) -> bool:
         """Restore step data from local cache when available."""
+        if (
+            task_api._preprocess_cache_mode(
+                step.operation,
+                simulation_type=self.simulation_type,
+                parent_tasks=self.parent_tasks,
+                store_preprocess_cache=self.store_preprocess_cache,
+            )
+            != "off"
+        ):
+            return False
         if not step.cacheable:
             return False
         if self._step_is_complete(step.name):
@@ -1065,6 +1112,7 @@ class Job(WebContainer):
             "progress_callback": progress_callback,
             "simulation_type": self.simulation_type,
             "parent_tasks": list(parent_task_ids) if parent_task_ids else None,
+            "store_preprocess_cache": self.store_preprocess_cache,
             "solver_version": self.solver_version,
             "reduce_simulation": self.reduce_simulation,
             "verbose_estimate_cost": verbose_estimate_cost,
@@ -1467,6 +1515,16 @@ class Job(WebContainer):
     def load_if_cached(self) -> bool:
         """Checks if results are cached and (if yes) restores them into our shared stash file."""
         if self.is_multi_step:
+            return False
+        if (
+            task_api._preprocess_cache_mode(
+                self.steps[0].operation,
+                simulation_type=self.simulation_type,
+                parent_tasks=self.parent_tasks,
+                store_preprocess_cache=self.store_preprocess_cache,
+            )
+            != "off"
+        ):
             return False
         if not self.steps[0].cacheable:
             return False
@@ -2360,7 +2418,9 @@ class Batch(WebContainer):
     parent_tasks: dict[str, tuple[TaskId, ...]] | None = Field(
         None,
         title="Parent Tasks",
-        description="Collection of parent task ids for each job in batch, used internally only.",
+        description="Parent task IDs keyed by batch task name. For ordinary FDTD jobs, each "
+        "value may contain one compatible cache-producing task ID. Other dependency uses are "
+        "internal.",
     )
 
     num_workers: PositiveInt | None = Field(
@@ -2802,6 +2862,12 @@ class Batch(WebContainer):
             return self.jobs_cached
 
         simulations = self._flat_simulations
+
+        if self.parent_tasks:
+            unknown_task_names = self.parent_tasks.keys() - simulations.keys()
+            if unknown_task_names:
+                names = ", ".join(sorted(unknown_task_names))
+                raise DataError(f"'parent_tasks' contains unknown task names: {names}.")
 
         # the type of job to upload (to generalize to subclasses)
         JobType = self._job_type

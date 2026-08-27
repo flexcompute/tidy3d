@@ -17,6 +17,7 @@ import tidy3d as td
 from tidy3d.config import config
 from tidy3d.config.sections import VALID_VGPU_ALLOCATIONS
 from tidy3d.exceptions import ValidationError, format_chained_exception_message
+from tidy3d.web.api.states import SUCCESS_STATES
 
 from .cache import FOLDER_CACHE
 from .client_identity import resolve_protocol_version
@@ -226,6 +227,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
         parent_tasks: list[str] | None = None,
         file_type: str = "Gz",
         projects_endpoint: str = "tidy3d/projects",
+        preprocess_cache_mode: str = "off",
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -246,6 +248,8 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             List of related task ids.
         file_type: str
             the simulation file type Json, Hdf5, Gz
+        preprocess_cache_mode : str
+            Internal structural preprocess-cache operation for this task.
 
         Returns
         -------
@@ -276,6 +280,8 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
                 "parentTasks": parent_tasks,
                 "fileType": file_type,
             }
+            if preprocess_cache_mode != "off":
+                payload["preprocessCacheMode"] = preprocess_cache_mode
             resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
         return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
 
@@ -486,17 +492,19 @@ class SimulationTask(WebTask):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    # simulation_type: str = Field(
-    #     None,
-    #     title="Simulation Type",
-    #     description="Type of simulation, used internally only.",
-    # )
+    preprocess_cache_compatibility_signature: str | None = Field(
+        None,
+        title="Preprocess Cache Compatibility Signature",
+        description="Opaque signature used to compare structural preprocess-cache inputs.",
+        alias="preprocessCacheCompatibilitySignature",
+    )
 
-    # parent_tasks: Tuple[TaskId, ...] = Field(
-    #     None,
-    #     title="Parent Tasks",
-    #     description="List of parent task ids for the simulation, used internally only."
-    # )
+    stores_preprocess_cache: bool | None = Field(
+        None,
+        title="Stores Preprocess Cache",
+        description="Whether this task was configured to produce a structural preprocess cache.",
+        alias="storesPreprocessCache",
+    )
 
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> SimulationTask | None:
@@ -893,8 +901,57 @@ class SimulationTask(WebTask):
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
         )
 
-    def validate_post_upload(self, parent_tasks: list[str] | None = None) -> None:
+    def _validate_preprocess_cache_post_upload(
+        self, parent_tasks: list[str] | None, preprocess_cache_mode: str
+    ) -> None:
+        """Validate producer metadata or one authoritative parent before solver submission."""
+        try:
+            task = SimulationTask.get(self.task_id, verbose=False)
+            if task is None:
+                raise ValidationError("Unable to fetch the uploaded task details.")
+            if not task.preprocess_cache_compatibility_signature:
+                raise ValidationError(
+                    "The uploaded simulation is not eligible for structural preprocess caching."
+                )
+
+            if preprocess_cache_mode == "export":
+                if not task.stores_preprocess_cache:
+                    raise ValidationError(
+                        "The uploaded task did not retain its preprocess-cache producer metadata."
+                    )
+                return
+
+            assert parent_tasks is not None
+            parent = SimulationTask.get(parent_tasks[0], verbose=False)
+            if parent is None:
+                raise ValidationError("Unable to fetch the parent task details.")
+            if parent.status not in SUCCESS_STATES:
+                raise ValidationError("The parent FDTD task has not completed successfully.")
+            if not parent.stores_preprocess_cache:
+                raise ValidationError("The parent FDTD task does not store a preprocess cache.")
+            if (
+                task.preprocess_cache_compatibility_signature
+                != parent.preprocess_cache_compatibility_signature
+            ):
+                raise ValidationError(
+                    "The parent preprocess cache is incompatible with the uploaded simulation."
+                )
+        except Exception as error:
+            raise WebError(
+                format_chained_exception_message(
+                    "Preprocess-cache request failed validation", error
+                )
+            ) from error
+
+    def validate_post_upload(
+        self,
+        parent_tasks: list[str] | None = None,
+        preprocess_cache_mode: str = "off",
+    ) -> None:
         """Perform checks after task is uploaded and metadata is processed."""
+        if preprocess_cache_mode != "off":
+            self._validate_preprocess_cache_post_upload(parent_tasks, preprocess_cache_mode)
+
         if self.task_type in {"HEAT", "HEAT_CHARGE"} and parent_tasks:
             try:
                 if len(parent_tasks) > 1:
