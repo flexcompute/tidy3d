@@ -12,6 +12,7 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
+from tidy3d.components.validators import assert_unique_names
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.container import Batch, Job
 
@@ -22,6 +23,7 @@ from .method import (
     MethodParticleSwarm,
     MethodSample,
     MethodType,
+    MethodZip,
 )
 from .parameter import ParameterAny, ParameterInt, ParameterType
 from .result import Result
@@ -128,6 +130,8 @@ class DesignSpace(Tidy3dBaseModel):
         description="Folder path where the simulation will be uploaded in the Tidy3D Workspace. Will use 'default' if no path is set.",
     )
 
+    _unique_parameter_names = assert_unique_names("parameters")
+
     @cached_property
     def dims(self) -> tuple[str]:
         """dimensions defined by the design parameter names."""
@@ -151,6 +155,16 @@ class DesignSpace(Tidy3dBaseModel):
                 f"{tuple(sample_kwargs.keys())}. Signature validation failed: {exc}"
             ) from exc
 
+        return self
+
+    @model_validator(mode="after")
+    def _validate_method_parameters(self) -> DesignSpace:
+        """Validate parameter combinations required by the selected method."""
+        if isinstance(self.method, MethodZip):
+            try:
+                self.method._get_parameter_values(self.parameters)
+            except ValueError as exc:
+                self._raise_validation_error_at_loc(str(exc), "parameters", log_error=False)
         return self
 
     def _package_run_results(
@@ -243,7 +257,7 @@ class DesignSpace(Tidy3dBaseModel):
         or a container where the first element is a ``float`` and second element is a ``list`` / ``dict`` e,g. [float {"aux_1": str}].
         The float is used by the optimizers as the return of the fitness function.
         The second element is for auxiliary data from the analysis that the user may want to keep.
-        Sampling methods (``MethodGrid`` or ``MethodMonteCarlo``) can have any return type.
+        Sampling methods (``MethodGrid``, ``MethodZip`` or ``MethodMonteCarlo``) can have any return type.
 
         Parameters
         ----------

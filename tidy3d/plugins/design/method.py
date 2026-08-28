@@ -230,6 +230,65 @@ class MethodGrid(MethodSample):
         return t_vals_dict
 
 
+class MethodZip(MethodSample):
+    """Select parameters in lock-step from their grid values.
+
+    Each parameter must produce the same number of grid values. The values at
+    each index are combined into one sample, rather than taking the Cartesian
+    product of the parameter values.
+
+    Example
+    -------
+    >>> import tidy3d.plugins.design as tdd
+    >>> method = tdd.MethodZip()
+    >>> parameters = (
+    ...     tdd.ParameterFloat(name="period", span=(0.3, 0.4), values=(0.3, 0.35, 0.4)),
+    ...     tdd.ParameterFloat(name="gap", span=(0.12, 0.18), values=(0.12, 0.15, 0.18)),
+    ... )
+    >>> method.sample(parameters)
+    [{'period': 0.3, 'gap': 0.12}, {'period': 0.35, 'gap': 0.15}, {'period': 0.4, 'gap': 0.18}]
+
+    Values can also be generated from ``num_points`` and ``allowed_values``.
+
+    >>> parameters = (
+    ...     tdd.ParameterFloat(name="width", span=(0.4, 0.6), num_points=3),
+    ...     tdd.ParameterAny(name="material", allowed_values=("Si", "SiN", "Ge")),
+    ... )
+    >>> method.sample(parameters)
+    [{'width': 0.4, 'material': 'Si'}, {'width': 0.5, 'material': 'SiN'}, {'width': 0.6, 'material': 'Ge'}]
+    """
+
+    @staticmethod
+    def _get_parameter_values(parameters: tuple[ParameterType, ...]) -> dict[str, list[Any]]:
+        """Get grid values and validate that all parameters have equal lengths."""
+
+        values_by_parameter = {parameter.name: parameter.sample_grid() for parameter in parameters}
+        lengths = {name: len(values) for name, values in values_by_parameter.items()}
+        if len(set(lengths.values())) > 1:
+            raise ValueError(
+                "All parameters used with 'MethodZip' must provide the same number of values. "
+                f"Got lengths {lengths}."
+            )
+
+        return values_by_parameter
+
+    def _get_run_count(self, parameters: list[ParameterType]) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
+        return len(self.sample(parameters))
+
+    @classmethod
+    def sample(cls, parameters: tuple[ParameterType, ...]) -> ArgsList:
+        """Define samples by pairing each parameter's grid values by index."""
+
+        values_by_parameter = cls._get_parameter_values(parameters)
+        if not values_by_parameter:
+            return []
+
+        names = list(values_by_parameter)
+        values = list(values_by_parameter.values())
+        return [dict(zip(names, sample_values)) for sample_values in zip(*values)]
+
+
 class MethodOptimize(Method, ABC):
     """A method for handling design searches that optimize the design."""
 
@@ -1007,4 +1066,6 @@ class MethodMonteCarlo(AbstractMethodRandom):
         return qmc.LatinHypercube(d=d, seed=self.seed)
 
 
-MethodType = MethodMonteCarlo | MethodGrid | MethodBayOpt | MethodGenAlg | MethodParticleSwarm
+MethodType = (
+    MethodMonteCarlo | MethodGrid | MethodZip | MethodBayOpt | MethodGenAlg | MethodParticleSwarm
+)

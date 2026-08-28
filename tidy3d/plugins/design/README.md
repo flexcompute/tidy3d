@@ -89,6 +89,30 @@ For this example, let's define a random sampling of the design parameters with 2
 method = tdd.MethodMonteCarlo(num_points=20)
 ```
 
+For deterministic paired sweeps, use `MethodZip`. It applies the same grid-value
+rules as `MethodGrid`: use `values` for explicit arrays, `allowed_values` for
+categorical parameters, `span` for integer parameters, or `num_points` for
+uniform float sampling. Values at the same index are evaluated together, so the
+following produces three cases rather than nine:
+
+```py
+method = tdd.MethodZip()
+design_space = tdd.DesignSpace(
+    parameters=[
+        tdd.ParameterFloat(
+            name="period", span=(0.3, 0.4), values=(0.3, 0.35, 0.4)
+        ),
+        tdd.ParameterFloat(
+            name="gap", span=(0.12, 0.18), values=(0.12, 0.15, 0.18)
+        ),
+    ],
+    method=method,
+)
+```
+
+All parameters used with `MethodZip` must have the same number of grid values;
+unequal-length arrays are rejected during `DesignSpace` validation.
+
 ## Design Space
 
 With the design parameters and our method defined, we can combine everything into a `DesignSpace`, which is mainly a container that provides some higher level methods for interacting with these objects.

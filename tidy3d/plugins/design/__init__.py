@@ -9,6 +9,7 @@ from .method import (
     MethodGrid,
     MethodMonteCarlo,
     MethodParticleSwarm,
+    MethodZip,
 )
 from .parameter import ParameterAny, ParameterFloat, ParameterInt
 from .result import Result
@@ -20,6 +21,7 @@ __all__ = [
     "MethodGrid",
     "MethodMonteCarlo",
     "MethodParticleSwarm",
+    "MethodZip",
     "ParameterAny",
     "ParameterFloat",
     "ParameterInt",

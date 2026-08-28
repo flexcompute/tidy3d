@@ -20,6 +20,7 @@ API Reference
    plugins.design.ParameterAny
    plugins.design.method.Method
    plugins.design.MethodGrid
+   plugins.design.MethodZip
    plugins.design.MethodMonteCarlo
    plugins.design.MethodBayOpt
    plugins.design.MethodGenAlg

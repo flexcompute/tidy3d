@@ -103,7 +103,7 @@ class ParameterFloat(ParameterNumeric):
         None,
         title="Number of Points",
         description="Number of uniform sampling points for this variable. "
-        "Only used for 'MethodGrid'. ",
+        "Used by grid-style methods such as 'MethodGrid' and 'MethodZip' when 'values' is not provided. ",
     )
 
     @field_validator("span")
