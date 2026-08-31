@@ -30,7 +30,6 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, Axis, FreqArray
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.validators import (
-    MIN_FREQUENCY,
     call_wrapped_validator,
     validate_freqs_min,
     validate_freqs_not_empty,
@@ -50,7 +49,6 @@ from .monitor import (
     EMEMonitorType,
 )
 from .sweep import (
-    EMEFreqSweep,
     EMELengthSweep,
     EMEModeSweep,
     EMEPeriodicitySweep,
@@ -437,6 +435,20 @@ class EMESimulation(AbstractYeeGridSimulation):
         "propagation step. The results are stored "
         "in 'sim_data.smatrix'. Other simulation monitor data is not included in the sweep.",
     )
+
+    @field_validator("sweep_spec", mode="before")
+    @classmethod
+    def _reject_removed_frequency_sweep(cls, value: Any) -> Any:
+        """Reject saved frequency-sweep inputs with an actionable migration path."""
+        if isinstance(value, dict) and value.get(TYPE_TAG_STR) == "EMEFreqSweep":
+            raise ValueError(
+                "'EMEFreqSweep' has been removed. Put the physical frequencies directly in "
+                "'EMESimulation.freqs' and configure 'EMEModeSpec.interp_spec' to control "
+                "mode sampling. To migrate old frequency-sweep result data, first open it "
+                "with an earlier Tidy3D version; its physical frequencies are the saved "
+                "simulation frequencies multiplied by 'freq_scale_factors'."
+            )
+        return value
 
     constraint: Literal["passive", "unitary"] | None = Field(
         "passive",
@@ -910,7 +922,6 @@ class EMESimulation(AbstractYeeGridSimulation):
             name="_eme_port_modes_monitor",
             colocate=False,
             num_modes=self.max_port_modes,
-            num_sweep=None,
             normalize=self.normalize,
         )
 
@@ -942,7 +953,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         self._validate_port_offsets()
         self._validate_symmetry()
         self._validate_sweep_spec()
-        self._validate_freq_sweep_capabilities()
         self._validate_bent_custom_media_frames()
         self._validate_anisotropic_bend_repetitions()
         self._validate_monitor_setup()
@@ -955,35 +965,6 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_eme_grid(self) -> Self:
         _ = self.eme_grid
-        return self
-
-    def _validate_freq_sweep_capabilities(self) -> Self:
-        """Reject unsupported options on the deprecated frequency-sweep path."""
-        if not isinstance(self.sweep_spec, EMEFreqSweep):
-            return self
-
-        for mode_spec in self.eme_grid.mode_specs:
-            if mode_spec._is_interp_spec_applied(self.freqs):
-                self._raise_validation_error_at_loc(
-                    "'EMEFreqSweep' is deprecated and is not compatible with an active "
-                    "'EMEModeSpec.interp_spec' that changes the modal solve frequencies. "
-                    "List target frequencies directly in 'EMESimulation.freqs' and remove "
-                    "'EMEFreqSweep'. To keep a legacy 'EMEFreqSweep' temporarily, explicitly "
-                    "set every 'EMEModeSpec.interp_spec' to 'None'.",
-                    "sweep_spec",
-                )
-
-        for monitor_index, monitor in enumerate(self.monitors):
-            if isinstance(monitor, EMEModeSolverMonitor) and monitor.keep_invalid_modes:
-                self._raise_validation_error_at_loc(
-                    "The deprecated 'EMEFreqSweep' is not compatible with "
-                    "'EMEModeSolverMonitor.keep_invalid_modes=True'. Swept relative mode "
-                    "solves require a finite basis and cannot preserve invalid-mode slots. "
-                    "Set 'keep_invalid_modes=False' or remove 'EMEFreqSweep'.",
-                    "monitors",
-                    monitor_index,
-                    "keep_invalid_modes",
-                )
         return self
 
     def _validate_mode_sort_spec_bounding_boxes(self) -> Self:
@@ -1176,24 +1157,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                         "monitors",
                         i,
                     )
-        elif isinstance(self.sweep_spec, EMEFreqSweep):
-            log.warning(
-                "'EMEFreqSweep' is deprecated. Instead, it is recommended to use "
-                "'EMESimulation.freqs' directly, and set "
-                "'EMEModeSpec.interp_spec' as desired to balance "
-                "performance and accuracy."
-            )
-            for i, scale_factor in enumerate(self.sweep_spec.freq_scale_factors):
-                scaled_freqs = np.array(self.freqs) * scale_factor
-                if np.min(scaled_freqs) < MIN_FREQUENCY:
-                    self._raise_validation_error_at_loc(
-                        f"Simulation 'sweep_spec' at sweep index {i} results in "
-                        f"scaled frequencies {scaled_freqs}; the minimum allowed is "
-                        f"{MIN_FREQUENCY:.0e} Hz.",
-                        "sweep_spec",
-                        "freq_scale_factors",
-                        i,
-                    )
         elif isinstance(self.sweep_spec, EMEPeriodicitySweep):
             for i, monitor in enumerate(self.monitors):
                 if isinstance(monitor, EMEFieldMonitor):
@@ -1220,24 +1183,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     @cached_property
     def _anisotropic_validation_freqs_by_cell(self) -> tuple[FreqArray, ...]:
         """Per-cell frequencies at which anisotropic mode tensors may be evaluated."""
-        base_freqs = np.asarray(self.freqs, dtype=float)
-        solve_freq_sets = [base_freqs]
-        if isinstance(self.sweep_spec, EMEFreqSweep):
-            # Frequency sweeps perturbatively re-solve modes at scaled simulation frequencies.
-            solve_freq_sets.extend(
-                base_freqs * float(scale_factor)
-                for scale_factor in np.asarray(self.sweep_spec.freq_scale_factors, dtype=float)
-            )
         freqs_by_cell = []
         for mode_spec in self.eme_grid.mode_specs:
-            freqs = set()
-            for solve_freqs in solve_freq_sets:
-                freqs |= {
-                    float(freq)
-                    for freq in mode_spec._sampling_freqs_mode_solver(
-                        freqs=np.asarray(solve_freqs, dtype=float).tolist()
-                    )
-                }
+            freqs = {
+                float(freq)
+                for freq in mode_spec._sampling_freqs_mode_solver(freqs=list(self.freqs))
+            }
             freqs_by_cell.append(np.asarray(sorted(freqs), dtype=float))
         return tuple(freqs_by_cell)
 
@@ -1883,18 +1834,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         return self.sweep_spec.num_sweep
 
     @property
-    def _sweep_modes(self) -> bool:
-        """Whether the sweep changes the modes."""
-        return self.sweep_spec is not None and self.sweep_spec.sweep_modes
-
-    @property
-    def _num_sweep_modes(self) -> PositiveInt:
-        """Number of sweep indices for modes."""
-        if self._sweep_modes:
-            return self._num_sweep
-        return 1
-
-    @property
     def _sweep_interfaces(self) -> bool:
         """Whether the sweep changes the cell interface scattering matrices."""
         return self.sweep_spec is not None and self.sweep_spec.sweep_interfaces
@@ -1922,8 +1861,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         """Number of sweep indices for a certain monitor."""
         if self.sweep_spec is None:
             return 1
-        # only freq sweep changes the modes
-        if isinstance(monitor, EMEModeSolverMonitor) and not self._sweep_modes:
+        if isinstance(monitor, EMEModeSolverMonitor):
             return 1
         if monitor.num_sweep is None:
             return self.sweep_spec.num_sweep
@@ -2262,9 +2200,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         coord they were built at. The S-matrix stages read those freqs when they
         construct their outputs, but ``compute_smatrix`` then relabels the final
         dataset with ``self.freqs``. On ``sim.updated_copy(freqs=...)`` reuse — the
-        advertised alternative to ``EMEFreqSweep`` — matching array lengths would
-        otherwise let stale-frequency results through under the new coordinate
-        labels. Check here so the caller is forced to re-stage instead.
+        supported workflow for changing frequencies — matching array lengths would otherwise
+        let stale-frequency results through under the new coordinate labels. Check here so the
+        caller is forced to re-stage instead.
         """
         sim_freqs = np.array(list(self.freqs), dtype=float)
         stage_freqs = np.asarray(freqs, dtype=float)
@@ -2275,24 +2213,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                 f"Frequency grid of {origin} ({stage_freqs.tolist()}) does not match "
                 f"'EMESimulation.freqs' ({sim_freqs.tolist()}). Re-stage the inputs on "
                 f"the current simulation (e.g. via 'compute_overlaps' or 'propagate')."
-            )
-
-    def _raise_if_freq_sweep_local(self) -> None:
-        """Gate for the local staged propagation path.
-
-        ``EMEFreqSweep`` requires mode data re-solved at each scaled frequency, which
-        the local staged path does not support. The S-matrix stages read
-        ``self.freqs`` (not the scaled sweep frequencies), so without this gate
-        callers of the explicit per-stage methods would silently get a "sweep" whose
-        points are all evaluated at the base frequency. Callers should either drop
-        the ``EMEFreqSweep`` and list target frequencies directly in ``freqs``
-        (typically with ``EMEModeSpec.interp_spec``), or run the EME simulation normally.
-        """
-        if isinstance(self.sweep_spec, EMEFreqSweep):
-            raise SetupError(
-                "'EMEFreqSweep' is not supported by the local staged propagation API. "
-                "Specify target frequencies directly in 'EMESimulation.freqs' and use "
-                "'EMEModeSpec.interp_spec' for the performance/accuracy tradeoff."
             )
 
     def _warn_if_local_ignores_monitors(self) -> None:
@@ -2364,9 +2284,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         """
         from tidy3d.components.mode.simulation import ModeSimulation
 
-        # Fail before the caller spawns N mode-solve jobs they can never feed into
-        # the staged propagation path.
-        self._raise_if_freq_sweep_local()
         self._warn_if_local_ignores_monitors()
 
         eme_grid = self.eme_grid
@@ -2648,7 +2565,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         interface_overlaps : list[:class:`.EMEStageInterfaceOverlap`]
             One per interface, in the order of :attr:`cell_index_pairs`.
         """
-        self._raise_if_freq_sweep_local()
         self._warn_if_local_ignores_monitors()
 
         num_cells = self.eme_grid.num_cells
@@ -2720,7 +2636,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
         check_tidy3d_extras_licensed_feature("local_eme")
-        self._raise_if_freq_sweep_local()
         self._warn_if_local_ignores_monitors()
         self._raise_if_stage_freqs_mismatch(
             cell_overlap.n_complex.f.values,
@@ -2780,7 +2695,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
         check_tidy3d_extras_licensed_feature("local_eme")
-        self._raise_if_freq_sweep_local()
         self._warn_if_local_ignores_monitors()
         pair = (left_overlap.cell_index, right_overlap.cell_index)
         self._raise_if_stage_freqs_mismatch(
@@ -2891,7 +2805,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
         check_tidy3d_extras_licensed_feature("local_eme")
-        self._raise_if_freq_sweep_local()
         self._warn_if_local_ignores_monitors()
 
         from tidy3d.components.data.data_array import EMESMatrixDataArray
@@ -3004,9 +2917,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         sweep-invariant under ``EMELengthSweep``, ``EMEModeSweep``, and
         ``EMEPeriodicitySweep``, so recomputing them per sweep wastes work.
 
-        ``EMEFreqSweep`` is not supported; specify target frequencies in
-        ``EMESimulation.freqs`` instead.
-
         Parameters
         ----------
         cell_overlaps : list[:class:`.EMEStageCellOverlap`]
@@ -3024,7 +2934,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         """
         from .data.dataset import EMESMatrixDataset
 
-        self._raise_if_freq_sweep_local()
         self._warn_if_local_ignores_monitors()
         sweep_spec = self.sweep_spec
 
@@ -3134,8 +3043,8 @@ class EMESimulation(AbstractYeeGridSimulation):
         sweep types, so ``propagate`` would redo that work each time.
 
         Supports ``EMELengthSweep``, ``EMEModeSweep``, and
-        ``EMEPeriodicitySweep``.  ``EMEFreqSweep`` is not supported;
-        specify target frequencies in ``EMESimulation.freqs`` instead.
+        ``EMEPeriodicitySweep``. For frequency sweeps, specify target
+        frequencies in ``EMESimulation.freqs`` instead.
 
         To override constraint, normalize, or sweep_spec, use
         ``sim.updated_copy(...)`` before calling.
@@ -3224,7 +3133,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         from tidy3d.components.mode.data.sim_data import ModeSimulationData
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
 
-        self._raise_if_freq_sweep_local()
         self._raise_if_stage_freqs_mismatch(smatrix.S11.f.values, "S-matrix")
 
         if modes1 is None and modes2 is None:

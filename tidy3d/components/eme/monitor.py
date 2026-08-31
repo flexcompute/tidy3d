@@ -205,17 +205,8 @@ class EMEModeSolverMonitor(EMEMonitor):
         sweep_spec: EMESweepSpecType | None,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        # EMEModeSolverMonitor only varies with sweep for EMEFreqSweep (sweep_modes)
-        num_sweep = sweep_spec.num_sweep if sweep_spec and sweep_spec.sweep_modes else 1
-        num_sweep = self._effective_num_sweep(num_sweep)
         bytes_single = (
-            6
-            * BYTES_COMPLEX
-            * num_transverse_cells
-            * num_eme_cells
-            * num_freqs
-            * num_modes
-            * num_sweep
+            6 * BYTES_COMPLEX * num_transverse_cells * num_eme_cells * num_freqs * num_modes
         )
         return bytes_single
 
@@ -366,10 +357,8 @@ class EMECoefficientMonitor(EMEMonitor):
         # A and B: use full sweep count
         num_sweep_full = sweep_spec.num_sweep if sweep_spec else 1
         num_sweep_full = self._effective_num_sweep(num_sweep_full)
-        # n_complex, flux, overlaps: only vary with EMEFreqSweep (sweep_modes)
-        num_sweep_modes = sweep_spec.num_sweep if sweep_spec and sweep_spec.sweep_modes else 1
-        num_sweep_modes = self._effective_num_sweep(num_sweep_modes)
-        # interface_smatrices: only vary with EMEFreqSweep or EMEModeSweep (sweep_interfaces)
+        # n_complex, flux, and overlaps are sweep-invariant.
+        # interface_smatrices only vary with EMEModeSweep (sweep_interfaces).
         num_sweep_interfaces = (
             sweep_spec.num_sweep if sweep_spec and sweep_spec.sweep_interfaces else 1
         )
@@ -398,11 +387,11 @@ class EMECoefficientMonitor(EMEMonitor):
                 * num_modes
             )
 
-        # n_complex and flux: (f, sweep, cells, modes)
+        # n_complex and flux: (f, cells, modes)
         if "n_complex" in self.fields:
-            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep_modes * num_eme_cells * num_modes
+            bytes_total += BYTES_COMPLEX * num_freqs * num_eme_cells * num_modes
         if "flux" in self.fields:
-            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep_modes * num_eme_cells * num_modes
+            bytes_total += BYTES_COMPLEX * num_freqs * num_eme_cells * num_modes
 
         # interface_smatrices: 4 S matrices (S11, S12, S21, S22), each (f, sweep, cells-1, modes, modes)
         if "interface_smatrices" in self.fields:
@@ -416,19 +405,11 @@ class EMECoefficientMonitor(EMEMonitor):
                 * num_modes
             )
 
-        # overlaps: O11 (f, sweep, cells, modes, modes) + O12, O21 (f, sweep, cells-1, modes, modes)
+        # overlaps: O11 (f, cells, modes, modes) + O12, O21 (f, cells-1, modes, modes)
         if "overlaps" in self.fields:
+            bytes_total += BYTES_COMPLEX * num_freqs * num_eme_cells * num_modes * num_modes  # O11
             bytes_total += (
-                BYTES_COMPLEX * num_freqs * num_sweep_modes * num_eme_cells * num_modes * num_modes
-            )  # O11
-            bytes_total += (
-                2
-                * BYTES_COMPLEX
-                * num_freqs
-                * num_sweep_modes
-                * num_interfaces
-                * num_modes
-                * num_modes
+                2 * BYTES_COMPLEX * num_freqs * num_interfaces * num_modes * num_modes
             )  # O12, O21
 
         return bytes_total

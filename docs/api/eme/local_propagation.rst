@@ -18,9 +18,8 @@ for recipes and prerequisites.
    :class:`.EMESimulation` ``monitors`` — :class:`.EMEFieldMonitor`,
    :class:`.EMEModeSolverMonitor`, :class:`.EMECoefficientMonitor`, etc. — are
    dropped with a warning; run the simulation through the remote backend if
-   you need monitor data.  :class:`.EMEFreqSweep` and anisotropic media in
-   bent cells with ``bend_medium_frame="global"`` are also unsupported on this
-   path.
+   you need monitor data. Anisotropic media in bent cells with
+   ``bend_medium_frame="global"`` are also unsupported on this path.
 
 .. autosummary::
    :toctree: ../_autosummary/

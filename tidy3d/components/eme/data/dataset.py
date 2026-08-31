@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
@@ -13,6 +15,7 @@ from tidy3d.components.data.data_array import (
     EMEInterfaceDiagnosticDataArray,
     EMEInterfaceSMatrixDataArray,
     EMEModeIndexDataArray,
+    EMEOverlapDataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
@@ -104,6 +107,9 @@ class EMEOverlapDataset(Dataset):
 
     Notes
     -----
+        Each overlap block is indexed by ``(f, eme_cell_index, mode_index_out,
+        mode_index_in)`` and is independent of propagation sweeps.
+
         ``Oij`` is the unconjugated overlap computed using the E field of cell ``i``
         and the H field of cell ``j``.
 
@@ -111,18 +117,33 @@ class EMEOverlapDataset(Dataset):
         in cell ``i``, and ``mode_index_in`` refers to the mode index in cell ``j``.
     """
 
-    O11: EMEInterfaceSMatrixDataArray = Field(
+    O11: EMEOverlapDataArray = Field(
         title="O11 matrix",
         description="Overlap integral between E field and H field in the same cell.",
     )
-    O12: EMEInterfaceSMatrixDataArray = Field(
+    O12: EMEOverlapDataArray = Field(
         title="O12 matrix",
         description="Overlap integral between E field on side 1 and H field on side 2.",
     )
-    O21: EMEInterfaceSMatrixDataArray = Field(
+    O21: EMEOverlapDataArray = Field(
         title="O21 matrix",
         description="Overlap integral between E field on side 2 and H field on side 1.",
     )
+
+    @field_validator("O11", "O12", "O21", mode="before")
+    @classmethod
+    def _normalize_legacy_overlap_sweep_axis(cls, value: Any) -> Any:
+        """Normalize the singleton sweep axis stored by legacy overlap datasets."""
+        if not hasattr(value, "dims") or "sweep_index" not in value.dims:
+            return value
+        if value.sizes["sweep_index"] != 1:
+            raise ValueError(
+                "EMEOverlapDataArray does not support multiple 'sweep_index' entries. "
+                "Only a singleton legacy 'sweep_index' dimension can be normalized. "
+                "Select one 'sweep_index' entry, or migrate saved legacy result data "
+                "with an earlier Tidy3D version."
+            )
+        return value.squeeze(dim="sweep_index", drop=True)
 
 
 class EMECoefficientDataset(Dataset):
@@ -440,9 +461,8 @@ class EMEModeSolverDataset(ElectromagneticFieldDataset):
     Notes
     -----
         Each field component is an :class:`.EMEScalarModeFieldDataArray` with coordinates
-        ``(x, y, z, f, eme_cell_index, mode_index)`` and optionally ``sweep_index``
-        when a frequency sweep is used. Also stores the complex propagation index
-        ``n_complex`` for each mode.
+        ``(x, y, z, f, eme_cell_index, mode_index)``. Also stores the complex propagation
+        index ``n_complex`` for each mode.
 
     Example
     -------
@@ -451,20 +471,18 @@ class EMEModeSolverDataset(ElectromagneticFieldDataset):
     >>> y = [0, 1, 2]
     >>> z = [0]
     >>> f = [2e14]
-    >>> sweep_index = [0]
     >>> eme_cell_index = [0, 1, 2]
     >>> mode_index = [0, 1]
     >>> field_coords = dict(
-    ...     x=x, y=y, z=z, f=f, sweep_index=sweep_index,
-    ...     eme_cell_index=eme_cell_index, mode_index=mode_index,
+    ...     x=x, y=y, z=z, f=f, eme_cell_index=eme_cell_index, mode_index=mode_index,
     ... )
     >>> field = EMEScalarModeFieldDataArray(
-    ...     (1+1j) * np.random.random((2,3,1,1,1,3,2)), coords=field_coords
+    ...     (1+1j) * np.random.random((2,3,1,1,3,2)), coords=field_coords
     ... )
     >>> index_coords = dict(
-    ...     f=f, sweep_index=sweep_index, eme_cell_index=eme_cell_index, mode_index=mode_index,
+    ...     f=f, eme_cell_index=eme_cell_index, mode_index=mode_index,
     ... )
-    >>> n_complex = EMEModeIndexDataArray((1+0.01j) * np.ones((1,1,3,2)), coords=index_coords)
+    >>> n_complex = EMEModeIndexDataArray((1+0.01j) * np.ones((1,3,2)), coords=index_coords)
     >>> data = EMEModeSolverDataset(
     ...     n_complex=n_complex, Ex=field, Ey=field, Ez=field, Hx=field, Hy=field, Hz=field,
     ... )

@@ -1538,83 +1538,6 @@ class ModeSolver(Tidy3dBaseModel):
 
         return mode_solver_data
 
-    def _data_on_yee_grid_relative(self, basis: ModeSolverData) -> ModeSolverData:
-        """Solve for all modes, and construct data with fields on the Yee grid."""
-        if basis.monitor.colocate:
-            raise ValidationError("Relative mode solver 'basis' must have 'colocate=False'.")
-        _, _solver_coords = self.plane.pop_axis(
-            self._solver_grid.boundaries.to_list, axis=self.normal_axis
-        )
-
-        basis_fields = []
-        for freq_ind in range(len(basis.n_complex.f)):
-            basis_fields_freq = {}
-            for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-                basis_fields_freq[field_name] = self._trim_output_field_to_solver_grid(
-                    basis.field_components[field_name].isel(f=freq_ind).to_numpy()
-                )
-            basis_fields.append(basis_fields_freq)
-
-        # Compute and store the modes at all frequencies
-        n_complex, fields, eps_spec = self._solve_all_freqs_relative(
-            coords=_solver_coords,
-            symmetry=self.solver_symmetry,
-            basis_fields=basis_fields,
-        )
-        fields = self._pad_solver_fields_to_output_grid(fields)
-
-        # start a dictionary storing the data arrays for the ModeSolverData
-        index_data = ModeIndexDataArray(
-            np.stack(n_complex, axis=0),
-            coords={
-                "f": list(self.freqs),
-                "mode_index": np.arange(self.mode_spec.num_modes),
-            },
-        )
-        data_dict = {"n_complex": index_data}
-
-        # Construct the field data on Yee grid
-        for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-            xyz_coords = self.grid_snapped[field_name].to_list
-            scalar_field_data = ScalarModeFieldDataArray(
-                np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
-                coords={
-                    "x": xyz_coords[0],
-                    "y": xyz_coords[1],
-                    "z": xyz_coords[2],
-                    "f": list(self.freqs),
-                    "mode_index": np.arange(self.mode_spec.num_modes),
-                },
-            )
-            data_dict[field_name] = scalar_field_data
-
-        # finite grid corrections
-        grid_factors, relative_grid_distances = self._grid_correction(
-            simulation=self.simulation,
-            plane=self.plane,
-            mode_spec=self.mode_spec,
-            n_complex=index_data,
-            direction=self.direction,
-        )
-
-        # make mode solver data on the Yee grid
-        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
-        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
-        mode_solver_data = ModeSolverData(
-            monitor=mode_solver_monitor,
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
-            grid_expanded=grid_expanded,
-            grid_primal_correction=grid_factors[0],
-            grid_dual_correction=grid_factors[1],
-            grid_distances_primal=relative_grid_distances[0],
-            grid_distances_dual=relative_grid_distances[1],
-            eps_spec=eps_spec,
-            **data_dict,
-        )
-
-        return mode_solver_data
-
     def _get_colocation_coordinates(self) -> dict[str, ArrayFloat1D]:
         """Get colocation coordinates in the solver plane.
 
@@ -2195,38 +2118,6 @@ class ModeSolver(Tidy3dBaseModel):
             eps_spec.append(eps_spec_freq)
         return n_complex, fields, eps_spec
 
-    @supports_local_subpixel
-    def _solve_all_freqs_relative(
-        self,
-        coords: tuple[ArrayFloat1D, ArrayFloat1D],
-        symmetry: tuple[Symmetry, Symmetry],
-        basis_fields: list[dict[str, ArrayComplex4D]],
-    ) -> tuple[list[float], list[dict[str, ArrayComplex4D]], list[EpsSpecType]]:
-        """Call the mode solver at all requested frequencies."""
-        if tidy3d_extras["use_local_subpixel"]:
-            subpixel_ms = tidy3d_extras["mod"].SubpixelModeSolver.from_mode_solver(self)
-            return subpixel_ms._solve_all_freqs_relative(
-                coords=coords,
-                symmetry=symmetry,
-                basis_fields=basis_fields,
-            )
-
-        fields = []
-        n_complex = []
-        eps_spec = []
-        for freq, basis_fields_freq in zip(self.freqs, basis_fields):
-            n_freq, fields_freq, eps_spec_freq = self._solve_single_freq_relative(
-                freq=freq,
-                coords=coords,
-                symmetry=symmetry,
-                basis_fields=basis_fields_freq,
-            )
-            fields.append(fields_freq)
-            n_complex.append(n_freq)
-            eps_spec.append(eps_spec_freq)
-
-        return n_complex, fields, eps_spec
-
     @staticmethod
     def _postprocess_solver_fields(
         solver_fields: ArrayComplex4D,
@@ -2275,70 +2166,6 @@ class ModeSolver(Tidy3dBaseModel):
             mode_spec=self.mode_spec,
             symmetry=symmetry,
             direction=self.direction,
-            precision=self._precision,
-            plane_center=self.plane_center_tangential(self.plane),
-        )
-
-        fields = self._postprocess_solver_fields(
-            solver_fields, self.normal_axis, self.plane, self.mode_spec, coords
-        )
-        return n_complex, fields, eps_spec
-
-    @classmethod
-    def _rotate_field_coords_inverse(
-        cls, field: FIELD, normal_axis: Axis, plane: MODE_PLANE_TYPE
-    ) -> FIELD:
-        """Move the propagation axis to the z axis in the array."""
-        f_x, f_y, f_z = np.moveaxis(field, source=1 + normal_axis, destination=3)
-        f_n, f_ts = plane.pop_axis((f_x, f_y, f_z), axis=normal_axis)
-        return np.stack(plane.unpop_axis(f_n, f_ts, axis=2), axis=0)
-
-    @classmethod
-    def _postprocess_solver_fields_inverse(
-        cls, fields: dict[str, ArrayComplex4D], normal_axis: Axis, plane: MODE_PLANE_TYPE
-    ) -> ArrayComplex4D:
-        """Convert ``fields`` to ``solver_fields``. Doesn't change gauge."""
-        E = [fields[key] for key in ("Ex", "Ey", "Ez")]
-        H = [fields[key] for key in ("Hx", "Hy", "Hz")]
-
-        (Ex, Ey, Ez) = cls._rotate_field_coords_inverse(E, normal_axis=normal_axis, plane=plane)
-        (Hx, Hy, Hz) = cls._rotate_field_coords_inverse(H, normal_axis=normal_axis, plane=plane)
-
-        # apply -1 to H fields if a reflection was involved in the rotation
-        if normal_axis == 1:
-            Hx *= -1
-            Hy *= -1
-            Hz *= -1
-
-        solver_fields = np.stack((Ex, Ey, Ez, Hx, Hy, Hz), axis=0)
-        return solver_fields
-
-    def _solve_single_freq_relative(
-        self,
-        freq: float,
-        coords: tuple[ArrayFloat1D, ArrayFloat1D],
-        symmetry: tuple[Symmetry, Symmetry],
-        basis_fields: dict[str, ArrayComplex4D],
-    ) -> tuple[float, dict[str, ArrayComplex4D], EpsSpecType]:
-        """Call the mode solver at a single frequency.
-        Modes are computed as linear combinations of ``basis_fields``.
-        """
-
-        if not LOCAL_SOLVER_IMPORTED:
-            raise ImportError(IMPORT_ERROR_MSG)
-
-        solver_basis_fields = self._postprocess_solver_fields_inverse(
-            fields=basis_fields, normal_axis=self.normal_axis, plane=self.plane
-        )
-
-        solver_fields, n_complex, eps_spec = compute_modes(
-            eps_cross=self._solver_eps(freq),
-            coords=coords,
-            freq=freq,
-            mode_spec=self.mode_spec,
-            symmetry=symmetry,
-            direction=self.direction,
-            solver_basis_fields=solver_basis_fields,
             precision=self._precision,
             plane_center=self.plane_center_tangential(self.plane),
         )

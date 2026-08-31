@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayFloat1D, ArrayInt1D, ArrayLike
+from tidy3d.components.types import ArrayInt1D, ArrayLike
 from tidy3d.exceptions import SetupError
 
 from .grid import MAX_NUM_REPS
@@ -31,20 +31,12 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
             Sweep over number of modes (convergence testing).
         :class:`.EMEPeriodicitySweep` :
             Sweep over number of periodic repetitions.
-        :class:`.EMEFreqSweep` :
-            Deprecated frequency sweep. Prefer ``EMESimulation.freqs`` with
-            ``EMEModeSpec.interp_spec``.
     """
 
     @property
     @abstractmethod
     def num_sweep(self) -> PositiveInt:
         """Number of sweep indices."""
-
-    @property
-    def sweep_modes(self) -> bool:
-        """Whether the sweep changes the modes."""
-        return False
 
     @property
     def sweep_interfaces(self) -> bool:
@@ -134,49 +126,6 @@ class EMEModeSweep(EMESweepSpec):
         return True
 
 
-class EMEFreqSweep(EMESweepSpec):
-    """Deprecated spec for sweeping frequency in the EME propagation step.
-
-    Prefer specifying the target frequencies directly in ``EMESimulation.freqs`` and
-    controlling the performance/accuracy tradeoff with ``EMEModeSpec.interp_spec``.
-    ``EMEFreqSweep`` is kept for backward compatibility and uses a perturbative mode
-    solver relative to the simulation EME modes.
-
-    Example
-    -------
-    >>> sweep_spec = EMEFreqSweep(freq_scale_factors=[0.9, 0.95, 1.0, 1.05, 1.1])
-    """
-
-    freq_scale_factors: ArrayFloat1D = Field(
-        title="Frequency Scale Factors",
-        description="Deprecated approximate alternative to listing frequencies directly in "
-        "``EMESimulation.freqs``. Scale factors are applied to every simulation frequency, "
-        "and the new modes are then computed approximately using the exact modes as a basis. "
-        "If there are multiple ``EMESimulation.freqs``, the exact modes are computed at each "
-        "of those frequencies and then scaled independently.",
-    )
-
-    @property
-    def num_sweep(self) -> PositiveInt:
-        """Number of sweep indices."""
-        return len(self.freq_scale_factors)
-
-    @property
-    def sweep_modes(self) -> bool:
-        """Whether the sweep changes the modes."""
-        return True
-
-    @property
-    def sweep_interfaces(self) -> bool:
-        """Whether the sweep changes the cell interface scattering matrices."""
-        return True
-
-    @property
-    def sweep_cells(self) -> bool:
-        """Whether the sweep changes the propagation within a cell."""
-        return True
-
-
 class EMEPeriodicitySweep(EMESweepSpec):
     """Spec for sweeping number of repetitions of EME subgrids.
 
@@ -228,4 +177,4 @@ class EMEPeriodicitySweep(EMESweepSpec):
         return len(self.num_reps)
 
 
-EMESweepSpecType = EMELengthSweep | EMEModeSweep | EMEFreqSweep | EMEPeriodicitySweep
+EMESweepSpecType = EMELengthSweep | EMEModeSweep | EMEPeriodicitySweep

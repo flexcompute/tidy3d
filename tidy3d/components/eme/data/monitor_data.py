@@ -84,18 +84,16 @@ class EMEModeSolverData(EMEFieldDataBase, EMEModeSolverDataset):
     >>> f = [2e14]
     >>> mode_index = [0, 1]
     >>> eme_cell_index = [0, 1]
-    >>> sweep_index = [0]
     >>> field_coords = dict(
-    ...     x=x, y=y, z=z, f=f, sweep_index=sweep_index,
-    ...     eme_cell_index=eme_cell_index, mode_index=mode_index,
+    ...     x=x, y=y, z=z, f=f, eme_cell_index=eme_cell_index, mode_index=mode_index,
     ... )
     >>> field = EMEScalarModeFieldDataArray(
-    ...     (1+1j) * np.random.random((2,2,1,1,1,2,2)), coords=field_coords
+    ...     (1+1j) * np.random.random((2,2,1,1,2,2)), coords=field_coords
     ... )
     >>> index_coords = dict(
-    ...     f=f, sweep_index=sweep_index, eme_cell_index=eme_cell_index, mode_index=mode_index,
+    ...     f=f, eme_cell_index=eme_cell_index, mode_index=mode_index,
     ... )
-    >>> n_complex = EMEModeIndexDataArray((1+0.01j) * np.ones((1,1,2,2)), coords=index_coords)
+    >>> n_complex = EMEModeIndexDataArray((1+0.01j) * np.ones((1,2,2)), coords=index_coords)
     >>> grid = Grid(boundaries=Coords(x=[-0.5, 0.5, 1.5], y=[-0.5, 0.5, 1.5], z=[-0.5, 0.5]))
     >>> data = EMEModeSolverData(
     ...     monitor=monitor, n_complex=n_complex, propagation_axis=2,

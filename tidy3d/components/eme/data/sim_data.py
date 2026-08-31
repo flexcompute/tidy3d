@@ -361,7 +361,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         return self.port_modes_raw.symmetry_expanded_copy
 
     def _extract_mode_solver_data(
-        self, data: EMEModeSolverData, eme_cell_index: int, sweep_index: int | None = None
+        self, data: EMEModeSolverData, eme_cell_index: int
     ) -> ModeSolverData:
         """Extract :class:`.ModeSolverData` at a given ``eme_cell_index``.
         Assumes the :class:`.EMEModeSolverMonitor` spans the entire simulation and has
@@ -381,20 +381,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             key: field.sel(eme_cell_index=eme_cell_index, drop=True)
             for key, field in update_dict.items()
         }
-        sweep_in_data = "sweep_index" in data.n_complex.coords
-        if sweep_index is not None and sweep_in_data:
-            update_dict = {
-                key: field.isel(sweep_index=sweep_index, drop=True)
-                for key, field in update_dict.items()
-            }
-        if (
-            "sweep_index" in update_dict["n_complex"].dims
-            and len(update_dict["n_complex"].sweep_index) == 1
-        ):
-            update_dict = {
-                key: field.squeeze(dim="sweep_index") for key, field in update_dict.items()
-            }
-
         # Re-introduce the normal coordinate with the correct value from eme_grid.centers
         axis = self.simulation.axis
         # convert propagation axis index to coordinate name
@@ -521,14 +507,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             return self.simulation.eme_grid.num_cells - 1
         raise SetupError("'port_index' must be either 0 or 1.")
 
-    def _port_modes_at_sweep(self, port_index: int, sweep_index: int) -> ModeSolverData:
-        """Extract one port basis without materializing the opposite port."""
-        return self._extract_mode_solver_data(
-            data=self.port_modes,
-            eme_cell_index=self._port_cell_index(port_index),
-            sweep_index=sweep_index,
-        )
-
     def _extract_basis_if_needed(
         self, modes: FieldData | ModeData | EMEModeSolverData, port_index: int
     ) -> FieldData | ModeData:
@@ -536,17 +514,40 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         if not isinstance(modes, EMEModeSolverData):
             return modes
 
-        if "sweep_index" in modes.n_complex.dims and modes.n_complex.sizes["sweep_index"] > 1:
-            raise SetupError(
-                "Raw EME mode-solver monitor data with multiple 'sweep_index' entries "
-                "cannot be used as a change-of-basis because a basis must contain one "
-                "set of modes. Select one sweep index from the data first."
-            )
-
         return self._extract_mode_solver_data(
             data=modes,
             eme_cell_index=self._port_cell_index(port_index),
         )
+
+    def _extract_port_modes(self, port_index: int) -> ModeSolverData:
+        """Extract one port basis without materializing the opposite port basis."""
+        if self.port_modes_raw is None:
+            raise SetupError(
+                "The field 'port_modes' is 'None'. Please set 'store_port_modes' "
+                "to 'True' in 'EMESimulation' and re-run the simulation."
+            )
+        return self._extract_mode_solver_data(
+            data=self.port_modes,
+            eme_cell_index=self._port_cell_index(port_index),
+        )
+
+    @cached_property
+    def _port_modes_1(self) -> ModeSolverData:
+        """Cached basis for port 1."""
+        return self._extract_port_modes(0)
+
+    @cached_property
+    def _port_modes_2(self) -> ModeSolverData:
+        """Cached basis for port 2."""
+        return self._extract_port_modes(1)
+
+    def _port_modes(self, port_index: int) -> ModeSolverData:
+        """Return one independently cached port basis."""
+        if port_index == 0:
+            return self._port_modes_1
+        if port_index == 1:
+            return self._port_modes_2
+        raise SetupError("'port_index' must be either 0 or 1.")
 
     @cached_property
     def port_modes_tuple(self) -> tuple[ModeSolverData, ModeSolverData]:
@@ -556,56 +557,9 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         -------
         tuple[:class:`.ModeSolverData`, :class:`.ModeSolverData`]
             A pair of :class:`.ModeSolverData` for port 1 and port 2, respectively.
-            Raises :class:`.SetupError` if ``store_port_modes`` was not enabled,
-            or if port modes vary with sweep index (use :attr:`port_modes_list_sweep` instead).
+            Raises :class:`.SetupError` if ``store_port_modes`` was not enabled.
         """
-        if self.port_modes is None:
-            raise SetupError(
-                "The field 'port_modes' is 'None'. Please set 'store_port_modes' "
-                "to 'True' in 'EMESimulation' and re-run the simulation."
-            )
-
-        if self.simulation._sweep_modes:
-            raise SetupError(
-                "The port modes vary with 'sweep_index'. "
-                "Use 'EMESimulationData.port_modes_list_sweep' instead."
-            )
-
-        return self._port_modes_at_sweep(0, 0), self._port_modes_at_sweep(1, 0)
-
-    @cached_property
-    def port_modes_list_sweep(self) -> list[tuple[ModeSolverData, ModeSolverData]]:
-        """Port modes as a list of tuples, one per sweep index.
-
-        Returns
-        -------
-        list[tuple[:class:`.ModeSolverData`, :class:`.ModeSolverData`]]
-            A list with one ``(port_modes_1, port_modes_2)`` tuple per sweep index.
-            If the sweep does not change the modes (e.g. :class:`.EMELengthSweep`),
-            the list contains a single entry.
-        """
-        if self.port_modes is None:
-            raise SetupError(
-                "The field 'port_modes' is 'None'. Please set 'store_port_modes' "
-                "to 'True' in 'EMESimulation' and re-run the simulation."
-            )
-
-        if self.simulation._sweep_modes:
-            sweep_indices = np.arange(self.simulation.sweep_spec.num_sweep)
-        else:
-            sweep_indices = [0]
-
-        port_modes_list = []
-
-        for sweep_index in sweep_indices:
-            port_modes_list.append(
-                (
-                    self._port_modes_at_sweep(0, sweep_index),
-                    self._port_modes_at_sweep(1, sweep_index),
-                )
-            )
-
-        return port_modes_list
+        return self._port_modes(0), self._port_modes(1)
 
     def smatrix_in_basis(
         self,
@@ -676,7 +630,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         # must run this without tidy3d_extras, so the basis change is reimplemented
         # here and kept in parity with the extras kernel by
         # tests/test_eme.py::test_eme_local_pipeline_matches_backend_lossy_smatrix_in_basis.
-        if self.port_modes is None:
+        if self.port_modes_raw is None:
             raise SetupError(
                 "Cannot convert the EME scattering matrix to the provided "
                 "basis, because 'port_modes' is 'None'. Please set 'store_port_modes' "
@@ -688,8 +642,8 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         if not modes1_provided and not modes2_provided:
             return self.smatrix
 
-        port_modes1 = self._port_modes_at_sweep(0, 0) if modes1_provided else None
-        port_modes2 = self._port_modes_at_sweep(1, 0) if modes2_provided else None
+        port_modes1 = self._port_modes(0) if modes1_provided else None
+        port_modes2 = self._port_modes(1) if modes2_provided else None
 
         if modes1_provided:
             modes1 = self._extract_basis_if_needed(modes1, port_index=0)
@@ -779,36 +733,39 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             (len(f), len(sweep_indices), len(mode_index_2), len(mode_index_2)), dtype=complex
         )
 
-        # Split the basis quantities by what they depend on. The new-basis Gram
-        # inverses depend only on the (fixed) new bases, so compute them once. The
-        # cross-overlaps O and port self-Grams gp depend on the port modes, so they
-        # are recomputed in the loop only when the modes sweep. Both interpolate to
-        # f; the loop selects the per-sweep active-mode subset.
-        def _port_overlaps(
-            pm1: ModeSolverData | None, pm2: ModeSolverData | None
-        ) -> tuple[DataArray | None, DataArray | None, DataArray | None, DataArray | None]:
-            o1 = o2 = gp1 = gp2 = None
-            if modes1_provided:
-                ov = modes1.outer_dot(pm1, conjugate=False)
-                if not modes_in_1:
-                    ov = ov.expand_dims(dim={"mode_index_0": mode_index_1}, axis=1)
-                o1 = _interp_to_f(modes1, ov, interp_spec1, f)
-                if not skip_gram_normalization:
-                    p_interp1 = getattr(
-                        getattr(pm1.monitor, "mode_spec", None), "interp_spec", None
-                    )
-                    gp1 = _interp_to_f(pm1, pm1.outer_dot(pm1, conjugate=False), p_interp1, f)
-            if modes2_provided:
-                ov = modes2.outer_dot(pm2, conjugate=False)
-                if not modes_in_2:
-                    ov = ov.expand_dims(dim={"mode_index_0": mode_index_2}, axis=1)
-                o2 = _interp_to_f(modes2, ov, interp_spec2, f)
-                if not skip_gram_normalization:
-                    p_interp2 = getattr(
-                        getattr(pm2.monitor, "mode_spec", None), "interp_spec", None
-                    )
-                    gp2 = _interp_to_f(pm2, pm2.outer_dot(pm2, conjugate=False), p_interp2, f)
-            return o1, o2, gp1, gp2
+        # All supported sweeps reuse a fixed port basis. Compute its cross-overlaps
+        # and self-Grams once; the loop below selects each sweep's active-mode subset.
+        O1_full = O2_full = gp1_full = gp2_full = None
+        if modes1_provided:
+            overlap1 = modes1.outer_dot(port_modes1, conjugate=False)
+            if not modes_in_1:
+                overlap1 = overlap1.expand_dims(dim={"mode_index_0": mode_index_1}, axis=1)
+            O1_full = _interp_to_f(modes1, overlap1, interp_spec1, f)
+            if not skip_gram_normalization:
+                port_interp_spec1 = getattr(
+                    getattr(port_modes1.monitor, "mode_spec", None), "interp_spec", None
+                )
+                gp1_full = _interp_to_f(
+                    port_modes1,
+                    port_modes1.outer_dot(port_modes1, conjugate=False),
+                    port_interp_spec1,
+                    f,
+                )
+        if modes2_provided:
+            overlap2 = modes2.outer_dot(port_modes2, conjugate=False)
+            if not modes_in_2:
+                overlap2 = overlap2.expand_dims(dim={"mode_index_0": mode_index_2}, axis=1)
+            O2_full = _interp_to_f(modes2, overlap2, interp_spec2, f)
+            if not skip_gram_normalization:
+                port_interp_spec2 = getattr(
+                    getattr(port_modes2.monitor, "mode_spec", None), "interp_spec", None
+                )
+                gp2_full = _interp_to_f(
+                    port_modes2,
+                    port_modes2.outer_dot(port_modes2, conjugate=False),
+                    port_interp_spec2,
+                    f,
+                )
 
         # New-basis Gram inverses: independent of the port modes -> computed once.
         G1_inv = G2_inv = None
@@ -828,8 +785,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             G2_inv = _per_freq_inverse(
                 _interp_to_f(modes2, gn, interp_spec2, f).sel(f=f).to_numpy()
             )
-
-        O1_full, O2_full, gp1_full, gp2_full = _port_overlaps(port_modes1, port_modes2)
 
         for sweep_index in sweep_indices:
             S11 = self.smatrix.S11.sel(f=f, sweep_index=sweep_index)
@@ -855,20 +810,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 S12 = S12.sel(mode_index_in=keep_mode_inds2)
                 S21 = S21.sel(mode_index_out=keep_mode_inds2)
                 S22 = S22.sel(mode_index_in=keep_mode_inds2, mode_index_out=keep_mode_inds2)
-
-            if self.simulation._sweep_modes:
-                # Only the port modes vary across sweeps; the new-basis Grams above
-                # are unchanged, so recompute just the port-dependent overlaps.
-                # Force the same single convention as above.
-                if modes1_provided:
-                    port_modes1 = self._port_modes_at_sweep(0, sweep_index)
-                    port_modes1 = _force_integration_convention(port_modes1, rebase_colocated)
-                    _, port_modes1 = modes1._interpolated_copies_if_needed(port_modes1)
-                if modes2_provided:
-                    port_modes2 = self._port_modes_at_sweep(1, sweep_index)
-                    port_modes2 = _force_integration_convention(port_modes2, rebase_colocated)
-                    _, port_modes2 = modes2._interpolated_copies_if_needed(port_modes2)
-                O1_full, O2_full, gp1_full, gp2_full = _port_overlaps(port_modes1, port_modes2)
 
             # Right-hand factor G_port_b^{-T}: pre-multiply each S block on its
             # IN-port-b axis before the dot with O_b. Full formula (G_new_a^{-1}
@@ -1077,7 +1018,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             in computation.
         """
 
-        if self.port_modes is None:
+        if self.port_modes_raw is None:
             raise SetupError(
                 "Cannot convert the EME field to the provided "
                 "basis, because 'port_modes' is 'None'. Please set 'store_port_modes' "
@@ -1093,35 +1034,36 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         else:
             sweep_indices = [0]
 
-        port_modes = self._port_modes_at_sweep(port_index, 0)
-
         modes_provided = modes is not None
-        if not modes_provided:
-            modes = port_modes
-        else:
+        port_modes = None
+        if modes_provided:
+            port_modes = self._port_modes(port_index)
             modes = self._extract_basis_if_needed(modes, port_index=port_index)
 
-        # Compute the change of basis in the port modes' integration convention -- Yee
-        # for EME -- matching how the field was computed and smatrix_in_basis. A target
-        # basis's use_colocated_integration is not honored; only colocate=True forces
-        # colocated (boundary storage makes Yee integration impossible).
-        rebase_colocated = (
-            _integration_colocated(port_modes)
-            or bool(getattr(getattr(modes, "monitor", None), "colocate", True))
-            or not _shares_tangential_grid(port_modes, modes)
-        )
-        port_modes = _force_integration_convention(port_modes, rebase_colocated)
-        if modes_provided:
+            # Compute the change of basis in the port modes' integration convention -- Yee
+            # for EME -- matching how the field was computed and smatrix_in_basis. A target
+            # basis's use_colocated_integration is not honored; only colocate=True forces
+            # colocated (boundary storage makes Yee integration impossible).
+            rebase_colocated = (
+                _integration_colocated(port_modes)
+                or bool(getattr(getattr(modes, "monitor", None), "colocate", True))
+                or not _shares_tangential_grid(port_modes, modes)
+            )
+            port_modes = _force_integration_convention(port_modes, rebase_colocated)
             modes = _force_integration_convention(modes, rebase_colocated)
             modes, port_modes = modes._interpolated_copies_if_needed(port_modes)
 
         # Interpolate the overlaps/Grams onto the frequency grid when a basis uses
         # frequency interpolation, exactly as smatrix_in_basis does -- so the two
         # paths cannot disagree.
-        mode_spec = modes.monitor.mode_spec if isinstance(modes, ModeData) else None
+        mode_spec = (
+            modes.monitor.mode_spec if modes_provided and isinstance(modes, ModeData) else None
+        )
         interp_spec = mode_spec.interp_spec if mode_spec is not None else None
-        port_interp_spec = getattr(
-            getattr(port_modes.monitor, "mode_spec", None), "interp_spec", None
+        port_interp_spec = (
+            getattr(getattr(port_modes.monitor, "mode_spec", None), "interp_spec", None)
+            if modes_provided
+            else None
         )
 
         # With no new basis this method only selects an excitation port. Preserve the
@@ -1138,7 +1080,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         else:
             mode_index = [0]
 
-        f1 = _basis_freqs(modes)
+        f1 = _basis_freqs(modes) if modes_provided else self.simulation.freqs
         f2 = list(field.field_components.values())[0].f.values
 
         f = np.array(sorted(set(f1).intersection(f2).intersection(self.simulation.freqs)))
@@ -1168,13 +1110,22 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 "mode_index": mode_index,
             }
 
+        overlaps_full = port_gram_full = None
+        if modes_provided:
+            overlaps_full = modes.outer_dot(port_modes, conjugate=False)
+            if not modes_present:
+                overlaps_full = overlaps_full.expand_dims(dim={"mode_index_0": [0]}, axis=1)
+            overlaps_full = _interp_to_f(modes, overlaps_full, interp_spec, f).sel(f=f)
+            if not skip_gram_normalization:
+                port_gram_full = _interp_to_f(
+                    port_modes,
+                    port_modes.outer_dot(port_modes, conjugate=False),
+                    port_interp_spec,
+                    f,
+                ).sel(f=f)
+
         # populate the arrays
         for sweep_index in sweep_indices:
-            if self.simulation._sweep_modes:
-                port_modes = self._port_modes_at_sweep(port_index, sweep_index)
-                port_modes = _force_integration_convention(port_modes, rebase_colocated)
-                if modes_provided:
-                    _, port_modes = modes._interpolated_copies_if_needed(port_modes)
             if modes_provided:
                 # Rebase through the same trial basis smatrix_in_basis uses: drop the
                 # port modes the S-matrix dropped (sweep-truncated or increasing-/
@@ -1188,21 +1139,13 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                     if self.smatrix is not None
                     else None
                 )
-                overlaps = modes.outer_dot(port_modes, conjugate=False)
-                if not modes_present:
-                    overlaps = overlaps.expand_dims(dim={"mode_index_0": [0]}, axis=1)
-                overlaps = _interp_to_f(modes, overlaps, interp_spec, f).sel(f=f)
+                overlaps = overlaps_full
                 if keep_inds is not None:
                     overlaps = overlaps.sel(mode_index_1=keep_inds)
                 if not skip_gram_normalization:
                     # Expansion coefficients d = O @ G_port^{-1} (raw O assumes
                     # orthonormal port modes); G_port in the same Yee convention.
-                    port_gram = _interp_to_f(
-                        port_modes,
-                        port_modes.outer_dot(port_modes, conjugate=False),
-                        port_interp_spec,
-                        f,
-                    ).sel(f=f)
+                    port_gram = port_gram_full
                     if keep_inds is not None:
                         port_gram = port_gram.sel(mode_index_0=keep_inds, mode_index_1=keep_inds)
                     overlaps = _port_expansion_coeffs(overlaps, port_gram)

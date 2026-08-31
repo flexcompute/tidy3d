@@ -209,6 +209,7 @@ from .components.data.data_array import (
     EMEInterfaceDiagnosticDataArray,
     EMEInterfaceSMatrixDataArray,
     EMEModeIndexDataArray,
+    EMEOverlapDataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
@@ -324,7 +325,7 @@ from .components.eme.monitor import (
 
 # EME
 from .components.eme.simulation import EMESimulation
-from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep
+from .components.eme.sweep import EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep
 
 # field projection
 from .components.field_projection import FieldProjector
@@ -708,7 +709,6 @@ __all__ = [
     "EMEFieldDataset",
     "EMEFieldMonitor",
     "EMEFluxDataArray",
-    "EMEFreqSweep",
     "EMEGrid",
     "EMEInterfaceCellIndexDataArray",
     "EMEInterfaceDiagnosticDataArray",
@@ -723,6 +723,7 @@ __all__ = [
     "EMEModeSpec",
     "EMEModeSweep",
     "EMEMonitor",
+    "EMEOverlapDataArray",
     "EMEOverlapDataset",
     "EMEPeriodicitySweep",
     "EMESMatrixDataArray",

@@ -138,6 +138,9 @@ class DataArray(xr.DataArray):
     __slots__ = ()
     # stores an ordered tuple of strings corresponding to the data dimensions
     _dims: tuple[str, ...] = ()
+    # Previous dimensions accepted for legacy serialized or in-memory arrays. Any
+    # dimensions absent from ``_dims`` must be singleton and are normalized away.
+    _legacy_dims: tuple[str, ...] | None = None
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: dict[str, str] = {}
 
@@ -231,7 +234,19 @@ class DataArray(xr.DataArray):
 
     @classmethod
     def _validate_dims(cls, val: Self) -> Self:
-        """Make sure the dims are the same as ``_dims``, then put them in the correct order."""
+        """Normalize supported legacy dimensions, validate them, and order them."""
+        for dim in set(cls._legacy_dims or ()) - set(cls._dims):
+            if dim not in val.dims:
+                continue
+            if val.sizes[dim] != 1:
+                raise ValueError(
+                    f"{cls.__name__} does not support multiple '{dim}' entries. "
+                    f"Only a singleton legacy '{dim}' dimension can be normalized. "
+                    f"Select one '{dim}' entry before constructing this array, or migrate "
+                    "saved legacy result data with an earlier Tidy3D version."
+                )
+            val = val.squeeze(dim=dim, drop=True)
+
         if set(val.dims) != set(cls._dims):
             raise ValueError(
                 f"Wrong dims for {cls.__name__}, expected '{cls._dims}', got '{val.dims}'"
@@ -369,11 +384,15 @@ class DataArray(xr.DataArray):
         """Load a DataArray from an open hdf5 file handle with a given group path."""
         sub_group = f_handle[group_path]
         values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
-        coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
+        dims = cls._dims
+        if cls._legacy_dims is not None and values.ndim == len(cls._legacy_dims):
+            dims = cls._legacy_dims
+        coords = {dim: np.array(sub_group[dim]) for dim in dims if dim in sub_group}
         for key, val in coords.items():
             if val.dtype == "O":
                 coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-        return cls(values, coords=coords, dims=cls._dims)
+        data_array = cls(values, coords=coords, dims=dims)
+        return cls._validate_dims(data_array)
 
     @classmethod
     def from_hdf5(cls, fname: PathLike | h5py.File, group_path: str) -> Self:
@@ -1632,7 +1651,8 @@ class EMEScalarModeFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "sweep_index", "eme_cell_index", "mode_index")
+    _dims = ("x", "y", "z", "f", "eme_cell_index", "mode_index")
+    _legacy_dims = ("x", "y", "z", "f", "sweep_index", "eme_cell_index", "mode_index")
 
 
 class EMEFreqModeDataArray(DataArray):
@@ -1648,7 +1668,8 @@ class EMEFreqModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
+    _dims = ("f", "eme_cell_index", "mode_index")
+    _legacy_dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
 
 
 class EMEScalarFieldDataArray(AbstractSpatialDataArray):
@@ -1753,6 +1774,17 @@ class EMEInterfaceSMatrixDataArray(DataArray):
     _data_attrs = {"long_name": "scattering matrix element"}
 
 
+class EMEOverlapDataArray(DataArray):
+    """Overlap matrix between EME modes in one cell or across one cell interface."""
+
+    __slots__ = ()
+    # Intentionally no ``_legacy_dims``: released overlap blocks retain the historical
+    # EMEInterfaceSMatrixDataArray type and normalize through EMEOverlapDataset. No
+    # released HDF5 file dispatches a legacy block directly to this replacement class.
+    _dims = ("f", "eme_cell_index", "mode_index_out", "mode_index_in")
+    _data_attrs = {"long_name": "mode overlap"}
+
+
 class EMEModeIndexDataArray(DataArray):
     """Complex-valued effective propagation index of an EME mode,
     also indexed by EME cell.
@@ -1767,7 +1799,8 @@ class EMEModeIndexDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
+    _dims = ("f", "eme_cell_index", "mode_index")
+    _legacy_dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
     _data_attrs = {"long_name": "Propagation index"}
 
 
@@ -1777,15 +1810,15 @@ class EMEFluxDataArray(DataArray):
     Example
     -------
     >>> f = [2e14, 3e14]
-    >>> sweep_index = np.arange(2)
     >>> eme_cell_index = np.arange(5)
     >>> mode_index = np.arange(4)
-    >>> coords = dict(f=f, sweep_index=sweep_index, eme_cell_index=eme_cell_index, mode_index=mode_index)
-    >>> data = EMEFluxDataArray(np.random.random((2,2,5,4)), coords=coords)
+    >>> coords = dict(f=f, eme_cell_index=eme_cell_index, mode_index=mode_index)
+    >>> data = EMEFluxDataArray(np.random.random((2,5,4)), coords=coords)
     """
 
     __slots__ = ()
-    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
+    _dims = ("f", "eme_cell_index", "mode_index")
+    _legacy_dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
     _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
@@ -2548,6 +2581,7 @@ DATA_ARRAY_TYPES = [
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
     EMEInterfaceSMatrixDataArray,
+    EMEOverlapDataArray,
     EMECoefficientDataArray,
     EMEModeIndexDataArray,
     EMEFluxDataArray,
