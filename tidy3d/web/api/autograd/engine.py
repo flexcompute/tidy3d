@@ -6,9 +6,10 @@ from typing import Any
 import tidy3d as td
 from tidy3d.components.autograd.field_map import TracerKeys
 from tidy3d.components.workflow import Workflow
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, WebError
 from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
+from tidy3d.web.api.states import ERROR_STATES
 
 from .constants import SIM_FIELDS_KEYS_FILE
 from .io_utils import get_cached_vjp_traced_fields, get_vjp_traced_fields
@@ -54,6 +55,33 @@ def _with_result_cache_disabled(batch: Batch) -> Batch:
         )
         jobs[task_name] = job.updated_copy(workflow=workflow, deep=False)
     return batch.updated_copy(jobs_cached=jobs, deep=False)
+
+
+def _raise_for_failed_batch_tasks(batch: Batch, *, operation: str) -> None:
+    """Raise with task details when a monitored autograd batch contains failures."""
+    failed_tasks = []
+    for task_name, status in batch._terminal_status_by_task.items():
+        if status not in ERROR_STATES:
+            continue
+        task_id = batch.jobs[task_name].task_id
+        try:
+            webapi.get_status(task_id)
+        except WebError as exc:
+            reason = str(exc)
+        except Exception:
+            reason = "Error details could not be obtained."
+        else:
+            reason = "The server did not provide an error message."
+        failed_tasks.append((task_name, task_id, status, reason))
+
+    if not failed_tasks:
+        return
+
+    details = "; ".join(
+        f"'{task_name}' (task_id={task_id}, status={status}): {reason}"
+        for task_name, task_id, status, reason in failed_tasks
+    )
+    raise WebError(f"{operation} task(s) failed: {details}")
 
 
 def _run_tidy3d(
@@ -135,6 +163,9 @@ def _run_async_tidy3d(
             ignore_memory_limit=ignore_memory_limit,
         )
 
+    if run_kwargs.get("is_adjoint", False):
+        _raise_for_failed_batch_tasks(batch, operation="Adjoint simulation")
+
     task_ids = getattr(batch_data, "task_ids", None)
     if task_ids is None:
         task_ids = {key: job.task_id for key, job in batch.jobs.items()}
@@ -178,6 +209,7 @@ def _run_async_tidy3d_bwd(
         priority=priority, vgpu_allocation=vgpu_allocation, ignore_memory_limit=ignore_memory_limit
     )
     batch.monitor()
+    _raise_for_failed_batch_tasks(batch, operation="Adjoint simulation")
 
     for task_name, job in batch.jobs.items():
         task_id = job.task_id
