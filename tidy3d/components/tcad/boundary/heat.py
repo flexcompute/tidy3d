@@ -43,15 +43,32 @@ class TemperatureBC(HeatChargeBC):
 class HeatFluxBC(HeatChargeBC):
     """Constant flux thermal boundary conditions.
 
+    Notes
+    -----
+
+    The boundary carries the prescribed heat flux
+
+    .. math::
+
+        q = -k \\frac{\\partial T}{\\partial n} = \\text{flux},
+
+    where :math:`k` is the thermal conductivity and :math:`n` the **outward** normal.
+    :math:`q` is therefore the heat *leaving* the domain through the boundary: a positive
+    ``flux`` extracts heat and a negative ``flux`` deposits heat. This is the same sign
+    convention used by every other thermal boundary condition (:class:`ConvectionBC`,
+    :class:`RadiationBC`, :class:`ThermalContactResistance`), whose fluxes are also
+    positive when heat leaves the solid.
+
     Example
     -------
     >>> import tidy3d as td
-    >>> bc = td.HeatFluxBC(flux=1)
+    >>> bc = td.HeatFluxBC(flux=1)  # extracts 1 W/um^2 from the domain
     """
 
     flux: float = Field(
         title="Heat Flux",
-        description="Heat flux value.",
+        description="Heat flux leaving the domain through the boundary. A positive value "
+        "extracts heat from the domain; use a negative value to deposit heat into it.",
         json_schema_extra={"units": HEAT_FLUX},
     )
 
@@ -130,6 +147,26 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
 class ConvectionBC(HeatChargeBC):
     """Convective thermal boundary conditions.
 
+    Notes
+    -----
+
+    The boundary exchanges the heat flux
+
+    .. math::
+
+        q = h \\left( T - T_\\text{amb} \\right),
+
+    where :math:`h` is a constant ``transfer_coeff`` and :math:`T_\\text{amb}` is
+    ``ambient_temperature``. A ``transfer_coeff`` given as a
+    :class:`VerticalNaturalConvectionCoeffModel` instead follows that class's
+    linear-plus-power law in :math:`T - T_\\text{amb}`, not this single coefficient.
+
+    Either way :math:`q` is the heat leaving the domain, as for every thermal boundary
+    condition, so a surface hotter than the ambient is cooled; equivalently
+    :math:`-k \\partial T / \\partial n = q` with :math:`n` the **outward** normal. When
+    ``emissivity`` is set, the radiative term of :class:`RadiationBC` is added to :math:`q`
+    with the same convention.
+
     Example
     -------
     >>> import tidy3d as td
@@ -171,7 +208,11 @@ class ConvectionBC(HeatChargeBC):
 
     transfer_coeff: NonNegativeFloat | VerticalNaturalConvectionCoeffModel = Field(
         title="Heat Transfer Coefficient",
-        description="Heat transfer coefficient value.",
+        description="Heat transfer coefficient value. A constant coefficient gives the "
+        "convective flux ``transfer_coeff * (T - ambient_temperature)``, while a "
+        ":class:`VerticalNaturalConvectionCoeffModel` gives that class's "
+        "linear-plus-power law. Either way the flux leaves the domain, so a surface hotter "
+        "than ``ambient_temperature`` is cooled.",
         json_schema_extra={"units": HEAT_TRANSFER_COEFF},
     )
 
