@@ -90,7 +90,7 @@ To get started, our documentation has a lot of [examples](https://docs.flexcompu
 
 ## FlexAgent MCP
 
-FlexAgent connects AI clients to Tidy3D through the Model Context Protocol (MCP). For AI coding agents, install the Tidy3D plugin from the Flexcompute plugin marketplace. The plugin provides Tidy3D guidance and MCP registration; for now, configure MCP clients to launch the Python package runtime through `uvx tidy3d mcp`.
+FlexAgent connects AI clients to Tidy3D through the Model Context Protocol (MCP). For AI coding agents, install the Tidy3D plugin from the Flexcompute plugin marketplace. The plugin provides Tidy3D guidance and MCP registration backed by the independently released `tidy3d-mcp` runtime.
 
 **Claude Code**
 
@@ -125,10 +125,16 @@ uvx tidy3d configure
 
 You can also set `SIMCLOUD_APIKEY` instead of running the configure command.
 
-For advanced manual MCP setup, launch the server directly:
+For advanced manual MCP setup, use Tidy3D's integrated command. It delegates to the same runtime shipped by `tidy3d-mcp` and forwards all remaining command-line arguments:
 
 ```bash
 uvx tidy3d mcp
+```
+
+If you install the standalone runtime package directly, its equivalent command is:
+
+```bash
+tidy3d-mcp
 ```
 
 For raw MCP client config, run the same command:

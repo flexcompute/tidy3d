@@ -47,7 +47,7 @@ dependencies = [
   "joblib>=1.5.3,<2.0.0",
   "typing-extensions>=4.15.0,<5.0.0",
   "filelock>=3.20.1,<4.0.0",
-  "fastmcp>=3.4.4,<4",
+  "tidy3d-mcp==0.16.7",
 ]
 
 [project.urls]
@@ -229,7 +229,7 @@ design = [
 extras = ["tidy3d-extras==2.13.0.dev0"]
 
 [project.scripts]
-tidy3d = "tidy3d.web.cli:tidy3d_cli"
+tidy3d = "tidy3d.web.cli:main"
 
 [tool.uv]
 required-version = ">=0.9.8"

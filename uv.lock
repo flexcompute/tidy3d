@@ -6992,7 +6992,6 @@ dependencies = [
     { name = "cryptography", version = "48.0.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "cryptography", version = "50.0.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "dask" },
-    { name = "fastmcp" },
     { name = "filelock" },
     { name = "h5netcdf" },
     { name = "h5py" },
@@ -7016,6 +7015,7 @@ dependencies = [
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "shapely" },
+    { name = "tidy3d-mcp" },
     { name = "toml" },
     { name = "tomlkit" },
     { name = "typing-extensions" },
@@ -7231,7 +7231,6 @@ requires-dist = [
     { name = "diff-cover", marker = "extra == 'dev'", specifier = ">=10.1.0,<11.0.0" },
     { name = "dill", marker = "extra == 'dev'", specifier = ">=0.4.0,<0.5.0" },
     { name = "dill", marker = "extra == 'notebooks'", specifier = ">=0.4.0,<0.5.0" },
-    { name = "fastmcp", specifier = ">=3.4.4,<4" },
     { name = "filelock", specifier = ">=3.20.1,<4.0.0" },
     { name = "flex-em", specifier = "==0.1.0", index = "https://flexcompute-625554095313.d.codeartifact.us-east-1.amazonaws.com/pypi/pypi-releases/simple/" },
     { name = "gdstk", marker = "extra == 'dev'", specifier = ">=0.9.49,<1.1" },
@@ -7363,6 +7362,7 @@ requires-dist = [
     { name = "sphinxemoji", marker = "extra == 'dev'", specifier = ">=0.3.2,<0.4.0" },
     { name = "sphinxemoji", marker = "extra == 'docs'", specifier = ">=0.3.2,<0.4.0" },
     { name = "tidy3d-extras", marker = "extra == 'extras'", specifier = "==2.13.0.dev0", index = "https://flexcompute-625554095313.d.codeartifact.us-east-1.amazonaws.com/pypi/pypi-releases/simple/" },
+    { name = "tidy3d-mcp", specifier = "==0.16.7" },
     { name = "tmm", marker = "extra == 'dev'", specifier = ">=0.2.0,<0.3.0" },
     { name = "tmm", marker = "extra == 'docs'", specifier = ">=0.2.0,<0.3.0" },
     { name = "tmm", marker = "extra == 'notebooks'", specifier = ">=0.2.0,<0.3.0" },
@@ -7398,6 +7398,20 @@ requires-dist = [
     { name = "zizmor", marker = "extra == 'dev'", specifier = ">=1.20.0,<2.0.0" },
 ]
 provides-extras = ["dev", "tests", "docs", "notebooks", "gdstk", "scikit-rf", "trimesh", "vtk", "pyvista", "ruff", "heatcharge", "pytorch", "design", "extras"]
+
+[[package]]
+name = "tidy3d-mcp"
+version = "0.16.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastmcp" },
+    { name = "tomli" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/86/2f59b4a232914ac0894fbd2062a28d15a4861ea82abf3a1e28ea2accc5cd/tidy3d_mcp-0.16.7.tar.gz", hash = "sha256:3b0938619fae08d2c462661c7cab1f59e9918080b6e3e90f9a3a5aa0486f6e4f", size = 24226, upload-time = "2026-08-28T16:41:56.923Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/27/d3c9f61add377a7eca33e320cc56a3b00b7692eabdf04e08270ad29486b9/tidy3d_mcp-0.16.7-py3-none-any.whl", hash = "sha256:f73513731cfad8772e66c1c62161e1cf42bf9dcc89d468a636fc6c77e62a45f1", size = 31936, upload-time = "2026-08-28T16:41:56.063Z" },
+]
 
 [[package]]
 name = "tifffile"
