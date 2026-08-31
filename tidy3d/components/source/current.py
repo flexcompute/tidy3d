@@ -155,7 +155,7 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
 
     **Notebooks**
         * `Particle swarm optimization of quantum emitter light extraction to free space <../../notebooks/BullseyeCavityPSO.html>`_
-        * `Adjoint optimization of quantum emitter light extraction to an integrated waveguide <../../notebooks/AdjointPlugin12LightExtractor.html>`_
+        * `Adjoint optimization of quantum emitter light extraction to an integrated waveguide <../../notebooks/Autograd12LightExtractor.html>`_
     """
 
     size: tuple[Literal[0], Literal[0], Literal[0]] = Field(

@@ -375,11 +375,8 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    `Lumped Elements <../lumped_elements.html>`_:
+    `Lumped Elements <../microwave/ports/lumped.html>`_:
         Available lumped element types.
-
-    **Notebooks:**
-        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
     grid_spec: GridSpec = Field(

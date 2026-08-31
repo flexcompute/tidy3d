@@ -48,7 +48,7 @@ Note that different :class:`.LayerRefinementSpec` instances are recommended for 
 
    For more explanation and examples, please refer to the following pages:
 
-   + `Grid Discretization <../discretization.html>`_
+   + `Grid Discretization <../discretization/index.html>`_
    + `Automatic mesh refinement in layered structures <../../notebooks/LayerRefinement.html>`_
 
    Example applications in Flex RF:

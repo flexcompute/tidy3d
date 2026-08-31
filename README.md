@@ -10,7 +10,7 @@ Name](https://img.shields.io/badge/pypi-tidy3d-blue?style=for-the-badge)](https:
 
 [![Notebooks](https://img.shields.io/badge/Demo-Live%20notebooks-8A2BE2?style=for-the-badge)](https://github.com/flexcompute/tidy3d-notebooks)
 
-![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/Tidy3D-logo.svg)
+![](https://docs.flexcompute.com/projects/tidy3d/en/latest/_static/img/Tidy3D-logo.svg)
 
 Tidy3D is a software package for solving extremely large electrodynamics problems using the finite-difference time-domain (FDTD) method. It can be controlled through either an [open source python package](https://github.com/flexcompute/tidy3d) or a [web-based graphical user interface](https://tidy3d.simulation.cloud).
 
@@ -21,7 +21,7 @@ This repository contains the python API to allow you to:
 * Submit and manage simulations running on Flexcompute's servers.
 * Download and postprocess the results from the simulations.
 
-![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/snippet.png)
+![](https://docs.flexcompute.com/projects/tidy3d/en/latest/_static/img/snippet.png)
 
 ## Installation
 

@@ -109,7 +109,7 @@ More complicated polyslabs with potentially self-intersecting behavior can be mo
 
    For more details and examples, please see the following learning center articles:
 
-   + `Defining self-intersection polygons <../notebooks/SelfIntersectingPolySlab.html>`_
+   + `Defining self-intersection polygons <../notebooks/SelfIntersectingPolyslab.html>`_
    + `Visualizing geometries in Tidy3D <../notebooks/VizSimulation.html>`_
 
 ~~~~

@@ -35,9 +35,8 @@ Behind the scenes, the desired mode is initially obtained by running the mode so
    For more detailed explanation and examples, please see the following learning center resources:
 
    + `Defining mode sources and monitors <../notebooks/ModalSourcesMonitors.html>`_
-   + `Injecting modes in bent and angled waveguides <../notebooks/ModeBentAngled.html>`_
+   + `Injecting modes in bent and angled waveguides <../notebooks/ModesBentAngled.html>`_
 
    For a short introduction to the use of mode sources, see the following FDTD101 lecture:
 
    + `Mode injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
-

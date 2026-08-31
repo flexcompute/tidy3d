@@ -1995,12 +1995,6 @@ class LinearLumpedElement(RectangularLumpedElement):
     ...                         name="LumpedRL"
     ...                   )
 
-
-    See Also
-    --------
-
-    **Notebooks:**
-        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
     network: NetworkType = Field(
@@ -2026,16 +2020,11 @@ class LinearLumpedElement(RectangularLumpedElement):
 
     When using a :attr:`dist_type` other than ``on`` additional parasitic network elements are
     introduced, see below. Thin connections lead to a higher inductance, while wide connections
-    lead to a higher parasitic capacitance. Follow the link to the associated notebook for an example
-    of using this field.
+    lead to a higher parasitic capacitance.
 
     .. image:: /_static/img/lumped_dist_type.png
         :width: 50%
 
-    See Also
-    --------
-    **Notebooks:**
-        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
     def _create_box_for_network(self, grid: Grid) -> Box:

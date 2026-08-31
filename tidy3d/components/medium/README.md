@@ -1,6 +1,6 @@
 # Electromagnetic media
 
-This package contains the electromagnetic material models exposed through `tidy3d` and the eager `tidy3d.components.medium` compatibility facade. Thermal, charge, and combined multiphysics material helpers live in the sibling [`material`](../material/) package.
+This package contains the electromagnetic material models exposed through `tidy3d` and the eager `tidy3d.components.medium` compatibility facade. Thermal, charge, and combined multiphysics material helpers live in the sibling [`material`](../material/README.md) package.
 
 The modules are organized by model family:
 

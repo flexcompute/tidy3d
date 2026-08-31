@@ -147,7 +147,7 @@ For example, if my data contains `x,y,z,f,mode_index` data, I might need to supp
 
 ### JSON
 
-`SimulationData` and `MontorData` objects inherit directly from `Tidy3dBaseModel` and can be written directly to json. `DataArray` objects can also be written to json as we define a json encoder that uses [`xarray.DataArray.to_dict()`](https://docs.xarray.dev/en/stable/generated/xarray.DataArray.to_dict.html`). Therefore, an entire `SimulationData`, `MonitorData`, or `DataArray` object can be written to json without issue.
+`SimulationData` and `MontorData` objects inherit directly from `Tidy3dBaseModel` and can be written directly to json. `DataArray` objects can also be written to json as we define a json encoder that uses [`xarray.DataArray.to_dict()`](https://docs.xarray.dev/en/stable/generated/xarray.DataArray.to_dict.html). Therefore, an entire `SimulationData`, `MonitorData`, or `DataArray` object can be written to json without issue.
 
 ### HDF5
 
