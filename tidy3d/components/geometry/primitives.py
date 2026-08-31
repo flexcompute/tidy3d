@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import autograd.numpy as anp
 import numpy as np
@@ -30,9 +30,13 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
+
+# canonical adjoint sample-set key for the sphere surface vertex samples
+_SPHERE_SURFACE_KEY = ("surface_vertices",)
 
 # for shapely circular shapes discretization in visualization
 _N_SHAPELY_QUAD_SEGS_VISUALIZATION = 200
@@ -105,6 +109,35 @@ def discretization_wavelength(derivative_info: DerivativeInfo, geometry_label: s
         f"Geometry VJP sampling for {geometry_label} requires "
         "`resolved_material_wavelength` in DerivativeInfo."
     )
+
+
+class _CollapsedAxisCylinder(NamedTuple):
+    """Equivalent-cylinder setup for a sphere's collapsed-axis (planar) case.
+
+    Produced by ``Sphere._collapsed_axis_cylinder`` and shared by sample-set
+    generation and consumption so both build the identical cylinder.
+    """
+
+    cylinder: Cylinder
+    """Equivalent cylinder through the sphere's cross section at the plane."""
+
+    cyl_paths: set[tuple]
+    """Cylinder derivative paths implied by the requested sphere paths."""
+
+    need_radius: bool
+    """Whether any requested sphere path consumes the cylinder radius gradient."""
+
+    delta: float
+    """Signed offset of the plane from the sphere center along the collapsed axis."""
+
+    radius_plane: float
+    """Radius of the sphere's cross section in the plane."""
+
+    bounds: Bound
+    """Bounds of the equivalent cylinder's cross section."""
+
+    bounds_intersect: Bound
+    """Intersection of ``bounds`` with the simulation domain."""
 
 
 class Sphere(base.Centered, base.Circular):
@@ -337,10 +370,28 @@ class Sphere(base.Centered, base.Circular):
         )
         return unit_tris
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives using smooth sphere surface samples."""
-        if not derivative_info.paths:
-            return {}
+    @staticmethod
+    def _collapsed_axis_from_simulation_bounds(
+        simulation_bounds: Bound,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Indices of collapsed simulation axes and the simulation min bounds."""
+        tol = config.adjoint.edge_clip_tolerance
+        sim_min, sim_max = (np.asarray(arr, dtype=float) for arr in simulation_bounds)
+        collapsed_indices = np.flatnonzero(np.isclose(sim_max - sim_min, 0.0, atol=tol))
+        return collapsed_indices, sim_min
+
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate surface vertex samples under the canonical ``("surface_vertices",)`` key.
+
+        One triangulated-surface set serves the ``radius`` and all ``center`` paths;
+        an explicit empty set means zero gradients (zero radius, fully clipped
+        surface, or a doubly-collapsed simulation). For a singly-collapsed (planar)
+        simulation, generation delegates to the equivalent ``Cylinder`` cross
+        section, whose canonical keys are used instead.
+        """
+        from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
 
         grid_cfg = config.adjoint
         radius = float(get_static(self.radius))
@@ -349,31 +400,47 @@ class Sphere(base.Centered, base.Circular):
                 "Sphere gradients cannot be computed for zero radius; gradients are zero.",
                 log_once=True,
             )
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return {_SPHERE_SURFACE_KEY: SurfaceSampleSet.empty()}
 
-        wvl_mat = discretization_wavelength(derivative_info, "sphere")
+        if ctx.material_wavelength is None:
+            raise AdjointError(
+                "'Sphere' adjoint sample-set generation requires 'material_wavelength' on "
+                "the sampling context."
+            )
+
+        collapsed_indices, sim_min_collapsed = self._collapsed_axis_from_simulation_bounds(
+            ctx.simulation_bounds
+        )
+        if collapsed_indices.size:
+            if collapsed_indices.size > 1:
+                return {_SPHERE_SURFACE_KEY: SurfaceSampleSet.empty()}
+            axis_idx = int(collapsed_indices[0])
+            plane_value = float(sim_min_collapsed[axis_idx])
+            collapsed_setup = self._collapsed_axis_cylinder(
+                paths=paths,
+                axis_idx=axis_idx,
+                plane_value=plane_value,
+                material_wavelength=ctx.material_wavelength,
+                simulation_bounds=ctx.simulation_bounds,
+            )
+            if collapsed_setup is None:
+                return {_SPHERE_SURFACE_KEY: SurfaceSampleSet.empty()}
+            ctx_cyl = ctx.updated_copy(
+                bounds=collapsed_setup.bounds, bounds_intersect=collapsed_setup.bounds_intersect
+            )
+            return collapsed_setup.cylinder._make_adjoint_sample_sets(
+                paths=sorted(collapsed_setup.cyl_paths, key=str), ctx=ctx_cyl
+            )
+
+        wvl_mat = ctx.material_wavelength
         target_edge = max(wvl_mat / grid_cfg.points_per_wavelength, np.finfo(float).eps)
         triangles, _ = self._triangulated_surface(max_edge_length=target_edge)
         triangles = triangles.astype(grid_cfg.gradient_dtype_float, copy=False)
 
         sim_min, sim_max = (
-            np.asarray(arr, dtype=grid_cfg.gradient_dtype_float)
-            for arr in derivative_info.simulation_bounds
+            np.asarray(arr, dtype=grid_cfg.gradient_dtype_float) for arr in ctx.simulation_bounds
         )
         tol = config.adjoint.edge_clip_tolerance
-
-        sim_extents = sim_max - sim_min
-        collapsed_indices = np.flatnonzero(np.isclose(sim_extents, 0.0, atol=tol))
-        if collapsed_indices.size:
-            if collapsed_indices.size > 1:
-                return dict.fromkeys(derivative_info.paths, 0.0)
-            axis_idx = int(collapsed_indices[0])
-            plane_value = float(sim_min[axis_idx])
-            return self._compute_derivatives_collapsed_axis(
-                derivative_info=derivative_info,
-                axis_idx=axis_idx,
-                plane_value=plane_value,
-            )
 
         trimesh_obj = TriangleMesh._triangles_to_trimesh(triangles)
         vertices = np.asarray(trimesh_obj.vertices, dtype=grid_cfg.gradient_dtype_float)
@@ -384,7 +451,7 @@ class Sphere(base.Centered, base.Circular):
         normals = verts_centered / norms
 
         if vertices.size == 0:
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return {_SPHERE_SURFACE_KEY: SurfaceSampleSet.empty()}
 
         # get vertex weights
         faces = np.asarray(trimesh_obj.faces, dtype=int)
@@ -402,34 +469,69 @@ class Sphere(base.Centered, base.Circular):
         ) & np.all(vertices[:, valid_axes] <= (sim_max + tol)[valid_axes], axis=1)
 
         if not np.any(inside_mask):
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return {_SPHERE_SURFACE_KEY: SurfaceSampleSet.empty()}
 
-        points = vertices[inside_mask]
-        normals_sel = normals[inside_mask]
-        perp1_sel = perp1[inside_mask]
-        perp2_sel = perp2[inside_mask]
-        weights_sel = weights[inside_mask]
+        sample_set = SurfaceSampleSet.from_arrays(
+            points=vertices[inside_mask],
+            normals=normals[inside_mask],
+            perps1=perp1[inside_mask],
+            perps2=perp2[inside_mask],
+            weights=weights[inside_mask],
+            serves_paths=(("radius",), ("center", 0), ("center", 1), ("center", 2)),
+        )
+        return {_SPHERE_SURFACE_KEY: sample_set}
 
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Compute radius/center derivatives from pre-generated surface samples."""
+        if not paths:
+            return {}
+
+        collapsed_indices, sim_min_collapsed = self._collapsed_axis_from_simulation_bounds(
+            derivative_info.simulation_bounds
+        )
+        if collapsed_indices.size:
+            if collapsed_indices.size > 1:
+                return dict.fromkeys(paths, 0.0)
+            axis_idx = int(collapsed_indices[0])
+            plane_value = float(sim_min_collapsed[axis_idx])
+            return self._collapsed_axis_vjps_from_sample_sets(
+                sample_sets=sample_sets,
+                paths=paths,
+                derivative_info=derivative_info,
+                axis_idx=axis_idx,
+                plane_value=plane_value,
+            )
+
+        if _SPHERE_SURFACE_KEY not in sample_sets:
+            raise AdjointError(
+                f"'Sphere' sample sets are missing the canonical {_SPHERE_SURFACE_KEY} key; "
+                f"got keys {tuple(sample_sets)}."
+            )
+        sample_set = sample_sets[_SPHERE_SURFACE_KEY]
+        if sample_set.num_points == 0:
+            return dict.fromkeys(paths, 0.0)
+
+        grid_cfg = config.adjoint
         interpolators = derivative_info.interpolators
         if interpolators is None:
             interpolators = derivative_info.create_interpolators(
                 dtype=grid_cfg.gradient_dtype_float
             )
 
-        g = derivative_info.evaluate_gradient_at_points(
-            points,
-            normals_sel,
-            perp1_sel,
-            perp2_sel,
-            interpolators,
-        )
+        g = sample_set.evaluate(derivative_info, interpolators=interpolators)
 
-        weighted = (weights_sel * g).real
+        normals_sel = sample_set.normals.values
+        weighted = (sample_set.weights.values * g).real
         grad_center = np.sum(weighted[:, None] * normals_sel, axis=0)
         grad_radius = np.sum(weighted)
 
         vjps: AutogradFieldMap = {}
-        for path in derivative_info.paths:
+        for path in paths:
             if path == ("radius",):
                 vjps[path] = float(grad_radius)
             else:
@@ -438,28 +540,35 @@ class Sphere(base.Centered, base.Circular):
 
         return vjps
 
-    def _compute_derivatives_collapsed_axis(
+    def _collapsed_axis_cylinder(
         self,
-        derivative_info: DerivativeInfo,
+        paths: list[PathType],
         axis_idx: int,
         plane_value: float,
-    ) -> AutogradFieldMap:
-        """Delegate collapsed-axis gradients to a Cylinder cross section."""
+        material_wavelength: float,
+        simulation_bounds: Bound,
+    ) -> _CollapsedAxisCylinder | None:
+        """Equivalent-cylinder setup for the collapsed-axis (planar) case.
+
+        Returns ``None`` when the plane misses the sphere, no requested path maps to
+        the cylinder, or the cylinder's cross section leaves the simulation domain —
+        all of which yield zero gradients.
+        """
         tol = config.adjoint.edge_clip_tolerance
         radius = float(self.radius)
         center = np.asarray(self.center, dtype=float)
         delta = plane_value - center[axis_idx]
         radius_sq = radius**2 - delta**2
         if radius_sq <= tol**2:
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return None
 
         radius_plane = float(np.sqrt(max(radius_sq, 0.0)))
         if radius_plane <= tol:
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return None
 
         cyl_paths: set[tuple[str, int | None]] = set()
         need_radius = False
-        for path in derivative_info.paths:
+        for path in paths:
             if path == ("radius",) or path == ("center", axis_idx):
                 cyl_paths.add(("radius",))
                 need_radius = True
@@ -467,14 +576,14 @@ class Sphere(base.Centered, base.Circular):
                 cyl_paths.add(("center", path[1]))
 
         if not cyl_paths:
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return None
 
         cyl_center = center.copy()
         cyl_center[axis_idx] = plane_value
         cylinder = Cylinder(
             center=tuple(cyl_center),
             radius=radius_plane,
-            length=discretization_wavelength(derivative_info, "sphere") * 2.0,
+            length=material_wavelength * 2.0,
             axis=axis_idx,
         )
 
@@ -487,29 +596,63 @@ class Sphere(base.Centered, base.Circular):
             bounds_max[dim] = center[dim] + radius_plane
 
         bounds = (tuple(bounds_min), tuple(bounds_max))
-        sim_min_arr, sim_max_arr = (
-            np.asarray(arr, dtype=float) for arr in derivative_info.simulation_bounds
-        )
+        sim_min_arr, sim_max_arr = (np.asarray(arr, dtype=float) for arr in simulation_bounds)
         intersect_min = tuple(max(bounds[0][i], sim_min_arr[i]) for i in range(3))
         intersect_max = tuple(min(bounds[1][i], sim_max_arr[i]) for i in range(3))
         if any(lo > hi for lo, hi in zip(intersect_min, intersect_max)):
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return None
 
-        derivative_info_cyl = derivative_info.updated_copy(
-            paths=list(cyl_paths),
+        return _CollapsedAxisCylinder(
+            cylinder=cylinder,
+            cyl_paths=cyl_paths,
+            need_radius=need_radius,
+            delta=delta,
+            radius_plane=radius_plane,
             bounds=bounds,
             bounds_intersect=(intersect_min, intersect_max),
         )
 
-        vjps_cyl = cylinder._compute_derivatives(derivative_info_cyl)
-        result = dict.fromkeys(derivative_info.paths, 0.0)
-        vjp_radius = float(vjps_cyl.get(("radius",), 0.0)) if need_radius else 0.0
+    def _collapsed_axis_vjps_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+        axis_idx: int,
+        plane_value: float,
+    ) -> AutogradFieldMap:
+        """Consume collapsed-axis sample sets through the equivalent cylinder."""
+        collapsed_setup = self._collapsed_axis_cylinder(
+            paths=paths,
+            axis_idx=axis_idx,
+            plane_value=plane_value,
+            material_wavelength=discretization_wavelength(derivative_info, "sphere"),
+            simulation_bounds=derivative_info.simulation_bounds,
+        )
+        if collapsed_setup is None:
+            return dict.fromkeys(paths, 0.0)
 
-        for path in derivative_info.paths:
+        cyl_paths_sorted = sorted(collapsed_setup.cyl_paths, key=str)
+        derivative_info_cyl = derivative_info.updated_copy(
+            paths=cyl_paths_sorted,
+            bounds=collapsed_setup.bounds,
+            bounds_intersect=collapsed_setup.bounds_intersect,
+        )
+        vjps_cyl = collapsed_setup.cylinder._compute_derivatives_from_sample_sets(
+            sample_sets=sample_sets,
+            paths=cyl_paths_sorted,
+            derivative_info=derivative_info_cyl,
+        )
+
+        radius = float(self.radius)
+        radius_plane = collapsed_setup.radius_plane
+        result = dict.fromkeys(paths, 0.0)
+        vjp_radius = float(vjps_cyl.get(("radius",), 0.0)) if collapsed_setup.need_radius else 0.0
+
+        for path in paths:
             if path == ("radius",):
                 result[path] = vjp_radius * (radius / radius_plane)
             elif path == ("center", axis_idx):
-                result[path] = vjp_radius * (delta / radius_plane)
+                result[path] = vjp_radius * (collapsed_setup.delta / radius_plane)
             elif path[0] == "center" and path[1] != axis_idx:
                 result[path] = float(vjps_cyl.get(("center", path[1]), 0.0))
 
@@ -752,27 +895,22 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
-
-        # compute circumference discretization
-        wvl_mat = discretization_wavelength(derivative_info, "cylinder")
-
+    def _num_pts_circumference(self, material_wavelength: float) -> int:
+        """Circumference discretization count for the equivalent polyslab."""
         circumference = 2 * np.pi * self.radius
-        wvls_in_circumference = circumference / wvl_mat
-
-        grid_cfg = config.adjoint
-        num_pts_circumference = int(np.ceil(grid_cfg.points_per_wavelength * wvls_in_circumference))
+        wvls_in_circumference = circumference / material_wavelength
+        num_pts_circumference = int(
+            np.ceil(config.adjoint.points_per_wavelength * wvls_in_circumference)
+        )
         num_pts_circumference = max(3, num_pts_circumference)
         # Preserve antipodal and coordinate-axis reflection pairs in the circle quadrature.
         num_pts_circumference += num_pts_circumference % 2
+        return num_pts_circumference
 
-        # construct equivalent polyslab and compute the derivatives
-        polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
-
-        # build PolySlab derivative paths based on requested Cylinder paths
+    def _polyslab_derivative_paths(self, paths: list[PathType]) -> set[PathType]:
+        """Map requested Cylinder derivative paths to equivalent PolySlab paths."""
         ps_paths = set()
-        for path in derivative_info.paths:
+        for path in paths:
             if path == ("length",):
                 ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
             elif path == ("radius",):
@@ -786,20 +924,77 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                     ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
             elif path == ("sidewall_angle",):
                 ps_paths.add(("sidewall_angle",))
+        return ps_paths
 
-        # pass interpolators to PolySlab if available to avoid redundant conversions
-        update_kwargs = {
-            "paths": list(ps_paths),
-            "deep": False,
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate sample sets through the equivalent polyslab.
+
+        The canonical keys are the equivalent polyslab's keys. The circumference
+        discretization count is stamped into every set's metadata so consumption can
+        rebuild the identical polyslab: recomputing it from backward-pass data could
+        drift from the generation-time discretization and silently corrupt the
+        vertex-to-parameter scatter.
+        """
+        if ctx.material_wavelength is None:
+            raise AdjointError(
+                "'Cylinder' adjoint sample-set generation requires 'material_wavelength' on "
+                "the sampling context."
+            )
+        num_pts_circumference = self._num_pts_circumference(ctx.material_wavelength)
+        polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
+        ps_paths = sorted(self._polyslab_derivative_paths(paths), key=str)
+
+        from tidy3d.flex_em.translate.sample_sets import circular_cross_section_metadata
+
+        sample_sets = polyslab._make_adjoint_sample_sets(paths=ps_paths, ctx=ctx)
+        # every non-empty polyslab set carries typed metadata; empty sets carry none and
+        # are skipped by every consumption path, so only non-empty sets are stamped
+        return {
+            key: (
+                sample_set.updated_copy(
+                    metadata=circular_cross_section_metadata(
+                        sample_set.metadata, num_pts_circumference
+                    )
+                )
+                if sample_set.num_points > 0
+                else sample_set
+            )
+            for key, sample_set in sample_sets.items()
         }
-        if derivative_info.interpolators is not None:
-            update_kwargs["interpolators"] = derivative_info.interpolators
 
-        derivative_info_polyslab = derivative_info.updated_copy(**update_kwargs)
-        vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Compute cylinder derivatives by consuming the equivalent polyslab's sets."""
+        ps_paths = sorted(self._polyslab_derivative_paths(paths), key=str)
+
+        # every non-empty set was stamped at generation; all-empty sets are generation's
+        # explicit statement that nothing contributes, so no polyslab needs rebuilding
+        first_set = next((ss for ss in sample_sets.values() if ss.num_points > 0), None)
+        if first_set is None:
+            return dict.fromkeys(paths, 0.0)
+        from tidy3d.flex_em.translate.sample_sets import (
+            CircularCrossSectionMetadataBase,
+            typed_sample_set_metadata,
+        )
+
+        metadata = typed_sample_set_metadata(
+            first_set, CircularCrossSectionMetadataBase, "Cylinder"
+        )
+        num_pts_circumference = metadata.num_pts_circumference
+
+        polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
+        vjps_polyslab = polyslab._compute_derivatives_from_sample_sets(
+            sample_sets=sample_sets, paths=list(ps_paths), derivative_info=derivative_info
+        )
 
         vjps = {}
-        for path in derivative_info.paths:
+        for path in paths:
             if path == ("length",):
                 vjp_bottom = vjps_polyslab.get(("slab_bounds", 0), 0.0)
                 vjp_top = vjps_polyslab.get(("slab_bounds", 1), 0.0)

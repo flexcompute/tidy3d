@@ -14,6 +14,13 @@ SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 SIM_FWD_DATA_FILE = "output/autograd_fwd_data.hdf5"
 SIM_FWD_FLUX_DATA_FILE = "output/autograd_fwd_flux_data.hdf5"
 SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
+SAMPLE_SETS_FILE = "autograd_sample_sets.hdf5"
+
+# Local-cache metadata flag recorded on autograd forward entries whose upload included
+# the sample-set sidecar. Restores for remote gradients require it, so cache entries
+# written by pre-sidecar clients (reachable when version strings collide, e.g. dev
+# builds) are treated as misses instead of producing an unusable backward parent.
+AUTOGRAD_SIDECAR_CACHE_FLAG = "autograd_sidecar_uploaded"
 
 FLUX_MONITOR_ADJOINT_DOCS = (
     "https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/"

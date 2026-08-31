@@ -22,7 +22,7 @@ from tidy3d.web.cache import resolve_local_cache
 
 from . import hooks
 from .backward import postprocess_adj, setup_adj
-from .constants import FLUX_MONITOR_ADJOINT_DOCS
+from .constants import AUTOGRAD_SIDECAR_CACHE_FLAG, FLUX_MONITOR_ADJOINT_DOCS
 from .context import AdjointPostprocessInputs, PreparedAdjointBatch
 from .flux_monitor import requires_flux_monitor_helpers, untracked_flux_monitor_vjp_names
 from .forward import postprocess_fwd, setup_fwd
@@ -485,6 +485,8 @@ class LocalGradientStrategy(GradientStrategy):
                 sim_data_combined=batch_data[task_name],
                 sim_original=task_context.sim_original,
                 context=task_context.context,
+                sim_fields_keys=task_context.sim_fields_keys,
+                custom_vjp=task_context.custom_vjp,
             )
             for task_name, task_context in task_contexts.items()
         }
@@ -543,6 +545,8 @@ class LocalGradientStrategy(GradientStrategy):
             sim_data_combined=sim_data_combined,
             sim_original=task_context.sim_original,
             context=task_context.context,
+            sim_fields_keys=task_context.sim_fields_keys,
+            custom_vjp=task_context.custom_vjp,
         )
 
     def run_forward_async(
@@ -687,6 +691,7 @@ class RemoteClientSourceStrategy(GradientStrategy):
             path=str(path),
             workflow_type=task_type_name_of(remote_sim),
             simulation=remote_sim,
+            extra_metadata={AUTOGRAD_SIDECAR_CACHE_FLAG: True},
         )
 
     @classmethod
@@ -792,6 +797,8 @@ class RemoteClientSourceStrategy(GradientStrategy):
     ) -> AutogradFieldMap:
         sim_combined, remote_sim = self._prepare_remote_forward_task(task_context)
         sim_combined.validate_pre_upload()
+        # restore_simulation_if_cached itself requires the sidecar cache flag for
+        # autograd forwards, uniformly across sync/async/Job/Batch restore paths
         restored_path, task_id_fwd = webapi.restore_simulation_if_cached(
             simulation=remote_sim,
             path=run_kwargs.get("path", None),

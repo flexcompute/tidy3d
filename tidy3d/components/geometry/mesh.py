@@ -13,13 +13,18 @@ from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
+from tidy3d.components.data.data_array import (
+    DATA_ARRAY_MAP,
+    IndexedDataArray,
+    PointDataArray,
+    TriangleMeshDataArray,
+)
 from tidy3d.components.data.dataset import TriangleMeshDataset
 from tidy3d.components.data.validators import validate_no_nans
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.config import config
 from tidy3d.constants import fp_eps, inf
-from tidy3d.exceptions import DataError, ValidationError
+from tidy3d.exceptions import AdjointError, DataError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
@@ -36,6 +41,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
+    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 AREA_SIZE_THRESHOLD = 1e-36
 _TRIMESH_PYTHON_RAY_BACKEND = "trimesh.ray.ray_triangle"
@@ -50,6 +56,13 @@ def _warn_if_slow_ray_backend(mesh: Trimesh) -> None:
             "Embree backend with 'pip install embreex' to accelerate point-in-mesh queries.",
             log_once=True,
         )
+
+
+# canonical adjoint sample-set key for the triangle-mesh surface samples
+_MESH_SURFACE_KEY = ("surface_samples",)
+
+# the single derivative path a TriangleMesh supports
+_MESH_DERIVATIVE_PATH = ("mesh_dataset", "surface_mesh")
 
 
 class TriangleMesh(base.Geometry, ABC):
@@ -784,43 +797,106 @@ class TriangleMesh(base.Geometry, ABC):
 
         return base.Geometry.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives for a ``TriangleMesh`` geometry."""
-        vjps: AutogradFieldMap = {}
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate surface samples under the canonical ``("surface_samples",)`` key.
+
+        One per-triangle-sampled set serves the ``("mesh_dataset", "surface_mesh")``
+        derivative path; an explicit empty set means zero gradients (mesh outside the
+        simulation domain or no retained samples). The per-vertex scatter data (face
+        indices and barycentric coordinates) travels in the metadata.
+        """
+        from tidy3d.flex_em.translate.sample_sets import (
+            SurfaceSampleSet,
+            TriangleMeshSurfaceMetadata,
+        )
 
         if not self.mesh_dataset:
             raise DataError("Can't compute derivatives without mesh data.")
 
-        if ("mesh_dataset", "surface_mesh") not in derivative_info.paths:
-            return vjps
+        if _MESH_DERIVATIVE_PATH not in paths:
+            return {}
 
         triangles = np.asarray(self.triangles, dtype=config.adjoint.gradient_dtype_float)
 
-        # early exit if geometry is completely outside simulation bounds
-        sim_min, sim_max = map(np.asarray, derivative_info.simulation_bounds)
+        # no samples if geometry is completely outside simulation bounds
+        sim_min, sim_max = map(np.asarray, ctx.simulation_bounds)
         mesh_min, mesh_max = map(np.asarray, self.bounds)
         if np.any(mesh_max < sim_min) or np.any(mesh_min > sim_max):
             log.warning(
                 "'TriangleMesh' lies completely outside the simulation domain.",
                 log_once=True,
             )
-            zeros = np.zeros_like(triangles)
-            vjps[("mesh_dataset", "surface_mesh")] = zeros
-            return vjps
+            return {_MESH_SURFACE_KEY: SurfaceSampleSet.empty()}
 
         # gather surface samples within the simulation bounds
-        dx = derivative_info.adaptive_vjp_spacing()
         samples = self._collect_surface_samples(
             triangles=triangles,
-            spacing=dx,
+            spacing=ctx.spacing,
             sim_min=sim_min,
             sim_max=sim_max,
         )
 
         if samples["points"].shape[0] == 0:
-            zeros = np.zeros_like(triangles)
-            vjps[("mesh_dataset", "surface_mesh")] = zeros
+            return {_MESH_SURFACE_KEY: SurfaceSampleSet.empty()}
+
+        num_points = samples["points"].shape[0]
+        point_index = np.arange(num_points)
+        metadata = TriangleMeshSurfaceMetadata(
+            faces=IndexedDataArray(np.asarray(samples["faces"]), coords={"index": point_index}),
+            barycentric=PointDataArray(
+                np.asarray(samples["barycentric"]),
+                coords={"index": point_index, "axis": np.arange(3)},
+            ),
+        )
+        sample_set = SurfaceSampleSet.from_arrays(
+            points=samples["points"],
+            normals=samples["normals"],
+            perps1=samples["perps1"],
+            perps2=samples["perps2"],
+            weights=samples["weights"],
+            metadata=metadata,
+            serves_paths=(_MESH_DERIVATIVE_PATH,),
+        )
+        return {_MESH_SURFACE_KEY: sample_set}
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Compute the surface-mesh derivative from pre-generated surface samples."""
+        vjps: AutogradFieldMap = {}
+
+        if not self.mesh_dataset:
+            raise DataError("Can't compute derivatives without mesh data.")
+
+        if _MESH_DERIVATIVE_PATH not in paths:
             return vjps
+
+        if _MESH_SURFACE_KEY not in sample_sets:
+            raise AdjointError(
+                f"'TriangleMesh' sample sets are missing the canonical {_MESH_SURFACE_KEY} "
+                f"key; got keys {tuple(sample_sets)}."
+            )
+
+        triangles = np.asarray(self.triangles, dtype=config.adjoint.gradient_dtype_float)
+
+        sample_set = sample_sets[_MESH_SURFACE_KEY]
+        if sample_set.num_points == 0:
+            vjps[_MESH_DERIVATIVE_PATH] = np.zeros_like(triangles)
+            return vjps
+
+        from tidy3d.flex_em.translate.sample_sets import (
+            TriangleMeshSurfaceMetadata,
+            typed_sample_set_metadata,
+        )
+
+        metadata = typed_sample_set_metadata(
+            sample_set, TriangleMeshSurfaceMetadata, "TriangleMesh"
+        )
 
         interpolators = derivative_info.interpolators
         if interpolators is None:
@@ -828,19 +904,13 @@ class TriangleMesh(base.Geometry, ABC):
                 dtype=config.adjoint.gradient_dtype_float
             )
 
-        g = derivative_info.evaluate_gradient_at_points(
-            samples["points"],
-            samples["normals"],
-            samples["perps1"],
-            samples["perps2"],
-            interpolators,
-        )
+        g = sample_set.evaluate(derivative_info, interpolators=interpolators)
 
         # accumulate per-vertex contributions using barycentric weights
-        weights = (samples["weights"] * g).real
-        normals = samples["normals"]
-        faces = samples["faces"]
-        bary = samples["barycentric"]
+        weights = (sample_set.weights.values * g).real
+        normals = sample_set.normals.values
+        faces = np.asarray(metadata.faces.values).astype(int)
+        bary = np.asarray(metadata.barycentric.values)
 
         contrib_vec = weights[:, None] * normals
 
@@ -849,7 +919,7 @@ class TriangleMesh(base.Geometry, ABC):
             scaled = contrib_vec * bary[:, vertex_idx][:, None]
             np.add.at(triangle_grads[:, vertex_idx, :], faces, scaled)
 
-        vjps[("mesh_dataset", "surface_mesh")] = triangle_grads
+        vjps[_MESH_DERIVATIVE_PATH] = triangle_grads
         return vjps
 
     def _collect_surface_samples(

@@ -18,6 +18,7 @@ from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType, TracedFloat
 from tidy3d.components.autograd.utils import hasbox
 from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import IndexedDataArray
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D
 from tidy3d.config import config
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
         PlanePosition,
         Shapely,
     )
+    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
@@ -59,6 +61,13 @@ _IS_CLOSE_RTOL = np.finfo(float).eps
 
 # Warn for too many divided polyslabs
 _COMPLEX_POLYSLAB_DIVISIONS_WARN = 100
+
+# canonical adjoint sample-set keys; sidewall patches for 'vertices' (raw vertex
+# winding) and 'sidewall_angle' (canonical CCW reference winding) are collected
+# separately because the two paths deliberately use different polygon conventions
+_POLYSLAB_SIDEWALL_KEY = ("sidewall_patches",)
+_POLYSLAB_SIDEWALL_ANGLE_KEY = ("sidewall_angle_patches",)
+_POLYSLAB_SLAB_FACE = "slab_face"  # keys are ('slab_face', 0) and ('slab_face', 1)
 
 # Warn before triangulating large polyslabs due to inefficiency
 _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
@@ -2347,23 +2356,42 @@ class PolySlab(base.Planar):
 
         return super()._resolve_autograd_route(field_path)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """
-        Return VJPs while handling several edge-cases:
+    @staticmethod
+    def _canonical_key_for_path(path: PathType) -> PathType | None:
+        """Canonical sample-set key serving the given derivative path, if any."""
+        if path == ("vertices",):
+            return _POLYSLAB_SIDEWALL_KEY
+        if path == ("sidewall_angle",):
+            return _POLYSLAB_SIDEWALL_ANGLE_KEY
+        if path[0] == "slab_bounds":
+            return (_POLYSLAB_SLAB_FACE, path[1])
+        return None
 
-        - If the slab volume does not overlap the simulation, all grads are zero
-          (one warning is issued).
-        - Faces that lie completely outside the simulation give zero ``slab_bounds``
-          gradients; this includes the +/- inf cases.
-        - A 2d simulation collapses the surface integral to a line integral
-        """
-        vjps: AutogradFieldMap = {}
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate the sidewall and slab-face sample sets for the requested paths.
 
-        intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
-        sim_min, sim_max = map(np.asarray, derivative_info.simulation_bounds)
+        Every requested path's canonical key is present in the result; an explicit
+        empty sample set under a key means that surface legitimately contributes no
+        samples (zero gradient), e.g. for faces outside the simulation domain or a
+        slab fully outside it.
+        """
+        from tidy3d.flex_em.translate.sample_sets import (
+            SurfaceSampleSet,
+        )
+
+        intersect_min, intersect_max = map(np.asarray, ctx.bounds_intersect)
+        sim_min, sim_max = map(np.asarray, ctx.simulation_bounds)
 
         extents = intersect_max - intersect_min
         is_2d = np.isclose(extents[self.axis], 0.0)
+
+        path_by_key = {}
+        for path in paths:
+            key = self._canonical_key_for_path(path)
+            if key is not None:
+                path_by_key[key] = path
 
         # early return if polyslab is not in simulation domain
         slab_min, slab_max = self.slab_bounds
@@ -2372,47 +2400,136 @@ class PolySlab(base.Planar):
                 "'PolySlab' lies completely outside the simulation domain.",
                 log_once=True,
             )
-            for p in derivative_info.paths:
-                vjps[p] = np.zeros_like(self.vertices) if p == ("vertices",) else 0.0
-            return vjps
+            return {key: SurfaceSampleSet.empty() for key in path_by_key}
 
-        # create interpolators once for ALL derivative computations
-        # use provided interpolators if available to avoid redundant field data conversions
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
-            dtype=config.adjoint.gradient_dtype_float
-        )
-
-        for path in derivative_info.paths:
-            if path == ("vertices",):
-                vjps[path] = self._compute_derivative_vertices(
-                    derivative_info, sim_min, sim_max, is_2d, interpolators
+        sample_sets = {}
+        for key in path_by_key:
+            if key == _POLYSLAB_SIDEWALL_KEY:
+                sample_set = self._make_sidewall_sample_set(
+                    sim_min=sim_min, sim_max=sim_max, is_2d=is_2d, dx=ctx.spacing
                 )
-
-            elif path == ("sidewall_angle",):
-                vjps[path] = self._compute_derivative_sidewall_angle(
-                    derivative_info, sim_min, sim_max, is_2d, interpolators
-                )
-            elif path[0] == "slab_bounds":
-                idx = path[1]
+            elif key == _POLYSLAB_SIDEWALL_ANGLE_KEY:
+                # 2D sim => no dependence on theta (z_local=0)
+                if is_2d:
+                    sample_set = None
+                else:
+                    sample_set = self._make_sidewall_angle_sample_set(
+                        sim_min=sim_min, sim_max=sim_max, dx=ctx.spacing
+                    )
+            else:  # slab face
+                idx = key[1]
                 face_coord = self.slab_bounds[idx]
 
-                # face entirely outside -> gradient 0
+                # face entirely outside -> no samples (gradient 0)
                 if (
                     np.isinf(face_coord)
                     or face_coord < sim_min[self.axis]
                     or face_coord > sim_max[self.axis]
                     or is_2d
                 ):
+                    sample_set = None
+                else:
+                    sample_set = self._make_slab_face_sample_set(min_max_index=idx, ctx=ctx)
+
+            sample_sets[key] = sample_set if sample_set is not None else SurfaceSampleSet.empty()
+
+        return sample_sets
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Compute vertices/sidewall-angle/slab-bounds derivatives from sample sets."""
+        # create interpolators once for ALL derivative computations
+        # use provided interpolators if available to avoid redundant field data conversions
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
+            dtype=config.adjoint.gradient_dtype_float
+        )
+
+        vjps: AutogradFieldMap = {}
+        for path in paths:
+            key = self._canonical_key_for_path(path)
+            if key is None:
+                continue
+            if key not in sample_sets:
+                raise AdjointError(
+                    f"'PolySlab' sample sets are missing the canonical {key} key needed for "
+                    f"derivative path {path}; got keys {tuple(sample_sets)}."
+                )
+            sample_set = sample_sets[key]
+
+            if path == ("vertices",):
+                if sample_set.num_points == 0:
+                    vjps[path] = np.zeros_like(self.vertices)
+                    continue
+                vjps[path] = self._vertices_vjp_from_sample_set(
+                    sample_set, derivative_info, interpolators
+                )
+            elif path == ("sidewall_angle",):
+                if sample_set.num_points == 0:
                     vjps[path] = 0.0
                     continue
-
-                v = self._compute_derivative_slab_bounds(derivative_info, idx, interpolators)
+                g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+                vjps[path] = float(np.real(np.sum(g * sample_set.weights.values)))
+            else:  # slab_bounds
+                if sample_set.num_points == 0:
+                    vjps[path] = 0.0
+                    continue
+                g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+                v = np.real(np.sum(g * sample_set.weights.values)).item()
                 # outward-normal convention
-                if idx == 0:
+                if path[1] == 0:
                     v *= -1
                 vjps[path] = v
 
         return vjps
+
+    def _vertices_vjp_from_sample_set(
+        self,
+        sample_set: SurfaceSampleSet,
+        derivative_info: DerivativeInfo,
+        interpolators: dict,
+    ) -> NDArray:
+        """Evaluate the sidewall sample set and scatter to per-vertex gradients."""
+        from tidy3d.flex_em.translate.sample_sets import (
+            PolySlabSidewallMetadata,
+            typed_sample_set_metadata,
+        )
+
+        metadata = typed_sample_set_metadata(sample_set, PolySlabSidewallMetadata, "PolySlab")
+
+        # evaluate integrand
+        g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+
+        # weights are the patch areas; compute weighted vjps
+        patch_vjps = (g * sample_set.weights.values).real
+
+        # distribute to vertices using vectorized accumulation
+        vertices, _, _, basis = self._edge_geometry_arrays()
+        normals_2d = np.delete(basis["norm"], self.axis, axis=1)
+        edge_idx = np.asarray(metadata.edge_indices.values).astype(int)
+        s = np.asarray(metadata.s_vals.values)
+        w0 = (1.0 - s) * patch_vjps
+        w1 = s * patch_vjps
+        edge_norms = normals_2d[edge_idx]
+
+        # Accumulate per-vertex contributions using bincount (O(N_patches))
+        num_vertices = vertices.shape[0]
+        contrib0 = w0[:, None] * edge_norms  # (n_patches, 2)
+        contrib1 = w1[:, None] * edge_norms  # (n_patches, 2)
+
+        idx0 = edge_idx
+        idx1 = (edge_idx + 1) % num_vertices
+
+        v0x = np.bincount(idx0, weights=contrib0[:, 0], minlength=num_vertices)
+        v0y = np.bincount(idx0, weights=contrib0[:, 1], minlength=num_vertices)
+        v1x = np.bincount(idx1, weights=contrib1[:, 0], minlength=num_vertices)
+        v1y = np.bincount(idx1, weights=contrib1[:, 1], minlength=num_vertices)
+
+        vjp_per_vertex = np.stack((v0x + v1x, v0y + v1y), axis=1)
+        return vjp_per_vertex
 
     # ---- Shared helpers for VJP surface integrations ----
     def _z_slices(
@@ -2888,31 +3005,25 @@ class PolySlab(base.Planar):
             "edge_indices": edge_indices,
         }
 
-    def _compute_derivative_sidewall_angle(
+    def _make_sidewall_angle_sample_set(
         self,
-        derivative_info: DerivativeInfo,
         sim_min: NDArray,
         sim_max: NDArray,
-        is_2d: bool = False,
-        interpolators: dict | None = None,
-    ) -> float:
-        """VJP for dJ/dtheta where theta = sidewall_angle.
+        dx: float,
+    ) -> SurfaceSampleSet | None:
+        """Sidewall sample set weighted for dJ/dtheta where theta = sidewall_angle.
 
-        Use dJ/dtheta = integral_S g(x) * V_n(x; theta) * dA, with g(x) from
-        `evaluate_gradient_at_points`. For a ruled sidewall built by
-        offsetting the mid-plane polygon by d(z) = -(z - z_ref) * tan(theta),
-        the normal velocity is V_n = (dd/dtheta) * cos(theta) = -(z - z_ref)/cos(theta)
-        and the area element is dA = (dz/cos(theta)) * d_ell.
-        Therefore each patch weight is w = L * dz * (-(z - z_ref)) / cos(theta)^2.
+        dJ/dtheta = integral_S g(x) * V_n(x; theta) * dA, with g(x) evaluated at
+        consumption time. For a ruled sidewall built by offsetting the mid-plane
+        polygon by d(z) = -(z - z_ref) * tan(theta), the normal velocity is
+        V_n = (dd/dtheta) * cos(theta) = -(z - z_ref)/cos(theta) and the area element
+        is dA = (dz/cos(theta)) * d_ell. Therefore each patch weight is
+        w = L * dz * (-(z - z_ref)) / cos(theta)^2, fully precomputed here.
         """
-        if interpolators is None:
-            interpolators = derivative_info.create_interpolators(
-                dtype=config.adjoint.gradient_dtype_float
-            )
-
-        # 2D sim => no dependence on theta (z_local=0)
-        if is_2d:
-            return 0.0
+        from tidy3d.flex_em.translate.sample_sets import (
+            PolySlabSidewallAngleMetadata,
+            SurfaceSampleSet,
+        )
 
         # The scalar sidewall-angle VJP should not depend on the user's input winding.
         # Use the canonical reference polygon; vertex VJPs keep the raw ordering.
@@ -2920,8 +3031,6 @@ class PolySlab(base.Planar):
             vertices=self.reference_polygon,
             is_ccw=True,
         )
-
-        dx = derivative_info.adaptive_vjp_spacing()
 
         # collect patches once
         patch = self._collect_sidewall_patches(
@@ -2935,7 +3044,7 @@ class PolySlab(base.Planar):
             dx=dx,
         )
         if patch["centers"].shape[0] == 0:
-            return 0.0
+            return None
 
         # Shape-derivative factors:
         # - Offset: d(z) = -(z - z_ref) * tan(theta)
@@ -2947,22 +3056,26 @@ class PolySlab(base.Planar):
         inv_cos2 = 1.0 / (cos_theta * cos_theta)
         z_ref = self.reference_axis_pos
 
-        g = derivative_info.evaluate_gradient_at_points(
-            patch["centers"], patch["normals"], patch["perps1"], patch["perps2"], interpolators
-        )
         z_local = patch["zc_vals"] - z_ref
         weights = patch["Ls"] * patch["s_weights"] * patch["dz"] * (-z_local) * inv_cos2
-        return float(np.real(np.sum(g * weights)))
+        return SurfaceSampleSet.from_arrays(
+            points=patch["centers"],
+            normals=patch["normals"],
+            perps1=patch["perps1"],
+            perps2=patch["perps2"],
+            weights=weights,
+            metadata=PolySlabSidewallAngleMetadata(),
+            serves_paths=(("sidewall_angle",),),
+        )
 
-    def _compute_derivative_slab_bounds(
-        self, derivative_info: DerivativeInfo, min_max_index: int, interpolators: dict
-    ) -> TracedArrayFloat2D:
-        """VJP for one of the two horizontal faces of a ``PolySlab``.
+    def _make_slab_face_sample_set(
+        self, min_max_index: int, ctx: SamplingContext
+    ) -> SurfaceSampleSet | None:
+        """Sample set for one of the two horizontal faces of a ``PolySlab``.
 
-        The face is discretized into a Cartesian grid of small planar patches.
-        The adjoint surface integral is evaluated on every retained patch; the
-        resulting derivative is split equally between the two vertices that bound
-        the edge segment.
+        The face is discretized into planar patches (a Gauss quadrature grid, or a
+        line of segments for a degenerate cross-section); patch quadrature weights
+        absorb the area elements so consumption is a plain weighted sum.
         """
         # rmin/rmax over the geometry and simulation box
         if np.isclose(self.slab_bounds[1] - self.slab_bounds[0], 0.0):
@@ -2971,7 +3084,7 @@ class PolySlab(base.Planar):
                 "may give zero for the derivative. Try using a structure with a small, but nonzero "
                 "thickness for slab bound derivatives."
             )
-        rmin, rmax = derivative_info.bounds_intersect
+        rmin, rmax = ctx.bounds_intersect
         _, (r1_min, r2_min) = self.pop_axis(rmin, axis=self.axis)
         _, (r1_max, r2_max) = self.pop_axis(rmax, axis=self.axis)
         ax_val = self.slab_bounds[min_max_index]
@@ -2992,19 +3105,18 @@ class PolySlab(base.Planar):
 
         if (r1_max <= r1_min) and (r2_max <= r2_min):
             # the polygon does not intersect the current simulation slice
-            return 0.0
+            return None
 
         # re-compute the extents after clipping to the polygon bounds
         extents = np.array([r1_max - r1_min, r2_max - r2_min])
 
-        # choose surface or line integral
-        integral_fun = (
-            self.compute_derivative_slab_bounds_line
+        # choose surface or line sampling
+        sample_fun = (
+            self._slab_face_line_samples
             if np.isclose(extents, 0).any()
-            else self.compute_derivative_slab_bounds_surface
+            else self._slab_face_surface_samples
         )
-        return integral_fun(
-            derivative_info,
+        return sample_fun(
             extents,
             r1_min,
             r1_max,
@@ -3013,12 +3125,11 @@ class PolySlab(base.Planar):
             ax_val,
             face_poly,
             min_max_index,
-            interpolators,
+            ctx.spacing,
         )
 
-    def compute_derivative_slab_bounds_line(
+    def _slab_face_line_samples(
         self,
-        derivative_info: DerivativeInfo,
         extents: NDArray,
         r1_min: float,
         r1_max: float,
@@ -3027,9 +3138,14 @@ class PolySlab(base.Planar):
         ax_val: float,
         face_poly: shapely.Polygon,
         min_max_index: int,
-        interpolators: dict,
-    ) -> float:
+        dx: float,
+    ) -> SurfaceSampleSet | None:
         """Handle degenerate line cross-section case"""
+        from tidy3d.flex_em.translate.sample_sets import (
+            PolySlabSlabFaceMetadata,
+            SurfaceSampleSet,
+        )
+
         line_dim = 1 if np.isclose(extents[0], 0) else 0
 
         poly_min_r1, poly_min_r2, poly_max_r1, poly_max_r2 = face_poly.bounds
@@ -3042,9 +3158,8 @@ class PolySlab(base.Planar):
 
         length = l_max - l_min
         if np.isclose(length, 0):
-            return 0.0
+            return None
 
-        dx = derivative_info.adaptive_vjp_spacing()
         n_seg = max(1, int(np.ceil(length / dx)))
         coords = np.linspace(
             l_min, l_max, 2 * n_seg + 1, dtype=config.adjoint.gradient_dtype_float
@@ -3060,7 +3175,7 @@ class PolySlab(base.Planar):
 
         inside = shapely.contains_xy(face_poly, xy[:, 0], xy[:, 1])
         if not inside.any():
-            return 0.0
+            return None
 
         xy = xy[inside]
         dir_vec_plane = dir_vec_plane[inside]
@@ -3078,14 +3193,18 @@ class PolySlab(base.Planar):
         perps1_xyz = self.unpop_axis_vect(np.zeros(n_pts), dir_vec_plane)
         perps2_xyz = self.unpop_axis_vect(np.zeros(n_pts), np.zeros_like(dir_vec_plane))
 
-        vjps = derivative_info.evaluate_gradient_at_points(
-            centers_xyz, normals_xyz, perps1_xyz, perps2_xyz, interpolators
+        return SurfaceSampleSet.from_arrays(
+            points=centers_xyz,
+            normals=normals_xyz,
+            perps1=perps1_xyz,
+            perps2=perps2_xyz,
+            weights=areas,
+            metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
+            serves_paths=(("slab_bounds", min_max_index),),
         )
-        return np.real(np.sum(vjps * areas)).item()
 
-    def compute_derivative_slab_bounds_surface(
+    def _slab_face_surface_samples(
         self,
-        derivative_info: DerivativeInfo,
         extents: NDArray,
         r1_min: float,
         r1_max: float,
@@ -3094,10 +3213,13 @@ class PolySlab(base.Planar):
         ax_val: float,
         face_poly: shapely.Polygon,
         min_max_index: int,
-        interpolators: dict,
-    ) -> float:
-        """2d surface integral on a Gauss quadrature grid"""
-        dx = derivative_info.adaptive_vjp_spacing()
+        dx: float,
+    ) -> SurfaceSampleSet | None:
+        """2d surface samples on a Gauss quadrature grid"""
+        from tidy3d.flex_em.translate.sample_sets import (
+            PolySlabSlabFaceMetadata,
+            SurfaceSampleSet,
+        )
 
         # uniform grid would use n1 x n2 points
         n1_uniform, n2_uniform = np.maximum(1, np.ceil(extents / dx).astype(int))
@@ -3123,7 +3245,7 @@ class PolySlab(base.Planar):
 
         in_face = shapely.contains_xy(face_poly, pts[:, 0], pts[:, 1])
         if not in_face.any():
-            return 0.0
+            return None
 
         xyz = self.unpop_axis_vect(
             np.full(in_face.sum(), ax_val, dtype=config.adjoint.gradient_dtype_float), pts[in_face]
@@ -3168,25 +3290,38 @@ class PolySlab(base.Planar):
             area_correction = face_poly.area / (sum_weights * jacobian)
             weights_flat = weights_flat * area_correction
 
-        vjps = derivative_info.evaluate_gradient_at_points(
-            xyz, normals_xyz, perps1_xyz, perps2_xyz, interpolators
+        # weights stay in the configured gradient dtype; folding the jacobian into the
+        # weights (instead of applying it after the field product, as the pre-split
+        # integration did) reorders the rounding within the same precision class
+        return SurfaceSampleSet.from_arrays(
+            points=xyz,
+            normals=normals_xyz,
+            perps1=perps1_xyz,
+            perps2=perps2_xyz,
+            weights=weights_flat * jacobian,
+            metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
+            serves_paths=(("slab_bounds", min_max_index),),
         )
-        return np.real(np.sum(vjps * weights_flat * jacobian)).item()
 
-    def _compute_derivative_vertices(
+    def _make_sidewall_sample_set(
         self,
-        derivative_info: DerivativeInfo,
         sim_min: NDArray,
         sim_max: NDArray,
-        is_2d: bool = False,
-        interpolators: dict | None = None,
-    ) -> NDArray:
-        """VJP for the vertices of a ``PolySlab``.
+        is_2d: bool,
+        dx: float,
+    ) -> SurfaceSampleSet | None:
+        """Sidewall sample set in the raw vertex winding, serving the ``vertices`` path.
 
-        Uses shared sidewall patch collection and batched field evaluation.
+        Weights are the patch areas; the per-vertex scatter data (edge indices and
+        parametric edge positions) travels in the metadata for consumption by
+        ``_vertices_vjp_from_sample_set``.
         """
+        from tidy3d.flex_em.translate.sample_sets import (
+            PolySlabSidewallMetadata,
+            SurfaceSampleSet,
+        )
+
         vertices, next_v, edges, basis = self._edge_geometry_arrays()
-        dx = derivative_info.adaptive_vjp_spacing()
 
         # collect patches once
         patch = self._collect_sidewall_patches(
@@ -3200,51 +3335,33 @@ class PolySlab(base.Planar):
             dx=dx,
         )
 
-        # early return if no patches
+        # no patches -> no samples (zero gradient)
         if patch["centers"].shape[0] == 0:
-            return np.zeros_like(vertices)
+            return None
 
         dz = patch["dz"]
         dz_surf = 1.0 if is_2d else dz / np.cos(self.sidewall_angle)
 
-        # use provided interpolators or create them if not provided
-        if interpolators is None:
-            interpolators = derivative_info.create_interpolators(
-                dtype=config.adjoint.gradient_dtype_float
-            )
-
-        # evaluate integrand
-        g = derivative_info.evaluate_gradient_at_points(
-            patch["centers"], patch["normals"], patch["perps1"], patch["perps2"], interpolators
-        )
-
-        # compute area-based weights and weighted vjps
+        # area-based quadrature weights
         areas = patch["Ls"] * patch["s_weights"] * dz_surf
-        patch_vjps = (g * areas).real
 
-        # distribute to vertices using vectorized accumulation
-        normals_2d = np.delete(basis["norm"], self.axis, axis=1)
-        edge_idx = patch["edge_indices"]
-        s = patch["s_vals"]
-        w0 = (1.0 - s) * patch_vjps
-        w1 = s * patch_vjps
-        edge_norms = normals_2d[edge_idx]
-
-        # Accumulate per-vertex contributions using bincount (O(N_patches))
-        num_vertices = vertices.shape[0]
-        contrib0 = w0[:, None] * edge_norms  # (n_patches, 2)
-        contrib1 = w1[:, None] * edge_norms  # (n_patches, 2)
-
-        idx0 = edge_idx
-        idx1 = (edge_idx + 1) % num_vertices
-
-        v0x = np.bincount(idx0, weights=contrib0[:, 0], minlength=num_vertices)
-        v0y = np.bincount(idx0, weights=contrib0[:, 1], minlength=num_vertices)
-        v1x = np.bincount(idx1, weights=contrib1[:, 0], minlength=num_vertices)
-        v1y = np.bincount(idx1, weights=contrib1[:, 1], minlength=num_vertices)
-
-        vjp_per_vertex = np.stack((v0x + v1x, v0y + v1y), axis=1)
-        return vjp_per_vertex
+        num_points = patch["centers"].shape[0]
+        point_index = np.arange(num_points)
+        metadata = PolySlabSidewallMetadata(
+            edge_indices=IndexedDataArray(
+                np.asarray(patch["edge_indices"]), coords={"index": point_index}
+            ),
+            s_vals=IndexedDataArray(np.asarray(patch["s_vals"]), coords={"index": point_index}),
+        )
+        return SurfaceSampleSet.from_arrays(
+            points=patch["centers"],
+            normals=patch["normals"],
+            perps1=patch["perps1"],
+            perps2=patch["perps2"],
+            weights=areas,
+            metadata=metadata,
+            serves_paths=(("vertices",),),
+        )
 
     def _edge_geometry_arrays(
         self,

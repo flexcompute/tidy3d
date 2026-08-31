@@ -10,6 +10,7 @@ gradient postprocessing.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
@@ -40,7 +41,84 @@ class SamplingResolution(NamedTuple):
     """Material discretization wavelength in microns for triangulation-based sampling."""
 
 
-def adjoint_sampling_resolution(simulation: Simulation, structure_index: int) -> SamplingResolution:
+@dataclass
+class SamplingScanIndex:
+    """Reusable per-simulation state for scanning many traced structures.
+
+    The per-structure scan tests every volumetric structure for overlap and evaluates
+    every overlapping medium; over ``S`` traced structures in a ``V``-structure
+    simulation that is ``O(S x V)`` exact-intersection and material work. Building this
+    index once per simulation turns the overlap search into a vectorized bounding-box
+    prefilter (exact intersection tests run only on the survivors, so results are
+    unchanged) and memoizes the frequency sweep of each spatially uniform medium, so
+    material work scales with the number of distinct media rather than structures.
+
+    Custom (spatially varying) media are never memoized: their values are reduced to
+    each structure's monitor region, so they are genuinely per-structure.
+    """
+
+    structures: tuple
+    bounds_min: np.ndarray
+    bounds_max: np.ndarray
+    medium_ids: dict[int, int] = field(default_factory=dict)
+    eps_cache: dict[int, np.ndarray] = field(default_factory=dict)
+
+    @classmethod
+    def from_simulation(cls, simulation: Simulation) -> SamplingScanIndex:
+        """Build the index over the simulation's volumetric structures."""
+        structures = tuple(simulation.volumetric_structures)
+        if structures:
+            bounds = np.asarray([candidate.geometry.bounds for candidate in structures])
+            bounds_min, bounds_max = bounds[:, 0, :], bounds[:, 1, :]
+        else:
+            bounds_min = bounds_max = np.empty((0, 3))
+
+        # canonicalize cacheable media by value once, so equal-valued but distinct
+        # objects (e.g. media constructed inline per structure) share one eps-cache
+        # entry; per-structure lookups then stay O(1) id lookups. Custom media are
+        # never cached, and hashing their datasets here would cost more than it saves.
+        mediums = [simulation.medium]
+        for candidate in structures:
+            mediums.append(candidate.medium)
+            if candidate.background_medium is not None:
+                mediums.append(candidate.background_medium)
+        medium_ids: dict[int, int] = {}
+        canonical_ids: dict = {}
+        for medium in mediums:
+            optical_medium = Structure._get_optical_medium(medium)
+            if optical_medium is None or isinstance(optical_medium, AbstractCustomMedium):
+                continue
+            medium_ids[id(medium)] = canonical_ids.setdefault(medium, id(medium))
+
+        return cls(
+            structures=structures,
+            bounds_min=bounds_min,
+            bounds_max=bounds_max,
+            medium_ids=medium_ids,
+        )
+
+    def cache_key(self, medium: MediumType) -> int:
+        """Canonical eps-cache key for a medium, collapsing value-equal instances."""
+        return self.medium_ids.get(id(medium), id(medium))
+
+    def candidates(self, monitor_box: Box) -> list:
+        """Volumetric structures whose bounding boxes overlap ``monitor_box``.
+
+        Bounding-box overlap is necessary for exact intersection, so prefiltering
+        here never changes which structures the exact test accepts.
+        """
+        box_min, box_max = np.asarray(monitor_box.bounds[0]), np.asarray(monitor_box.bounds[1])
+        overlaps = np.all(self.bounds_min <= box_max, axis=1) & np.all(
+            self.bounds_max >= box_min, axis=1
+        )
+        return [self.structures[i] for i in np.flatnonzero(overlaps)]
+
+
+def adjoint_sampling_resolution(
+    simulation: Simulation,
+    structure_index: int,
+    scan_index: SamplingScanIndex | None = None,
+) -> SamplingResolution:
     """Compute definition-derived sampling resolutions for one traced structure.
 
     The calculation mirrors ``DerivativeInfo.adaptive_vjp_spacing()`` and
@@ -49,6 +127,10 @@ def adjoint_sampling_resolution(simulation: Simulation, structure_index: int) ->
     structure's adjoint monitor region and evaluates them at the full adjoint
     frequency set, so the result is independent of solver frequency chunking or
     adjoint-source grouping.
+
+    Callers resolving many structures of one simulation should build a
+    :class:`SamplingScanIndex` once and pass it here, which prefilters the overlap
+    search and reuses uniform-media evaluations without changing any result.
     """
 
     frequencies = np.asarray(simulation._freqs_adjoint, dtype=float)
@@ -63,7 +145,10 @@ def adjoint_sampling_resolution(simulation: Simulation, structure_index: int) ->
     monitor_box = structure._adjoint_monitor_box(grid=simulation.grid, plane=plane)
 
     eps_values = _region_eps_values(
-        simulation=simulation, monitor_box=monitor_box, frequencies=frequencies
+        simulation=simulation,
+        monitor_box=monitor_box,
+        frequencies=frequencies,
+        scan_index=scan_index,
     )
     wavelength_min = C_0 / frequencies.max()
     material_length_scale = _min_spacing_from_eps(
@@ -82,7 +167,10 @@ def adjoint_sampling_resolution(simulation: Simulation, structure_index: int) ->
 
 
 def _region_eps_values(
-    simulation: Simulation, monitor_box: Box, frequencies: np.ndarray
+    simulation: Simulation,
+    monitor_box: Box,
+    frequencies: np.ndarray,
+    scan_index: SamplingScanIndex | None = None,
 ) -> np.ndarray:
     """Return permittivity values for media overlapping ``monitor_box``.
 
@@ -94,24 +182,39 @@ def _region_eps_values(
     because both can define outside-side shape-gradient material data.
     """
 
+    candidates = (
+        scan_index.candidates(monitor_box)
+        if scan_index is not None
+        else simulation.volumetric_structures
+    )
+
     mediums = [simulation.medium]
-    for candidate in simulation.volumetric_structures:
+    for candidate in candidates:
         if not monitor_box.intersects(candidate.geometry):
             continue
         mediums.append(candidate.medium)
         if candidate.background_medium is not None:
             mediums.append(candidate.background_medium)
 
+    eps_cache = scan_index.eps_cache if scan_index is not None else None
     values = []
     for medium in mediums:
         optical_medium = Structure._get_optical_medium(medium)
         if optical_medium is None:
             continue
-        values.append(
-            _medium_eps_values(
-                medium=optical_medium, frequencies=frequencies, monitor_box=monitor_box
-            )
+        # spatially uniform media evaluate identically for every structure; custom
+        # media are region-reduced per structure and must not be cached
+        cacheable = eps_cache is not None and not isinstance(optical_medium, AbstractCustomMedium)
+        cache_key = scan_index.cache_key(medium) if cacheable else None
+        if cacheable and cache_key in eps_cache:
+            values.append(eps_cache[cache_key])
+            continue
+        medium_values = _medium_eps_values(
+            medium=optical_medium, frequencies=frequencies, monitor_box=monitor_box
         )
+        if cacheable:
+            eps_cache[cache_key] = medium_values
+        values.append(medium_values)
 
     if not values:
         raise AdjointError(

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tidy3d as td
+from tidy3d.components.autograd.collection import collect_adjoint_sample_sets
 from tidy3d.components.autograd.field_map import TracerKeys
 from tidy3d.components.workflow import Workflow
 from tidy3d.exceptions import DataError, WebError
@@ -11,13 +12,43 @@ from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.states import ERROR_STATES
 
-from .constants import SIM_FIELDS_KEYS_FILE
+from .constants import SAMPLE_SETS_FILE, SIM_FIELDS_KEYS_FILE
 from .io_utils import get_cached_vjp_traced_fields, get_vjp_traced_fields
 
+if TYPE_CHECKING:
+    from tidy3d.components.base import Tidy3dBaseModel
 
-def _sim_fields_keys_artifacts(sim_fields_keys: list[tuple]) -> dict[str, TracerKeys]:
-    """Build sidecar artifacts needed before autograd forward metadata processing."""
-    return {SIM_FIELDS_KEYS_FILE: TracerKeys(keys=sim_fields_keys)}
+
+# rough per-point payload of a serialized sample set: points/normals/perps1/perps2
+# (4 x 3 scalars) + weights (1 scalar) at 8 bytes each
+_SAMPLE_SET_BYTES_PER_POINT = 13 * 8
+# above this estimated payload, the upload size line is logged at info level
+_SAMPLE_SETS_SIZE_INFO_BYTES = 50e6
+
+
+def _autograd_forward_sidecar_artifacts(
+    simulation: td.Simulation, sim_fields_keys: list[tuple]
+) -> dict[str, Tidy3dBaseModel]:
+    """Build sidecar artifacts uploaded alongside an autograd forward task.
+
+    The sample sets are collected without exclusions: sidecars only ride remote-gradient
+    forward uploads, and custom vjps / numerical structures (the only sources of
+    exclusions) force ``local_gradient=True``.
+    """
+    sample_sets = collect_adjoint_sample_sets(simulation, sim_fields_keys)
+    est_bytes = sample_sets.num_points * _SAMPLE_SET_BYTES_PER_POINT
+    size_message = (
+        f"Uploading adjoint sample-set artifact: {sample_sets.num_points} surface points, "
+        f"approximately {est_bytes / 1e6:.1f} MB."
+    )
+    if est_bytes > _SAMPLE_SETS_SIZE_INFO_BYTES:
+        td.log.info(size_message)
+    else:
+        td.log.debug(size_message)
+    return {
+        SIM_FIELDS_KEYS_FILE: TracerKeys(keys=sim_fields_keys),
+        SAMPLE_SETS_FILE: sample_sets,
+    }
 
 
 def parse_run_kwargs(*, include_workflow: bool = False, **run_kwargs: Any) -> dict[str, Any]:
@@ -95,7 +126,9 @@ def _run_tidy3d(
     if job.simulation_type == "autograd_fwd":
         job._upload_and_cache(
             verbose_estimate_cost=False,
-            _sidecar_artifacts=_sim_fields_keys_artifacts(run_kwargs["sim_fields_keys"]),
+            _sidecar_artifacts=_autograd_forward_sidecar_artifacts(
+                simulation, run_kwargs["sim_fields_keys"]
+            ),
         )
     path_arg = run_kwargs.get("path")
     if path_arg is None:
@@ -143,11 +176,11 @@ def _run_async_tidy3d(
         }
         batch = batch.updated_copy(simulations=sims)
 
-        sim_fields_key_artifacts = {
-            task_name: _sim_fields_keys_artifacts(sim_fields_keys)
+        sidecar_artifacts_by_task = {
+            task_name: _autograd_forward_sidecar_artifacts(sims[task_name], sim_fields_keys)
             for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items()
         }
-        batch._upload_jobs(_sidecar_artifacts_by_task=sim_fields_key_artifacts)
+        batch._upload_jobs(_sidecar_artifacts_by_task=sidecar_artifacts_by_task)
 
     if path_dir is not None:
         batch_data = batch.run(

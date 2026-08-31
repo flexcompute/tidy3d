@@ -1712,12 +1712,16 @@ def postprocess_fwd(
     sim_data_combined: td.SimulationData,
     sim_original: td.Simulation,
     context: AutogradContext,
+    sim_fields_keys: list[tuple],
+    custom_vjp: Sequence[CustomVJPConfig] | None = None,
 ) -> AutogradFieldMap:
     """Postprocess the combined simulation data into an Autograd field map (delegated)."""
     return forward.postprocess_fwd(
         sim_data_combined=sim_data_combined,
         sim_original=sim_original,
         context=context,
+        sim_fields_keys=sim_fields_keys,
+        custom_vjp=custom_vjp,
     )
 
 

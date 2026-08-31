@@ -83,6 +83,7 @@ if TYPE_CHECKING:
         Size,
     )
     from tidy3d.components.viz import PlotParams, VisualizationSpec
+    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 POLY_GRID_SIZE = 1e-12
 POLY_TOLERANCE_RATIO = 1e-12
@@ -90,6 +91,11 @@ POLY_DISTANCE_TOLERANCE = 8e-12
 # Tolerance for validating linear-only transforms (no translation)
 LINEAR_TRANSFORM_TOL = 1e-12
 GDS_MAX_COORDINATE_INDEX = 2**31 - 1
+
+# root of the canonical adjoint sample-set keys for box faces: the full key is
+# ('faces', min_max_index, axis_normal), naming one face; face sets serve both
+# 'center' and 'size' derivative paths
+_BOX_FACES = "faces"
 
 
 def _raise_unsupported_traced_geometry_path(
@@ -1757,9 +1763,47 @@ class Geometry(Tidy3dBaseModel, ABC):
         fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
-        raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate the surface sample sets for the requested shape-derivative paths.
+
+        Returns exactly one sample set per geometry-owned canonical key, where the key
+        fully identifies its sampling unit (e.g. ``("faces", 0, 1)`` names one box
+        face). One canonical set may serve several derivative paths (box face sets
+        serve both ``center`` and ``size``).
+
+        Every canonical key the requested paths imply is emitted: a sampling unit that
+        legitimately contributes nothing (outside the simulation domain, degenerate)
+        appears as an explicit empty set, never as a missing key.
+
+        Pure and deterministic in ``paths`` and ``ctx`` — pre-simulation collection
+        and late generation must produce identical sets. Each requested path's samples
+        must not depend on which other paths are co-requested (grouped router dispatch
+        relies on this).
+        """
+        raise NotImplementedError(
+            f"Can't generate adjoint sample sets for 'Geometry': '{type(self)}'."
+        )
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Compute adjoint derivatives for ``paths`` by consuming pre-generated sample sets.
+
+        ``sample_sets`` must come from this geometry's ``_make_adjoint_sample_sets``
+        (canonical keys and metadata are a contract between the two methods). Every
+        canonical key the requested paths imply must be present — an empty set is a
+        legitimate zero contribution, a missing key means data was lost and raises.
+        Each requested path's vjp must not depend on which other paths are
+        co-requested (grouped router dispatch relies on this).
+        """
+        raise NotImplementedError(
+            f"Can't compute derivative from sample sets for 'Geometry': '{type(self)}'."
+        )
 
     def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
         """Resolve and validate one traced geometry path for adjoint routing."""
@@ -2901,18 +2945,78 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
+    @staticmethod
+    def _face_axes_for_paths(paths: list[PathType]) -> tuple[int, ...]:
+        """Face-normal axes implied by the requested derivative paths.
 
-        # get gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = self._derivative_faces(derivative_info=derivative_info)
+        All axes unless every requested path names a specific axis (robust to mixed
+        indexed/unindexed path lists from grouped router dispatch). Shared by
+        generation and consumption so the implied canonical keys cannot disagree.
+        """
+        if all(len(path) > 1 for path in paths):
+            return tuple(sorted({path[1] for path in paths}))
+        return (0, 1, 2)
+
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate face sample sets under canonical ``("faces", min_max_index, axis)`` keys.
+
+        Every implied face key is emitted; a face outside the simulation domain or
+        collapsed by clipping carries an explicit empty set (zero gradient). The face
+        sets serve both the ``center`` and ``size`` derivative paths.
+        """
+        from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
+
+        sample_sets = {}
+        for min_max_index in (0, 1):
+            for axis_normal in self._face_axes_for_paths(paths):
+                sample_set = self._make_face_sample_set(
+                    min_max_index=min_max_index,
+                    axis_normal=axis_normal,
+                    ctx=ctx,
+                )
+                if sample_set is None:
+                    sample_set = SurfaceSampleSet.empty(serves_paths=(("center",), ("size",)))
+                sample_sets[(_BOX_FACES, min_max_index, axis_normal)] = sample_set
+
+        return sample_sets
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Compute ``center``/``size`` derivatives from pre-generated face sample sets."""
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+
+        # gradients w.r.t. each of the 6 faces (in normal direction)
+        vjps_faces = np.zeros((2, 3))
+        for min_max_index in (0, 1):
+            for axis_normal in self._face_axes_for_paths(paths):
+                key = (_BOX_FACES, min_max_index, axis_normal)
+                if key not in sample_sets:
+                    raise AdjointError(
+                        f"'Box' sample sets are missing the canonical {key} key required "
+                        f"by derivative paths {tuple(paths)}; got keys {tuple(sample_sets)}."
+                    )
+                sample_set = sample_sets[key]
+                if sample_set.num_points == 0:
+                    continue  # explicit zero contribution
+                gradient_at_points = sample_set.evaluate(
+                    derivative_info, interpolators=interpolators
+                )
+                vjps_faces[min_max_index, axis_normal] = np.sum(
+                    sample_set.weights.values * np.real(gradient_at_points)
+                )
 
         # post-process these values to give the gradients w.r.t. center and size
         vjps_center_size = self._derivatives_center_size(vjps_faces=vjps_faces)
 
         # store only the gradients asked for in 'field_paths'
         derivative_map = {}
-        for field_path in derivative_info.paths:
+        for field_path in paths:
             field_name, *index = field_path
 
             if field_name in vjps_center_size:
@@ -2943,53 +3047,34 @@ class Box(SimplePlaneIntersection, Centered):
             "size": tuple(vjp_size.tolist()),
         }
 
-    def _derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
-        """Derivative with respect to normal position of 6 faces of ``Box``."""
-
-        axes_to_compute = (0, 1, 2)
-        if len(derivative_info.paths[0]) > 1:
-            axes_to_compute = tuple(info[1] for info in derivative_info.paths)
-
-        # change in permittivity between inside and outside
-        vjp_faces = np.zeros((2, 3))
-
-        for min_max_index, _ in enumerate((0, -1)):
-            for axis in axes_to_compute:
-                vjp_face = self._derivative_face(
-                    min_max_index=min_max_index,
-                    axis_normal=axis,
-                    derivative_info=derivative_info,
-                )
-
-                # record vjp for this face
-                vjp_faces[min_max_index, axis] = vjp_face
-
-        return vjp_faces
-
-    def _derivative_face(
+    def _make_face_sample_set(
         self,
         min_max_index: int,
         axis_normal: Axis,
-        derivative_info: DerivativeInfo,
-    ) -> float:
-        """Compute the derivative w.r.t. shifting a face in the normal direction."""
+        ctx: SamplingContext,
+    ) -> SurfaceSampleSet | None:
+        """Generate the surface samples for one face, or ``None`` if it contributes none.
 
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+        The face's identity is carried by its canonical key ``("faces", min_max_index,
+        axis_normal)``; the set itself holds only samples and quadrature weights.
+        """
+        from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
+
         _, axis_perp = self.pop_axis((0, 1, 2), axis=axis_normal)
 
-        # First, check if the face is outside the simulation domain in which case set the
-        # face gradient to 0.
-        bounds_normal, _ = self.pop_axis(np.array(derivative_info.bounds).T, axis=axis_normal)
+        # First, check if the face is outside the simulation domain in which case the
+        # face contributes no samples (zero gradient).
+        bounds_normal, _ = self.pop_axis(np.array(ctx.bounds).T, axis=axis_normal)
         coord_normal_face = bounds_normal[min_max_index]
 
         if min_max_index == 0:
-            if coord_normal_face < derivative_info.simulation_bounds[0][axis_normal]:
-                return 0.0
+            if coord_normal_face < ctx.simulation_bounds[0][axis_normal]:
+                return None
         else:
-            if coord_normal_face > derivative_info.simulation_bounds[1][axis_normal]:
-                return 0.0
+            if coord_normal_face > ctx.simulation_bounds[1][axis_normal]:
+                return None
 
-        intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
+        intersect_min, intersect_max = map(np.asarray, ctx.bounds_intersect)
         extents = intersect_max - intersect_min
         _, intersect_min_perp = self.pop_axis(np.array(intersect_min), axis=axis_normal)
         _, intersect_max_perp = self.pop_axis(np.array(intersect_max), axis=axis_normal)
@@ -3001,12 +3086,12 @@ class Box(SimplePlaneIntersection, Centered):
             is_2d_map.append(np.isclose(extents[axis_idx], 0.0))
 
         if np.all(is_2d_map):
-            return 0.0
+            return None
 
         is_2d = np.any(is_2d_map)
 
         # Build point grid
-        adaptive_spacing = derivative_info.adaptive_vjp_spacing()
+        adaptive_spacing = ctx.spacing
 
         def spacing_to_grid_points(
             spacing: float, min_coord: float, max_coord: float
@@ -3046,7 +3131,7 @@ class Box(SimplePlaneIntersection, Centered):
             )
 
             if not verify_integration_interval(integration_bounds_perp):
-                return 0.0
+                return None
 
             grid_points_linear = spacing_to_grid_points(
                 adaptive_spacing, integration_bounds_perp[0], integration_bounds_perp[1]
@@ -3069,7 +3154,7 @@ class Box(SimplePlaneIntersection, Centered):
             )
 
             if not np.all([verify_integration_interval(b) for b in integration_bounds_perp]):
-                return 0.0
+                return None
 
             grid_points_perp_1 = spacing_to_grid_points(
                 adaptive_spacing, integration_bounds_perp[0][0], integration_bounds_perp[0][1]
@@ -3100,16 +3185,14 @@ class Box(SimplePlaneIntersection, Centered):
         perps1[:, axis_perp[0]] = 1
         perps2[:, axis_perp[1]] = 1
 
-        gradient_at_points = derivative_info.evaluate_gradient_at_points(
-            spatial_coords=grid_points,
+        return SurfaceSampleSet.from_arrays(
+            points=grid_points,
             normals=normals,
             perps1=perps1,
             perps2=perps2,
-            interpolators=interpolators,
+            weights=np.full(len(grid_points), integration_weight),
+            serves_paths=(("center",), ("size",)),
         )
-
-        vjp_value = np.sum(integration_weight * np.real(gradient_at_points))
-        return vjp_value
 
 
 """Compound subclasses"""
@@ -3767,13 +3850,48 @@ class ClipOperation(Geometry):
             ),
         )
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives by accumulating contributions from both operands."""
+    @staticmethod
+    def _operand_paths(paths: list[PathType]) -> dict[str, list[PathType]]:
+        """Group operand-relative sub-paths by operand key."""
         geometry_paths = {"geometry_a": [], "geometry_b": []}
-        for path in derivative_info.paths:
+        for path in paths:
             geometry_key, *sub_path = path
             geometry_paths[geometry_key].append(tuple(sub_path))
+        return geometry_paths
 
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Route generation to both operands, prefixing their canonical keys.
+
+        Operands generate their full (unmasked) surfaces; the clip-activity masking
+        stays at evaluation time via ``derivative_info.clipped_geometry``.
+        """
+        geometry_map = {
+            "geometry_a": self.geometry_a,
+            "geometry_b": self.geometry_b,
+        }
+        sample_sets = {}
+        for geometry_key, operand_paths in self._operand_paths(paths).items():
+            if not operand_paths:
+                continue
+            geometry = geometry_map[geometry_key]
+            ctx_operand = ctx.updated_copy(
+                bounds=geometry.bounds,
+                bounds_intersect=self.bounds_intersection(geometry.bounds, ctx.simulation_bounds),
+            )
+            operand_sets = geometry._make_adjoint_sample_sets(paths=operand_paths, ctx=ctx_operand)
+            for key, key_sample_sets in operand_sets.items():
+                sample_sets[(geometry_key, *key)] = key_sample_sets
+        return sample_sets
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Route consumption to both operands, accumulating their contributions."""
         if derivative_info.clipped_geometry is None:
             raise ValidationError(
                 "ClipOperation derivative evaluation requires `clipped_geometry`."
@@ -3788,13 +3906,18 @@ class ClipOperation(Geometry):
         # Reuse interpolation data for both operands to avoid duplicate setup.
         interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
 
-        for geometry_key, geometry in geometry_map.items():
-            paths = geometry_paths[geometry_key]
-            if not paths:
+        for geometry_key, operand_paths in self._operand_paths(paths).items():
+            if not operand_paths:
                 continue
+            geometry = geometry_map[geometry_key]
+
+            prefix = (geometry_key,)
+            operand_sets = {
+                key[1:]: value for key, value in sample_sets.items() if key[:1] == prefix
+            }
 
             geometry_info = derivative_info.updated_copy(
-                paths=paths,
+                paths=operand_paths,
                 bounds=geometry.bounds,
                 bounds_intersect=self.bounds_intersection(
                     geometry.bounds, derivative_info.simulation_bounds
@@ -3803,7 +3926,11 @@ class ClipOperation(Geometry):
                 interpolators=interpolators,
             )
 
-            vjp_dict_geometry = geometry._compute_derivatives(geometry_info)
+            vjp_dict_geometry = geometry._compute_derivatives_from_sample_sets(
+                sample_sets=operand_sets,
+                paths=operand_paths,
+                derivative_info=geometry_info,
+            )
 
             for geo_path, geo_vjp in vjp_dict_geometry.items():
                 full_path = (geometry_key, *geo_path)
@@ -4075,35 +4202,70 @@ class GeometryGroup(Geometry):
             )
         return AutogradRoute(local_path=field_path)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
+    @staticmethod
+    def _sub_paths_by_child(paths: list[PathType]) -> dict[int, list[PathType]]:
+        """Group child-relative sub-paths by child geometry index."""
+        grouped: dict[int, list[PathType]] = {}
+        for field_path in paths:
+            _, index, *geo_path = field_path
+            grouped.setdefault(index, []).append(tuple(geo_path))
+        return grouped
 
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Route generation to child geometries, prefixing their canonical keys.
+
+        All of a child's requested paths are generated in one call so canonical sets
+        shared across derivative paths (e.g. box faces) are produced exactly once.
+        """
+        sample_sets = {}
+        for index, child_paths in self._sub_paths_by_child(paths).items():
+            child = self.geometries[index]
+            ctx_child = ctx.updated_copy(
+                bounds=child.bounds,
+                bounds_intersect=self.bounds_intersection(child.bounds, ctx.simulation_bounds),
+            )
+            child_sets = child._make_adjoint_sample_sets(paths=child_paths, ctx=ctx_child)
+            for key, key_sample_sets in child_sets.items():
+                sample_sets[("geometries", index, *key)] = key_sample_sets
+        return sample_sets
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """Route consumption to child geometries, mapping their vjps to full paths."""
         grad_vjps = {}
 
         # create interpolators once for all geometries to avoid redundant field data conversions
         interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
 
-        for field_path in derivative_info.paths:
-            _, index, *geo_path = field_path
+        for index, child_paths in self._sub_paths_by_child(paths).items():
+            child = self.geometries[index]
 
-            geo = self.geometries[index]
+            prefix = ("geometries", index)
+            child_sets = {key[2:]: value for key, value in sample_sets.items() if key[:2] == prefix}
+
             # pass pre-computed interpolators if available
-            geo_info = derivative_info.updated_copy(
-                paths=[tuple(geo_path)],
-                bounds=geo.bounds,
+            child_info = derivative_info.updated_copy(
+                paths=child_paths,
+                bounds=child.bounds,
                 bounds_intersect=self.bounds_intersection(
-                    geo.bounds, derivative_info.simulation_bounds
+                    child.bounds, derivative_info.simulation_bounds
                 ),
                 deep=False,
                 interpolators=interpolators,
             )
 
-            vjp_dict_geo = geo._compute_derivatives(geo_info)
+            child_vjps = child._compute_derivatives_from_sample_sets(
+                sample_sets=child_sets, paths=child_paths, derivative_info=child_info
+            )
 
-            if len(vjp_dict_geo) != 1:
-                raise AssertionError("Got multiple gradients for single geometry field.")
-
-            grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
+            for geo_path, geo_vjp in child_vjps.items():
+                grad_vjps[("geometries", index, *geo_path)] = geo_vjp
 
         return grad_vjps
 

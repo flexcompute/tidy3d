@@ -64,7 +64,7 @@ from .run_options import (
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData, task_type_name_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Sequence
     from os import PathLike
     from typing import Literal
 
@@ -494,8 +494,27 @@ def restore_simulation_if_cached(
     path: PathLike | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose: bool = True,
+    required_metadata_flags: Sequence[str] = (),
 ) -> tuple[PathLike | None, TaskId | None]:
-    """Attempt to restore simulation data from a local cache entry, if available."""
+    """Attempt to restore simulation data from a local cache entry, if available.
+
+    ``required_metadata_flags`` names entry-metadata keys that must be truthy for the
+    entry to count as a hit; entries written before a flag existed are treated as
+    misses.
+
+    Autograd forward simulations additionally always require the sample-set sidecar
+    flag: every restore path (sync and async strategies, ``Job.load_if_cached``, and
+    batch step restores) funnels through this function, and a cached parent whose
+    upload predates the sidecar cannot feed a remote backward task — treating it as
+    a miss makes the forward rerun actually produce a usable parent.
+    """
+    required_metadata_flags = tuple(required_metadata_flags)
+    if getattr(simulation, "simulation_type", None) == "autograd_fwd":
+        from tidy3d.web.api.autograd.constants import AUTOGRAD_SIDECAR_CACHE_FLAG
+
+        if AUTOGRAD_SIDECAR_CACHE_FLAG not in required_metadata_flags:
+            required_metadata_flags += (AUTOGRAD_SIDECAR_CACHE_FLAG,)
+
     simulation_cache = resolve_local_cache()
     retrieved_simulation_path = None
     cached_task_id = None
@@ -504,6 +523,15 @@ def restore_simulation_if_cached(
         if isinstance(simulation, ModeSolver | ModeSimulation):
             sim_for_cache = get_reduced_simulation(simulation, reduce_simulation)
         entry = simulation_cache.try_fetch(simulation=sim_for_cache, verbose=verbose)
+        if entry is not None and any(
+            not entry.metadata.get(flag) for flag in required_metadata_flags
+        ):
+            log.info(
+                "Ignoring local cache entry for this simulation: it was created without "
+                f"required capabilities {list(required_metadata_flags)} (likely by an "
+                "older tidy3d version); rerunning instead of restoring."
+            )
+            entry = None
         if entry is not None:
             if path is not None:
                 copied = _copy_simulation_data_from_cache_entry(entry, path)
@@ -1229,12 +1257,20 @@ def load(
                 cache_simulation=cache_simulation,
             )
             if should_store:
+                extra_metadata = None
+                if getattr(simulation, "simulation_type", None) == "autograd_fwd":
+                    # uploads from this client always include the sample-set sidecar,
+                    # so record that capability for remote-gradient cache restores
+                    from tidy3d.web.api.autograd.constants import AUTOGRAD_SIDECAR_CACHE_FLAG
+
+                    extra_metadata = {AUTOGRAD_SIDECAR_CACHE_FLAG: True}
                 simulation_cache.store_result(
                     stub_data=stub_data,
                     task_id=task_id,
                     path=path,
                     workflow_type=workflow_type,
                     simulation=simulation,
+                    extra_metadata=extra_metadata,
                 )
 
     return stub_data

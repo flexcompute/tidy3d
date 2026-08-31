@@ -692,6 +692,7 @@ class LocalCache:
         path: str,
         workflow_type: str,
         simulation: WorkflowOperationType | None = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
         Stores completed workflow results in the local cache using a canonical cache key.
@@ -752,6 +753,7 @@ class LocalCache:
                 path=path,
                 workflow_type=workflow_name,
                 simulation_hash=simulation_hash,
+                extra_metadata=extra_metadata,
             )
         except Exception as e:
             log.error(f"Could not store cache entry: {e}")
@@ -765,6 +767,7 @@ class LocalCache:
         simulation_hash: str,
         artifact_type: str | None = None,
         version: Any | None = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store a completed workflow result using a validated explicit origin hash."""
         try:
@@ -784,6 +787,7 @@ class LocalCache:
                 version=version,
                 path=Path(path),
                 artifact_type=artifact_type,
+                extra_metadata=extra_metadata,
             )
 
             self._store(
@@ -939,8 +943,14 @@ def build_entry_metadata(
     version: str,
     path: Path,
     artifact_type: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> CacheEntryMetadata:
-    """Create metadata object for a cache entry."""
+    """Create metadata object for a cache entry.
+
+    ``extra_metadata`` entries are persisted alongside the schema fields (the model
+    allows extra keys) so workflow-specific consumers can record capability flags,
+    e.g. whether an autograd forward upload included its sample-set sidecar.
+    """
 
     now = datetime.now(timezone.utc)
     return CacheEntryMetadata(
@@ -955,6 +965,7 @@ def build_entry_metadata(
         task_id=task_id,
         path=str(path),
         artifact_type=artifact_type,
+        **(extra_metadata or {}),
     )
 
 

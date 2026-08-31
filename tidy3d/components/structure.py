@@ -59,9 +59,10 @@ if TYPE_CHECKING:
     from tidy3d import VisualizationSpec
     from tidy3d.compat import Self
     from tidy3d.components.grid.grid import Grid
+    from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
 
     from .autograd.derivative_utils import DerivativeInfo
-    from .autograd.types import AutogradFieldMap
+    from .autograd.types import AutogradFieldMap, PathType
     from .data.data_array import SpatialDataArray
     from .geometry.contour_conversion import ContourPolyslabData
     from .geometry.polyslab import PolySlab
@@ -499,7 +500,12 @@ class Structure(AbstractStructure):
         return monitor_name_map[data_type]
 
     def _adjoint_monitor_box(self, grid: Grid, plane: Box | None = None) -> Box:
-        """Expanded box covered by this structure's adjoint monitors."""
+        """Expanded box covered by this structure's adjoint monitors.
+
+        This is the single source of truth for the adjoint monitor region: adjoint
+        sample-set generation scans the same box so monitor setup and derivative
+        sampling cannot drift.
+        """
 
         geometry = self.geometry
         geom_box = geometry.bounding_box
@@ -594,9 +600,14 @@ class Structure(AbstractStructure):
         self,
         derivative_info: DerivativeInfo,
         vjp_fns: dict[tuple[str, ...], Callable[..., Any]] | None = None,
+        sample_sets: dict[PathType, SurfaceSampleSet] | None = None,
     ) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields provided in derivative_info.
-        vjp_fns provide alternate derivative computation paths for the geometry or medium derivatives.
+
+        vjp_fns provide alternate derivative computation paths for the geometry or medium
+        derivatives, matched by (med_or_geo, path head). sample_sets are the pre-collected
+        surface samples consumed by the standard geometry shape paths; they are required
+        whenever such paths are present (see ``collect_adjoint_sample_sets``).
         """
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
@@ -620,27 +631,50 @@ class Structure(AbstractStructure):
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
 
-            collect_paths_by_keys = {}
+            # split off custom-vjp-owned paths, matched by path head as before
+            custom_paths_by_key = {}
+            standard_paths = []
             for path in field_paths:
-                if path[0] in collect_paths_by_keys:
-                    collect_paths_by_keys[path[0]].append(path)
+                if (vjp_fns is not None) and ((med_or_geo, path[0]) in vjp_fns):
+                    custom_paths_by_key.setdefault(path[0], []).append(path)
                 else:
-                    collect_paths_by_keys[path[0]] = [path]
+                    standard_paths.append(path)
 
             derivative_values_map = {}
-            for path_key, paths in collect_paths_by_keys.items():
-                full_path = (med_or_geo, path_key)
-                if (vjp_fns is not None) and (full_path in vjp_fns):
-                    full_paths = [(med_or_geo, *path) for path in paths]
-                    info = derivative_info.updated_copy(paths=full_paths, deep=False)
+            for path_key, paths in custom_paths_by_key.items():
+                full_paths = [(med_or_geo, *path) for path in paths]
+                info = derivative_info.updated_copy(paths=full_paths, deep=False)
 
-                    vjp = vjp_fns[full_path](med_or_geo_field, derivative_info=info)
-                    vjp_strip_med_or_geo = {key[1:]: val for key, val in vjp.items()}
+                vjp = vjp_fns[(med_or_geo, path_key)](med_or_geo_field, derivative_info=info)
+                vjp_strip_med_or_geo = {key[1:]: val for key, val in vjp.items()}
 
-                    derivative_values_map.update(vjp_strip_med_or_geo)
-                else:
+                derivative_values_map.update(vjp_strip_med_or_geo)
+
+            if med_or_geo == "geometry" and standard_paths:
+                if sample_sets is None:
+                    raise AdjointError(
+                        "Geometry shape derivatives require pre-collected adjoint sample sets. "
+                        "Generate them with 'collect_adjoint_sample_sets' (or "
+                        "'Geometry._make_adjoint_sample_sets') and pass them via the "
+                        "'sample_sets' argument."
+                    )
+                # all standard geometry paths in one call: canonical sample sets shared
+                # across derivative paths are consumed exactly once
+                info = derivative_info.updated_copy(paths=standard_paths, deep=False)
+                derivative_values_map.update(
+                    self.geometry._compute_derivatives_from_sample_sets(
+                        sample_sets=sample_sets,
+                        paths=standard_paths,
+                        derivative_info=info,
+                    )
+                )
+            elif standard_paths:
+                # medium paths keep their per-head dispatch unchanged
+                standard_paths_by_key = {}
+                for path in standard_paths:
+                    standard_paths_by_key.setdefault(path[0], []).append(path)
+                for paths in standard_paths_by_key.values():
                     info = derivative_info.updated_copy(paths=paths, deep=False)
-
                     derivative_values_map.update(
                         med_or_geo_field._compute_derivatives(derivative_info=info)
                     )

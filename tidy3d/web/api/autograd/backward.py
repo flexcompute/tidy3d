@@ -21,11 +21,24 @@ from tidy3d.components.source.adjoint_helpers import (
 from tidy3d.components.source.field import AbstractGaussianBeam
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
+from tidy3d.flex_em.translate.sample_sets import (
+    SamplingContext,
+    shape_paths_by_structure,
+    validate_sample_sets_coverage,
+)
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel
 
+from .constants import SAMPLE_SETS_FILE
 from .flux_monitor import expand_flux_monitor_vjps
-from .utils import E_to_D, filter_vjp_map, get_derivative_maps, scale_field_data
+from .utils import (
+    E_to_D,
+    custom_vjp_geometry_exclusions,
+    expand_custom_vjp_configs,
+    filter_vjp_map,
+    get_derivative_maps,
+    scale_field_data,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -301,31 +314,24 @@ def postprocess_adj(
     numerical_structure_map = postprocess_inputs.numerical_structure_map
     custom_vjp = postprocess_inputs.custom_vjp
 
-    def get_all_paths(match_structure_index: int) -> tuple[tuple[Any, ...], ...]:
-        """Get traced autograd paths for one structure index.
+    custom_vjp_lookup = expand_custom_vjp_configs(custom_vjp, sim_fields_keys)
+    sample_set_exclusions = custom_vjp_geometry_exclusions(custom_vjp_lookup)
 
-        ``sim_fields_keys`` can contain entries for both ``"structures"`` and ``"sources"``.
-        Restricting to ``"structures"`` here avoids mixing source paths into
-        structure-level ``custom_vjp`` expansion when indices overlap.
-        """
-        return tuple(
-            tuple(component_path)
-            for component_type, component_index, *component_path in sim_fields_keys
-            if component_type == "structures" and component_index == match_structure_index
-        )
-
-    custom_vjp_lookup: dict[int, dict[tuple[str, str], Callable[..., Any]]] = {}
-    if custom_vjp:
-        for vjp_config in custom_vjp:
-            structure_index = vjp_config.structure
-            vjp_fn = vjp_config.compute_derivatives
-            path = vjp_config.path_key
-
-            if path is None:
-                for match_path in get_all_paths(structure_index):
-                    custom_vjp_lookup.setdefault(structure_index, {})[match_path[0:2]] = vjp_fn
-            else:
-                custom_vjp_lookup.setdefault(structure_index, {})[path] = vjp_fn
+    sample_sets_artifact = postprocess_inputs.sample_sets
+    required_sample_paths = shape_paths_by_structure(sim_fields_keys, exclude=sample_set_exclusions)
+    if sample_sets_artifact is None:
+        if required_sample_paths:
+            raise AdjointError(
+                "Geometry shape derivatives require the pre-collected adjoint sample sets "
+                f"artifact ('{SAMPLE_SETS_FILE}'), but none was provided. This artifact is "
+                "uploaded with every autograd forward task by tidy3d versions that support it. "
+                "Rerun the forward simulation with an up-to-date tidy3d client, or use "
+                "'local_gradient=True'."
+            )
+    else:
+        # partial coverage is an error, never a partial recompute; the boundary helper
+        # translates schema exceptions so callers only ever see tidy3d exceptions
+        validate_sample_sets_coverage(sample_sets_artifact, required_sample_paths)
 
     # group the paths by component type and index
     sim_vjp_map = defaultdict(list)
@@ -356,6 +362,11 @@ def postprocess_adj(
     sim_fields_vjp = {}
     for (component_type, component_index), component_paths in sim_vjp_map.items():
         if component_type == "structures":
+            structure_sample_sets = (
+                sample_sets_artifact.for_structure(component_index)
+                if sample_sets_artifact is not None
+                else None
+            )
             sim_fields_vjp.update(
                 _process_structure_gradients(
                     sim_data_adj,
@@ -367,6 +378,11 @@ def postprocess_adj(
                         component_index
                     ),
                     custom_vjp=custom_vjp_lookup.get(component_index),
+                    sample_sets=(
+                        structure_sample_sets.by_key()
+                        if structure_sample_sets is not None
+                        else None
+                    ),
                 )
             )
         elif component_type == "sources":
@@ -629,8 +645,13 @@ def _process_structure_gradients(
     custom_vjp: dict[tuple[str, str], Callable[..., Any]] | None = None,
     numerical_structure: NumericalStructureConfig | None = None,
     numerical_paths: list[tuple] | None = None,
+    sample_sets: dict[tuple, Any] | None = None,
 ) -> AutogradFieldMap:
-    """Process gradients for a specific structure."""
+    """Process gradients for a specific structure.
+
+    ``sample_sets`` are the structure's pre-collected surface samples (canonical-keyed),
+    shared across all frequency chunks; when absent, geometries generate late.
+    """
 
     structure_paths = structure_paths or []
     numerical_paths = numerical_paths or []
@@ -888,8 +909,10 @@ def _process_structure_gradients(
         )
 
         if structure_paths:
-            # compute derivatives for chunk
-            vjp_chunk = structure._compute_derivatives(derivative_info, vjp_fns=custom_vjp)
+            # compute derivatives for chunk; sample sets are shared across chunks
+            vjp_chunk = structure._compute_derivatives(
+                derivative_info, vjp_fns=custom_vjp, sample_sets=sample_sets
+            )
 
             # accumulate results
             _accumulate_field_map(vjp_value_map, vjp_chunk)
@@ -1012,7 +1035,26 @@ def _process_structure_gradients(
                     interpolators=shared_interpolators,
                     deep=False,
                 )
-                return target_structure._compute_derivatives(helper_derivative_info_use)
+                helper_sample_sets = None
+                helper_geometry_paths = [
+                    tuple(path[1:])
+                    for path in helper_derivative_info_use.paths
+                    if path and path[0] == "geometry"
+                ]
+                if helper_geometry_paths:
+                    helper_ctx = SamplingContext(
+                        bounds=target_bounds,
+                        bounds_intersect=bounds_intersection(sim_orig.bounds, target_bounds),
+                        simulation_bounds=sim_orig.bounds,
+                        spacing=helper_sampling_resolution.spacing,
+                        material_wavelength=helper_sampling_resolution.material_wavelength,
+                    )
+                    helper_sample_sets = target_structure.geometry._make_adjoint_sample_sets(
+                        paths=helper_geometry_paths, ctx=helper_ctx
+                    )
+                return target_structure._compute_derivatives(
+                    helper_derivative_info_use, sample_sets=helper_sample_sets
+                )
 
             derivative_helper = functools.partial(
                 _derivative_helper_impl,

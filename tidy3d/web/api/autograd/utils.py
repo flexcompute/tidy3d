@@ -10,8 +10,13 @@ from tidy3d.components.autograd import get_static
 from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from typing import Any
+
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.data.data_array import DataArray
+
+    from .types import CustomVJPConfig
 
 """ E and D field gradient map calculation helpers. """
 
@@ -118,3 +123,57 @@ def zero_vjp_map(sim_fields_original: AutogradFieldMap) -> AutogradFieldMap:
         key: (type(value)(0 * x for x in value) if isinstance(value, (list, tuple)) else 0 * value)
         for key, value in sim_fields_original.items()
     }
+
+
+def expand_custom_vjp_configs(
+    custom_vjp: Sequence[CustomVJPConfig] | None,
+    sim_fields_keys: list[tuple],
+) -> dict[int, dict[tuple[str, str], Callable[..., Any]]]:
+    """Expand custom-vjp configs into per-structure ``(med_or_geo, path head)`` handlers.
+
+    A config with ``path_key=None`` claims every traced path of its structure.
+    """
+
+    def get_all_paths(match_structure_index: int) -> tuple[tuple[Any, ...], ...]:
+        """Get traced autograd paths for one structure index.
+
+        ``sim_fields_keys`` can contain entries for both ``"structures"`` and ``"sources"``.
+        Restricting to ``"structures"`` here avoids mixing source paths into
+        structure-level ``custom_vjp`` expansion when indices overlap.
+        """
+        return tuple(
+            tuple(component_path)
+            for component_type, component_index, *component_path in sim_fields_keys
+            if component_type == "structures" and component_index == match_structure_index
+        )
+
+    custom_vjp_lookup: dict[int, dict[tuple[str, str], Callable[..., Any]]] = {}
+    if custom_vjp:
+        for vjp_config in custom_vjp:
+            structure_index = vjp_config.structure
+            vjp_fn = vjp_config.compute_derivatives
+            path = vjp_config.path_key
+
+            if path is None:
+                for match_path in get_all_paths(structure_index):
+                    custom_vjp_lookup.setdefault(structure_index, {})[match_path[0:2]] = vjp_fn
+            else:
+                custom_vjp_lookup.setdefault(structure_index, {})[path] = vjp_fn
+
+    return custom_vjp_lookup
+
+
+def custom_vjp_geometry_exclusions(
+    custom_vjp_lookup: dict[int, dict[tuple[str, str], Callable[..., Any]]],
+) -> dict[int, tuple[tuple[str], ...]]:
+    """Geometry path-head exclusions implied by custom vjps, as 1-tuple prefixes.
+
+    Sample-set collection and coverage validation both take these exclusions, so
+    custom-vjp-owned paths are neither collected for nor demanded of the artifact.
+    """
+    exclusions = {}
+    for structure_index, vjp_fns in custom_vjp_lookup.items():
+        heads = tuple((key[1],) for key in vjp_fns if key[0] == "geometry")
+        if heads:
+            exclusions[structure_index] = heads
+    return exclusions
