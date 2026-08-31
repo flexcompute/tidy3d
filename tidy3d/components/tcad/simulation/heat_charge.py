@@ -1731,12 +1731,9 @@ class HeatChargeSimulation(AbstractSimulation):
         if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
             return self
         domain_length = np.max([d for d in self.size if d != np.inf])
+        # Units are Tidy3D-native (um, J/(kg*K), kg/um^3, W/(um*K)); this is already seconds.
         characteristic_time = (
-            domain_length**2
-            * np.mean(capacities)
-            * np.mean(densities)
-            / np.mean(conductivities)
-            * 1e-18
+            domain_length**2 * np.mean(capacities) * np.mean(densities) / np.mean(conductivities)
         )
         if (
             analysis_type.unsteady_spec.time_step * analysis_type.unsteady_spec.total_time_steps

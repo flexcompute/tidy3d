@@ -110,7 +110,10 @@ class FluidMedium(AbstractHeatMedium):
     specific_heat: NonNegativeFloat | None = Field(
         default=None,
         title="Fluid Specific Heat",
-        description="Specific heat of the fluid at constant pressure.",
+        description="Specific heat of the fluid at constant pressure, in units of "
+        f"{SPECIFIC_HEAT}, which is 1e12 times the SI value in {SPECIFIC_HEAT_CAPACITY}. "
+        "Prefer ``FluidMedium.from_si_units()``, which takes every property in SI units and "
+        "applies the conversion.",
         json_schema_extra={"units": SPECIFIC_HEAT},
     )
     density: NonNegativeFloat | None = Field(
@@ -135,6 +138,11 @@ class FluidMedium(AbstractHeatMedium):
         density: NonNegativeFloat,
         expansivity: NonNegativeFloat,
     ) -> Self:
+        """Create a FluidMedium from SI units, converting each property to Tidy3D units.
+
+        This is the recommended way to build a fluid, since every property except
+        ``expansivity`` differs from its SI unit.
+        """
         thermal_conductivity_tidy = thermal_conductivity / 1e6  # W/(m*K) -> W/(um*K)
         viscosity_tidy = viscosity / 1e6  # Pa*s -> kg/(um*s)
         specific_heat_tidy = specific_heat * 1e12  # J/(kg*K) -> um**2/(s**2*K)
@@ -295,12 +303,33 @@ class SolidMedium(AbstractHeatMedium):
     ...     capacity=2,
     ...     conductivity=3,
     ... )
+
+    >>> # It is most convenient to define the solid from standard SI units
+    >>> # using the `from_si_units` classmethod. The following defines silicon.
+    >>> silicon = SolidMedium.from_si_units(
+    ...     conductivity=148,   # Unit: W/(m*K)
+    ...     capacity=700,       # Unit: J/(kg*K)
+    ...     density=2330,       # Unit: kg/m^3
+    ... )
+
+    >>> # One can also define the medium directly in Tidy3D units.
+    >>> # The following is equivalent to the example above. Note that `capacity` is
+    >>> # unchanged, since J/(kg*K) is already the Tidy3D convention for solids, while
+    >>> # `conductivity` and `density` are scaled.
+    >>> silicon_direct = SolidMedium(
+    ...     conductivity=1.48e-4,
+    ...     capacity=700,
+    ...     density=2.33e-15,
+    ... )
     """
 
     capacity: PositiveFloat | None = Field(
         None,
         title="Heat capacity",
-        description=f"Specific heat capacity in unit of {SPECIFIC_HEAT_CAPACITY}.",
+        description=f"Specific heat capacity in units of {SPECIFIC_HEAT_CAPACITY}, which is "
+        "already the SI unit, so no conversion is needed for this field. Prefer "
+        "``SolidMedium.from_si_units()``, which takes every property in SI units and converts "
+        "``conductivity`` and ``density``, both of which do differ from their SI units.",
         json_schema_extra={"units": SPECIFIC_HEAT_CAPACITY},
     )
 
@@ -374,7 +403,9 @@ class SolidMedium(AbstractHeatMedium):
         velocity: Coordinate | None = None,
     ) -> Self:
         """Create a SolidMedium using SI units. ``conductivity`` may be a scalar or an
-        ``AnisotropicConductivity`` given in SI units; its principals are converted too."""
+        ``AnisotropicConductivity`` given in SI units; its principals are converted too.
+        ``capacity`` is passed through unchanged, since J/(kg*K) is both the SI unit and the
+        Tidy3D convention for solids."""
         # W/(m*K) -> W/(um*K). For a tensor, scale the principals (rotation is unitless).
         if isinstance(conductivity, AnisotropicConductivity):
             new_conductivity = conductivity.updated_copy(
