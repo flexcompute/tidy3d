@@ -78,8 +78,8 @@ def test_imported_faq_sources_are_complete_and_valid() -> None:
     categories = generate_faq_docs.load_and_validate(FAQ_ROOT)
 
     assert len(categories) == 22
-    assert sum(len(category.faqs) for category in categories) == 256
-    assert len({faq.manifest_path for category in categories for faq in category.faqs}) == 256
+    assert sum(len(category.faqs) for category in categories) == 257
+    assert len({faq.manifest_path for category in categories for faq in category.faqs}) == 257
 
 
 def test_parallel_checkpoint_faq_distinguishes_web_run_from_direct_batch() -> None:
@@ -379,7 +379,7 @@ def test_generation_is_deterministic(tmp_path: Path) -> None:
 
     assert _snapshot(first) == _snapshot(second)
     manifest = json.loads((first / "manifest.json").read_text(encoding="utf-8"))
-    assert len(manifest) == 256
+    assert len(manifest) == 257
     assert (first / "index.rst").is_file()
     assert (first / generate_faq_docs.GENERATED_MARKER).is_file()
     aliases = json.loads((first / "aliases.json").read_text(encoding="utf-8"))
