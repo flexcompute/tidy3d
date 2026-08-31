@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from typing import ClassVar
 
 from pydantic import Field, field_validator
 
@@ -78,6 +79,9 @@ class SSACAnalysis(SteadyChargeDCAnalysis, AbstractSSACAnalysis):
     >>> sweep_freqs = freq_range.sweep_decade(num_points_per_decade=10)
     >>> ssac_spec = td.SSACAnalysis(freqs=sweep_freqs)
     """
+
+    # The DC default would send a scalar 'temperature' to a class with no AC fields.
+    _isothermal_equivalent: ClassVar[str] = "IsothermalSSACAnalysis"
 
 
 class IsothermalSSACAnalysis(IsothermalSteadyChargeDCAnalysis, AbstractSSACAnalysis):

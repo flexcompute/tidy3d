@@ -613,6 +613,9 @@ class HeatChargeSimulation(AbstractSimulation):
             self._check_transient_heat_time_warning()
         self._call_with_validation_loc(("structures",), self._check_non_isothermal_is_possible)
         self._call_with_validation_loc(
+            ("analysis_spec",), self._validate_prescribed_temperature_requirements
+        )
+        self._call_with_validation_loc(
             ("use_accelerated_solver",), self._check_use_accelerated_solver
         )
         return self
@@ -1558,6 +1561,69 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
+    def _validate_prescribed_temperature_requirements(self) -> Self:
+        """Checks for a charge analysis running on a prescribed lattice temperature field."""
+        if not self._temperature_prescribed:
+            return self
+
+        if self.use_accelerated_solver is False:
+            self._raise_validation_error_at_loc(
+                "A prescribed lattice temperature ('SteadyChargeDCAnalysis.temperature') is "
+                "only supported by the accelerated charge solver, but "
+                "'use_accelerated_solver=False' was set. Use the accelerated solver (the "
+                "default), or use 'IsothermalSteadyChargeDCAnalysis' for a uniform "
+                "temperature.",
+                "use_accelerated_solver",
+                log_error=False,
+            )
+
+        # Via the shared iterator so a semiconductor background 'medium' counts too: it
+        # fills the whole domain, so a field sized to the structures falls short.
+        semiconductor_bounds = []
+        for loc, _charge in self._iter_semiconductor_charge_media():
+            if loc == ("medium",):
+                semiconductor_bounds.append(self.bounds)
+            else:
+                semiconductor_bounds.append(self.structures[loc[1]].geometry.bounds)
+        if not semiconductor_bounds:
+            return self
+
+        # Clip to the simulation domain: an unbounded semiconductor structure is only ever
+        # meshed where it overlaps the domain, so that is all the field has to cover.
+        sim_rmin, sim_rmax = self.bounds
+        device_min = [
+            max(min(b[0][d] for b in semiconductor_bounds), sim_rmin[d]) for d in range(3)
+        ]
+        device_max = [
+            min(max(b[1][d] for b in semiconductor_bounds), sim_rmax[d]) for d in range(3)
+        ]
+
+        temperature = self.analysis_spec.temperature
+        uncovered = []
+        for dim_index, dim in enumerate("xyz"):
+            coords = np.asarray(temperature.coords[dim])
+            # Singleton axis reads as "invariant along it" to the sampler, so it covers.
+            if coords.size <= 1:
+                continue
+            if device_min[dim_index] < coords.min() or device_max[dim_index] > coords.max():
+                uncovered.append(
+                    f"{dim}: field spans [{coords.min():.4g}, {coords.max():.4g}] but "
+                    f"semiconductors span [{device_min[dim_index]:.4g}, "
+                    f"{device_max[dim_index]:.4g}]"
+                )
+
+        if uncovered:
+            log.warning(
+                "The prescribed lattice temperature "
+                "('SteadyChargeDCAnalysis.temperature') does not cover the whole "
+                "semiconductor region, so outside its bounding box the temperature is "
+                "clamped to the nearest value on the field's boundary rather than "
+                "interpolated. Extend the field to cover the device if that is not "
+                "intended. Shortfall by axis -- " + "; ".join(uncovered) + "."
+            )
+
+        return self
+
     def _check_heat_sim(self) -> Self:
         """Make sure that heat simulations have at least one monitor defined."""
         if not any(isinstance(mnt, TemperatureMonitor) for mnt in self.monitors):
@@ -1753,12 +1819,13 @@ class HeatChargeSimulation(AbstractSimulation):
         Both halves scan the background 'medium' as well as every structure, since the
         mesher composes them into the same domain: asking the two questions over
         different sets of media is what let a background semiconductor satisfy the
-        charge-medium requirement and then be reported here as absent."""
+        charge-medium requirement and then be reported here as absent.
 
-        analysis_spec = self.analysis_spec
-        if isinstance(analysis_spec, SteadyChargeDCAnalysis) and not isinstance(
-            analysis_spec, IsothermalSteadyChargeDCAnalysis
-        ):
+        Gated on ``_thermal_solver_active``: a prescribed temperature is non-isothermal but
+        solves no heat equation, so demanding a thermal conductivity would reject a
+        runnable setup."""
+
+        if self._thermal_solver_active:
             semiconductor_locs = [loc for loc, _ in self._iter_semiconductor_charge_media()]
             has_elec = bool(semiconductor_locs)
 
@@ -2742,12 +2809,31 @@ class HeatChargeSimulation(AbstractSimulation):
     def _thermal_solver_active(self) -> bool:
         """Whether a coupled thermal solve runs alongside the charge analysis.
 
-        Returns ``True`` for non-isothermal :class:`SteadyChargeDCAnalysis` and
-        ``False`` for :class:`IsothermalSteadyChargeDCAnalysis`. Determines
-        whether the thermal residual ``residual_temperature`` is reported.
+        One test suffices -- a thermal solve runs exactly when the lattice temperature is
+        unknown -- because neither way of supplying it leaves the field unset: the
+        isothermal spec narrows ``temperature`` to a scalar defaulting to 300 K, and a
+        prescribed field is frozen rather than solved for. The AC specs inherit from both,
+        so they classify with no extra cases.
+
+        Gates the ``residual_temperature`` report, the heat-solver feature checks, and the
+        coupling-source checks.
         """
-        return isinstance(self.analysis_spec, SteadyChargeDCAnalysis) and not isinstance(
-            self.analysis_spec, IsothermalSteadyChargeDCAnalysis
+        return (
+            isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
+            and self.analysis_spec.temperature is None
+        )
+
+    @property
+    def _temperature_prescribed(self) -> bool:
+        """Whether the charge analysis runs on a fixed, spatially varying lattice temperature.
+
+        Distinguishes a prescribed-T run from a uniform isothermal one: both skip the
+        thermal solve, but only this one ships a field to the solver.
+        """
+        return (
+            isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
+            and not isinstance(self.analysis_spec, IsothermalSteadyChargeDCAnalysis)
+            and self.analysis_spec.temperature is not None
         )
 
     def _accelerated_only_features(self) -> list[str]:
@@ -2841,8 +2927,17 @@ class HeatChargeSimulation(AbstractSimulation):
         Raises directly at the offending charge medium's loc (``("medium",)``
         or ``("structures", i)``) so the user is pointed at the exact field to
         fix; the iteration helper yields the loc alongside each charge spec.
+
+        A prescribed lattice temperature makes ``temperature`` a whole field, so the
+        asymptote is checked at the field's extremes rather than at a single value.
         """
         temperature = getattr(self.analysis_spec, "temperature", None)
+        # Both extremes, since the sign of 'exp_0' decides which end is worst. Via numpy so a
+        # scalar takes the same path; testing the array itself raises on its ambiguous truth.
+        candidate_temperatures = ()
+        if temperature is not None:
+            values = np.asarray(temperature, dtype=float)
+            candidate_temperatures = (float(values.min()), float(values.max()))
         for loc, charge in self._iter_semiconductor_charge_media():
             n_is_masetti = isinstance(charge.mobility_n, MasettiMobility)
             p_is_masetti = isinstance(charge.mobility_p, MasettiMobility)
@@ -2854,7 +2949,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     "charge solver.",
                     *loc,
                 )
-            if temperature is None:
+            if not candidate_temperatures:
                 continue
             for carrier, mobility in (
                 ("electron", charge.mobility_n),
@@ -2862,16 +2957,20 @@ class HeatChargeSimulation(AbstractSimulation):
             ):
                 if not isinstance(mobility, MasettiMobility):
                     continue
-                high_doping_limit = (
-                    mobility.mu_0 * (temperature / 300.0) ** mobility.exp_0 - mobility.mu_1
+                worst_temperature, high_doping_limit = min(
+                    (
+                        (T, mobility.mu_0 * (T / 300.0) ** mobility.exp_0 - mobility.mu_1)
+                        for T in candidate_temperatures
+                    ),
+                    key=lambda candidate: candidate[1],
                 )
                 if high_doping_limit <= 0.0:
                     self._raise_validation_error_at_loc(
                         f"MasettiMobility high-doping asymptote for {carrier} mobility "
-                        f"is non-positive at {temperature} K "
+                        f"is non-positive at {worst_temperature} K "
                         "('mu_0 * (T/300)**exp_0 - mu_1' <= 0); the accelerated evaluator would "
                         "silently clamp mobility to zero at high doping. Reduce 'mu_1', "
-                        "increase 'mu_0', or use a lower isothermal temperature.",
+                        "increase 'mu_0', or lower the lattice temperature.",
                         *loc,
                     )
         return self

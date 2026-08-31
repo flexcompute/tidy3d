@@ -213,11 +213,31 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             )
 
         data = self._select_voltage(data=data, voltage=voltage)
+        # The same guard the Cartesian branch applies. Vector data (an electric field, a
+        # current density) keeps its 'axis' dimension through '_select_voltage', which only
+        # drops 'voltage', so interpolating here would return a bias-selected 4D array from a
+        # method that promises a 'SpatialDataArray'.
+        extra_dims = data._non_spatial_dims
+        if extra_dims:
+            raise DataError(
+                f"The data for monitor '{self.monitor.name}' is a "
+                f"'{type(data).__name__}' carrying {extra_dims} beyond the spatial "
+                "dimensions, which has no single 'SpatialDataArray' form. A vector field "
+                "carries 'axis' (0, 1, 2 for x, y, z); select one component before "
+                "converting."
+            )
         return data.interp(x=x, y=y, z=z, fill_value=fill_value, method=method)
 
     def _resolve_field(self, field: str | None) -> FieldDataset:
         """Pick the field to convert, requiring a name only when the choice is ambiguous."""
         components = self.field_components
+        if not components:
+            # 'pass field to choose one' cannot be followed when there is nothing to choose
+            # from: a capacitance monitor records values against bias, not a spatial field.
+            raise DataError(
+                f"Monitor '{self.monitor.name}' records no spatial field, so it has no "
+                "'SpatialDataArray' form."
+            )
         if field is None:
             if len(components) != 1:
                 raise DataError(
