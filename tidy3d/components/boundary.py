@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 from pydantic import (
@@ -75,6 +75,7 @@ def warn_num_layers_factory(
 
 
 DEFAULT_MODE_SPEC_MODE_ABC = ModeSpec()
+DEFAULT_MODE_ABC_TOLERANCE = 1e-3
 DEFAULT_BROADBAND_MODE_ABC_FITTER_TOLERANCE = 1e-6
 DEFAULT_BROADBAND_MODE_ABC_NUM_FREQS = 15
 DEFAULT_BROADBAND_MODE_ABC_NUM_POLES = 5
@@ -267,7 +268,31 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
 
 
 class ModeABCBoundary(AbstractABCBoundary):
-    """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
+    """Absorbing boundary conditions for waveguide modes.
+
+    Absorbs the mode(s) selected by ``mode_index`` at the cross-section defined by ``plane``.
+    Pass a single integer for the single-mode regime, or a tuple of integers for the multi-mode
+    regime. The multi-mode form (two or more modes) is only valid as
+    ``InternalAbsorber.boundary_spec``; the single-integer or single-element-tuple form is also
+    permitted as a domain boundary (``Boundary.plus`` / ``Boundary.minus``).
+
+    Example
+    -------
+    >>> from tidy3d import ModeSpec, Box
+    >>> # Single mode: valid as a domain boundary or internal absorber
+    >>> single = ModeABCBoundary(
+    ...     mode_spec=ModeSpec(num_modes=1),
+    ...     mode_index=0,
+    ...     plane=Box(size=(1, 1, 0)),
+    ... )
+    >>> # Several modes simultaneously: internal absorber only
+    >>> hybrid = ModeABCBoundary(
+    ...     mode_spec=ModeSpec(num_modes=3),
+    ...     mode_index=(0, 1, 2),
+    ...     primary_mode_index=0,
+    ...     plane=Box(size=(1, 1, 0)),
+    ... )
+    """
 
     mode_spec: ModeSpecType = Field(
         DEFAULT_MODE_SPEC_MODE_ABC,
@@ -276,25 +301,58 @@ class ModeABCBoundary(AbstractABCBoundary):
         discriminator=TYPE_TAG_STR,
     )
 
-    mode_index: NonNegativeInt = Field(
+    mode_index: (
+        NonNegativeInt
+        | Annotated[
+            tuple[NonNegativeInt, ...],
+            Field(json_schema_extra={"minItems": 1, "uniqueItems": True}),
+        ]
+    ) = Field(
         0,
         title="Mode Index",
-        description="Index into the collection of modes returned by mode solver. "
-        "The absorbing boundary conditions are configured to absorb the specified mode. "
-        "If larger than ``mode_spec.num_modes``, "
-        "``num_modes`` in the solver will be set to ``mode_index + 1``.",
+        description="Mode index, or tuple of mode indices, into the collection of modes "
+        "returned by the mode solver. Pass a single integer for the single-mode regime; "
+        "pass a tuple of integers for the multi-mode regime. The multi-mode form is only "
+        "valid as ``InternalAbsorber.boundary_spec``. In the multi-mode form, the dominant "
+        "mode of the absorbed signal is selected by ``primary_mode_index``.",
+    )
+
+    primary_mode_index: NonNegativeInt | None = Field(
+        None,
+        title="Primary Mode Index",
+        description="The expected dominant mode in the absorbed signal. Only meaningful "
+        "when ``mode_index`` is a tuple (multi-mode regime); must be one of its entries. "
+        "If ``None`` in the multi-mode regime, defaults to the first entry of "
+        "``mode_index``.",
+    )
+
+    tolerance: NonNegativeFloat = Field(
+        DEFAULT_MODE_ABC_TOLERANCE,
+        title="Effective-Index Grouping Tolerance",
+        description="Relative tolerance used to decide whether two modes share the same "
+        "effective propagation index. Each mode is compared against the primary mode at the "
+        "central frequency of the absorption frequency grid, so for a broadband ``freq_spec`` "
+        "the grouping follows the band centre rather than the whole band. Only meaningful in "
+        "the multi-mode regime.",
     )
 
     freq_spec: PositiveFloat | BroadbandModeABCSpec | None = Field(
         None,
         title="Absorption Frequency Specification",
-        description="Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.",
+        description="Specifies the frequency at which the field is absorbed. If ``None``, "
+        "the central frequency of the source is used. If ``BroadbandModeABCSpec``, the "
+        "field is absorbed over the specified frequency range. In the multi-mode regime, "
+        "absorbing multiple modes simultaneously degrades broadband performance to roughly "
+        "the level of single-frequency absorption.",
     )
 
     plane: Box = Field(
         ...,
         title="Plane",
-        description="Cross-sectional plane in which the absorbed mode will be computed.",
+        description="Cross-sectional plane in which the absorbed modes will be computed. This has "
+        "no effect when the boundary absorbs more than one mode as "
+        "'InternalAbsorber.boundary_spec': there the absorber's own box and position determine "
+        "where the modes are solved, and this plane is ignored.",
     )
 
     @field_validator("plane")
@@ -306,6 +364,104 @@ class ModeABCBoundary(AbstractABCBoundary):
                 f"'ModeABCBoundary' target plane must be planar, given size={val.size}"
             )
         return val
+
+    @model_validator(mode="after")
+    def _validate_mode_index_tuple_nonempty(self) -> Self:
+        """Reject empty tuple form ``mode_index=()`` with a loc-aware error."""
+        if isinstance(self.mode_index, tuple) and len(self.mode_index) == 0:
+            self._raise_validation_error_at_loc(
+                "'mode_index' must contain at least one index when given as a tuple; "
+                "got an empty tuple.",
+                "mode_index",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_mode_index_tuple_unique(self) -> Self:
+        """Reject duplicate entries in the tuple form of ``mode_index``.
+
+        Downstream counts each entry independently, so a duplicate index would
+        double-count one physical mode as a phantom extra absorbed mode.
+        """
+        if not isinstance(self.mode_index, tuple):
+            return self
+        if len(set(self.mode_index)) != len(self.mode_index):
+            self._raise_validation_error_at_loc(
+                f"'mode_index' must not contain duplicate entries; got {list(self.mode_index)}.",
+                "mode_index",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_primary_mode_index(self) -> Self:
+        """``primary_mode_index`` only makes sense in the multi-mode tuple form, and
+        when set must be one of the entries in ``mode_index`` -- it designates the
+        dominant mode within the absorbed set, so naming a mode the absorber never
+        acts on is ill-defined.
+        """
+        if not isinstance(self.mode_index, tuple):
+            if self.primary_mode_index is not None:
+                self._raise_validation_error_at_loc(
+                    "'primary_mode_index' is only meaningful when 'mode_index' is a tuple "
+                    "(multi-mode regime); set 'mode_index' to a tuple or remove "
+                    "'primary_mode_index'.",
+                    "primary_mode_index",
+                )
+            return self
+        if self.primary_mode_index is None:
+            return self
+        if len(self.mode_index) <= 1:
+            self._raise_validation_error_at_loc(
+                "'primary_mode_index' is only meaningful when 'mode_index' has more than one "
+                "entry (multi-mode regime); remove 'primary_mode_index'.",
+                "primary_mode_index",
+            )
+        if self.primary_mode_index not in self.mode_index:
+            self._raise_validation_error_at_loc(
+                f"'primary_mode_index={self.primary_mode_index}' must be one of the entries "
+                f"in 'mode_index'={list(self.mode_index)}.",
+                "primary_mode_index",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_tolerance(self) -> Self:
+        """``tolerance`` groups the absorbed modes by effective index, which only happens when
+        more than one mode is absorbed. Outside that regime the value is never read, so accepting
+        one would silently drop it."""
+        if self._num_absorbed_modes > 1:
+            return self
+        if self.tolerance != DEFAULT_MODE_ABC_TOLERANCE:
+            self._raise_validation_error_at_loc(
+                "'tolerance' is only meaningful when 'mode_index' has more than one entry "
+                "(multi-mode regime); remove 'tolerance'.",
+                "tolerance",
+            )
+        return self
+
+    @cached_property
+    def _mode_indices_tuple(self) -> tuple[int, ...]:
+        """Normalized tuple of absorbed mode indices: ``(mode_index,)`` in the
+        single-mode regime (``int``), ``mode_index`` unchanged in the multi-mode regime.
+        """
+        if isinstance(self.mode_index, tuple):
+            return self.mode_index
+        return (self.mode_index,)
+
+    @property
+    def _num_absorbed_modes(self) -> int:
+        """Number of modes this absorber targets (single-mode regime: 1)."""
+        return len(self._mode_indices_tuple)
+
+    @property
+    def _primary_index(self) -> int:
+        """Resolved primary-mode index: :attr:`primary_mode_index` when set,
+        otherwise the first entry of :attr:`_mode_indices_tuple` (``mode_index``
+        itself in the single-mode form).
+        """
+        if self.primary_mode_index is not None:
+            return self.primary_mode_index
+        return self._mode_indices_tuple[0]
 
     @classmethod
     def from_source(
@@ -1042,6 +1198,21 @@ class Boundary(Tidy3dBaseModel):
         title="Minus BC",
         description="Boundary condition on the minus side along a dimension.",
     )
+
+    @model_validator(mode="after")
+    def _multimode_mode_abc_only_in_internal_absorber(self) -> Self:
+        """Multi-mode ``ModeABCBoundary`` is only valid as ``InternalAbsorber.boundary_spec``;
+        it is not supported as a domain boundary.
+        """
+        for loc, edge in (("plus", self.plus), ("minus", self.minus)):
+            if isinstance(edge, ModeABCBoundary) and edge._num_absorbed_modes > 1:
+                self._raise_validation_error_at_loc(
+                    "Multi-mode 'ModeABCBoundary' (more than one entry in 'mode_index') "
+                    "is only valid as 'InternalAbsorber.boundary_spec'; on a domain boundary, "
+                    "use a single integer or single-element tuple for 'mode_index'.",
+                    loc,
+                )
+        return self
 
     @model_validator(mode="after")
     def bloch_on_both_sides(self) -> Self:

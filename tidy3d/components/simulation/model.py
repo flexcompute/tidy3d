@@ -837,6 +837,9 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_no_bloch_with_modal_decomposition = (
         _mode_integration_methods._validate_no_bloch_with_modal_decomposition
     )
+    _validate_internal_absorber_placement = (
+        _mode_integration_methods._validate_internal_absorber_placement
+    )
     _validate_mode_objects = _mode_integration_methods._validate_mode_objects
     _validate_modes_size = _mode_integration_methods._validate_modes_size
     _validate_num_cells_in_mode_objects = (
@@ -1075,6 +1078,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_relax_courant_compatibility()
         self._validate_absorber_in_zero_dims()
         self._validate_no_bloch_with_modal_decomposition()
+        self._validate_internal_absorber_placement()
 
         # Validate monitor frequency, geometry, medium, and surface constraints.
         self._validate_mode_time_monitor_freq_range()

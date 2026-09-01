@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.boundary import BlochBoundary
+from tidy3d.components.boundary import BlochBoundary, ModeABCBoundary
 from tidy3d.components.geometry.base import Box, GeometryGroup
 from tidy3d.components.geometry.utils import find_snap_location
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -205,19 +205,92 @@ def _validate_finalized(self: Any) -> None:
 
 
 def _validate_no_bloch_with_modal_decomposition(self: Any) -> Self:
-    """Reject Bloch boundaries combined with ``ModeTimeMonitor``.
-    ``Periodic`` boundaries remain supported.
+    """Reject Bloch boundaries combined with ``ModeTimeMonitor`` or multi-mode
+    ``ModeABCBoundary``. ``Periodic`` boundaries and single-mode
+    ``ModeABCBoundary`` remain supported.
     """
     if not any(isinstance(boundary[0], BlochBoundary) for boundary in self.boundary_spec.to_list):
         return self
     message = (
         "Bloch boundaries are not supported in combination with "
-        "'ModeTimeMonitor'. Use 'Periodic' boundaries instead, or remove "
-        "the 'ModeTimeMonitor'."
+        "'ModeTimeMonitor' or multi-mode 'ModeABCBoundary'. "
+        "Use 'Periodic' boundaries instead, or remove the "
+        "modal-decomposition feature."
     )
     for idx, monitor in enumerate(self.monitors):
         if isinstance(monitor, ModeTimeMonitor):
             self._raise_validation_error_at_loc(message, "monitors", idx)
+    for idx, absorber in enumerate(self.internal_absorbers or []):
+        boundary_spec = absorber.boundary_spec
+        if isinstance(boundary_spec, ModeABCBoundary) and boundary_spec._num_absorbed_modes > 1:
+            self._raise_validation_error_at_loc(message, "internal_absorbers", idx)
+    return self
+
+
+def _validate_internal_absorber_placement(self: Any) -> Self:
+    """Require an ``InternalAbsorber`` to sit strictly inside the domain along its normal.
+
+    Every absorber is closed by a PEC backing plate one cell to its non-absorbing side, so an
+    absorber on a domain face puts that plate outside the domain. A ``ModeABCBoundary`` also
+    solves modes on a plane, which needs grid cells around it: single-mode absorption solves on
+    ``boundary_spec.plane`` as given, while multi-mode absorption solves one cell upstream of the
+    absorber -- below itself for a ``"+"`` absorber, above for a ``"-"`` one -- and so needs that
+    cell to exist AND to be interior, which is why it asks for
+    ``MULTIMODE_MODE_ABC_NORMAL_CLEARANCE_CELLS`` cells rather than one.
+    """
+    for idx, absorber in enumerate(self._shifted_internal_absorbers):
+        span_inds, axis, direction = self._pec_frame_span_inds(absorber)
+        dim = "xyz"[axis]
+        sim_min = self.center[axis] - self.size[axis] / 2
+        sim_max = self.center[axis] + self.size[axis] / 2
+        if sim_max <= sim_min:
+            continue
+
+        # The PEC backing plate closes the frame on the absorber's non-absorbing side: the cell
+        # just past the frame for a "+" absorber, the frame's own cell for a "-" one. On a domain
+        # face the "+" plate lands outside the grid, where the solver has only a ghost cell.
+        num_cells = int(self.grid.num_cells[axis])
+        plate_cell = int(span_inds[axis][1]) if direction == "+" else int(span_inds[axis][0])
+        if not 0 <= plate_cell < num_cells:
+            self._raise_validation_error_at_loc(
+                f"An 'InternalAbsorber' must leave room for its PEC backing plate, which sits on "
+                f"its non-absorbing side, but this absorber is against the '{dim}' domain "
+                "boundary and the plate would fall outside the simulation. Move it one cell "
+                "further in, or use a domain boundary condition to absorb at the edge.",
+                "internal_absorbers",
+                idx,
+            )
+
+        boundary_spec = absorber.boundary_spec
+        if not isinstance(boundary_spec, ModeABCBoundary):
+            continue
+
+        if boundary_spec._num_absorbed_modes > 1:
+            clearance = constants.MULTIMODE_MODE_ABC_NORMAL_CLEARANCE_CELLS
+            if direction == "+":
+                gap, side = int(span_inds[axis][0]), f"-{dim}"
+            else:
+                gap = num_cells - int(span_inds[axis][1])
+                side = f"+{dim}"
+            if gap < clearance:
+                self._raise_validation_error_at_loc(
+                    f"A multi-mode 'ModeABCBoundary' needs at least {clearance} grid cells "
+                    f"between its absorber and the '{side}' domain boundary, but this absorber "
+                    f"has {gap}. Move it further into the domain, enlarge the simulation along "
+                    f"'{dim}', or absorb a single mode.",
+                    "internal_absorbers",
+                    idx,
+                )
+        else:
+            plane_pos = boundary_spec.plane.center[axis]
+            if not sim_min < plane_pos < sim_max:
+                self._raise_validation_error_at_loc(
+                    "The mode plane of a 'ModeABCBoundary' absorber lies on the simulation "
+                    f"boundary along its normal direction, at {plane_pos} with simulation "
+                    f"bounds ({sim_min}, {sim_max}). Please move the plane inside the simulation.",
+                    "internal_absorbers",
+                    idx,
+                )
     return self
 
 
@@ -414,11 +487,18 @@ def complex_fields(self: Any) -> bool:
 
 @cached_property
 def _has_lossy_mode_decomposition_feature(self: Any) -> bool:
-    """True iff the simulation contains a ``ModeTimeMonitor`` and any sim
-    medium can be lossy.
+    """True iff the simulation contains a ``ModeTimeMonitor`` or multi-mode
+    ``ModeABCBoundary`` and any sim medium can be lossy.
     """
     has_mtm = any(isinstance(m, ModeTimeMonitor) for m in self.monitors)
-    if not has_mtm:
+    # Single-element ``mode_index`` (``=i`` or ``=(i,)``) absorbs only one mode, so no
+    # decomposition runs; gate on the count to avoid enabling ``complex_fields`` (~2x
+    # cost) when no decomposition is performed.
+    has_multimode_abc = any(
+        isinstance(ia.boundary_spec, ModeABCBoundary) and ia.boundary_spec._num_absorbed_modes > 1
+        for ia in (self.internal_absorbers or [])
+    )
+    if not (has_mtm or has_multimode_abc):
         return False
     # `scene.mediums` covers structure mediums; the background medium is
     # held separately on the simulation, so include it explicitly.

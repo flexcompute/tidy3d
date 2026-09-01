@@ -1086,6 +1086,10 @@ def _shift_object(obj: Box, grid: Grid, bounds: Bound, direction: Direction, shi
     """Move a plane-like object by ``shift`` number
     of cells in the positive or negative ``direction`` along the dimension given by
     ``obj._normal_axis``.
+
+    Only the normal-axis coordinate of ``center`` moves, and ``updated_copy`` re-runs the object's
+    validators on the result. A check relating ``center`` to another field the shift does not touch
+    must therefore live above this call, on the object as supplied.
     """
     shift = _shift_value_signed(obj=obj, grid=grid, bounds=bounds, direction=direction, shift=shift)
     new_center = np.array(obj.center)
