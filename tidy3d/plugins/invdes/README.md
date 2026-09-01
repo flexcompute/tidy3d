@@ -325,16 +325,18 @@ Now that we've constructed our `InverseDesign` object, we can optimize it with g
 
 The optimizer accepts our `InverseDesign`, as well as various optimization parameters, such as the number of steps and learning rate, and parameters specific to the algorithm being implemented.
 
-The `results_cache_fname` is an optional, but very useful argument that will tell the optimizer to save the optimization state to file at each iteration using `pickle`. It is good practice to include it in case the optimization gets stalled, which can happen in case of a bad internet connection, for example.
+The `results_cache_fname` is an optional, but very useful argument that will tell the optimizer to write the `InverseDesignResult` to file at each iteration. It is good practice to include it in case the optimization gets stalled, which can happen in case of a bad internet connection, for example. The file is written with `InverseDesignResult.to_file`, so the extension must be one of `.hdf5`, `.hdf5.gz`, `.json`, or `.yaml`.
 
 In a later section, we'll show how to conveniently load results from this file.
 
 ```py
+num_initial_steps = 12
+
 optimizer = tdi.AdamOptimizer(
     design=design,
-    num_steps=12,
+    num_steps=num_initial_steps,
     learning_rate=0.3,
-    results_cache_fname="data/invdes_history.pkl",
+    results_cache_fname="data/invdes_history.hdf5",
 )
 
 ```
@@ -364,15 +366,19 @@ result = tdi.InverseDesignResult.from_file(optimizer.results_cache_fname)
 
 ### Continuing an optimization run
 
-To continue an optimization run from where it left off, you can use `Optimizer.continue_run(results)`, passing in the `InverseDesignResult`. As the `InverseDesignResult` stores the previous optimizer states, it can continue the optimization without loss of information. The return value of this method will be a new copy of the `InverseDesignResult` with the combined data.
+To continue an optimization run from where it left off, you can use `Optimizer.continue_run(result)`, passing in the `InverseDesignResult`. As the `InverseDesignResult` stores the previous optimizer states, it can continue the optimization without loss of information. The return value of this method will be a new copy of the `InverseDesignResult` with the combined data.
+
+Note that `AdamOptimizer.num_steps` is the **total** budget for the run, not a count of extra steps, so raise it above the number of steps already completed. Setting it to a smaller value leaves no steps to take and the continuation returns unchanged. Note also that `post_process_fn` is not stored in the `InverseDesignResult`, so a design that uses one must pass it again on every continuation call; designs that define `metric` instead need no objective argument.
 
 ```py
 
-# change some optimization parameters, if desired, set new number of steps
-optimizer = optimizer.updated_copy(num_steps=3, learning_rate=0.1)
+# change some optimization parameters, if desired, set total number of steps
+num_additional_steps = 3
+num_steps = num_initial_steps + num_additional_steps
+optimizer = optimizer.updated_copy(num_steps=num_steps, learning_rate=0.1)
 
 # continue the run, passing in the latest result
-result = optimizer.continue_run(result=result)
+result = optimizer.continue_run(result=result, post_process_fn=post_process_fn)
 
 ```
 > Note: A convenient way to continue an optimization in just one line is to use `Optimizer.continue_run_from_history()`. This method combines `.continue_run()` with the backup file in the `results_cache_fname` to continue a run from the history saved to disk.
@@ -539,7 +545,7 @@ To run this, let's make a new optimizer with this multi-design. We'll save the r
 
 optimizer = tdi.AdamOptimizer(
     design=design_multi,
-    results_cache_fname="data/invdes_history.pkl",
+    results_cache_fname="data/invdes_history.hdf5",
     learning_rate=0.3,
     num_steps=3,
 )
