@@ -46,7 +46,8 @@ class EMEModeSpec(ModeSpec):
           :meth:`.EMESimulationData.smatrix_in_basis`.
         - Default precision is ``'double'`` for accurate EME results. ``'auto'``
           resolves precision per EME cell -- double where that cell's mode solve
-          contains a good conductor, single otherwise.
+          contains a good conductor, single otherwise. Explicitly selecting
+          ``'single'`` or ``'auto'`` is deprecated; use ``'double'`` instead.
         - Includes a ``bend_medium_frame`` field to control whether media in bent
           EME cells are interpreted in the global frame or as co-rotating with the
           local waveguide frame.
@@ -111,7 +112,9 @@ class EMEModeSpec(ModeSpec):
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
         "The default is ``'double'``. Choose ``'auto'`` to resolve precision per EME "
-        "cell: double where that cell's mode solve contains a good conductor, single otherwise.",
+        "cell: double where that cell's mode solve contains a good conductor, single otherwise. "
+        "Explicitly selecting ``'single'`` or ``'auto'`` is deprecated and will be removed in a "
+        "future version; use ``'double'`` instead.",
     )
 
     bend_medium_frame: Literal["global", "co_rotating"] = Field(

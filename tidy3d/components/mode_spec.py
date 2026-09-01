@@ -671,7 +671,9 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
         "Choose ``'auto'`` to apply double precision if the simulation contains a good "
-        "conductor, single precision otherwise.",
+        "conductor, single precision otherwise. Explicitly selecting ``'single'`` or "
+        "``'auto'`` is deprecated and will be removed in a future version; use "
+        "``'double'`` instead.",
     )
 
     bend_radius: FiniteFloat | None = Field(
@@ -878,6 +880,24 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
                 "'filter_pol' is deprecated and will be removed in future versions. "
                 "Please use 'sort_spec' instead."
             )
+        return val
+
+    @field_validator("precision")
+    @classmethod
+    def _non_double_precision_deprecated(cls, val: str) -> str:
+        """Warn that explicitly selecting a precision other than double is deprecated."""
+        if val == "double":
+            return val
+        detail = (
+            " It resolves to single precision unless that mode solve contains a good conductor."
+            if val == "auto"
+            else ""
+        )
+        log.warning(
+            f"Explicitly selecting mode-solver precision '{val}' is deprecated and will be "
+            f"removed in a future version.{detail} Use 'double' instead.",
+            log_once=True,
+        )
         return val
 
     @field_validator("track_freq")
