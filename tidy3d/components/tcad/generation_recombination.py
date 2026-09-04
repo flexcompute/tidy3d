@@ -546,8 +546,16 @@ SurfaceRecombinationModelType = SurfaceShockleyReedHallRecombination
 
 class SelberherrImpactIonization(Tidy3dBaseModel):
     """
-    This class defines the parameters for the Selberherr impact ionization model. Two formulations are available that
-    depend on the driving field, as described in [1]_ (:math:`\\| E \\|`) and [2]_ (:math:`E \\cdot J_{\\nu} / \\| E \\|` for :math:`\\nu = n,p`).
+    This class defines the parameters for the Selberherr impact ionization model [1]_.
+    Three formulations are available, distinguished by the driving force
+    :math:`F_\\nu` for carrier :math:`\\nu`: ``"Selberherr"`` uses the
+    conduction-band-edge gradient :math:`\\|\\nabla E_c\\|`, ``"PQ"`` projects it
+    on the carrier-current direction,
+    :math:`\\nabla E_c\\cdot\\mathbf J_\\nu/\\|\\mathbf J_\\nu\\|` [2]_, and
+    ``"GradQuasiFermi"`` uses the quasi-Fermi-energy gradient
+    :math:`\\|\\nabla E_{F\\nu}\\|`. Every gradient is taken within a single
+    material, so a band offset across a heterojunction does not act as a
+    driving force.
 
     Notes
     -----
@@ -556,9 +564,17 @@ class SelberherrImpactIonization(Tidy3dBaseModel):
 
         .. math::
 
-            \\alpha_{\\nu} = \\alpha_{\\nu}^\\infty \\cdot \\exp \\left( - \\left( \\frac{E_{\\nu}^{\\text{crit}} \\cdot |\\mathbf{J}_{\\nu}|}{E \\cdot \\mathbf{J}_{\\nu}} \\right)^{\\beta_{\\nu}} \\right)
+            \\alpha_{\\nu} = \\alpha_{\\nu}^\\infty \\cdot \\exp \\left( - \\left( \\frac{E_{\\nu}^{\\text{crit}}}{F_\\nu} \\right)^{\\beta_{\\nu}} \\right)
 
-        where :math:`\\alpha_{\\nu}^\\infty`, :math:`E_{\\nu}^{\\text{crit}}`, and :math:`\\beta_{\\nu}` are material-dependent parameters.
+        where :math:`\\alpha_{\\nu}^\\infty`,
+        :math:`E_{\\nu}^{\\text{crit}}`, and :math:`\\beta_{\\nu}` are
+        material-dependent parameters and :math:`\\mathbf J_\\nu` is the carrier
+        current density. With ``"GradQuasiFermi"``, :math:`E_{F\\nu}` is
+        evaluated at a carrier density of at least
+        :math:`10^{8}\\,\\text{cm}^{-3}` and held constant below it: the
+        quasi-Fermi level of a fully depleted region is not resolvable there and
+        carries no ionization. This formulation is supported only for isothermal
+        charge simulations using the accelerated solver.
 
     Example
     -------
@@ -609,9 +625,11 @@ class SelberherrImpactIonization(Tidy3dBaseModel):
         description="Exponent for holes.",
     )
 
-    formulation: Literal["Selberherr", "PQ"] = Field(
+    formulation: Literal["Selberherr", "PQ", "GradQuasiFermi"] = Field(
         "PQ",
         title="Formulation",
-        description="Formulation used for impact ionization. Options are 'Selberherr' "
-        "or 'PQ' for Selberherr and Palankovski and Quay formulations, respectively.",
+        description="Driving-force formulation used for impact ionization. "
+        "'Selberherr' uses the conduction-band-edge gradient magnitude, 'PQ' "
+        "projects that gradient onto the carrier-current direction, and "
+        "'GradQuasiFermi' uses the quasi-Fermi-energy gradient magnitude.",
     )

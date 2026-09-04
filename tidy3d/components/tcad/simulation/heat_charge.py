@@ -583,6 +583,7 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._warn_non_accelerated_ignores_electron_affinity
             )
+            self._check_grad_quasi_fermi_impact_ionization()
         # Ahead of '_not_all_neumann', whose generic message would hide the real mistake when
         # a 'HeatFromElectricSource' has no heat BCs.
         self._call_with_validation_loc(("sources",), self._check_charge_heat_coupling_unsupported)
@@ -2778,16 +2779,21 @@ class HeatChargeSimulation(AbstractSimulation):
         one direct solve; otherwise the sweep starts at 0 V and covers positive
         then negative voltages by increasing magnitude, inserting a warm-start
         solve per ``convergence_dv`` interval within each pass. Doping ramp-up
-        adds ``tolerance_settings.ramp_up_iters - 1`` solves. Charge sims only.
+        adds ``tolerance_settings.ramp_up_iters - 1`` solves. With impact
+        ionization every bias point is solved twice, first with the source
+        frozen and then with it active, for every formulation. Charge sims only.
         """
         voltages = self._dc_voltages
 
         # Doping ramp: the initial solve runs once per ramp level.
         ramp_solves = self.analysis_spec.tolerance_settings.ramp_up_iters - 1
 
+        # Staged ionization re-solves every bias point, but not the ramp levels.
+        solves_per_point = 2 if self._uses_impact_ionization() else 1
+
         if len(voltages) <= 1:
             # No sweep: one direct solve at the requested bias.
-            return 1 + ramp_solves
+            return solves_per_point + ramp_solves
 
         convergence_dv = self.analysis_spec.convergence_dv
         positive = sorted(v for v in voltages if v > 1e-7)
@@ -2803,7 +2809,8 @@ class HeatChargeSimulation(AbstractSimulation):
             return n
 
         # 1 for the initial 0 V solve; each pass warm-starts from the 0 V solution.
-        return 1 + pass_solves(positive) + pass_solves(negative) + ramp_solves
+        bias_points = 1 + pass_solves(positive) + pass_solves(negative)
+        return solves_per_point * bias_points + ramp_solves
 
     @property
     def _thermal_solver_active(self) -> bool:
@@ -2854,6 +2861,9 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if self._uses_gpu_only_lifetime_model():
             features.append("PalankovskiQuayApproxCarrierLifetime")
+
+        if self._uses_grad_quasi_fermi_impact_ionization():
+            features.append("GradQuasiFermi impact ionization")
 
         if self._ssac_uses_bias_point_selection():
             features.append("SSAC 'at_voltages' bias-point selection")
@@ -2920,6 +2930,30 @@ class HeatChargeSimulation(AbstractSimulation):
                 if isinstance(model, SelberherrImpactIonization):
                     return True
         return False
+
+    def _uses_grad_quasi_fermi_impact_ionization(self) -> bool:
+        """Whether any semiconductor selects the GradQuasiFermi formulation."""
+        return any(
+            isinstance(model, SelberherrImpactIonization) and model.formulation == "GradQuasiFermi"
+            for _loc, charge in self._iter_semiconductor_charge_media()
+            for model in charge.R
+        )
+
+    def _check_grad_quasi_fermi_impact_ionization(self) -> Self:
+        """Restrict GradQuasiFermi impact ionization to accelerated isothermal charge."""
+        if not self._uses_grad_quasi_fermi_impact_ionization():
+            return self
+
+        if not isinstance(
+            self.analysis_spec, (IsothermalSteadyChargeDCAnalysis, IsothermalSSACAnalysis)
+        ):
+            self._raise_validation_error_at_loc(
+                "'GradQuasiFermi' impact ionization is supported only for isothermal "
+                "charge analyses.",
+                "analysis_spec",
+            )
+
+        return self
 
     def _check_masetti_mobility_models(self) -> Self:
         """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0.
