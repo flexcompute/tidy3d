@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
 from tidy3d.log import log
@@ -24,8 +24,35 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
     unstructured: bool = Field(
         True,
         title="Unstructured Grid",
-        description="Return data on the original unstructured grid.",
+        description="Return data on the original unstructured grid. Setting this to ``False`` "
+        "is deprecated and will be removed in Tidy3D 3.0, after which monitor data is "
+        "always returned on the solver's own grid; resample it with "
+        ":meth:`HeatChargeMonitorData.to_spatial_data_array` where a Cartesian "
+        ":class:`.SpatialDataArray` is needed. Most heat-charge monitors already accept only "
+        "``True``; :class:`.TemperatureMonitor` and :class:`.SteadyPotentialMonitor` still "
+        "take ``False`` in steady Heat, Conduction, and Charge runs, always with the "
+        "deprecation warning above and, in Charge, a second warning that only unstructured "
+        "monitors are supported there. Unsteady Heat rejects it outright.",
     )
+
+    @field_validator("unstructured")
+    @classmethod
+    def _unstructured_false_deprecated(cls, val: bool) -> bool:
+        """Warn that structured monitor output is on its way out.
+
+        Only reachable on the monitors that still type this field as ``bool``; the rest
+        narrow it to ``Literal[True]`` and reject ``False`` outright.
+        """
+        if not val:
+            log.warning(
+                "'unstructured=False' is deprecated and will be removed in Tidy3D 3.0. "
+                "Monitor data will always be returned on the solver's unstructured grid. Set "
+                "'unstructured=True', and where a Cartesian grid is needed, resample the "
+                "recorded field with 'to_spatial_data_array()' on the monitor data.",
+                # 'updated_copy' re-validates, so a bias sweep would repeat this per point
+                log_once=True,
+            )
+        return val
 
     @model_validator(mode="before")
     @classmethod

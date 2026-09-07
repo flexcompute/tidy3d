@@ -77,6 +77,15 @@ def planar_zero_dim_tolerance(size_scale: float) -> float:
     return max(PLANAR_ZERO_DIM_TOLERANCE_ABS, PLANAR_ZERO_DIM_TOLERANCE_REL * size_scale)
 
 
+def _as_sequence_selector(value: Any) -> Any:
+    """Wrap a scalar in a length-1 list so xarray keeps the dimension it indexes.
+
+    Array-likes pass through. Uses ``np.ndim`` rather than ``isinstance(value, list)``,
+    which nested numpy arrays and made xarray reject them as multi-dimensional indexers.
+    """
+    return value if np.ndim(value) > 0 else [value]
+
+
 class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, ABC):
     """Abstract base for datasets that store unstructured grid or surface data."""
 
@@ -1203,10 +1212,8 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         if "index" in sel_kwargs.keys():
             raise DataError("Cannot select along dimension 'index'.")
 
-        # convert individual values into lists of length 1
-        # so that xarray doesn't drop the corresponding dimension
         sel_kwargs_only_lists = {
-            key: value if isinstance(value, list) or key not in self._non_spatial_dims else [value]
+            key: value if key not in self._non_spatial_dims else _as_sequence_selector(value)
             for key, value in sel_kwargs.items()
         }
         return self.updated_copy(
@@ -1222,6 +1229,10 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
         Parameters
         ----------
+        drop : bool = False
+            Drop the selected dimension instead of keeping it at length 1. Dropping every
+            non-spatial dimension is what lets a later ``interp()`` return a
+            :class:`.SpatialDataArray` again.
         **sel_kwargs : dict
             Keyword arguments to pass to the xarray isel() function.
 
@@ -1237,17 +1248,13 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         # extract ``drop`` so it isn't treated as a dimension selector
         drop = sel_kwargs.pop("drop", False)
 
-        # convert individual values into lists of length 1
-        # so that xarray doesn't drop the corresponding dimension
-        # (but only when ``drop`` is not requested, since list selectors
-        # prevent xarray from honouring ``drop=True``)
+        # a length-1 sequence selector would stop xarray honouring ``drop=True``, so
+        # only normalize when the caller is keeping the dimension
         if drop:
             sel_kwargs_processed = sel_kwargs
         else:
             sel_kwargs_processed = {
-                key: value
-                if isinstance(value, list) or key not in self._non_spatial_dims
-                else [value]
+                key: value if key not in self._non_spatial_dims else _as_sequence_selector(value)
                 for key, value in sel_kwargs.items()
             }
         return self.updated_copy(
@@ -1373,9 +1380,9 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         if fill_value is None:
             fill_value = np.nan if method == "linear" else "extrapolate"
 
+        # every key here is non-spatial by construction, so no dimension guard is needed
         coords_kwargs_only_lists = {
-            key: value if isinstance(value, list) else [value]
-            for key, value in coords_kwargs.items()
+            key: _as_sequence_selector(value) for key, value in coords_kwargs.items()
         }
 
         interp_kwargs = {"method": method, "kwargs": {"fill_value": fill_value}}

@@ -1563,7 +1563,10 @@ class Job(WebContainer):
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
         if self.is_multi_step:
             raise DataError(
-                "Multi-step jobs do not expose a single task_id. Use 'job.task_ids' instead."
+                "Multi-step jobs do not expose a single task_id. For cost, call "
+                "'job.estimate_cost()' or 'job.real_cost()' directly rather than passing a "
+                "task id to 'web.estimate_cost()'/'web.real_cost()'. Use 'job.task_ids' to "
+                "get the per-step ids."
             )
 
         step = self.steps[0]

@@ -11,6 +11,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import IndexedDataArray
 from tidy3d.components.data.unstructured.tetrahedral import TetrahedralGridDataset
 from tidy3d.components.data.unstructured.triangular import TriangularGridDataset
+from tidy3d.components.data.utils import _as_custom_spatial_data
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
 from tidy3d.components.medium import (
@@ -523,6 +524,13 @@ def perturbed_mediums_copy(
     Simulation
         Simulation after application of heat and/or charge data.
     """
+
+    if temperature is not None:
+        temperature = _as_custom_spatial_data(name="temperature", field=temperature)
+    if electron_density is not None:
+        electron_density = _as_custom_spatial_data(name="electron_density", field=electron_density)
+    if hole_density is not None:
+        hole_density = _as_custom_spatial_data(name="hole_density", field=hole_density)
 
     new_carrier_data = {
         "electron_density": electron_density,

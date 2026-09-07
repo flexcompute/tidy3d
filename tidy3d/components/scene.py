@@ -57,6 +57,7 @@ from .data.utils import (
     TetrahedralGridDataset,
     TriangularGridDataset,
     UnstructuredGridDataset,
+    _as_custom_spatial_data,
 )
 from .geometry.base import Box
 from .geometry.utils import merging_geometries_on_plane
@@ -1854,13 +1855,17 @@ class Scene(Tidy3dBaseModel):
             Simulation after application of heat and/or charge data.
         """
 
+        array_dict = {
+            name: None if array is None else _as_custom_spatial_data(name=name, field=array)
+            for name, array in (
+                ("temperature", temperature),
+                ("electron_density", electron_density),
+                ("hole_density", hole_density),
+            )
+        }
+
         scene_dict = self.model_dump()
         structures = self.sorted_structures
-        array_dict = {
-            "temperature": temperature,
-            "electron_density": electron_density,
-            "hole_density": hole_density,
-        }
 
         # For each structure made of mediums with perturbation models, convert those mediums into
         # spatially dependent mediums by selecting minimal amount of heat and charge data points

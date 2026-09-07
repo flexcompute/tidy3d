@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
 
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.types.base import discriminated_union
+from tidy3d.exceptions import DataError
 
 from .data_array import SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset
@@ -462,3 +463,40 @@ def _check_same_coordinates(
             return False
 
     return True
+
+
+def _as_custom_spatial_data(name: str, field: Any) -> CustomSpatialDataType:
+    """Return ``field`` as a type that supports spatial restriction.
+
+    Consumers such as ``perturbed_mediums_copy`` call ``sel_inside``/``does_cover`` on
+    these fields, which a plain ``xarray.DataArray`` does not provide. A purely spatial
+    one is promoted; anything else raises here rather than surfacing as an
+    ``AttributeError`` from deep inside the caller.
+    """
+    if isinstance(field, (SpatialDataArray, UnstructuredGridDataset)):
+        return field
+
+    hint = ""
+    if isinstance(field, xr.DataArray):
+        if set(field.dims) == {"x", "y", "z"}:
+            # spatial already, just untyped -- promote it, since the background-medium
+            # path in 'Scene.perturbed_mediums_copy' has always accepted this shape
+            return SpatialDataArray(field.transpose("x", "y", "z"))
+
+        extra = [dim for dim in field.dims if dim not in ("x", "y", "z")]
+        if extra:
+            selectors = ", ".join(f"{dim}=0" for dim in extra)
+            hint = (
+                f" It carries {extra} beyond the spatial dimensions. Drop them on the "
+                "unstructured dataset before interpolating -- "
+                f"'dataset.isel({selectors}, drop=True).interp(x=..., y=..., z=...)' "
+                "returns a 'SpatialDataArray'. Dropping them on this result instead "
+                "leaves it a plain 'DataArray'."
+            )
+        else:
+            hint = f" It spans {list(field.dims)}, not all of 'x', 'y', and 'z'."
+
+    raise DataError(
+        f"'{name}' must be a 'SpatialDataArray', 'TriangularGridDataset', or "
+        f"'TetrahedralGridDataset', got '{type(field).__name__}'.{hint}"
+    )
