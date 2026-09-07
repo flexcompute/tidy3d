@@ -119,6 +119,16 @@ class SurfaceRecombinationBC(HeatChargeBC):
         composition the contact pins the potential and this BC supplies the
         finite surface-recombination carrier exchange.
 
+        The condition may also be placed on an interface between two materials
+        that both take part in the charge simulation, such as a
+        semiconductor/insulator interface (for example Si/SiO2), or a junction
+        between two differently doped regions of the same material, as at a
+        regrowth or wafer-bonded interface. There the interface keeps its
+        material continuity and the recombination applies on the semiconductor
+        side. Two placements are rejected: an interface with no
+        :class:`SemiconductorMedium` on either side, which has no carriers to
+        recombine, and a heterojunction, which is not yet supported.
+
     Example
     -------
 

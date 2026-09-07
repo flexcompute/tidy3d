@@ -107,6 +107,7 @@ if TYPE_CHECKING:
     from pydantic import FiniteFloat
 
     from tidy3d.compat import Self
+    from tidy3d.components.bc_placement import BCPlacementType
     from tidy3d.components.data.data_array import SpatialDataArray
     from tidy3d.components.types import Ax, Bound, Shapely
     from tidy3d.components.types.base import ArrayFloat1D
@@ -150,6 +151,21 @@ MIN_CYLINDER_RADIUS_FRACTION = 0.01
 # the user did not configure. Mirrored by SSAC_VOLTAGE_MATCH_TOL_V in
 # Flow360DriftDiffusionSolver.cpp; keep in sync.
 SSAC_VOLTAGE_MATCH_TOL_V = 1e-14
+
+# Band parameters that make two touching semiconductors a heterojunction rather
+# than a junction between two differently doped regions of the same material.
+# Doping and bandgap narrowing are excluded: neither opens a band offset at the
+# interface.
+HETEROJUNCTION_BAND_FIELDS = ("N_c", "N_v", "E_g", "electron_affinity")
+
+
+def _is_material_heterojunction(
+    medium_a: SemiconductorMedium, medium_b: SemiconductorMedium
+) -> bool:
+    """Whether two semiconductors meet in a band offset."""
+    return any(
+        getattr(medium_a, name) != getattr(medium_b, name) for name in HETEROJUNCTION_BAND_FIELDS
+    )
 
 
 def _get_cylinder_radii_with_meshing_tol(
@@ -1081,6 +1097,75 @@ class HeatChargeSimulation(AbstractSimulation):
         self._check_surface_recombination_not_stacked_with_schottky()
         self._check_surface_recombination_qf_on_voltage_overlay()
         self._check_surface_recombination_no_duplicate_placement()
+        self._check_surface_recombination_interface_materials()
+        return self
+
+    def _placement_side_media(self, placement: BCPlacementType) -> list | None:
+        """The two media a placement names, or ``None`` if it names only one side.
+
+        A ``StructureBoundary`` or simulation-boundary placement names one side
+        only; the opposing material follows from the geometry and is resolved
+        when the simulation runs. Assumes ``_names_exist_bcs`` has already run.
+        """
+        media = {s.medium.name: s.medium for s in self.structures if s.medium.name}
+        if self.medium and self.medium.name:
+            media[self.medium.name] = self.medium
+        structures_map = {s.name: s for s in self.structures if s.name}
+
+        if isinstance(placement, MediumMediumInterface):
+            sides = [media.get(name) for name in placement.mediums]
+        elif isinstance(placement, StructureStructureInterface):
+            # An unnamed side is the background medium the structure sits in.
+            sides = [
+                structures_map[name].medium if name in structures_map else self.medium
+                for name in placement.structures
+            ]
+        else:
+            return None
+        return None if any(side is None for side in sides) else sides
+
+    def _check_surface_recombination_interface_materials(self) -> Self:
+        """Reject ``SurfaceRecombinationBC`` on an interface that cannot carry it.
+
+        Only placements naming both sides are checked; for the rest the opposing
+        material follows from the geometry and is resolved when the simulation
+        runs.
+        """
+        for i, bc in enumerate(self.boundary_spec):
+            if not isinstance(bc.condition, SurfaceRecombinationBC):
+                continue
+            sides = self._placement_side_media(bc.placement)
+            if sides is None:
+                continue
+
+            charge_specs = [
+                side.charge if isinstance(side, MultiPhysicsMedium) else side for side in sides
+            ]
+            semiconductors = [
+                spec for spec in charge_specs if isinstance(spec, SemiconductorMedium)
+            ]
+
+            if not semiconductors:
+                self._raise_validation_error_at_loc(
+                    "'SurfaceRecombinationBC' is placed on an interface where neither "
+                    "side is a 'SemiconductorMedium'. Surface recombination consumes "
+                    "electrons and holes, so it needs a semiconductor on at least one "
+                    "side of the interface.",
+                    "boundary_spec",
+                    i,
+                    "placement",
+                )
+            if len(semiconductors) == 2 and _is_material_heterojunction(*semiconductors):
+                self._raise_validation_error_at_loc(
+                    "'SurfaceRecombinationBC' is placed on a heterojunction, which is "
+                    "not yet supported. Place the condition on a "
+                    "semiconductor/insulator interface, on a junction between two "
+                    "regions of the same material, or on an outer semiconductor "
+                    "surface.",
+                    "boundary_spec",
+                    i,
+                    "placement",
+                )
         return self
 
     def _check_surface_recombination_requires_accelerated(self) -> Self:
