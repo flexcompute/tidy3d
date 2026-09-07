@@ -209,7 +209,10 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         title="Small-signal AC current-voltage",
         description="Small-signal AC current as a function of DC bias voltage and frequency. "
         "This complex-valued data :math:`I(v, f)` is computed from small-signal analysis and "
-        "can be used to determine frequency-dependent device parameters like admittance. "
+        "uses the passive terminal convention, with positive current flowing into the driven "
+        "contact. For the usual :math:`e^{j\\omega t}` convention, use "
+        ":math:`Y = I / V` and :math:`C = \\operatorname{Im}(Y) / (2\\pi f)` to extract "
+        "admittance and capacitance. "
         "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
         "(extrusion length) to obtain the total current.",
         json_schema_extra={"units": "A", "units_2d": "A/um"},
