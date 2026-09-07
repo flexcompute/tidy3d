@@ -307,6 +307,7 @@ packages = ["tidy3d"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "tidy3d/style.mplstyle" = "tidy3d/style.mplstyle"
+"tidy3d/py.typed" = "tidy3d/py.typed"
 
 [tool.ruff]
 target-version = "py310"
