@@ -9,7 +9,7 @@ The data organization lives in `tidy3d/components/data` directory.
 The directory contains three files:
 
 - `data_array.py` defines the most atomic datastructures, which are subclasses of `xarray.DataArray`.
-- `monitor_data.py` defines the datastructures associated with each monitor type. They are regular tidy3d components that contain `DataArray` fields, among others.
+- `monitor_data/` defines the datastructures associated with each monitor type. They are regular tidy3d components that contain `DataArray` fields, among others.
 - `sim_data.py` holds the `SimulationData`, which basically holds a dictionary of `MonitorData` objects for the monitors in the simulation.
 
 ## Structure
@@ -101,7 +101,7 @@ Field-like data also support `def colocate(x=None, y=None, z=None) -> xr.Dataset
 
 #### Data Type Map
 
-The ``DATA_TYPE_MAP`` is defined in `monitor_data.py` as a dictionary mapping the various `Monitor` types to the corresponding `MonitorData` types. This is used in the backend to select the right data type to load for a given monitor.
+The ``DATA_TYPE_MAP`` is defined in `sim_data.py` as a dictionary mapping the various `Monitor` types to the corresponding `MonitorData` types. This is used in the backend to select the right data type to load for a given monitor.
 
 ### `SimulationData` objects
 
@@ -154,5 +154,3 @@ For example, if my data contains `x,y,z,f,mode_index` data, I might need to supp
 We may also write any tidy3d component to hdf5. The logic for this is defined in `Tidy3dBaseModel` and involves a recursive writing and reading of files to hdf5 groups.
 
 To write object `obj` to hdf5 format, simply use `obj.to_file(path)` where the path includes `.hdf5` as the extension.
-
-

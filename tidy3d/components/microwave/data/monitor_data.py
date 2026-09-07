@@ -54,7 +54,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
     Example
     -------
     >>> import numpy as np
-    >>> from tidy3d.components.data.monitor_data import FluxDataArray, FieldProjectionAngleDataArray
+    >>> from tidy3d.components.data.data_array import FluxDataArray, FieldProjectionAngleDataArray
     >>> from tidy3d.components.monitor import DirectivityMonitor
     >>> f = np.linspace(1e14, 2e14, 10)
     >>> r = np.atleast_1d(1e6)
