@@ -271,42 +271,42 @@ class DirectivityMonitorSpec(MicrowaveBaseModel):
     """
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Monitor Name",
         description=f"Optional name for the auto-generated monitor. "
         f"If not provided, defaults to ``{AUTO_RADIATION_MONITOR_NAME}_<N>`` where ``<N>`` is the index of the monitor in the list of radiation monitors.",
     )
 
     freqs: tuple[NonNegativeInt, ...] | None = Field(
-        None,
+        default=None,
         title="Frequencies",
         description="Frequencies to obtain fields at. If not provided, uses all frequencies "
         "from the :class:`.TerminalComponentModeler`. Must be a subset of modeler frequencies if provided.",
     )
 
     buffer: NonNegativeInt = Field(
-        AUTO_RADIATION_MONITOR_BUFFER,
+        default=AUTO_RADIATION_MONITOR_BUFFER,
         title="Buffer Distance",
         description="Number of grid cells to maintain between monitor and PML/domain boundaries. "
         f"Default: {AUTO_RADIATION_MONITOR_BUFFER} cells.",
     )
 
     num_theta_points: NonNegativeInt = Field(
-        AUTO_RADIATION_MONITOR_NUM_POINTS_THETA,
+        default=AUTO_RADIATION_MONITOR_NUM_POINTS_THETA,
         title="Elevation Angle Points",
         description="Number of elevation angle (theta) sample points from 0 to π. "
         f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_THETA}.",
     )
 
     num_phi_points: NonNegativeInt = Field(
-        AUTO_RADIATION_MONITOR_NUM_POINTS_PHI,
+        default=AUTO_RADIATION_MONITOR_NUM_POINTS_PHI,
         title="Azimuthal Angle Points",
         description="Number of azimuthal angle (phi) sample points from -π to π. "
         f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_PHI}.",
     )
 
     custom_origin: Coordinate | None = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
@@ -373,14 +373,14 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     """
 
     ports: tuple[discriminated_union(TerminalPortType), ...] = Field(
-        (),
+        default=(),
         title="Terminal Ports",
         description="Collection of lumped and wave ports associated with the network. "
         "For each port, one simulation will be run with a source that is associated with the port.",
     )
 
     run_only: tuple[NetworkIndex, ...] | None = Field(
-        None,
+        default=None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
         "If ``None``, simulations will be run for all indices in the scattering matrix. "
@@ -388,7 +388,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     element_mappings: tuple[tuple[NetworkElement, NetworkElement, Complex], ...] = Field(
-        (),
+        default=(),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
         "(input_element, output_element, coefficient), where the coefficient is the "
@@ -400,7 +400,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     radiation_monitors: tuple[
         discriminated_union(DirectivityMonitor | DirectivityMonitorSpec), ...
     ] = Field(
-        (),
+        default=(),
         title="Radiation Monitors",
         description="Facilitates the calculation of figures-of-merit for antennas. "
         "These monitors will be included in every simulation and record the radiated fields. "
@@ -409,7 +409,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     assume_ideal_excitation: bool = Field(
-        False,
+        default=False,
         title="Assume Ideal Excitation",
         description="If ``True``, only the excited port is assumed to have a nonzero incident wave "
         "amplitude power. This choice simplifies the calculation of the scattering matrix. "
@@ -420,19 +420,19 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     s_param_def: SParamDef = Field(
-        "pseudo",
+        default="pseudo",
         title="Scattering Parameter Definition",
         description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'. Default is 'pseudo'.",
     )
 
     low_freq_smoothing: ModelerLowFrequencySmoothingSpec | None = Field(
-        None,
+        default=None,
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the terminal component simulation.",
     )
 
     structure_priority_mode: PriorityMode | None = Field(
-        "conductor",
+        default="conductor",
         title="Structure Priority Setting",
         description="If not `None`, override the structure priority mode in the simulation. "
         "This field only affects structures of `priority=None`. "

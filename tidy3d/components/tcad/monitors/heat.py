@@ -11,7 +11,7 @@ class TemperatureMonitor(HeatChargeMonitor):
     """Temperature monitor."""
 
     interval: PositiveInt = Field(
-        1,
+        default=1,
         title="Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
         "Set ``interval`` to 1 for the highest possible resolution in time. "

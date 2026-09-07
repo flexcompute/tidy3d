@@ -16,8 +16,8 @@ class AbstractPlotParams(Tidy3dBaseModel):
     Corresponds with select properties of ``matplotlib.artist.Artist``.
     """
 
-    alpha: Any = Field(1.0, title="Opacity")
-    zorder: float | None = Field(None, title="Display Order")
+    alpha: Any = Field(default=1.0, title="Opacity")
+    zorder: float | None = Field(default=None, title="Display Order")
 
     def include_kwargs(self, **kwargs: Any) -> AbstractPlotParams:
         """Update the plot params with supplied kwargs."""
@@ -45,13 +45,13 @@ class PathPlotParams(AbstractPlotParams):
     Corresponds with select properties of ``matplotlib.lines.Line2D``.
     """
 
-    color: Any | None = Field(None, title="Color", alias="c")
-    linewidth: NonNegativeFloat = Field(2, title="Line Width", alias="lw")
-    linestyle: str = Field("--", title="Line Style", alias="ls")
-    marker: Any = Field("o", title="Marker Style")
-    markeredgecolor: Any | None = Field(None, title="Marker Edge Color", alias="mec")
-    markerfacecolor: Any | None = Field(None, title="Marker Face Color", alias="mfc")
-    markersize: NonNegativeFloat = Field(10, title="Marker Size", alias="ms")
+    color: Any | None = Field(default=None, title="Color", alias="c")
+    linewidth: NonNegativeFloat = Field(default=2, title="Line Width", alias="lw")
+    linestyle: str = Field(default="--", title="Line Style", alias="ls")
+    marker: Any = Field(default="o", title="Marker Style")
+    markeredgecolor: Any | None = Field(default=None, title="Marker Edge Color", alias="mec")
+    markerfacecolor: Any | None = Field(default=None, title="Marker Face Color", alias="mfc")
+    markersize: NonNegativeFloat = Field(default=10, title="Marker Size", alias="ms")
 
 
 class PlotParams(AbstractPlotParams):
@@ -59,11 +59,11 @@ class PlotParams(AbstractPlotParams):
     Corresponds with select properties of ``matplotlib.patches.Patch``.
     """
 
-    edgecolor: Any | None = Field(None, title="Edge Color", alias="ec")
-    facecolor: Any | None = Field(None, title="Face Color", alias="fc")
-    fill: bool = Field(True, title="Is Filled")
-    hatch: str | None = Field(None, title="Hatch Style")
-    linewidth: NonNegativeFloat = Field(1, title="Line Width", alias="lw")
+    edgecolor: Any | None = Field(default=None, title="Edge Color", alias="ec")
+    facecolor: Any | None = Field(default=None, title="Face Color", alias="fc")
+    fill: bool = Field(default=True, title="Is Filled")
+    hatch: str | None = Field(default=None, title="Hatch Style")
+    linewidth: NonNegativeFloat = Field(default=1, title="Line Width", alias="lw")
 
 
 # defaults for different tidy3d objects

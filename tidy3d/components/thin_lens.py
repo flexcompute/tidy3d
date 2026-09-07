@@ -28,7 +28,7 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
     )
 
     waist_distance: float = Field(
-        0.0,
+        default=0.0,
         title="Waist Distance",
         description="Signed axial distance from the thin-lens focal plane to the component "
         "plane, measured along the rotated beam propagation direction. A positive value "
@@ -37,7 +37,7 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
     )
 
     fill_lens: bool = Field(
-        True,
+        default=True,
         title="Fill Lens",
         description="If ``True``, use a uniform circular pupil over the numerical aperture. "
         "If ``False``, use a Gaussian under-filled pupil defined by ``lens_diameter`` "
@@ -45,7 +45,7 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
     )
 
     lens_diameter: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Lens Diameter",
         description="Physical lens diameter used for Gaussian under-filled pupils. Required "
         "when ``fill_lens=False`` and ignored when ``fill_lens=True``.",
@@ -53,7 +53,7 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
     )
 
     beam_diameter: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Beam Diameter",
         description="Incident Gaussian beam diameter used for Gaussian under-filled pupils. "
         "Required when ``fill_lens=False`` and ignored when ``fill_lens=True``.",
@@ -61,7 +61,7 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
     )
 
     num_plane_waves: PositiveInt | tuple[PositiveInt, PositiveInt] = Field(
-        DEFAULT_THIN_LENS_NUM_PLANE_WAVES,
+        default=DEFAULT_THIN_LENS_NUM_PLANE_WAVES,
         title="Number of Plane Waves",
         description="Number of angular-spectrum samples in the two tangential directions. "
         "If an integer is supplied, the same value is used in both directions. If not "
@@ -70,7 +70,7 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
     )
 
     lens_offset: tuple[float, float] = Field(
-        (0.0, 0.0),
+        default=(0.0, 0.0),
         title="Lens Offset",
         description="Tangential offset of the focused field relative to the beam axis, "
         "implemented as a pupil phase ramp. The two entries follow the component's "

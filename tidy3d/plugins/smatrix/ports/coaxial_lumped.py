@@ -59,7 +59,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     """
 
     center: Coordinate = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
         json_schema_extra={"units": MICROMETER},

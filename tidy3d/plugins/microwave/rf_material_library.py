@@ -270,7 +270,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
     )
 
     roughness: SurfaceRoughnessType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Surface Roughness Model",
         description="Surface roughness model that applies a frequency-dependent scaling "
@@ -279,7 +279,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
     )
 
     thickness: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Conductor Thickness",
         description="When the thickness is not much greater than the skin depth, "
         "a 1D transmission line model is applied to compute the surface impedance of the thin conductor, "
@@ -288,7 +288,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
     )
 
     fit_param: SurfaceImpedanceFitterParam | None = Field(
-        None,
+        default=None,
         title="Fitting Parameters For Surface Impedance",
         description="Parameters controlling the pole-residue fitting process for the scaled "
         "surface impedance (surface impedance divided by -1j * omega) over the frequency range. "

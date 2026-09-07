@@ -31,38 +31,38 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         description="The grid spacing.",
     )
     size_px: int | tuple[int, ...] | None = Field(
-        None,
+        default=None,
         title="Size in Pixels",
         description="The size of the kernel in pixels.",
     )
     beta: NonNegativeFloat = Field(
-        20.0,
+        default=20.0,
         title="Beta",
         description="The beta parameter for the tanh projection.",
     )
     eta: NonNegativeFloat = Field(
-        0.5,
+        default=0.5,
         title="Eta",
         description="The eta parameter for the tanh projection.",
     )
     filter_type: str = Field(
-        "conic",
+        default="conic",
         title="Filter Type",
         description="The type of filter to create.",
     )
     padding: PaddingType = Field(
-        "reflect",
+        default="reflect",
         title="Padding",
         description="The padding mode to use.",
     )
     symmetry: MirrorSymmetry | None = Field(
-        None,
+        default=None,
         title="Mirror Symmetry",
         description="Optional per-axis mirror symmetry applied by expanding the array across "
         "selected low or high boundaries before evaluating the penalty.",
     )
     delta_eta: float = Field(
-        0.01,
+        default=0.01,
         title="Delta Eta",
         description="The binarization threshold for erosion and dilation operations.",
     )

@@ -253,7 +253,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     """
 
     transmission_line_data: TransmissionLineDataset | None = Field(
-        None,
+        default=None,
         title="Transmission Line Data",
         description="Additional data relevant to transmission lines in RF and microwave applications, "
         "like characteristic impedance. This field is populated when a :class:`~tidy3d.rf.MicrowaveModeSpec` has "
@@ -261,7 +261,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     )
 
     transmission_line_terminal_data: TransmissionLineTerminalDataset | None = Field(
-        None,
+        default=None,
         title="Transmission Line Terminal Data",
         description="Additional data relevant to transmission line terminals in RF and microwave applications, "
         "like characteristic impedance, voltage transformation matrix, and current transformation matrix. "

@@ -86,7 +86,7 @@ class SimulationBoundary(AbstractBCPlacement):
     """
 
     surfaces: tuple[BoxSurface, ...] = Field(
-        ("x-", "x+", "y-", "y+", "z-", "z+"),
+        default=("x-", "x+", "y-", "y+", "z-", "z+"),
         title="Surfaces",
         description="Surfaces of simulation domain where to apply boundary conditions.",
     )
@@ -106,7 +106,7 @@ class StructureSimulationBoundary(AbstractBCPlacement):
     )
 
     surfaces: tuple[BoxSurface, ...] = Field(
-        ("x-", "x+", "y-", "y+", "z-", "z+"),
+        default=("x-", "x+", "y-", "y+", "z-", "z+"),
         title="Surfaces",
         description="Surfaces of simulation domain where to apply boundary conditions.",
     )

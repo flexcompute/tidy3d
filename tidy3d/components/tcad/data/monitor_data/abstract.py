@@ -50,7 +50,7 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
     )
 
     symmetry: tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetry",
         description="Symmetry of the original simulation in x, y, and z.",
     )

@@ -46,7 +46,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
     )
 
     data: tuple[discriminated_union(ModeSimulationMonitorDataType), ...] = Field(
-        (),
+        default=(),
         title="Monitor Data",
         description="List of monitor data "
         "associated with the monitors of the original :class:`.ModeSimulation`.",

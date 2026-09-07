@@ -45,7 +45,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     )
 
     transformations: tuple[TransformationType, ...] = Field(
-        (),
+        default=(),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
         "The end result of the transformations should be the material density of the design region "
@@ -55,7 +55,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     )
 
     penalties: tuple[PenaltyType, ...] = Field(
-        (),
+        default=(),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
         "penalties are applied after ``transformations`` are applied. Penalty weights can be set "
@@ -166,14 +166,14 @@ class TopologyDesignRegion(DesignRegion):
     )
 
     uniform: tuple[bool, bool, bool] = Field(
-        (False, False, True),
+        default=(False, False, True),
         title="Uniform",
         description="Axes along which the design should be uniform. By default, the structure "
         "is assumed to be uniform, i.e. invariant, in the z direction.",
     )
 
     transformations: tuple[TransformationType, ...] = Field(
-        (),
+        default=(),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
         "The end result of the transformations should be the material density of the design region "
@@ -182,7 +182,7 @@ class TopologyDesignRegion(DesignRegion):
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
     penalties: tuple[PenaltyType, ...] = Field(
-        (),
+        default=(),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
         "penalties are applied after ``transformations`` are applied. Penalty weights can be set "
@@ -190,7 +190,7 @@ class TopologyDesignRegion(DesignRegion):
     )
 
     override_structure_dl: PositiveFloat | Literal[False] | None = Field(
-        None,
+        default=None,
         title="Design Region Override Structure",
         description="Defines grid size when adding an ``override_structure`` to the "
         "``Simulation.grid_spec`` corresponding to this design region. "
@@ -201,7 +201,7 @@ class TopologyDesignRegion(DesignRegion):
     )
 
     priority: int | None = Field(
-        None,
+        default=None,
         title="Priority",
         description="Priority of the structure applied in structure overlapping region. "
         "The material property in the overlapping region is dictated by the structure "

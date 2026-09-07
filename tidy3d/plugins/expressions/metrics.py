@@ -74,18 +74,18 @@ class ModeAmp(Metric):
         description="The name of the mode monitor. This needs to match the name of the monitor in the simulation.",
     )
     f: float | FreqArray | None = Field(
-        None,
+        default=None,
         title="Frequency Array",
         description="The frequency array. If None, all frequencies in the monitor will be used.",
         alias="freqs",
     )
     direction: Direction = Field(
-        "+",
+        default="+",
         title="Direction",
         description="The direction of propagation of the mode.",
     )
     mode_index: NonNegativeInt = Field(
-        0,
+        default=0,
         title="Mode Index",
         description="The index of the mode.",
     )

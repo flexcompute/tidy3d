@@ -72,14 +72,14 @@ class ImpedanceCalculator(MicrowaveBaseModel):
     """
 
     voltage_integral: VoltageIntegralType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Voltage Integral",
         description="Definition of path integral for computing voltage.",
     )
 
     current_integral: CurrentIntegralType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Current Integral",
         description="Definition of contour integral for computing current.",

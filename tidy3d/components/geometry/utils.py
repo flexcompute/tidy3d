@@ -708,7 +708,7 @@ class SnappingSpec(Tidy3dBaseModel):
     )
 
     margin: tuple[NonNegativeInt, NonNegativeInt, NonNegativeInt] | None = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Margin",
         description="Number of additional grid points to consider when expanding or contracting "
         "during snapping. Only applies when ``SnapBehavior`` is ``Expand`` or ``Contract``.",

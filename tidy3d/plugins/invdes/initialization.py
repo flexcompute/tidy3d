@@ -36,21 +36,21 @@ class RandomInitializationSpec(AbstractInitializationSpec):
     """
 
     min_value: float = Field(
-        0.0,
+        default=0.0,
         ge=0.0,
         le=1.0,
         title="Minimum Value",
         description="Minimum value for the random parameters (inclusive).",
     )
     max_value: float = Field(
-        1.0,
+        default=1.0,
         ge=0.0,
         le=1.0,
         title="Maximum Value",
         description="Maximum value for the random parameters (exclusive).",
     )
     seed: NonNegativeInt | None = Field(
-        None,
+        default=None,
         description="Seed for the random number generator.",
     )
 
@@ -73,7 +73,7 @@ class UniformInitializationSpec(AbstractInitializationSpec):
     """Specification for uniform initial parameters."""
 
     value: float = Field(
-        0.5,
+        default=0.5,
         ge=0.0,
         le=1.0,
         title="Value",

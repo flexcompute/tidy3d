@@ -105,14 +105,14 @@ class NonlinearSusceptibility(NonlinearModel):
     """
 
     chi3: float = Field(
-        0,
+        default=0,
         title="Chi3",
         description=":math:`\\chi_3` nonlinear susceptibility.",
         json_schema_extra={"units": f"{MICROMETER}^2 / {VOLT}^2"},
     )
 
     numiters: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Number of iterations",
         description="Deprecated. The old usage ``nonlinear_spec=model`` with ``model.numiters`` "
         "is deprecated and will be removed in a future release. The new usage is "
@@ -186,51 +186,51 @@ class TwoPhotonAbsorption(NonlinearModel):
     """
 
     beta: float = Field(
-        0,
+        default=0,
         title="TPA coefficient",
         description="Coefficient for two-photon absorption (TPA).",
         json_schema_extra={"units": f"{MICROMETER} / {WATT}"},
     )
 
     tau: NonNegativeFloat = Field(
-        0,
+        default=0,
         title="Carrier lifetime",
         description="Lifetime for the free carriers created by two-photon absorption (TPA).",
         json_schema_extra={"units": f"{SECOND}"},
     )
 
     sigma: NonNegativeFloat = Field(
-        0,
+        default=0,
         title="FCA cross section",
         description="Total cross section for free-carrier absorption (FCA). "
         "Contains contributions from electrons and from holes.",
         json_schema_extra={"units": f"{MICROMETER}^2"},
     )
     e_e: NonNegativeFloat = Field(
-        1,
+        default=1,
         title="Electron exponent",
         description="Exponent for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
     )
     e_h: NonNegativeFloat = Field(
-        1,
+        default=1,
         title="Hole exponent",
         description="Exponent for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
     )
     c_e: float = Field(
-        0,
+        default=0,
         title="Electron coefficient",
         description="Coefficient for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
         json_schema_extra={"units": f"{MICROMETER}^(3 e_e)"},
     )
     c_h: float = Field(
-        0,
+        default=0,
         title="Hole coefficient",
         description="Coefficient for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
         json_schema_extra={"units": f"{MICROMETER}^(3 e_h)"},
     )
 
     n0: float | None = Field(
-        None,
+        default=None,
         title="Linear refractive index",
         description="Real linear refractive index of the medium, computed for instance using "
         "'medium.nk_model'. If not provided, it is calculated automatically using the central "
@@ -238,7 +238,7 @@ class TwoPhotonAbsorption(NonlinearModel):
     )
 
     freq0: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Central frequency",
         description="Central frequency, used to calculate the energy of the free-carriers "
         "excited by two-photon absorption. If not provided, it is obtained automatically "
@@ -314,14 +314,14 @@ class KerrNonlinearity(NonlinearModel):
     """
 
     n2: float = Field(
-        0,
+        default=0,
         title="Nonlinear refractive index",
         description="Nonlinear refractive index in the Kerr nonlinearity.",
         json_schema_extra={"units": f"{MICROMETER}^2 / {WATT}"},
     )
 
     n0: float | None = Field(
-        None,
+        default=None,
         title="Complex linear refractive index",
         description="Complex linear refractive index of the medium, computed for instance using "
         "'medium.nk_model'. If not provided, it is calculated automatically using the central "
@@ -349,7 +349,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     """
 
     models: tuple[discriminated_union(NonlinearModelType), ...] = Field(
-        (),
+        default=(),
         title="Nonlinear models",
         description="The nonlinear models present in this nonlinear spec. "
         "Nonlinear models of different types are additive. "
@@ -357,7 +357,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     )
 
     num_iters: PositiveInt = Field(
-        NONLINEAR_DEFAULT_NUM_ITERS,
+        default=NONLINEAR_DEFAULT_NUM_ITERS,
         title="Number of iterations",
         description="Number of iterations for solving nonlinear constitutive relation.",
     )

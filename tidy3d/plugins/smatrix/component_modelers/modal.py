@@ -50,14 +50,14 @@ class ModalComponentModeler(AbstractComponentModeler):
     """
 
     ports: tuple[discriminated_union(ModalPortType), ...] = Field(
-        (),
+        default=(),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
     run_only: tuple[MatrixIndex, ...] | None = Field(
-        None,
+        default=None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
         "If ``None``, simulations will be run for all indices in the scattering matrix. "
@@ -65,7 +65,7 @@ class ModalComponentModeler(AbstractComponentModeler):
     )
 
     element_mappings: tuple[tuple[Element, Element, Complex], ...] = Field(
-        (),
+        default=(),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
         "(input_element, output_element, coefficient), where the coefficient is the "

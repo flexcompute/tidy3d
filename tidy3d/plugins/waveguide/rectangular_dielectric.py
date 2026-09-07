@@ -88,21 +88,21 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     box_medium: AnnotatedMedium | tuple[AnnotatedMedium, ...] | None = Field(
-        None,
+        default=None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer. A sequence of mediums can "
         "be used to create a layered substrate. If not set, the first clad medium is used.",
     )
 
     slab_thickness: Size1D = Field(
-        0.0,
+        default=0.0,
         title="Slab Thickness",
         description="Thickness of the slab for rib geometry.",
         json_schema_extra={"units": MICROMETER},
     )
 
     clad_thickness: Size1D | ArrayFloat1D | None = Field(
-        None,
+        default=None,
         title="Clad Thickness",
         description="Domain size above the core layer. An array can be used to define a layered "
         "clad. The last layer is extended into the PML as an infinitely thick layer.",
@@ -110,7 +110,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     box_thickness: Size1D | ArrayFloat1D | None = Field(
-        None,
+        default=None,
         title="Box Thickness",
         description="Domain size below the core layer. An array can be used to define a layered "
         "substrate. The last layer is extended into the PML as an infinitely thick layer.",
@@ -118,14 +118,14 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     side_margin: Size1D | None = Field(
-        None,
+        default=None,
         title="Side Margin",
         description="Domain size to the sides of the waveguide core.",
         json_schema_extra={"units": MICROMETER},
     )
 
     sidewall_angle: float = Field(
-        0.0,
+        default=0.0,
         title="Sidewall Angle",
         description="Angle of the core sidewalls measured from the vertical direction (in "
         "radians).  Positive (negative) values create waveguides with bases wider (narrower) "
@@ -134,7 +134,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     gap: float | ArrayFloat1D = Field(
-        0.0,
+        default=0.0,
         title="Gap",
         description="Distance between adjacent waveguides, measured at the top core edges.  "
         "An array can be used to define one gap per pair of adjacent waveguides.",
@@ -142,21 +142,21 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     sidewall_thickness: Size1D = Field(
-        0.0,
+        default=0.0,
         title="Sidewall Thickness",
         description="Sidewall layer thickness (within core).",
         json_schema_extra={"units": MICROMETER},
     )
 
     sidewall_medium: MediumType | None = Field(
-        None,
+        default=None,
         title="Sidewall medium",
         description="Medium associated with the sidewall layer to model sidewall losses.",
         discriminator=TYPE_TAG_STR,
     )
 
     surface_thickness: Size1D = Field(
-        0.0,
+        default=0.0,
         title="Surface Thickness",
         description="Thickness of the surface layers defined on the top of the waveguide and  "
         "slab regions (if any).",
@@ -164,14 +164,14 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     surface_medium: MediumType | None = Field(
-        None,
+        default=None,
         title="Surface Medium",
         description="Medium associated with the surface layer to model surface losses.",
         discriminator=TYPE_TAG_STR,
     )
 
     origin: Coordinate = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Origin",
         description="Center of the waveguide geometry.  This coordinate represents the base "
         "of the waveguides (substrate surface) in the normal axis, and center of the geometry "
@@ -180,20 +180,20 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     length: Size1D = Field(
-        1e30,
+        default=1e30,
         title="Length",
         description="Length of the waveguides in the propagation direction",
         json_schema_extra={"units": MICROMETER},
     )
 
     propagation_axis: Axis = Field(
-        0,
+        default=0,
         title="Propagation Axis",
         description="Axis of propagation of the waveguide",
     )
 
     normal_axis: Axis = Field(
-        2,
+        default=2,
         title="Normal Axis",
         description="Axis normal to the substrate surface",
     )
@@ -205,13 +205,13 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     grid_resolution: int = Field(
-        15,
+        default=15,
         title="Grid Resolution",
         description="Solver grid resolution per wavelength.",
     )
 
     max_grid_scaling: float = Field(
-        1.2,
+        default=1.2,
         title="Maximal Grid Scaling",
         description="Maximal size increase between adjacent grid boundaries.",
     )

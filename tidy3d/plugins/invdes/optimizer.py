@@ -37,7 +37,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     )
 
     maximize: bool = Field(
-        True,
+        default=True,
         title="Direction of Optimization",
         description="If ``True``, the optimizer will maximize the objective function. If ``False``, the optimizer will minimize the objective function.",
     )
@@ -48,7 +48,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     )
 
     results_cache_fname: str | None = Field(
-        None,
+        default=None,
         title="History Storage File",
         description="If specified, will save the optimization state to a local ``.pkl`` file "
         "using ``dill.dump()``. This file stores an ``InverseDesignResult`` corresponding "
@@ -60,7 +60,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     )
 
     store_full_results: bool = Field(
-        True,
+        default=True,
         title="Store Full Results",
         description="If ``True``, stores the full history for the vector fields, specifically "
         "the gradient, params, and optimizer state. For large design regions and many iterations, "
@@ -250,7 +250,7 @@ class AdamOptimizer(AbstractOptimizer):
     """Specification for an optimization."""
 
     beta1: float = Field(
-        0.9,
+        default=0.9,
         ge=0.0,
         le=1.0,
         title="Beta 1",
@@ -258,7 +258,7 @@ class AdamOptimizer(AbstractOptimizer):
     )
 
     beta2: float = Field(
-        0.999,
+        default=0.999,
         ge=0.0,
         le=1.0,
         title="Beta 2",
@@ -266,7 +266,7 @@ class AdamOptimizer(AbstractOptimizer):
     )
 
     eps: PositiveFloat = Field(
-        1e-8,
+        default=1e-8,
         title="Epsilon",
         description="Epsilon parameter in the Adam optimization method.",
     )

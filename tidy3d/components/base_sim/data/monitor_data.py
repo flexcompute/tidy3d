@@ -42,13 +42,13 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data from unstructured monitors."""
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetry",
         description="Symmetry of the original simulation in x, y, and z.",
     )
 
     symmetry_center: Coordinate = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetry Center",
         description="Symmetry center of the original simulation in x, y, and z.",
     )

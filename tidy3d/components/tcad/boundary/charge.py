@@ -54,7 +54,7 @@ class VoltageBC(HeatChargeBC):
     )
 
     model: ContactModelType = Field(
-        "ohmic",
+        default="ohmic",
         title="Contact model",
         description='Contact model. ``"ohmic"`` (default) is the ohmic '
         'contact path. ``"schottky_mott"`` enables the Schottky-Mott + '
@@ -145,7 +145,7 @@ class SurfaceRecombinationBC(HeatChargeBC):
     )
 
     Q_f: float = Field(
-        0.0,
+        default=0.0,
         title="Fixed interface sheet charge density",
         description="Signed fixed interface sheet charge density "
         "[C/cm^2]. Negative values (e.g. for Al2O3 on Si) attract holes "

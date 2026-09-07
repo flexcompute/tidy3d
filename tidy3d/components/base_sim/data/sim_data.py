@@ -49,7 +49,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
     )
 
     log: str | None = Field(
-        None,
+        default=None,
         title="Solver Log",
         description="A string containing the log information from the simulation run.",
     )

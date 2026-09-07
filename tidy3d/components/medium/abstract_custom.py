@@ -51,7 +51,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         return True
 
     interp_method: InterpMethod = Field(
-        "nearest",
+        default="nearest",
         title="Interpolation method",
         description="Interpolation method to obtain permittivity values "
         "that are not supplied at the Yee grids; For grids outside the range "
@@ -61,7 +61,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     )
 
     subpixel: bool = Field(
-        False,
+        default=False,
         title="Subpixel averaging",
         description="If ``True``, apply the subpixel averaging method specified by "
         "``Simulation``'s field ``subpixel`` for this type of material on the "
@@ -70,7 +70,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     )
 
     derived_from: PerturbationMediumType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Parent Medium",
         description="If not ``None``, it records the parent medium from which this medium was derived.",

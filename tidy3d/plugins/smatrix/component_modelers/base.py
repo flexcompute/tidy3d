@@ -51,7 +51,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     """Tool for modeling devices and computing port parameters."""
 
     name: str = Field(
-        "",
+        default="",
         title="Name",
     )
 
@@ -61,7 +61,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     )
 
     ports: tuple[discriminated_union(Port | TerminalPortType), ...] = Field(
-        (),
+        default=(),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
@@ -74,7 +74,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     )
 
     remove_dc_component: bool = Field(
-        True,
+        default=True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
         "If ``True``, the Gaussian pulse is modified at low frequencies to zero out the "
@@ -85,7 +85,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     )
 
     run_only: tuple[IndexType, ...] | None = Field(
-        None,
+        default=None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
         "If ``None``, simulations will be run for all indices in the scattering matrix. "
@@ -93,7 +93,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     )
 
     element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...] = Field(
-        (),
+        default=(),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
         "(input_element, output_element, coefficient), where the coefficient is the "
@@ -102,7 +102,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
     custom_source_time: SourceTimeType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Custom Source Time",
         description="If provided, this will be used as specification of the source time-dependence in simulations. "

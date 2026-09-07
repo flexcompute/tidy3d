@@ -88,7 +88,7 @@ class FieldProjector(
     )
 
     pts_per_wavelength: int | None = Field(
-        PTS_PER_WVL,
+        default=PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
         "to discretize the surface monitors for the projection. If ``None``, fields will "
@@ -98,7 +98,7 @@ class FieldProjector(
     )
 
     origin: Coordinate | None = Field(
-        None,
+        default=None,
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "average of the centers of all surface monitors.",

@@ -47,7 +47,7 @@ class ImpedanceSpec(MicrowaveBaseModel):
     """
 
     impedance: Complex = Field(
-        DEFAULT_REFERENCE_IMPEDANCE,
+        default=DEFAULT_REFERENCE_IMPEDANCE,
         title="Impedance",
         description="Reference port impedance ``Z = R + jX`` in ohms. "
         "For a complex value with non-zero imaginary part, :attr:`frequency` must be provided.",
@@ -55,7 +55,7 @@ class ImpedanceSpec(MicrowaveBaseModel):
     )
 
     frequency: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Measurement Frequency",
         description="Frequency (Hz) at which the complex :attr:`impedance` was measured. "
         "Required when the imaginary part of :attr:`impedance` is non-zero.",
@@ -110,7 +110,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
     """
 
     impedance: Complex | ImpedanceSpec = Field(
-        DEFAULT_REFERENCE_IMPEDANCE,
+        default=DEFAULT_REFERENCE_IMPEDANCE,
         title="Impedance",
         description="Reference port impedance in ohms. Accepts a plain real number "
         "(e.g. ``50``) for a purely resistive load, or an :class:`ImpedanceSpec` for a "
@@ -154,7 +154,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
         return complex(self.impedance)
 
     num_grid_cells: PositiveInt | None = Field(
-        DEFAULT_PORT_NUM_CELLS,
+        default=DEFAULT_PORT_NUM_CELLS,
         title="Port grid cells",
         description="Number of mesh grid cells associated with the port along each direction, "
         "which are added through automatic mesh refinement. "
@@ -162,7 +162,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
     )
 
     enable_snapping_points: bool = Field(
-        True,
+        default=True,
         title="Snap Grid To Lumped Port",
         description="When enabled, snapping points are automatically generated to snap grids to key "
         "geometric features of the lumped port for more accurate modelling.",

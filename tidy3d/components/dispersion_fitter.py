@@ -130,7 +130,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
     """Advanced fast fitter parameters."""
 
     loss_bounds: tuple[float, float] = Field(
-        (0, np.inf),
+        default=(0, np.inf),
         title="Loss bounds",
         description="Bounds (lower, upper) on Im[resp]. Default corresponds to only passivity. "
         "A lower bound of 0 or greater ensures passivity. To fit a gain medium without "
@@ -140,7 +140,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         "In this case, consider also increasing the weight for fitting the imaginary part.",
     )
     weights: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(
-        None,
+        default=None,
         title="Weights",
         description="Weights (real, imag) in objective function for fitting. The weights "
         "are applied to the real and imaginary parts of the response. The weights "
@@ -153,31 +153,31 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         "more important than the other.",
     )
     show_progress: bool = Field(
-        True,
+        default=True,
         title="Show progress bar",
         description="Whether to show progress bar during fitter run.",
     )
     show_unweighted_rms: bool = Field(
-        False,
+        default=False,
         title="Show unweighted RMS",
         description="Whether to show unweighted RMS error in addition to the default weighted "
         'RMS error. Requires ``td.config.logging.level = "INFO"``.',
     )
     relaxed: bool | None = Field(
-        None,
+        default=None,
         title="Relaxed",
         description="Whether to use relaxed fitting algorithm, which "
         "has better pole relocation properties. If ``None``, will try both original and relaxed "
         "algorithms.",
     )
     smooth: bool | None = Field(
-        None,
+        default=None,
         title="Smooth",
         description="Whether to use real starting poles, which can help when fitting smooth data. "
         "If ``None``, will try both real and complex starting poles.",
     )
     logspacing: bool | None = Field(
-        None,
+        default=None,
         title="Log spacing",
         description="Whether to space the poles logarithmically. "
         "If ``None``, will try both log and linear spacing.",
@@ -185,20 +185,20 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
 
     # more technical parameters
     num_iters: PositiveInt = Field(
-        DEFAULT_NUM_ITERS,
+        default=DEFAULT_NUM_ITERS,
         title="Number of iterations",
         description="Number of iterations of the fitting algorithm. Make this smaller to "
         "speed up fitter, or make it larger to try to improve fit.",
     )
     passivity_num_iters: PositiveInt = Field(
-        PASSIVITY_NUM_ITERS_DEFAULT,
+        default=PASSIVITY_NUM_ITERS_DEFAULT,
         title="Number of loss bounds enforcement iterations",
         description="Number of loss bounds enforcement iterations of the fitting algorithm. "
         "Make this smaller to speed up fitter. There will be a warning if this value "
         "is too small. To fit a gain medium, use the ``loss_bounds`` parameter instead.",
     )
     slsqp_constraint_scale: PositiveFloat = Field(
-        SLSQP_CONSTRAINT_SCALE_DEFAULT,
+        default=SLSQP_CONSTRAINT_SCALE_DEFAULT,
         title="Scale factor for SLSQP",
         description="Passivity constraint is weighted relative to fit quality by this factor, "
         "before running passivity optimization using the SLSQP algorithm. "
@@ -241,47 +241,47 @@ class FastFitterData(AdvancedFastFitterParam):
     )
 
     optimize_eps_inf: bool | None = Field(
-        None,
+        default=None,
         title="Optimize eps_inf",
         description="Whether to optimize ``eps_inf``.",
     )
 
     num_poles: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Number of poles",
         description="Number of poles",
     )
     eps_inf: float | None = Field(
-        None,
+        default=None,
         title="eps_inf",
         description="Value of ``eps_inf``.",
     )
     poles: ArrayComplex1D | None = Field(
-        None,
+        default=None,
         title="Pole frequencies in eV",
         description="Pole frequencies in eV",
     )
     residues: ArrayComplex1D | None = Field(
-        None,
+        default=None,
         title="Residues in eV",
         description="Residues in eV",
     )
 
     passivity_optimized: bool | None = Field(
-        False,
+        default=False,
         title="Passivity optimized",
         description="Whether the fit was optimized to enforce passivity. If None, "
         "then passivity optimization did not terminate; "
         "consider increasing ``AdvancedFastFitterParam.passivity_num_iters``.",
     )
     passivity_num_iters_too_small: bool = Field(
-        False,
+        default=False,
         title="Passivity num iters too small",
         description="If this is True, consider increasing "
         "``AdvancedFastFitterParam.passivity_num_iters``.",
     )
     slsqp_constraint_scale_too_small: bool = Field(
-        False,
+        default=False,
         title="SLSQP constraint scale too small",
         description="The constraint is rescaled by ``slsqp_constraint_scale`` before "
         "running passivity optimization using the SLSQP algorithm. If this is ``True``, "

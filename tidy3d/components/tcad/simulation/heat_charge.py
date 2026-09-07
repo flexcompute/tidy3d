@@ -409,20 +409,20 @@ class HeatChargeSimulation(AbstractSimulation):
     """
 
     sources: tuple[discriminated_union(HeatChargeSourceType), ...] = Field(
-        (),
+        default=(),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
     )
 
     monitors: tuple[discriminated_union(HeatChargeMonitorType), ...] = Field(
-        (),
+        default=(),
         title="Monitors",
         description="Monitors in the simulation.",
     )
 
     boundary_spec: tuple[discriminated_union(HeatChargeBoundarySpec | HeatBoundarySpec), ...] = (
         Field(
-            (),
+            default=(),
             title="Boundary Condition Specifications",
             description="List of boundary condition specifications.",
         )
@@ -436,7 +436,7 @@ class HeatChargeSimulation(AbstractSimulation):
     )
 
     symmetry: tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
@@ -445,7 +445,7 @@ class HeatChargeSimulation(AbstractSimulation):
     )
 
     analysis_spec: AnalysisSpecType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Analysis specification.",
         description="The `analysis_spec` is used to specify the type of simulation. Currently, it is used to "
@@ -453,7 +453,7 @@ class HeatChargeSimulation(AbstractSimulation):
     )
 
     use_accelerated_solver: bool = Field(
-        True,
+        default=True,
         title="Use accelerated solver.",
         description="Controls the solver used for charge simulations. When ``True`` "
         "(default), the GPU accelerated charge solver is used. Set to ``False`` "

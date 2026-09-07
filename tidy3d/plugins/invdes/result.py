@@ -25,43 +25,43 @@ class InverseDesignResult(InvdesBaseModel):
     )
 
     params: tuple[ArrayLike, ...] = Field(
-        (),
+        default=(),
         title="Parameter History",
         description="History of parameter arrays throughout the optimization.",
     )
 
     objective_fn_val: tuple[float, ...] = Field(
-        (),
+        default=(),
         title="Objective Function History",
         description="History of objective function values throughout the optimization.",
     )
 
     grad: tuple[ArrayLike, ...] = Field(
-        (),
+        default=(),
         title="Gradient History",
         description="History of objective function gradient arrays throughout the optimization.",
     )
 
     penalty: tuple[float, ...] = Field(
-        (),
+        default=(),
         title="Penalty History",
         description="History of weighted sum of penalties throughout the optimization.",
     )
 
     post_process_val: tuple[float, ...] = Field(
-        (),
+        default=(),
         title="Post-Process Function History",
         description="History of return values from ``post_process_fn`` throughout the optimization.",
     )
 
     simulation: tuple[td.Simulation, ...] = Field(
-        (),
+        default=(),
         title="Simulation History",
         description="History of ``td.Simulation`` instances throughout the optimization.",
     )
 
     opt_state: tuple[dict[str, int | ArrayLike], ...] = Field(
-        (),
+        default=(),
         title="Optimizer State History",
         description="History of optimizer states throughout the optimization.",
     )

@@ -33,21 +33,21 @@ class ApodizationSpec(Tidy3dBaseModel):
     """
 
     start: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="Start Interval",
         description="Defines the time at which the start apodization ends.",
         json_schema_extra={"units": SECOND},
     )
 
     end: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="End Interval",
         description="Defines the time at which the end apodization begins.",
         json_schema_extra={"units": SECOND},
     )
 
     width: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Apodization Width",
         description="Characteristic decay length of the apodization function, i.e., the width of the ramping up of the scaling function from 0 to 1.",
         json_schema_extra={"units": SECOND},

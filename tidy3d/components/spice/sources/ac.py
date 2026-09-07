@@ -32,7 +32,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
     """
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Unique name for the SSAC voltage source.",
         min_length=1,

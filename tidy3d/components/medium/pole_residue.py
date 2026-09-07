@@ -295,14 +295,14 @@ class PoleResidue(DispersiveMedium):
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: TracedPositiveFloat = Field(
-        1.0,
+        default=1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
     poles: TracedPolesAndResidues = Field(
-        (),
+        default=(),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
         json_schema_extra={"units": (RADPERSEC, RADPERSEC)},

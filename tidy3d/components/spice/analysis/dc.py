@@ -184,7 +184,7 @@ class SteadyChargeDCAnalysis(Tidy3dBaseModel):
     )
 
     fermi_dirac: bool = Field(
-        False,
+        default=False,
         title="Fermi-Dirac statistics",
         description="Determines whether Fermi-Dirac statistics are used. When ``False``, "
         "Boltzmann statistics will be used. This can provide more accurate results in situations "
@@ -280,7 +280,7 @@ class IsothermalSteadyChargeDCAnalysis(SteadyChargeDCAnalysis):
     """
 
     temperature: PositiveFloat = Field(
-        300,
+        default=300,
         title="Temperature",
         description="Lattice temperature. Assumed constant throughout the device. "
         "Carriers are assumed to be at thermodynamic equilibrium with the lattice.",

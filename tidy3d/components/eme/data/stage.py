@@ -63,13 +63,13 @@ class EMEStageCellOverlap(Tidy3dBaseModel):
     )
 
     filter_mask: tuple[bool, ...] | None = Field(
-        None,
+        default=None,
         description="Per-mode propagation keep mask. Modes excluded by this mask remain "
         "available to the interface matching basis but are not propagated as trial modes.",
     )
 
     interface_test_mask: tuple[bool, ...] | None = Field(
-        None,
+        default=None,
         description="Per-mode interface test keep mask for numerically usable modes. "
         "Modes excluded by this mask have unusable EME interface self-overlap "
         "and are removed from the interface matching equations.",
@@ -96,25 +96,25 @@ class EMEStageInterfaceOverlap(Tidy3dBaseModel):
     )
 
     electric_field_metric: EMETraceMetricDataArray | None = Field(
-        None,
+        default=None,
         description="Tangential electric-field metric matrix used by the residual "
         "diagnostic; populated only when overlaps are staged with diagnostics enabled.",
     )
 
     magnetic_field_metric: EMETraceMetricDataArray | None = Field(
-        None,
+        default=None,
         description="Tangential magnetic-field metric matrix used by the residual "
         "diagnostic; populated only when overlaps are staged with diagnostics enabled.",
     )
 
     aperture_electric_field_metric: EMETraceMetricDataArray | None = Field(
-        None,
+        default=None,
         description="Tangential electric-field metric matrix with mode-solver PML layers excluded; "
         "populated only when overlaps are staged with diagnostics enabled.",
     )
 
     aperture_magnetic_field_metric: EMETraceMetricDataArray | None = Field(
-        None,
+        default=None,
         description="Tangential magnetic-field metric matrix with mode-solver PML layers excluded; "
         "populated only when overlaps are staged with diagnostics enabled.",
     )

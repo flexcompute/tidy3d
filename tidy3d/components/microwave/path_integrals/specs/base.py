@@ -76,7 +76,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
     _line_validator = assert_line()
 
     extrapolate_to_endpoints: bool = Field(
-        False,
+        default=False,
         title="Extrapolate to Endpoints",
         description="If the endpoints of the path integral terminate at or near a material interface, "
         "the field is likely discontinuous. When this field is ``True``, fields that are outside and on the bounds "
@@ -84,7 +84,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
     )
 
     snap_path_to_grid: bool = Field(
-        False,
+        default=False,
         title="Snap Path to Grid",
         description="It might be desirable to integrate exactly along the Yee grid associated with "
         "a field. When this field is ``True``, the integration path will be snapped to the grid.",

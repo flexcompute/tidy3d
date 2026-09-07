@@ -18,7 +18,7 @@ class AbstractSource(Tidy3dBaseModel, ABC):
     """Abstract base class for all sources."""
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Optional name for the source.",
     )

@@ -92,7 +92,7 @@ class DesignSpace(Tidy3dBaseModel):
     """
 
     parameters: tuple[ParameterType, ...] = Field(
-        (),
+        default=(),
         title="Parameters",
         description="Set of parameters defining the dimensions and allowed values for the design space.",
     )
@@ -104,7 +104,7 @@ class DesignSpace(Tidy3dBaseModel):
     )
 
     task_name: str = Field(
-        "",
+        default="",
         title="Task Name",
         description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{sim_index}_{counter} where ``sim_index`` is "
         "the index of the workflow/simulation object from the pre function output. "
@@ -113,19 +113,19 @@ class DesignSpace(Tidy3dBaseModel):
     )
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Optional name for the design space.",
     )
 
     path_dir: str = Field(
-        ".",
+        default=".",
         title="Path Directory",
         description="Directory where simulation data files will be locally saved to. Only used when pre and post functions are supplied.",
     )
 
     folder_name: str = Field(
-        "default",
+        default="default",
         title="Folder Name",
         description="Folder path where the simulation will be uploaded in the Tidy3D Workspace. Will use 'default' if no path is set.",
     )

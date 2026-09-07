@@ -34,7 +34,7 @@ class BasebandSourceTime(SourceTime, ABC):
     """
 
     phase: Literal[0] = Field(
-        0,
+        default=0,
         frozen=True,
         title="Phase",
         description="Phase is locked to 0 for baseband source times (no carrier frequency).",
@@ -59,7 +59,7 @@ class BasebandStep(BasebandSourceTime):
     )
 
     offset: float = Field(
-        5.0,
+        default=5.0,
         title="Offset",
         description="Delay of the step center in units of ``rise_time``.",
         ge=2.5,
@@ -118,7 +118,7 @@ class BasebandGaussianPulse(BasebandSourceTime):
     )
 
     offset: float = Field(
-        5.0,
+        default=5.0,
         title="Offset",
         description="Delay of the pulse peak in units of ``twidth``.",
         ge=2.5,
@@ -172,7 +172,7 @@ class BasebandRectangularPulse(BasebandSourceTime):
     )
 
     offset: float = Field(
-        5.0,
+        default=5.0,
         title="Offset",
         description="Delay of the pulse start (rising edge center) in units of ``rise_time``.",
         ge=2.5,
@@ -231,7 +231,7 @@ class BasebandCustomSourceTime(BasebandSourceTime):
     """
 
     source_time_dataset: TimeDataset | None = Field(
-        None,
+        default=None,
         title="Source time dataset",
         description="Dataset for storing the baseband source time envelope. "
         "If ``None``, the source produces no signal and must be populated before use.",

@@ -43,7 +43,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
     """Advanced fitter parameters"""
 
     bound_amp: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="Upper bound of oscillator strength",
         description="Upper bound of real and imagniary part of oscillator "
         "strength ``c`` in the model :class:`.PoleResidue` (The default 'None' will trigger "
@@ -51,7 +51,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         json_schema_extra={"units": HERTZ},
     )
     bound_f: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="Upper bound of pole frequency",
         description="Upper bound of real and imaginary part of ``a`` that corresponds to pole "
         "damping rate and frequency in the model :class:`.PoleResidue` (The default 'None' "
@@ -59,20 +59,20 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         json_schema_extra={"units": HERTZ},
     )
     bound_f_lower: NonNegativeFloat = Field(
-        0.0,
+        default=0.0,
         title="Lower bound of pole frequency",
         description="Lower bound of imaginary part of ``a`` that corresponds to pole "
         "frequency in the model :class:`.PoleResidue`.",
         json_schema_extra={"units": HERTZ},
     )
     bound_eps_inf: float = Field(
-        10.0,
+        default=10.0,
         title="Upper bound of epsilon at infinity frequency",
         description="Upper bound of epsilon at infinity frequency. It must be no less than 1.",
         ge=1,
     )
     constraint: Literal["hard", "soft"] = Field(
-        "hard",
+        default="hard",
         title="Type of constraint for stability",
         description="Stability constraint: 'hard' constraints are generally recommended since "
         "they are faster to compute per iteration, and they often require fewer iterations to "
@@ -81,12 +81,12 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         "for larger search space. However, both constraints improve stability equally well.",
     )
     nlopt_maxeval: PositiveInt = Field(
-        5000,
+        default=5000,
         title="Number of inner iterations",
         description="Number of iterations in each inner optimization.",
     )
     random_seed: int | None = Field(
-        0,
+        default=0,
         title="Random seed for starting coefficients",
         description="The fitting tool performs global optimizations with random "
         "starting coefficients. With the same random seed, one obtains identical "
@@ -121,33 +121,33 @@ class FitterData(AdvancedFitterParam):
         description="Real part of the complex index of refraction at each wavelength.",
     )
     k_data: tuple[float, ...] | None = Field(
-        None,
+        default=None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction at each wavelength.",
     )
     num_poles: PositiveInt = Field(
-        1,
+        default=1,
         title="Number of poles",
         description="Number of poles in model.",
     )
     num_tries: PositiveInt = Field(
-        50,
+        default=50,
         title="Number of tries",
         description="Number of optimizations to run with different initial guess.",
     )
     tolerance_rms: NonNegativeFloat = Field(
-        0.0,
+        default=0.0,
         title="RMS error tolerance",
         description="RMS error below which the fit is successful and result is returned.",
     )
     bound_amp: PositiveFloat = Field(
-        100.0,
+        default=100.0,
         title="Upper bound of oscillator strength",
         description="Upper bound of oscillator strength in the model.",
         json_schema_extra={"units": "eV"},
     )
     bound_f: PositiveFloat = Field(
-        100.0,
+        default=100.0,
         title="Upper bound of pole frequency",
         description="Upper bound of pole frequency in the model.",
         json_schema_extra={"units": "eV"},

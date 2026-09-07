@@ -54,19 +54,19 @@ class VisualizationSpec(Tidy3dBaseModel):
     """Defines specification for visualization when used with plotting functions."""
 
     facecolor: str = Field(
-        "",
+        default="",
         title="Face color",
         description="Color applied to the faces in visualization.",
     )
 
     edgecolor: str = Field(
-        "",
+        default="",
         title="Edge color",
         description="Color applied to the edges in visualization.",
     )
 
     alpha: float = Field(
-        1.0,
+        default=1.0,
         title="Opacity",
         description="Opacity/alpha value in plotting between 0 and 1.",
         ge=0,

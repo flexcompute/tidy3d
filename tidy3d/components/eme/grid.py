@@ -67,7 +67,7 @@ class EMEModeSpec(ModeSpec):
     """
 
     num_modes: PositiveInt = Field(
-        1,
+        default=1,
         title="Number of modes",
         description="Number of modes solved in each EME cell. The full solved basis is "
         "available for interface testing and diagnostics, so interface memory grows "
@@ -78,7 +78,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     interp_spec: ModeInterpSpec | None = Field(
-        ModeInterpSpec.cheb(num_points=5, reduce_data=True),
+        default=ModeInterpSpec.cheb(num_points=5, reduce_data=True),
         title="Mode frequency interpolation specification",
         description="Specification for computing modes at a reduced set of frequencies and "
         "interpolating to obtain results at all requested frequencies. This can significantly "
@@ -88,7 +88,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     angle_theta: Literal[0.0] = Field(  # pyrefly: ignore[invalid-literal]
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis. Not currently "
         "supported in EME cells. Use an additional 'ModeSolverMonitor' and "
@@ -97,7 +97,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     angle_phi: Literal[0.0] = Field(  # pyrefly: ignore[invalid-literal]
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis. Not currently supported in EME cells. Use an additional "
@@ -107,7 +107,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     precision: Literal["auto", "single", "double"] = Field(
-        "double",
+        default="double",
         title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
@@ -118,7 +118,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     bend_medium_frame: Literal["global", "co_rotating"] = Field(
-        "global",
+        default="global",
         title="Bent medium frame",
         description="Interpretation of media in bent EME cells. Choose ``'global'`` when the "
         "material axes are fixed in physical space, matching the global-frame convention used "
@@ -132,7 +132,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     increasing_mode_tolerance: float = Field(
-        1e-12,
+        default=1e-12,
         title="Increasing-mode filter tolerance",
         description="Unitless tolerance on ``-Im(n_eff)`` when filtering increasing modes "
         "from the EME propagation basis. A mode is dropped only if "
@@ -143,7 +143,7 @@ class EMEModeSpec(ModeSpec):
     )
 
     group_index_step: Literal[False, 0] = Field(
-        False,
+        default=False,
         title="Frequency step for group index computation",
         description="Not supported for EME cell modes. EME propagation does not use group "
         "index, and EME mode data does not store `n_group` or dispersion quantities. "
@@ -204,7 +204,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
     """
 
     num_reps: PositiveInt = Field(
-        1,
+        default=1,
         title="Number of Repetitions",
         description="Number of periodic repetitions of this EME grid. Useful for "
         "efficiently simulating long periodic structures like Bragg gratings. "
@@ -221,7 +221,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
     )
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Name of this 'EMEGridSpec'. Used in 'EMEPeriodicitySweep'.",
     )

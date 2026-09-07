@@ -32,7 +32,7 @@ class AbstractDopingBox(Box):
 
     # Override size so that we can set default values
     size: TracedSize = Field(
-        (inf, inf, inf),
+        default=(inf, inf, inf),
         title="Size",
         description="Size in x, y, and z directions.",
         json_schema_extra={"units": MICROMETER},
@@ -231,7 +231,7 @@ class GaussianDoping(AbstractDopingBox):
     )
 
     source: Literal["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"] = Field(
-        "xmin",
+        default="xmin",
         title="Source face",
         description="Specifies the side of the box acting as the source, i.e., "
         "the face specified does not have a gaussian evolution normal to it, instead "

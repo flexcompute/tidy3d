@@ -25,11 +25,13 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
     """Base class describing time dependence."""
 
     amplitude: NonNegativeFloat = Field(
-        1.0, title="Amplitude", description="Real-valued maximum amplitude of the time dependence."
+        default=1.0,
+        title="Amplitude",
+        description="Real-valued maximum amplitude of the time dependence.",
     )
 
     phase: float = Field(
-        0.0,
+        default=0.0,
         title="Phase",
         description="Phase shift of the time dependence.",
         json_schema_extra={"units": RADIAN},

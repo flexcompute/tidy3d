@@ -69,38 +69,38 @@ class Graphene(ParametricVariantItem2D):
     """
 
     mu_c: float = Field(
-        GRAPHENE_DEF_MU_C,
+        default=GRAPHENE_DEF_MU_C,
         title="Chemical potential in eV",
         description="Chemical potential in eV.",
         json_schema_extra={"units": ELECTRON_VOLT},
     )
     temp: float = Field(
-        GRAPHENE_DEF_TEMP,
+        default=GRAPHENE_DEF_TEMP,
         title="Temperature in K",
         description="Temperature in K.",
         json_schema_extra={"units": KELVIN},
     )
     gamma: float = Field(
-        GRAPHENE_DEF_GAMMA,
+        default=GRAPHENE_DEF_GAMMA,
         title="Scattering rate in eV",
         description="Scattering rate in eV. Must be small compared to the optical frequency.",
         json_schema_extra={"units": ELECTRON_VOLT},
     )
     scaling: float = Field(
-        1,
+        default=1,
         title="Scaling factor",
         description="Scaling factor used to model multiple layers of graphene.",
     )
 
     include_interband: bool = Field(
-        True,
+        default=True,
         title="Include interband terms",
         description="Include interband terms, relevant at high frequency (IR). "
         "Otherwise, the intraband terms only give a simpler Drude-type model relevant "
         "only at low frequency (THz).",
     )
     interband_fit_freq_nodes: list[tuple[float, float]] | None = Field(
-        None,
+        default=None,
         title="Interband fitting frequency nodes",
         description="Frequency nodes for fitting interband term. "
         "Each pair of nodes in the list corresponds to a single Pade approximant of order "
@@ -112,7 +112,7 @@ class Graphene(ParametricVariantItem2D):
         "narrow-band simulation.",
     )
     interband_fit_num_iters: NonNegativeInt = Field(
-        GRAPHENE_FIT_NUM_ITERS,
+        default=GRAPHENE_FIT_NUM_ITERS,
         title="Interband fitting number of iterations",
         description="Number of iterations for optimizing each Pade approximant when "
         "fitting the interband term. Making this larger might give a better fit "

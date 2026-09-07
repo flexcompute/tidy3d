@@ -39,39 +39,39 @@ class Result(Tidy3dBaseModel):
     """
 
     dims: tuple[str, ...] = Field(
-        (),
+        default=(),
         title="Dimensions",
         description="The dimensions of the design variables (indexed by 'name').",
     )
 
     values: tuple[Any, ...] = Field(
-        (),
+        default=(),
         title="Values",
         description="The return values from the design problem function.",
     )
 
     coords: tuple[tuple[Any, ...], ...] = Field(
-        (),
+        default=(),
         title="Coordinates",
         description="The values of the coordinates corresponding to each of the dims."
         "Note: shaped (D, N) where D is the ``len(dims)`` and N is the ``len(values)``",
     )
 
     output_names: tuple[str, ...] | None = Field(
-        None,
+        default=None,
         title="Output Names",
         description="Names for each of the outputs stored in ``values``. If not specified, default "
         "values are assigned.",
     )
 
     fn_source: str | None = Field(
-        None,
+        default=None,
         title="Function Source Code",
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
     task_names: list | None = Field(
-        None,
+        default=None,
         title="Task Names",
         description="Task name of every simulation run during ``DesignSpace.run``. Only available if "
         "the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
@@ -79,7 +79,7 @@ class Result(Tidy3dBaseModel):
     )
 
     task_ids: list[TaskIdMetadata] | None = Field(
-        None,
+        default=None,
         title="Task IDs",
         description="Task ID of every simulation run during ``DesignSpace.run``. Only available if "
         "the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
@@ -87,7 +87,7 @@ class Result(Tidy3dBaseModel):
     )
 
     task_paths: list | None = Field(
-        None,
+        default=None,
         title="Task Paths",
         description="Task paths of every simulation run during ``DesignSpace.run``. Useful for loading download ``SimulationData`` hdf5 files."
         "Only available if the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
@@ -95,14 +95,14 @@ class Result(Tidy3dBaseModel):
     )
 
     aux_values: tuple[Any, ...] | None = Field(
-        None,
+        default=None,
         title="Auxiliary values output from the user function",
         description="The auxiliary return values from the design problem function. This is the collection of objects returned "
         "alongside the float value used for the optimization. These weren't used to inform the optimizer, if one was used.",
     )
 
     optimizer: Any = Field(
-        None,
+        default=None,
         title="Optimizer object",
         description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. "
         "Attributes depend on the optimizer used; a full explaination of the optimizer can be found on associated library doc pages. Will be ``None`` for sampling based methods.",

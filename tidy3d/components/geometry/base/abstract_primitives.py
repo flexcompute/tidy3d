@@ -34,7 +34,7 @@ class Centered(Geometry, ABC):
     """Geometry with a well defined center."""
 
     center: TracedCoordinate = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
         json_schema_extra={"units": MICROMETER},
@@ -157,13 +157,13 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
     axis: Axis = Field(
-        2,
+        default=2,
         title="Axis",
         description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z).",
     )
 
     sidewall_angle: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Sidewall angle",
         description="Angle of the sidewall. "
         "``sidewall_angle=0`` (default) specifies a vertical wall; "
@@ -175,7 +175,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
     )
 
     reference_plane: PlanePosition = Field(
-        "middle",
+        default="middle",
         title="Reference plane for cross section",
         description="The position of the plane where the supplied cross section are "
         "defined. The plane is perpendicular to the ``axis``. "

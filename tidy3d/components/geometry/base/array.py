@@ -83,7 +83,7 @@ class GeometryArray(Geometry):
     )
 
     offsets: tuple[Coordinate, ...] | None = Field(
-        None,
+        default=None,
         title="Offsets",
         description="A tuple of 3D coordinate offsets. Each offset translates the base "
         "geometry (after any transform is applied) to create a copy. If not provided, no "
@@ -91,7 +91,7 @@ class GeometryArray(Geometry):
     )
 
     transforms: tuple[MatrixReal4x4, ...] | None = Field(
-        None,
+        default=None,
         title="Transforms",
         description="A tuple of 4x4 linear-only transformation matrices "
         "(rotation/reflection/scale/shear, no translation). Typical transforms can be "

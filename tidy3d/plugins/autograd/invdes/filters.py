@@ -40,12 +40,12 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
         description="Size of the kernel in pixels for each dimension.",
     )
     normalize: bool = Field(
-        True,
+        default=True,
         title="Normalize",
         description="Whether to normalize the kernel so that it sums to 1.",
     )
     padding: PaddingType = Field(
-        "reflect",
+        default="reflect",
         title="Padding",
         description="The padding mode to use.",
     )
@@ -165,13 +165,13 @@ class GaussianFilter(AbstractFilter):
     """
 
     sigma_scale: float = Field(
-        _GAUSSIAN_SIGMA_SCALE,
+        default=_GAUSSIAN_SIGMA_SCALE,
         title="Sigma Scale",
         description="Scale factor mapping radius in pixels to Gaussian sigma.",
         ge=0.0,
     )
     truncate: float = Field(
-        2.0,
+        default=2.0,
         title="Truncate",
         description="Truncation radius in multiples of sigma passed to ``gaussian_filter``.",
         ge=0.0,

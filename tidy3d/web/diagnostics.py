@@ -58,8 +58,8 @@ class ConnectionDiagnosticSample(BaseModel):
     """One timed connection diagnostic measurement."""
 
     seconds: float = Field(title="Elapsed wall-clock seconds.")
-    bytes_transferred: int | None = Field(None, title="Number of bytes transferred.")
-    throughput_mib_s: float | None = Field(None, title="Throughput in MiB/s.")
+    bytes_transferred: int | None = Field(default=None, title="Number of bytes transferred.")
+    throughput_mib_s: float | None = Field(default=None, title="Throughput in MiB/s.")
 
 
 class ConnectionDiagnosticResult(BaseModel):
@@ -67,14 +67,18 @@ class ConnectionDiagnosticResult(BaseModel):
 
     name: str = Field(title="Diagnostic check name.")
     status: str = Field(title="One of 'pass', 'fail', or 'skip'.")
-    target_host: str | None = Field(None, title="Host tested, without URL secrets.")
+    target_host: str | None = Field(default=None, title="Host tested, without URL secrets.")
     samples: tuple[ConnectionDiagnosticSample, ...] = Field(
-        (), title="Timed measurements for this check."
+        default=(), title="Timed measurements for this check."
     )
-    detail: str | None = Field(None, title="Human-readable summary.")
-    error_type: str | None = Field(None, title="Exception type if the check failed.")
-    error: str | None = Field(None, title="Sanitized exception message if the check failed.")
-    recommendation: str | None = Field(None, title="Suggested next step for known failures.")
+    detail: str | None = Field(default=None, title="Human-readable summary.")
+    error_type: str | None = Field(default=None, title="Exception type if the check failed.")
+    error: str | None = Field(
+        default=None, title="Sanitized exception message if the check failed."
+    )
+    recommendation: str | None = Field(
+        default=None, title="Suggested next step for known failures."
+    )
     metadata: dict[str, Any] = Field(default_factory=dict, title="Structured diagnostic metadata.")
 
 
@@ -83,7 +87,7 @@ class ConnectionDiagnosticConfiguration(BaseModel):
 
     api_endpoint: str = Field(title="Configured API endpoint.")
     ssl_verify: bool = Field(title="Configured SSL certificate verification setting.")
-    ssl_version: str | None = Field(None, title="Configured TLS version override.")
+    ssl_version: str | None = Field(default=None, title="Configured TLS version override.")
     proxy_environment: dict[str, str | None] = Field(
         title="Redacted proxy-related environment variables."
     )
@@ -93,24 +97,24 @@ class ConnectionDiagnosticConfiguration(BaseModel):
     tidy3d_environment: dict[str, str | None] = Field(
         title="Redacted Tidy3D network environment variables."
     )
-    warnings: tuple[str, ...] = Field((), title="Configuration warnings.")
+    warnings: tuple[str, ...] = Field(default=(), title="Configuration warnings.")
 
 
 class ConnectionDiagnosticReport(BaseModel):
     """Support-facing network diagnostic report."""
 
     generated_at: str = Field(title="UTC report creation timestamp.")
-    privacy_mode: str = Field("shareable", title="Either 'shareable' or 'private'.")
+    privacy_mode: str = Field(default="shareable", title="Either 'shareable' or 'private'.")
     private_details_warning: str | None = Field(
-        None, title="Warning shown when private network details are included."
+        default=None, title="Warning shown when private network details are included."
     )
     tidy3d_version: str = Field(title="Tidy3D client version.")
     python_version: str = Field(title="Python version.")
     platform: str = Field(title="Operating system and machine summary.")
-    api_endpoint_host: str | None = Field(None, title="Configured API endpoint host.")
+    api_endpoint_host: str | None = Field(default=None, title="Configured API endpoint host.")
     api_key_configured: bool = Field(title="Whether an API key is configured.")
     configuration: ConnectionDiagnosticConfiguration | None = Field(
-        None, title="Redacted client network configuration."
+        default=None, title="Redacted client network configuration."
     )
     results: tuple[ConnectionDiagnosticResult, ...] = Field(title="Diagnostic check results.")
 
@@ -874,16 +878,16 @@ class EnvironmentPackage(BaseModel):
     """One installed (or missing) Python package."""
 
     name: str = Field(title="Distribution name as queried.")
-    version: str | None = Field(None, title="Installed version, or None if not importable.")
+    version: str | None = Field(default=None, title="Installed version, or None if not importable.")
 
 
 class EnvironmentDiagnosticReport(BaseModel):
     """Support-facing snapshot of the local Python environment."""
 
     generated_at: str = Field(title="UTC report creation timestamp.")
-    privacy_mode: str = Field("shareable", title="Either 'shareable' or 'private'.")
+    privacy_mode: str = Field(default="shareable", title="Either 'shareable' or 'private'.")
     private_details_warning: str | None = Field(
-        None, title="Warning shown when private network details are embedded."
+        default=None, title="Warning shown when private network details are embedded."
     )
     tidy3d_version: str = Field(title="Tidy3D client version.")
     python_version: str = Field(title="Python interpreter version (major.minor.patch).")
@@ -891,7 +895,7 @@ class EnvironmentDiagnosticReport(BaseModel):
     python_executable: str = Field(title="Path to the running Python interpreter.")
     platform: str = Field(title="Operating system and machine summary.")
     machine: str = Field(title="Machine architecture (e.g. x86_64, arm64).")
-    processor: str | None = Field(None, title="Processor identifier if reported by the OS.")
+    processor: str | None = Field(default=None, title="Processor identifier if reported by the OS.")
     in_virtualenv: bool = Field(title="Whether the interpreter is inside a venv/uv env.")
     in_notebook: bool = Field(
         title="Whether execution appears to be inside a notebook kernel (Jupyter, Colab, VSCode)."
@@ -903,7 +907,7 @@ class EnvironmentDiagnosticReport(BaseModel):
         title="All distributions visible via importlib.metadata (pip-freeze equivalent)."
     )
     configuration: ConnectionDiagnosticConfiguration | None = Field(
-        None, title="Redacted Tidy3D client configuration snapshot."
+        default=None, title="Redacted Tidy3D client configuration snapshot."
     )
 
     def support_text(self) -> str:
@@ -950,18 +954,18 @@ class SupportReport(BaseModel):
     """Combined support bundle mapping onto the Tidy3D issue report template."""
 
     generated_at: str = Field(title="UTC report creation timestamp.")
-    privacy_mode: str = Field("shareable", title="Either 'shareable' or 'private'.")
+    privacy_mode: str = Field(default="shareable", title="Either 'shareable' or 'private'.")
     private_details_warning: str | None = Field(
-        None, title="Warning shown when private network details are embedded."
+        default=None, title="Warning shown when private network details are embedded."
     )
-    task_id: str | None = Field(None, title="Task ID the user is reporting on, if any.")
+    task_id: str | None = Field(default=None, title="Task ID the user is reporting on, if any.")
     narrative: dict[str, str] = Field(
         default_factory=dict,
         title="Free-text answers to the support template (description, when, reproducibility).",
     )
     environment: EnvironmentDiagnosticReport = Field(title="Local environment snapshot.")
     connection: ConnectionDiagnosticReport | None = Field(
-        None, title="Optional connection diagnostics."
+        default=None, title="Optional connection diagnostics."
     )
 
     def support_text(self) -> str:

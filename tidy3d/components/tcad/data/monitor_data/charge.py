@@ -53,7 +53,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
     )
 
     potential: FieldDataset | None = Field(
-        None,
+        default=None,
         title="Electric potential series",
         description="Contains the electric potential series.",
         json_schema_extra={"units": "V"},
@@ -82,7 +82,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     )
 
     electrons: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Electrons series",
         description=r"Contains the computed electrons concentration :math:`n`.",
         json_schema_extra={"units": "1/cm^3"},
@@ -90,7 +90,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     # n = electrons
 
     holes: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Holes series",
         description=r"Contains the computed holes concentration :math:`p`.",
         json_schema_extra={"units": "1/cm^3"},
@@ -157,35 +157,35 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     )
 
     Ec: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Conduction band series",
         description="Contains the computed energy of the bottom of the conduction band :math:`E_c`.",
         json_schema_extra={"units": "eV"},
     )
 
     Ev: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Valence band series",
         description="Contains the computed energy of the top of the valence band :math:`E_v`.",
         json_schema_extra={"units": "eV"},
     )
 
     Ei: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Intrinsic Fermi level series",
         description="Contains the computed intrinsic Fermi level for the material :math:`E_i`.",
         json_schema_extra={"units": "eV"},
     )
 
     Efn: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Electron's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for electrons :math:`E_{fn}`.",
         json_schema_extra={"units": "eV"},
     )
 
     Efp: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Hole's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for holes :math:`E_{fp}`.",
         json_schema_extra={"units": "eV"},
@@ -314,7 +314,7 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     )
 
     hole_capacitance: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Hole capacitance",
         description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor. "
         "Units: fF (3D) or fF/μm (2D, per unit length).",
@@ -323,7 +323,7 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     # C_p = hole_capacitance
 
     electron_capacitance: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Electron capacitance",
         description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor. "
         "Units: fF (3D) or fF/μm (2D, per unit length).",
@@ -383,7 +383,7 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
     )
 
     E: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Electric field",
         description="Contains the computed electric field.",
         json_schema_extra={"units": ":math:`V/\\mu m`"},
@@ -448,7 +448,7 @@ class SteadyChargeResidualData(HeatChargeMonitorData):
     )
 
     residual_temperature: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Thermal residual",
         description="Signed residual of the heat equation :math:`R_T`. "
         "Present only when the thermal solver is active.",
@@ -488,7 +488,7 @@ class SelfHeatingData(HeatChargeMonitorData):
     )
 
     heat_rate: FieldDataset | None = Field(
-        None,
+        default=None,
         title="Volumetric heat rate",
         description="Contains the computed total volumetric heat generation rate.",
         json_schema_extra={"units": VOLUMETRIC_HEAT_RATE},
@@ -542,7 +542,7 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
     )
 
     J: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Current density",
         description="Contains the computed current density.",
         discriminator=TYPE_TAG_STR,
@@ -593,7 +593,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     net_recombination: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Net generation-recombination rate",
         description="Net generation-recombination source term :math:`U = R - G` entering the "
         "continuity equations, including every generation-recombination mechanism active "
@@ -602,7 +602,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     impact_ionization: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Impact-ionization generation rate",
         description="Signed contribution of impact-ionization (avalanche) generation, "
         ":math:`-G_\\mathrm{ii}` (negative, since generation adds carriers). Present only "
@@ -611,7 +611,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     shockley_reed_hall: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Shockley-Reed-Hall recombination rate",
         description="Signed contribution of Shockley-Reed-Hall recombination, "
         ":math:`R_\\mathrm{SRH}` (positive). Not currently reported; stays ``None``.",
@@ -619,7 +619,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     auger: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Auger recombination rate",
         description="Signed contribution of Auger recombination, "
         ":math:`R_\\mathrm{Auger}` (positive). Not currently reported; stays ``None``.",
@@ -627,7 +627,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     radiative: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Radiative recombination rate",
         description="Signed contribution of radiative recombination, "
         ":math:`R_\\mathrm{rad}` (positive). Not currently reported; stays ``None``.",
@@ -635,7 +635,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     band_to_band_tunneling: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Band-to-band tunneling generation rate",
         description="Signed contribution of band-to-band tunneling generation, "
         ":math:`-G_\\mathrm{btbt}` (negative, since generation adds carriers). "
@@ -644,7 +644,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     distributed_generation: UnstructuredFieldType | None = Field(
-        None,
+        default=None,
         title="Distributed carrier generation rate",
         description="Signed contribution of distributed carrier generation, "
         ":math:`-G_\\mathrm{dist}` (negative, since generation adds carriers). "

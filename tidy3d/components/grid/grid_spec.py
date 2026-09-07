@@ -629,7 +629,7 @@ class CustomGrid(GridSpec1d):
     )
 
     custom_offset: float | None = Field(
-        None,
+        default=None,
         title="Customized grid offset.",
         description="The starting coordinate of the grid which defines the simulation center. "
         "If ``None``, the simulation center is set such that it spans the region "
@@ -704,7 +704,7 @@ class AbstractAutoGrid(GridSpec1d):
     """Specification for non-uniform or quasi-uniform grid along a given dimension."""
 
     max_scale: float = Field(
-        1.4,
+        default=1.4,
         title="Maximum Grid Size Scaling",
         description="Sets the maximum ratio between any two consecutive grid steps.",
         ge=1.2,
@@ -718,7 +718,7 @@ class AbstractAutoGrid(GridSpec1d):
     )
 
     dl_min: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="Lower Bound of Grid Size",
         description="Lower bound of the grid size along this dimension regardless of "
         "structures present in the simulation, including override structures "
@@ -1080,14 +1080,14 @@ class AutoGrid(AbstractAutoGrid):
     """
 
     min_steps_per_wvl: float = Field(
-        10.0,
+        default=10.0,
         title="Minimal Number of Steps Per Wavelength",
         description="Minimal number of steps per wavelength in each medium.",
         ge=6.0,
     )
 
     min_steps_per_sim_size: float = Field(
-        10.0,
+        default=10.0,
         title="Minimal Number of Steps Per Simulation Domain Size",
         description="Minimal number of steps per longest edge length of simulation domain "
         "bounding box. This is useful when the simulation domain size is subwavelength.",
@@ -1173,20 +1173,20 @@ class GridRefinement(Tidy3dBaseModel):
     """
 
     refinement_factor: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Mesh Refinement Factor",
         description="Refine grid step size in vacuum by this factor.",
     )
 
     dl: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Grid Size",
         description="Grid step size in the refined region.",
         json_schema_extra={"units": MICROMETER},
     )
 
     num_cells: PositiveInt = Field(
-        3,
+        default=3,
         title="Number of Refined Grid Cells",
         description="Sets the extent of the refinement region in units of the refined grid size "
         "``dl``. When refining around a point, it is the width of the refined box "
@@ -1300,14 +1300,14 @@ class LayerRefinementSpec(Box):
     )
 
     min_steps_along_axis: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Minimal Number Of Steps Along Axis",
         description="If not ``None`` and the thickness of the layer is nonzero, set minimal "
         "number of steps discretizing the layer thickness.",
     )
 
     bounds_refinement: GridRefinement | None = Field(
-        None,
+        default=None,
         title="Mesh Refinement Factor Around Layer Bounds",
         description="If not ``None``, refine mesh around minimum and maximum positions "
         "of the layer along normal axis dimension. If `min_steps_along_axis` is also specified, "
@@ -1315,7 +1315,7 @@ class LayerRefinementSpec(Box):
     )
 
     bounds_snapping: Literal["bounds", "lower", "upper", "center"] | None = Field(
-        "lower",
+        default="lower",
         title="Placing Grid Snapping Point Along Axis",
         description="If not ``None``, enforcing grid boundaries to pass through ``lower``, "
         "``center``, or ``upper`` position of the layer; or both ``lower`` and ``upper`` with ``bounds``.",
@@ -1329,7 +1329,7 @@ class LayerRefinementSpec(Box):
     )
 
     corner_snapping: bool = Field(
-        True,
+        default=True,
         title="Placing Grid Snapping Point At Corners",
         description="If ``True`` and ``corner_finder`` is not ``None``, enforcing inplane "
         "grid boundaries to pass through corners of geometries specified by ``corner_finder``.",
@@ -1345,7 +1345,7 @@ class LayerRefinementSpec(Box):
     )
 
     in_plane_edge_refinement: GridRefinement | Literal["mirror_corner"] | None = Field(
-        "mirror_corner",
+        default="mirror_corner",
         title="Inplane Mesh Refinement Along Axis-Unaligned Edges",
         description="Refine mesh along in-plane edges; enabled only when ``corner_finder`` "
         "is not ``None``. ``'mirror_corner'`` (default) uses ``corner_refinement``'s grid size; "
@@ -1356,7 +1356,7 @@ class LayerRefinementSpec(Box):
     )
 
     min_steps_per_geometry: PositiveFloat | None = Field(
-        2,
+        default=2,
         title="Minimum Grid Steps Across A Small Geometry",
         description="If not ``None`` and ``corner_finder`` is not ``None``, sets the minimum "
         "number of grid cells to place across each disjoint geometry made of the medium "
@@ -1364,7 +1364,7 @@ class LayerRefinementSpec(Box):
     )
 
     refinement_inside_sim_only: bool = Field(
-        True,
+        default=True,
         title="Apply Refinement Only To Features Inside Simulation Domain",
         description="If ``True``, only apply mesh refinement to features such as corners inside "
         "the simulation domain; If ``False``, features outside the domain can take effect "
@@ -1373,7 +1373,7 @@ class LayerRefinementSpec(Box):
     )
 
     gap_meshing_iters: NonNegativeInt = Field(
-        1,
+        default=1,
         title="Gap Meshing Iterations",
         description="If ``corner_finder`` is not ``None``, number of recursive iterations for "
         "resolving thin gaps. "
@@ -1381,14 +1381,14 @@ class LayerRefinementSpec(Box):
     )
 
     dl_min_from_gap_width: bool = Field(
-        True,
+        default=True,
         title="Set ``dl_min`` from Estimated Gap Width",
         description="Take into account autodetected minimal PEC gap width when determining ``dl_min``. "
         "This only applies if ``dl_min`` in ``AutoGrid`` specification is not set.",
     )
 
     interior_disjoint_geometries: bool = Field(
-        True,
+        default=True,
         title="Geometries Are Interior-Disjoint",
         description="If ``True``, geometries made of different materials on the plane must not be overlapping. "
         "This can speed up the performance "
@@ -3022,7 +3022,7 @@ class GridSpec(Tidy3dBaseModel):
     )
 
     wavelength: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Free-space wavelength",
         description="Free-space wavelength for automatic nonuniform grid. It can be ``None`` "
         "if there is at least one source in the simulation, in which case it is defined by "
@@ -3033,7 +3033,7 @@ class GridSpec(Tidy3dBaseModel):
     )
 
     override_structures: tuple[discriminated_union(StructureType), ...] = Field(
-        (),
+        default=(),
         title="Grid specification override structures",
         description="A set of structures that is added on top of the simulation structures in "
         "the process of generating the grid. This can be used to refine the grid or make it "
@@ -3043,7 +3043,7 @@ class GridSpec(Tidy3dBaseModel):
     )
 
     snapping_points: tuple[CoordinateOptional, ...] = Field(
-        (),
+        default=(),
         title="Grid specification snapping_points",
         description="A set of points that enforce grid boundaries to pass through them. "
         "However, some points might be skipped if they are too close. "
@@ -3054,7 +3054,7 @@ class GridSpec(Tidy3dBaseModel):
     )
 
     layer_refinement_specs: tuple[LayerRefinementSpec, ...] = Field(
-        (),
+        default=(),
         title="Mesh Refinement In Layered Structures",
         description="Automatic mesh refinement according to layer specifications. The material "
         "distribution is assumed to be uniform inside the layer along the layer axis. "

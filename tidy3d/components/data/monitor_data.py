@@ -311,19 +311,19 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     ) = Field(discriminator=TYPE_TAG_STR)
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetry",
         description="Symmetry eigenvalues of the original simulation in x, y, and z.",
     )
 
     symmetry_center: Coordinate | None = Field(
-        None,
+        default=None,
         title="Symmetry Center",
         description="Center of the symmetry planes of the original simulation in x, y, and z. "
         "Required only if any of the ``symmetry`` field are non-zero.",
     )
     grid_expanded: Grid | None = Field(
-        None,
+        default=None,
         title="Expanded Grid",
         description=":class:`.Grid` discretization of the associated monitor in the simulation "
         "which created the data. Required if symmetries are present, as "
@@ -547,7 +547,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     """Collection of electromagnetic fields."""
 
     grid_primal_correction: GRID_CORRECTION_TYPE = Field(
-        1.0,
+        default=1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
         "monitor to take into account the finite grid in the normal direction in the simulation in "
@@ -555,7 +555,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "locations along the normal direction.",
     )
     grid_dual_correction: GRID_CORRECTION_TYPE = Field(
-        1.0,
+        default=1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
         "monitor to take into account the finite grid in the normal direction in the simulation in "
@@ -2319,7 +2319,7 @@ class DipoleEmissionData(MonitorData):
     )
 
     radiation_intensity_at_positions: DipoleEmissionPositionDataArray | None = Field(
-        None,
+        default=None,
         title="Position-Resolved Radiation Intensity",
         description="Radiation intensity at selected stored position indexes.",
     )
@@ -3142,7 +3142,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
     monitor: ModeMonitor = Field(title="Monitor", description="Monitor associated with the data.")
 
     eps_spec: list[EpsSpecType] | None = Field(
-        None,
+        default=None,
         title="Permittivity Specification",
         description="Characterization of the permittivity profile on the plane where modes are "
         "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
@@ -4045,13 +4045,13 @@ class ModeSolverData(ModeData):
     )
 
     amps: ModeAmpsDataArray | None = Field(
-        None,
+        default=None,
         title="Amplitudes",
         description="Unused for ModeSolverData.",
     )
 
     grid_distances_primal: tuple[float] | tuple[float, float] = Field(
-        (0.0,),
+        default=(0.0,),
         title="Distances to the Primal Grid",
         description="Relative distances to the primal grid locations along the normal direction in "
         "the original simulation grid. Needed to recalculate grid corrections after "
@@ -4059,7 +4059,7 @@ class ModeSolverData(ModeData):
     )
 
     grid_distances_dual: tuple[float] | tuple[float, float] = Field(
-        (0.0,),
+        default=(0.0,),
         title="Distances to the Dual Grid",
         description="Relative distances to the dual grid locations along the normal direction in "
         "the original simulation grid. Needed to recalculate grid corrections after "
@@ -4067,7 +4067,7 @@ class ModeSolverData(ModeData):
     )
 
     log: str | None = Field(
-        None,
+        default=None,
         title="Solver Log",
         description="A string containing the log information from the mode solver run.",
     )
@@ -4550,7 +4550,7 @@ class AbstractFieldProjectionData(MonitorData):
     )
 
     is_2d_simulation: bool = Field(
-        False,
+        default=False,
         title="2D Simulation",
         description="Indicates whether the monitor data is for a 2D simulation.",
     )

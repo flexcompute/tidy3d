@@ -325,26 +325,26 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     )
 
     smatrix: EMESMatrixDataset | None = Field(
-        None,
+        default=None,
         title="S Matrix",
         description="Scattering matrix of the EME simulation.",
     )
 
     coeffs: EMECoefficientData | EMECoefficientDataset | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Coefficients",
         description="Coefficients from the EME simulation. Useful for debugging and optimization.",
     )
 
     diagnostics: EMEDiagnosticsData | None = Field(
-        None,
+        default=None,
         title="Diagnostics",
         description="Diagnostic quantities from the EME simulation.",
     )
 
     port_modes_raw: EMEModeSolverData | None = Field(
-        None,
+        default=None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
         "The scattering matrix is expressed in this basis. "

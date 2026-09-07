@@ -232,21 +232,21 @@ class ModeSolver(Tidy3dBaseModel):
     )
 
     direction: Direction = Field(
-        "+",
+        default="+",
         title="Propagation direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
     )
 
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="Only takes effect when ``colocate=False``. If ``True``, dot products "
         "and overlap integrals still use fields interpolated to grid cell boundaries "
@@ -258,13 +258,13 @@ class ModeSolver(Tidy3dBaseModel):
     _colocated_integration_validator = validate_colocated_integration()
 
     conjugated_dot_product: bool = Field(
-        True,
+        default=True,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
     fields: tuple[EMField, ...] = Field(
-        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        default=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
         "methods like ``flux``, ``dot`` require all tangential field components, while others "

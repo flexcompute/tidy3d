@@ -59,7 +59,7 @@ class DipoleEmissionStudyData(Tidy3dBaseModel):
     )
 
     radiation_intensity_at_positions: DipoleEmissionStudyPositionDataArray | None = Field(
-        None,
+        default=None,
         title="Position-Resolved Radiation Intensity",
         description=(
             "Radiation intensity at positions selected by the study ``store_position_indexes``."

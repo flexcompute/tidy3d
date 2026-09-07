@@ -238,7 +238,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     courant: float = Field(
-        0.99,
+        default=0.99,
         title="Normalized Courant Factor",
         description="Normalized Courant stability factor that is no larger than 1 when CFL "
         "stability condition is met. It controls time step to spatial step ratio. "
@@ -321,13 +321,13 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     relax_courant: bool = Field(
-        False,
+        default=False,
         title="Relax Courant",
         description="Relax the CFL stability condition if possible.",
     )
 
     precision: Literal["hybrid", "double"] = Field(
-        "hybrid",
+        default="hybrid",
         title="Floating-point Precision",
         description="Floating point precision to use in the computations.",
     )
@@ -345,7 +345,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     lumped_elements: tuple[LumpedElementType, ...] = Field(
-        (),
+        default=(),
         title="Lumped Elements",
         description="Tuple of lumped elements in the simulation. ",
     )
@@ -559,7 +559,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     normalize_index: NonNegativeInt | None = Field(
-        0,
+        default=0,
         title="Normalization index",
         description="Index of the source in the tuple of sources whose spectrum will be used to "
         "normalize the frequency-dependent data. If ``None``, the raw field data is returned "
@@ -571,7 +571,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     monitors: tuple[discriminated_union(MonitorType), ...] = Field(
-        (),
+        default=(),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
@@ -587,7 +587,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     sources: tuple[discriminated_union(SourceType), ...] = Field(
-        (),
+        default=(),
         title="Sources",
         description="Tuple of electric current sources injecting fields into the simulation.",
     )
@@ -624,7 +624,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     shutoff: NonNegativeFloat = Field(
-        1e-5,
+        default=1e-5,
         title="Shutoff Condition",
         description="Ratio of the instantaneous integrated E-field intensity to the maximum value "
         "at which the simulation will automatically terminate time stepping. "
@@ -639,7 +639,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     structures: tuple[Structure, ...] = Field(
-        (),
+        default=(),
         title="Structures",
         description="Tuple of structures present in simulation. "
         "Note: Structures defined later in this list override the "
@@ -704,7 +704,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
@@ -796,7 +796,7 @@ class Simulation(AbstractYeeGridSimulation):
     """
 
     low_freq_smoothing: LowFrequencySmoothingSpec | None = Field(
-        None,
+        default=None,
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the simulation.",
     )

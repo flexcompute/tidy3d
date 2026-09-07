@@ -36,26 +36,26 @@ class SurfaceImpedanceFitterParam(Tidy3dBaseModel):
     """
 
     max_num_poles: PositiveInt = Field(
-        LOSSY_METAL_DEFAULT_MAX_POLES,
+        default=LOSSY_METAL_DEFAULT_MAX_POLES,
         title="Maximal Number Of Poles",
         description="Maximal number of poles in complex-conjugate pole residue model for "
         "fitting surface impedance.",
     )
 
     tolerance_rms: NonNegativeFloat = Field(
-        LOSSY_METAL_DEFAULT_TOLERANCE_RMS,
+        default=LOSSY_METAL_DEFAULT_TOLERANCE_RMS,
         title="Tolerance In Fitting",
         description="Tolerance in fitting.",
     )
 
     frequency_sampling_points: PositiveInt = Field(
-        LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY,
+        default=LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY,
         title="Number Of Sampling Frequencies",
         description="Number of sampling frequencies used in fitting.",
     )
 
     log_sampling: bool = Field(
-        True,
+        default=True,
         title="Frequencies Sampling In Log Scale",
         description="Whether to sample frequencies logarithmically (``True``),  "
         "or linearly (``False``).",
@@ -125,7 +125,7 @@ class HammerstadSurfaceRoughness(AbstractSurfaceRoughness):
     )
 
     roughness_factor: float = Field(
-        2.0,
+        default=2.0,
         title="Roughness Factor",
         description="Expected maximal increase in conductor losses due to roughness effect. "
         "Value 2 gives the classic Hammerstad equation.",
@@ -188,7 +188,7 @@ class HuraySurfaceRoughness(AbstractSurfaceRoughness):
     """
 
     relative_area: PositiveFloat = Field(
-        1,
+        default=1,
         title="Relative Area",
         description="Relative area of the matte base compared to a flat surface",
     )

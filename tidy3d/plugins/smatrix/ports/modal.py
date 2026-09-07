@@ -124,19 +124,19 @@ class AbstractGaussianPort(AbstractPort, ABC):
     """Abstract base for Gaussian-like ports (Gaussian and AstigmaticGaussian)."""
 
     angle_theta: float = Field(
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
         json_schema_extra={"units": RADIAN},
     )
     angle_phi: float = Field(
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.",
         json_schema_extra={"units": RADIAN},
     )
     pol_angle: float = Field(
-        0.0,
+        default=0.0,
         title="Polarization Angle",
         description="Angle between E-field polarization and the plane defined by the injection axis and propagation axis. "
         "0 => P polarization, pi/2 => S polarization.",
@@ -148,13 +148,13 @@ class GaussianPort(AbstractGaussianPort):
     """Specifies a Gaussian port for S-matrix calculation."""
 
     waist_radius: PositiveFloat = Field(
-        1.0,
+        default=1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
         json_schema_extra={"units": MICROMETER},
     )
     waist_distance: float = Field(
-        0.0,
+        default=0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
         "A positive value places the waist behind the port plane (toward the negative normal axis). "
@@ -209,13 +209,13 @@ class AstigmaticGaussianPort(AbstractGaussianPort):
     """Specifies an astigmatic Gaussian port for S-matrix calculation."""
 
     waist_sizes: tuple[PositiveFloat, PositiveFloat] = Field(
-        (1.0, 1.0),
+        default=(1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         json_schema_extra={"units": MICROMETER},
     )
     waist_distances: tuple[float, float] = Field(
-        (0.0, 0.0),
+        default=(0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
         "for the waist sizes in the local x and y directions. "

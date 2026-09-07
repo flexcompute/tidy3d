@@ -84,7 +84,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     )
 
     conductivity: CustomSpatialDataTypeAnnotated | None = Field(
-        None,
+        default=None,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
@@ -310,7 +310,7 @@ class CustomMedium(AbstractCustomMedium):
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = _EPS_SIGMA_TRACED_PATHS
 
     eps_dataset: PermittivityDataset | None = Field(
-        None,
+        default=None,
         title="Permittivity Dataset",
         description="[To be deprecated] User-supplied dataset containing complex-valued "
         "permittivity as a function of space. Permittivity distribution over the Yee-grid "
@@ -318,14 +318,14 @@ class CustomMedium(AbstractCustomMedium):
     )
 
     permittivity: CustomSpatialDataTypeAnnotated | None = Field(
-        None,
+        default=None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: CustomSpatialDataTypeAnnotated | None = Field(
-        None,
+        default=None,
         title="Conductivity",
         description="Spatial profile Electric conductivity. Defined such "
         "that the imaginary part of the complex permittivity at angular "

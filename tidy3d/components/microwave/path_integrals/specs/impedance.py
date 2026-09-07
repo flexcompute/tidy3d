@@ -82,14 +82,14 @@ class CustomImpedanceSpec(AbstractImpedanceSpec):
     """
 
     voltage_spec: VoltagePathSpecType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Voltage Integration Path",
         description="Path specification for computing the voltage associated with a mode profile.",
     )
 
     current_spec: CurrentPathSpecType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Current Integration Path",
         description="Path specification for computing the current associated with a mode profile.",

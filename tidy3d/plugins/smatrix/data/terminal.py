@@ -45,7 +45,7 @@ class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
     port_reference_impedances: TerminalPortDataArray | None = Field(
-        None,
+        default=None,
         title="Port Reference Impedances",
         description="Reference impedance matrix for each port used in the S-parameter calculation. "
         "Has dimensions (f, port_out, port_in) to support coupled impedances from TerminalWavePort. "
@@ -58,7 +58,7 @@ class MicrowaveSMatrixData(MicrowaveBaseModel):
     )
 
     s_param_def: SParamDef = Field(
-        "pseudo",
+        default="pseudo",
         title="Scattering Parameter Definition",
         description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'.",
     )
@@ -115,7 +115,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     )
 
     renormalized_reference_impedance: RenormalizedReferenceImpedance | None = Field(
-        None,
+        default=None,
         title="Renormalized Reference Impedance",
         description="When set, overrides port_reference_impedances for all S-matrix computations. "
         "Accepts: complex (uniform), PortDataArray (per-port diagonal), "

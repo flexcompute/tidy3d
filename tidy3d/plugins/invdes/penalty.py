@@ -21,7 +21,7 @@ class AbstractPenalty(InvdesBaseModel, abc.ABC):
     """Base class for penalties added to ``invdes.DesignRegion`` objects."""
 
     weight: NonNegativeFloat = Field(
-        1.0,
+        default=1.0,
         title="Weight",
         description="When this penalty is evaluated, it will be weighted by this "
         "value. Note that the optimizer seeks to maximize the objective function and "
@@ -63,7 +63,7 @@ class ErosionDilationPenalty(AbstractPenalty):
     )
 
     beta: float = Field(
-        100.0,
+        default=100.0,
         ge=1.0,
         title="Projection Beta",
         description="Strength of the ``tanh`` projection. "
@@ -72,7 +72,7 @@ class ErosionDilationPenalty(AbstractPenalty):
     )
 
     eta0: float = Field(
-        0.5,
+        default=0.5,
         ge=0.0,
         le=1.0,
         title="Projection Midpoint",
@@ -82,7 +82,7 @@ class ErosionDilationPenalty(AbstractPenalty):
     )
 
     delta_eta: float = Field(
-        0.01,
+        default=0.01,
         ge=0.0,
         le=1.0,
         title="Delta Eta Cutoff",

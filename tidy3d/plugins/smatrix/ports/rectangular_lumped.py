@@ -86,7 +86,7 @@ class LumpedPort(AbstractLumpedPort, Box):
     )
 
     snap_perimeter_to_grid: bool = Field(
-        True,
+        default=True,
         title="Snap Perimeter to Grid",
         description="When enabled, the perimeter of the port is snapped to the simulation grid, "
         "which improves accuracy when the number of grid cells is low within the element. A :class:`LumpedPort` "
@@ -94,7 +94,7 @@ class LumpedPort(AbstractLumpedPort, Box):
     )
 
     dist_type: LumpDistType = Field(
-        "on",
+        default="on",
         title="Distribute Type",
         description="Optional field that is passed directly to the :class:`.LinearLumpedElement` used to model the port's load. "
         "When set to ``on``, the network portion of the lumped port, including the source, is distributed"

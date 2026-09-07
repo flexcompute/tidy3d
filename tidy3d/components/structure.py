@@ -213,10 +213,12 @@ class AbstractStructure(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    name: str | None = Field(None, title="Name", description="Optional name for the structure.")
+    name: str | None = Field(
+        default=None, title="Name", description="Optional name for the structure."
+    )
 
     background_permittivity: float | None = Field(
-        None,
+        default=None,
         ge=1.0,
         title="Background Permittivity",
         description="DEPRECATED: Use ``Structure.background_medium``. "
@@ -225,7 +227,7 @@ class AbstractStructure(Tidy3dBaseModel):
     )
 
     background_medium: StructureMediumType | None = Field(
-        None,
+        default=None,
         title="Background Medium",
         description="Medium used for the background of this structure "
         "when performing shape optimization with autograd. This is required when the "
@@ -234,7 +236,7 @@ class AbstractStructure(Tidy3dBaseModel):
     )
 
     priority: int | None = Field(
-        None,
+        default=None,
         title="Priority",
         description="Priority of the structure applied in structure overlapping region. "
         "The material property in the overlapping region is dictated by the structure "
@@ -1140,7 +1142,7 @@ class MeshOverrideStructure(AbstractStructure):
         PositiveFloat | None,
         PositiveFloat | None,
     ] = Field(
-        (None, None, None),
+        default=(None, None, None),
         title="Grid Size",
         description="Grid size along x, y, z directions. Use ``None`` along a dimension to apply no "
         "override there, or to leave the grid size to ``min_steps_per_size``. When both ``dl`` and "
@@ -1154,7 +1156,7 @@ class MeshOverrideStructure(AbstractStructure):
         PositiveFloat | None,
         PositiveFloat | None,
     ] = Field(
-        (None, None, None),
+        default=(None, None, None),
         title="Minimum Steps Per Bounding Box Size",
         description="Minimum number of grid steps spanning the structure's bounding box along x, "
         "y, z directions. The grid size along a dimension is the bounding box size divided by this "
@@ -1165,14 +1167,14 @@ class MeshOverrideStructure(AbstractStructure):
     )
 
     priority: int = Field(
-        0,
+        default=0,
         title="Priority",
         description="Priority of the structure applied in mesh override structure overlapping region. "
         "The priority of internal override structures is ``-1``.",
     )
 
     enforce: bool = Field(
-        False,
+        default=False,
         title="Enforce Grid Size",
         description="If ``True``, enforce the grid size setup inside the structure "
         "even if the structure is inside a structure of smaller grid size. In the intersection "
@@ -1181,7 +1183,7 @@ class MeshOverrideStructure(AbstractStructure):
     )
 
     shadow: bool = Field(
-        True,
+        default=True,
         title="Grid Size Choice In Structure Overlapping Region",
         description="In structure intersection region, grid size is decided by the latter added "
         "structure in the structure list when ``shadow=True``; or the structure of smaller grid size "
@@ -1191,7 +1193,7 @@ class MeshOverrideStructure(AbstractStructure):
     )
 
     drop_outside_sim: bool = Field(
-        True,
+        default=True,
         title="Drop Structure Outside Simulation Domain",
         description="If ``True``, structure outside the simulation domain is dropped; if ``False``, "
         "structure takes effect along the dimensions where the projections of the structure "

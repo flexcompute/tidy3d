@@ -53,7 +53,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     """
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Unique name for the DC voltage source",
         min_length=1,
@@ -149,7 +149,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     """
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Unique name for the DC current source",
         min_length=1,

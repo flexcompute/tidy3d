@@ -358,21 +358,21 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running of a :class:`.ModeSolver` task on server."""
 
     task_id: str | None = Field(
-        None,
+        default=None,
         title="task_id",
         description="Task ID number, set when the task is created, leave as None.",
         alias="refId",
     )
 
     solver_id: str | None = Field(
-        None,
+        default=None,
         title="solver",
         description="Solver ID number, set when the task is created, leave as None.",
         alias="id",
     )
 
     real_flex_unit: float | None = Field(
-        None, title="real FlexCredits", description="Billed FlexCredits.", alias="charge"
+        default=None, title="real FlexCredits", description="Billed FlexCredits.", alias="charge"
     )
 
     created_at: datetime | None = Field(
@@ -380,20 +380,20 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
     )
 
     status: str | None = Field(
-        None,
+        default=None,
         title="status",
         description="Mode solver task status.",
     )
 
     file_type: str | None = Field(
-        None,
+        default=None,
         title="file_type",
         description="File type used to upload the mode solver.",
         alias="fileType",
     )
 
     mode_solver: ModeSolver | None = Field(
-        None,
+        default=None,
         title="mode_solver",
         description="Mode solver being run by this task.",
     )

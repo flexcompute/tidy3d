@@ -181,7 +181,7 @@ class Monitor(AbstractMonitor):
     """
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -190,7 +190,7 @@ class Monitor(AbstractMonitor):
     )
 
     colocate: Literal[True] = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
@@ -198,7 +198,7 @@ class Monitor(AbstractMonitor):
     )
 
     use_colocated_integration: Literal[True] = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="Whether to use colocated fields for flux, dot products, and overlap "
         "integrals. Hard-coded to ``True`` for most monitor types. Can be toggled on field, "
@@ -305,14 +305,14 @@ class TimeMonitor(Monitor, ABC):
     """
 
     start: NonNegativeFloat = Field(
-        0.0,
+        default=0.0,
         title="Start Time",
         description="Time at which to start monitor recording.",
         json_schema_extra={"units": SECOND},
     )
 
     stop: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="Stop Time",
         description="Time at which to stop monitor recording.  "
         "If not specified, record until end of simulation.",
@@ -320,7 +320,7 @@ class TimeMonitor(Monitor, ABC):
     )
 
     interval: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Time Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
         "Set ``interval`` to 1 for the highest possible resolution in time. "
@@ -331,7 +331,7 @@ class TimeMonitor(Monitor, ABC):
     )
 
     sampling_dt: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Sampling Time Step",
         description="Time between recorded samples, in seconds. Unlike ``interval`` (an integer "
         "number of time steps), this specifies the cadence in physical units. Mutually exclusive "
@@ -341,7 +341,7 @@ class TimeMonitor(Monitor, ABC):
     )
 
     num_samples: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Number of Samples",
         description="Number of samples to record, spaced uniformly over the monitor's "
         "``[start, stop]`` window. The count is exact when the simulation runs its full "
@@ -551,13 +551,13 @@ class AbstractFieldMonitor(Monitor, ABC):
     """:class:`~tidy3d.Monitor` that records electromagnetic field data as a function of x,y,z."""
 
     fields: tuple[EMField, ...] = Field(
-        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        default=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
     )
 
     interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -565,14 +565,14 @@ class AbstractFieldMonitor(Monitor, ABC):
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes).",
     )
 
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="Only takes effect when ``colocate=False``. If ``True``, flux, dot "
         "products, and overlap integrals still use fields interpolated to grid cell "
@@ -612,14 +612,14 @@ class AbstractAuxFieldMonitor(Monitor, ABC):
     """
 
     fields: tuple[AuxField, ...] = Field(
-        (),
+        default=(),
         title="Aux Field Components",
         description="Collection of auxiliary field components to store in the monitor. "
         "Auxiliary fields which are not present in the simulation will be zero.",
     )
 
     interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -627,7 +627,7 @@ class AbstractAuxFieldMonitor(Monitor, ABC):
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes).",
@@ -665,19 +665,19 @@ class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
     """
 
     store_fields_direction: Direction | None = Field(
-        None,
+        default=None,
         title="Store Fields",
         description="Propagation direction for the field profiles stored from overlap calculation.",
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. primal grid nodes).",
     )
 
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="Only takes effect when ``colocate=False``. If ``True``, dot products "
         "and overlap integrals still use fields interpolated to grid cell boundaries "
@@ -689,7 +689,7 @@ class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
     _colocated_integration_validator = validate_colocated_integration()
 
     conjugated_dot_product: bool = Field(
-        True,
+        default=True,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for overlap/decomposition.",
     )
@@ -760,20 +760,20 @@ class AbstractModeMonitor(AbstractOverlapMonitor):
     )
 
     store_fields_direction: Direction | None = Field(
-        None,
+        default=None,
         title="Store Fields",
         description="Propagation direction for the mode field profiles stored from mode solving.",
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes).",
     )
 
     conjugated_dot_product: bool = Field(
-        True,
+        default=True,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
@@ -867,21 +867,21 @@ class AbstractGaussianOverlapMonitor(AbstractOverlapMonitor):
     """
 
     angle_theta: float = Field(
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of propagation direction.",
         json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of propagation direction.",
         json_schema_extra={"units": RADIAN},
     )
 
     pol_angle: float = Field(
-        0,
+        default=0,
         title="Polarization Angle",
         description="Specifies the angle between the electric field polarization of the "
         "source and the plane defined by the injection axis and the propagation axis (rad). "
@@ -929,14 +929,14 @@ class GaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
     """
 
     waist_radius: PositiveFloat = Field(
-        1.0,
+        default=1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
         json_schema_extra={"units": MICROMETER},
     )
 
     waist_distance: float = Field(
-        0.0,
+        default=0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
         "A positive value places the waist behind the monitor plane (toward the negative normal axis). "
@@ -975,14 +975,14 @@ class AstigmaticGaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
     """
 
     waist_sizes: tuple[PositiveFloat, PositiveFloat] = Field(
-        (1.0, 1.0),
+        default=(1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         json_schema_extra={"units": MICROMETER},
     )
 
     waist_distances: tuple[float, float] = Field(
-        (0.0, 0.0),
+        default=(0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
         "for the waist sizes in the local x and y directions. "
@@ -1096,14 +1096,14 @@ class FieldStructureMonitor(AbstractFieldMonitor, FreqMonitor):
     # partial or reordered set would silently undercount absorption. A Literal makes this a
     # schema-level constraint, so no separate validator is needed.
     fields: tuple[Literal["Ex"], Literal["Ey"], Literal["Ez"]] = Field(
-        ("Ex", "Ey", "Ez"),
+        default=("Ex", "Ey", "Ez"),
         title="Field Components",
         description="Electric field components to record. Fixed to ``Ex``, ``Ey``, and ``Ez``; "
         "the displacement field and absorbed power require all three.",
     )
 
     colocate: Literal[False] = Field(
-        False,
+        default=False,
         title="Colocate Fields",
         description="Field–medium monitors record their constituents on the native Yee grid. "
         "Colocation is applied only when a colocated derived quantity is requested from "
@@ -1150,14 +1150,14 @@ class PointCloudFieldMonitor(FreqMonitor):
     _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
 
     center: Coordinate = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Derived Center",
         description="Bounding-box center derived from the point cloud coordinates.",
         json_schema_extra={"units": MICROMETER, "doc_hidden": True},
     )
 
     size: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Derived Size",
         description="Bounding-box size derived from the point cloud coordinates.",
         json_schema_extra={"units": MICROMETER, "doc_hidden": True},
@@ -1172,19 +1172,19 @@ class PointCloudFieldMonitor(FreqMonitor):
     )
 
     fields: tuple[PointCloudFieldComponent, ...] = Field(
-        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        default=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
     )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Point-cloud field monitors do not support spatial downsampling.",
     )
 
     colocate: Literal[False] = Field(
-        False,
+        default=False,
         title="Colocate Fields",
         description="Point-cloud field monitors do not support field colocation. E and H "
         "components are sampled from native Yee-grid field values; D components are "
@@ -1309,7 +1309,7 @@ class DipoleEmissionMonitor(PointCloudFieldMonitor):
     """
 
     fields: tuple[Literal["Ex"], Literal["Ey"], Literal["Ez"]] = Field(
-        DIPOLE_EMISSION_FIELD_COMPONENTS,
+        default=DIPOLE_EMISSION_FIELD_COMPONENTS,
         title="Field Components",
         description="Electric-field components used to evaluate Cartesian dipole orientations.",
         json_schema_extra={"doc_hidden": True},
@@ -1326,7 +1326,7 @@ class DipoleEmissionMonitor(PointCloudFieldMonitor):
     )
 
     store_position_indexes: tuple[NonNegativeInt, ...] = Field(
-        (),
+        default=(),
         title="Stored Position Indexes",
         description=(
             "Zero-based indexes into ``points`` for positions whose individual radiation "
@@ -1472,14 +1472,14 @@ class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
     """:class:`~tidy3d.Monitor` that records material properties in the frequency domain."""
 
     colocate: Literal[False] = Field(
-        False,
+        default=False,
         title="Colocate Fields",
         description="Colocation turned off, since colocated medium property values do not have a "
         "physical meaning - they do not correspond to the subpixel-averaged ones.",
     )
 
     interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -1564,14 +1564,14 @@ class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
     _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
 
     center: Coordinate = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Derived Center",
         description="Bounding-box center derived from the point cloud coordinates.",
         json_schema_extra={"units": MICROMETER, "doc_hidden": True},
     )
 
     size: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Derived Size",
         description="Bounding-box size derived from the point cloud coordinates.",
         json_schema_extra={"units": MICROMETER, "doc_hidden": True},
@@ -1588,7 +1588,7 @@ class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
     )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Point-cloud permittivity monitors do not support spatial downsampling.",
     )
@@ -1654,7 +1654,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     flux and near to far transformations."""
 
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="Selects the surface-integration scheme. If ``True`` (default), the integral "
         "is computed from fields colocated to the grid cell boundaries (primal nodes). If "
@@ -1663,7 +1663,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     )
 
     colocate: Literal[True] = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Always ``True`` for surface-integration monitors; select the integration "
         "scheme with ``use_colocated_integration``.",
@@ -1676,7 +1676,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         return self.use_colocated_integration
 
     normal_dir: Direction | None = Field(
-        None,
+        default=None,
         title="Normal Vector Orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
@@ -1684,7 +1684,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     )
 
     exclude_surfaces: tuple[BoxSurface, ...] | None = Field(
-        None,
+        default=None,
         title="Excluded Surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
     )
@@ -1783,7 +1783,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """
 
     enable_adjoint: bool = Field(
-        False,
+        default=False,
         title="Enable Adjoint",
         description="Enable adjoint differentiation for this flux monitor. When ``True``, "
         "autograd forward runs store hidden tangential field data on this monitor's "
@@ -1983,14 +1983,14 @@ class ModeSolverMonitor(AbstractModeMonitor):
     """
 
     direction: Direction = Field(
-        "+",
+        default="+",
         title="Propagation Direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
     fields: tuple[EMField, ...] = Field(
-        ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"),
+        default=("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"),
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
         "methods like ``flux``, ``dot`` require all tangential field components, while others "
@@ -2071,7 +2071,7 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
     )
 
     freq_spec: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Frequency Specification",
         description="Single frequency at which the mode profiles are solved for the time-domain "
         "modal decomposition. If ``None``, the central frequency of the first source is used (so "
@@ -2079,7 +2079,7 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
     )
 
     interval: Literal[1] = Field(
-        1,
+        default=1,
         title="Time Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
         "Currently must be ``1`` (downsampling of time-domain modal amplitudes is not yet "
@@ -2098,7 +2098,7 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
         return 1 if val is None else val
 
     colocate: Literal[False] = Field(
-        False,
+        default=False,
         title="Colocate Fields",
         description="Hard-coded to ``False``: ``ModeTimeMonitor`` overlaps Yee-native fields "
         "against per-component primal / dual mode profiles, so colocation to the primal "
@@ -2106,7 +2106,7 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
     )
 
     use_colocated_integration: Literal[False] = Field(
-        False,
+        default=False,
         title="Use Colocated Integration",
         description="Hard-coded to ``False``: overlap weights are built from per-axis primal × "
         "dual cell widths, matching the Yee-staggered field sampling.",
@@ -2209,7 +2209,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     """
 
     custom_origin: Coordinate | None = Field(
-        None,
+        default=None,
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
@@ -2217,7 +2217,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     far_field_approx: bool = Field(
-        True,
+        default=True,
         title="Far Field Approximation",
         description="Whether to enable the far field approximation when projecting fields. "
         "If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components "
@@ -2227,7 +2227,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals at which near fields are recorded for "
         "projection to the far field, along each direction. If equal to 1, there will be no "
@@ -2240,7 +2240,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     window_size: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
-        (0, 0),
+        default=(0, 0),
         title="Spatial filtering window size",
         description="Size of the transition region of the windowing function used to ensure that "
         "the recorded near fields decay to zero near the edges of the monitor. "
@@ -2257,7 +2257,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     medium: MediumType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Projection medium",
         description="Medium through which to project fields. Generally, the fields should be "
@@ -2487,7 +2487,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     """
 
     proj_distance: float = Field(
-        1e6,
+        default=1e6,
         title="Projection Distance",
         description="Radial distance of the projection points from ``local_origin``.",
         json_schema_extra={"units": MICROMETER},
@@ -2552,7 +2552,7 @@ class DirectivityMonitor(MicrowaveBaseModel, FieldProjectionAngleMonitor, FluxMo
     enable_adjoint: ClassVar[bool] = False
 
     far_field_approx: Literal[True] = Field(
-        True,
+        default=True,
         title="Far Field Approximation",
         description="Directivity calculations require the far field approximation. "
         "This field is hard-coded to be ``True`` and cannot be changed.",
@@ -2678,7 +2678,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     )
 
     proj_distance: float = Field(
-        1e6,
+        default=1e6,
         title="Projection Distance",
         description="Signed distance of the projection plane along ``proj_axis``. "
         "from the plane containing ``local_origin``.",
@@ -2784,7 +2784,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
     )
 
     proj_distance: float = Field(
-        1e6,
+        default=1e6,
         title="Projection Distance",
         description="Radial distance of the projection points from ``local_origin``.",
         json_schema_extra={"units": MICROMETER},
@@ -2872,7 +2872,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     """
 
     normal_dir: Direction = Field(
-        "+",
+        default="+",
         title="Normal Vector Orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
@@ -2880,7 +2880,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     )
 
     colocate: Literal[False] = Field(
-        False,
+        default=False,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
@@ -2922,7 +2922,7 @@ class AbstractSurfaceMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z on PEC and lossy metal surfaces."""
 
     fields: tuple[EMSurfaceField, ...] = Field(
-        ["E", "H"],
+        default=["E", "H"],
         title="Field Components",
         description="Collection of field components to store in the monitor. 'E' must be recorded "
         "for intensity and Poynting vector calculations, and 'H' for surface current density and "
@@ -2930,14 +2930,14 @@ class AbstractSurfaceMonitor(Monitor, ABC):
     )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. "
         "Only the value of 1 (no downsampling) is currently supported for surface monitors.",
     )
 
     colocate: Literal[True] = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="For surface monitors fields are always colocated on surface.",
     )

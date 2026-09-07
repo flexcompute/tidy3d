@@ -34,7 +34,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     """
 
     freqs: FreqArray | None = Field(
-        None,
+        default=None,
         title="Monitor Frequencies",
         description="Frequencies at which the monitor will record. "
         "Must be a subset of the simulation 'freqs'. "
@@ -42,7 +42,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     )
 
     num_modes: NonNegativeInt | None = Field(
-        None,
+        default=None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
         "Cannot exceed the greatest number of modes in any EME cell. "
@@ -50,7 +50,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     )
 
     num_sweep: NonNegativeInt | None = Field(
-        1,
+        default=1,
         title="Number of Sweep Indices",
         description="Number of sweep indices for the monitor to record. "
         "Cannot exceed the number of sweep indices for the simulation. "
@@ -59,7 +59,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -68,7 +68,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     )
 
     eme_cell_interval_space: Literal[1] = Field(
-        1,
+        default=1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -77,7 +77,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     )
 
     colocate: Literal[True] = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
@@ -157,7 +157,7 @@ class EMEModeSolverMonitor(EMEMonitor):
     """
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Note: not yet supported. Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -166,7 +166,7 @@ class EMEModeSolverMonitor(EMEMonitor):
     )
 
     eme_cell_interval_space: PositiveInt = Field(
-        1,
+        default=1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -175,20 +175,20 @@ class EMEModeSolverMonitor(EMEMonitor):
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
     normalize: bool = Field(
-        True,
+        default=True,
         title="Normalize Modes",
         description="Whether to normalize the EME modes to unity flux.",
     )
 
     keep_invalid_modes: bool = Field(
-        False,
+        default=False,
         title="Keep Invalid Modes",
         description="Whether to store modes containing nan values and modes which are "
         "exponentially increasing in the propagation direction.",
@@ -234,7 +234,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     """
 
     interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -242,7 +242,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     )
 
     eme_cell_interval_space: Literal[1] = Field(
-        1,
+        default=1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -252,14 +252,14 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
     num_modes: NonNegativeInt | None = Field(
-        None,
+        default=None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
         "For 'EMEFieldMonitor', refers to the number of modes at each port."
@@ -311,7 +311,7 @@ class EMECoefficientMonitor(EMEMonitor):
     fields: tuple[
         Literal["A", "B", "n_complex", "flux", "interface_smatrices", "overlaps"], ...
     ] = Field(
-        ("A", "B"),
+        default=("A", "B"),
         title="Coefficient Fields",
         description="Collection of coefficient fields to store in the monitor. "
         "Available fields: 'A' (forward mode coefficients), 'B' (backward mode coefficients), "
@@ -321,7 +321,7 @@ class EMECoefficientMonitor(EMEMonitor):
     )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
@@ -331,7 +331,7 @@ class EMECoefficientMonitor(EMEMonitor):
     )
 
     eme_cell_interval_space: PositiveInt = Field(
-        1,
+        default=1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "

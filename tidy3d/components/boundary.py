@@ -87,7 +87,7 @@ class BoundaryEdge(ABC, Tidy3dBaseModel):
     """Electromagnetic boundary condition at a domain edge."""
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="Optional unique name for boundary.",
     )
@@ -126,7 +126,7 @@ class ABCBoundary(AbstractABCBoundary):
     """
 
     permittivity: float | None = Field(
-        None,
+        default=None,
         title="Effective Permittivity",
         description="Effective permittivity for determining propagation constant. "
         "If ``None``, this value will be automatically inferred from the medium at "
@@ -135,7 +135,7 @@ class ABCBoundary(AbstractABCBoundary):
     )
 
     conductivity: NonNegativeFloat | None = Field(
-        None,
+        default=None,
         title="Effective Conductivity",
         description="Effective conductivity for determining propagation constant. "
         "If ``None``, this value will be automatically inferred from the medium at "
@@ -168,7 +168,7 @@ class BroadbandModeABCFitterParam(Tidy3dBaseModel):
     """
 
     max_num_poles: int = Field(
-        DEFAULT_BROADBAND_MODE_ABC_NUM_POLES,
+        default=DEFAULT_BROADBAND_MODE_ABC_NUM_POLES,
         title="Maximal Number Of Poles",
         description="Maximal number of poles in complex-conjugate pole residue model for "
         "fitting the mode propagation index.",
@@ -177,13 +177,13 @@ class BroadbandModeABCFitterParam(Tidy3dBaseModel):
     )
 
     tolerance_rms: NonNegativeFloat = Field(
-        DEFAULT_BROADBAND_MODE_ABC_FITTER_TOLERANCE,
+        default=DEFAULT_BROADBAND_MODE_ABC_FITTER_TOLERANCE,
         title="Fitting Tolerance",
         description="Tolerance in fitting the mode propagation index.",
     )
 
     frequency_sampling_points: int = Field(
-        DEFAULT_BROADBAND_MODE_ABC_NUM_FREQS,
+        default=DEFAULT_BROADBAND_MODE_ABC_NUM_FREQS,
         title="Number Of Frequencies",
         description="Number of sampling frequencies used in fitting the mode propagation index.",
         gt=0,
@@ -209,7 +209,7 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
     )
 
     fit_param: BroadbandModeABCFitterParam = Field(
-        DEFAULT_BROADBAND_MODE_ABC_FITTER_PARAMS,
+        default=DEFAULT_BROADBAND_MODE_ABC_FITTER_PARAMS,
         title="Fitting Parameters For Broadband Mode Absorption Boundary Conditions",
         description="Parameters for fitting the mode propagation index over the frequency range using pole-residue pair model.",
     )
@@ -295,7 +295,7 @@ class ModeABCBoundary(AbstractABCBoundary):
     """
 
     mode_spec: ModeSpecType = Field(
-        DEFAULT_MODE_SPEC_MODE_ABC,
+        default=DEFAULT_MODE_SPEC_MODE_ABC,
         title="Mode Specification",
         description="Parameters that determine the modes computed by the mode solver.",
         discriminator=TYPE_TAG_STR,
@@ -308,7 +308,7 @@ class ModeABCBoundary(AbstractABCBoundary):
             Field(json_schema_extra={"minItems": 1, "uniqueItems": True}),
         ]
     ) = Field(
-        0,
+        default=0,
         title="Mode Index",
         description="Mode index, or tuple of mode indices, into the collection of modes "
         "returned by the mode solver. Pass a single integer for the single-mode regime; "
@@ -318,7 +318,7 @@ class ModeABCBoundary(AbstractABCBoundary):
     )
 
     primary_mode_index: NonNegativeInt | None = Field(
-        None,
+        default=None,
         title="Primary Mode Index",
         description="The expected dominant mode in the absorbed signal. Only meaningful "
         "when ``mode_index`` is a tuple (multi-mode regime); must be one of its entries. "
@@ -327,7 +327,7 @@ class ModeABCBoundary(AbstractABCBoundary):
     )
 
     tolerance: NonNegativeFloat = Field(
-        DEFAULT_MODE_ABC_TOLERANCE,
+        default=DEFAULT_MODE_ABC_TOLERANCE,
         title="Effective-Index Grouping Tolerance",
         description="Relative tolerance used to decide whether two modes share the same "
         "effective propagation index. Each mode is compared against the primary mode at the "
@@ -337,7 +337,7 @@ class ModeABCBoundary(AbstractABCBoundary):
     )
 
     freq_spec: PositiveFloat | BroadbandModeABCSpec | None = Field(
-        None,
+        default=None,
         title="Absorption Frequency Specification",
         description="Specifies the frequency at which the field is absorbed. If ``None``, "
         "the central frequency of the source is used. If ``BroadbandModeABCSpec``, the "
@@ -551,7 +551,7 @@ class InternalAbsorber(Box):
     )
 
     grid_shift: int = Field(
-        0,
+        default=0,
         title="Absorber Shift",
         description="Displacement of absorber in the normal positive direction in number of cells. "
         "This could be used to conveniently place an absorber right behind a source: "
@@ -757,7 +757,7 @@ class AbsorberParams(Tidy3dBaseModel):
     """
 
     sigma_order: NonNegativeInt = Field(
-        3,
+        default=3,
         title="Sigma Order",
         description=(
             "Order of the polynomial describing the absorber profile "
@@ -766,14 +766,14 @@ class AbsorberParams(Tidy3dBaseModel):
     )
 
     sigma_min: NonNegativeFloat = Field(
-        0.0,
+        default=0.0,
         title="Sigma Minimum",
         description="Minimum value of the absorber conductivity.",
         json_schema_extra={"units": PML_SIGMA},
     )
 
     sigma_max: NonNegativeFloat = Field(
-        1.5,
+        default=1.5,
         title="Sigma Maximum",
         description="Maximum value of the absorber conductivity.",
         json_schema_extra={"units": PML_SIGMA},
@@ -789,7 +789,7 @@ class PMLParams(AbsorberParams):
     """
 
     kappa_order: NonNegativeInt = Field(
-        3,
+        default=3,
         title="Kappa Order",
         description=(
             "Order of the polynomial describing the PML kappa profile "
@@ -797,12 +797,12 @@ class PMLParams(AbsorberParams):
         ),
     )
 
-    kappa_min: NonNegativeFloat = Field(0.0, title="Kappa Minimum")
+    kappa_min: NonNegativeFloat = Field(default=0.0, title="Kappa Minimum")
 
-    kappa_max: NonNegativeFloat = Field(1.5, title="Kappa Maximum")
+    kappa_max: NonNegativeFloat = Field(default=1.5, title="Kappa Maximum")
 
     alpha_order: NonNegativeInt = Field(
-        3,
+        default=3,
         title="Alpha Order",
         description=(
             "Order of the polynomial describing the PML alpha profile "
@@ -811,14 +811,14 @@ class PMLParams(AbsorberParams):
     )
 
     alpha_min: NonNegativeFloat = Field(
-        0.0,
+        default=0.0,
         title="Alpha Minimum",
         description="Minimum value of the PML alpha.",
         json_schema_extra={"units": PML_SIGMA},
     )
 
     alpha_max: NonNegativeFloat = Field(
-        1.5,
+        default=1.5,
         title="Alpha Maximum",
         description="Maximum value of the PML alpha.",
         json_schema_extra={"units": PML_SIGMA},
@@ -869,7 +869,7 @@ class AbsorberSpec(BoundaryEdge):
     )
 
     extrude_structures: bool = Field(
-        False,
+        default=False,
         title="Enable structure extrusion to PML",
         description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
         f"Any structure located within {CLIPPING_MARGIN} cells of a simulation boundary will be extended "
@@ -998,14 +998,14 @@ class PML(AbsorberSpec):
     """
 
     num_layers: int = Field(
-        12,
+        default=12,
         title="Number of Layers",
         description="Number of layers of standard PML.",
         ge=1,
     )
 
     parameters: PMLParams = Field(
-        DefaultPMLParameters,
+        default=DefaultPMLParameters,
         title="PML Parameters",
         description="Parameters of the complex frequency-shifted absorption poles.",
     )
@@ -1015,7 +1015,7 @@ class PML(AbsorberSpec):
     )
 
     extrude_structures: bool = Field(
-        True,
+        default=True,
         title="Enable structure extrusion to PML",
         description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
         f"Any structure located within {CLIPPING_MARGIN} cells of a simulation boundary will be extended "
@@ -1051,14 +1051,14 @@ class StablePML(AbsorberSpec):
     """
 
     num_layers: int = Field(
-        40,
+        default=40,
         title="Number of Layers",
         description="Number of layers of 'stable' PML.",
         ge=1,
     )
 
     parameters: PMLParams = Field(
-        DefaultStablePMLParameters,
+        default=DefaultStablePMLParameters,
         title="Stable PML Parameters",
         description="'Stable' parameters of the complex frequency-shifted absorption poles.",
     )
@@ -1068,7 +1068,7 @@ class StablePML(AbsorberSpec):
     )
 
     extrude_structures: bool = Field(
-        True,
+        default=True,
         title="Enable structure extrusion to PML",
         description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
         f"Any structure located within {CLIPPING_MARGIN} cells of a simulation boundary will be extended "
@@ -1119,14 +1119,14 @@ class Absorber(AbsorberSpec):
     """
 
     num_layers: int = Field(
-        40,
+        default=40,
         title="Number of Layers",
         description="Number of layers of absorber to add to + and - boundaries.",
         ge=1,
     )
 
     parameters: AbsorberParams = Field(
-        DefaultAbsorberParameters,
+        default=DefaultAbsorberParameters,
         title="Absorber Parameters",
         description="Adiabatic absorber parameters.",
     )

@@ -46,7 +46,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
     """Abstract class for medium perturbation."""
 
     subpixel: bool = Field(
-        True,
+        default=True,
         title="Subpixel averaging",
         description="This value will be transferred to the resulting custom medium. That is, "
         "if ``True``, the subpixel averaging will be applied to the custom medium. The type "
@@ -56,7 +56,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
     )
 
     perturbation_spec: PermittivityPerturbation | IndexPerturbation | None = Field(
-        None,
+        default=None,
         title="Perturbation Spec",
         description="Specification of medium perturbation as one of predefined types.",
         discriminator=TYPE_TAG_STR,
@@ -147,14 +147,14 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
     """
 
     permittivity_perturbation: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity_perturbation: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
         json_schema_extra={"units": CONDUCTIVITY},
@@ -319,7 +319,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     """
 
     eps_inf_perturbation: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Perturbation of Epsilon at Infinity",
         description="Perturbations to relative permittivity at infinite frequency "
         "(:math:`\\epsilon_\\infty`).",
@@ -329,7 +329,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     poles_perturbation: (
         tuple[tuple[ParameterPerturbation | None, ParameterPerturbation | None], ...] | None
     ) = Field(
-        None,
+        default=None,
         title="Perturbations of Poles",
         description="Perturbations to poles of the model.",
         json_schema_extra={"units": (RADPERSEC, RADPERSEC)},

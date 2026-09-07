@@ -88,7 +88,7 @@ class Debye(DispersiveMedium):
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: PositiveFloat = Field(
-        1.0,
+        default=1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         json_schema_extra={"units": PERMITTIVITY},

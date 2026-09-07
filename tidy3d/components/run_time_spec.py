@@ -34,7 +34,7 @@ class RunTimeSpec(Tidy3dBaseModel):
     )
 
     source_factor: PositiveFloat = Field(
-        3,
+        default=3,
         title="Source Factor",
         description="The contribution to the ``run_time`` from the longest source is computed from "
         "the ``source_time`` length times ``source_factor``. Larger values provide more buffer "

@@ -198,17 +198,19 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = ()
 
-    name: str | None = Field(None, title="Name", description="Optional unique name for medium.")
+    name: str | None = Field(
+        default=None, title="Name", description="Optional unique name for medium."
+    )
 
     frequency_range: FreqBound | None = Field(
-        None,
+        default=None,
         title="Frequency Range",
         description="Optional range of validity for the medium.",
         json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
     allow_gain: bool = Field(
-        False,
+        default=False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
         "simulations with a gain medium are unstable, and are likely to diverge."
@@ -218,25 +220,25 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     )
 
     nonlinear_spec: NonlinearSpecType | None = Field(
-        None,
+        default=None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
     )
 
     modulation_spec: ModulationSpec | None = Field(
-        None,
+        default=None,
         title="Modulation Spec",
         description="Modulation spec applied on top of the base medium properties.",
     )
 
     viz_spec: VisualizationSpec | None = Field(
-        None,
+        default=None,
         title="Visualization Specification",
         description="Plotting specification for visualizing medium.",
     )
 
     heat_spec: ThermalSpecType | None = Field(
-        None,
+        default=None,
         title="Heat Specification",
         description="DEPRECATED: Use :class:`~tidy3d.MultiPhysicsMedium`. Specification of the medium heat properties. They are "
         "used for solving the heat equation via the :class:`~tidy3d.HeatSimulation` interface. Such simulations can be"

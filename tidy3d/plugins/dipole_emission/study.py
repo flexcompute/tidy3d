@@ -151,7 +151,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
     )
 
     position_weights: ArrayFloat1D | ArrayFloat2D | None = Field(
-        None,
+        default=None,
         title="Position Weights",
         description=(
             "Weights used when summing radiation intensity over ``positions``. Provide one "
@@ -161,7 +161,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
     )
 
     store_position_indexes: tuple[int, ...] = Field(
-        (),
+        default=(),
         title="Stored Position Indexes",
         description=(
             "Zero-based indexes into ``positions`` for individual position-resolved radiation "

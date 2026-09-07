@@ -51,13 +51,13 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
     )
 
     extrapolate_to_endpoints: bool = Field(
-        False,
+        default=False,
         title="Extrapolate to Endpoints",
         description="This parameter is passed to :class:`AxisAlignedPathIntegral` objects when computing the contour integral.",
     )
 
     snap_contour_to_grid: bool = Field(
-        False,
+        default=False,
         title="Snap Contour to Grid",
         description="This parameter is passed to :class:`AxisAlignedPathIntegral` objects when computing the contour integral.",
     )

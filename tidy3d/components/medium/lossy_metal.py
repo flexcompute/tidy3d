@@ -61,7 +61,7 @@ class LossyMetalMedium(Medium):
     """
 
     allow_gain: Literal[False] = Field(
-        False,
+        default=False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
         "simulations with a gain medium are unstable, and are likely to diverge."
@@ -71,7 +71,7 @@ class LossyMetalMedium(Medium):
     )
 
     permittivity: Literal[1.0] = Field(  # pyrefly: ignore[invalid-literal]
-        1.0,
+        default=1.0,
         title="Permittivity",
         description="Relative permittivity.",
         json_schema_extra={"units": PERMITTIVITY},
@@ -85,7 +85,7 @@ class LossyMetalMedium(Medium):
     )
 
     roughness: SurfaceRoughnessType | None = Field(
-        None,
+        default=None,
         title="Surface Roughness Model",
         description="Surface roughness model that applies a frequency-dependent scaling "
         "factor to surface impedance. Takes effect only when ``penetrable=False`` and "
@@ -94,7 +94,7 @@ class LossyMetalMedium(Medium):
     )
 
     thickness: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Conductor Thickness",
         description="When the thickness of the conductor is not much greater than skin depth, "
         "1D transmission line model is applied to compute the surface impedance of the thin conductor. "
@@ -118,7 +118,7 @@ class LossyMetalMedium(Medium):
     )
 
     penetrable: bool = Field(
-        False,
+        default=False,
         title="Penetrable",
         description="If ``True``, the metal is solved as a regular conductive medium with the "
         "given ``conductivity`` (and ``permittivity = 1``), and subpixel averaging on this "

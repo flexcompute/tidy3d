@@ -138,21 +138,21 @@ class SpaceModulation(AbstractSpaceModulation):
     """
 
     amplitude: float | SpatialDataArray = Field(
-        1,
+        default=1,
         title="Amplitude of modulation in space",
         description="Amplitude of modulation that can vary spatially. "
         "It takes the unit of whatever is being modulated.",
     )
 
     phase: float | SpatialDataArray = Field(
-        0,
+        default=0,
         title="Phase of modulation in space",
         description="Phase of modulation that can vary spatially.",
         json_schema_extra={"units": RADIAN},
     )
 
     interp_method: InterpMethod = Field(
-        "nearest",
+        default="nearest",
         title="Interpolation method",
         description="Method of interpolation to use to obtain values at spatial locations on the Yee grids.",
     )
@@ -270,14 +270,14 @@ class ModulationSpec(Tidy3dBaseModel):
     """
 
     permittivity: SpaceTimeModulation | None = Field(
-        None,
+        default=None,
         title="Space-time modulation of relative permittivity",
         description="Space-time modulation of relative permittivity at infinite frequency "
         "applied on top of the base permittivity at infinite frequency.",
     )
 
     conductivity: SpaceTimeModulation | None = Field(
-        None,
+        default=None,
         title="Space-time modulation of conductivity",
         description="Space-time modulation of electric conductivity "
         "applied on top of the base conductivity.",

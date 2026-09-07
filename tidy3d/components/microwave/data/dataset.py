@@ -169,32 +169,32 @@ class TerminalFieldDataset(ElectromagneticFieldDataset, FreqDataset):
     """
 
     Ex: ScalarTerminalFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field for each terminal.",
     )
     Ey: ScalarTerminalFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field for each terminal.",
     )
     Ez: ScalarTerminalFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field for each terminal.",
     )
     Hx: ScalarTerminalFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field for each terminal.",
     )
     Hy: ScalarTerminalFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field for each terminal.",
     )
     Hz: ScalarTerminalFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field for each terminal.",
     )

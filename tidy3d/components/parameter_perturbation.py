@@ -129,7 +129,7 @@ class HeatPerturbation(AbstractPerturbation):
     """Abstract class for heat perturbation."""
 
     temperature_range: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
-        (0, inf),
+        default=(0, inf),
         title="Temperature range",
         description="Temperature range in which perturbation model is valid.",
         json_schema_extra={"units": KELVIN},
@@ -301,7 +301,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     )
 
     temperature_range: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(
-        None,
+        default=None,
         title="Temperature range",
         description="Temperature range in which perturbation model is valid. For "
         ":class:`.CustomHeatPerturbation` this field is computed automatically based on "
@@ -310,7 +310,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     )
 
     interp_method: InterpMethod = Field(
-        "linear",
+        default="linear",
         title="Interpolation method",
         description="Interpolation method to obtain perturbation values between sample points.",
     )
@@ -454,13 +454,13 @@ class ChargePerturbation(AbstractPerturbation):
     """Abstract class for charge perturbation."""
 
     electron_range: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
-        (0, inf),
+        default=(0, inf),
         title="Electron Density Range",
         description="Range of electrons densities in which perturbation model is valid.",
     )
 
     hole_range: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
-        (0, inf),
+        default=(0, inf),
         title="Hole Density Range",
         description="Range of holes densities in which perturbation model is valid.",
     )
@@ -731,7 +731,7 @@ class CustomChargePerturbation(ChargePerturbation):
     )
 
     electron_range: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(
-        None,
+        default=None,
         title="Electron Density Range",
         description="Range of electrons densities in which perturbation model is valid. For "
         ":class:`.CustomChargePerturbation` this field is computed automatically based on "
@@ -739,7 +739,7 @@ class CustomChargePerturbation(ChargePerturbation):
     )
 
     hole_range: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(
-        None,
+        default=None,
         title="Hole Density Range",
         description="Range of holes densities in which perturbation model is valid. For "
         ":class:`.CustomChargePerturbation` this field is computed automatically based on "
@@ -747,7 +747,7 @@ class CustomChargePerturbation(ChargePerturbation):
     )
 
     interp_method: InterpMethod = Field(
-        "linear",
+        default="linear",
         title="Interpolation method",
         description="Interpolation method to obtain perturbation values between sample points.",
     )
@@ -916,13 +916,13 @@ class ParameterPerturbation(Tidy3dBaseModel):
     """
 
     heat: HeatPerturbationType | None = Field(
-        None,
+        default=None,
         title="Heat Perturbation",
         description="Heat perturbation to apply.",
     )
 
     charge: ChargePerturbationType | None = Field(
-        None,
+        default=None,
         title="Charge Perturbation",
         description="Charge perturbation to apply.",
     )
@@ -1061,13 +1061,13 @@ class PermittivityPerturbation(Tidy3dBaseModel):
     """
 
     delta_eps: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Permittivity Perturbation",
         description="Perturbation model for permittivity.",
     )
 
     delta_sigma: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Conductivity Perturbation",
         description="Perturbation model for conductivity.",
     )
@@ -1637,13 +1637,13 @@ class IndexPerturbation(Tidy3dBaseModel):
     """
 
     delta_n: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Refractive Index Perturbation",
         description="Perturbation of the real part of refractive index.",
     )
 
     delta_k: ParameterPerturbation | None = Field(
-        None,
+        default=None,
         title="Exctinction Coefficient Perturbation",
         description="Perturbation of the imaginary part of refractive index.",
     )

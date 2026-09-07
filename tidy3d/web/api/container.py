@@ -255,7 +255,7 @@ class JobState(Tidy3dBaseModel):
         description="Task ids restored from local cache per step name.",
     )
     current_step_index: int = Field(
-        0,
+        default=0,
         title="Current Step Index",
         description="Index of the next step to execute.",
     )
@@ -332,25 +332,25 @@ class Job(WebContainer):
     )
 
     workflow: Workflow | None = Field(
-        None,
+        default=None,
         title="Workflow",
         description="Internal workflow definition. If unset, resolved from simulation type.",
     )
 
     task_name: TaskName | None = Field(
-        None,
+        default=None,
         title="Task Name",
         description="Unique name of the task. Will be auto-generated if not provided.",
     )
 
     folder_name: str = Field(
-        "default",
+        default="default",
         title="Folder Name",
         description="Name of folder to store task on web UI.",
     )
 
     callback_url: str | None = Field(
-        None,
+        default=None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
         "The body content is a json file with fields "
@@ -358,26 +358,26 @@ class Job(WebContainer):
     )
 
     solver_version: str | None = Field(
-        None,
+        default=None,
         title="Solver Version",
         description="Deprecated direct option for internal use only. Internal workflows should set "
         "``td.config.run.solver_version`` instead; external users should leave unset.",
     )
 
     verbose: bool = Field(
-        True,
+        default=True,
         title="Verbose",
         description="Whether to print info messages and progressbars.",
     )
 
     simulation_type: BatchCategoryType | None = Field(
-        None,
+        default=None,
         title="Simulation Type",
         description="Internal simulation type label; external users should leave unset.",
     )
 
     parent_tasks: tuple[TaskId, ...] | None = Field(
-        None,
+        default=None,
         title="Parent Tasks",
         description="Tuple of parent task IDs. For an ordinary FDTD job, exactly one compatible "
         "cache-producing task enables structural preprocessing reuse. Other dependency uses are "
@@ -385,13 +385,13 @@ class Job(WebContainer):
     )
 
     store_preprocess_cache: bool = Field(
-        False,
+        default=False,
         title="Store Preprocess Cache",
         description="Store structural preprocessing for reuse by compatible FDTD child tasks.",
     )
 
     task_id_cached: TaskId | None = Field(
-        None,
+        default=None,
         title="Task ID (Cached)",
         description="Optional field to specify ``task_id``. Only used as a workaround internally "
         "so that ``task_id`` is written when ``Job.to_file()`` and then the proper task is loaded "
@@ -400,26 +400,26 @@ class Job(WebContainer):
     )
 
     state_cached: JobState | None = Field(
-        None,
+        default=None,
         title="State (Cached)",
         description="Cached runtime workflow state used for job serialization.",
     )
 
     reduce_simulation: Literal["auto", True, False] = Field(
-        "auto",
+        default="auto",
         title="Reduce Simulation",
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
     pay_type: PayType | None = Field(
-        None,
+        default=None,
         title="Payment Type",
         description="Deprecated direct option for internal use only. Internal workflows should set "
         "``td.config.run.pay_type`` instead; external users should leave unset.",
     )
 
     lazy: bool = Field(
-        False,
+        default=False,
         title="Lazy",
         description="Whether to load the actual data (lazy=False) or return a proxy that loads the data when accessed (lazy=True).",
     )
@@ -2111,30 +2111,30 @@ class BatchData(Tidy3dBaseModel, Mapping):
     )
 
     verbose: bool = Field(
-        True,
+        default=True,
         title="Verbose",
         description="Whether to print info messages and progressbars.",
     )
     cached_tasks: dict[TaskName, bool] | None = Field(
-        None,
+        default=None,
         title="Cached Tasks",
         description="Whether the data of a task came from the cache.",
     )
 
     lazy: bool = Field(
-        False,
+        default=False,
         title="Lazy",
         description="Whether to load the actual data (lazy=False) or return a proxy that loads the data when accessed (lazy=True).",
     )
 
     is_downloaded: bool | None = Field(
-        False,
+        default=False,
         title="Is Downloaded",
         description="Whether the simulation data was downloaded before.",
     )
 
     task_tree: BatchTaskTree | None = Field(
-        None,
+        default=None,
         title="Task Tree",
         description="Optional nested mapping from container positions to flat batch task names.",
     )
@@ -2386,26 +2386,26 @@ class Batch(WebContainer):
     )
 
     folder_name: str = Field(
-        "default",
+        default="default",
         title="Folder Name",
         description="Name of folder to store member of each batch on web UI.",
     )
 
     verbose: bool = Field(
-        True,
+        default=True,
         title="Verbose",
         description="Whether to print info messages and progressbars.",
     )
 
     solver_version: str | None = Field(
-        None,
+        default=None,
         title="Solver Version",
         description="Deprecated direct option for internal use only. Internal workflows should set "
         "``td.config.run.solver_version`` instead; external users should leave unset.",
     )
 
     callback_url: str | None = Field(
-        None,
+        default=None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
         "The body content is a json file with fields "
@@ -2413,13 +2413,13 @@ class Batch(WebContainer):
     )
 
     simulation_type: BatchCategoryType | None = Field(
-        None,
+        default=None,
         title="Simulation Type",
         description="Internal simulation type label; external users should leave unset.",
     )
 
     parent_tasks: dict[str, tuple[TaskId, ...]] | None = Field(
-        None,
+        default=None,
         title="Parent Tasks",
         description="Parent task IDs keyed by batch task name. For ordinary FDTD jobs, each "
         "value may contain one compatible cache-producing task ID. Other dependency uses are "
@@ -2437,20 +2437,20 @@ class Batch(WebContainer):
     )
 
     reduce_simulation: Literal["auto", True, False] = Field(
-        "auto",
+        default="auto",
         title="Reduce Simulation",
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
     pay_type: PayType | None = Field(
-        None,
+        default=None,
         title="Payment Type",
         description="Deprecated direct option for internal use only. Internal workflows should set "
         "``td.config.run.pay_type`` instead; external users should leave unset.",
     )
 
     jobs_cached: dict[TaskName, Job] | None = Field(
-        None,
+        default=None,
         title="Jobs (Cached)",
         description="Optional field to specify ``jobs``. Only used as a workaround internally "
         "so that ``jobs`` is written when ``Batch.to_file()`` and then the proper task is loaded "
@@ -2459,13 +2459,13 @@ class Batch(WebContainer):
     )
 
     task_tree: BatchTaskTree | None = Field(
-        None,
+        default=None,
         title="Task Tree",
         description="Internal nested mapping from container positions to flat batch task names.",
     )
 
     lazy: bool = Field(
-        False,
+        default=False,
         title="Lazy",
         description="Whether to load the actual data (lazy=False) or return a proxy that loads the data when accessed (lazy=True).",
     )

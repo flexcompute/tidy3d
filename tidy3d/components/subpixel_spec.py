@@ -79,7 +79,7 @@ class VolumetricAveraging(AbstractSubpixelAveragingMethod):
     """
 
     staircase_normal_component: bool = Field(
-        True,
+        default=True,
         title="Staircasing For Field Components Substantially Normal To Interface",
         description="Volumetric averaging works accurately if the electric field component "
         "is substantially tangential to the interface. If ``True``, apply volumetric averaging only "
@@ -116,7 +116,7 @@ class PECConformal(AbstractSubpixelAveragingMethod):
     """
 
     timestep_reduction: float = Field(
-        DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL,
+        default=DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL,
         title="Time Step Size Reduction Rate",
         description="Reduction factor between 0 and 1 such that the simulation's time step size "
         "is ``1 - timestep_reduction`` times its default value. "
@@ -126,7 +126,7 @@ class PECConformal(AbstractSubpixelAveragingMethod):
     )
 
     edge_singularity_correction: bool = Field(
-        True,
+        default=True,
         title="Apply Singularity Model At Metal Edges",
         description="Apply field correction model at metallic edges where field singularity occurs. "
         "The edges should be straight, and aligned with the primal grids; and the wedge angle is either "
@@ -151,7 +151,7 @@ class SurfaceImpedance(PECConformal):
     """
 
     timestep_reduction: float = Field(
-        DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL,
+        default=DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL,
         title="Time Step Size Reduction Rate",
         description="Reduction factor between 0 and 1 such that the simulation's time step size "
         "is ``1 - timestep_reduction`` times its default value. "

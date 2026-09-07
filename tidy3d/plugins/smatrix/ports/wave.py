@@ -98,7 +98,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     )
 
     num_grid_cells: int | None = Field(
-        DEFAULT_WAVE_PORT_NUM_CELLS,
+        default=DEFAULT_WAVE_PORT_NUM_CELLS,
         ge=MIN_WAVE_PORT_NUM_CELLS,
         title="Number of Grid Cells",
         description="Minimum number of mesh grid cells along the largest transverse dimension "
@@ -111,26 +111,26 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     )
 
     conjugated_dot_product: bool = Field(
-        False,
+        default=False,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
     frame: PECFrame | None = Field(
-        DEFAULT_WAVE_PORT_FRAME,
+        default=DEFAULT_WAVE_PORT_FRAME,
         title="Source Frame",
         description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
     absorber: bool | ABCBoundary | ModeABCBoundary = Field(
-        True,
+        default=True,
         title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
     extrude_structures: bool = Field(
-        False,
+        default=False,
         title="Extrude Structures",
         description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
     )
@@ -138,7 +138,7 @@ class AbstractWavePort(AbstractTerminalPort, Box):
     reference_impedance: (
         Literal["Z0"] | Complex | ImpedanceModeDataArray | ImpedanceTerminalDataArray
     ) = Field(
-        "Z0",
+        default="Z0",
         title="Reference Impedance",
         description="User-specified reference impedance for S-parameter computation. "
         "If ``Z0`` (default), the characteristic impedance "
@@ -949,7 +949,7 @@ class WavePort(AbstractWavePort):
     )
 
     mode_index: NonNegativeInt | None = Field(
-        None,
+        default=None,
         title="Mode Index (deprecated)",
         description="Index into the collection of modes returned by mode solver. "
         "Specifies which mode to inject using this port. "
@@ -957,7 +957,7 @@ class WavePort(AbstractWavePort):
     )
 
     mode_selection: tuple[int, ...] | None = Field(
-        None,
+        default=None,
         title="Mode Selection",
         description="Selects specific mode(s) to use from the mode solver. "
         "Can be a single integer for one mode, or a tuple of integers for multiple modes. "
@@ -1274,7 +1274,7 @@ class TerminalWavePort(AbstractWavePort):
     """
 
     reference_impedance: Literal["Z0"] | Complex | ImpedanceTerminalDataArray = Field(
-        "Z0",
+        default="Z0",
         title="Reference Impedance",
         description="User-specified reference impedance for S-parameter computation. "
         "If ``Z0``, the characteristic impedance "
@@ -1285,7 +1285,7 @@ class TerminalWavePort(AbstractWavePort):
     )
 
     absorber: bool | ABCBoundary | ModeABCBoundary = Field(
-        False,
+        default=False,
         title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
@@ -1300,7 +1300,7 @@ class TerminalWavePort(AbstractWavePort):
     )
 
     differential_pairs: tuple[tuple[str, str], ...] = Field(
-        (),
+        default=(),
         title="Differential Pair",
         description="Differential pairs defined by a pair of single-ended terminals based "
         "on their labels, which can be "

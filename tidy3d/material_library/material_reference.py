@@ -10,24 +10,24 @@ from tidy3d.components.base import Tidy3dBaseModel
 class ReferenceData(Tidy3dBaseModel):
     """Reference data."""
 
-    doi: str | None = Field(None, title="DOI", description="DOI of the reference.")
+    doi: str | None = Field(default=None, title="DOI", description="DOI of the reference.")
     journal: str | None = Field(
-        None,
+        default=None,
         title="Journal publication info",
         description="Publication info in the order of author, title, journal volume, and year.",
     )
     url: str | None = Field(
-        None,
+        default=None,
         title="URL link",
         description="Some reference can be accessed through a url link to its pdf etc.",
     )
     manufacturer: str | None = Field(
-        None,
+        default=None,
         title="Manufacturer",
         description="Name of the manufacturer, e.g., Rogers, Arlon.",
     )
     datasheet_title: str | None = Field(
-        None,
+        default=None,
         title="Datasheet Title",
         description="Title of the datasheet.",
     )

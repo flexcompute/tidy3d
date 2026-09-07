@@ -96,14 +96,14 @@ class RotationAroundAxis(AbstractRotation):
     """Rotation of vectors and tensors around a given vector."""
 
     axis: Axis | Coordinate = Field(
-        0,
+        default=0,
         title="Axis of Rotation",
         description="A vector that specifies the axis of rotation, or a single int: 0, 1, or 2, "
         "indicating x, y, or z.",
     )
 
     angle: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Angle of Rotation",
         description="Angle of rotation in radians.",
         json_schema_extra={"units": RADIAN},
@@ -191,7 +191,7 @@ class ReflectionFromPlane(AbstractReflection):
     """Reflection of vectors and tensors around a given vector."""
 
     normal: Coordinate = Field(
-        (1, 0, 0),
+        default=(1, 0, 0),
         title="Normal of the reflecting plane",
         description="A vector that specifies the normal of the plane of reflection",
     )

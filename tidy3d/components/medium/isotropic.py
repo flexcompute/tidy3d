@@ -214,7 +214,7 @@ class Medium(AbstractMedium):
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = _EPS_SIGMA_TRACED_PATHS
 
     permittivity: TracedFloat = Field(
-        1.0,
+        default=1.0,
         ge=1.0,
         title="Permittivity",
         description="Relative permittivity.",
@@ -222,7 +222,7 @@ class Medium(AbstractMedium):
     )
 
     conductivity: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",

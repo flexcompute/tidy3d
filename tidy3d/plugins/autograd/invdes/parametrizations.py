@@ -40,32 +40,32 @@ class FilterAndProject(Tidy3dBaseModel):
         description="The grid spacing.",
     )
     size_px: int | tuple[int, ...] | None = Field(
-        None,
+        default=None,
         title="Size in Pixels",
         description="The size of the kernel in pixels.",
     )
     beta: NonNegativeFloat = Field(
-        BETA_DEFAULT,
+        default=BETA_DEFAULT,
         title="Beta",
         description="The beta parameter for the tanh projection.",
     )
     eta: NonNegativeFloat = Field(
-        ETA_DEFAULT,
+        default=ETA_DEFAULT,
         title="Eta",
         description="The eta parameter for the tanh projection.",
     )
     filter_type: KernelType = Field(
-        "conic",
+        default="conic",
         title="Filter Type",
         description="The type of filter to create.",
     )
     padding: PaddingType = Field(
-        "reflect",
+        default="reflect",
         title="Padding",
         description="The padding mode to use.",
     )
     symmetry: MirrorSymmetry | None = Field(
-        None,
+        default=None,
         title="Mirror Symmetry",
         description="Optional per-axis mirror symmetry applied by expanding the array across "
         "selected low or high boundaries before filtering and projection.",

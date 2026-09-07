@@ -27,7 +27,7 @@ class FluxMonitorAdjointLayout(Tidy3dBaseModel):
     """Internal autograd layout for flux-monitor helper fields."""
 
     flux_helpers: tuple[FluxMonitorHelperSpec, ...] = Field(
-        (),
+        default=(),
         title="Flux helper monitor mappings.",
     )
 

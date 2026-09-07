@@ -50,7 +50,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
     """Abstract base for phased array calculators."""
 
     taper: RectangularTaper | RadialTaper | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="Antenna Array Taper",
         description="Amplitude weighting of array elements to control main lobe width and suppress side lobes.",
@@ -762,13 +762,13 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     )
 
     phase_shifts: tuple[float, float, float] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Phase Shifts",
         description="Phase-shifts between antennas along x, y, and z directions.",
     )
 
     amp_multipliers: tuple[ArrayLike | None, ArrayLike | None, ArrayLike | None] = Field(
-        (None, None, None),
+        default=(None, None, None),
         title="Amplitude Multipliers",
         description="Amplitude multipliers spatially distributed along x, y, and z directions.",
     )
@@ -1217,21 +1217,21 @@ class RectangularTaper(AbstractTaper):
     """Class for rectangular taper."""
 
     window_x: RectangularWindowType | None = Field(
-        None,
+        default=None,
         title="X Axis Window",
         description="Window type used to taper array antenna along x axis.",
         discriminator=TYPE_TAG_STR,
     )
 
     window_y: RectangularWindowType | None = Field(
-        None,
+        default=None,
         title="Y Axis Window",
         description="Window type used to taper array antenna along y axis.",
         discriminator=TYPE_TAG_STR,
     )
 
     window_z: RectangularWindowType | None = Field(
-        None,
+        default=None,
         title="Z Axis Window",
         description="Window type used to taper array antenna along z axis.",
         discriminator=TYPE_TAG_STR,

@@ -92,7 +92,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     )
 
     interp_method: InterpMethod | None = Field(
-        None,
+        default=None,
         title="Interpolation method",
         description="When the value is ``None`` each component will follow its own "
         "interpolation method. When the value is other than ``None`` the interpolation "
@@ -100,13 +100,13 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     )
 
     allow_gain: bool | None = Field(
-        None,
+        default=None,
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
     subpixel: bool | None = Field(
-        None,
+        default=None,
         title="Subpixel averaging",
         description="This field is ignored. Please set ``subpixel`` in each component",
     )

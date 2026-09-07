@@ -38,12 +38,12 @@ class ResonanceData(Tidy3dBaseModel):
         description="Resonance eigenvalues.",
     )
     complex_amplitudes: ArrayComplex1D | None = Field(
-        None,
+        default=None,
         title="Complex amplitudes",
         description="Complex resonance amplitudes",
     )
     errors: ArrayFloat1D | None = Field(
-        None,
+        default=None,
         title="Errors",
         description="Rough eigenvalue error estimate.",
     )
@@ -94,7 +94,7 @@ class ResonanceFinder(Tidy3dBaseModel):
     )
 
     init_num_freqs: PositiveInt = Field(
-        INIT_NUM_FREQS,
+        default=INIT_NUM_FREQS,
         title="Initial number of frequencies.",
         description="Number of frequencies with which the resonance finder is initialized. "
         "The resonance finder then iteratively optimizes and prunes these frequencies. "
@@ -104,7 +104,7 @@ class ResonanceFinder(Tidy3dBaseModel):
     )
 
     rcond: NonNegativeFloat = Field(
-        RCOND,
+        default=RCOND,
         title="Cutoff for eigenvalues",
         description="Cutoff for eigenvalues, relative to the largest eigenvalue. "
         "The resonance finder solves a generalized eigenvalue problem of the form "

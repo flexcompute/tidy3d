@@ -56,7 +56,7 @@ class LobeMeasurer(MicrowaveBaseModel):
     )
 
     apply_cyclic_extension: bool = Field(
-        True,
+        default=True,
         title="Apply Cyclic Extension",
         description="To enable accurate peak finding near boundaries of the ``angle`` array, "
         "we need to extend the signal using its periodicity. If lobes near the boundaries are not "
@@ -64,7 +64,7 @@ class LobeMeasurer(MicrowaveBaseModel):
     )
 
     width_measure: float = Field(
-        0.5,
+        default=0.5,
         gt=0.0,
         le=1.0,
         title="Beamwidth Measure",
@@ -73,7 +73,7 @@ class LobeMeasurer(MicrowaveBaseModel):
     )
 
     min_lobe_height: float = Field(
-        DEFAULT_MIN_LOBE_REL_HEIGHT,
+        default=DEFAULT_MIN_LOBE_REL_HEIGHT,
         gt=0.0,
         le=1.0,
         title="Minimum Lobe Height",
@@ -82,7 +82,7 @@ class LobeMeasurer(MicrowaveBaseModel):
     )
 
     null_threshold: float = Field(
-        DEFAULT_NULL_THRESHOLD,
+        default=DEFAULT_NULL_THRESHOLD,
         gt=0.0,
         le=1.0,
         title="Null Threshold",

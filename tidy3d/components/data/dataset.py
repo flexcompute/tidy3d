@@ -370,32 +370,32 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
     """Stores a collection of E and H fields with x, y, z components."""
 
     Ex: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
     Ey: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
     Ez: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
     Hx: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
     Hy: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
     Hz: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
@@ -439,32 +439,32 @@ class FieldDataset(ElectromagneticFieldDataset):
     """
 
     Ex: ScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
     Ey: ScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
     Ez: ScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
     Hx: ScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
     Hy: ScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
     Hz: ScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
@@ -570,57 +570,57 @@ class PointCloudFieldDataset(AbstractFieldDataset):
     )
 
     Ex: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Point-cloud x-component of the electric field.",
         json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Ey: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Point-cloud y-component of the electric field.",
         json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Ez: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Point-cloud z-component of the electric field.",
         json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Hx: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Point-cloud x-component of the magnetic field.",
         json_schema_extra={"units": MAGNETIC_FIELD_UNITS},
     )
     Hy: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Point-cloud y-component of the magnetic field.",
         json_schema_extra={"units": MAGNETIC_FIELD_UNITS},
     )
     Hz: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Point-cloud z-component of the magnetic field.",
         json_schema_extra={"units": MAGNETIC_FIELD_UNITS},
     )
     Dx: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Dx",
         description="Point-cloud x-component of ``D / epsilon_0``, computed from Ex and "
         "the local x-direction relative permittivity.",
         json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Dy: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Dy",
         description="Point-cloud y-component of ``D / epsilon_0``, computed from Ey and "
         "the local y-direction relative permittivity.",
         json_schema_extra={"units": ELECTRIC_FIELD_UNITS},
     )
     Dz: IndexedFreqDataArray | None = Field(
-        None,
+        default=None,
         title="Dz",
         description="Point-cloud z-component of ``D / epsilon_0``, computed from Ez and "
         "the local z-direction relative permittivity.",
@@ -778,32 +778,32 @@ class FieldTimeDataset(ElectromagneticFieldDataset):
     """
 
     Ex: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
     Ey: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
     Ez: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
     Hx: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
     Hy: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
     Hz: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
@@ -821,19 +821,19 @@ class AuxFieldDataset(AbstractFieldDataset, ABC):
     """Stores a collection of aux fields with x, y, z components."""
 
     Nfx: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Nfx",
         description="Spatial distribution of the free carrier density for "
         "polarization in the x-direction.",
     )
     Nfy: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Nfy",
         description="Spatial distribution of the free carrier density for "
         "polarization in the y-direction.",
     )
     Nfz: EMScalarFieldType | None = Field(
-        None,
+        default=None,
         title="Nfz",
         description="Spatial distribution of the free carrier density for "
         "polarization in the z-direction.",
@@ -880,19 +880,19 @@ class AuxFieldTimeDataset(AuxFieldDataset):
     """
 
     Nfx: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Nfx",
         description="Spatial distribution of the free carrier density for polarization "
         "in the x-direction.",
     )
     Nfy: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Nfy",
         description="Spatial distribution of the free carrier density for polarization "
         "in the y-direction.",
     )
     Nfz: ScalarFieldTimeDataArray | None = Field(
-        None,
+        default=None,
         title="Nfz",
         description="Spatial distribution of the free carrier density for polarization "
         "in the z-direction.",
@@ -903,13 +903,13 @@ class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
     """Stores a collection of E and H fields with x, y, z components on one side of the surface."""
 
     E: TriangularSurfaceDataset | None = Field(
-        None,
+        default=None,
         title="E",
         description="Spatial distribution of the electric field on the one side of the surface.",
     )
 
     H: TriangularSurfaceDataset | None = Field(
-        None,
+        default=None,
         title="H",
         description="Spatial distribution of the magnetic field on the one side of the surface.",
     )
@@ -1012,32 +1012,32 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
     """
 
     Ex: ScalarModeFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
     Ey: ScalarModeFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
     Ez: ScalarModeFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
     Hx: ScalarModeFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
     Hy: ScalarModeFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
     Hz: ScalarModeFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )
@@ -1048,14 +1048,14 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
     )
 
     n_group_raw: GroupIndexDataArray | None = Field(
-        None,
+        default=None,
         alias="n_group",  # This is for backwards compatibility only when loading old data
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
 
     dispersion_raw: ModeDispersionDataArray | None = Field(
-        None,
+        default=None,
         title="Dispersion",
         description="Dispersion parameter for the mode.",
         json_schema_extra={"units": PICOSECOND_PER_NANOMETER_PER_KILOMETER},

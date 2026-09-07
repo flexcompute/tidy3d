@@ -19,7 +19,7 @@ class VolumeMeshMonitor(HeatChargeMonitor):
     stored as a ``TriangularGridDataset``."""
 
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return the original unstructured grid.",
     )

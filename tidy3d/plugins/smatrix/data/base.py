@@ -39,7 +39,7 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
     )
 
     log: str | None = Field(
-        None,
+        default=None,
         title="Modeler Post-process Log",
         description="A string containing the log information from the modeler post-processing run.",
     )

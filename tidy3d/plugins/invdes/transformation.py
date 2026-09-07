@@ -53,7 +53,7 @@ class FilterProject(InvdesBaseModel):
     )
 
     beta: float = Field(
-        1.0,
+        default=1.0,
         ge=1.0,
         title="Beta",
         description="Steepness of the binarization, "
@@ -62,7 +62,7 @@ class FilterProject(InvdesBaseModel):
     )
 
     eta: float = Field(
-        0.5,
+        default=0.5,
         ge=0.0,
         le=1.0,
         title="Eta",
@@ -70,7 +70,7 @@ class FilterProject(InvdesBaseModel):
     )
 
     strict_binarize: bool = Field(
-        False,
+        default=False,
         title="Binarize strictly",
         description="If ``False``, the binarization is still continuous between min and max. "
         "If ``True``, the values are snapped to the min and max values after projection.",

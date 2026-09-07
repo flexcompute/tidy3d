@@ -88,10 +88,10 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     ... )
     """
 
-    name: str | None = Field(None, title="Name", description="Medium name")
+    name: str | None = Field(default=None, title="Name", description="Medium name")
 
     optical: OpticalMediumType | None = Field(
-        None,
+        default=None,
         title="Optical properties",
         description="Specifies optical properties.",
         discriminator=TYPE_TAG_STR,
@@ -104,14 +104,14 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     # )
 
     heat: HeatMediumType | None = Field(
-        None,
+        default=None,
         title="Heat properties",
         description="Specifies properties for Heat simulations.",
         discriminator=TYPE_TAG_STR,
     )
 
     charge: ChargeMediumType | None = Field(
-        None,
+        default=None,
         title="Charge properties",
         description="Specifies properties for Charge simulations.",
         discriminator=TYPE_TAG_STR,

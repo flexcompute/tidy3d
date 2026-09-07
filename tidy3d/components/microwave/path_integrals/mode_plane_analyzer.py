@@ -45,7 +45,7 @@ class ModePlaneAnalyzer(Box):
     _plane_validator = assert_plane()
 
     field_data_colocated: bool = Field(
-        False,
+        default=False,
         title="Field Data Colocated",
         description="Whether field data is colocated with grid points. When 'True', bounding boxes "
         "are placed with additional margin to avoid interpolated field values near conductor surfaces.",

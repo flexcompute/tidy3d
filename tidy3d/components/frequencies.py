@@ -28,7 +28,7 @@ class FrequencyUtils(Tidy3dBaseModel):
     """Utilities for classifying frequencies/wavelengths and generating samples for standard optical bands."""
 
     use_wavelength: bool = Field(
-        False,
+        default=False,
         title="Use wavelength",
         description="Indicate whether to use wavelengths instead of frequencies for the return "
         "values of functions and parameters.",

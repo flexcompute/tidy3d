@@ -33,7 +33,9 @@ FilterFunction = Callable[..., bool]
 class Method(Tidy3dBaseModel, ABC):
     """Spec for a sweep algorithm, with a method to run it."""
 
-    name: str | None = Field(None, title="Name", description="Optional name for the sweep method.")
+    name: str | None = Field(
+        default=None, title="Name", description="Optional name for the sweep method."
+    )
 
     @abstractmethod
     def _run(
@@ -129,7 +131,7 @@ class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed in one iteration."""
 
     filter_func: FilterFunction | None = Field(
-        None,
+        default=None,
         title="Filter Function",
         description="Optional callback called as ``filter_func(**sample)`` for each sampled "
         "parameter combination. Return ``True`` to keep the sample or ``False`` to skip it.",
@@ -294,7 +296,7 @@ class MethodOptimize(Method, ABC):
 
     # NOTE: We could move this to the Method base class but it's not relevant to MethodGrid
     seed: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Seed for random number generation",
         description="Set the seed used by the optimizers to ensure consistant random number generation.",
     )
@@ -968,7 +970,7 @@ class AbstractMethodRandom(MethodSample, ABC):
     )
 
     filter_attempts_per_sample: PositiveInt = Field(
-        32,
+        default=32,
         title="Filter Attempts Per Sample",
         description="Maximum number of random sampling attempts per requested sample when "
         "``filter_func`` is provided. The overall attempt limit is "

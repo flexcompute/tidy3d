@@ -198,7 +198,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running a task on the server."""
 
     task_id: str | None = Field(
-        None,
+        default=None,
         title="task_id",
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
@@ -455,37 +455,37 @@ class SimulationTask(WebTask):
     """Interface for managing the running of solver tasks on the server."""
 
     folder_id: str | None = Field(
-        None,
+        default=None,
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
         alias="folderId",
     )
-    status: str | None = Field(None, title="status", description="Simulation task status.")
+    status: str | None = Field(default=None, title="status", description="Simulation task status.")
 
     real_flex_unit: float | None = Field(
-        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
+        default=None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
     )
 
     created_at: datetime | None = Field(
-        None,
+        default=None,
         title="created_at",
         description="Time at which this task was created.",
         alias="createdAt",
     )
 
     task_type: str | None = Field(
-        None, title="task_type", description="The type of task.", alias="taskType"
+        default=None, title="task_type", description="The type of task.", alias="taskType"
     )
 
     folder_name: str | None = Field(
-        "default",
+        default="default",
         title="Folder Name",
         description="Name of the folder associated with this task.",
         alias="folderName",
     )
 
     callback_url: str | None = Field(
-        None,
+        default=None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
         "The body content is a json file with fields "
@@ -493,14 +493,14 @@ class SimulationTask(WebTask):
     )
 
     preprocess_cache_compatibility_signature: str | None = Field(
-        None,
+        default=None,
         title="Preprocess Cache Compatibility Signature",
         description="Opaque signature used to compare structural preprocess-cache inputs.",
         alias="preprocessCacheCompatibilitySignature",
     )
 
     stores_preprocess_cache: bool | None = Field(
-        None,
+        default=None,
         title="Stores Preprocess Cache",
         description="Whether this task was configured to produce a structural preprocess cache.",
         alias="storesPreprocessCache",
@@ -995,9 +995,9 @@ class BatchTask(WebTask):
     """Interface for managing a batch task on the server."""
 
     task_type: str | None = Field(
-        None, title="task_type", description="The type of task.", alias="taskType"
+        default=None, title="task_type", description="The type of task.", alias="taskType"
     )
-    status: str | None = Field(None, title="status", description="The status of the task.")
+    status: str | None = Field(default=None, title="status", description="The status of the task.")
 
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> BatchTask:

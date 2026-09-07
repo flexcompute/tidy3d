@@ -39,7 +39,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
 
     lumped_elements: tuple[LumpedElementType, ...] = Field(
-        (),
+        default=(),
         title="Lumped Elements",
         description="Tuple of lumped elements in the simulation. "
         "Note: only :class:`tidy3d.LumpedResistor` is supported currently.",
@@ -107,21 +107,21 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
 
     simulation_type: Literal["autograd_fwd", "autograd_bwd", "tidy3d"] | None = Field(
-        "tidy3d",
+        default="tidy3d",
         title="Simulation Type",
         description="Tag used internally to distinguish types of simulations for "
         "``autograd`` gradient processing.",
     )
 
     post_norm: float | FreqDataArray = Field(
-        1.0,
+        default=1.0,
         title="Post Normalization Values",
         description="Factor to multiply the fields by after running, "
         "given the adjoint source pipeline used. Note: this is used internally only.",
     )
 
     internal_absorbers: tuple[InternalAbsorber, ...] = Field(
-        (),
+        default=(),
         title="Internal Absorbers",
         description="Planes with the first order absorbing boundary conditions placed inside the computational domain. "
         "Note that internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.",

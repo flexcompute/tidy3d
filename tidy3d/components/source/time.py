@@ -162,7 +162,7 @@ class Pulse(SourceTime, ABC):
     )
 
     offset: float = Field(
-        5.0,
+        default=5.0,
         title="Offset",
         description="Time delay of the maximum value of the "
         "pulse in units of 1 / (``2pi * fwidth``).",
@@ -214,7 +214,7 @@ class GaussianPulse(Pulse):
     """
 
     remove_dc_component: bool = Field(
-        True,
+        default=True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
         "If ``True``, the Gaussian pulse is modified at low frequencies to zero out the "
@@ -502,13 +502,13 @@ class CustomSourceTime(Pulse):
     """
 
     offset: float = Field(
-        0.0,
+        default=0.0,
         title="Offset",
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
     source_time_dataset: TimeDataset | None = Field(
-        None,
+        default=None,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
         "This envelope will be modulated by a complex exponential at frequency ``freq0``.",
@@ -652,14 +652,14 @@ class BroadbandPulse(SourceTime):
         json_schema_extra={"units": HERTZ},
     )
     minimum_amplitude: float = Field(
-        0.3,
+        default=0.3,
         title="Minimum Amplitude",
         description="Minimum amplitude of the pulse relative to the peak amplitude in the frequency range.",
         gt=0.05,
         lt=0.5,
     )
     offset: float = Field(
-        0.0,
+        default=0.0,
         title="Offset",
         description="An automatic time delay of the peak value of the pulse has been applied under the hood "
         "to ensure smooth ramping up of the pulse at time = 0. This offfset is added on top of the automatic time delay "

@@ -56,7 +56,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     """Specification for corner detection on a 2D plane."""
 
     medium: Literal["metal", "dielectric", "all"] = Field(
-        "metal",
+        default="metal",
         title="Material Type For Corner Identification",
         description="Find corners of structures made of :class:`.Medium`, "
         "which can take value ``metal`` for PEC and lossy metal, ``dielectric`` "
@@ -64,7 +64,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     angle_threshold: float = Field(
-        CORNER_ANGLE_THRESOLD,
+        default=CORNER_ANGLE_THRESOLD,
         title="Angle Threshold In Corner Identification",
         description="A vertex is qualified as a corner if the angle spanned by its two edges "
         "is larger than the supplementary angle of "
@@ -74,14 +74,14 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     distance_threshold: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Distance Threshold In Corner Identification",
         description="If not ``None`` and the distance of the vertex to its neighboring vertices "
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
     )
 
     axis_aligned_angle_threshold: float = Field(
-        AXIS_ALIGNED_ANGLE_THRESHOLD,
+        default=AXIS_ALIGNED_ANGLE_THRESHOLD,
         title="Axis-Alignment Angle Threshold For Edge Refinement",
         description="An in-plane edge is treated as axis-aligned "
         "when its direction is within this angle of the nearest in-plane axis. "
@@ -91,7 +91,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     corner_rounding_collapse_extent: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Corner Rounding Collapse Extent",
         description="If not ``None``, collapse a small rounded or chamfered corner chain bounded "
         "by straight support edges, convex or concave, back to the support-line intersection "
@@ -101,21 +101,21 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     concave_resolution: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Concave Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on concave featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
     convex_resolution: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Convex Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on convex featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
     mixed_resolution: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Mixed Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on mixed featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",

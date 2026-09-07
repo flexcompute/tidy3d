@@ -73,13 +73,13 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     )
 
     verbose: bool = Field(
-        False,
+        default=False,
         title="Task Verbosity",
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
 
     metric: ExpressionType | None = Field(
-        None,
+        default=None,
         title="Objective Metric",
         description="Serializable expression defining the objective function.",
     )
@@ -164,7 +164,7 @@ class InverseDesign(AbstractInverseDesign):
     )
 
     output_monitor_names: tuple[str, ...] | None = Field(
-        None,
+        default=None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
         "If this field is left ``None``, the plugin will try to add all compatible monitors "
@@ -311,7 +311,7 @@ class InverseDesignMulti(AbstractInverseDesign):
     )
 
     output_monitor_names: tuple[tuple[str, ...] | None, ...] | None = Field(
-        None,
+        default=None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
         "If this field is left ``None``, the plugin will try to add all compatible monitors "

@@ -98,7 +98,7 @@ class AnisotropicMedium(AbstractMedium):
     )
 
     allow_gain: bool | None = Field(
-        None,
+        default=None,
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
@@ -399,14 +399,14 @@ class FullyAnisotropicMedium(AbstractMedium):
         return True
 
     permittivity: TensorReal = Field(
-        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         title="Permittivity",
         description="Relative permittivity tensor.",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: TensorReal = Field(
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        default=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         title="Conductivity",
         description="Electric conductivity tensor. Defined such that the imaginary part "
         "of the complex permittivity at angular frequency omega is given by conductivity/omega.",

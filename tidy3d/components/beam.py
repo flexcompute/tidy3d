@@ -64,7 +64,7 @@ class BeamProfile(Box):
     """Base class for handling analytic beams."""
 
     resolution: float = Field(
-        DEFAULT_RESOLUTION,
+        default=DEFAULT_RESOLUTION,
         title="Sampling resolution",
         description="Sampling resolution in the tangential directions of the beam (defines a "
         "number of equally spaced points).",
@@ -85,14 +85,14 @@ class BeamProfile(Box):
     )
 
     angle_theta: float = Field(
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the normal axis.",
         json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "normal axis.",
@@ -100,7 +100,7 @@ class BeamProfile(Box):
     )
 
     pol_angle: float = Field(
-        0.0,
+        default=0.0,
         title="Polarization Angle",
         description="Specifies the angle between the electric field polarization of the "
         "beam and the plane defined by the normal axis and the propagation axis (rad). "
@@ -114,7 +114,7 @@ class BeamProfile(Box):
     )
 
     direction: Direction = Field(
-        "+",
+        default="+",
         title="Direction",
         description="Specifies propagation in the positive or negative direction of the normal "
         "axis.",
@@ -597,14 +597,14 @@ class PlaneWaveBeamProfile(BeamProfile):
     """
 
     angular_spec: FixedInPlaneKSpec | FixedAngleSpec = Field(
-        FixedAngleSpec(),
+        default=FixedAngleSpec(),
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
         discriminator=TYPE_TAG_STR,
     )
 
     as_fixed_angle_source: bool = Field(
-        False,
+        default=False,
         title="Fixed Angle Flag",
         description="Fixed angle flag. Only used internally when computing source beams for "
         "injection in an FDTD simulation with fixed angle boudnaries. Use ``angular_spec`` to "
@@ -612,7 +612,7 @@ class PlaneWaveBeamProfile(BeamProfile):
     )
 
     angle_theta_frequency: float | None = Field(
-        None,
+        default=None,
         title="Frequency at Which Angle Theta is Defined",
         description="Frequency for which ``angle_theta`` is set. This only has an effect for "
         "fixed in-plane wave-vector beams. If not supplied, the average of the beam ``freqs`` is "
@@ -1149,14 +1149,14 @@ class GaussianBeamProfile(AbstractGaussianBeamProfile):
     """
 
     waist_radius: PositiveFloat = Field(
-        1.0,
+        default=1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
         json_schema_extra={"units": MICROMETER},
     )
 
     waist_distance: float = Field(
-        0.0,
+        default=0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
         "A positive value places the waist behind the beam plane (toward the negative normal axis). "
@@ -1206,14 +1206,14 @@ class AstigmaticGaussianBeamProfile(AbstractGaussianBeamProfile):
     """
 
     waist_sizes: tuple[PositiveFloat, PositiveFloat] = Field(
-        (1.0, 1.0),
+        default=(1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         json_schema_extra={"units": MICROMETER},
     )
 
     waist_distances: tuple[float, float] = Field(
-        (0.0, 0.0),
+        default=(0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
         "for the waist sizes in the local x and y directions. "

@@ -143,21 +143,21 @@ class ModeSimulation(AbstractYeeGridSimulation):
     )
 
     direction: Direction = Field(
-        "+",
+        default="+",
         title="Propagation direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
     colocate: bool = Field(
-        True,
+        default=True,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
     )
 
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="Only takes effect when ``colocate=False``. If ``True``, dot products "
         "and overlap integrals still use fields interpolated to grid cell boundaries "
@@ -169,13 +169,13 @@ class ModeSimulation(AbstractYeeGridSimulation):
     _colocated_integration_validator = validate_colocated_integration()
 
     conjugated_dot_product: bool = Field(
-        True,
+        default=True,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
     fields: tuple[EMField, ...] = Field(
-        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        default=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
         "methods like ``flux``, ``dot`` require all tangential field components, while others "
@@ -193,21 +193,21 @@ class ModeSimulation(AbstractYeeGridSimulation):
     )
 
     monitors: tuple[discriminated_union(ModeSimulationMonitorType), ...] = Field(
-        (),
+        default=(),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
     sources: tuple[()] = Field(
-        (),
+        default=(),
         title="Sources",
         description="Sources in the simulation. Note: sources are not supported in mode "
         "simulations.",
     )
 
     internal_absorbers: tuple[()] = Field(
-        (),
+        default=(),
         title="Internal Absorbers",
         description="Planes with the first order absorbing boundary conditions placed inside the computational domain. "
         "Note: absorbers are not supported in mode simulations.",
@@ -220,7 +220,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     )
 
     plane: MODE_PLANE_TYPE | None = Field(
-        None,
+        default=None,
         title="Plane",
         description="Cross-sectional plane in which the mode will be computed. "
         "If provided, the computational domain will be the intersection between "

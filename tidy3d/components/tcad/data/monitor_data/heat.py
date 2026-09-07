@@ -46,7 +46,7 @@ class TemperatureData(HeatChargeMonitorData):
     )
 
     temperature: FieldDataset | None = Field(
-        None,
+        default=None,
         title="Temperature",
         description="Spatial temperature field.",
         json_schema_extra={"units": KELVIN},

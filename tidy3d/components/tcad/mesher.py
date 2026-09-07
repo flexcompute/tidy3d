@@ -21,7 +21,7 @@ class VolumeMesher(Tidy3dBaseModel):
     )
 
     monitors: tuple[VolumeMeshMonitor, ...] = Field(
-        (),
+        default=(),
         title="Monitors",
         description="List of monitors to be used for the mesher.",
     )

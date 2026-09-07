@@ -182,37 +182,37 @@ class EMECoefficientDataset(Dataset):
     """
 
     A: EMECoefficientDataArray | None = Field(
-        None,
+        default=None,
         title="A coefficient",
         description="Coefficient for forward mode in this cell.",
     )
 
     B: EMECoefficientDataArray | None = Field(
-        None,
+        default=None,
         title="B coefficient",
         description="Coefficient for backward mode in this cell.",
     )
 
     n_complex: EMEModeIndexDataArray | None = Field(
-        None,
+        default=None,
         title="Propagation Index",
         description="Complex-valued effective propagation indices associated with the EME modes.",
     )
 
     flux: EMEFluxDataArray | None = Field(
-        None,
+        default=None,
         title="Flux",
         description="Power flux of the EME modes.",
     )
 
     interface_smatrices: EMEInterfaceSMatrixDataset | None = Field(
-        None,
+        default=None,
         title="Interface S Matrices",
         description="S matrices associated with the interfaces between EME cells.",
     )
 
     overlaps: EMEOverlapDataset | None = Field(
-        None, title="Overlaps", description="Overlaps between EME modes."
+        default=None, title="Overlaps", description="Overlaps between EME modes."
     )
 
     @cached_property
@@ -389,7 +389,7 @@ class EMEDiagnosticsData(Dataset):
     """Diagnostic quantities associated with an EME simulation."""
 
     interface_residuals: EMEInterfaceDiagnostics | None = Field(
-        None,
+        default=None,
         title="Interface Residuals",
         description="Direct physical residual diagnostics for local EME interface solves.",
     )
@@ -424,32 +424,32 @@ class EMEFieldDataset(ElectromagneticFieldDataset):
     """
 
     Ex: EMEScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
     Ey: EMEScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
     Ez: EMEScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
     Hx: EMEScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
     Hy: EMEScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
     Hz: EMEScalarFieldDataArray | None = Field(
-        None,
+        default=None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )

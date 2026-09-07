@@ -27,19 +27,19 @@ class MaterialLibrary(Queryable):
         description="Material Library Name",
     )
     medium: MediumType | None = Field(
-        None,
+        default=None,
         title="medium",
         description="medium",
         alias="calcResult",
     )
     medium_type: str | None = Field(
-        None,
+        default=None,
         title="medium type",
         description="medium type",
         alias="mediumType",
     )
     json_input: dict | None = Field(
-        None,
+        default=None,
         title="json input",
         description="original input",
         alias="jsonInput",

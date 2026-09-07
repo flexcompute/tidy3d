@@ -102,22 +102,22 @@ class ModeSortSpec(Tidy3dBaseModel):
 
     # Filtering stage
     filter_key: MODE_DATA_KEYS | None = Field(
-        None,
+        default=None,
         title="Filtering key",
         description="Quantity used to filter modes into two groups before sorting.",
     )
     filter_reference: float = Field(
-        0.0,
+        default=0.0,
         title="Filtering reference",
         description="Reference value used in the filtering stage.",
     )
     filter_order: Literal["over", "under"] = Field(
-        "over",
+        default="over",
         title="Filtering order",
         description="Select whether the first group contains values over or under the reference.",
     )
     bounding_box: Box | None = Field(
-        None,
+        default=None,
         title="Bounding box",
         description=(
             "Regular 3D tidy3d :class:`~tidy3d.Box` used by metrics such as ``'fill_fraction_box'``. "
@@ -127,7 +127,7 @@ class ModeSortSpec(Tidy3dBaseModel):
         ),
     )
     keep_modes: Literal["all"] | Literal["filtered"] | PositiveInt = Field(
-        "all",
+        default="all",
         title="Keep Modes",
         description=(
             "If ``filtered``, modes that do not satisfy the filter criterion are removed entirely "
@@ -139,19 +139,19 @@ class ModeSortSpec(Tidy3dBaseModel):
 
     # Sorting stage
     sort_key: MODE_DATA_KEYS = Field(
-        "n_eff",
+        default="n_eff",
         title="Sorting key",
         description="Quantity used to sort modes within each filtered group.",
     )
     sort_reference: float | None = Field(
-        None,
+        default=None,
         title="Sorting reference",
         description=(
             "If provided, sorting is based on the absolute difference to this reference value."
         ),
     )
     sort_order: Literal["ascending", "descending"] | None = Field(
-        None,
+        default=None,
         title="Sorting direction",
         description=_build_sort_order_description(),
     )
@@ -175,7 +175,7 @@ class ModeSortSpec(Tidy3dBaseModel):
 
     # Frequency tracking - applied after sorting and filtering
     track_freq: TrackFreq | None = Field(
-        "central",
+        default="central",
         title="Tracking base frequency",
         description="If provided, enables cross-frequency mode tracking. Can be 'lowest', "
         "'central', or 'highest', which refers to the frequency **index** in the list of "
@@ -434,7 +434,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
     )
 
     method: Literal["linear", "cubic", "poly"] = Field(
-        "linear",
+        default="linear",
         title="Interpolation Method",
         description="Method for interpolating mode data between computed frequencies. "
         "'linear' uses linear interpolation (faster, requires 2+ points). "
@@ -445,7 +445,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
     )
 
     reduce_data: bool = Field(
-        False,
+        default=False,
         title="Reduce Data",
         description="Applies only to :class:`ModeSolverData`. If ``True``, fields and quantities "
         "are only recorded at interpolation source frequency points. "
@@ -617,25 +617,25 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     """
 
     num_modes: PositiveInt = Field(
-        1,
+        default=1,
         title="Number of modes",
         description="Number of modes returned by mode solver.",
     )
 
     target_neff: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Target effective index",
         description="Guess for effective index of the mode.",
     )
 
     num_pml: tuple[NonNegativeInt, NonNegativeInt] = Field(
-        (0, 0),
+        default=(0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",
     )
 
     filter_pol: Literal["te", "tm"] | None = Field(
-        None,
+        default=None,
         title="Polarization filtering",
         description="The solver always computes the ``num_modes`` modes closest to the given "
         "``target_neff``. If ``filter_pol==None``, they are simply sorted in order of decreasing "
@@ -651,14 +651,14 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     angle_theta: float = Field(
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
         json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis.",
@@ -666,7 +666,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     precision: Literal["auto", "single", "double"] = Field(
-        "double",
+        default="double",
         title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
@@ -677,7 +677,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     bend_radius: FiniteFloat | None = Field(
-        None,
+        default=None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
         "which case the mode plane center has a smaller value than the curvature center along the "
@@ -686,7 +686,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     bend_axis: Axis2D | None = Field(
-        None,
+        default=None,
         title="Bend axis",
         description="Index into the two tangential axes defining the normal to the "
         "plane in which the bend lies. This must be provided if ``bend_radius`` is not ``None``. "
@@ -695,7 +695,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     angle_rotation: bool = Field(
-        False,
+        default=False,
         title="Use fields rotation when ``angle_theta`` is not zero",
         description="Defines how modes are computed when ``angle_theta`` is not zero. "
         "If ``False``, a coordinate transformation is applied through the permittivity and permeability tensors."
@@ -708,13 +708,13 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     track_freq: TrackFreq | None = Field(
-        None,
+        default=None,
         title="Mode Tracking Frequency (deprecated)",
         description="Deprecated. Use 'sort_spec.track_freq' instead.",
     )
 
     group_index_step: PositiveFloat | bool = Field(
-        False,
+        default=False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "
         "set to a positive value, it sets the fractional frequency step used in the numerical "
@@ -731,7 +731,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     interp_spec: ModeInterpSpec | None = Field(
-        None,
+        default=None,
         title="Mode frequency interpolation specification",
         description="Specification for computing modes at a reduced set of frequencies and "
         "interpolating to obtain results at all requested frequencies. This can significantly "

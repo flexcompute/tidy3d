@@ -117,7 +117,7 @@ class Adam(Tidy3dBaseModel):
     )
 
     beta1: float = Field(
-        0.9,
+        default=0.9,
         ge=0.0,
         le=1.0,
         title="Beta 1",
@@ -125,7 +125,7 @@ class Adam(Tidy3dBaseModel):
     )
 
     beta2: float = Field(
-        0.999,
+        default=0.999,
         ge=0.0,
         le=1.0,
         title="Beta 2",
@@ -133,7 +133,7 @@ class Adam(Tidy3dBaseModel):
     )
 
     eps: PositiveFloat = Field(
-        1e-8,
+        default=1e-8,
         title="Epsilon",
         description="Small constant for numerical stability.",
     )

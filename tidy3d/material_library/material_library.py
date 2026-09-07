@@ -127,13 +127,13 @@ class AbstractVariantItem(Tidy3dBaseModel):
     """Reference, and data_source for a variant of a material."""
 
     reference: list[ReferenceData] | None = Field(
-        None,
+        default=None,
         title="Reference information",
         description="A list of references related to this variant model.",
     )
 
     data_url: str | None = Field(
-        None,
+        default=None,
         title="Dispersion data URL",
         description="The URL to access the dispersion data upon which the material "
         "model is fitted.",

@@ -305,7 +305,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
     poles: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         Field(
-            (),
+            default=(),
             title="Poles",
             description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
             json_schema_extra={"units": (RADPERSEC, RADPERSEC)},

@@ -485,7 +485,7 @@ class PolySlab(base.Planar):
     )
 
     dilation: float = Field(
-        0.0,
+        default=0.0,
         title="Dilation",
         description="Dilation of the supplied polygon by shifting each edge along its "
         "normal outwards direction by a distance; a negative value corresponds to erosion.",
@@ -502,7 +502,7 @@ class PolySlab(base.Planar):
     )
 
     bulges: ArrayFloat1D | None = Field(
-        None,
+        default=None,
         title="Bulges In Segments",
         description="List of values describing the bulge of each edge, following the typical convention: "
         "``bulge = tan(θ/4)`` where θ is the included angle of the arc. "

@@ -27,14 +27,14 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
     """Abstract unstructured grid."""
 
     relative_min_dl: NonNegativeFloat = Field(
-        1e-3,
+        default=1e-3,
         title="Relative Mesh Size Limit",
         description="The minimal allowed mesh size relative to the largest dimension of the simulation domain."
         "Use ``relative_min_dl=0`` to remove this constraint.",
     )
 
     geometry_tolerance: PositiveFloat = Field(
-        1e-6,
+        default=1e-6,
         title="Geometry Tolerance",
         description="Absolute distance below which coincident geometric entities are fused when "
         "building the mesh. Increase this if abutting structures with finely tessellated (e.g. "
@@ -48,7 +48,7 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
     )
 
     remove_fragments: bool = Field(
-        False,
+        default=False,
         title="Remove Fragments",
         description="Whether to remove fragments before meshing. This is useful when overlapping structures generate internal boundaries that can lead to very small cell volumes.",
     )
@@ -76,7 +76,7 @@ class UniformUnstructuredGrid(UnstructuredGrid):
     )
 
     min_edges_per_circumference: NonNegativeFloat = Field(
-        15,
+        default=15,
         title="Minimum Edges per Circumference",
         description="Enforced minimum number of mesh segments per circumference of an object. "
         "Applies to :class:`Cylinder` and :class:`Sphere`, for which the circumference "
@@ -85,7 +85,7 @@ class UniformUnstructuredGrid(UnstructuredGrid):
     )
 
     min_edges_per_side: NonNegativeFloat = Field(
-        2,
+        default=2,
         title="Minimum Edges per Side",
         description="Enforced minimum number of mesh segments per any side of an object. "
         "Set to ``0`` to skip this sizing contribution entirely (side-length-based local "
@@ -93,7 +93,7 @@ class UniformUnstructuredGrid(UnstructuredGrid):
     )
 
     non_refined_structures: tuple[str, ...] = Field(
-        (),
+        default=(),
         title="Structures Without Refinement",
         description="List of structures for which ``min_edges_per_circumference`` and "
         "``min_edges_per_side`` will not be enforced. The original ``dl`` is used instead.",
@@ -256,21 +256,21 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
     )
 
     sampling: PositiveFloat = Field(
-        100,
+        default=100,
         title="Surface Sampling",
         description="An internal advanced parameter that defines number of sampling points per "
         "surface when computing distance values.",
     )
 
     uniform_grid_mediums: tuple[str, ...] = Field(
-        (),
+        default=(),
         title="Mediums With Uniform Refinement",
         description="List of mediums for which ``dl_interface`` will be enforced everywhere "
         "in the volume.",
     )
 
     non_refined_structures: tuple[str, ...] = Field(
-        (),
+        default=(),
         title="Structures Without Refinement",
         description="List of structures whose owned interfaces do not enforce "
         "``dl_interface``. For interfaces shared by multiple structures, ownership follows "
@@ -281,7 +281,7 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
 
     mesh_refinements: tuple[discriminated_union(GridRefinementRegion | GridRefinementLine), ...] = (
         Field(
-            (),
+            default=(),
             title="Mesh refinement structures",
             description="List of regions/lines for which the mesh refinement will be applied",
         )

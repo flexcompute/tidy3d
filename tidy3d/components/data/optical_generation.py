@@ -63,7 +63,7 @@ class OpticalGenerationData(Tidy3dBaseModel):
     """
 
     component: Literal["x", "y", "z"] | None = Field(
-        None,
+        default=None,
         title="Field component",
         description="``None`` for the whole-domain colocated aggregate; ``'x'``/``'y'``/``'z'`` "
         "when this instance holds a single electric-field component's contribution on its "

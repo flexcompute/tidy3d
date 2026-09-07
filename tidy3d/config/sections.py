@@ -73,20 +73,20 @@ class LoggingConfig(ConfigSection):
     """Logging configuration."""
 
     level: LogLevel = Field(
-        DEFAULT_LEVEL,
+        default=DEFAULT_LEVEL,
         title="Logging level",
         description="Lowest logging level that will be emitted.",
         json_schema_extra={"persist": True},
     )
 
     suppression: bool = Field(
-        True,
+        default=True,
         title="Log suppression",
         description="Suppress repeated log messages when True.",
     )
 
     warn_once: bool = Field(
-        False,
+        default=False,
         title="Warn once",
         description="When True, each unique warning message is only shown once per process.",
     )
@@ -106,7 +106,7 @@ class SimulationConfig(ConfigSection):
     """Simulation-related configuration."""
 
     use_local_subpixel: bool | None = Field(
-        None,
+        default=None,
         title="Use local subpixel",
         description=(
             "Controls whether local subpixel averaging is used in "
@@ -125,7 +125,7 @@ class SimulationConfig(ConfigSection):
     )
 
     skip_size_checks: bool = Field(
-        False,
+        default=False,
         title="Skip size checks",
         description=(
             "Skip client-side simulation and monitor size checks before upload. "
@@ -141,7 +141,7 @@ class MicrowaveConfig(ConfigSection):
     """Microwave solver configuration."""
 
     suppress_rf_license_warning: bool = Field(
-        False,
+        default=False,
         title="Suppress RF license warning",
         description="If true, do not emit microwave license availability warnings.",
     )
@@ -152,7 +152,7 @@ class AdjointConfig(ConfigSection):
     """Adjoint (autograd) configuration section."""
 
     min_wvl_fraction: float = Field(
-        5e-2,
+        default=5e-2,
         title="Minimum wavelength fraction",
         description=(
             "Minimum fraction of the smallest free-space wavelength used when discretizing "
@@ -162,7 +162,7 @@ class AdjointConfig(ConfigSection):
     )
 
     points_per_wavelength: PositiveInt = Field(
-        10,
+        default=10,
         title="Points per wavelength",
         description=(
             "Default number of material sample points per wavelength when discretizing "
@@ -171,7 +171,7 @@ class AdjointConfig(ConfigSection):
     )
 
     default_wavelength_fraction: float = Field(
-        0.1,
+        default=0.1,
         title="Default wavelength fraction",
         description=(
             "Fallback fraction of the minimum wavelength used when autograd needs to "
@@ -181,7 +181,7 @@ class AdjointConfig(ConfigSection):
     )
 
     minimum_spacing_fraction: float = Field(
-        1e-3,
+        default=1e-3,
         title="Minimum spacing fraction",
         description=(
             "Minimum fraction of the shortest free-space adjoint wavelength used as the lower "
@@ -191,7 +191,7 @@ class AdjointConfig(ConfigSection):
     )
 
     boundary_snapping_fraction: float = Field(
-        1.0,
+        default=1.0,
         title="Boundary snapping fraction",
         description=(
             "Fraction of minimum local grid size to use for snapping coordinates outside of "
@@ -201,7 +201,7 @@ class AdjointConfig(ConfigSection):
     )
 
     pec_detection_threshold: NonPositiveFloat = Field(
-        -100.0,
+        default=-100.0,
         title="PEC detection threshold",
         description=(
             "Value the real permittivity should be below to consider it a PEC material in "
@@ -210,7 +210,7 @@ class AdjointConfig(ConfigSection):
     )
 
     local_gradient: bool = Field(
-        False,
+        default=False,
         title="Enable local gradients",
         description=(
             "When True, autograd runs download intermediate data and compute gradients locally. "
@@ -221,7 +221,7 @@ class AdjointConfig(ConfigSection):
     )
 
     local_adjoint_dir: Path = Field(
-        Path("adjoint_data"),
+        default=Path("adjoint_data"),
         title="Local gradient directory",
         description=(
             "Relative directory name used to store intermediate results when local gradients are enabled."
@@ -230,7 +230,7 @@ class AdjointConfig(ConfigSection):
     )
 
     parallel_run: bool = Field(
-        False,
+        default=False,
         title="Enable parallel adjoint sources",
         description=(
             "When True, run canonical adjoint simulations in parallel with the forward solve for "
@@ -240,7 +240,7 @@ class AdjointConfig(ConfigSection):
     )
 
     parallel_adjoint_mode_direction_policy: ParallelAdjointModeDirectionPolicy = Field(
-        "assume_outgoing",
+        default="assume_outgoing",
         title="Parallel adjoint mode direction policy",
         description=(
             "Policy for selecting propagation directions when launching parallel adjoint mode "
@@ -252,7 +252,7 @@ class AdjointConfig(ConfigSection):
     )
 
     field_source_reduction_mode: Literal["pca"] | None = Field(
-        None,
+        default=None,
         title="Field-source adjoint reduction mode",
         description=(
             "Strategy for compressing compatible FieldData-derived adjoint current sources. "
@@ -263,7 +263,7 @@ class AdjointConfig(ConfigSection):
     )
 
     field_source_pca_min_energy_coverage: float = Field(
-        0.999,
+        default=0.999,
         title="Field-source PCA minimum energy coverage",
         description=(
             "Minimum fraction of weighted current-source profile energy retained per "
@@ -285,7 +285,7 @@ class AdjointConfig(ConfigSection):
     )
 
     field_source_pca_max_matrix_entries: PositiveInt = Field(
-        20_000_000,
+        default=20_000_000,
         title="Field-source PCA max matrix entries",
         description=(
             "Maximum number of dense complex entries allowed in an individual field-source "
@@ -300,13 +300,13 @@ class AdjointConfig(ConfigSection):
     )
 
     gradient_precision: Literal["single", "double"] = Field(
-        "single",
+        default="single",
         title="Gradient precision",
         description="Floating-point precision used for autograd gradient calculations.",
     )
 
     monitor_interval_poly: tuple[int, int, int] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Polynomial monitor spacing",
         description=(
             "Default spatial interval (in cells) between samples for polynomial autograd monitors."
@@ -314,7 +314,7 @@ class AdjointConfig(ConfigSection):
     )
 
     monitor_interval_custom: tuple[int, int, int] = Field(
-        (1, 1, 1),
+        default=(1, 1, 1),
         title="Custom monitor spacing",
         description=(
             "Default spatial interval (in cells) between samples for custom autograd monitors."
@@ -322,7 +322,7 @@ class AdjointConfig(ConfigSection):
     )
 
     quadrature_sample_fraction: float = Field(
-        0.4,
+        default=0.4,
         title="Quadrature sample fraction",
         description=(
             "Fraction of uniform samples reused when building Gauss quadrature nodes for "
@@ -333,7 +333,7 @@ class AdjointConfig(ConfigSection):
     )
 
     gauss_quadrature_order: PositiveInt = Field(
-        7,
+        default=7,
         title="Gauss quadrature order",
         description=(
             "Maximum Gauss-Legendre order used when constructing composite quadrature rules "
@@ -342,7 +342,7 @@ class AdjointConfig(ConfigSection):
     )
 
     edge_clip_tolerance: float = Field(
-        1e-9,
+        default=1e-9,
         title="Edge clipping tolerance",
         description=(
             "Padding tolerance applied when clipping polygon edges against simulation bounds "
@@ -352,7 +352,7 @@ class AdjointConfig(ConfigSection):
     )
 
     solver_freq_chunk_size: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Adjoint frequency chunk size",
         description=(
             "Maximum number of frequencies to process per chunk during adjoint gradient "
@@ -361,7 +361,7 @@ class AdjointConfig(ConfigSection):
     )
 
     memory_allotment_fraction: float = Field(
-        0.75,
+        default=0.75,
         title="Adjoint memory allotment fraction",
         description=(
             "Fraction of reported available RAM reserved for local adjoint postprocessing "
@@ -373,13 +373,13 @@ class AdjointConfig(ConfigSection):
     )
 
     max_traced_structures: PositiveInt = Field(
-        500,
+        default=500,
         title="Max traced structures",
         description="Maximum number of structures that can have traced fields in an adjoint run.",
     )
 
     max_adjoint_per_fwd: PositiveInt = Field(
-        10,
+        default=10,
         title="Max adjoint solves per forward",
         description="Maximum number of adjoint simulations dispatched per forward solve.",
     )
@@ -439,32 +439,32 @@ class RunConfig(ConfigSection):
     """Default run configuration for web submissions."""
 
     solver_version: str | None = Field(
-        None,
+        default=None,
         title="Solver version",
         description="Internal usage only. Default solver version to use for web runs.",
     )
 
     worker_group: str | None = Field(
-        None,
+        default=None,
         title="Worker group",
         description="Internal usage only. Default worker group to use for web runs.",
     )
 
     simulation_type: str = Field(
-        "tidy3d",
+        default="tidy3d",
         title="Simulation type",
         description="Internal usage only. Default simulation type label for uploaded tasks.",
     )
 
     additional_payload: dict[str, Any] | None = Field(
-        None,
+        default=None,
         title="Additional payload",
         description="Internal usage only. Additional submit payload serialized to JSON and sent "
         "under 'additionalPayload'.",
     )
 
     pay_type: str = Field(
-        "AUTO",
+        default="AUTO",
         title="Payment type",
         description="Internal usage only. Default payment type for web runs.",
     )
@@ -483,19 +483,19 @@ class VgpuConfig(ConfigSection):
     """Default vGPU configuration for web runs."""
 
     priority: int | None = Field(
-        None,
+        default=None,
         title="Priority",
         description="Default queue priority for vGPU runs (1 = lowest, 10 = highest).",
     )
 
     vgpu_allocation: int | None = Field(
-        None,
+        default=None,
         title="vGPU allocation",
         description="Default virtual GPU allocation for vGPU runs.",
     )
 
     ignore_memory_limit: bool | None = Field(
-        None,
+        default=None,
         title="Ignore memory limit",
         description="Default flag to allow vGPU runs above the estimated memory limit.",
     )
@@ -525,45 +525,45 @@ class WebConfig(ConfigSection):
     """Web/HTTP configuration."""
 
     apikey: SecretStr | None = Field(
-        None,
+        default=None,
         title="API key",
         description="Tidy3D API key.",
         json_schema_extra={"persist": True},
     )
 
     ssl_verify: bool = Field(
-        True,
+        default=True,
         title="SSL verification",
         description="Verify SSL certificates for API requests.",
     )
 
     enable_caching: bool = Field(
-        True,
+        default=True,
         title="Enable server-side caching",
         description="Allow the web service to return cached simulation results.",
         json_schema_extra={"persist": True},
     )
 
     api_endpoint: str = Field(
-        "https://tidy3d-api.simulation.cloud",
+        default="https://tidy3d-api.simulation.cloud",
         title="API endpoint",
         description="Tidy3D API base URL.",
     )
 
     website_endpoint: str = Field(
-        "https://tidy3d.simulation.cloud",
+        default="https://tidy3d.simulation.cloud",
         title="Website endpoint",
         description="Tidy3D website URL.",
     )
 
     s3_region: str = Field(
-        "us-gov-west-1",
+        default="us-gov-west-1",
         title="S3 region",
         description="AWS S3 region used by the platform.",
     )
 
     timeout: int = Field(
-        120,
+        default=120,
         title="HTTP timeout",
         description="HTTP request timeout in seconds.",
         ge=0,
@@ -571,7 +571,7 @@ class WebConfig(ConfigSection):
     )
 
     default_num_workers: PositiveInt = Field(
-        10,
+        default=10,
         title="Default batch workers",
         description=(
             "Default worker count for configurable ``Batch`` thread pools when ``num_workers`` "
@@ -580,7 +580,7 @@ class WebConfig(ConfigSection):
     )
 
     ssl_version: str | None = Field(
-        None,
+        default=None,
         title="SSL/TLS version",
         description=(
             "Optional TLS version override to enforce for requests. Accepts values such as "
@@ -690,7 +690,7 @@ class LocalCacheConfig(ConfigSection):
     """Settings controlling the optional local simulation cache."""
 
     enabled: bool = Field(
-        True,
+        default=True,
         title="Enable cache",
         description="Enable or disable the local simulation cache.",
         json_schema_extra={"persist": True},
@@ -704,14 +704,14 @@ class LocalCacheConfig(ConfigSection):
     )
 
     max_size_gb: NonNegativeFloat = Field(
-        10.0,
+        default=10.0,
         title="Maximum cache size (GB)",
         description="Maximum cache size in gigabytes. Set to 0 for no size limit.",
         json_schema_extra={"persist": True},
     )
 
     max_entries: NonNegativeInt = Field(
-        0,
+        default=0,
         title="Maximum cache entries",
         description="Maximum number of cache entries. Set to 0 for no limit.",
         json_schema_extra={"persist": True},
@@ -735,13 +735,13 @@ class BatchDataCacheConfig(ConfigSection):
     """Settings controlling in-memory caching for batch data."""
 
     enabled: bool = Field(
-        True,
+        default=True,
         title="Enable batch data cache",
         description="Cache batch results in memory when files are below the size threshold.",
     )
 
     max_total_size_gb: NonNegativeFloat = Field(
-        1.0,
+        default=1.0,
         title="Maximum total batch data size (GB)",
         description=(
             "Cache batch task data only when the combined size of all task data files is at or "

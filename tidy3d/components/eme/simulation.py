@@ -344,7 +344,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     monitors: tuple[discriminated_union(EMEMonitorType), ...] = Field(
-        (),
+        default=(),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Supported types: 'EMEModeSolverMonitor', 'EMEFieldMonitor', "
@@ -365,7 +365,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     sources: tuple[None, ...] = Field(
-        (),
+        default=(),
         title="Sources",
         description="Sources in the simulation. NOTE: sources are not currently supported "
         "for EME simulations. Instead, the simulation performs full bidirectional "
@@ -374,7 +374,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     internal_absorbers: tuple[()] = Field(
-        (),
+        default=(),
         title="Internal Absorbers",
         description="Planes with the first order absorbing boundary conditions placed inside the computational domain. "
         "Note: absorbers are not supported in EME simulations.",
@@ -390,21 +390,21 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     store_port_modes: bool = Field(
-        True,
+        default=True,
         title="Store Port Modes",
         description="Whether to store the modes associated with the two ports. "
         "Required to find scattering matrix in basis besides the computational basis.",
     )
 
     store_coeffs: bool = Field(
-        False,
+        default=False,
         title="Store Coefficients",
         description="Whether to store the internal coefficients from the EME simulation. "
         "The results are stored in 'EMESimulationData.coeffs'.",
     )
 
     eme_diagnostics: bool = Field(
-        False,
+        default=False,
         title="EME Diagnostics",
         description="Whether to compute and store per-interface physical residual "
         "diagnostics (incident-normalized squared tangential E/H residuals, their "
@@ -414,21 +414,21 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     normalize: bool = Field(
-        True,
+        default=True,
         title="Normalize Scattering Matrix",
         description="Whether to normalize the port modes to unity flux, "
         "thereby normalizing the scattering matrix and expansion coefficients.",
     )
 
     port_offsets: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
-        (0, 0),
+        default=(0, 0),
         title="Port Offsets",
         description="Offsets for the two ports, relative to the simulation bounds "
         "along the propagation axis.",
     )
 
     sweep_spec: EMESweepSpecType | None = Field(
-        None,
+        default=None,
         discriminator=TYPE_TAG_STR,
         title="EME Sweep Specification",
         description="Specification for a parameter sweep to be performed during the EME "
@@ -451,7 +451,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         return value
 
     constraint: Literal["passive", "unitary"] | None = Field(
-        "passive",
+        default="passive",
         title="EME Constraint",
         description="Constraint for EME propagation, imposed at cell interfaces. "
         "A constraint of 'passive' means that energy can be dissipated but not created at "

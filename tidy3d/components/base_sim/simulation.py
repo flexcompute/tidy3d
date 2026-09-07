@@ -48,7 +48,7 @@ class AbstractSimulation(Box, ABC):
     """
 
     structures: tuple[Structure, ...] = Field(
-        (),
+        default=(),
         title="Structures",
         description="Tuple of structures present in simulation. "
         "Note: Structures defined later in this list override the "
@@ -77,7 +77,7 @@ class AbstractSimulation(Box, ABC):
     """
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
@@ -85,37 +85,37 @@ class AbstractSimulation(Box, ABC):
     )
 
     sources: tuple[None, ...] = Field(
-        (),
+        default=(),
         title="Sources",
         description="Sources in the simulation.",
     )
 
     boundary_spec: Literal[None] = Field(
-        None,
+        default=None,
         title="Boundaries",
         description="Specification of boundary conditions.",
     )
 
     monitors: tuple[None, ...] = Field(
-        (),
+        default=(),
         title="Monitors",
         description="Monitors in the simulation. ",
     )
 
     grid_spec: Literal[None] = Field(
-        None,
+        default=None,
         title="Grid Specification",
         description="Specifications for the simulation grid.",
     )
 
     version: str = Field(
-        __version__,
+        default=__version__,
         title="Version",
         description="String specifying the front end version number.",
     )
 
     plot_length_units: LengthUnit | None = Field(
-        "μm",
+        default="μm",
         title="Plot Units",
         description="When set to a supported ``LengthUnit``, "
         "plots will be produced with proper scaling of axes and "
@@ -123,7 +123,7 @@ class AbstractSimulation(Box, ABC):
     )
 
     structure_priority_mode: PriorityMode = Field(
-        "equal",
+        default="equal",
         title="Structure Priority Setting",
         description="This field only affects structures of `priority=None`. "
         "If `equal`, the priority of those structures is set to 0; if `conductor`, "

@@ -80,7 +80,7 @@ class TriangleMesh(base.Geometry, ABC):
     )
 
     mesh_dataset: TriangleMeshDataset | None = Field(
-        None,
+        default=None,
         title="Surface mesh data",
         description="Surface mesh data.",
     )

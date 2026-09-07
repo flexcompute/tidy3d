@@ -69,7 +69,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     """
 
     num_modes: PositiveInt | Literal["auto"] = Field(
-        1,
+        default=1,
         title="Number of modes",
         description="Number of modes returned by mode solver. "
         "Use 'auto' to infer from impedance_specs length (if tuple) or detected "
@@ -88,7 +88,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     tem_polarization_threshold: float = Field(
-        TEM_POLARIZATION_THRESHOLD,
+        default=TEM_POLARIZATION_THRESHOLD,
         gt=0.0,
         le=1.0,
         title="TEM Polarization Threshold",
@@ -99,7 +99,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     qtem_polarization_threshold: float = Field(
-        QTEM_POLARIZATION_THRESHOLD,
+        default=QTEM_POLARIZATION_THRESHOLD,
         gt=0.0,
         le=1.0,
         title="Quasi-TEM Polarization Threshold",
@@ -279,7 +279,7 @@ class MicrowaveTerminalModeSpec(MicrowaveModeSpec):
     )
 
     terminals_mapping: dict[str, str | tuple[str, str]] | None = Field(
-        None,
+        default=None,
         title="Terminals Mapping",
         description="Mapping from terminal (including differential pairs) labels to single-ended terminal labels.",
     )

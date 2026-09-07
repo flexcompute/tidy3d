@@ -13,7 +13,7 @@ class AbstractSourceFrame(Tidy3dBaseModel, ABC):
     """Abstract base class for all source frames."""
 
     length: int = Field(
-        2,
+        default=2,
         title="Length",
         description="The length of the frame, specified as the number of cells along the source "
         "injection direction.",

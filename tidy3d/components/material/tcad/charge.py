@@ -32,7 +32,7 @@ class AbstractChargeMedium(AbstractMedium):
     Currently, permittivity is treated as a constant."""
 
     permittivity: float = Field(
-        1.0,
+        default=1.0,
         ge=1.0,
         title="Permittivity",
         description="Relative permittivity.",
@@ -91,7 +91,7 @@ class ChargeConductorMedium(AbstractChargeMedium):
     )
 
     work_function: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Work function",
         description="Metal work function :math:`W` [eV]. Required on the metal "
         "side of a Schottky contact.",
@@ -297,7 +297,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     electron_affinity: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Electron affinity",
         description=":math:`\\chi` Electron affinity [eV]. Required on the "
         "semiconductor side of a Schottky contact, and used by the accelerated "
@@ -306,7 +306,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     richardson_electron: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Electron Richardson constant",
         description=":math:`A^*_n` Electron Richardson constant "
         "[A/(cm^2 K^2)]. Used by accelerated charge thermionic transport for "
@@ -314,7 +314,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     richardson_hole: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Hole Richardson constant",
         description=":math:`A^*_p` Hole Richardson constant [A/(cm^2 K^2)]. "
         "Used by accelerated charge thermionic transport for Schottky contacts "
@@ -334,7 +334,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     R: tuple[discriminated_union(RecombinationModelType), ...] = Field(
-        (),
+        default=(),
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material. "
         "At most one Shockley-Read-Hall (:class:`.ShockleyReedHallRecombination`) model "
@@ -342,7 +342,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     delta_E_g: BandGapNarrowingModelType | None = Field(
-        None,
+        default=None,
         title="Bandgap narrowing model.",
         description=":math:`\\Delta E_g` Bandgap narrowing model.",
         json_schema_extra={"units": ELECTRON_VOLT},
@@ -354,7 +354,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         | SpatialDataArray
         | NonNegativeFloat
     ) = Field(
-        (),
+        default=(),
         title="Doping: Acceptor concentration",
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
@@ -368,7 +368,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         | SpatialDataArray
         | NonNegativeFloat
     ) = Field(
-        (),
+        default=(),
         title="Doping: Donor concentration",
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "

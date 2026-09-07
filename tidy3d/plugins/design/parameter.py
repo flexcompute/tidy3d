@@ -23,7 +23,7 @@ class Parameter(Tidy3dBaseModel, ABC):
     )
 
     values: tuple[Any, ...] | None = Field(
-        None,
+        default=None,
         title="Custom Values",
         description="If specified, the parameter scan uses these values for grid search methods.",
     )
@@ -100,7 +100,7 @@ class ParameterFloat(ParameterNumeric):
     """
 
     num_points: PositiveInt | None = Field(
-        None,
+        default=None,
         title="Number of Points",
         description="Number of uniform sampling points for this variable. "
         "Used by grid-style methods such as 'MethodGrid' and 'MethodZip' when 'values' is not provided. ",

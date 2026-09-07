@@ -71,7 +71,7 @@ class ReverseInterpolatedSource(Source):
     """Abstract source that allows reverse-interpolation along zero-sized dimensions."""
 
     interpolate: bool = Field(
-        True,
+        default=True,
         title="Enable Interpolation",
         description="Handles reverse-interpolation of zero-size dimensions of the source. "
         "If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, "
@@ -80,7 +80,7 @@ class ReverseInterpolatedSource(Source):
     )
 
     confine_to_bounds: bool = Field(
-        False,
+        default=False,
         title="Confine to Analytical Bounds",
         description="If ``True``, any source amplitudes which, after discretization, fall beyond "
         "the bounding box of the source are zeroed out, but only along directions where "
@@ -107,7 +107,7 @@ class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
     """
 
     current_amplitude_definition: Literal["density", "total"] = Field(
-        "density",
+        default="density",
         title="Current Amplitude Definition",
         description="Defines how the ``source_time`` amplitude is interpreted. "
         "If ``'total'``, the ``source_time`` parameter is interpreted as the total "
@@ -159,7 +159,7 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
     """
 
     size: tuple[Literal[0], Literal[0], Literal[0]] = Field(
-        (0, 0, 0),
+        default=(0, 0, 0),
         title="Size",
         description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
         json_schema_extra={"units": MICROMETER},

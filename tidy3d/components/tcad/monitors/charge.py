@@ -36,7 +36,7 @@ class SteadyFreeCarrierMonitor(HeatChargeMonitor):
 
     # NOTE: for the time being supporting unstructured
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -56,7 +56,7 @@ class SteadyEnergyBandMonitor(HeatChargeMonitor):
 
     # NOTE: for the time being supporting unstructured
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -76,7 +76,7 @@ class SteadyCapacitanceMonitor(HeatChargeMonitor):
 
     # NOTE: for the time being supporting unstructured
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -95,7 +95,7 @@ class SteadyElectricFieldMonitor(HeatChargeMonitor):
     """
 
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -114,7 +114,7 @@ class SteadyCurrentDensityMonitor(HeatChargeMonitor):
     """
 
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -148,7 +148,7 @@ class SteadyGenerationRecombinationMonitor(HeatChargeMonitor):
     """
 
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -186,7 +186,7 @@ class SelfHeatingMonitor(HeatChargeMonitor):
     """
 
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
@@ -217,7 +217,7 @@ class SteadyChargeResidualMonitor(HeatChargeMonitor):
     """
 
     unstructured: Literal[True] = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )

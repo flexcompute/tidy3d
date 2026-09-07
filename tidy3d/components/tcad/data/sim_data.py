@@ -120,14 +120,14 @@ class SteadyConvergenceData(Tidy3dBaseModel):
     """
 
     converged: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Converged",
         description="``True`` at biases where the Newton iteration met the configured "
         "tolerance and ``False`` otherwise.",
     )
 
     n_iters: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Newton iterations",
         description="Number of Newton iterations taken at each bias. At a non-converged "
         "bias this equals the cap if ``max_iters`` was hit, or the count of attempted "
@@ -135,7 +135,7 @@ class SteadyConvergenceData(Tidy3dBaseModel):
     )
 
     residual_history: ConvergenceHistoryDataArray | None = Field(
-        None,
+        default=None,
         title="Per-pseudo-step residual trace",
         description="Per-bias trace of the absolute residual norm. Dimensions are "
         "``(v, pseudo_step, component)``; ragged biases are NaN-padded along "
@@ -166,7 +166,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     """
 
     steady_dc_hole_capacitance: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Steady DC hole capacitance",
         description="Device steady DC capacitance data based on holes. If the simulation "
         "has converged, these result should be close to that of electrons. "
@@ -176,7 +176,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     )
 
     steady_dc_electron_capacitance: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Steady DC electron capacitance",
         description="Device steady DC capacitance data based on electrons. If the simulation "
         "has converged, these result should be close to that of holes. "
@@ -186,7 +186,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     )
 
     steady_dc_current_voltage: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Steady DC current-voltage",
         description="Device steady DC current-voltage relation for the device. "
         "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
@@ -195,7 +195,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     )
 
     steady_dc_resistance_voltage: SteadyVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Small signal resistance",
         description="Steady DC computation of the small signal resistance. This is computed "
         "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
@@ -205,7 +205,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     )
 
     ac_current_voltage: FreqVoltageDataArray | None = Field(
-        None,
+        default=None,
         title="Small-signal AC current-voltage",
         description="Small-signal AC current as a function of DC bias voltage and frequency. "
         "This complex-valued data :math:`I(v, f)` is computed from small-signal analysis and "
@@ -219,7 +219,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     )
 
     dc_convergence: SteadyConvergenceData | None = Field(
-        None,
+        default=None,
         title="Steady DC convergence state",
         description="Per-bias Newton convergence state for the steady DC sweep. When "
         "present, callers can mask the I-V/C-V curves by ``dc_convergence.converged`` "
@@ -443,7 +443,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     )
 
     device_characteristics: DeviceCharacteristics | None = Field(
-        None,
+        default=None,
         title="Device characteristics",
         description="Data characterizing the device :class:`DeviceCharacteristics`.",
     )

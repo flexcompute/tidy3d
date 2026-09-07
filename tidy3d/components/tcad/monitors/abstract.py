@@ -22,7 +22,7 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
     """Abstract base class for heat-charge monitors."""
 
     unstructured: bool = Field(
-        True,
+        default=True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid. Setting this to ``False`` "
         "is deprecated and will be removed in Tidy3D 3.0, after which monitor data is "

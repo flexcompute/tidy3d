@@ -52,13 +52,13 @@ class DispersionFitter(Tidy3dBaseModel):
     )
 
     k_data: ArrayFloat1D | None = Field(
-        None,
+        default=None,
         title="Extinction coefficient data",
         description="Imaginary part of the complex index of refraction.",
     )
 
     wvl_range: tuple[float | None, float | None] = Field(
-        (None, None),
+        default=(None, None),
         title="Wavelength range [wvl_min,wvl_max] for fitting",
         description="Truncate the wavelength, n and k data to the wavelength range '[wvl_min, "
         "wvl_max]' for fitting.",

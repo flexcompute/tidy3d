@@ -142,7 +142,7 @@ class Scene(Tidy3dBaseModel):
     )
 
     structures: tuple[Structure, ...] | None = Field(
-        (),
+        default=(),
         title="Structures",
         description="Tuple of structures present in scene. "
         "Note: In regions of spatial overlap between structures, "
@@ -153,7 +153,7 @@ class Scene(Tidy3dBaseModel):
     )
 
     structure_priority_mode: PriorityMode = Field(
-        "equal",
+        default="equal",
         title="Structure Priority Setting",
         description="This field only affects structures of `priority=None`. "
         "If `equal`, the priority of those structures is set to 0; if `conductor`, "
@@ -162,7 +162,7 @@ class Scene(Tidy3dBaseModel):
     )
 
     plot_length_units: LengthUnit | None = Field(
-        "μm",
+        default="μm",
         title="Plot Units",
         description="When set to a supported ``LengthUnit``, "
         "plots will be produced with proper scaling of axes and "

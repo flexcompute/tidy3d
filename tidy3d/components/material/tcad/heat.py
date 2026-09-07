@@ -31,7 +31,9 @@ if TYPE_CHECKING:
 class AbstractHeatMedium(ABC, Tidy3dBaseModel):
     """Abstract heat material specification."""
 
-    name: str | None = Field(None, title="Name", description="Optional unique name for medium.")
+    name: str | None = Field(
+        default=None, title="Name", description="Optional unique name for medium."
+    )
 
     @property
     def heat(self) -> Self:
@@ -204,7 +206,7 @@ class AnisotropicConductivity(Tidy3dBaseModel):
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
     rotation: RotationType | None = Field(
-        None,
+        default=None,
         title="Rotation",
         description="Optional rotation orienting the principal axes ``(xx, yy, zz)`` in the "
         "global frame. When ``None`` the principal axes coincide with the global axes "
@@ -324,7 +326,7 @@ class SolidMedium(AbstractHeatMedium):
     """
 
     capacity: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Heat capacity",
         description=f"Specific heat capacity in units of {SPECIFIC_HEAT_CAPACITY}, which is "
         "already the SI unit, so no conversion is needed for this field. Prefer "
@@ -347,14 +349,14 @@ class SolidMedium(AbstractHeatMedium):
     )
 
     density: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Density",
         description=f"Mass density of material in units of {DENSITY}.",
         json_schema_extra={"units": DENSITY},
     )
 
     velocity: Coordinate | None = Field(
-        None,
+        default=None,
         title="Advection velocity",
         description="Constant advection velocity ``(vx, vy, vz)`` of the solid medium in units "
         f"of {VELOCITY}. When set to a nonzero value, the heat solver adds a convective "

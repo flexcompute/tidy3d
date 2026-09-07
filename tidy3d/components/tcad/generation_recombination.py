@@ -202,13 +202,13 @@ class PalankovskiQuayApproxCarrierLifetime(Tidy3dBaseModel):
     )
 
     gamma: float = Field(
-        1.0,
+        default=1.0,
         title="Doping exponent",
         description="Dimensionless exponent :math:`\\gamma` of the doping-dependence factor.",
     )
 
     alpha_T: float = Field(
-        -1.5,
+        default=-1.5,
         title="Temperature exponent",
         description="Dimensionless temperature exponent :math:`\\alpha_T`. "
         "The Palankovski-Quay model fixes this at :math:`-3/2`; users may "
@@ -413,25 +413,25 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
     """
 
     A: PositiveFloat = Field(
-        4e14,
+        default=4e14,
         title="Parameter :math:`A`",
         description="Parameter :math:`A` in the direct BTBT Hurkx model.",
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
     B: float = Field(
-        1.9e6,
+        default=1.9e6,
         title="Parameter :math:`B`",
         description="Parameter :math:`B` in the direct BTBT Hurkx model.",
         json_schema_extra={"units": "V/cm"},
     )
     E_0: PositiveFloat = Field(
-        1,
+        default=1,
         title="Reference electric field :math:`E_0`",
         description="Reference electric field :math:`E_0` in the direct BTBT Hurkx model.",
         json_schema_extra={"units": "V/cm"},
     )
     sigma: float = Field(
-        2.5,
+        default=2.5,
         title="Exponent parameter",
         description="Exponent :math:`\\sigma` in the direct BTBT Hurkx model. For direct "
         "semiconductors :math:`\\sigma` is typically 2.0, while for indirect "
@@ -499,7 +499,7 @@ class SurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
         json_schema_extra={"units": "cm/s"},
     )
     E_t: float = Field(
-        0.0,
+        default=0.0,
         title="Trap level relative to intrinsic Fermi",
         description="Energy of the interface trap level relative to the "
         "intrinsic Fermi level. ``0`` corresponds to mid-gap (the most common "
@@ -626,7 +626,7 @@ class SelberherrImpactIonization(Tidy3dBaseModel):
     )
 
     formulation: Literal["Selberherr", "PQ", "GradQuasiFermi"] = Field(
-        "PQ",
+        default="PQ",
         title="Formulation",
         description="Driving-force formulation used for impact ionization. "
         "'Selberherr' uses the conduction-band-edge gradient magnitude, 'PQ' "

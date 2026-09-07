@@ -14,34 +14,34 @@ class Account(Tidy3DResource, extra="allow"):
     """Tidy3D User Account."""
 
     allowance_cycle_type: str | None = Field(
-        None,
+        default=None,
         title="AllowanceCycleType",
         description="Daily or Monthly",
         alias="allowanceCycleType",
     )
     credit: float | None = Field(
-        0, title="credit", description="Current FlexCredit balance", alias="credit"
+        default=0, title="credit", description="Current FlexCredit balance", alias="credit"
     )
     credit_expiration: datetime | None = Field(
-        None,
+        default=None,
         title="creditExpiration",
         description="Expiration date",
         alias="creditExpiration",
     )
     allowance_current_cycle_amount: float | None = Field(
-        0,
+        default=0,
         title="allowanceCurrentCycleAmount",
         description="Daily/Monthly free simulation balance",
         alias="allowanceCurrentCycleAmount",
     )
     allowance_current_cycle_end_date: datetime | None = Field(
-        None,
+        default=None,
         title="allowanceCurrentCycleEndDate",
         description="Daily/Monthly free simulation balance expiration date",
         alias="allowanceCurrentCycleEndDate",
     )
     daily_free_simulation_counts: int | None = Field(
-        0,
+        default=0,
         title="dailyFreeSimulationCounts",
         description="Daily free simulation counts",
         alias="dailyFreeSimulationCounts",

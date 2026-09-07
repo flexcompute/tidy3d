@@ -16,21 +16,21 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
     """Abstract base class for low frequency smoothing specifications."""
 
     min_sampling_time: NonNegativeFloat = Field(
-        1.0,
+        default=1.0,
         title="Minimum Sampling Time (periods)",
         description="The minimum simulation time in periods of the corresponding frequency for which frequency domain results will be used to fit the polynomial for the low frequency extrapolation. "
         "Results below this threshold will be completely discarded.",
     )
 
     max_sampling_time: NonNegativeFloat = Field(
-        5.0,
+        default=5.0,
         title="Maximum Sampling Time (periods)",
         description="The maximum simulation time in periods of the corresponding frequency for which frequency domain results will be used to fit the polynomial for the low frequency extrapolation. "
         "Results above this threshold will be not be modified.",
     )
 
     order: int = Field(
-        1,
+        default=1,
         title="Extrapolation Order",
         description="The order of the polynomial to use for the low frequency extrapolation.",
         ge=0,
@@ -38,7 +38,7 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
     )
 
     max_deviation: float | None = Field(
-        0.5,
+        default=0.5,
         title="Maximum Deviation",
         description="The maximum deviation (in fraction of the trusted values) to allow for the low frequency smoothing.",
         ge=0,

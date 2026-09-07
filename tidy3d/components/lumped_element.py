@@ -179,7 +179,7 @@ class LumpedElement(MicrowaveBaseModel, ABC):
     )
 
     num_grid_cells: PositiveInt | None = Field(
-        DEFAULT_LUMPED_ELEMENT_NUM_CELLS,
+        default=DEFAULT_LUMPED_ELEMENT_NUM_CELLS,
         title="Lumped element grid cells",
         description="Number of mesh grid cells associated with the lumped element along each direction. "
         "Used in generating the suggested list of :class:`.MeshOverrideStructure` objects. "
@@ -187,7 +187,7 @@ class LumpedElement(MicrowaveBaseModel, ABC):
     )
 
     enable_snapping_points: bool = Field(
-        True,
+        default=True,
         title="Snap Grid To Lumped Element",
         description="When enabled, snapping points are automatically generated to snap grids to key "
         "geometric features of the lumped element for more accurate modelling.",
@@ -256,7 +256,7 @@ class RectangularLumpedElement(LumpedElement, Box):
     )
 
     snap_perimeter_to_grid: bool = Field(
-        True,
+        default=True,
         title="Snap Perimeter to Grid",
         description="When enabled, the perimeter of the lumped element is snapped to the simulation grid, "
         "which improves accuracy when the number of grid cells is low within the element. Sides of the element "
@@ -514,7 +514,7 @@ class CoaxialLumpedResistor(LumpedElement):
     )
 
     center: Coordinate = Field(
-        (0.0, 0.0, 0.0),
+        default=(0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
         json_schema_extra={"units": MICROMETER},
@@ -759,28 +759,28 @@ class RLCNetwork(MicrowaveBaseModel):
     """
 
     resistance: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Resistance",
         description="Resistance value in ohms.",
         json_schema_extra={"units": OHM},
     )
 
     capacitance: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Capacitance",
         description="Capacitance value in farads.",
         json_schema_extra={"units": FARAD},
     )
 
     inductance: PositiveFloat | None = Field(
-        None,
+        default=None,
         title="Inductance",
         description="Inductance value in henrys.",
         json_schema_extra={"units": HENRY},
     )
 
     network_topology: Literal["series", "parallel"] = Field(
-        "series",
+        default="series",
         title="Network Topology",
         description="Describes whether network elements are connected in ``series`` or ``parallel``.",
     )
@@ -1104,7 +1104,7 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
     """
 
     freq_range: FreqBound | None = Field(
-        None,
+        default=None,
         title="Frequency Range",
         description="Frequency range in Hz for fitting the admittance. When set, must satisfy "
         "0 < f_min < f_max (fitting requires strictly positive frequencies). "
@@ -2004,7 +2004,7 @@ class LinearLumpedElement(RectangularLumpedElement):
     )
 
     dist_type: LumpDistType = Field(
-        "on",
+        default="on",
         title="Distribute Type",
         description="Switches between the different methods for distributing the lumped element over "
         "the grid.",

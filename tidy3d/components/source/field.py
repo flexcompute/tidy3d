@@ -104,7 +104,7 @@ class PlanarSource(Source, ABC):
 
     _plane_validator = assert_plane()
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="If ``True`` (default), source power normalization uses fields "
         "interpolated to grid cell boundaries (colocated). If ``False``, uses fields at "
@@ -157,7 +157,7 @@ class BroadbandSource(Source, ABC):
     """A source with frequency dependent field distributions."""
 
     num_freqs: int = Field(
-        1,
+        default=1,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
         "field. For 'chebyshev', a Chebyshev interpolation is used with 'num_freqs' terms "
@@ -172,7 +172,7 @@ class BroadbandSource(Source, ABC):
     )
 
     broadband_method: Literal["chebyshev", "pole_residue"] = Field(
-        "chebyshev",
+        default="chebyshev",
         title="Broadband Method",
         description="Method for representing the frequency dependence of the injected field. "
         "'chebyshev' uses Chebyshev polynomial interpolation (default). "
@@ -325,7 +325,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
     _traced_source_dataset_key: ClassVar[str] = "field_dataset"
 
     field_dataset: FieldDataset | None = Field(
-        None,
+        default=None,
         title="Field Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
         "fields patterns to inject. At least one tangential field component must be specified.",
@@ -481,14 +481,14 @@ class AngledFieldSource(DirectionalSource, ABC):
     """
 
     angle_theta: float = Field(
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
         json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis.",
@@ -496,7 +496,7 @@ class AngledFieldSource(DirectionalSource, ABC):
     )
 
     pol_angle: float = Field(
-        0,
+        default=0,
         title="Polarization Angle",
         description="Specifies the angle between the electric field polarization of the "
         "source and the plane defined by the injection axis and the propagation axis (rad). "
@@ -577,7 +577,7 @@ class AbstractModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     )
 
     frame: PECFrame | None = Field(
-        None,
+        default=None,
         title="Source Frame",
         description="Add a thin frame around the source during the FDTD run to improve "
         "the injection quality. The frame is positioned along the primal grid lines "
@@ -673,7 +673,7 @@ class ModeSource(AbstractModeSource):
     """
 
     mode_index: NonNegativeInt = Field(
-        0,
+        default=0,
         title="Mode Index",
         description="Index into the collection of modes returned by mode solver. "
         " Specifies which mode to inject using this source. "
@@ -760,7 +760,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     )
 
     num_freqs: int = Field(
-        3,
+        default=3,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
         "field. Default is 3, which should cover even very broadband plane waves. For simulations "
@@ -771,7 +771,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     )
 
     broadband_method: Literal["chebyshev"] = Field(
-        "chebyshev",
+        default="chebyshev",
         title="Broadband Method",
         description="PlaneWave only supports the Chebyshev broadband method.",
     )
@@ -1103,14 +1103,14 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
     """Shared base class for Gaussian-like planar field sources."""
 
     angle_theta: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
         json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis.",
@@ -1118,7 +1118,7 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
     )
 
     pol_angle: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Polarization Angle",
         description="Specifies the angle between the electric field polarization of the "
         "source and the plane defined by the injection axis and the propagation axis (rad). "
@@ -1132,7 +1132,7 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
     )
 
     num_freqs: int = Field(
-        1,
+        default=1,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
         "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
@@ -1284,14 +1284,14 @@ class GaussianBeam(AbstractGaussianBeam):
     """
 
     waist_radius: TracedPositiveFloat = Field(
-        1.0,
+        default=1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
         json_schema_extra={"units": MICROMETER},
     )
 
     waist_distance: TracedFloat = Field(
-        0.0,
+        default=0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
         "A positive value places the waist behind the source plane (toward the negative normal axis). "
@@ -1368,14 +1368,14 @@ class AstigmaticGaussianBeam(AbstractGaussianBeam):
     """
 
     waist_sizes: tuple[TracedPositiveFloat, TracedPositiveFloat] = Field(
-        (1.0, 1.0),
+        default=(1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         json_schema_extra={"units": MICROMETER},
     )
 
     waist_distances: tuple[TracedFloat, TracedFloat] = Field(
-        (0.0, 0.0),
+        default=(0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
         "for the waist sizes in the local x and y directions. "
@@ -1549,7 +1549,7 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
     )
 
     num_freqs: int = Field(
-        1,
+        default=1,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
         "field. A Chebyshev interpolation is used, thus, only a small number of points is "
@@ -1559,7 +1559,7 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
     )
 
     broadband_method: Literal["chebyshev"] = Field(
-        "chebyshev",
+        default="chebyshev",
         title="Broadband Method",
         description="TFSF only supports the Chebyshev broadband method.",
     )
@@ -1579,7 +1579,7 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
     )
 
     use_colocated_integration: bool = Field(
-        True,
+        default=True,
         title="Use Colocated Integration",
         description="If ``True`` (default), source power normalization uses fields "
         "interpolated to grid cell boundaries (colocated). If ``False``, uses fields at "

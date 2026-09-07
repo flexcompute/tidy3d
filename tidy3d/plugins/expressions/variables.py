@@ -40,7 +40,7 @@ class Variable(Expression):
     """
 
     name: str | None = Field(
-        None,
+        default=None,
         title="Name",
         description="The name of the variable used for lookup during evaluation.",
     )

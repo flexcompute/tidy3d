@@ -1452,7 +1452,7 @@ class SimulationData(AbstractYeeGridSimulationData):
     )
 
     diverged: bool = Field(
-        False,
+        default=False,
         title="Diverged",
         description="A boolean flag denoting whether the simulation run diverged.",
     )

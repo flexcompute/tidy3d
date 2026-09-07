@@ -69,13 +69,13 @@ class StepOutput(Tidy3dBaseModel):
     )
 
     optional: bool = Field(
-        False,
+        default=False,
         title="Optional",
         description="Whether the output may be absent or trivial depending on step configuration.",
     )
 
     default_load: bool = Field(
-        False,
+        default=False,
         title="Default Load",
         description="Whether this is the default user-facing output for step-loading semantics.",
     )
@@ -104,7 +104,7 @@ class Step(Tidy3dBaseModel):
     )
 
     inputs: tuple[StepInput, ...] = Field(
-        (),
+        default=(),
         title="Inputs",
         description="Inputs consumed by this step.",
     )
@@ -116,7 +116,7 @@ class Step(Tidy3dBaseModel):
     )
 
     cacheable: bool = Field(
-        False,
+        default=False,
         title="Cacheable",
         description="Whether this step can be safely restored from local cache.",
     )
