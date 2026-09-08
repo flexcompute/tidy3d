@@ -19,8 +19,9 @@ drift-diffusion solver uses.
 Mobility
 ^^^^^^^^^^^^^^
 
-Carrier mobility models assigned to ``SemiconductorMedium.mobility_n`` and
-``mobility_p``.
+Models contributing to carrier mobility, assigned to
+``SemiconductorMedium.mobility_n`` and ``mobility_p`` or, for
+``CanaliFieldDependence``, attached to those models through ``field_dependence``.
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -29,9 +30,13 @@ Carrier mobility models assigned to ``SemiconductorMedium.mobility_n`` and
    ConstantMobilityModel
    CaugheyThomasMobility
    MasettiMobility
+   CanaliFieldDependence
 
 .. note::
-   ``MasettiMobility`` is supported only on the accelerated solver.
+   ``MasettiMobility`` is supported only on the accelerated solver, as is
+   ``CanaliFieldDependence``, which adds high-field velocity saturation on top
+   of any of the low-field mobility models through their ``field_dependence``
+   parameter.
 
 Generation Recombination
 ^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -11,6 +11,148 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
 
 
+# Floor the accelerated charge solver applies to the temperature-scaled Canali
+# saturation velocity 'v_sat * (T/300)**exp_v_sat' [cm/s], and the bounds it
+# clamps the temperature-scaled exponent 'beta * (T/300)**exp_beta' to.
+# Configurations that reach either at a known lattice temperature are rejected at
+# setup time instead of being silently clamped.
+CANALI_V_SAT_FLOOR = 5e5
+CANALI_BETA_MIN = 0.1
+CANALI_BETA_MAX = 20.0
+
+_FIELD_DEPENDENCE_DESCRIPTION = (
+    "Optional high-field velocity-saturation model applied on top of the low-field "
+    "mobility computed by this model. When ``None``, the mobility does not depend on "
+    "the driving force. Supported only by the accelerated charge solver, and must be "
+    "set on both the electron and hole mobility models of a medium or on neither."
+)
+
+
+class CanaliFieldDependence(Tidy3dBaseModel):
+    """High-field velocity saturation with the extended Canali model.
+
+    Notes
+    -----
+        The extended Canali model [1]_ degrades the low-field mobility
+        :math:`\\mu_{low}` computed by the mobility model it is attached to, so
+        that the carrier drift velocity saturates at :math:`v_{sat}` for large
+        driving forces:
+
+        .. math::
+
+            \\mu(F) = \\frac{\\mu_{low}}
+            {\\left[1 + \\left(\\mu_{low} F / v_{sat}\\right)^\\beta\\right]^{1/\\beta}}
+
+    where :math:`F` [V/cm] is the magnitude of the local driving force on that
+    carrier: the electrostatic field plus the band-structure and thermal-gradient
+    contributions. The saturation velocity and the Canali exponent follow
+    power-law temperature dependences
+
+    .. math::
+
+        v_{sat}(T) = v_{sat} \\left(\\frac{T}{300K}\\right)^{\\alpha_{v}},
+        \\qquad
+        \\beta(T) = \\beta \\left(\\frac{T}{300K}\\right)^{\\alpha_{\\beta}}
+
+    with :math:`\\alpha_v` given by ``exp_v_sat`` and :math:`\\alpha_\\beta` by
+    ``exp_beta``. The solver floors :math:`v_{sat}(T)` at :math:`5 \\times 10^5`
+    cm/s and clamps :math:`\\beta(T)` to :math:`[0.1, 20]`. Which of the two
+    happens depends on whether the lattice temperature is known when the
+    simulation is built: when it is — a scalar analysis temperature *or* a
+    prescribed temperature field — configurations that reach the floor or leave
+    the clamp are rejected at validation time; when the temperature is solved
+    for (self-heating), the floor and the clamp are applied at runtime against
+    the live temperature field.
+
+    .. [1] C. Canali, G. Majni, R. Minder, and G. Ottaviani. Electron and hole
+           drift velocity measurements in silicon and their empirical relation
+           to electric field and temperature. IEEE Transactions on Electron
+           Devices, 22(11):1045-1047, 1975.
+
+    Note
+    ----
+    The power-law temperature dependence degrades above roughly 400 K; treat
+    results at higher lattice temperatures with care.
+
+    Example
+    -------
+    The silicon parameters measured by Canali et al. [1]_:
+
+        >>> import tidy3d as td
+        >>> canali_Si_n = td.CanaliFieldDependence(
+        ...   v_sat=1.07e7,
+        ...   beta=1.109,
+        ...   exp_v_sat=-0.87,
+        ...   exp_beta=0.66,
+        ... )
+        >>> canali_Si_p = td.CanaliFieldDependence(
+        ...   v_sat=8.37e6,
+        ...   beta=1.213,
+        ...   exp_v_sat=-0.52,
+        ...   exp_beta=0.17,
+        ... )
+
+    attached to the low-field model of each carrier:
+
+        >>> mobility_n = td.CaugheyThomasMobility(
+        ...   mu_min=52.2,
+        ...   mu=1471.0,
+        ...   ref_N=9.68e16,
+        ...   exp_N=0.68,
+        ...   exp_1=-0.57,
+        ...   exp_2=-2.33,
+        ...   exp_3=2.4,
+        ...   exp_4=-0.146,
+        ...   field_dependence=canali_Si_n,
+        ... )
+
+    Warning
+    -------
+    Use this model for silicon/germanium-family (indirect-gap) semiconductors,
+    whose drift velocity rises monotonically with the driving force and
+    saturates — the behavior this expression describes. Do not use it for
+    direct-gap III-V semiconductors (GaAs, InGaAs, InP): there the electron
+    velocity peaks and then *decreases* with increasing field
+    (transferred-electron effect), which no parameter choice of a monotone
+    model can represent; beyond the peak field it would overestimate the
+    drift velocity.
+    """
+
+    v_sat: PositiveFloat = Field(
+        allow_inf_nan=False,
+        title="Saturation velocity",
+        description="Carrier saturation velocity :math:`v_{sat}` at the reference "
+        "temperature (300K).",
+        json_schema_extra={"units": "cm/s"},
+    )
+
+    beta: float = Field(
+        default=1.0,
+        ge=CANALI_BETA_MIN,
+        le=CANALI_BETA_MAX,
+        title="Canali exponent",
+        description="Canali exponent :math:`\\beta` at the reference temperature (300K), "
+        "controlling how sharply the mobility rolls off at the saturation field. "
+        f"Must lie in [{CANALI_BETA_MIN}, {CANALI_BETA_MAX}].",
+    )
+
+    exp_v_sat: float = Field(
+        default=0.0,
+        allow_inf_nan=False,
+        title="Exponent for temperature dependence of the saturation velocity",
+        description="Exponent for the temperature dependence of the saturation velocity, "
+        "``v_sat(T) = v_sat * (T/300)**exp_v_sat``.",
+    )
+
+    exp_beta: float = Field(
+        default=0.0,
+        allow_inf_nan=False,
+        title="Exponent for temperature dependence of the Canali exponent",
+        description="Exponent for the temperature dependence of the Canali exponent, "
+        "``beta(T) = beta * (T/300)**exp_beta``.",
+    )
+
+
 class ConstantMobilityModel(Tidy3dBaseModel):
     """Constant mobility model
 
@@ -24,6 +166,12 @@ class ConstantMobilityModel(Tidy3dBaseModel):
         title="Mobility",
         description="Mobility",
         json_schema_extra={"units": "cm²/V-s"},
+    )
+
+    field_dependence: CanaliFieldDependence | None = Field(
+        default=None,
+        title="High-field mobility dependence",
+        description=_FIELD_DEPENDENCE_DESCRIPTION,
     )
 
 
@@ -117,11 +265,10 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
         ... )
 
 
-    Warning
-    -------
-    There are some current limitations of this model:
-
-    - High electric field effects not yet supported.
+    Note
+    ----
+    High-field velocity saturation can be enabled by supplying a
+    :class:`CanaliFieldDependence` model through ``field_dependence``.
     """
 
     # mobilities
@@ -169,6 +316,12 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     exp_4: float = Field(
         title="Exponent of thermal dependence of the doping exponent effect.",
         description="Exponent of thermal dependence of the doping exponent effect.",
+    )
+
+    field_dependence: CanaliFieldDependence | None = Field(
+        default=None,
+        title="High-field mobility dependence",
+        description=_FIELD_DEPENDENCE_DESCRIPTION,
     )
 
 
@@ -313,6 +466,12 @@ class MasettiMobility(Tidy3dBaseModel):
     exp_0: float = Field(
         title="Exponent for low mobility temperature dependence.",
         description="Temperature exponent for the mid-doping mobility floor.",
+    )
+
+    field_dependence: CanaliFieldDependence | None = Field(
+        default=None,
+        title="High-field mobility dependence",
+        description=_FIELD_DEPENDENCE_DESCRIPTION,
     )
 
     @model_validator(mode="after")

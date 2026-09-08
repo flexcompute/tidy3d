@@ -56,7 +56,12 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
-from tidy3d.components.tcad.mobility import MasettiMobility
+from tidy3d.components.tcad.mobility import (
+    CANALI_BETA_MAX,
+    CANALI_BETA_MIN,
+    CANALI_V_SAT_FLOOR,
+    MasettiMobility,
+)
 from tidy3d.components.tcad.monitors.charge import (
     SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
@@ -591,6 +596,9 @@ class HeatChargeSimulation(AbstractSimulation):
                 ("structures",), self._check_charge_simulation_semiconductors
             )
             self._call_with_validation_loc(("structures",), self._check_masetti_mobility_models)
+            self._call_with_validation_loc(
+                ("structures",), self._check_field_dependence_mobility_models
+            )
             # Schottky contacts and surface recombination apply only to
             # charge simulations, so validate them inside the charge guard;
             # heat-only and conduction-only simulations skip these checks.
@@ -2977,12 +2985,18 @@ class HeatChargeSimulation(AbstractSimulation):
         configuration is fully supported by the CPU charge solver.
         """
         features = []
-        for _loc, charge in self._iter_semiconductor_charge_media():
-            if isinstance(charge.mobility_n, MasettiMobility) or isinstance(
-                charge.mobility_p, MasettiMobility
-            ):
-                features.append("MasettiMobility")
-                break
+        if any(
+            isinstance(charge.mobility_n, MasettiMobility)
+            or isinstance(charge.mobility_p, MasettiMobility)
+            for _loc, charge in self._iter_semiconductor_charge_media()
+        ):
+            features.append("MasettiMobility")
+        if any(
+            charge.mobility_n.field_dependence is not None
+            or charge.mobility_p.field_dependence is not None
+            for _loc, charge in self._iter_semiconductor_charge_media()
+        ):
+            features.append("CanaliFieldDependence")
 
         if self._uses_gpu_only_lifetime_model():
             features.append("PalankovskiQuayApproxCarrierLifetime")
@@ -3080,6 +3094,22 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
+    def _analysis_temperature_extremes(self) -> tuple[float, float] | None:
+        """Coldest and hottest lattice temperature the analysis prescribes, if any.
+
+        ``None`` when the analysis has no prescribed temperature — either an
+        isothermal spec that carries none, or a self-heating spec whose
+        temperature is solved for. A prescribed field makes ``temperature`` a whole
+        array, so both extremes are returned: which one is worst depends on the sign
+        of the exponent the caller is checking. ``np.asarray`` puts a scalar, a list
+        and a :class:`SpatialDataArray` on the same path.
+        """
+        temperature = getattr(self.analysis_spec, "temperature", None)
+        if temperature is None:
+            return None
+        values = np.asarray(getattr(temperature, "values", temperature), dtype=float).reshape(-1)
+        return float(values.min()), float(values.max())
+
     def _check_masetti_mobility_models(self) -> Self:
         """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0.
 
@@ -3090,13 +3120,8 @@ class HeatChargeSimulation(AbstractSimulation):
         A prescribed lattice temperature makes ``temperature`` a whole field, so the
         asymptote is checked at the field's extremes rather than at a single value.
         """
-        temperature = getattr(self.analysis_spec, "temperature", None)
-        # Both extremes, since the sign of 'exp_0' decides which end is worst. Via numpy so a
-        # scalar takes the same path; testing the array itself raises on its ambiguous truth.
-        candidate_temperatures = ()
-        if temperature is not None:
-            values = np.asarray(temperature, dtype=float)
-            candidate_temperatures = (float(values.min()), float(values.max()))
+        # Both extremes, since the sign of 'exp_0' decides which end is worst.
+        candidate_temperatures = self._analysis_temperature_extremes() or ()
         for loc, charge in self._iter_semiconductor_charge_media():
             n_is_masetti = isinstance(charge.mobility_n, MasettiMobility)
             p_is_masetti = isinstance(charge.mobility_p, MasettiMobility)
@@ -3132,6 +3157,64 @@ class HeatChargeSimulation(AbstractSimulation):
                         "increase 'mu_0', or lower the lattice temperature.",
                         *loc,
                     )
+        return self
+
+    def _check_field_dependence_mobility_models(self) -> Self:
+        """Error if velocity saturation is single-carrier, or if v_sat(T)/beta(T) is clamped.
+
+        Raises directly at the offending charge medium's loc (``("medium",)``
+        or ``("structures", i)``) so the user is pointed at the exact field to
+        fix; the iteration helper yields the loc alongside each charge spec.
+
+        Both temperature-scaled quantities are evaluated at the extremes of the
+        prescribed lattice temperature, since the sign of each exponent decides
+        whether the coldest or the hottest node is its worst case. When the
+        temperature is solved for instead, there is nothing to check here and the
+        solver applies the floor and the clamp at runtime.
+        """
+        temperature_samples = self._analysis_temperature_extremes()
+        for loc, charge in self._iter_semiconductor_charge_media():
+            field_dependence_n = charge.mobility_n.field_dependence
+            field_dependence_p = charge.mobility_p.field_dependence
+            if (field_dependence_n is None) != (field_dependence_p is None):
+                present, missing = (
+                    ("electron", "hole") if field_dependence_p is None else ("hole", "electron")
+                )
+                self._raise_validation_error_at_loc(
+                    f"'field_dependence' is set on the {present} mobility model but not on "
+                    f"the {missing} one; velocity saturation must be enabled for both carriers "
+                    "or neither.",
+                    *loc,
+                )
+            if temperature_samples is None:
+                continue
+            for carrier, field_dependence in (
+                ("electron", field_dependence_n),
+                ("hole", field_dependence_p),
+            ):
+                if field_dependence is None:
+                    continue
+                for temperature in temperature_samples:
+                    scale = temperature / 300.0
+                    v_sat = field_dependence.v_sat * scale**field_dependence.exp_v_sat
+                    if v_sat <= CANALI_V_SAT_FLOOR:
+                        self._raise_validation_error_at_loc(
+                            f"'CanaliFieldDependence' saturation velocity for the {carrier} "
+                            f"mobility is {v_sat:.3g} cm/s at {temperature:g} K "
+                            "('v_sat * (T/300)**exp_v_sat'), at or below the "
+                            f"{CANALI_V_SAT_FLOOR:g} cm/s floor the accelerated charge solver "
+                            "clamps to. Adjust 'v_sat' or 'exp_v_sat'.",
+                            *loc,
+                        )
+                    beta = field_dependence.beta * scale**field_dependence.exp_beta
+                    if not CANALI_BETA_MIN <= beta <= CANALI_BETA_MAX:
+                        self._raise_validation_error_at_loc(
+                            f"'CanaliFieldDependence' exponent for the {carrier} mobility is "
+                            f"{beta:.3g} at {temperature:g} K ('beta * (T/300)**exp_beta'), "
+                            f"outside the [{CANALI_BETA_MIN}, {CANALI_BETA_MAX}] range the "
+                            "accelerated charge solver clamps to. Adjust 'beta' or 'exp_beta'.",
+                            *loc,
+                        )
         return self
 
     def _check_use_accelerated_solver(self) -> Self:
