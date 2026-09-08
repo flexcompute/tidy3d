@@ -8,14 +8,19 @@ import numpy as np
 from pydantic import Field, model_validator
 
 from tidy3d.components.data.data_array import (
+    AbstractSpatialDataArray,
     IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
     PointDataArray,
     SpatialDataArray,
+    SpatialVoltageDataArray,
     SteadyVoltageDataArray,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
-from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
+from tidy3d.components.tcad.data.monitor_data.abstract import (
+    VOLTAGE_MATCH_TOL,
+    HeatChargeMonitorData,
+)
 from tidy3d.components.tcad.monitors.charge import (
     SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
@@ -38,10 +43,16 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Ax
 
 FieldDataset = (
-    discriminated_union(TriangularGridDataset | TetrahedralGridDataset) | SpatialDataArray
+    discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
+    | SpatialDataArray
+    | SpatialVoltageDataArray
 )
 
 UnstructuredFieldType = discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
+
+# A 1D (line) monitor has no unstructured form, so its field is Cartesian; in a charge
+# simulation it is also resolved over bias.
+VoltageFieldDataset = UnstructuredFieldType | SpatialVoltageDataArray
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
@@ -81,7 +92,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: UnstructuredFieldType | None = Field(
+    electrons: VoltageFieldDataset | None = Field(
         default=None,
         title="Electrons series",
         description=r"Contains the computed electrons concentration :math:`n`.",
@@ -89,7 +100,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     )
     # n = electrons
 
-    holes: UnstructuredFieldType | None = Field(
+    holes: VoltageFieldDataset | None = Field(
         default=None,
         title="Holes series",
         description=r"Contains the computed holes concentration :math:`p`.",
@@ -98,7 +109,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     # p = holes
 
     @property
-    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
+    def field_components(self) -> dict[str, VoltageFieldDataset | None]:
         """Maps the field components to their associated data."""
         return {"electrons": self.electrons, "holes": self.holes}
 
@@ -156,35 +167,35 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         description="Energy bands data associated with a Charge simulation.",
     )
 
-    Ec: UnstructuredFieldType | None = Field(
+    Ec: VoltageFieldDataset | None = Field(
         default=None,
         title="Conduction band series",
         description="Contains the computed energy of the bottom of the conduction band :math:`E_c`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Ev: UnstructuredFieldType | None = Field(
+    Ev: VoltageFieldDataset | None = Field(
         default=None,
         title="Valence band series",
         description="Contains the computed energy of the top of the valence band :math:`E_v`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Ei: UnstructuredFieldType | None = Field(
+    Ei: VoltageFieldDataset | None = Field(
         default=None,
         title="Intrinsic Fermi level series",
         description="Contains the computed intrinsic Fermi level for the material :math:`E_i`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Efn: UnstructuredFieldType | None = Field(
+    Efn: VoltageFieldDataset | None = Field(
         default=None,
         title="Electron's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for electrons :math:`E_{fn}`.",
         json_schema_extra={"units": "eV"},
     )
 
-    Efp: UnstructuredFieldType | None = Field(
+    Efp: VoltageFieldDataset | None = Field(
         default=None,
         title="Hole's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for holes :math:`E_{fp}`.",
@@ -192,7 +203,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
+    def field_components(self) -> dict[str, VoltageFieldDataset | None]:
         """Maps the field components to their associated data."""
         return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 
@@ -234,10 +245,26 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
 
         selection_data = {}
 
-        if ("voltage" not in sel_kwargs) and (self.Ec.values.coords.sizes["voltage"] > 1):
+        # a 1D monitor records a Cartesian field, which carries 'voltage' directly rather
+        # than on its 'values'
+        is_cartesian = isinstance(self.Ec, AbstractSpatialDataArray)
+        voltages = self.Ec.coords["voltage"] if is_cartesian else self.Ec.values.coords["voltage"]
+        if ("voltage" not in sel_kwargs) and (voltages.size > 1):
             raise DataError(
                 "'voltage' is not selected for the plot with multiple voltage data points."
             )
+
+        # the selection below snaps to the nearest recorded bias, which would quietly plot a
+        # different operating point than the one asked for
+        if "voltage" in sel_kwargs:
+            recorded = np.atleast_1d(voltages.data)
+            if not np.any(
+                np.isclose(recorded, sel_kwargs["voltage"], rtol=0.0, atol=VOLTAGE_MATCH_TOL)
+            ):
+                raise DataError(
+                    f"No recorded bias matches voltage={sel_kwargs['voltage']} for monitor "
+                    f"'{self.monitor.name}'; available: {recorded.tolist()}."
+                )
 
         selection_data = {coord: sel_kwargs[coord] for coord in "xyz" if coord in sel_kwargs.keys()}
         N_coords = len(selection_data.keys())
@@ -267,24 +294,37 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
                     f"Triangular grid (normal: {self.Ec.normal_axis}) cannot be sliced by a parallel plane."
                 )
 
-        Ec_data = self.Ec
-        Ev_data = self.Ev
-        Ei_data = self.Ei
-        Efn_data = self.Efn
-        Efp_data = self.Efp
+        elif N_coords != 0:
+            raise DataError(
+                "No spatial coordinate value has to be defined to plot the 1D cross-section "
+                "figure for a 1D dataset."
+            )
+
+        band_data = {
+            "Ec": self.Ec,
+            "Ev": self.Ev,
+            "Ei": self.Ei,
+            "Efn": self.Efn,
+            "Efp": self.Efp,
+        }
 
         for coord_name, coord_val in selection_data.items():
-            Ec_data = Ec_data.sel(**{coord_name: coord_val}, method="nearest")
-            Ev_data = Ev_data.sel(**{coord_name: coord_val}, method="nearest")
-            Ei_data = Ei_data.sel(**{coord_name: coord_val}, method="nearest")
-            Efn_data = Efn_data.sel(**{coord_name: coord_val}, method="nearest")
-            Efp_data = Efp_data.sel(**{coord_name: coord_val}, method="nearest")
+            band_data = {
+                name: data.sel(**{coord_name: coord_val}, method="nearest")
+                for name, data in band_data.items()
+            }
 
-        Ec_data.plot(ax=ax, label="Ec")
-        Ev_data.plot(ax=ax, label="Ev")
-        Ei_data.plot(ax=ax, label="Ei")
-        Efn_data.plot(ax=ax, label="Efn")
-        Efp_data.plot(ax=ax, label="Efp")
+        if is_cartesian:
+            # the monitor's two zero-size dimensions survive as singletons
+            band_data = {name: data.squeeze(drop=True) for name, data in band_data.items()}
+            if all(data.ndim == 0 for data in band_data.values()):
+                raise DataError(
+                    f"The data for monitor '{self.monitor.name}' is a single point, which has "
+                    "no spatial extent to plot the energy bands against."
+                )
+
+        for name, data in band_data.items():
+            data.plot(ax=ax, label=name)
         ax.legend()
 
         return ax
@@ -427,27 +467,27 @@ class SteadyChargeResidualData(HeatChargeMonitorData):
         description="Per-node residual monitor associated with a Charge simulation.",
     )
 
-    residual_potential: UnstructuredFieldType = Field(
+    residual_potential: VoltageFieldDataset = Field(
         title="Potential residual",
         description="Signed residual of the Poisson equation :math:`R_\\psi`.",
         json_schema_extra={"units": "dimensionless"},
     )
 
-    residual_electrons: UnstructuredFieldType = Field(
+    residual_electrons: VoltageFieldDataset = Field(
         title="Electron continuity residual",
         description="Signed residual of the electron continuity (carrier conservation) "
         "equation :math:`R_n`.",
         json_schema_extra={"units": "dimensionless"},
     )
 
-    residual_holes: UnstructuredFieldType = Field(
+    residual_holes: VoltageFieldDataset = Field(
         title="Hole continuity residual",
         description="Signed residual of the hole continuity (carrier conservation) "
         "equation :math:`R_p`.",
         json_schema_extra={"units": "dimensionless"},
     )
 
-    residual_temperature: UnstructuredFieldType | None = Field(
+    residual_temperature: VoltageFieldDataset | None = Field(
         default=None,
         title="Thermal residual",
         description="Signed residual of the heat equation :math:`R_T`. "
@@ -456,9 +496,9 @@ class SteadyChargeResidualData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
+    def field_components(self) -> dict[str, VoltageFieldDataset | None]:
         """Maps the field components to their associated data."""
-        components: dict[str, UnstructuredFieldType | None] = {
+        components: dict[str, VoltageFieldDataset | None] = {
             "residual_potential": self.residual_potential,
             "residual_electrons": self.residual_electrons,
             "residual_holes": self.residual_holes,
@@ -518,7 +558,7 @@ class SelfHeatingData(HeatChargeMonitorData):
             The integrated heat generation rate.
         """
         data = self._resolve_field(field="heat_rate")
-        if isinstance(data, SpatialDataArray):
+        if isinstance(data, AbstractSpatialDataArray):
             raise DataError(
                 f"The data for monitor '{self.monitor.name}' is already Cartesian; integrate "
                 "it directly with xarray rather than through 'total_power'."
@@ -592,7 +632,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         description="Generation-recombination rate monitor associated with a Charge simulation.",
     )
 
-    net_recombination: UnstructuredFieldType | None = Field(
+    net_recombination: VoltageFieldDataset | None = Field(
         default=None,
         title="Net generation-recombination rate",
         description="Net generation-recombination source term :math:`U = R - G` entering the "
@@ -601,7 +641,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
-    impact_ionization: UnstructuredFieldType | None = Field(
+    impact_ionization: VoltageFieldDataset | None = Field(
         default=None,
         title="Impact-ionization generation rate",
         description="Signed contribution of impact-ionization (avalanche) generation, "
@@ -610,7 +650,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
-    shockley_reed_hall: UnstructuredFieldType | None = Field(
+    shockley_reed_hall: VoltageFieldDataset | None = Field(
         default=None,
         title="Shockley-Reed-Hall recombination rate",
         description="Signed contribution of Shockley-Reed-Hall recombination, "
@@ -618,7 +658,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
-    auger: UnstructuredFieldType | None = Field(
+    auger: VoltageFieldDataset | None = Field(
         default=None,
         title="Auger recombination rate",
         description="Signed contribution of Auger recombination, "
@@ -626,7 +666,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
-    radiative: UnstructuredFieldType | None = Field(
+    radiative: VoltageFieldDataset | None = Field(
         default=None,
         title="Radiative recombination rate",
         description="Signed contribution of radiative recombination, "
@@ -634,7 +674,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
-    band_to_band_tunneling: UnstructuredFieldType | None = Field(
+    band_to_band_tunneling: VoltageFieldDataset | None = Field(
         default=None,
         title="Band-to-band tunneling generation rate",
         description="Signed contribution of band-to-band tunneling generation, "
@@ -643,7 +683,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
-    distributed_generation: UnstructuredFieldType | None = Field(
+    distributed_generation: VoltageFieldDataset | None = Field(
         default=None,
         title="Distributed carrier generation rate",
         description="Signed contribution of distributed carrier generation, "
@@ -653,12 +693,12 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, UnstructuredFieldType | None]:
+    def field_components(self) -> dict[str, VoltageFieldDataset | None]:
         """Maps the field components to their associated data."""
         # ``net_recombination`` stays present even when ``None`` so missing data
         # is reported like other monitors; per-mechanism entries appear only
         # when populated.
-        components: dict[str, UnstructuredFieldType | None] = {
+        components: dict[str, VoltageFieldDataset | None] = {
             "net_recombination": self.net_recombination
         }
         optional = {

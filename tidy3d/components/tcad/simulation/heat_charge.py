@@ -62,6 +62,7 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
+    SteadyElectricFieldMonitor,
     SteadyFreeCarrierMonitor,
     SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
@@ -559,6 +560,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("structures",), self._structures_not_at_edges)
         self._call_with_validation_loc(("structures",), self._validate_scene)
         self._call_with_validation_loc(("monitors",), self._monitors_cross_solids)
+        self._call_with_validation_loc(("monitors",), self._check_monitor_dimensionality)
         self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
         self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
         self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
@@ -635,6 +637,44 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("use_accelerated_solver",), self._check_use_accelerated_solver
         )
+        return self
+
+    def _check_monitor_dimensionality(self) -> Self:
+        """Reject monitors whose recorded quantity needs more than a line.
+
+        A monitor also collapses along the simulation's own invariant dimensions, so one
+        zero-size dimension in a 2D simulation already records a line, not a plane.
+        """
+        needs_two_dims = {
+            SteadyCapacitanceMonitor: "integrates charge over mesh cells",
+            SteadyElectricFieldMonitor: "records a vector field",
+            SteadyCurrentDensityMonitor: "records a vector field",
+        }
+        sim_zero_dims = set(self.zero_dims)
+
+        for idx, mnt in enumerate(self.monitors):
+            reason = next(
+                (why for mnt_type, why in needs_two_dims.items() if isinstance(mnt, mnt_type)),
+                None,
+            )
+            if reason is None:
+                continue
+
+            zero_dims = sim_zero_dims | set(mnt.zero_dims)
+            if len(zero_dims) < 2:
+                continue
+
+            axes = ", ".join("xyz"[dim] for dim in sorted(zero_dims))
+            note = "" if set(mnt.zero_dims) >= zero_dims else " (with the simulation's own)"
+            self._raise_validation_error_at_loc(
+                f"'{type(mnt).__name__}' (monitor '{mnt.name}') {reason}, so it needs two "
+                f"non-zero dimensions, but it has zero size along {axes}{note} and records "
+                "only a line or a point. Give it a non-zero size in two dimensions the "
+                "simulation resolves.",
+                "monitors",
+                idx,
+            )
+
         return self
 
     def _monitors_cross_solids(self) -> Self:

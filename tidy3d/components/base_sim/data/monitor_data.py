@@ -10,7 +10,7 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
-from tidy3d.components.data.data_array import SpatialDataArray
+from tidy3d.components.data.data_array import AbstractSpatialDataArray
 from tidy3d.components.data.dataset import Dataset
 from tidy3d.components.types import Coordinate, Symmetry
 
@@ -55,9 +55,9 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
 
     def _symmetry_expanded_copy_base(
         self,
-        data: UnstructuredGridDatasetType | SpatialDataArray,
+        data: UnstructuredGridDatasetType | AbstractSpatialDataArray,
         custom_symmetry: tuple[Literal[-1, 1] | XrDataArray, ...] | None = None,
-    ) -> UnstructuredGridDatasetType | SpatialDataArray:
+    ) -> UnstructuredGridDatasetType | AbstractSpatialDataArray:
         """Return the data with symmetry applied."""
 
         # no symmetry
@@ -68,7 +68,8 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
 
         mnt_bounds = np.array(self.monitor.bounds)
 
-        if isinstance(new_data, SpatialDataArray):
+        # 'SpatialVoltageDataArray' is a sibling of 'SpatialDataArray', not a subclass
+        if isinstance(new_data, AbstractSpatialDataArray):
             data_bounds = [
                 [np.min(new_data.x), np.min(new_data.y), np.min(new_data.z)],
                 [np.max(new_data.x), np.max(new_data.y), np.max(new_data.z)],
@@ -117,7 +118,7 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
             for dim in dims_need_clipping_right:
                 clip_bounds[1][dim] = mnt_bounds[1][dim]
 
-            if isinstance(new_data, SpatialDataArray):
+            if isinstance(new_data, AbstractSpatialDataArray):
                 new_data = new_data.sel_inside(clip_bounds)
             else:
                 new_data = new_data.box_clip(bounds=clip_bounds)

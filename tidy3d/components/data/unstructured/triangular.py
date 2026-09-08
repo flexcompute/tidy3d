@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from xarray import DataArray
 
     from tidy3d.compat import Self
-    from tidy3d.components.types import ArrayLike, Ax, Bound
+    from tidy3d.components.types import ArrayLike, Ax, Bound, Coordinate
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
@@ -255,6 +255,16 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # perform slicing in vtk and get unprocessed points and values
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
+
+        # the plane can lie inside the bounds -- all '_plane_slice_raw' checks -- and still
+        # miss every cell, e.g. crossing a hole in a non-convex grid. An empty slice carries
+        # no points object at all, so this has to come before reading the points.
+        if slice_vtk.GetNumberOfPoints() == 0:
+            raise DataError(
+                f"Slicing plane (axis: {axis}, pos: {pos}) does not intersect any cell of the "
+                "unstructured grid."
+            )
+
         points_numpy = np.array(vtk["vtk_to_numpy"](slice_vtk.GetPoints().GetData()), copy=True)
         values = self._get_values_from_vtk(
             slice_vtk,
@@ -284,6 +294,56 @@ class TriangularGridDataset(UnstructuredGridDataset):
         return XrDataArray(values_reshaped, coords=coords_dict, name=self.values.name).sortby(
             "xyz"[slice_axis]
         )
+
+    @requires_vtk
+    def line_slice(self, axis: Axis, pos: Coordinate) -> XrDataArray:
+        """Slice data with a line and return the resulting xarray.DataArray.
+
+        Parameters
+        ----------
+        axis : Axis
+            The axis of the slicing line.
+        pos : Tuple[float, float, float]
+            Position of the slicing line.
+
+        Returns
+        -------
+        xarray.DataArray
+            The resulting slice.
+
+        Notes
+        -----
+            The line must lie in the plane of the grid. No 3D probing is needed, unlike
+            the tetrahedral case: one in-plane slice already reduces the grid to a line.
+
+            Coincident points are merged, as in ``plane_slice``, so a line crossing a
+            material interface carries one value there rather than both sides of a
+            discontinuity such as a band offset.
+        """
+
+        if axis == self.normal_axis:
+            raise DataError(
+                f"Triangular grid (normal: {self.normal_axis}) cannot be sliced by a line "
+                "along its normal direction."
+            )
+
+        # the in-plane slice ignores the normal coordinate, so an off-plane line would
+        # silently return data for the wrong position
+        size_scale = float(np.max(np.array(self.bounds[1]) - np.array(self.bounds[0])))
+        if not np.isclose(
+            pos[self.normal_axis],
+            self.normal_pos,
+            rtol=0.0,
+            atol=planar_zero_dim_tolerance(size_scale),
+        ):
+            raise DataError(
+                f"Slicing line at {'xyz'[self.normal_axis]} = {pos[self.normal_axis]} does not "
+                f"lie in the plane of the triangular grid ({'xyz'[self.normal_axis]} = "
+                f"{self.normal_pos})."
+            )
+
+        slice_axis = 3 - self.normal_axis - axis
+        return self.plane_slice(axis=slice_axis, pos=pos[slice_axis])
 
     @requires_vtk
     def reflect(

@@ -9,7 +9,11 @@ import numpy as np
 from pydantic import Field, model_validator
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractUnstructuredMonitorData
-from tidy3d.components.data.data_array import SpatialDataArray
+from tidy3d.components.data.data_array import (
+    AbstractSpatialDataArray,
+    SpatialDataArray,
+    SpatialVoltageDataArray,
+)
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.types import HeatChargeMonitorType
 from tidy3d.components.types import TYPE_TAG_STR, ScalarSymmetry
@@ -24,8 +28,10 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.types import ArrayLike, Bound
 
-FieldDataset = SpatialDataArray | discriminated_union(
-    TriangularGridDataset | TetrahedralGridDataset
+FieldDataset = (
+    SpatialDataArray
+    | SpatialVoltageDataArray
+    | discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
 )
 UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
@@ -153,6 +159,11 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             Feeding the result into another simulation interpolates a second time, onto that
             simulation's mesh. Detail lost here cannot be recovered downstream, so choose a
             resolution fine enough to resolve the structure of the field.
+
+            A line or point monitor holds a single sample along each axis it is flat in.
+            There is nothing to interpolate there, so the recorded value is repeated over
+            every coordinate requested along that axis -- a 1D profile extrudes into the
+            target grid rather than being confined to the line it was recorded on.
         """
         if method != "linear":
             raise DataError(
@@ -186,9 +197,11 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             self._check_sample_count([x, y, z])
 
         if not isinstance(data, (TriangularGridDataset, TetrahedralGridDataset)):
-            # Already Cartesian. Only a plain 'SpatialDataArray' can be returned as one --
-            # anything carrying extra dimensions (a time series, say) would need a selector
-            # for them, which this converter does not take.
+            # Already Cartesian, as a 1D monitor's data always is. Only a plain
+            # 'SpatialDataArray' can be returned as one -- anything still carrying extra
+            # dimensions (a time series, say) would need a selector for them, which this
+            # converter does not take.
+            data = self._select_voltage(data=data, voltage=voltage)
             if not isinstance(data, SpatialDataArray):
                 extra = [dim for dim in data.dims if dim not in ("x", "y", "z")]
                 raise DataError(
@@ -200,11 +213,21 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             # Only resample if a different grid was asked for.
             if not coords_given:
                 return data
-            return SpatialDataArray(
-                data.interp(
-                    x=x, y=y, z=z, method=method, kwargs={"fill_value": fill_value}
-                ).transpose("x", "y", "z")
-            )
+
+            # A line or point monitor is singleton along its flat axes, and interpolating
+            # linearly across a single sample divides by a zero slope, giving NaN. That one
+            # value is all there is along such an axis, so carry it to every coordinate
+            # asked for there instead.
+            target = {"x": x, "y": y, "z": z}
+            flat_dims = [dim for dim in target if data.coords[dim].size == 1]
+            interp_coords = {dim: pos for dim, pos in target.items() if dim not in flat_dims}
+            if interp_coords:
+                data = data.interp(
+                    **interp_coords, method=method, kwargs={"fill_value": fill_value}
+                )
+            for dim in flat_dims:
+                data = data.squeeze(dim=dim, drop=True).expand_dims({dim: target[dim]})
+            return SpatialDataArray(data.transpose("x", "y", "z"))
 
         if not coords_given:
             raise DataError(
@@ -320,14 +343,21 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             for lo, hi, count in zip(rmin, rmax, counts)
         )
 
-    def _select_voltage(
-        self, data: UnstructuredFieldType, voltage: float | None
-    ) -> UnstructuredFieldType:
+    def _select_voltage(self, data: FieldDataset, voltage: float | None) -> FieldDataset:
         """Reduce a bias-resolved dataset to the single requested bias point."""
-        if "voltage" not in data._non_spatial_dims:
+        # an unstructured dataset keeps its dimensions and bias coordinate on its 'values'.
+        # Any 'xarray.DataArray' carries them directly -- a Cartesian array, or the plain
+        # line an unstructured 'sel()' returns.
+        unstructured = isinstance(data, (TetrahedralGridDataset, TriangularGridDataset))
+        if unstructured:
+            non_spatial_dims = data._non_spatial_dims
+        else:
+            non_spatial_dims = [dim for dim in data.dims if dim not in ("x", "y", "z")]
+        if "voltage" not in non_spatial_dims:
             return data
 
-        voltages = np.atleast_1d(data.values.coords["voltage"].data)
+        values = data.values if unstructured else data
+        voltages = np.atleast_1d(values.coords["voltage"].data)
         if voltage is None:
             if len(voltages) > 1:
                 raise DataError(
@@ -350,4 +380,9 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
 
         # ``drop=True`` removes the voltage dimension, so the interpolation downstream
         # returns a plain 'SpatialDataArray' rather than a bias-resolved array.
-        return data.isel(voltage=index, drop=True)
+        selected = data.isel(voltage=index, drop=True)
+        # what is left of a Cartesian array has plain spatial dimensions, which is a
+        # different array class; a plain line stays a plain 'xarray.DataArray'
+        if isinstance(data, AbstractSpatialDataArray):
+            return SpatialDataArray(selected)
+        return selected

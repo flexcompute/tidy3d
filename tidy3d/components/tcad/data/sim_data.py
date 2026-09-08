@@ -7,13 +7,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, model_validator
+from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
+    AbstractSpatialDataArray,
     ConvergenceHistoryDataArray,
     FreqVoltageDataArray,
-    SpatialDataArray,
     SteadyVoltageDataArray,
 )
 from tidy3d.components.data.utils import (
@@ -335,6 +336,12 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
 
         field_data = self._get_field_by_name(monitor_data=monitor_data, field_name=field_name)
 
+        if isinstance(field_data, AbstractSpatialDataArray):
+            raise DataError(
+                f"The data for monitor '{monitor_name}' is a line or a point, which the solver "
+                "records on a Cartesian grid of its own, so there is no mesh to plot."
+            )
+
         # do sel on unstructured data
         if len(sel_kwargs) > 0:
             field_data = field_data.sel(**sel_kwargs)
@@ -460,7 +467,6 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         object.__setattr__(self, "device_characteristics", device_characteristics)
         return self
 
-    @equal_aspect
     @add_ax_if_none
     def plot_field(
         self,
@@ -506,11 +512,11 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         cmap : Optional[Union[str, Colormap]] = None
             Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
-            These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
-            or time dimension (``t``) if applicable.
-            For the plotting to work appropriately, the resulting data after selection must contain
-            only two coordinates with len > 1.
-            Furthermore, these should be spatial coordinates (``x``, ``y``, or ``z``).
+            These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``), the bias
+            voltage (``voltage``), or time (``t``), whichever the data carries. A bias must be
+            one the simulation solved at; it is not interpolated. For the plotting to work
+            appropriately, the selection must leave two spatial coordinates with len > 1, which
+            are plotted as a plane, or one, which is plotted as a line.
 
         Returns
         -------
@@ -582,7 +588,10 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             min_bounds = tuple(ax_min)
             max_bounds = tuple(ax_max)
 
-        if isinstance(field_data, SpatialDataArray):
+        # A two-coordinate 'sel()' on an unstructured dataset returns a line as a plain
+        # 'xarray.DataArray', not a 'SpatialDataArray', so match the base class -- the 1D
+        # branch below is exactly what such a result needs.
+        if isinstance(field_data, XrDataArray):
             # interp out any monitor.size==0 dimensions
             monitor = self.simulation.get_monitor_by_name(monitor_name)
             thin_dims = {
@@ -596,6 +605,13 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 else:
                     field_data = field_data.interp(**{axis: pos}, kwargs={"bounds_error": True})
 
+            # A bias is matched against the recorded ones, never interpolated: a voltage
+            # between two bias points is not an operating point the solver solved at.
+            if "voltage" in field_data.dims:
+                field_data = monitor_data._select_voltage(
+                    data=field_data, voltage=sel_kwargs.pop("voltage", None)
+                )
+
             # select the extra coordinates out of the data from user-specified kwargs
             for coord_name, coord_val in sel_kwargs.items():
                 if field_data.coords[coord_name].size <= 1:
@@ -607,6 +623,20 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
 
             field_data = field_data.squeeze(drop=True)
             non_scalar_coords = {name: c for name, c in field_data.coords.items() if c.size > 1}
+
+            if len(non_scalar_coords) == 1 and set(non_scalar_coords) <= set("xyz"):
+                # a 1D monitor has no plane to overlay structures on, so the line is
+                # the whole figure
+                field_data.plot(ax=ax, x=next(iter(non_scalar_coords)))
+                ax.set_ylabel(field_name or monitor_data.field_name(val))
+                ax.set_ylim(vmin, vmax)
+                return ax
+
+            if not non_scalar_coords:
+                raise DataError(
+                    f"The data for monitor '{monitor_name}' is a single point, which has no "
+                    "spatial extent to plot. Read the value from the monitor data directly."
+                )
 
             # assert the data is valid for plotting
             if len(non_scalar_coords) != 2:
@@ -667,6 +697,9 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         # set the limits based on the xarray coordinates min and max
         ax.set_xlim(min_bounds[0], max_bounds[0])
         ax.set_ylim(min_bounds[1], max_bounds[1])
+
+        # both axes are spatial here, unlike the 1D branch above, which returns early
+        ax.set_aspect("equal")
 
         return ax
 

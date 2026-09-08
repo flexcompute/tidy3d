@@ -24,7 +24,10 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
     unstructured: bool = Field(
         default=True,
         title="Unstructured Grid",
-        description="Return data on the original unstructured grid. Setting this to ``False`` "
+        description="Return data on the original unstructured grid, where the monitor has "
+        "one. A monitor with zero size in two or more dimensions records a line or a point, "
+        "which has no unstructured form, so its data is Cartesian either way. Setting this "
+        "to ``False`` "
         "is deprecated and will be removed in Tidy3D 3.0, after which monitor data is "
         "always returned on the solver's own grid; resample it with "
         ":meth:`HeatChargeMonitorData.to_spatial_data_array` where a Cartesian "

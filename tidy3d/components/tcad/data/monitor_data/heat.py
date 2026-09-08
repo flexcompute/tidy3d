@@ -7,6 +7,7 @@ from pydantic import Field
 from tidy3d.components.data.data_array import (
     ScalarFieldTimeDataArray,
     SpatialDataArray,
+    SpatialVoltageDataArray,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
@@ -18,7 +19,8 @@ FieldDataset = (
     discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
     | SpatialDataArray
     | ScalarFieldTimeDataArray
-    | SpatialDataArray
+    # a 1D or point monitor in a charge simulation records temperature over bias
+    | SpatialVoltageDataArray
 )
 UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 

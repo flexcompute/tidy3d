@@ -1141,21 +1141,6 @@ class AbstractSpatialDataArray(DataArray, ABC):
         self_bounds = (tuple(self_min), tuple(self_max))
         return bounds_contains(self_bounds, bounds, rtol=rtol, atol=atol)
 
-
-class SpatialDataArray(AbstractSpatialDataArray):
-    """Spatial distribution.
-
-    Example
-    -------
-    >>> x = [1,2]
-    >>> y = [2,3,4]
-    >>> z = [3,4,5,6]
-    >>> coords = dict(x=x, y=y, z=z)
-    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
-    """
-
-    __slots__ = ()
-
     def reflect(
         self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1
     ) -> Self:
@@ -1175,16 +1160,19 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
         Returns
         -------
-        SpatialDataArray
+        AbstractSpatialDataArray
             Data after reflection is performed.
         """
 
         sorted_self = self._spatially_sorted
+        dim = "xyz"[axis]
 
-        coords = [sorted_self.x.values, sorted_self.y.values, sorted_self.z.values]
+        # index the reflected axis by name so extra dims ('voltage', 't', ...) pass through
+        coords = {name: np.asarray(sorted_self.coords[name].data) for name in sorted_self.dims}
         data = np.array(sorted_self.data)
+        dim_index = list(sorted_self.dims).index(dim)
 
-        data_left_bound = coords[axis][0]
+        data_left_bound = coords[dim][0]
 
         if np.isclose(center, data_left_bound):
             num_duplicates = 1
@@ -1194,36 +1182,49 @@ class SpatialDataArray(AbstractSpatialDataArray):
             num_duplicates = 0
 
         if reflection_only:
-            coords[axis] = 2 * center - coords[axis]
-            coords_dict = dict(zip("xyz", coords))
+            new_coords = dict(coords)
+            new_coords[dim] = 2 * center - coords[dim]
+            return type(self)(data * symmetry, coords=new_coords).sortby(dim)
 
-            tmp_arr = SpatialDataArray(sorted_self.data * symmetry, coords=coords_dict)
+        shape = list(np.shape(data))
+        old_len = shape[dim_index]
+        shape[dim_index] = 2 * old_len - num_duplicates
 
-            return tmp_arr.sortby("xyz"[axis])
+        ind_left = [slice(None)] * data.ndim
+        ind_right = [slice(None)] * data.ndim
 
-        shape = np.array(np.shape(data))
-        old_len = shape[axis]
-        shape[axis] = 2 * old_len - num_duplicates
+        ind_left[dim_index] = slice(old_len - 1, None, -1)
+        ind_right[dim_index] = slice(old_len - num_duplicates, None)
 
-        ind_left = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
-        ind_right = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+        # source dtype: a default-float zeros() would discard the imaginary part
+        new_data = np.zeros(shape, dtype=data.dtype)
 
-        ind_left[axis] = slice(old_len - 1, None, -1)
-        ind_right[axis] = slice(old_len - num_duplicates, None)
+        new_data[tuple(ind_left)] = data * symmetry
+        new_data[tuple(ind_right)] = data
 
-        new_data = np.zeros(shape)
+        new_dim_coords = np.zeros(shape[dim_index])
+        new_dim_coords[old_len - num_duplicates :] = coords[dim]
+        new_dim_coords[old_len - 1 :: -1] = 2 * center - coords[dim]
 
-        new_data[ind_left[0], ind_left[1], ind_left[2]] = data * symmetry
-        new_data[ind_right[0], ind_right[1], ind_right[2]] = data
+        new_coords = dict(coords)
+        new_coords[dim] = new_dim_coords
 
-        new_coords = np.zeros(shape[axis])
-        new_coords[old_len - num_duplicates :] = coords[axis]
-        new_coords[old_len - 1 :: -1] = 2 * center - coords[axis]
+        return type(self)(new_data, coords=new_coords)
 
-        coords[axis] = new_coords
-        coords_dict = dict(zip("xyz", coords))
 
-        return SpatialDataArray(new_data, coords=coords_dict)
+class SpatialDataArray(AbstractSpatialDataArray):
+    """Spatial distribution.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
+    """
+
+    __slots__ = ()
 
 
 class ScalarFieldDataArray(AbstractSpatialDataArray):
