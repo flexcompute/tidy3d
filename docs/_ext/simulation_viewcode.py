@@ -1,4 +1,4 @@
-"""Preserve Sphinx viewcode links for extracted simulation methods."""
+"""Preserve Sphinx viewcode links for extracted public methods."""
 
 from __future__ import annotations
 
@@ -8,17 +8,26 @@ from typing import Any
 
 from sphinx.pycode import ModuleAnalyzer
 
+from tidy3d.components.grid.grid_spec import GridSpec, LayerRefinementSpec
 from tidy3d.components.simulation import AbstractYeeGridSimulation, Simulation
 
-_SIMULATION_MODULE_PREFIX = "tidy3d.components.simulation."
-_PUBLIC_SIMULATION_CLASSES = (AbstractYeeGridSimulation, Simulation)
+_EXTRACTED_MODULE_PREFIXES = (
+    "tidy3d.components.grid.grid_spec.",
+    "tidy3d.components.simulation.",
+)
+_PUBLIC_EXTRACTED_CLASSES = (
+    AbstractYeeGridSimulation,
+    GridSpec,
+    LayerRefinementSpec,
+    Simulation,
+)
 
 
 def _viewcode_aliases() -> dict[str, dict[str, str]]:
     """Map public class member names to their extracted module-level source tags."""
 
     aliases: defaultdict[str, dict[str, str]] = defaultdict(dict)
-    for cls in _PUBLIC_SIMULATION_CLASSES:
+    for cls in _PUBLIC_EXTRACTED_CLASSES:
         for member_name, descriptor in vars(cls).items():
             if member_name.startswith("_"):
                 continue
@@ -30,7 +39,7 @@ def _viewcode_aliases() -> dict[str, dict[str, str]]:
             if not inspect.isfunction(implementation):
                 continue
             module_name = implementation.__module__
-            if not module_name.startswith(_SIMULATION_MODULE_PREFIX):
+            if not module_name.startswith(_EXTRACTED_MODULE_PREFIXES):
                 continue
             if "." in implementation.__qualname__:
                 continue
