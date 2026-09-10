@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.parallel_adjoint_bases import ParallelAdjointBasis
     from tidy3d.components.autograd.spacing import SamplingResolution
-    from tidy3d.flex_em.translate.sample_sets import GeometrySampleSets
+    from tidy3d.em.translate.sample_sets import GeometrySampleSets
 
     from .types import CustomVJPConfig, NumericalStructureConfig
 

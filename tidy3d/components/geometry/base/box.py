@@ -47,7 +47,7 @@ if TYPE_CHECKING:
         Shapely,
         Size,
     )
-    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 
 class Box(SimplePlaneIntersection, Centered):
@@ -952,7 +952,7 @@ class Box(SimplePlaneIntersection, Centered):
         collapsed by clipping carries an explicit empty set (zero gradient). The face
         sets serve both the ``center`` and ``size`` derivative paths.
         """
-        from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
+        from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
         sample_sets = {}
         for min_max_index in (0, 1):
@@ -1044,7 +1044,7 @@ class Box(SimplePlaneIntersection, Centered):
         The face's identity is carried by its canonical key ``("faces", min_max_index,
         axis_normal)``; the set itself holds only samples and quadrature weights.
         """
-        from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
+        from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
         _, axis_perp = self.pop_axis((0, 1, 2), axis=axis_normal)
 

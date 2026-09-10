@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         Shapely,
     )
     from tidy3d.components.viz import PlotParams
-    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
     from .box import Box
 

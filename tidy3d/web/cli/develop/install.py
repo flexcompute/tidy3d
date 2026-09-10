@@ -90,17 +90,17 @@ def _get_uv_project_python() -> str:
 def _install_internal_dependencies(*, include_extras: bool = False) -> str:
     """Install dependencies intentionally excluded from ``uv.lock`` and validate the result."""
     project_python = _get_uv_project_python()
-    flex_em_source = get_install_directory().parent / "flex-em"
+    core_source = get_install_directory().parent / "flexcompute-core"
 
-    if (flex_em_source / "pyproject.toml").is_file():
-        flex_em_install = [
+    if (core_source / "pyproject.toml").is_file():
+        core_install = [
             "--no-sources",
             "--no-config",
             "--editable",
-            str(flex_em_source),
+            str(core_source),
         ]
     else:
-        flex_em_install = [_declared_requirement("flex-em")]
+        core_install = [_declared_requirement("flexcompute-core")]
 
     echo_and_check_subprocess(
         [
@@ -111,8 +111,8 @@ def _install_internal_dependencies(*, include_extras: bool = False) -> str:
             project_python,
             "--no-deps",
             "--reinstall-package",
-            "flex-em",
-            *flex_em_install,
+            "flexcompute-core",
+            *core_install,
         ]
     )
 
@@ -315,7 +315,7 @@ def install_development_environment(args: Any = None) -> None:
     # reinstall and validate the excluded packages explicitly.
     activate_uv_python()
     echo_and_check_subprocess(
-        ["uv", "sync", "--frozen", "--extra", "dev", "--no-install-package", "flex-em"]
+        ["uv", "sync", "--frozen", "--extra", "dev", "--no-install-package", "flexcompute-core"]
     )
     _install_internal_dependencies()
     echo_and_check_subprocess(["uv", "run", "--frozen", "--no-sync", "pre-commit", "install"])
@@ -352,7 +352,7 @@ def install_in_uv(env: str = "dev") -> int:
         "--extra",
         env,
         "--no-install-package",
-        "flex-em",
+        "flexcompute-core",
     ]
     if env == "extras":
         sync_command.extend(["--no-install-package", "tidy3d-extras"])
@@ -466,12 +466,12 @@ def verify_development_environment(args: Any = None) -> int:
             "--extra",
             "dev",
             "--no-install-package",
-            "flex-em",
+            "flexcompute-core",
             "--dry-run",
         ]
     )
     print(
-        "'uv sync --frozen --extra dev --no-install-package flex-em' dry run on the "
+        "'uv sync --frozen --extra dev --no-install-package flexcompute-core' dry run on the "
         "'uv.lock' complete."
     )
     return 0

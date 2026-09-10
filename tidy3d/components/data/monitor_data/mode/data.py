@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
-from flex_em.numerical.raw import mode as mode_numerics
+from flexcompute.core._migration.em.numerical.raw import mode as mode_numerics
 from pydantic import (
     Field,
     model_validator,

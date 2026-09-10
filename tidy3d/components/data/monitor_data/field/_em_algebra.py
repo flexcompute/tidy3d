@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
-from flex_em.numerical.raw import (
+from flexcompute.core._migration.em.numerical.raw import (
     field_data as field_data_numerics,
 )
-from flex_em.numerical.raw import (
+from flexcompute.core._migration.em.numerical.raw import (
     mode as mode_numerics,
 )
 

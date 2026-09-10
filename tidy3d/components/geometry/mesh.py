@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
-    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 AREA_SIZE_THRESHOLD = 1e-36
 _TRIMESH_PYTHON_RAY_BACKEND = "trimesh.ray.ray_triangle"
@@ -807,7 +807,7 @@ class TriangleMesh(base.Geometry, ABC):
         simulation domain or no retained samples). The per-vertex scatter data (face
         indices and barycentric coordinates) travels in the metadata.
         """
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             SurfaceSampleSet,
             TriangleMeshSurfaceMetadata,
         )
@@ -889,7 +889,7 @@ class TriangleMesh(base.Geometry, ABC):
             vjps[_MESH_DERIVATIVE_PATH] = np.zeros_like(triangles)
             return vjps
 
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             TriangleMeshSurfaceMetadata,
             typed_sample_set_metadata,
         )

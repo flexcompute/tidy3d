@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
-from flex_em.numerical.raw import source_normalization as source_normalization_numerics
+from flexcompute.core._migration.em.numerical.raw import (
+    source_normalization as source_normalization_numerics,
+)
 from pydantic import Field
 
 from tidy3d.components.data.data_array import (

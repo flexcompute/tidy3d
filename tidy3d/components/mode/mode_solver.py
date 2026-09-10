@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 import numpy as np
 import xarray as xr
-from flex_em.numerical.raw import grid as grid_numerics
+from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import (
@@ -2388,7 +2388,7 @@ class ModeSolver(Tidy3dBaseModel):
             """Signed offsets from the plane to its adjacent grid pair.
 
             The pure pair selection -- closest point, side choice, and the in-range clamp
-            for near-boundary planes -- is shared in ``flex_em.numerical.raw.grid``; an
+            for near-boundary planes -- is shared in ``flexcompute.core._migration.em.numerical.raw.grid``; an
             unbracketed clamped pair is detected and declined in
             ``_grid_correction_factors``.
             """

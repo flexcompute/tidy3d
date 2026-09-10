@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast, get_args
 
-from flex_em.numerical.raw import source_normalization as source_normalization_numerics
-from flex_em.numerical.raw import symmetry as symmetry_numerics
+from flexcompute.core._migration.em.numerical.raw import (
+    source_normalization as source_normalization_numerics,
+)
+from flexcompute.core._migration.em.numerical.raw import symmetry as symmetry_numerics
 
 from tidy3d.components.types import EMField, PointCloudFieldComponent
 

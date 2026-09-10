@@ -6,7 +6,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, cast, get_args
 
 import numpy as np
-from flex_em.numerical.raw import diffraction as diffraction_numerics
+from flexcompute.core._migration.em.numerical.raw import diffraction as diffraction_numerics
 
 from tidy3d.components.types.base import DiffractionPolarization
 from tidy3d.constants import C_0, EPSILON_0, MU_0, fp_eps

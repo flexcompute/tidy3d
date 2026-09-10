@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import autograd.numpy as np
 import xarray as xr
-from flex_em.numerical.raw import grid as grid_numerics
+from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
 from pydantic import Field
 
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray, ModeAmpsDataArray
@@ -177,7 +177,7 @@ class ModeSolverData(ModeData):
             a cell of the simulation boundary -- the correction has no counterpart on the
             grid to reproduce: every FDTD path stays on the grid rather than reaching past
             it, so the correction is declined with a warning instead of extrapolated. The
-            bracketing decision itself is shared in ``flex_em.numerical.raw.grid``.
+            bracketing decision itself is shared in ``flexcompute.core._migration.em.numerical.raw.grid``.
             """
             decision = grid_numerics.classify_plane_offsets(distances.values)
             if decision == "on_grid":

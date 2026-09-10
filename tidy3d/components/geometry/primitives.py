@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
-    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
@@ -391,7 +391,7 @@ class Sphere(base.Centered, base.Circular):
         simulation, generation delegates to the equivalent ``Cylinder`` cross
         section, whose canonical keys are used instead.
         """
-        from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
+        from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
         grid_cfg = config.adjoint
         radius = float(get_static(self.radius))
@@ -946,7 +946,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
         ps_paths = sorted(self._polyslab_derivative_paths(paths), key=str)
 
-        from tidy3d.flex_em.translate.sample_sets import circular_cross_section_metadata
+        from tidy3d.em.translate.sample_sets import circular_cross_section_metadata
 
         sample_sets = polyslab._make_adjoint_sample_sets(paths=ps_paths, ctx=ctx)
         # every non-empty polyslab set carries typed metadata; empty sets carry none and
@@ -978,7 +978,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         first_set = next((ss for ss in sample_sets.values() if ss.num_points > 0), None)
         if first_set is None:
             return dict.fromkeys(paths, 0.0)
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             CircularCrossSectionMetadataBase,
             typed_sample_set_metadata,
         )

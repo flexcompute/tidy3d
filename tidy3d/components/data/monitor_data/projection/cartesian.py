@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
-from flex_em.numerical.raw import field_data as field_data_numerics
+from flexcompute.core._migration.em.numerical.raw import field_data as field_data_numerics
 from pydantic import Field
 
 from tidy3d.components.base import cached_property

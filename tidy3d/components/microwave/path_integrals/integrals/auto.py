@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from flex_em.numerical.raw import microwave as microwave_numerics
+from flexcompute.core._migration.em.numerical.raw import microwave as microwave_numerics
 
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.utils import (

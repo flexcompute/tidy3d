@@ -18,7 +18,7 @@ free of any pydantic / xarray dependency.
 
 from __future__ import annotations
 
-from flex_em.numerical.raw.grid import (
+from flexcompute.core._migration.em.numerical.raw.grid import (
     colocated_edges_1d,
     colocated_widths_1d,
     yee_primal_dual_widths_1d,

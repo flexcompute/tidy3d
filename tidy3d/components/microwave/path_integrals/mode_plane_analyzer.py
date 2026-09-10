@@ -7,7 +7,7 @@ from math import isclose
 from typing import TYPE_CHECKING
 
 import shapely
-from flex_em.numerical.raw import microwave as microwave_numerics
+from flexcompute.core._migration.em.numerical.raw import microwave as microwave_numerics
 from pydantic import Field
 from shapely.geometry import LineString, Polygon
 

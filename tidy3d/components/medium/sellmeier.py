@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 def _medium_numerics() -> Any:
     """Import shared medium kernels after Pydantic model rebuilds finish."""
-    from flex_em.numerical.raw import medium as medium_numerics
+    from flexcompute.core._migration.em.numerical.raw import medium as medium_numerics
 
     return medium_numerics
 

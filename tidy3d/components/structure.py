@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from tidy3d import VisualizationSpec
     from tidy3d.compat import Self
     from tidy3d.components.grid.grid import Grid
-    from tidy3d.flex_em.translate.sample_sets import SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
     from .autograd.derivative_utils import DerivativeInfo
     from .autograd.types import AutogradFieldMap, PathType

@@ -20,12 +20,12 @@ from tidy3d.components.source.adjoint_helpers import (
 )
 from tidy3d.components.source.field import AbstractGaussianBeam
 from tidy3d.config import config
-from tidy3d.exceptions import AdjointError
-from tidy3d.flex_em.translate.sample_sets import (
+from tidy3d.em.translate.sample_sets import (
     SamplingContext,
     shape_paths_by_structure,
     validate_sample_sets_coverage,
 )
+from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel
 

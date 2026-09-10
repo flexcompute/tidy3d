@@ -246,7 +246,7 @@ class GaussianPulse(Pulse):
     def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
-        from flex_em.numerical.raw import source_time as source_time_numerics
+        from flexcompute.core._migration.em.numerical.raw import source_time as source_time_numerics
 
         return source_time_numerics.gaussian_pulse_amp_time(
             time,
@@ -451,7 +451,7 @@ class ContinuousWave(Pulse):
     def amp_time(self, time: float | ArrayFloat1D) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
-        from flex_em.numerical.raw import source_time as source_time_numerics
+        from flexcompute.core._migration.em.numerical.raw import source_time as source_time_numerics
 
         return source_time_numerics.continuous_wave_amp_time(
             time,
@@ -612,7 +612,7 @@ class CustomSourceTime(Pulse):
         if self.source_time_dataset is None:
             raise SetupError("'source_time_dataset' must be provided to use this method.")
 
-        from flex_em.numerical.raw import source_time as source_time_numerics
+        from flexcompute.core._migration.em.numerical.raw import source_time as source_time_numerics
 
         return source_time_numerics.custom_source_time_amp_time(
             time,

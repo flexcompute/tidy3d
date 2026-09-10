@@ -51,7 +51,7 @@ if TYPE_CHECKING:
         PlanePosition,
         Shapely,
     )
-    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
@@ -2377,7 +2377,7 @@ class PolySlab(base.Planar):
         samples (zero gradient), e.g. for faces outside the simulation domain or a
         slab fully outside it.
         """
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             SurfaceSampleSet,
         )
 
@@ -2493,7 +2493,7 @@ class PolySlab(base.Planar):
         interpolators: dict,
     ) -> NDArray:
         """Evaluate the sidewall sample set and scatter to per-vertex gradients."""
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             PolySlabSidewallMetadata,
             typed_sample_set_metadata,
         )
@@ -3020,7 +3020,7 @@ class PolySlab(base.Planar):
         is dA = (dz/cos(theta)) * d_ell. Therefore each patch weight is
         w = L * dz * (-(z - z_ref)) / cos(theta)^2, fully precomputed here.
         """
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             PolySlabSidewallAngleMetadata,
             SurfaceSampleSet,
         )
@@ -3141,7 +3141,7 @@ class PolySlab(base.Planar):
         dx: float,
     ) -> SurfaceSampleSet | None:
         """Handle degenerate line cross-section case"""
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             PolySlabSlabFaceMetadata,
             SurfaceSampleSet,
         )
@@ -3216,7 +3216,7 @@ class PolySlab(base.Planar):
         dx: float,
     ) -> SurfaceSampleSet | None:
         """2d surface samples on a Gauss quadrature grid"""
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             PolySlabSlabFaceMetadata,
             SurfaceSampleSet,
         )
@@ -3316,7 +3316,7 @@ class PolySlab(base.Planar):
         parametric edge positions) travels in the metadata for consumption by
         ``_vertices_vjp_from_sample_set``.
         """
-        from tidy3d.flex_em.translate.sample_sets import (
+        from tidy3d.em.translate.sample_sets import (
             PolySlabSidewallMetadata,
             SurfaceSampleSet,
         )

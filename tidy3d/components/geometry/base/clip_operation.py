@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd.types import PathType
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
-    from tidy3d.flex_em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 
 class ClipOperation(Geometry):

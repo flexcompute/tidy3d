@@ -15,7 +15,9 @@ from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin
 import h5py
 import numpy as np
 import xarray as xr
-from flex_em.numerical.raw import source_normalization as source_normalization_numerics
+from flexcompute.core._migration.em.numerical.raw import (
+    source_normalization as source_normalization_numerics,
+)
 from pydantic import Field
 
 from tidy3d.components.autograd.field_source_pca import FieldSourcePCAProcessor

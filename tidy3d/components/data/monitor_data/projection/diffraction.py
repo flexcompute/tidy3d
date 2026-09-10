@@ -4,7 +4,7 @@ import warnings
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
-from flex_em.numerical.raw import diffraction as diffraction_numerics
+from flexcompute.core._migration.em.numerical.raw import diffraction as diffraction_numerics
 from pydantic import Field
 
 from tidy3d.components.autograd.source_factory import (

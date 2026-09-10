@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tidy3d.components.geometry.bound_ops import bounds_intersection
-from tidy3d.flex_em.translate.sample_sets import (
+from tidy3d.em.translate.sample_sets import (
     GeometrySampleSets,
     SampleSetEntry,
     SamplingContext,
