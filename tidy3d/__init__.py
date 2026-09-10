@@ -96,6 +96,7 @@ from tidy3d.components.tcad.data.types import (
 from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, GaussianDoping
 from tidy3d.components.tcad.generation_recombination import (
     FossumCarrierLifetime,
+    HurkxTrapAssistedTunneling,
     PalankovskiQuayApproxCarrierLifetime,
     SurfaceShockleyReedHallRecombination,
 )
@@ -815,6 +816,7 @@ __all__ = [
     "HeuristicPECStaircasing",
     "HuraySurfaceRoughness",
     "HurkxDirectBandToBandTunneling",
+    "HurkxTrapAssistedTunneling",
     "ImpedanceCalculator",
     "ImpedanceSpec",
     "IndexPerturbation",

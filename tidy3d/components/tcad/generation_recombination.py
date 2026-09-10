@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -12,6 +13,13 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+
+# Advisory floor on a tunneling effective mass in units of the free electron
+# mass. Not a bound: masses below it are accepted. It sits about a decade under
+# the lightest band mass in ordinary use (InSb electrons, ~0.014) and some
+# twenty-seven decades above an electron mass mistakenly given in kilograms, so
+# it separates a unit error from a real material without touching either.
+MIN_PLAUSIBLE_TUNNELING_EFFECTIVE_MASS = 1e-3
 
 
 class FossumCarrierLifetime(Tidy3dBaseModel):
@@ -283,6 +291,178 @@ class RadiativeRecombination(Tidy3dBaseModel):
     )
 
 
+class HurkxTrapAssistedTunneling(Tidy3dBaseModel):
+    """
+    Field enhancement of Shockley-Read-Hall recombination by trap-assisted tunneling.
+
+    Notes
+    -----
+
+        This is not an additional recombination mechanism but a field
+        enhancement of an existing Shockley-Read-Hall model. The process is
+        *elastic* band-to-trap tunneling: a carrier crosses the triangular
+        barrier tilted by the local electric field :math:`F` and is captured
+        by (or emitted from) the trap at unchanged energy. The field acts on
+        the trap-band matrix element, so emission and capture are enhanced
+        equally, detailed balance is preserved and the trap-level
+        concentrations :math:`n_1` and :math:`p_1` are unchanged. The
+        enhancement therefore enters only as a shortened effective lifetime
+        in the bulk,
+
+        .. math::
+
+            \\tau_c \\rightarrow \\frac{\\tau_c}{1 + \\Gamma_c},
+
+        and as an increased recombination velocity at a surface,
+
+        .. math::
+
+            S_c \\rightarrow S_c \\left( 1 + \\Gamma_c \\right),
+
+        for each carrier :math:`c = n, p`.
+
+        The enhancement factor is the Hurkx field-effect integral [1]_
+
+        .. math::
+
+            \\Gamma_c = \\int_0^{\\tilde{E}_{n,c}}
+                \\exp \\left[ w - \\frac{2}{3} \\frac{w^{3/2}}{\\tilde{E}_c} \\right] \\, dw
+
+        in the reduced field :math:`\\tilde{E}_c = |F| / E_{0,c}`, with
+
+        .. math::
+
+            E_{0,c} = \\frac{\\sqrt{8 \\, m_{t,c} \\, m_0 \\, (k T)^3}}{q \\hbar}
+
+        and the Pauli-blocked upper limit, the shorter of the band-to-trap
+        barrier and the distance to the carrier's own quasi-Fermi level,
+
+        .. math::
+
+            \\tilde{E}_{n,n} = \\min \\left[ \\frac{E_C - E_T}{kT},
+            -\\eta_n \\right], \\qquad
+            \\tilde{E}_{n,p} = \\min \\left[ \\frac{E_T - E_V}{kT},
+            -\\eta_p \\right],
+
+        floored at zero. The trap sits at the intrinsic level :math:`E_i`,
+        which is what the equal :math:`n_1 = p_1` convention of the
+        recombination model means, so the two barriers are
+
+        .. math::
+
+            E_C - E_T = \\frac{E_g}{2}
+            - \\frac{kT}{2} \\ln \\frac{N_V}{N_C} - E_t, \\qquad
+            E_T - E_V = \\frac{E_g}{2}
+            + \\frac{kT}{2} \\ln \\frac{N_V}{N_C} + E_t,
+
+        and they still sum to :math:`E_g`: asymmetric densities of state move
+        the trap within the gap, they do not change the gap. The quasi-Fermi
+        coordinates :math:`\\eta_n = F_{1/2}^{-1}(n/N_C)` and
+        :math:`\\eta_p = F_{1/2}^{-1}(p/N_V)` are exact under Fermi-Dirac
+        statistics and reduce to :math:`\\ln(n/N_C)` and
+        :math:`\\ln(p/N_V)` under Boltzmann. Tunneling into states already
+        occupied below the quasi-Fermi level is forbidden, so the enhancement
+        switches itself off in quasi-neutral regions and reaches its full
+        value only in depletion. That window also saturates
+        :math:`\\Gamma_c` at :math:`e^{\\tilde{E}_{n,c}} - 1`, a
+        band-structure limit rather than a fitted one, and one that differs
+        between the two carriers wherever :math:`N_C \\neq N_V`.
+
+        The tunneling effective masses :math:`m_{t,n}` and :math:`m_{t,p}`
+        are **single-carrier** masses, not the electron-hole *reduced* mass
+        that appears in band-to-band tunneling: band-to-trap tunneling
+        involves one carrier and one localized state, so only that carrier's
+        mass enters. The reduced mass built from the same germanium band
+        masses, :math:`(1/0.038 + 1/0.043)^{-1} = 0.0202 \\, m_0`, is a
+        band-to-band quantity and overestimates :math:`\\Gamma` here by more
+        than an order of magnitude.
+
+        The defaults are germanium values, :math:`m_{t,n} = 0.12 \\, m_0`
+        (L valley) and :math:`m_{t,p} = 0.043 \\, m_0` (light hole); a
+        defensible range for :math:`m_{t,n}` in germanium is
+        0.08 - 0.36 :math:`m_0`. These are material inputs, not fitting
+        parameters.
+
+        The formulation is local: the field is taken to be uniform over the
+        tunneling length :math:`L_t = \\Delta E / (q F)`, so it is least
+        reliable at sharp junction corners and heterointerfaces, where the
+        field varies appreciably over that distance.
+
+        On a surface, the enhancement acts on the steady-state solution only;
+        small-signal results do not include it.
+
+    Note
+    ----
+    This model is supported only by the accelerated charge solver.
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> tat = td.HurkxTrapAssistedTunneling(m_t_n=0.12, m_t_p=0.043)
+        >>> srh = td.ShockleyReedHallRecombination(
+        ...     tau_n=1e-9,
+        ...     tau_p=1e-9,
+        ...     field_enhancement=tat,
+        ... )
+
+    References
+    ----------
+        .. [1] Hurkx, G. A. M., D. B. M. Klaassen, and M. P. G. Knuvers. "A new
+               recombination model for device simulation including tunneling."
+               IEEE Transactions on Electron Devices 39.2 (1992): 331-338.
+    """
+
+    m_t_n: PositiveFloat = Field(
+        default=0.12,
+        title="Electron tunneling effective mass",
+        description="Electron tunneling effective mass :math:`m_{t,n}` in units of the "
+        "free electron mass :math:`m_0`. This is the single-carrier tunneling mass, "
+        "not the electron-hole reduced mass used in band-to-band tunneling. The "
+        "default is the germanium L-valley value.",
+        json_schema_extra={"units": "m_0"},
+    )
+
+    m_t_p: PositiveFloat = Field(
+        default=0.043,
+        title="Hole tunneling effective mass",
+        description="Hole tunneling effective mass :math:`m_{t,p}` in units of the "
+        "free electron mass :math:`m_0`. This is the single-carrier tunneling mass, "
+        "not the electron-hole reduced mass used in band-to-band tunneling. The "
+        "default is the germanium light-hole value.",
+        json_schema_extra={"units": "m_0"},
+    )
+
+    @model_validator(mode="after")
+    def _validate_tunneling_masses(self) -> Self:
+        """Require finite masses, and flag ones small enough to look like kilograms.
+
+        There is no upper bound: a heavy band mass is a slow-tunneling material,
+        not an error. The unit mistake runs the other way, and the bound this
+        replaced could not catch it -- an electron mass written in kilograms is
+        9.1e-31, which is comfortably inside any positive upper limit. So the
+        small side is where the check belongs, and it warns rather than rejects,
+        because no threshold can distinguish a very light real mass from a
+        mistake with certainty.
+        """
+        for field_name in ("m_t_n", "m_t_p"):
+            value = getattr(self, field_name)
+            if not math.isfinite(value):
+                self._raise_validation_error_at_loc(
+                    f"'HurkxTrapAssistedTunneling.{field_name}' = {value} is not finite. "
+                    "The tunneling effective mass is given in units of the free "
+                    "electron mass 'm_0'.",
+                    field_name,
+                )
+            if value < MIN_PLAUSIBLE_TUNNELING_EFFECTIVE_MASS:
+                log.warning(
+                    f"'HurkxTrapAssistedTunneling.{field_name}' = {value:.3e} is far below "
+                    "any semiconductor band mass. The tunneling effective mass is given in "
+                    "units of the free electron mass 'm_0', so a value this small usually "
+                    "means it was given in kilograms. Accepting it as written."
+                )
+        return self
+
+
 class ShockleyReedHallRecombination(Tidy3dBaseModel):
     """Defines the parameters for the Shockley-Reed-Hall (SRH) recombination model.
 
@@ -327,6 +507,16 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
         title="Hole lifetime",
         description="Hole lifetime",
         json_schema_extra={"units": SECOND},
+    )
+
+    field_enhancement: HurkxTrapAssistedTunneling | None = Field(
+        default=None,
+        title="Trap-assisted tunneling field enhancement",
+        description="Optional :class:`HurkxTrapAssistedTunneling` model. When set, the "
+        "SRH lifetimes are field-enhanced by trap-assisted tunneling, "
+        ":math:`\\tau \\rightarrow \\tau / (1 + \\Gamma)`, with :math:`\\Gamma` "
+        "evaluated per carrier from the local electric field. Leaving it ``None`` gives "
+        "the unenhanced SRH rate. Requires the accelerated charge solver.",
     )
 
 
@@ -506,6 +696,18 @@ class SurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
         "case); positive values are above intrinsic. Must lie inside the "
         "band gap for the recombination rate to be physical.",
         json_schema_extra={"units": "eV"},
+    )
+    field_enhancement: HurkxTrapAssistedTunneling | None = Field(
+        default=None,
+        title="Trap-assisted tunneling field enhancement",
+        description="Optional :class:`HurkxTrapAssistedTunneling` model. When set, the "
+        "surface recombination velocities are field-enhanced by trap-assisted "
+        "tunneling, :math:`S \\rightarrow S (1 + \\Gamma)`, with :math:`\\Gamma` "
+        "evaluated per carrier from the local electric field. It does not apply on a "
+        "surface that also carries a :class:`VoltageBC`, "
+        "where the recombination velocities describe carrier exchange with the metal "
+        "rather than capture by a trap. Leaving it ``None`` gives the unenhanced "
+        "surface SRH rate. Requires the accelerated charge solver.",
     )
 
     @model_validator(mode="after")

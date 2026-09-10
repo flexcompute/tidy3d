@@ -50,6 +50,7 @@ from tidy3d.components.tcad.generation_recombination import (
     PalankovskiQuayApproxCarrierLifetime,
     SelberherrImpactIonization,
     ShockleyReedHallRecombination,
+    SurfaceShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.grid import (
     AutoUnstructuredGrid,
@@ -1150,6 +1151,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._check_surface_recombination_not_stacked_with_insulating_bc()
         self._check_surface_recombination_not_stacked_with_schottky()
         self._check_surface_recombination_qf_on_voltage_overlay()
+        self._check_surface_recombination_tat_on_voltage_overlay()
         self._check_surface_recombination_no_duplicate_placement()
         self._check_surface_recombination_interface_materials()
         return self
@@ -1295,6 +1297,34 @@ class HeatChargeSimulation(AbstractSimulation):
                     )
         return self
 
+    def _check_surface_recombination_tat_on_voltage_overlay(self) -> Self:
+        """Reject a trap-assisted tunneling enhancement on a placement shared with
+        ``VoltageBC``, where the surface term is contact exchange and not trap SRH."""
+        for i, sr_bc in enumerate(self.boundary_spec):
+            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
+                continue
+            model = sr_bc.condition.model
+            if (
+                not isinstance(model, SurfaceShockleyReedHallRecombination)
+                or model.field_enhancement is None
+            ):
+                continue
+            for j, other_bc in enumerate(self.boundary_spec):
+                if i == j or not isinstance(other_bc.condition, VoltageBC):
+                    continue
+                if self._placements_overlap(sr_bc.placement, other_bc.placement):
+                    raise SetupError(
+                        "'SurfaceShockleyReedHallRecombination' with a "
+                        "'field_enhancement' cannot share a placement with "
+                        "'VoltageBC'. On a contact overlay the surface term "
+                        "relaxes the minority-carrier density towards the ohmic "
+                        "equilibrium value, which is carrier exchange with the "
+                        "metal rather than recombination through a trap, so a "
+                        "trap-assisted tunneling enhancement has no meaning "
+                        "there. Drop 'field_enhancement' on this face."
+                    )
+        return self
+
     def _check_surface_recombination_not_stacked_with_insulating_bc(self) -> Self:
         """Reject ``SurfaceRecombinationBC`` sharing a placement with ``InsulatingBC``,
         whose zero-flux condition it already replaces."""
@@ -1393,6 +1423,11 @@ class HeatChargeSimulation(AbstractSimulation):
             second, SimulationBoundary
         ):
             return self._placements_overlap(second, first)
+
+        # A StructureBoundary names a whole structure's boundary, and surface
+        # recombination never applies to faces a contact already occupies. Such
+        # a placement is therefore not an overlap: it is a valid configuration
+        # in which the contacted faces carry no surface recombination.
 
         return False
 
@@ -3228,6 +3263,9 @@ class HeatChargeSimulation(AbstractSimulation):
         if self._uses_grad_quasi_fermi_impact_ionization():
             features.append("GradQuasiFermi impact ionization")
 
+        if self._uses_trap_assisted_tunneling():
+            features.append("HurkxTrapAssistedTunneling")
+
         if self._ssac_uses_bias_point_selection():
             features.append("SSAC 'at_voltages' bias-point selection")
 
@@ -3284,6 +3322,29 @@ class HeatChargeSimulation(AbstractSimulation):
                 for tau in (model.tau_n, model.tau_p):
                     if isinstance(tau, PalankovskiQuayApproxCarrierLifetime):
                         return True
+        return False
+
+    def _uses_trap_assisted_tunneling(self) -> bool:
+        """Whether any bulk or surface SRH model carries a trap-assisted tunneling enhancement."""
+        for _loc, charge in self._iter_semiconductor_charge_media():
+            for model in charge.R:
+                if (
+                    isinstance(model, ShockleyReedHallRecombination)
+                    and model.field_enhancement is not None
+                ):
+                    return True
+
+        for bc_spec in self.boundary_spec:
+            condition = bc_spec.condition
+            if not isinstance(condition, SurfaceRecombinationBC):
+                continue
+            model = condition.model
+            if (
+                isinstance(model, SurfaceShockleyReedHallRecombination)
+                and model.field_enhancement is not None
+            ):
+                return True
+
         return False
 
     def _uses_impact_ionization(self) -> bool:

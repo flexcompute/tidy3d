@@ -55,6 +55,7 @@ drift-diffusion source terms.
    PalankovskiQuayApproxCarrierLifetime
    DistributedGeneration
    HurkxDirectBandToBandTunneling
+   HurkxTrapAssistedTunneling
    SelberherrImpactIonization
 
 .. note::
