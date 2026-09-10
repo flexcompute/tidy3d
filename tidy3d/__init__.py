@@ -100,9 +100,13 @@ from tidy3d.components.tcad.generation_recombination import (
     SurfaceShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.grid import (
+    AutoUnstructuredGrid,
     DistanceUnstructuredGrid,
     GridRefinementLine,
     GridRefinementRegion,
+    InterfaceRefinementSpec,
+    RelativeGridRefinementLine,
+    RelativeGridRefinementRegion,
     UniformUnstructuredGrid,
 )
 from tidy3d.components.tcad.mesher import VolumeMesher
@@ -610,6 +614,7 @@ __all__ = [
     "AugerRecombination",
     "AutoGrid",
     "AutoImpedanceSpec",
+    "AutoUnstructuredGrid",
     "AuxFieldTimeData",
     "AuxFieldTimeMonitor",
     "AxisAlignedCurrentIntegral",
@@ -825,6 +830,7 @@ __all__ = [
     "IndexedTimeDataArray",
     "IndexedVoltageDataArray",
     "InsulatingBC",
+    "InterfaceRefinementSpec",
     "InternalAbsorber",
     "IsothermalSSACAnalysis",
     "IsothermalSteadyChargeDCAnalysis",
@@ -915,6 +921,8 @@ __all__ = [
     "RadiationBC",
     "RadiativeRecombination",
     "RectangularLumpedElement",
+    "RelativeGridRefinementLine",
+    "RelativeGridRefinementRegion",
     "RotationAroundAxis",
     "RunTimeSpec",
     "SSACAnalysis",

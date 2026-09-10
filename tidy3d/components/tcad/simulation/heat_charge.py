@@ -52,6 +52,7 @@ from tidy3d.components.tcad.generation_recombination import (
     ShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.grid import (
+    AutoUnstructuredGrid,
     DistanceUnstructuredGrid,
     UniformUnstructuredGrid,
     UnstructuredGridType,
@@ -1620,14 +1621,68 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     def _names_exist_grid_spec(self) -> Self:
-        """Warn if 'UniformUnstructuredGrid' points at a non-existing structure."""
+        """Check grid spec structure/medium references."""
         structures_names = {s.name for s in self.structures}
+        mediums_names = {s.medium.name for s in self.structures}
+        mediums_names.add(self.medium.name)
+
         for structure_name in self.grid_spec.non_refined_structures:
             if structure_name not in structures_names:
                 log.warning(
                     f"Structure '{structure_name}' listed as a non-refined structure in "
                     "'HeatChargeSimulation.grid_spec' is not present in 'HeatChargeSimulation.structures'"
                 )
+
+        if isinstance(self.grid_spec, DistanceUnstructuredGrid | AutoUnstructuredGrid):
+            for med_ind, medium_name in enumerate(self.grid_spec.uniform_grid_mediums):
+                if medium_name not in mediums_names:
+                    self._raise_validation_error_at_loc(
+                        f"Medium '{medium_name}' listed in 'grid_spec.uniform_grid_mediums' "
+                        "is not found among simulation mediums.",
+                        "grid_spec",
+                        "uniform_grid_mediums",
+                        med_ind,
+                    )
+
+        if isinstance(self.grid_spec, AutoUnstructuredGrid):
+            for ref_ind, refinement in enumerate(self.grid_spec.interface_refinements):
+                selection = refinement.selection
+                if isinstance(selection, StructureBoundary):
+                    if selection.structure not in structures_names:
+                        self._raise_validation_error_at_loc(
+                            f"Structure '{selection.structure}' provided in "
+                            f"'grid_spec.interface_refinements[{ref_ind}].selection' "
+                            f"(type '{selection.type}') is not found among simulation structures.",
+                            "grid_spec",
+                            "interface_refinements",
+                            ref_ind,
+                            "selection",
+                        )
+                elif isinstance(selection, StructureStructureInterface):
+                    for struct_name in selection.structures:
+                        if struct_name not in structures_names:
+                            self._raise_validation_error_at_loc(
+                                f"Structure '{struct_name}' provided in "
+                                f"'grid_spec.interface_refinements[{ref_ind}].selection' "
+                                f"(type '{selection.type}') is not found among simulation structures.",
+                                "grid_spec",
+                                "interface_refinements",
+                                ref_ind,
+                                "selection",
+                            )
+                elif isinstance(selection, MediumMediumInterface):
+                    for med_name in selection.mediums:
+                        if med_name not in mediums_names:
+                            self._raise_validation_error_at_loc(
+                                f"Medium '{med_name}' provided in "
+                                f"'grid_spec.interface_refinements[{ref_ind}].selection' "
+                                f"(type '{selection.type}') is not found among simulation mediums.",
+                                "grid_spec",
+                                "interface_refinements",
+                                ref_ind,
+                                "selection",
+                            )
+
         return self
 
     def _warn_if_minimal_mesh_size_override(self) -> Self:
@@ -1635,11 +1690,11 @@ class HeatChargeSimulation(AbstractSimulation):
         val = self.grid_spec
         max_size = np.max(self.size)
         min_dl = val.relative_min_dl * max_size
-
-        if isinstance(val, UniformUnstructuredGrid):
-            desired_min_dl = val.dl
+        desired_min_dl = val.min_mesh_size
         if isinstance(val, DistanceUnstructuredGrid):
-            desired_min_dl = min(val.dl_interface, val.dl_bulk)
+            # Keep the grid property's geometry-processing contract unchanged;
+            # this warning must also consider a finer requested bulk size.
+            desired_min_dl = min(desired_min_dl, val.dl_bulk)
 
         if desired_min_dl < min_dl:
             log.warning(
@@ -1993,6 +2048,15 @@ class HeatChargeSimulation(AbstractSimulation):
         elif isinstance(grid_spec, DistanceUnstructuredGrid):
             dl_min = grid_spec.dl_interface
             dl_max = grid_spec.dl_bulk
+        elif isinstance(grid_spec, AutoUnstructuredGrid):
+            dl_min = grid_spec._automatic_min_mesh_size
+            dl_max = grid_spec.dl_bulk
+        else:
+            raise TypeError(
+                f"Unsupported grid_spec type '{type(grid_spec).__name__}'. "
+                "Expected UniformUnstructuredGrid, DistanceUnstructuredGrid, or "
+                "AutoUnstructuredGrid."
+            )
 
         for struct in self.structures:
             name = struct.name
