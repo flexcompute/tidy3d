@@ -101,24 +101,47 @@ class ModeSolverData(ModeData):
     )
 
     def _normalize_modes(self) -> None:
-        """Normalize modes. Note: this modifies ``self`` in-place."""
-        self_dot = self.dot(self, conjugate=self.monitor.conjugated_dot_product)
-        real_part = np.real(self_dot)
-        imag_part = np.imag(self_dot)
-        tolerance = fp_eps * np.abs(self_dot)
-        has_meaningful_real_part = np.abs(real_part) > tolerance
-        sign = np.where(has_meaningful_real_part, np.sign(real_part), np.sign(imag_part))
-        sign = np.where(sign == 0, 1.0, sign)
-        scaling = np.sqrt(sign * self_dot)
-        near_zero = np.abs(scaling) < fp_eps
-        if np.any(near_zero):
-            affected = near_zero.any(dim="f") if "f" in near_zero.dims else near_zero
-            affected_modes = [int(m) for m in affected.mode_index.values[affected.values]]
-            log.warning(
-                f"Mode indices {affected_modes} have a self-overlap magnitude smaller than "
-                f"'fp_eps' and cannot be normalized. Skipping normalization for these modes."
-            )
-            scaling = scaling.where(~near_zero, other=1.0)
+        """Scale every mode to a unit self-overlap in the monitor's own dot product.
+
+        A conjugated self-overlap is the time-averaged Poynting flux, so modes carry 1 W each
+        and ``abs(amp) ** 2`` is a mode's power. Its sign is physical and kept, and the
+        divisor is real, so each mode keeps the phase the mode solver gave it.
+
+        An unconjugated one is the bilinear form under which distinct modes of a reciprocal
+        cross-section are orthogonal, lossy or not, so pinning it to +1 makes the set
+        bi-orthonormal and a projection returns modal expansion coefficients. That divisor is
+        complex, and rotates each mode onto the gauge where the overlap is +1.
+
+        Modes with no self-overlap to divide by keep their own scale. Modifies in-place.
+        """
+        conjugate = self.monitor.conjugated_dot_product
+        self_dot = self.dot(self, conjugate=conjugate)
+        if conjugate:
+            # below cutoff the flux is round-off with no dependable real part
+            real_part = np.real(self_dot)
+            imag_part = np.imag(self_dot)
+            tolerance = fp_eps * np.abs(self_dot)
+            has_meaningful_real_part = np.abs(real_part) > tolerance
+            sign = np.where(has_meaningful_real_part, np.sign(real_part), np.sign(imag_part))
+            sign = np.where(sign == 0, 1.0, sign)
+            scaling = np.sqrt(sign * self_dot)
+        else:
+            scaling = np.sqrt(self_dot)
+        # on the self-overlap, not its root, which would square the tolerance to fp_eps ** 2
+        degenerate = np.abs(self_dot) < fp_eps
+        if np.any(degenerate):
+            # a vanishing flux is ordinary below cutoff; a vanishing bi-orthogonal norm is not
+            bi_orthogonal = self.dot(self, conjugate=False) if conjugate else self_dot
+            empty = degenerate & (np.abs(bi_orthogonal) < fp_eps)
+            if np.any(empty):
+                affected = empty.any(dim="f") if "f" in empty.dims else empty
+                affected_modes = [int(m) for m in affected.mode_index.values[affected.values]]
+                log.warning(
+                    f"Mode indices {affected_modes} have a vanishing bi-orthogonal "
+                    "self-overlap and cannot be normalized. Skipping normalization for "
+                    "these modes."
+                )
+            scaling = scaling.where(~degenerate, other=1.0)
         for field in self.field_components.values():
             field /= scaling
 

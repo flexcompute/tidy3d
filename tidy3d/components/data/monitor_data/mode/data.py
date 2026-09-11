@@ -20,7 +20,7 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.data.dataset import ModeSolverDataset
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.types import EpsSpecType
-from tidy3d.constants import C_0
+from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import (
     DataError,
     ValidationError,
@@ -150,11 +150,15 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         track_freq: TrackFreq,
         overlap_thresh: float = 0.9,
     ) -> ModeData:
-        """Starting from the base frequency defined by parameter ``track_freq``, sort modes at each
-        frequency according to their overlap values with the modes at the previous frequency.
-        That is, it attempts to rearrange modes in such a way that a given ``mode_index``
-        corresponds to physically the same mode at all frequencies. Modes with overlap values over
-        ``overlap_thresh`` are considered matching and not rearranged.
+        """Match modes across frequency and align their phases onto a common gauge.
+
+        Starting from the base frequency given by ``track_freq``, each step does two things.
+        It reorders the modes so that a given ``mode_index`` is physically the same mode at
+        all frequencies, pairing each with the mode it overlaps most strongly at the previous
+        frequency; modes overlapping by more than ``overlap_thresh`` are taken as already
+        matching and are not rearranged. It then rotates each mode onto the phase gauge of
+        the mode it was paired with, which the mode solver fixes independently at every
+        frequency.
 
         Note
         ----
@@ -171,7 +175,9 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
             Modal overlap threshold above which two modes are considered to be the same and are not
             rearranged. If after the sorting procedure the overlap value between two corresponding
             modes is less than this threshold, a warning about a possible discontinuity is
-            displayed.
+            displayed. A mode whose self-overlap vanishes in the monitor's convention has no
+            scale to normalize its overlaps against: it is still reordered, but keeps the
+            phase the mode solver assigned it and is not reported as discontinuous.
         """
         if len(self.field_components) == 0:
             return self.copy()
@@ -186,22 +192,25 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         elif track_freq == "central":
             f0_ind = num_freqs // 2
 
-        # Normalizing the flux to 1, does not guarantee self terms of overlap integrals
-        # are also normalized to 1 when the non-conjugated product is used.
+        # Both jobs use the monitor's own dot product, the one its amplitudes are decomposed
+        # in. The self-overlaps set the scale of the matching thresholds, keeping the sorting
+        # independent of how the modes were normalized, and give the phase its reference.
         data_expanded = self.symmetry_expanded
-        if data_expanded.monitor.conjugated_dot_product:
-            self_overlap = np.ones((num_freqs, num_modes))
-        else:
-            self_overlap = data_expanded.dot(data_expanded, self.monitor.conjugated_dot_product)
-            self_overlap = np.abs(self_overlap.values)
-            threshold_array = overlap_thresh * self_overlap
+        conjugate = data_expanded.monitor.conjugated_dot_product
+        self_overlap = data_expanded.dot(data_expanded, conjugate).values
+        # A conjugated self-overlap is the real power, which a mode below cutoff does not
+        # carry: it comes back as round-off, giving neither scale nor reference. Modes arrive
+        # normalized to unit self-overlap magnitude, so the threshold is an absolute one.
+        usable = np.abs(self_overlap) > fp_eps
+        self_overlap = np.where(usable, self_overlap, 1.0)
+        scale = np.sqrt(np.abs(self_overlap))
 
         # Compute sorting order and overlaps with neighboring frequencies
         sorting = -np.ones((num_freqs, num_modes), dtype=int)
         overlap = np.zeros((num_freqs, num_modes))
         phase = np.zeros((num_freqs, num_modes))
         sorting[f0_ind, :] = np.arange(num_modes)  # base frequency won't change
-        overlap[f0_ind, :] = self_overlap[f0_ind, :]
+        overlap[f0_ind, :] = 1.0
 
         # Sort in two directions from the base frequency
         for step, last_ind in zip([-1, 1], [-1, num_freqs]):
@@ -210,28 +219,59 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
 
             # March to lower/higher frequencies
             for freq_id in range(f0_ind + step, last_ind, step):
-                # Calculate threshold array for this frequency
-                if not data_expanded.monitor.conjugated_dot_product:
-                    overlap_thresh = threshold_array[freq_id, :]
                 # Get next frequency to sort
                 data_to_sort = data_expanded._isel(f=[freq_id])
                 # Assign to the base frequency so that outer_dot will compare them
                 data_to_sort = data_to_sort._assign_coords(f=[self.monitor._stored_freqs[f0_ind]])
 
                 # Compute "sorting w.r.t. to neighbor" and overlap values
-                sorting_one_mode, amps_one_mode = data_template._find_ordering_one_freq(
-                    data_to_sort, overlap_thresh
+                threshold = overlap_thresh * scale[freq_id - step, :] * scale[freq_id, :]
+                sorting_one_mode, amps = data_template._find_ordering_one_freq(
+                    data_to_sort, threshold
                 )
 
                 # Transform "sorting w.r.t. neighbor" to "sorting w.r.t. to f0_ind"
-                sorting[freq_id, :] = sorting_one_mode[sorting[freq_id - step, :]]
-                overlap[freq_id, :] = np.abs(amps_one_mode[sorting[freq_id - step, :]])
-                phase[freq_id, :] = phase[freq_id - step, :] + np.angle(
-                    amps_one_mode[sorting[freq_id - step, :]]
+                raw_prev = sorting[freq_id - step, :]
+                raw_curr = sorting_one_mode[raw_prev]
+                sorting[freq_id, :] = raw_curr
+                amps = amps[raw_prev]
+                pair_scale = scale[freq_id - step, raw_prev] * scale[freq_id, raw_curr]
+                overlap[freq_id, :] = np.abs(amps) / pair_scale
+
+                # An aligned pair overlaps along the geometric mean of their self-overlaps, so
+                # the residual below is exactly gauge-covariant: it comes out the same whatever
+                # phase the mode solver assigned, which is what a fixed reference would not do.
+                # Whatever is left in it is gauge, and how much of it to remove depends on the
+                # convention. An unconjugated self-overlap is pinned to one, and differentiating
+                # that identity gives ``<u, du/df> == 0``, so a neighbour overlap is real to
+                # second order in ``df`` and rounding the residual to a sign discards nothing;
+                # the gauge that survives is the one that does not move when the frequencies
+                # are resampled. The conjugated pairing obeys no such identity, so its overlap
+                # carries a first-order imaginary part -- milliradians across a lossy guide,
+                # tenths of a radian beside an anticrossing -- and there the whole angle is
+                # transported instead. Pinning the unconjugated self-overlap also leaves the
+                # branch cut of ``sqrt`` reachable only through a reversal of power flow, where
+                # the reference swings half a turn on round-off in the imaginary part; such a
+                # pair is left alone with the unusable ones.
+                n_prev = self_overlap[freq_id - step, raw_prev]
+                n_curr = self_overlap[freq_id, raw_curr]
+                ratio = n_curr / n_prev
+                on_branch_cut = (np.real(ratio) < 0) & (
+                    np.abs(np.imag(ratio)) <= fp_eps * np.abs(ratio)
                 )
+                referenced = (
+                    usable[freq_id - step, raw_prev] & usable[freq_id, raw_curr] & ~on_branch_cut
+                )
+                residual = amps * np.conj(n_prev * np.sqrt(ratio))
+                if conjugate:
+                    rotation = np.angle(residual)
+                else:
+                    rotation = np.where(np.real(residual) < 0, np.pi, 0.0)
+                phase[freq_id, :] = phase[freq_id - step, :] + np.where(referenced, rotation, 0.0)
 
                 # Check for discontinuities and show warning if any
-                for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
+                flagged = (overlap[freq_id, :] < overlap_thresh) & referenced
+                for mode_ind in list(np.nonzero(flagged)[0]):
                     log.warning(
                         f"Mode '{mode_ind}' appears to undergo a discontinuous change "
                         f"between frequencies '{self.monitor._stored_freqs[freq_id]}' "
@@ -292,14 +332,17 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         data_to_sort: ModeData,
         overlap_thresh: float | np.array,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Find new ordering of modes in data_to_sort based on their similarity to own modes."""
+        """Find new ordering of modes in ``data_to_sort`` based on their similarity to own
+        modes, measured with the monitor's dot product. Returned overlaps are raw: neither
+        normalized by the self-overlaps nor signed by ``store_fields_direction``. The caller
+        references them to the self-overlaps of the pair, whose direction already carries the
+        sign of a backward-stored mode."""
         num_modes = self.n_complex.sizes["mode_index"]
 
         # Current pairs and their overlaps
         pairs = np.arange(num_modes)
-        complex_amps = self.dot(data_to_sort, self.monitor.conjugated_dot_product).data.ravel()
-        if self.monitor.store_fields_direction == "-":
-            complex_amps *= -1
+        conjugate = self.monitor.conjugated_dot_product
+        complex_amps = self.dot(data_to_sort, conjugate=conjugate).data.ravel()
 
         # Check whether modes already match
         modes_to_sort = np.where(np.abs(complex_amps) < overlap_thresh)[0]
@@ -311,11 +354,8 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         data_template_reduced = self._isel(mode_index=modes_to_sort)
 
         amps_reduced = data_template_reduced.outer_dot(
-            data_to_sort._isel(mode_index=modes_to_sort), self.monitor.conjugated_dot_product
+            data_to_sort._isel(mode_index=modes_to_sort), conjugate=conjugate
         ).to_numpy()[0, :, :]
-
-        if self.monitor.store_fields_direction == "-":
-            amps_reduced *= -1
 
         # Find the most similar modes and corresponding overlap values
         pairs_reduced, amps_reduced = self._find_closest_pairs(amps_reduced)
