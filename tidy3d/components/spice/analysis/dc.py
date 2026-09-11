@@ -74,9 +74,10 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         default=None,
         title="Minimum CFL number.",
         description="Lower bound of the adaptive CFL controller in the drift-diffusion "
-        "solver. When ``None`` (default), the solver uses ``cfl_number * 1e-6`` so "
-        "behaviour matches setups that predate this field. Setting ``cfl_min`` equal "
-        "to ``cfl_number`` effectively runs the solver with a constant CFL (no "
+        "solver. The pseudo-time term is the transport diagonal divided by the CFL, "
+        "so a high CFL reduces the effect of the pseudo-time damping during the "
+        "nonlinear iterations. When ``None`` (default), the solver uses 1. Setting "
+        "``cfl_min`` equal to ``cfl_number`` runs the solver at a constant CFL (no "
         "adaptive backoff).",
     )
 
