@@ -17,6 +17,7 @@ from tidy3d.components.bc_placement import (
     StructureSimulationBoundary,
     StructureStructureInterface,
 )
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box, Transformed
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.geometry.primitives import Cylinder
@@ -116,7 +117,6 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.bc_placement import BCPlacementType
-    from tidy3d.components.data.data_array import SpatialDataArray
     from tidy3d.components.geometry.base import Geometry
     from tidy3d.components.types import Ax, Bound, Shapely
     from tidy3d.components.types.base import ArrayFloat1D, BoxSurface
@@ -643,6 +643,9 @@ class HeatChargeSimulation(AbstractSimulation):
             )
             self._call_with_validation_loc(
                 ("analysis_spec",), self._check_transient_heat_time_steps
+            )
+            self._call_with_validation_loc(
+                ("analysis_spec",), self._check_transient_heat_initial_temperature
             )
             self._check_transient_heat_time_warning()
         self._call_with_validation_loc(("structures",), self._check_non_isothermal_is_possible)
@@ -2181,6 +2184,39 @@ class HeatChargeSimulation(AbstractSimulation):
                 "Unsteady simulations require the number of time-steps to be less than "
                 f"{TRANSIENT_HEAT_MAX_STEPS} but {analysis_type.unsteady_spec.total_time_steps} were provided."
             )
+        return self
+
+    def _check_transient_heat_initial_temperature(self) -> Self:
+        """Reject a planar initial temperature that a 3D mesh would silently extrude.
+
+        The solver reads an axis holding one coordinate as invariant and skips the
+        bounding-box test along it. That is what makes a 2D simulation work: its mesh is one
+        cell thick along the zero-size dimension, so a field sampled on the plane -- what a
+        planar monitor hands back -- has to reach the nodes off it. On any other axis the same
+        rule extrudes the plane through the whole domain instead of leaving the surrounding
+        nodes at 'background_temperature', which is not what 'initial_temperature' promises.
+        """
+        temperature = self.analysis_spec.initial_temperature
+        if not isinstance(temperature, SpatialDataArray):
+            return self
+
+        extruded = [
+            dim
+            for dim in range(3)
+            if temperature.coords["xyz"[dim]].size <= 1 and dim not in self.zero_dims
+        ]
+        if not extruded:
+            return self
+
+        axes = ", ".join(f"'{'xyz'[dim]}'" for dim in extruded)
+        self._raise_validation_error_at_loc(
+            f"'initial_temperature' holds a single coordinate along {axes}. An axis with one "
+            "coordinate is invariant, not zero-thickness: the field is extruded along it, so "
+            "nodes away from the plane start at the field's value rather than at "
+            "'background_temperature'. Only the zero-size dimension of a 2D simulation may be "
+            f"invariant; give {axes} at least two coordinates to bound the field there.",
+            "analysis_spec",
+        )
         return self
 
     def _check_transient_heat_time_warning(self) -> Self:
