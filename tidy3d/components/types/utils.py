@@ -94,7 +94,6 @@ def complex_json_schema(
     return {
         "anyOf": [
             {"type": "number"},
-            _tuple_item_schema(tuple[float, float]),
             complex_object_json_schema(),
         ]
     }

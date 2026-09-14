@@ -223,9 +223,6 @@ def _parse_complex(v: Any) -> complex:
         except Exception:
             pass
 
-    if isinstance(v, (list, tuple)) and len(v) == 2:
-        return complex(v[0], v[1])
-
     return v
 
 
