@@ -377,7 +377,9 @@ class EigSolver(Tidy3dBaseModel):
         keff : np.ndarray
             Imaginary part of the effective index, shape (num_modes, ).
         eps_spec : Union["diagonal", "tensorial_real", "tensorial_complex"]
-            Permittivity characterization on the mode solver's plane.
+            Operator classification on the mode solver's plane. The historical
+            ``tensorial_complex`` label also covers real nonreciprocal operators because
+            both cases require an independent backward solve.
         """
 
         # In the matrices P and Q below, they contain terms ``epsilon_parallel`` or
@@ -395,6 +397,12 @@ class EigSolver(Tidy3dBaseModel):
         eps_offd = np.abs(eps_tensor[off_diagonals])
         mu_offd = np.abs(mu_tensor[off_diagonals])
         is_tensorial = np.any(eps_offd > TOL_TENSORIAL) or np.any(mu_offd > TOL_TENSORIAL)
+
+        if is_tensorial:
+            if np.any(eps_tensor[2, 2, :] == 0):
+                raise ValueError("Tensorial mode solving requires nonzero epsilon_zz.")
+            if np.any(mu_tensor[2, 2, :] == 0):
+                raise ValueError("Tensorial mode solving requires nonzero mu_zz.")
 
         # Determine if ``eps`` and ``mu`` represent reciprocal media
         is_reciprocal = True
@@ -417,8 +425,15 @@ class EigSolver(Tidy3dBaseModel):
             "mat_precision": mat_precision,
         }
 
-        # Determine if epsilon has complex values (used to select real vs complex tensorial solver)
-        is_eps_complex = cls.isinstance_complex(eps_tensor)
+        # The conjugation shortcut is valid only for a real reciprocal tensorial operator.
+        # Complex permeability and transverse PML stretching make the operator complex even
+        # when epsilon is real; real nonreciprocal tensors also require an independent solve.
+        requires_independent_backward_solve = cls._requires_independent_backward_solve(
+            eps_tensor=eps_tensor,
+            mu_tensor=mu_tensor,
+            der_mats=der_mats,
+            is_reciprocal=is_reciprocal,
+        )
 
         if not is_tensorial:
             eps_spec = "diagonal"
@@ -431,7 +446,7 @@ class EigSolver(Tidy3dBaseModel):
                 H[1] *= -1
                 E[2] *= -1
 
-        elif not is_eps_complex:
+        elif not requires_independent_backward_solve:
             eps_spec = "tensorial_real"
             E, H, neff, keff = cls.solver_tensorial(
                 **base_kwargs,
@@ -878,6 +893,22 @@ class EigSolver(Tidy3dBaseModel):
         )
 
     @classmethod
+    def _requires_independent_backward_solve(
+        cls,
+        eps_tensor: ArrayComplex,
+        mu_tensor: ArrayComplex,
+        der_mats: Sequence[sp.csr_matrix],
+        is_reciprocal: bool,
+    ) -> bool:
+        """Whether conjugating the forward tensorial mode would change the operator."""
+        return (
+            not is_reciprocal
+            or cls.isinstance_complex(eps_tensor)
+            or cls.isinstance_complex(mu_tensor)
+            or any(cls.isinstance_complex(der_mat) for der_mat in der_mats)
+        )
+
+    @classmethod
     def type_conversion(
         cls, vec_or_mat: ArrayComplex | sp.csr_matrix, new_dtype: np.dtype[Any]
     ) -> ArrayComplex | sp.csr_matrix:
@@ -985,11 +1016,25 @@ class EigSolver(Tidy3dBaseModel):
         the property at the E(H)x, E(H)y, and E(H)z locations of the Yee grid in the order
         xx, xy, xz, yx, yy, yz, zx, zy, zz.
         """
-        if isinstance(mat_data, np.ndarray):
-            return tuple(mat_data[i, :, :] for i in range(9))
-        if len(mat_data) == 9:
-            return tuple(np.copy(e) for e in mat_data)
-        raise ValueError("Wrong input to mode solver pemittivity/permeability!")
+        mat_array = np.asarray(mat_data)
+        if mat_array.ndim == 2:
+            zero = np.zeros_like(mat_array)
+            return (
+                np.copy(mat_array),
+                zero.copy(),
+                zero.copy(),
+                zero.copy(),
+                np.copy(mat_array),
+                zero.copy(),
+                zero.copy(),
+                zero.copy(),
+                np.copy(mat_array),
+            )
+        if mat_array.ndim == 3 and mat_array.shape[0] == 9:
+            return tuple(np.copy(mat_array[i, :, :]) for i in range(9))
+        raise ValueError(
+            "A mode-solver material array must be 2D isotropic data or have shape (9, Nx, Ny)."
+        )
 
     @staticmethod
     def split_curl_field_postprocess(split_curl: ArrayFloat, E: ArrayComplex) -> ArrayComplex:

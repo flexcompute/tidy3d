@@ -1198,6 +1198,12 @@ class ModeSolver(Tidy3dBaseModel):
 
     #     return rotated_data_arrays
 
+    @staticmethod
+    def _wrapped_angle_difference(theta: ArrayFloat1D, reference: float) -> ArrayFloat1D:
+        """Return the shortest signed angular displacement from ``reference``."""
+        delta = theta - reference
+        return np.arctan2(np.sin(delta), np.cos(delta))
+
     def _mode_rotation(
         self,
         solver_ref_data_cylindrical: dict[
@@ -1242,7 +1248,7 @@ class ModeSolver(Tidy3dBaseModel):
             theta = np.arctan2(pts[idx_v], pts[idx_u])
             axial = pts[idx_w]
 
-            theta_rel = theta - self.theta_reference
+            theta_rel = self._wrapped_angle_difference(theta, self.theta_reference)
 
             cos_theta = pts[idx_u] / rho
             sin_theta = pts[idx_v] / rho

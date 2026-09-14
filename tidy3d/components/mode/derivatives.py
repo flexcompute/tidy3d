@@ -185,9 +185,9 @@ def average_relative_speed(
         tensor_diag = tensor_diag.reshape((3, Nx, Ny))
 
         avg_xminus = relative_mean(tensor_diag[:, : npml[0], :])
-        avg_xplus = relative_mean(tensor_diag[:, Nx - npml[0] + 1 :, :])
+        avg_xplus = relative_mean(tensor_diag[:, Nx - npml[0] :, :])
         avg_yminus = relative_mean(tensor_diag[:, :, : npml[1]])
-        avg_yplus = relative_mean(tensor_diag[:, :, Ny - npml[1] + 1 :])
+        avg_yplus = relative_mean(tensor_diag[:, :, Ny - npml[1] :])
         return np.array([avg_xminus, avg_xplus, avg_yminus, avg_yplus])
 
     eps_avg = pml_average_allsides(eps_tensor)

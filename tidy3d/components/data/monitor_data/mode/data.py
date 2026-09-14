@@ -100,9 +100,9 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
 
     eps_spec: list[EpsSpecType] | None = Field(
         default=None,
-        title="Permittivity Specification",
-        description="Characterization of the permittivity profile on the plane where modes are "
-        "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
+        title="Mode Operator Specification",
+        description="Characterization of the mode operator on the plane where modes are computed. "
+        "Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
     )
 
     @property

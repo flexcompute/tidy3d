@@ -173,12 +173,14 @@ def _clamp_grid_expanded_bounds(
     _, tangential_axes = Box.pop_axis([0, 1, 2], normal_axis)
     grid_bounds = grid_expanded.boundaries.to_list
     for ax in tangential_axes:
-        if rmax[ax] is not None and isclose(rmax[ax], grid_bounds[ax][-1], rel_tol=fp_eps):
+        if rmax[ax] is not None and isclose(
+            rmax[ax], grid_bounds[ax][-1], rel_tol=fp_eps, abs_tol=fp_eps
+        ):
             rmax[ax] = grid_bounds[ax][-2]
         if (
             not colocate
             and rmin[ax] is not None
-            and isclose(rmin[ax], grid_bounds[ax][0], rel_tol=fp_eps)
+            and isclose(rmin[ax], grid_bounds[ax][0], rel_tol=fp_eps, abs_tol=fp_eps)
         ):
             rmin[ax] = grid_bounds[ax][1]
     return (tuple(rmin), tuple(rmax))
@@ -248,6 +250,7 @@ def _tangential_corrected(
     components = [fname + dim for fname in "EH" for dim in tan_dims]
 
     normal_dim = self._normal_dim
+    normal_axis = "xyz".index(normal_dim)
 
     tan_fields = {}
     for component in components:
@@ -261,7 +264,7 @@ def _tangential_corrected(
             correction *= -1
 
         # finite grid correction to all fields
-        eig_val = self.symmetry_eigenvalues[component](normal_dim)
+        eig_val = self.symmetry_eigenvalues[component](normal_axis)
         if eig_val < 0:
             correction *= self.grid_dual_correction
         else:
@@ -345,9 +348,10 @@ def grid_corrected_copy(self: ElectromagneticFieldData) -> ElectromagneticFieldD
         return field_data
 
     normal_dim = self._normal_dim
+    normal_axis = "xyz".index(normal_dim)
     update = {"grid_primal_correction": 1.0, "grid_dual_correction": 1.0}
     for field_name, field in field_data.field_components.items():
-        eig_val = self.symmetry_eigenvalues[field_name](normal_dim)
+        eig_val = self.symmetry_eigenvalues[field_name](normal_axis)
         if eig_val < 0:
             update[field_name] = field * self.grid_dual_correction
         else:
