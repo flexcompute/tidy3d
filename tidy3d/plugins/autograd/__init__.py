@@ -44,7 +44,7 @@ from .invdes import (
 )
 from .optimizers import (
     Adam,
-    BacktrackingLineSearch,
+    BacktrackingSafeUpdate,
     BatchedConstraintChecker,
     ConstraintChecker,
     SafeUpdate,
@@ -59,7 +59,7 @@ from .utilities import chain, get_kernel_size_px, make_kernel, scalar_objective
 
 __all__ = [
     "Adam",
-    "BacktrackingLineSearch",
+    "BacktrackingSafeUpdate",
     "BatchedConstraintChecker",
     "CircularFilter",
     "ConicFilter",

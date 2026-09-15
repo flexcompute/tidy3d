@@ -15,7 +15,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from itertools import tee
+from itertools import chain
 from numbers import Integral
 from typing import TYPE_CHECKING, Literal, Protocol, get_args, runtime_checkable
 
@@ -53,7 +53,7 @@ def _tree_map(fn: Callable[..., ParamLeaf], *trees: Params) -> Params:
     """Apply ``fn`` element-wise across one or more matching pytrees (dicts or arrays)."""
     first = trees[0]
     if isinstance(first, dict):
-        return {k: _tree_map(fn, *(t[k] for t in trees)) for k in first}
+        return {k: _tree_map(fn, *(t[k] for t in trees)) for k in sorted(first)}
     return fn(*trees)
 
 
@@ -82,6 +82,14 @@ def _parameters_equal(first: Params, second: Params) -> bool:
     if isinstance(second, dict):
         return False
     return np.array_equal(first, second)
+
+
+def _parameter_values(params: Params) -> np.ndarray:
+    """Flatten a parameter tree into one array of scalar values."""
+    if isinstance(params, dict):
+        values = [_parameter_values(params[key]) for key in sorted(params)]
+        return np.concatenate(values) if values else np.array([])
+    return np.asarray(params).reshape(-1)
 
 
 class Adam(Tidy3dBaseModel):
@@ -309,13 +317,28 @@ class SafeUpdate(ABC):
 
 
 @dataclass(frozen=True)
-class BacktrackingLineSearch(SafeUpdate):
-    """Find a valid update by checking progressively smaller steps.
+class BacktrackingSafeUpdate(SafeUpdate):
+    """Find a valid update with global and per-parameter backtracking.
 
     A bare constraint function checks one parameterization at a time. Pass a
     :class:`ConstraintChecker` implementation to control how candidates are
     evaluated, for example :class:`BatchedConstraintChecker` or
     :class:`tidy3d.plugins.klayout.BatchedDRCChecker`.
+
+    The current parameterization is validated first. The full proposed update
+    and successively smaller global updates are then checked from largest to
+    smallest scale. Unless the full update passes, the accepted global update
+    is improved one parameter at a time: each parameter is tried at the full
+    remaining change and then with successively smaller changes. Parameters
+    already accepted remain fixed while the next parameter is checked. If no
+    global candidate passes, per-parameter recovery starts from the current
+    parameterization instead. The order of these coordinate checks is
+    deterministic or reproducibly randomized by ``candidate_order`` and
+    ``random_seed``.
+
+    The returned metrics include the accepted global scale, the norm fraction
+    of the proposed update retained, the number of constraint checks, and the
+    counts of fully accepted, partially accepted, and unchanged parameters.
 
     Parameters
     ----------
@@ -329,11 +352,14 @@ class BacktrackingLineSearch(SafeUpdate):
     shrink_factor : float = 0.5
         Factor in ``(0, 1)`` used to shrink each successive step.
     candidate_order : {"deterministic", "random"} = "deterministic"
-        Check largest-to-smallest steps deterministically or shuffle the
-        nonzero candidates. The current parameters are always validated first.
+        Order in which parameters are recovered after the global search. Global
+        candidates are always checked first from largest to smallest scale.
     random_seed : int, optional = 0
-        Seed used for reproducible randomized candidate ordering. Set to
+        Seed used for reproducible randomized parameter ordering. Set to
         ``None`` for nondeterministic ordering.
+    per_parameter_search : bool = True
+        Whether to recover the remaining update one parameter at a time after
+        the global search.
     """
 
     checker: ConstraintChecker | ConstraintFn
@@ -341,6 +367,7 @@ class BacktrackingLineSearch(SafeUpdate):
     shrink_factor: float = 0.5
     candidate_order: CandidateOrder = "deterministic"
     random_seed: int | None = 0
+    per_parameter_search: bool = True
     _rng: np.random.Generator = field(init=False, repr=False, compare=False)
     _constraint_checker: ConstraintChecker = field(init=False, repr=False, compare=False)
 
@@ -363,34 +390,68 @@ class BacktrackingLineSearch(SafeUpdate):
                 f"'candidate_order' must be one of {CANDIDATE_ORDERS}. "
                 f"Got {self.candidate_order!r}."
             )
+        if self.random_seed is not None and (
+            isinstance(self.random_seed, bool) or not isinstance(self.random_seed, Integral)
+        ):
+            raise TypeError("'random_seed' must be an integer or None.")
+        if not isinstance(self.per_parameter_search, bool):
+            raise TypeError("'per_parameter_search' must be a bool.")
         object.__setattr__(self, "_rng", np.random.default_rng(self.random_seed))
         object.__setattr__(self, "_constraint_checker", constraint_checker)
 
     @property
     def candidate_scales(self) -> tuple[float, ...]:
-        """Nonzero candidate step scales before ordering."""
+        """Nonzero candidate step scales from largest to smallest."""
         return tuple(self.shrink_factor**index for index in range(self.max_backtracks + 1))
 
-    def _ordered_scales(self) -> tuple[float, ...]:
-        """Return scales in their evaluation and selection order."""
-        scales = self.candidate_scales
+    def _ordered_parameter_indices(self, params: Params) -> np.ndarray:
+        """Return indices in the configured per-parameter recovery order."""
+        indices = np.arange(_parameter_count(params))
         if self.candidate_order == "random":
-            permutation = self._rng.permutation(len(scales))
-            scales = tuple(scales[int(index)] for index in permutation)
-        return scales
+            return self._rng.permutation(indices)
+        return indices
 
     @staticmethod
     def _candidate(current: Params, proposed: Params, scale: float) -> Params:
         """Interpolate a candidate parameterization."""
         return _tree_map(lambda old, new: old + scale * (new - old), current, proposed)
 
-    def _candidate_stream(
-        self, current: Params, proposed: Params, scales: Iterable[float]
-    ) -> Iterator[Params]:
-        """Yield the current parameters followed by nonzero update candidates."""
-        yield current
-        for scale in scales:
-            yield self._candidate(current, proposed, scale)
+    @staticmethod
+    def _coordinate_candidate(
+        accepted: Params, proposed: Params, index: int, scale: float
+    ) -> Params:
+        """Set one flattened parameter coordinate to a scaled proposed value."""
+        remaining = index
+
+        def replace_leaf(accepted_value: ParamLeaf, new: ParamLeaf) -> ParamLeaf:
+            nonlocal remaining
+            if remaining == -1:
+                return accepted_value
+            accepted_values = np.asarray(accepted_value)
+            size = accepted_values.size
+            if remaining >= size:
+                remaining -= size
+                return accepted_value
+            candidate = np.array(
+                accepted_value,
+                dtype=np.result_type(accepted_value, new, np.float64),
+                copy=True,
+            )
+            candidate_values = candidate.reshape(-1)
+            proposed_values = np.asarray(new).reshape(-1)
+            if scale == 1:
+                candidate_values[remaining] = proposed_values[remaining]
+            else:
+                candidate_values[remaining] += scale * (
+                    proposed_values[remaining] - candidate_values[remaining]
+                )
+            remaining = -1
+            return float(candidate) if np.ndim(accepted_value) == 0 else candidate
+
+        candidate = _tree_map(replace_leaf, accepted, proposed)
+        if remaining != -1:
+            raise IndexError(f"Parameter index {index} is out of range.")
+        return candidate
 
     @staticmethod
     def _as_bool(value: object, *, context: str) -> bool:
@@ -400,18 +461,43 @@ class BacktrackingLineSearch(SafeUpdate):
         return bool(value)
 
     @staticmethod
-    def _result(candidate: Params, scale: float, num_checks: int) -> SafeUpdateResult:
-        """Build the result for the selected candidate."""
-        if scale == 1:
-            status: SafeUpdateStatus = "full"
-        elif scale == 0:
-            status = "rejected"
+    def _result(
+        current: Params,
+        proposed: Params,
+        candidate: Params,
+        global_scale: float,
+        num_checks: int,
+        parameter_status: np.ndarray,
+    ) -> SafeUpdateResult:
+        """Build the result and summarize its per-parameter recovery."""
+        current_values = _parameter_values(current)
+        proposed_values = _parameter_values(proposed)
+        candidate_values = _parameter_values(candidate)
+        changed = proposed_values != current_values
+        full = changed & (parameter_status == 2)
+        partial = changed & (parameter_status == 1)
+        rejected = changed & ~(full | partial)
+        if np.any(full | partial):
+            status: SafeUpdateStatus = "full" if np.all(full[changed]) else "partial"
         else:
-            status = "partial"
+            status = "rejected"
+        proposed_norm = float(np.linalg.norm(proposed_values - current_values))
+        retained_fraction = (
+            float(np.linalg.norm(candidate_values - current_values)) / proposed_norm
+            if proposed_norm
+            else 0.0
+        )
         return SafeUpdateResult(
             params=candidate,
             status=status,
-            metrics={"scale": scale, "checks": float(num_checks)},
+            metrics={
+                "global_scale": global_scale,
+                "retained_fraction": retained_fraction,
+                "checks": float(num_checks),
+                "full_parameter_updates": float(np.count_nonzero(full)),
+                "partial_parameter_updates": float(np.count_nonzero(partial)),
+                "rejected_parameter_updates": float(np.count_nonzero(rejected)),
+            },
         )
 
     def find_safe_update(self, current: Params, proposed: Params) -> SafeUpdateResult:
@@ -424,44 +510,81 @@ class BacktrackingLineSearch(SafeUpdate):
         """
         if _parameter_count(current) > _LARGE_LINE_SEARCH_PARAMETER_COUNT:
             log.warning(
-                "Backtracking line searches with more than 1,000 parameters can be slow, "
+                "Backtracking safe updates with more than 1,000 parameters can be slow, "
                 "especially when the constraint checker is not batched.",
                 log_once=True,
             )
 
         # An unchanged proposal only needs current validation and represents a
         # zero-scale update, even when clipping produced a new parameter tree.
-        scales = () if _parameters_equal(current, proposed) else self._ordered_scales()
+        scales = () if _parameters_equal(current, proposed) else self.candidate_scales
+        current_values = _parameter_values(current)
+        proposed_values = _parameter_values(proposed)
+        changed = proposed_values != current_values
+        parameter_status = np.zeros(current_values.size, dtype=np.int8)
         num_checks = 0
 
-        def tracked_candidates() -> Iterator[Params]:
+        def checked(candidates: Iterable[Params]) -> Iterator[tuple[Params, object]]:
             nonlocal num_checks
-            for candidate in self._candidate_stream(current, proposed, scales):
-                num_checks += 1
-                yield candidate
+            if isinstance(self._constraint_checker, ScalarConstraintChecker):
+                for candidate in candidates:
+                    num_checks += 1
+                    yield candidate, self._constraint_checker.check_fn(candidate)
+                return
+            candidate_batch = tuple(candidates)
 
-        checker_candidates, result_candidates = tee(tracked_candidates())
-        results = self._constraint_checker.check_candidates(checker_candidates)
-        candidate_results = zip(result_candidates, results, strict=True)
+            def tracked_candidates() -> Iterator[Params]:
+                nonlocal num_checks
+                for candidate in candidate_batch:
+                    num_checks += 1
+                    yield candidate
 
-        _, current_result = next(candidate_results)
+            results = self._constraint_checker.check_candidates(tracked_candidates())
+            yield from zip(candidate_batch, results, strict=True)
+
+        initial_results = checked(
+            chain((current,), (self._candidate(current, proposed, scale) for scale in scales))
+        )
+        _, current_result = next(initial_results)
         if not self._as_bool(current_result, context="'checker'"):
             raise RuntimeError(
                 "The current parameters do not satisfy the constraint; "
                 "a safe update requires a valid starting point."
             )
         if not scales:
-            return self._result(current, 0.0, num_checks)
+            return self._result(current, proposed, current, 0.0, num_checks, parameter_status)
 
-        for scale, (candidate, result) in zip(scales, candidate_results, strict=True):
+        accepted = current
+        global_scale = 0.0
+        for scale, (candidate, result) in zip(scales, initial_results, strict=True):
             if self._as_bool(result, context="'checker'"):
-                return self._result(candidate, scale, num_checks)
+                accepted = candidate
+                global_scale = scale
+                parameter_status[changed] = 2 if scale == 1.0 else 1
+                break
 
-        log.warning(
-            "The constraint rejected every nonzero candidate; keeping the current parameters.",
-            log_once=True,
-        )
-        return self._result(current, 0.0, num_checks)
+        if global_scale != 1.0 and self.per_parameter_search:
+            for index in self._ordered_parameter_indices(proposed):
+                index = int(index)
+                if current_values[index] == proposed_values[index]:
+                    continue
+                coordinate_candidates = (
+                    self._coordinate_candidate(accepted, proposed, index, scale) for scale in scales
+                )
+                for coordinate_scale, (candidate, result) in zip(
+                    scales, checked(coordinate_candidates), strict=True
+                ):
+                    if self._as_bool(result, context="'checker'"):
+                        accepted = candidate
+                        parameter_status[index] = 2 if coordinate_scale == 1.0 else 1
+                        break
+
+        if _parameters_equal(accepted, current):
+            log.warning(
+                "The constraint rejected every nonzero candidate; keeping the current parameters.",
+                log_once=True,
+            )
+        return self._result(current, proposed, accepted, global_scale, num_checks, parameter_status)
 
 
 def _grad_norm(grad: Params) -> float:

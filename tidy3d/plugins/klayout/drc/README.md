@@ -12,7 +12,8 @@ For a full quickstart example, please see [this quickstart notebook](https://git
 - Load DRC results into a `DRCResults` data structure with `DRCResults.load()`.
 - Limit how many violation markers are loaded by passing `max_results` to `DRCRunner.run()`,
   `run_drc_on_gds()`, or `DRCResults.load()`.
-- Evaluate a complete optimizer line search with one KLayout process using `BatchedDRCChecker`.
+- Evaluate one global or per-parameter optimizer candidate batch with one KLayout process using
+  `BatchedDRCChecker`.
 
 ## Prerequisites
 
@@ -189,9 +190,9 @@ valid = drc_checker([design_a_parameters, design_b_parameters])
 # valid contains one boolean for each input design.
 ```
 
-The same checker can be passed to `BacktrackingLineSearch` when the designs are candidate updates
-from an optimization. It implements the autograd plugin's `ConstraintChecker` interface, so the
-line search delegates candidate evaluation to it directly.
+The same checker can be passed to `BacktrackingSafeUpdate` when the designs are candidate updates
+from an optimization. It implements the autograd plugin's `ConstraintChecker` interface, so each
+global or per-parameter backtracking candidate batch is delegated to it directly.
 
 The checker arranges candidates in a near-square grid to limit the stitched layout's coordinate
 range. It automatically separates rows and columns by
@@ -217,6 +218,6 @@ enable the `klayout.db` Python module.
 Spatial batching is intended for local, translation-invariant rules with a finite interaction
 distance. Whole-layout rules such as global density, connectivity, or aggregate geometry checks can
 couple otherwise separated candidates and should not use `BatchedDRCChecker`. Such rules can still
-be used with `BacktrackingLineSearch`: provide a scalar checker that runs KLayout separately for one
-parameterization and returns `results.is_clean`. Scalar checking is the line search default and
-stops after the first valid candidate.
+be used with `BacktrackingSafeUpdate`: provide a scalar checker that runs KLayout separately for one
+parameterization and returns `results.is_clean`. Scalar checking evaluates candidates lazily and
+stops after the first valid candidate in each global or per-parameter candidate batch.

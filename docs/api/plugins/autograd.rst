@@ -30,7 +30,7 @@ Optimizers
     plugins.autograd.optimizers.ConstraintChecker
     plugins.autograd.optimizers.ScalarConstraintChecker
     plugins.autograd.optimizers.BatchedConstraintChecker
-    plugins.autograd.optimizers.BacktrackingLineSearch
+    plugins.autograd.optimizers.BacktrackingSafeUpdate
     plugins.autograd.optimizers.adam
     plugins.autograd.optimizers.apply_updates
     plugins.autograd.optimizers.optimize
