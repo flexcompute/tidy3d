@@ -11,6 +11,7 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from flexcompute.core.config.manager import ConfigManager as CoreConfigManager
 from pydantic import BaseModel
 from rich.console import Console
 from rich.panel import Panel
@@ -22,10 +23,12 @@ from tidy3d.log import log
 
 from .loader import (
     ConfigLoader,
+    Tidy3DRegistryAdapter,
     build_validated_models,
     deep_diff,
     deep_merge,
     load_environment_overrides,
+    tidy3d_config_app,
 )
 from .profiles import BUILTIN_PROFILES
 from .registry import attach_manager, get_handlers, get_sections
@@ -113,8 +116,13 @@ class ProfilesAccessor:
         return self._manager.preview_profile(profile)
 
 
-class ConfigManager:
+class ConfigManager(CoreConfigManager):
     """High-level orchestrator for tidy3d configuration."""
+
+    _loader: ConfigLoader
+    _profile: str
+    _profile_data: dict[str, Any]
+    _runtime_overrides: dict[str, dict[str, Any]]
 
     def __init__(
         self,
@@ -122,22 +130,21 @@ class ConfigManager:
         config_dir: os.PathLike[str] | None = None,
     ) -> None:
         loader_path = None if config_dir is None else Path(config_dir)
-        self._loader = ConfigLoader(loader_path)
-        self._runtime_overrides: dict[str, dict[str, Any]] = defaultdict(dict)
         self._plugin_models: dict[str, BaseModel] = {}
         self._section_models: dict[str, BaseModel] = {}
-        self._profile = self._resolve_initial_profile(profile)
-        self._builtin_data: dict[str, Any] = {}
-        self._base_data: dict[str, Any] = {}
-        self._profile_data: dict[str, Any] = {}
-        self._raw_tree: dict[str, Any] = {}
-        self._effective_tree: dict[str, Any] = {}
-        self._env_overrides: dict[str, Any] = load_environment_overrides()
         self._web_env_previous: dict[str, str | None] = {}
-        self._context_stack: list[tuple[str, dict[str, Any]]] = []
+        self._base_data: dict[str, Any] = {}
+        self._public_reload_enabled = False
+        app = tidy3d_config_app(loader_path)
 
-        self._reload()
+        super().__init__(
+            app=app,
+            registry=Tidy3DRegistryAdapter(),
+            profile=profile,
+            env=os.environ,
+        )
         attach_manager(self)
+        self._public_reload_enabled = True
 
         # Notify users when using a non-default profile
         if self._profile != "default":
@@ -164,9 +171,9 @@ class ConfigManager:
     def update_section(self, name: str, **updates: Any) -> None:
         if not updates:
             return
+        snapshot = self._snapshot_state()
         segments = name.split(".")
         overrides = self._runtime_overrides[self._profile]
-        previous = deepcopy(overrides)
         node = overrides
         for segment in segments[:-1]:
             node = node.setdefault(segment, {})
@@ -176,10 +183,12 @@ class ConfigManager:
             section_payload[key] = _serialize_value(value)
         try:
             self._reload()
+            self._apply_handlers(section=name, raise_errors=True)
         except Exception:
-            self._runtime_overrides[self._profile] = previous
+            self._restore_web_env()
+            self._restore_state(snapshot)
+            self._apply_handlers()
             raise
-        self._apply_handlers(section=name)
 
     def switch_profile(self, profile: str) -> None:
         if not profile:
@@ -195,6 +204,21 @@ class ConfigManager:
             log.info(f"Switched to configuration profile: '{self._profile}'")
 
         self._apply_handlers()
+
+    def reload(self) -> None:
+        """Reload configuration and apply Tidy3D's product handlers."""
+
+        snapshot = self._snapshot_state()
+        try:
+            super().reload()
+            if self._public_reload_enabled:
+                self._apply_handlers(raise_errors=True)
+        except Exception:
+            self._restore_web_env()
+            self._restore_state(snapshot)
+            if self._public_reload_enabled:
+                self._apply_handlers(raise_errors=False)
+            raise
 
     def set_default_profile(self, profile: str | None) -> None:
         """Set the default profile to be used on startup.
@@ -256,6 +280,8 @@ class ConfigManager:
 
         self._runtime_overrides = defaultdict(dict)
         defaults = self._filter_persisted(self._default_tree())
+        # Explicitly clear this metadata; save_base preserves metadata that is absent.
+        defaults["default_profile"] = None
         self._loader.save_base(defaults)
 
         if include_profiles:
@@ -377,33 +403,66 @@ class ConfigManager:
         # Fall back to "default" profile
         return "default"
 
-    def _reload(self) -> None:
-        self._env_overrides = load_environment_overrides()
-        self._builtin_data = deepcopy(self._loader.get_builtin_profile(self._profile))
-        self._base_data = deepcopy(
+    def _make_loader(self) -> ConfigLoader:
+        loader = ConfigLoader(app=self.app)
+        self._loader = loader
+        return loader
+
+    def _load_env_overrides(self) -> dict[str, Any]:
+        return load_environment_overrides()
+
+    def _load_builtin_data(self) -> dict[str, Any]:
+        return deepcopy(self._loader.get_builtin_profile(self._profile))
+
+    def _load_base_data(self) -> dict[str, Any]:
+        return deepcopy(
             self._loader.load_base(
                 commit_writes=False,
                 queue_migration_write=True,
                 validation_profile=self._profile,
             )
         )
-        self._profile_data = deepcopy(
+
+    def _load_profile_data(self) -> dict[str, Any]:
+        return deepcopy(
             self._loader.load_user_profile(
                 self._profile, commit_writes=False, queue_migration_write=True
             )
         )
-        self._raw_tree = deep_merge(self._builtin_data, self._base_data, self._profile_data)
 
-        runtime = deepcopy(self._runtime_overrides.get(self._profile, {}))
-        effective = deep_merge(self._raw_tree, self._env_overrides, runtime)
-        self._effective_tree = effective
-        self._build_models()
-        self._loader.commit_pending_writes()
+    def _after_reload(self) -> None:
+        """Tidy3D applies handlers at the public-operation boundaries."""
 
-    def _build_models(self) -> None:
-        models = build_validated_models(self._effective_tree, error_context="load")
+    def _snapshot_state(self) -> dict[str, Any]:
+        snapshot = super()._snapshot_state()
+        snapshot["section_models"] = deepcopy(self._section_models)
+        snapshot["plugin_models"] = deepcopy(self._plugin_models)
+        snapshot["web_env_previous"] = deepcopy(self._web_env_previous)
+        snapshot["web_env_values"] = {key: os.environ.get(key) for key in self._web_env_previous}
+        return snapshot
+
+    def _restore_state(self, snapshot: dict[str, Any]) -> None:
+        super()._restore_state(snapshot)
+        self._section_models = snapshot["section_models"]
+        self._plugin_models = snapshot["plugin_models"]
+        for key, value in snapshot["web_env_values"].items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self._web_env_previous = snapshot["web_env_previous"]
+
+    def _reload(self) -> None:
+        super().reload()
+
+    def _build_models(self, tree: dict[str, Any]) -> dict[str, BaseModel]:
+        models = build_validated_models(tree, error_context="load")
         self._section_models = models.sections
         self._plugin_models = models.plugins
+        merged = dict(models.sections)
+        for plugin_name, model in models.plugins.items():
+            merged[f"plugins.{plugin_name}"] = model
+        return merged
 
     def _get_model(self, name: str) -> BaseModel | None:
         if name.startswith("plugins."):
@@ -411,7 +470,7 @@ class ConfigManager:
             return self._plugin_models.get(plugin)
         return self._section_models.get(name)
 
-    def _apply_handlers(self, section: str | None = None) -> None:
+    def _apply_handlers(self, section: str | None = None, *, raise_errors: bool = False) -> None:
         handlers = get_handlers()
         targets = [section] if section else handlers.keys()
         for target in targets:
@@ -425,6 +484,8 @@ class ConfigManager:
                 handler(model)
             except Exception as exc:
                 log.error(f"Failed to apply configuration handler for '{target}': {exc}")
+                if raise_errors:
+                    raise
 
     def _compose_without_env(self) -> dict[str, Any]:
         runtime = self._runtime_overrides.get(self._profile, {})
@@ -480,7 +541,11 @@ class ConfigManager:
         raise AttributeError(f"Config has no section '{name}'")
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if name.startswith("_"):
+        if (
+            name.startswith("_")
+            or name in {"app", "registry", "env", "loader"}
+            or "_section_models" not in self.__dict__
+        ):
             object.__setattr__(self, name, value)
             return
         if name in self._section_models:
@@ -498,8 +563,7 @@ class ConfigManager:
     def __enter__(self) -> ConfigManager:
         """Temporarily scope runtime config overrides to a context block."""
 
-        snapshot = (self._profile, deepcopy(self._runtime_overrides))
-        self._context_stack.append(snapshot)
+        self._context_stack.append(self._snapshot_state())
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
@@ -508,12 +572,17 @@ class ConfigManager:
         if not self._context_stack:
             return
 
-        profile, runtime_overrides = self._context_stack.pop()
+        snapshot = self._context_stack.pop()
         self._restore_web_env()
-        self._profile = profile
-        self._runtime_overrides = deepcopy(runtime_overrides)
-        self._reload()
-        self._apply_handlers()
+        self._restore_state(snapshot)
+        try:
+            self._reload()
+            self._apply_handlers()
+        except Exception:
+            self._restore_state(snapshot)
+            self._apply_handlers()
+            if exc_type is None:
+                raise
 
 
 def _serialize_value(value: Any) -> Any:

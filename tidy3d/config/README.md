@@ -6,7 +6,7 @@
 
 - Section schemas live in `sections.py` and register via `register_section`.
 - `ConfigManager` merges builtin defaults, saved files, environment overrides, and runtime edits, then runs section handlers.
-- `ConfigLoader` handles disk IO while `serializer.py` preserves comments and key order inside TOML files.
+- `ConfigLoader` wires Tidy3D policy into `flexcompute.core.config`, which preserves comments and key order inside TOML files.
 - `registry.py` tracks sections and handlers so late imports (plugins, tests) attach automatically.
 - Historical config accessors were removed in Tidy3D 2.12.
 
@@ -37,8 +37,8 @@ flowchart LR
     end
 
     subgraph Persistence
-        loader_py["loader.ConfigLoader"] --> serializer_py
-        serializer_py["serializer.py<br/>annotated TOML builder"] --> filesystem["config.toml<br/>profiles/<name>.toml"]
+        loader_py["loader.ConfigLoader"] --> core_config["flexcompute.core.config<br/>persistence mechanics"]
+        core_config --> filesystem["config.toml<br/>profiles/<name>.toml"]
     end
 
     env_vars["Environment variables"] --> loader_py
@@ -53,8 +53,7 @@ flowchart LR
 - `sections.py` - Pydantic models for built-in sections (logging, simulation, microwave, adjoint, web, local cache, in-memory batch data cache, plugin container) registered via `register_section`. The bundled models inherit from the internal `ConfigSection` helper, but external code can use plain `BaseModel` subclasses. Optional handlers perform side effects. Fields mark persistence with `json_schema_extra={"persist": True}`.
 - `registry.py` - Stores section and handler registries and notifies the attached manager so new entries appear immediately.
 - `manager.py` - `ConfigManager` caches validated models, tracks runtime overrides per profile, filters persisted fields, exposes helpers such as `plugins`, `profiles`, and `format`. `SectionAccessor` routes attribute access to `update_section`.
-- `loader.py` - Resolves the config directory, loads `config.toml` and `profiles/<name>.toml`, parses environment overrides, applies schema migrations, centralizes section payload iteration/validation helpers, and writes atomically through `serializer.build_document`.
-- `serializer.py` - Builds stable TOML documents with descriptive comments derived from section docstrings.
+- `loader.py` - Resolves Tidy3D-specific config directories, parses Tidy3D environment overrides, exposes section payload validation helpers, and delegates generic TOML persistence and migration mechanics to `flexcompute.core.config`.
 - `profiles.py` - Supplies builtin profiles merged ahead of user overrides.
 - `migrations.py` - Schema versioning utilities and the `vN -> vN+1` migration registry.
 - `deprecations.py` - Centralizes deprecated/removed field warnings during config validation.
