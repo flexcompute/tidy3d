@@ -21,7 +21,11 @@ from tidy3d.components.autograd.utils import (
 from tidy3d.components.autograd.utils import (
     adjoint_fwidth_from_simulation,
 )
-from tidy3d.components.data.monitor_data import AbstractFieldData, FieldData
+from tidy3d.components.data.monitor_data import (
+    AbstractFieldData,
+    FieldData,
+    PointCloudFieldData,
+)
 from tidy3d.components.data.sim_data import AdjointSourceInfo, make_adjoint_simulation
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.config import config
@@ -94,10 +98,16 @@ def _warn_parallel_adjoint_fallback(
 
 
 def _scale_adjoint_field_data(sim_data_adj: td.SimulationData, scale: complex) -> td.SimulationData:
-    """Return a copy of adjoint data with field monitor components scaled."""
+    """Return a copy of adjoint data with field monitor components scaled.
+
+    Point-cloud field data is scaled alongside volumetric field data: shape
+    gradients consume the ``adjoint_fld_pc_*`` monitors, so the parallel basis
+    coefficient must reach them too (D is linear in E, so one uniform factor is
+    correct for every component).
+    """
     scaled_data = []
     for monitor_data in sim_data_adj.data:
-        if isinstance(monitor_data, FieldData):
+        if isinstance(monitor_data, (FieldData, PointCloudFieldData)):
             scaled_components = {
                 key: value * scale for key, value in monitor_data.field_components.items()
             }
@@ -335,7 +345,12 @@ def prepare_parallel_adjoint(
     if not basis_specs:
         td.log.warning("Parallel adjoint disabled because no eligible monitor outputs were found.")
         return None
-    adjoint_monitors = make_adjoint_monitors(simulation, sim_fields_keys)
+    # the strategy threads the collected artifact onto the context before this call,
+    # so parallel adjoint simulations stage the same point-cloud monitors the
+    # forward simulation records
+    adjoint_monitors = make_adjoint_monitors(
+        simulation, sim_fields_keys, sample_sets=task_context.context.sample_sets
+    )
 
     basis_sources: list[tuple[ParallelAdjointBasis, SourceType]] = []
     for basis in basis_specs:

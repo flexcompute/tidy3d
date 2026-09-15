@@ -190,11 +190,11 @@ grouping.
    * - ``monitor_interval_poly``
      - ``(1, 1, 1)``
      - No
-     - Cell spacing between samples for polynomial autograd monitors.
+     - Cell spacing between samples for the volumetric adjoint monitors of geometry paths handled volumetrically (numerical structures and custom-vjp-owned paths). Standard shape gradients record surface point clouds whose density is set by ``default_wavelength_fraction`` and ignore this setting.
    * - ``monitor_interval_custom``
      - ``(1, 1, 1)``
      - No
-     - Cell spacing between samples for custom autograd monitors.
+     - Cell spacing between samples for the volumetric adjoint monitors of structures with traced medium paths. Shape-gradient surface point clouds are unaffected.
    * - ``quadrature_sample_fraction``
      - ``0.4``
      - No

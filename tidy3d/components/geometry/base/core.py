@@ -618,6 +618,18 @@ class Geometry(Tidy3dBaseModel, ABC):
             f"Can't generate adjoint sample sets for 'Geometry': '{type(self)}'."
         )
 
+    @staticmethod
+    def _sample_set_integrand(
+        sample_set: SurfaceSampleSet,
+        derivative_info: DerivativeInfo,
+        interpolators: dict | None,
+        key: PathType,
+    ) -> np.ndarray:
+        """Evaluate one set's integrand through the boundary consumption seam."""
+        from tidy3d.em.translate.sample_sets import sample_set_integrand
+
+        return sample_set_integrand(sample_set, derivative_info, interpolators, key)
+
     def _compute_derivatives_from_sample_sets(
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],

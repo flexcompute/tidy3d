@@ -352,8 +352,11 @@ class GeometryGroup(Geometry):
         """Route consumption to child geometries, mapping their vjps to full paths."""
         grad_vjps = {}
 
-        # create interpolators once for all geometries to avoid redundant field data conversions
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+        # volumetric route only: the point-cloud route reads precomputed integrands
+        # and needs no interpolation setup
+        interpolators = derivative_info.interpolators
+        if interpolators is None and derivative_info.point_integrands is None:
+            interpolators = derivative_info.create_interpolators()
 
         for index, child_paths in self._sub_paths_by_child(paths).items():
             child = self.geometries[index]
@@ -370,6 +373,17 @@ class GeometryGroup(Geometry):
                 ),
                 deep=False,
                 interpolators=interpolators,
+                # point-cloud integrands are keyed like sample sets: strip the routing
+                # prefix so the child's local canonical keys resolve
+                point_integrands=(
+                    {
+                        key[2:]: value
+                        for key, value in derivative_info.point_integrands.items()
+                        if key[:2] == prefix
+                    }
+                    if derivative_info.point_integrands is not None
+                    else None
+                ),
             )
 
             child_vjps = child._compute_derivatives_from_sample_sets(

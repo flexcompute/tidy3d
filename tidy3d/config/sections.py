@@ -309,7 +309,11 @@ class AdjointConfig(ConfigSection):
         default=(1, 1, 1),
         title="Polynomial monitor spacing",
         description=(
-            "Default spatial interval (in cells) between samples for polynomial autograd monitors."
+            "Spatial interval (in cells) between samples for the volumetric adjoint monitors "
+            "of geometry paths handled volumetrically (numerical structures and "
+            "custom-vjp-owned paths). Standard shape gradients record surface point clouds "
+            "instead; their sampling density is set by 'default_wavelength_fraction', not by "
+            "this interval."
         ),
     )
 
@@ -317,7 +321,9 @@ class AdjointConfig(ConfigSection):
         default=(1, 1, 1),
         title="Custom monitor spacing",
         description=(
-            "Default spatial interval (in cells) between samples for custom autograd monitors."
+            "Spatial interval (in cells) between samples for the volumetric adjoint monitors "
+            "of structures with traced medium paths. Shape-gradient surface point clouds are "
+            "unaffected."
         ),
     )
 

@@ -469,8 +469,11 @@ class ClipOperation(Geometry):
         }
         grad_vjps = {}
 
-        # Reuse interpolation data for both operands to avoid duplicate setup.
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+        # Reuse interpolation data for both operands to avoid duplicate setup
+        # (volumetric route only: the point-cloud route reads precomputed integrands).
+        interpolators = derivative_info.interpolators
+        if interpolators is None and derivative_info.point_integrands is None:
+            interpolators = derivative_info.create_interpolators()
 
         for geometry_key, operand_paths in self._operand_paths(paths).items():
             if not operand_paths:
@@ -490,6 +493,17 @@ class ClipOperation(Geometry):
                 ),
                 deep=False,
                 interpolators=interpolators,
+                # point-cloud integrands are keyed like sample sets: strip the routing
+                # prefix so the operand's local canonical keys resolve
+                point_integrands=(
+                    {
+                        key[1:]: value
+                        for key, value in derivative_info.point_integrands.items()
+                        if key[:1] == prefix
+                    }
+                    if derivative_info.point_integrands is not None
+                    else None
+                ),
             )
 
             vjp_dict_geometry = geometry._compute_derivatives_from_sample_sets(

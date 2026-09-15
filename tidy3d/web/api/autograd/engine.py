@@ -17,26 +17,47 @@ from .io_utils import get_cached_vjp_traced_fields, get_vjp_traced_fields
 
 if TYPE_CHECKING:
     from tidy3d.components.base import Tidy3dBaseModel
+    from tidy3d.em.translate.sample_sets import GeometrySampleSets
 
 
-# rough per-point payload of a serialized sample set: points/normals/perps1/perps2
-# (4 x 3 scalars) + weights (1 scalar) at 8 bytes each
-_SAMPLE_SET_BYTES_PER_POINT = 13 * 8
 # above this estimated payload, the upload size line is logged at info level
 _SAMPLE_SETS_SIZE_INFO_BYTES = 50e6
 
 
+def _data_array_nbytes(value: Any) -> int:
+    """Total bytes of the data arrays reachable from a model tree.
+
+    Generic traversal so the upload estimate stays truthful as the sample-set
+    payload evolves (quadrature arrays, staged query points, PEC sampling data).
+    """
+    values = getattr(value, "values", None)
+    if values is not None and hasattr(values, "nbytes"):
+        return int(values.nbytes)
+    if isinstance(value, (tuple, list)):
+        return sum(_data_array_nbytes(item) for item in value)
+    model_fields = getattr(type(value), "model_fields", None)
+    if model_fields:
+        return sum(_data_array_nbytes(getattr(value, name)) for name in model_fields)
+    return 0
+
+
 def _autograd_forward_sidecar_artifacts(
-    simulation: td.Simulation, sim_fields_keys: list[tuple]
+    simulation: td.Simulation,
+    sim_fields_keys: list[tuple],
+    sample_sets: GeometrySampleSets | None = None,
 ) -> dict[str, Tidy3dBaseModel]:
     """Build sidecar artifacts uploaded alongside an autograd forward task.
 
-    The sample sets are collected without exclusions: sidecars only ride remote-gradient
-    forward uploads, and custom vjps / numerical structures (the only sources of
-    exclusions) force ``local_gradient=True``.
+    ``sample_sets`` is the artifact instance the strategy prepared the forward with
+    (``prepare_forward``), so the upload ships the exact object monitors were staged
+    from. When absent (direct callers outside the strategies), it is collected here
+    without exclusions: sidecars only ride remote-gradient forward uploads, and
+    custom vjps / numerical structures (the only sources of exclusions) force
+    ``local_gradient=True``.
     """
-    sample_sets = collect_adjoint_sample_sets(simulation, sim_fields_keys)
-    est_bytes = sample_sets.num_points * _SAMPLE_SET_BYTES_PER_POINT
+    if sample_sets is None:
+        sample_sets = collect_adjoint_sample_sets(simulation, sim_fields_keys)
+    est_bytes = _data_array_nbytes(sample_sets)
     size_message = (
         f"Uploading adjoint sample-set artifact: {sample_sets.num_points} surface points, "
         f"approximately {est_bytes / 1e6:.1f} MB."
@@ -127,7 +148,9 @@ def _run_tidy3d(
         job._upload_and_cache(
             verbose_estimate_cost=False,
             _sidecar_artifacts=_autograd_forward_sidecar_artifacts(
-                simulation, run_kwargs["sim_fields_keys"]
+                simulation,
+                run_kwargs["sim_fields_keys"],
+                sample_sets=run_kwargs.get("sample_sets"),
             ),
         )
     path_arg = run_kwargs.get("path")
@@ -176,8 +199,11 @@ def _run_async_tidy3d(
         }
         batch = batch.updated_copy(simulations=sims)
 
+        sample_sets_dict = run_kwargs.get("sample_sets_dict") or {}
         sidecar_artifacts_by_task = {
-            task_name: _autograd_forward_sidecar_artifacts(sims[task_name], sim_fields_keys)
+            task_name: _autograd_forward_sidecar_artifacts(
+                sims[task_name], sim_fields_keys, sample_sets=sample_sets_dict.get(task_name)
+            )
             for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items()
         }
         batch._upload_jobs(_sidecar_artifacts_by_task=sidecar_artifacts_by_task)

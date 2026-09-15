@@ -963,7 +963,7 @@ class Box(SimplePlaneIntersection, Centered):
                     ctx=ctx,
                 )
                 if sample_set is None:
-                    sample_set = SurfaceSampleSet.empty(serves_paths=(("center",), ("size",)))
+                    sample_set = SurfaceSampleSet.empty()
                 sample_sets[(_BOX_FACES, min_max_index, axis_normal)] = sample_set
 
         return sample_sets
@@ -975,7 +975,9 @@ class Box(SimplePlaneIntersection, Centered):
         derivative_info: DerivativeInfo,
     ) -> AutogradFieldMap:
         """Compute ``center``/``size`` derivatives from pre-generated face sample sets."""
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+        # threaded interpolators (or None): the legacy volumetric branch materializes
+        # its own on demand; the point-cloud path needs none
+        interpolators = derivative_info.interpolators
 
         # gradients w.r.t. each of the 6 faces (in normal direction)
         vjps_faces = np.zeros((2, 3))
@@ -990,8 +992,8 @@ class Box(SimplePlaneIntersection, Centered):
                 sample_set = sample_sets[key]
                 if sample_set.num_points == 0:
                     continue  # explicit zero contribution
-                gradient_at_points = sample_set.evaluate(
-                    derivative_info, interpolators=interpolators
+                gradient_at_points = self._sample_set_integrand(
+                    sample_set, derivative_info, interpolators, key
                 )
                 vjps_faces[min_max_index, axis_normal] = np.sum(
                     sample_set.weights.values * np.real(gradient_at_points)
@@ -1177,7 +1179,6 @@ class Box(SimplePlaneIntersection, Centered):
             perps1=perps1,
             perps2=perps2,
             weights=np.full(len(grid_points), integration_weight),
-            serves_paths=(("center",), ("size",)),
         )
 
 

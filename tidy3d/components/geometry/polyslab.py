@@ -2442,11 +2442,9 @@ class PolySlab(base.Planar):
         derivative_info: DerivativeInfo,
     ) -> AutogradFieldMap:
         """Compute vertices/sidewall-angle/slab-bounds derivatives from sample sets."""
-        # create interpolators once for ALL derivative computations
-        # use provided interpolators if available to avoid redundant field data conversions
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
-            dtype=config.adjoint.gradient_dtype_float
-        )
+        # threaded interpolators (or None): the legacy volumetric branch materializes
+        # its own on demand; the point-cloud path needs none
+        interpolators = derivative_info.interpolators
 
         vjps: AutogradFieldMap = {}
         for path in paths:
@@ -2465,19 +2463,19 @@ class PolySlab(base.Planar):
                     vjps[path] = np.zeros_like(self.vertices)
                     continue
                 vjps[path] = self._vertices_vjp_from_sample_set(
-                    sample_set, derivative_info, interpolators
+                    sample_set, derivative_info, interpolators, key
                 )
             elif path == ("sidewall_angle",):
                 if sample_set.num_points == 0:
                     vjps[path] = 0.0
                     continue
-                g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+                g = self._sample_set_integrand(sample_set, derivative_info, interpolators, key)
                 vjps[path] = float(np.real(np.sum(g * sample_set.weights.values)))
             else:  # slab_bounds
                 if sample_set.num_points == 0:
                     vjps[path] = 0.0
                     continue
-                g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+                g = self._sample_set_integrand(sample_set, derivative_info, interpolators, key)
                 v = np.real(np.sum(g * sample_set.weights.values)).item()
                 # outward-normal convention
                 if path[1] == 0:
@@ -2491,6 +2489,7 @@ class PolySlab(base.Planar):
         sample_set: SurfaceSampleSet,
         derivative_info: DerivativeInfo,
         interpolators: dict,
+        key: PathType,
     ) -> NDArray:
         """Evaluate the sidewall sample set and scatter to per-vertex gradients."""
         from tidy3d.em.translate.sample_sets import (
@@ -2501,7 +2500,7 @@ class PolySlab(base.Planar):
         metadata = typed_sample_set_metadata(sample_set, PolySlabSidewallMetadata, "PolySlab")
 
         # evaluate integrand
-        g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+        g = self._sample_set_integrand(sample_set, derivative_info, interpolators, key)
 
         # weights are the patch areas; compute weighted vjps
         patch_vjps = (g * sample_set.weights.values).real
@@ -3065,7 +3064,6 @@ class PolySlab(base.Planar):
             perps2=patch["perps2"],
             weights=weights,
             metadata=PolySlabSidewallAngleMetadata(),
-            serves_paths=(("sidewall_angle",),),
         )
 
     def _make_slab_face_sample_set(
@@ -3200,7 +3198,6 @@ class PolySlab(base.Planar):
             perps2=perps2_xyz,
             weights=areas,
             metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
-            serves_paths=(("slab_bounds", min_max_index),),
         )
 
     def _slab_face_surface_samples(
@@ -3300,7 +3297,6 @@ class PolySlab(base.Planar):
             perps2=perps2_xyz,
             weights=weights_flat * jacobian,
             metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
-            serves_paths=(("slab_bounds", min_max_index),),
         )
 
     def _make_sidewall_sample_set(
@@ -3360,7 +3356,6 @@ class PolySlab(base.Planar):
             perps2=patch["perps2"],
             weights=areas,
             metadata=metadata,
-            serves_paths=(("vertices",),),
         )
 
     def _edge_geometry_arrays(

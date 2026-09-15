@@ -3,8 +3,8 @@
 This is the single generation entry point of the adjoint sample-set pipeline
 (the alignment invariant): forward setup calls it to pre-collect sample sets before
 any simulation runs — onto the in-process context for local gradients and into the
-uploaded sidecar artifact for remote gradients — and future point-cloud monitor
-construction will consume the same sets. There is never a second generation
+uploaded sidecar artifact for remote gradients — and point-cloud monitor
+construction consumes the same sets. There is never a second generation
 implementation that can drift.
 
 Everything here is definition-derived: sampling resolutions come from the simulation
@@ -29,6 +29,7 @@ from tidy3d.em.translate.sample_sets import (
 from tidy3d.log import log
 
 from .spacing import SamplingScanIndex, adjoint_sampling_resolution
+from .staging import _fully_anisotropic_trigger, _metal_like_trigger, stage_sample_sets
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
@@ -79,6 +80,19 @@ def collect_adjoint_sample_sets(
         )
 
         sample_sets = geometry._make_adjoint_sample_sets(paths=list(geometry_paths), ctx=ctx)
+        # structure-level staging: geometries are medium-agnostic, so the monitor
+        # query points (and PEC payload, when triggered) are attached here where the
+        # medium, grid, and full simulation are in scope. Downstream monitor
+        # construction (including the solver's, through the uploaded artifact) keys
+        # off payload presence, so the artifact is the single authority and every
+        # construction site stages identical monitors.
+        sample_sets = stage_sample_sets(
+            sample_sets=sample_sets,
+            structure=structure,
+            simulation=simulation,
+            scan_index=scan_index,
+            grid=simulation.grid,
+        )
 
         structure_sample_sets = StructureSampleSets(
             entries=tuple(
@@ -96,6 +110,52 @@ def collect_adjoint_sample_sets(
                 sample_sets=structure_sample_sets,
             )
         )
+
+        if structure_sample_sets.num_points > 0 and _fully_anisotropic_trigger(
+            structure, simulation, scan_index
+        ):
+            # not an error: this matches the legacy volumetric path's treatment, but
+            # the approximation deserves surfacing at collection time
+            log.warning(
+                f"Adjoint sample sets: structure {structure_index} interfaces fully "
+                "anisotropic media; its shape gradient uses only the diagonal "
+                "permittivity components, so off-diagonal tensor coupling is not "
+                "included in the surface-gradient computation."
+            )
+
+        # parity with the legacy consumption-time warning: metals must be declared
+        # PEC to receive PEC boundary handling; undeclared metal-like media take the
+        # dielectric-only path, which is a poor approximation at a metal boundary
+        if (
+            structure_sample_sets.num_points > 0
+            and not structure_sample_sets.pec_staged
+            and _metal_like_trigger(structure, simulation, scan_index, simulation._freqs_adjoint)
+        ):
+            log.warning(
+                f"Adjoint sample sets: structure {structure_index} interfaces a medium "
+                "with metal-like permittivity (real part below "
+                "'config.adjoint.pec_detection_threshold') that is not declared PEC, so "
+                "its shape gradient uses dielectric-only surface integration. If PEC "
+                "behavior is intended, use a PEC medium or set the structure's "
+                "'background_medium' to PEC so the PEC correction is applied."
+            )
+
+        from .point_consumption import _adjoint_point_cloud_chunk_size
+
+        chunk_size = _adjoint_point_cloud_chunk_size()
+        if structure_sample_sets.num_points > chunk_size:
+            # not an error: monitors split transparently across chunks, but the
+            # recorded adjoint data volume scales with the point count, so surface
+            # the cost and the resolution lever
+            log.warning(
+                f"Adjoint sample sets: structure {structure_index} stages "
+                f"{structure_sample_sets.num_points:,} surface points, above the "
+                f"{chunk_size:,}-point per-monitor cap; its point-cloud adjoint "
+                "monitors are split across multiple monitors and the recorded adjoint "
+                "data will be correspondingly large. Coarsen the adjoint sampling "
+                "resolution (e.g. 'config.adjoint.default_wavelength_fraction') if "
+                "this is unintended."
+            )
 
         # per-structure detail is aggregated across canonical keys (composite geometries
         # can imply thousands of keys) and capped across structures

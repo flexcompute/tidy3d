@@ -477,7 +477,6 @@ class Sphere(base.Centered, base.Circular):
             perps1=perp1[inside_mask],
             perps2=perp2[inside_mask],
             weights=weights[inside_mask],
-            serves_paths=(("radius",), ("center", 0), ("center", 1), ("center", 2)),
         )
         return {_SPHERE_SURFACE_KEY: sample_set}
 
@@ -516,14 +515,13 @@ class Sphere(base.Centered, base.Circular):
         if sample_set.num_points == 0:
             return dict.fromkeys(paths, 0.0)
 
-        grid_cfg = config.adjoint
+        # threaded interpolators (or None): the legacy volumetric branch materializes
+        # its own on demand; the point-cloud path needs none
         interpolators = derivative_info.interpolators
-        if interpolators is None:
-            interpolators = derivative_info.create_interpolators(
-                dtype=grid_cfg.gradient_dtype_float
-            )
 
-        g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+        g = self._sample_set_integrand(
+            sample_set, derivative_info, interpolators, _SPHERE_SURFACE_KEY
+        )
 
         normals_sel = sample_set.normals.values
         weighted = (sample_set.weights.values * g).real

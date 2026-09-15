@@ -185,14 +185,34 @@ class SyntheticMonitorDataFactory:
             **field_cmps,
         )
 
+    @staticmethod
+    def _point_position_modulation(
+        monitor: td.PointCloudFieldMonitor | td.PointCloudPermittivityMonitor,
+    ) -> np.ndarray:
+        """Smooth position-dependent modulation for point-cloud values, shape (N, 1).
+
+        Synthetic volumetric data varies with its grid coordinates; point-cloud data
+        must vary with its point positions the same way, so that spatially offset
+        monitors (e.g. inside- vs outside-snapped permittivity query points) yield
+        different values. Without this, permittivity contrasts vanish and emulated
+        shape gradients are identically zero.
+        """
+        points = np.asarray(monitor.points.values, dtype=float)
+        phase = points @ np.array([1.0, 2.0, 3.0])
+        return (1.0 + 0.1 * np.sin(phase) + 0.05 * phase)[:, None]
+
     def make_point_cloud_field_data(
         self, monitor: td.PointCloudFieldMonitor
     ) -> td.PointCloudFieldData:
         field_cmps = {}
         coords = {"index": np.asarray(monitor.points.coords["index"]), "f": list(monitor.freqs)}
+        modulation = self._point_position_modulation(monitor)
         for field_name in monitor.fields:
-            field_cmps[field_name] = self._make_data(
+            values = self._make_data(
                 coords=coords, data_array_type=td.IndexedFreqDataArray, is_complex=True
+            )
+            field_cmps[field_name] = td.IndexedFreqDataArray(
+                values.values * modulation, coords=coords
             )
 
         return td.PointCloudFieldData(monitor=monitor, points=monitor.points, **field_cmps)
@@ -209,7 +229,7 @@ class SyntheticMonitorDataFactory:
                 is_complex=True,
             )
             field_cmps[component_name] = td.IndexedFreqDataArray(
-                1.5**2 + np.abs(values.values),
+                1.5**2 + np.abs(values.values * self._point_position_modulation(monitor)),
                 coords=coords,
             )
 

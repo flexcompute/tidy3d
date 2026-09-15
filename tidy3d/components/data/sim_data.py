@@ -22,6 +22,7 @@ from pydantic import Field
 
 from tidy3d.components.autograd.field_source_pca import FieldSourcePCAProcessor
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
+from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
 from tidy3d.components.autograd.source_factory import (
     fold_adjoint_current_source_samples_outside_bounds,
 )
@@ -39,7 +40,6 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import GaussianBeamType, SourceType
-from tidy3d.components.structure import Structure
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
@@ -2163,10 +2163,10 @@ class SimulationData(AbstractYeeGridSimulationData):
             )
         return field_structure
 
-    def _get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
+    def _get_adjoint_data(self, structure_index: int, monitor_tag: str) -> MonitorDataType:
         """Grab the field or permittivity data for a given structure index."""
 
-        monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
+        monitor_name = adjoint_monitor_name(index=structure_index, monitor_tag=monitor_tag)
         return self[monitor_name]
 
 

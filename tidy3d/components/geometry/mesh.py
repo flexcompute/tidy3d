@@ -857,7 +857,6 @@ class TriangleMesh(base.Geometry, ABC):
             perps2=samples["perps2"],
             weights=samples["weights"],
             metadata=metadata,
-            serves_paths=(_MESH_DERIVATIVE_PATH,),
         )
         return {_MESH_SURFACE_KEY: sample_set}
 
@@ -898,13 +897,13 @@ class TriangleMesh(base.Geometry, ABC):
             sample_set, TriangleMeshSurfaceMetadata, "TriangleMesh"
         )
 
+        # threaded interpolators (or None): the legacy volumetric branch materializes
+        # its own on demand; the point-cloud path needs none
         interpolators = derivative_info.interpolators
-        if interpolators is None:
-            interpolators = derivative_info.create_interpolators(
-                dtype=config.adjoint.gradient_dtype_float
-            )
 
-        g = sample_set.evaluate(derivative_info, interpolators=interpolators)
+        g = self._sample_set_integrand(
+            sample_set, derivative_info, interpolators, _MESH_SURFACE_KEY
+        )
 
         # accumulate per-vertex contributions using barycentric weights
         weights = (sample_set.weights.values * g).real

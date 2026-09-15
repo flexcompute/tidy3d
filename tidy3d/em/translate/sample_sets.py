@@ -5,7 +5,7 @@ and uploads it with the forward task, and the solver consumes it during adjoint
 postprocessing. To keep that contract single-source (no drifting public twin), the
 classes are defined once in ``flexcompute.core._migration.em.schema`` and re-exported here rather than
 translated into duplicate public models. This module is the owned translator
-boundary for the sample-set contract (see ``flex/public/flexcompute-core/README.md``): the
+boundary for the sample-set contract (see ``flex/public/flex-em/README.md``): the
 rest of the public package imports these names from here, never from
 ``flexcompute.core._migration.em.schema`` directly, and the functions below translate schema exceptions
 into public tidy3d exceptions.
@@ -26,6 +26,10 @@ from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_set
     CircularCrossSectionSidewallMetadata,
     CircularCrossSectionSlabFaceMetadata,
     GeometrySampleSets,  # noqa: TC — runtime re-export consumed across the client package
+    MaterialQueryPoints,
+    PECSamplingData,
+    PECSideSamplingData,
+    PointCloudSamplingData,
     PolySlabSidewallAngleMetadata,
     PolySlabSidewallMetadata,
     PolySlabSlabFaceMetadata,
@@ -40,6 +44,9 @@ from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_set
 )
 from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
     circular_cross_section_metadata as _schema_circular_cross_section_metadata,
+)
+from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
+    sample_set_integrand as _schema_sample_set_integrand,
 )
 from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
     typed_sample_set_metadata as _schema_typed_sample_set_metadata,
@@ -67,9 +74,13 @@ from tidy3d.exceptions import AdjointError
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
+    import numpy as np
     from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
         SampleSetMetadataType,
     )
+
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.types import PathType
 
 MetadataT = TypeVar("MetadataT")
 
@@ -81,6 +92,10 @@ __all__ = [
     "CircularCrossSectionSlabFaceMetadata",
     "GeometrySampleSets",
     "IndexedDataArray",
+    "MaterialQueryPoints",
+    "PECSamplingData",
+    "PECSideSamplingData",
+    "PointCloudSamplingData",
     "PointDataArray",
     "PolySlabSidewallAngleMetadata",
     "PolySlabSidewallMetadata",
@@ -93,10 +108,30 @@ __all__ = [
     "TriangleMeshSurfaceMetadata",
     "circular_cross_section_metadata",
     "encode_traced_keys",
+    "sample_set_integrand",
     "shape_paths_by_structure",
     "typed_sample_set_metadata",
     "validate_sample_sets_coverage",
 ]
+
+
+def sample_set_integrand(
+    sample_set: SurfaceSampleSet,
+    derivative_info: DerivativeInfo,
+    interpolators: dict | None,
+    key: PathType,
+) -> np.ndarray:
+    """Per-point shape-gradient integrand for one sample set at this boundary.
+
+    Delegates to the schema consumption seam (point-cloud integrand lookup or legacy
+    interpolation) and translates the schema package's ``AdjointError`` into
+    ``tidy3d.exceptions.AdjointError``, so public-side consumption raises only tidy3d
+    exceptions.
+    """
+    try:
+        return _schema_sample_set_integrand(sample_set, derivative_info, interpolators, key)
+    except _SchemaAdjointError as exc:
+        raise AdjointError(str(exc)) from exc
 
 
 def circular_cross_section_metadata(

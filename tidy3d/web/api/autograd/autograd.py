@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from tidy3d.components.tcad.simulation.heat import HeatSimulation
     from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
+    from tidy3d.em.translate.sample_sets import GeometrySampleSets
     from tidy3d.plugins.mode import ModeSolver
     from tidy3d.plugins.smatrix import ModalComponentModeler, TerminalComponentModeler
     from tidy3d.web.api.container import BatchData
@@ -1699,12 +1700,14 @@ def setup_fwd(
     sim_fields: AutogradFieldMap,
     sim_original: td.Simulation,
     local_gradient: bool = False,
+    custom_vjp: Sequence[CustomVJPConfig] | None = None,
 ) -> td.Simulation:
     """Return a forward simulation with adjoint monitors attached (delegated)."""
     return forward.setup_fwd(
         sim_fields=sim_fields,
         sim_original=sim_original,
         local_gradient=local_gradient,
+        custom_vjp=custom_vjp,
     )
 
 
@@ -1815,6 +1818,7 @@ def setup_adj(
     max_num_adjoint_per_fwd: int,
     already_filtered: bool = False,
     sim_data_fwd: td.SimulationData | None = None,
+    sample_sets: GeometrySampleSets | None = None,
 ) -> list[td.Simulation]:
     """Construct adjoint simulations (delegated)."""
     return backward.setup_adj(
@@ -1824,6 +1828,7 @@ def setup_adj(
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         already_filtered=already_filtered,
         sim_data_fwd=sim_data_fwd,
+        sample_sets=sample_sets,
     )
 
 

@@ -12,6 +12,12 @@ import tidy3d as td
 import tidy3d.system as system_utils
 from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
+from tidy3d.components.autograd.point_consumption import (
+    adjoint_point_cloud_chunk_bounds,
+    adjoint_point_cloud_chunk_tag,
+    compute_point_integrands,
+)
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.components.geometry.bound_ops import bounds_contains, bounds_intersection
@@ -49,6 +55,7 @@ if TYPE_CHECKING:
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.monitor import Monitor
+    from tidy3d.em.translate.sample_sets import GeometrySampleSets, StructureSampleSets
 
     from .context import AdjointPostprocessInputs
     from .types import DerivativeView, NumericalStructureConfig
@@ -71,9 +78,21 @@ class AdjointSetupResult:
 def make_adjoint_monitors(
     simulation: td.Simulation,
     sim_fields_keys: list[tuple],
+    sample_sets: GeometrySampleSets | None = None,
 ) -> list[Monitor]:
-    """Return the structure adjoint monitors used by adjoint simulations."""
-    monitors_fld, monitors_eps = simulation._make_adjoint_monitors(sim_fields_keys)
+    """Return the structure adjoint monitors used by adjoint simulations.
+
+    Point-cloud permittivity monitors are forward-only (permittivity is identical in
+    the adjoint simulation), so they are dropped here.
+    """
+    monitors_fld, monitors_eps = simulation._make_adjoint_monitors(
+        sim_fields_keys, sample_sets=sample_sets
+    )
+    monitors_eps = [
+        monitor
+        for monitor in monitors_eps
+        if not isinstance(monitor, td.PointCloudPermittivityMonitor)
+    ]
     return [*monitors_fld, *monitors_eps]
 
 
@@ -125,6 +144,7 @@ def setup_adj(
     already_filtered: bool = False,
     sim_data_fwd: td.SimulationData | None = None,
     return_result: bool = False,
+    sample_sets: GeometrySampleSets | None = None,
 ) -> list[td.Simulation] | AdjointSetupResult:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
@@ -161,7 +181,9 @@ def setup_adj(
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
 
-    adjoint_monitors = make_adjoint_monitors(sim_data_orig.simulation, sim_fields_keys)
+    adjoint_monitors = make_adjoint_monitors(
+        sim_data_orig.simulation, sim_fields_keys, sample_sets=sample_sets
+    )
 
     adjoint_setup_result = sim_data_vjp._make_adjoint_sims_with_result(
         data_vjp_paths=data_vjp_paths,
@@ -221,6 +243,88 @@ def _get_freq_coords(field_data: td.FieldData) -> np.ndarray:
 def _estimate_dataset_bytes(dataset: td.PermittivityData | td.FieldData) -> int:
     """Estimate total byte size of field components in a dataset."""
     return sum(np.asarray(comp.values).nbytes for comp in dataset.field_components.values())
+
+
+def _adjoint_freq_chunk_size(n_freqs: int, combined_data_size: int) -> int:
+    """Resolve the adjoint frequency chunk size from config and the memory budget.
+
+    Shared by the volumetric, mixed, and point-only consumption paths so every
+    family of adjoint data participates in the same frequency memory budget.
+    """
+
+    def estimate_peak_bytes(num_chunk_freqs: int) -> int:
+        return int(
+            ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+            + (num_chunk_freqs / n_freqs) * combined_data_size * ADJOINT_MEMORY_MULTIPLIER
+        )
+
+    user_desired_freqs = config.adjoint.solver_freq_chunk_size
+    if user_desired_freqs is not None and user_desired_freqs > 0:
+        freq_chunk_size = min(n_freqs, user_desired_freqs)
+        available_bytes = system_utils.get_available_memory_bytes()
+        if available_bytes > 0:
+            budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
+            if combined_data_size > 0 and estimate_peak_bytes(freq_chunk_size) > budget_bytes:
+                td.log.warning(
+                    "Configured adjoint frequency chunk size may exceed the available memory budget; "
+                    "continuing with the configured chunk size.",
+                    log_once=True,
+                )
+        return freq_chunk_size
+
+    def max_freqs_from_budget(available_bytes: int) -> int:
+        budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
+        numerator = budget_bytes - ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
+        denominator = combined_data_size * ADJOINT_MEMORY_MULTIPLIER
+        return int(n_freqs * numerator / denominator) if denominator > 0 else n_freqs
+
+    return _resolve_freq_chunk_size(
+        n_freqs=n_freqs, max_freqs_from_budget=max_freqs_from_budget, fallback_num_freqs=1
+    )
+
+
+def _point_cloud_monitor_names(
+    structure_index: int, pec_staged: bool, num_chunks: int
+) -> list[str]:
+    """Candidate point-cloud monitor names for one structure's staged sample sets."""
+    monitor_tags = ["fld_pc"]
+    monitor_tags += [
+        f"eps_pc_{side}_{component}" for side in ("in", "out") for component in ("xx", "yy", "zz")
+    ]
+    if pec_staged:
+        monitor_tags += [
+            f"fld_pc_{component}_{side}"
+            for side in ("out", "in")
+            for component in ("ex", "ey", "ez", "hx", "hy", "hz")
+        ]
+    return [
+        adjoint_monitor_name(
+            index=structure_index,
+            monitor_tag=adjoint_point_cloud_chunk_tag(monitor_tag, chunk_index),
+        )
+        for monitor_tag in monitor_tags
+        for chunk_index in range(num_chunks)
+    ]
+
+
+def _point_cloud_data_size(
+    sim_data_fwd: td.SimulationData,
+    sim_data_adj: td.SimulationData,
+    structure_index: int,
+    sample_sets: StructureSampleSets,
+) -> int:
+    """Total bytes of one structure's point-cloud monitor data (forward and adjoint)."""
+    num_chunks = len(adjoint_point_cloud_chunk_bounds(sample_sets.num_points))
+    names = _point_cloud_monitor_names(
+        structure_index, pec_staged=sample_sets.pec_staged, num_chunks=num_chunks
+    )
+    total = 0
+    for sim_data in (sim_data_fwd, sim_data_adj):
+        monitor_names = {monitor.name for monitor in sim_data.simulation.monitors}
+        for name in names:
+            if name in monitor_names:
+                total += _estimate_dataset_bytes(sim_data[name])
+    return total
 
 
 def _require_freq_ascending(
@@ -378,11 +482,7 @@ def postprocess_adj(
                         component_index
                     ),
                     custom_vjp=custom_vjp_lookup.get(component_index),
-                    sample_sets=(
-                        structure_sample_sets.by_key()
-                        if structure_sample_sets is not None
-                        else None
-                    ),
+                    sample_sets=structure_sample_sets,
                 )
             )
         elif component_type == "sources":
@@ -645,12 +745,13 @@ def _process_structure_gradients(
     custom_vjp: dict[tuple[str, str], Callable[..., Any]] | None = None,
     numerical_structure: NumericalStructureConfig | None = None,
     numerical_paths: list[tuple] | None = None,
-    sample_sets: dict[tuple, Any] | None = None,
+    sample_sets: StructureSampleSets | None = None,
 ) -> AutogradFieldMap:
     """Process gradients for a specific structure.
 
-    ``sample_sets`` are the structure's pre-collected surface samples (canonical-keyed),
-    shared across all frequency chunks; when absent, geometries generate late.
+    ``sample_sets`` is the structure's pre-collected ``StructureSampleSets``, shared
+    across all frequency chunks (converted to its canonical-keyed mapping only at the
+    geometry boundary); when absent, geometries generate late.
     """
 
     structure_paths = structure_paths or []
@@ -667,10 +768,101 @@ def _process_structure_gradients(
             [get_static(param) for param in numerical_structure.parameters]
         )
 
+    # point-only structures: when the artifact staged monitor payload and the
+    # selection matrix placed no volumetric monitors (shape-only paths), gradients
+    # come entirely from the point-cloud monitor data — no volumetric fetch, and the
+    # same adjoint frequency memory budget chunks the point-cloud consumption
+    staged_point_path = bool(structure_paths) and sample_sets is not None and sample_sets.staged
+    fwd_monitor_names = {monitor.name for monitor in sim_data_fwd.simulation.monitors}
+    volumetric_available = (
+        adjoint_monitor_name(index=structure_index, monitor_tag="fld") in fwd_monitor_names
+    )
+    if not volumetric_available:
+        if not staged_point_path or use_numerical_vjp or custom_vjp:
+            raise AdjointError(
+                "Rerun the forward simulation to regenerate its adjoint data: no adjoint "
+                f"monitor data was recorded for structure {structure_index} (neither "
+                "volumetric nor point-cloud) for its traced derivative paths."
+            )
+        structure = sim_data_fwd.simulation.structures[structure_index]
+        clipped_geometry = (
+            structure.geometry if _geometry_contains_clip_operation(structure.geometry) else None
+        )
+        fld_adj_pc = sim_data_adj[adjoint_monitor_name(index=structure_index, monitor_tag="fld_pc")]
+        adjoint_frequencies = np.array(
+            next(iter(fld_adj_pc.field_components.values())).coords["f"].values
+        )
+        n_freqs = len(adjoint_frequencies)
+        freq_chunk_size = _adjoint_freq_chunk_size(
+            n_freqs=n_freqs,
+            combined_data_size=_point_cloud_data_size(
+                sim_data_fwd, sim_data_adj, structure_index, sample_sets
+            ),
+        )
+        struct_bounds = structure.geometry.bounds
+        vjp_value_map: dict[tuple, Any] = {}
+        for chunk_start in range(0, n_freqs, freq_chunk_size):
+            select_adjoint_freqs = adjoint_frequencies[
+                chunk_start : min(chunk_start + freq_chunk_size, n_freqs)
+            ]
+            point_integrands_chunk = compute_point_integrands(
+                sample_sets=sample_sets,
+                structure_index=structure_index,
+                sim_data_fwd=sim_data_fwd,
+                sim_data_adj=sim_data_adj,
+                frequencies=select_adjoint_freqs,
+                adjoint_post_norm=sim_data_adj.simulation.post_norm,
+                is_medium_pec=structure.medium.is_pec,
+                background_medium_is_pec=bool(
+                    structure.background_medium and structure.background_medium.is_pec
+                ),
+                clipped_geometry=clipped_geometry,
+                material_length_scale=(
+                    sampling_resolution.material_length_scale
+                    if sampling_resolution is not None
+                    else None
+                ),
+            )
+            derivative_info = DerivativeInfo(
+                paths=structure_paths,
+                # volumetric datasets intentionally empty: every shape path reads the
+                # precomputed point integrands through the consumption seam
+                E_der_map={},
+                D_der_map={},
+                E_fwd={},
+                E_adj={},
+                D_fwd={},
+                D_adj={},
+                eps_data={},
+                bounds=struct_bounds,
+                bounds_intersect=bounds_intersection(
+                    sim_data_orig.simulation.bounds, struct_bounds
+                ),
+                simulation_bounds=sim_data_orig.simulation.bounds,
+                frequencies=select_adjoint_freqs,
+                updated_epsilon=None,
+                is_medium_pec=structure.medium.is_pec,
+                background_medium_is_pec=bool(
+                    structure.background_medium and structure.background_medium.is_pec
+                ),
+                clipped_geometry=clipped_geometry,
+                point_integrands=point_integrands_chunk,
+                **_sampling_resolution_fields(sampling_resolution),
+            )
+            vjp_chunk = structure._compute_derivatives(
+                derivative_info, sample_sets=sample_sets.by_key()
+            )
+            _accumulate_field_map(vjp_value_map, vjp_chunk)
+        return _to_sim_fields_vjp(
+            component_type="structures",
+            component_index=structure_index,
+            component_vjp=vjp_value_map,
+        )
+
     # grab the forward and adjoint data
-    fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
-    fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
-    eps_data = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
+    fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, monitor_tag="fld")
+    fld_adj = sim_data_adj._get_adjoint_data(structure_index, monitor_tag="fld")
+    eps_data = sim_data_adj._get_adjoint_data(structure_index, monitor_tag="eps")
 
     _require_freq_ascending(
         fld_fwd,
@@ -708,6 +900,12 @@ def _process_structure_gradients(
         + _estimate_dataset_bytes(eps_data)
         + _estimate_dataset_bytes(fld_fwd)
     )
+    if staged_point_path:
+        # mixed structures consume point-cloud data inside the same chunk loop, so
+        # its size participates in the same frequency memory budget
+        combined_data_size += _point_cloud_data_size(
+            sim_data_fwd, sim_data_adj, structure_index, sample_sets
+        )
 
     # Filter forward field data to match adjoint monitor frequencies.
     fld_fwd = _filter_frequency_data(
@@ -789,35 +987,9 @@ def _process_structure_gradients(
     n_freqs = len(adjoint_frequencies)
     H_info_exists = np.all([f"H{dim}" in fld_fwd.field_components for dim in "xyz"])
 
-    def estimate_peak_bytes(num_chunk_freqs: int) -> int:
-        return int(
-            ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
-            + (num_chunk_freqs / n_freqs) * combined_data_size * ADJOINT_MEMORY_MULTIPLIER
-        )
-
-    user_desired_freqs = config.adjoint.solver_freq_chunk_size
-    if user_desired_freqs is not None and user_desired_freqs > 0:
-        freq_chunk_size = min(n_freqs, user_desired_freqs)
-        available_bytes = system_utils.get_available_memory_bytes()
-        if available_bytes > 0:
-            budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
-            if combined_data_size > 0 and estimate_peak_bytes(freq_chunk_size) > budget_bytes:
-                td.log.warning(
-                    "Configured adjoint frequency chunk size may exceed the available memory budget; "
-                    "continuing with the configured chunk size.",
-                    log_once=True,
-                )
-    else:
-
-        def max_freqs_from_budget(available_bytes: int) -> int:
-            budget_bytes = int(available_bytes * config.adjoint.memory_allotment_fraction)
-            numerator = budget_bytes - ADJOINT_MEMORY_BASELINE_MULTIPLIER * combined_data_size
-            denominator = combined_data_size * ADJOINT_MEMORY_MULTIPLIER
-            return int(n_freqs * numerator / denominator) if denominator > 0 else n_freqs
-
-        freq_chunk_size = _resolve_freq_chunk_size(
-            n_freqs=n_freqs, max_freqs_from_budget=max_freqs_from_budget, fallback_num_freqs=1
-        )
+    freq_chunk_size = _adjoint_freq_chunk_size(
+        n_freqs=n_freqs, combined_data_size=combined_data_size
+    )
 
     # process in chunks
     vjp_value_map = {}
@@ -883,6 +1055,30 @@ def _process_structure_gradients(
             select_adjoint_freqs=select_adjoint_freqs,
         )
 
+        # point-cloud path: compute this chunk's per-set integrands from the
+        # point-cloud monitor data; each call touches only the chunk's frequencies,
+        # so point consumption honors the same memory budget as the volumetric data
+        point_integrands_chunk = None
+        if staged_point_path:
+            point_integrands_chunk = compute_point_integrands(
+                sample_sets=sample_sets,
+                structure_index=structure_index,
+                sim_data_fwd=sim_data_fwd,
+                sim_data_adj=sim_data_adj,
+                frequencies=select_adjoint_freqs,
+                adjoint_post_norm=sim_data_adj.simulation.post_norm,
+                is_medium_pec=structure.medium.is_pec,
+                background_medium_is_pec=bool(
+                    structure.background_medium and structure.background_medium.is_pec
+                ),
+                clipped_geometry=clipped_geometry,
+                material_length_scale=(
+                    sampling_resolution.material_length_scale
+                    if sampling_resolution is not None
+                    else None
+                ),
+            )
+
         # create derivative info with sliced data
         derivative_info = DerivativeInfo(
             paths=structure_paths if structure_paths else numerical_paths_ordered,
@@ -905,13 +1101,16 @@ def _process_structure_gradients(
             background_medium_is_pec=structure.background_medium
             and structure.background_medium.is_pec,
             clipped_geometry=clipped_geometry,
+            point_integrands=point_integrands_chunk,
             **_sampling_resolution_fields(sampling_resolution),
         )
 
         if structure_paths:
             # compute derivatives for chunk; sample sets are shared across chunks
             vjp_chunk = structure._compute_derivatives(
-                derivative_info, vjp_fns=custom_vjp, sample_sets=sample_sets
+                derivative_info,
+                vjp_fns=custom_vjp,
+                sample_sets=sample_sets.by_key() if sample_sets is not None else None,
             )
 
             # accumulate results
@@ -1033,6 +1232,11 @@ def _process_structure_gradients(
                     ),
                     **_sampling_resolution_fields(helper_sampling_resolution),
                     interpolators=shared_interpolators,
+                    # the helper's sample sets are late-generated for the (possibly
+                    # substituted) target geometry: recorded point integrands belong
+                    # to the original geometry's surface points and must never be
+                    # consumed here — the helper uses the volumetric contract
+                    point_integrands=None,
                     deep=False,
                 )
                 helper_sample_sets = None

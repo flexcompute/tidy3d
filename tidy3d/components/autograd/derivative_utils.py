@@ -18,6 +18,7 @@ from tidy3d.constants import C_0, EPSILON_0, MU_0
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 
+from .snapping import edge_distance_after_snapping, snap_coords_to_boundary
 from .types import PathType
 from .utils import get_static
 
@@ -174,6 +175,13 @@ class DerivativeInfo:
 
     clipped_geometry: GeometryType | None = None
     """Final clipped geometry used for p±eps*n inside/outside masking."""
+
+    point_integrands: dict[PathType, ArrayComplex] | None = None
+    """Point-cloud shape-gradient integrands by canonical sample-set key.
+    When present (the point-cloud monitor path), maps each canonical key to its
+    pre-computed ``(N, F)`` integrand; the ``sample_set_integrand`` consumption seam
+    reads these instead of interpolating volumetric data. Composite geometry routers
+    re-key entries when dispatching to children, mirroring sample-set key stripping."""
 
     interpolators: dict | None = None
     """Pre-computed interpolators.
@@ -372,52 +380,12 @@ class DerivativeInfo:
                 "Clip-context shape gradients require `resolved_material_length_scale` "
                 "in DerivativeInfo."
             )
-        probe_eps = CLIP_INSIDE_PROBE_FRACTION * self.resolved_material_length_scale
-        points_minus = spatial_coords - probe_eps * normals
-        points_plus = spatial_coords + probe_eps * normals
-
-        operation = getattr(self.clipped_geometry, "operation", None)
-        use_bounds_prefilter = operation in ("difference", "intersection")
-
-        if use_bounds_prefilter:
-            clipped_bounds_min = np.asarray(
-                self.clipped_geometry.bounds[0], dtype=spatial_coords.dtype
-            )
-            clipped_bounds_max = np.asarray(
-                self.clipped_geometry.bounds[1], dtype=spatial_coords.dtype
-            )
-            clipped_bounds_min -= AUTOGRAD_COORDINATE_TOLERANCE
-            clipped_bounds_max += AUTOGRAD_COORDINATE_TOLERANCE
-
-            in_bounds_minus = np.all(
-                (points_minus >= clipped_bounds_min[None, :])
-                & (points_minus <= clipped_bounds_max[None, :]),
-                axis=1,
-            )
-            in_bounds_plus = np.all(
-                (points_plus >= clipped_bounds_min[None, :])
-                & (points_plus <= clipped_bounds_max[None, :]),
-                axis=1,
-            )
-
-            inside_minus = np.zeros(spatial_coords.shape[0], dtype=bool)
-            inside_plus = np.zeros(spatial_coords.shape[0], dtype=bool)
-
-            if np.any(in_bounds_minus):
-                inside_minus[in_bounds_minus] = self._evaluate_geometry_inside_points(
-                    self.clipped_geometry, points_minus[in_bounds_minus]
-                )
-            if np.any(in_bounds_plus):
-                inside_plus[in_bounds_plus] = self._evaluate_geometry_inside_points(
-                    self.clipped_geometry, points_plus[in_bounds_plus]
-                )
-        else:
-            inside_minus = self._evaluate_geometry_inside_points(
-                self.clipped_geometry, points_minus
-            )
-            inside_plus = self._evaluate_geometry_inside_points(self.clipped_geometry, points_plus)
-
-        return np.logical_or(inside_minus, inside_plus)
+        return clip_active_from_inside_check(
+            clipped_geometry=self.clipped_geometry,
+            material_length_scale=self.resolved_material_length_scale,
+            spatial_coords=spatial_coords,
+            normals=normals,
+        )
 
     def _eps_data_contains_metal_like_values(self) -> bool:
         """Return whether any ``eps_data`` component contains PEC-like values."""
@@ -457,47 +425,42 @@ class DerivativeInfo:
             interpolators,
         )
 
-        def _pec_outside_mask_and_flag() -> tuple[np.ndarray, bool]:
-            """Detect PEC outside points and whether any are present."""
-            mask_pec_outside_local = self._detect_pec_gradient_points(
-                spatial_coords,
-                normals,
-                interpolators["eps_data"],
-                is_outside=True,
-            )
-            has_pec_outside_local = bool(np.any(mask_pec_outside_local > 0))
-            return mask_pec_outside_local, has_pec_outside_local
+        mask_pec_outside = None
+        mask_pec_inside = None
+        vjps_pec_fields_outside = None
+        vjps_pec_fields_inside = None
 
-        if self.is_medium_pec:
-            # The structure medium is PEC, but there may be a part of the interface that has
-            # dielectric placed on top of or around it where we want to use the dielectric
-            # gradient integration. We use the mask to choose between the PEC-dielectric and
-            # dielectric-dielectric parts of the border.
-
+        if self.is_medium_pec or self.background_medium_is_pec:
             # Detect PEC by looking just outside the boundary.
-            mask_pec_outside, has_pec_outside = _pec_outside_mask_and_flag()
-
-            # Detect PEC by looking just inside the boundary
-            mask_pec_inside = self._detect_pec_gradient_points(
+            mask_pec_outside = self._detect_pec_gradient_points(
                 spatial_coords,
                 normals,
                 interpolators["eps_data"],
-                is_outside=False,
-            )
-
-            # Compute PEC gradients, pulling fields outside of the boundary
-            vjps_pec_inside = self._evaluate_pec_gradient_at_points(
-                spatial_coords,
-                normals,
-                perps1,
-                perps2,
-                interpolators,
                 is_outside=True,
             )
+            has_pec_outside = bool(np.any(mask_pec_outside > 0))
+
+            if self.is_medium_pec:
+                # Detect PEC by looking just inside the boundary.
+                mask_pec_inside = self._detect_pec_gradient_points(
+                    spatial_coords,
+                    normals,
+                    interpolators["eps_data"],
+                    is_outside=False,
+                )
+                # Compute PEC gradients, pulling fields outside of the boundary.
+                vjps_pec_fields_outside = self._evaluate_pec_gradient_at_points(
+                    spatial_coords,
+                    normals,
+                    perps1,
+                    perps2,
+                    interpolators,
+                    is_outside=True,
+                )
 
             if has_pec_outside:
-                # Compute PEC gradients, pulling fields outside of the boundary
-                vjps_pec_outside = -self._evaluate_pec_gradient_at_points(
+                # Compute PEC gradients, pulling fields inside of the boundary.
+                vjps_pec_fields_inside = self._evaluate_pec_gradient_at_points(
                     spatial_coords,
                     normals,
                     perps1,
@@ -505,54 +468,24 @@ class DerivativeInfo:
                     interpolators,
                     is_outside=False,
                 )
+        elif self._eps_data_contains_metal_like_values():
+            log.warning(
+                "Detected metal-like permittivity values in eps_data while using "
+                "dielectric-only shape gradient integration. If PEC surroundings are "
+                "intended, set the structure background medium to PEC so the PEC correction "
+                "is applied.",
+                log_once=True,
+            )
 
-                overlap = (mask_pec_inside == 1) & (mask_pec_outside == 1)
-                mask_pec_inside[overlap] = 0.5
-                mask_pec_outside[overlap] = 0.5
-                vjps_pec = mask_pec_inside * vjps_pec_inside + mask_pec_outside * vjps_pec_outside
-
-                mask_pec = mask_pec_inside + mask_pec_outside
-            else:
-                vjps_pec = mask_pec_inside * vjps_pec_inside
-                mask_pec = mask_pec_inside
-
-            vjps = vjps_pec + (1.0 - mask_pec) * vjps_dielectric
-        elif self.background_medium_is_pec:
-            # The structure medium is dielectric, but there may be a part of the interface that has
-            # PEC placed on top of or around it where we want to use the PEC gradient integration.
-            # We use the mask to choose between the dielectric-dielectric and PEC-dielectric parts
-            # of the border.
-
-            # Detect PEC by looking just outside the boundary
-            mask_pec_outside, has_pec_outside = _pec_outside_mask_and_flag()
-            if has_pec_outside:
-                # Compute PEC gradients, pulling fields inside of the boundary and applying a
-                # negative sign because inside/outside definitions are switched.
-                vjps_pec_outside = -self._evaluate_pec_gradient_at_points(
-                    spatial_coords,
-                    normals,
-                    perps1,
-                    perps2,
-                    interpolators,
-                    is_outside=False,
-                )
-                vjps = (
-                    mask_pec_outside * vjps_pec_outside + (1.0 - mask_pec_outside) * vjps_dielectric
-                )
-            else:
-                vjps = vjps_dielectric
-        else:
-            # The structure and its background are both assumed to be dielectric, so we use the
-            # dielectric-dielectric gradient integration.
-            if self._eps_data_contains_metal_like_values():
-                log.warning(
-                    "Detected metal-like permittivity values in eps_data while using "
-                    "dielectric-only shape gradient integration. If PEC surroundings are "
-                    "intended, set the structure background medium to PEC so the PEC correction "
-                    "is applied.",
-                    log_once=True,
-                )
-            vjps = vjps_dielectric
+        vjps = blend_pec_dielectric_gradient(
+            vjps_dielectric=vjps_dielectric,
+            vjps_pec_fields_outside=vjps_pec_fields_outside,
+            vjps_pec_fields_inside=vjps_pec_fields_inside,
+            mask_pec_outside=mask_pec_outside,
+            mask_pec_inside=mask_pec_inside,
+            is_medium_pec=self.is_medium_pec,
+            background_medium_is_pec=self.background_medium_is_pec,
+        )
 
         # sum over frequency dimension
         return np.sum(vjps, axis=-1)
@@ -597,10 +530,10 @@ class DerivativeInfo:
             with appropriate quadrature weights to get total gradient.
         """
         if interpolators is None:
-            raise NotImplementedError(
-                "Direct field evaluation without interpolators is not implemented. "
-                "Please create interpolators using 'create_interpolators()' first."
-            )
+            # materialized only when the volumetric path actually evaluates (the
+            # point-cloud path never reaches here); cached per instance, so the
+            # per-sample-set calls of one consumption pass share one dict
+            interpolators = self.create_interpolators()
 
         if self.eps_data is None:
             raise ValueError(
@@ -635,7 +568,7 @@ class DerivativeInfo:
 
         invalid_active = ~np.isfinite(vjps_active)
         if np.any(invalid_active):
-            num_invalid_inside = int(np.count_nonzero(invalid_active))
+            num_invalid_inside = np.count_nonzero(invalid_active)
             raise AdjointError(
                 "Detected non-finite clip-context gradient values inside occupied clip "
                 f"regions ({num_invalid_inside} points)."
@@ -690,9 +623,6 @@ class DerivativeInfo:
             )
             for name, interp in interpolators["eps_data"].items()
         }
-        eps_out_diag = self._stack_diagonal_permittivity_components(eps_out_at_coords)
-        eps_in_diag = self._stack_diagonal_permittivity_components(eps_in_at_coords)
-
         # evaluate all field components at surface points
         E_fwd_at_coords = {
             name: interp(spatial_coords) for name, interp in interpolators["E_fwd_linear"].items()
@@ -706,52 +636,17 @@ class DerivativeInfo:
         D_adj_at_coords = {
             name: interp(spatial_coords) for name, interp in interpolators["D_adj_linear"].items()
         }
-
-        eps_out_norm = self._project_diagonal_permittivity_in_basis(
-            eps_out_at_coords, basis_vector=normals
+        return dielectric_gradient_from_samples(
+            E_fwd=E_fwd_at_coords,
+            E_adj=E_adj_at_coords,
+            D_fwd=D_fwd_at_coords,
+            D_adj=D_adj_at_coords,
+            eps_in=eps_in_at_coords,
+            eps_out=eps_out_at_coords,
+            normals=normals,
+            perps1=perps1,
+            perps2=perps2,
         )
-        eps_in_norm = self._project_diagonal_permittivity_in_basis(
-            eps_in_at_coords, basis_vector=normals
-        )
-        delta_eps_inv = 1.0 / eps_in_norm - 1.0 / eps_out_norm
-
-        # project fields onto local surface basis (normal + two tangents)
-        D_fwd_norm = self._project_in_basis(D_fwd_at_coords, basis_vector=normals)
-        D_adj_norm = self._project_in_basis(D_adj_at_coords, basis_vector=normals)
-
-        E_fwd_perp1 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps1)
-        E_adj_perp1 = self._project_in_basis(E_adj_at_coords, basis_vector=perps1)
-
-        E_fwd_perp2 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps2)
-        E_adj_perp2 = self._project_in_basis(E_adj_at_coords, basis_vector=perps2)
-
-        eps_parallel_out = self._modified_tangential_permittivity_tensor(
-            eps_out_diag, normals, eps_out_norm
-        )
-        eps_parallel_in = self._modified_tangential_permittivity_tensor(
-            eps_in_diag, normals, eps_in_norm
-        )
-        delta_eps_parallel = eps_parallel_in - eps_parallel_out
-
-        E_parallel_fwd = self._reconstruct_tangential_field_vector(
-            E_fwd_perp1, E_fwd_perp2, perps1, perps2
-        )
-        E_parallel_adj = self._reconstruct_tangential_field_vector(
-            E_adj_perp1, E_adj_perp2, perps1, perps2
-        )
-
-        D_der_norm = D_fwd_norm * D_adj_norm
-        g_normal = -delta_eps_inv * D_der_norm
-        g_tangential = np.einsum(
-            "nif,nijf,njf->nf",
-            E_parallel_adj,
-            delta_eps_parallel,
-            E_parallel_fwd,
-        )
-
-        vjps = g_normal + g_tangential
-
-        return vjps
 
     def _snap_spatial_coords_boundary(
         self,
@@ -790,57 +685,13 @@ class DerivativeInfo:
         """
         coords = data_array.coords
         grid_centers = {key: np.array(coords[key].values) for key in coords}
-
-        grid_ddim = np.zeros_like(normals)
-        for idx, dim in enumerate("xyz"):
-            expanded_coords = np.expand_dims(spatial_coords[:, idx], axis=1)
-            grid_centers_select = grid_centers[dim]
-
-            diff = np.abs(expanded_coords - grid_centers_select)
-
-            nearest_grid = np.argmin(diff, axis=-1)
-            nearest_grid = np.minimum(np.maximum(nearest_grid, 1), len(grid_centers_select) - 1)
-
-            # compute the local grid spacing near the boundary
-            grid_ddim[:, idx] = (
-                grid_centers_select[nearest_grid] - grid_centers_select[nearest_grid - 1]
-            )
-
-        #
-        # Assuming we move in the normal direction, finds which dimension we need to move the least
-        # in order to ensure we snap to a point outside the boundary in the worst case (i.e. - the
-        # nearest point is just inside the surface)
-        #
-        # Cover for 2D cases using filter below:
-        # 2D case 1:
-        #    - in plane gradients where normal: [a, b, 0] and grid: [dx, dy, 0]
-        #    - want to rely on in plane normals for boundary snapping (filter on normal component = 0)
-        # 2D case 2:
-        #    - out of plane gradietns where normal: [0, 0, 1] and grid: [dx, dy, 0]
-        #    - want to rely on out of plane normal (so do not want to filter on grid component = 0)
-        #    - data may not be captured out of plane, so no snapping will occur even with coords_dn = 0
-        #
-        small_number = np.finfo(normals.dtype).eps
-        coords_dn = np.min(
-            np.where(
-                (np.abs(normals) > small_number),
-                np.abs(grid_ddim) / (np.abs(normals) + small_number),
-                np.inf,
-            ),
-            axis=1,
-            keepdims=True,
+        return snap_coords_to_boundary(
+            spatial_coords=spatial_coords,
+            normals=normals,
+            grid_centers=grid_centers,
+            is_outside=is_outside,
+            snapping_fraction=config.adjoint.boundary_snapping_fraction,
         )
-
-        # adjust coordinates by a partial grid point outside boundary such that nearest interpolation
-        # point snaps to outside the boundary. The grid point fraction is set by the
-        # config.adjoint.boundary_snapping_fraction parameter
-        normal_direction = 1.0 if is_outside else -1.0
-        adjust_spatial_coords = (
-            spatial_coords
-            + normal_direction * normals * config.adjoint.boundary_snapping_fraction * coords_dn
-        )
-
-        return adjust_spatial_coords
 
     def _compute_edge_distance(
         self,
@@ -869,25 +720,11 @@ class DerivativeInfo:
             edge points specified by `spatial_coords`
         """
 
-        edge_distance_squared_sum = np.zeros_like(adjust_spatial_coords[:, 0])
-        for idx, dim in enumerate("xyz"):
-            expanded_adjusted_coords = np.expand_dims(adjust_spatial_coords[:, idx], axis=1)
-            grid_centers_select = grid_centers[dim]
-
-            # find nearest grid point from the adjusted coordinates
-            diff = np.abs(expanded_adjusted_coords - grid_centers_select)
-            nearest_grid = np.argmin(diff, axis=-1)
-
-            # compute edge distance from the nearest interpolated point to the boundary edge
-            edge_distance_squared_sum += (
-                np.abs(spatial_coords[:, idx] - grid_centers_select[nearest_grid]) ** 2
-            )
-
-        # this edge distance is useful when correcting for edge singularities like those from a PEC
-        # material and is used when the PEC PolySlab structure has zero thickness, for example
-        edge_distance = np.sqrt(edge_distance_squared_sum)
-
-        return edge_distance
+        return edge_distance_after_snapping(
+            spatial_coords=spatial_coords,
+            grid_centers=grid_centers,
+            adjusted_coords=adjust_spatial_coords,
+        )
 
     def _detect_pec_gradient_points(
         self,
@@ -1005,98 +842,36 @@ class DerivativeInfo:
             )
             for name, interp in interpolators["eps_data"].items()
         }
-        eps_dielectric = self._project_diagonal_permittivity_in_basis(
-            eps_dielectric_at_coords, basis_vector=normals
-        )
-
         structure_sizes = np.array(
             [self.bounds[1][idx] - self.bounds[0][idx] for idx in range(len(self.bounds[0]))]
         )
 
         is_flat_perp_dim1 = np.isclose(np.abs(np.sum(perps1[0] * structure_sizes)), 0.0)
         is_flat_perp_dim2 = np.isclose(np.abs(np.sum(perps2[0] * structure_sizes)), 0.0)
-        flat_perp_dims = [is_flat_perp_dim1, is_flat_perp_dim2]
+        flat_perp_dims = (bool(is_flat_perp_dim1), bool(is_flat_perp_dim2))
 
         # check if this integration is happening along an edge in which case we will eliminate
-        # on of the H field integration components and apply singularity correction
+        # one of the H field integration components and apply singularity correction
         pec_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
 
-        def _compute_singularity_correction(
-            adjustment_: dict[str, dict[str, ArrayFloat]],
-        ) -> ArrayFloat:
-            """
-            Given the `adjustment_` which contains the distance from the PEC edge each field
-            component is nearest interpolated at, computes the singularity correction when
-            working with 2D PEC using the average edge_distance for each component. In the case
-            of 3D PEC gradients, no singularity correction is applied so an array of ones is returned.
+        def _mean_edge_distance(adjustment_: dict[str, dict[str, ArrayFloat]]) -> ArrayFloat:
+            """Group-mean distance from the sampled grid points to the surface points."""
+            return np.mean([adjustment_[name]["edge_distance"] for name in adjustment_], axis=0)
 
-            Parameters
-            ----------
-            adjustment_: dict[str, dict[str, np.ndarray]]
-                Dictionary that maps field component name to a dictionary containing the coordinate
-                adjustment and the distance to the PEC edge for those coordinates. The edge distance
-                is used for 2D PEC singularity correction.
-
-            Returns
-            -------
-            np.ndarray
-                Returns the singularity correction which has shape (N,) where there are N points in
-                `spatial_coords`
-            """
-            return (
-                (
-                    0.5
-                    * np.pi
-                    * np.mean([adjustment_[name]["edge_distance"] for name in adjustment_], axis=0)
-                )
-                if pec_line_integration
-                else np.ones_like(spatial_coords, shape=spatial_coords.shape[0])
-            )
-
-        E_norm_singularity_correction = np.expand_dims(
-            _compute_singularity_correction(E_fwd_coords_adjusted), axis=1
+        return pec_gradient_from_samples(
+            E_fwd=E_fwd_at_coords,
+            E_adj=E_adj_at_coords,
+            H_fwd=H_fwd_at_coords,
+            H_adj=H_adj_at_coords,
+            eps_dielectric=eps_dielectric_at_coords,
+            normals=normals,
+            perps1=perps1,
+            perps2=perps2,
+            edge_distance_e=_mean_edge_distance(E_fwd_coords_adjusted),
+            edge_distance_h=_mean_edge_distance(H_fwd_coords_adjusted),
+            line_integration=bool(pec_line_integration),
+            flat_perp_dims=flat_perp_dims,
         )
-        H_perp_singularity_correction = np.expand_dims(
-            _compute_singularity_correction(H_fwd_coords_adjusted), axis=1
-        )
-
-        E_fwd_norm = self._project_in_basis(E_fwd_at_coords, basis_vector=normals)
-        E_adj_norm = self._project_in_basis(E_adj_at_coords, basis_vector=normals)
-
-        # compute the normal E contribution to the gradient (the tangential E contribution
-        # is 0 in the case of PEC since this field component is continuous and thus 0 at
-        # the boundary)
-        contrib_E = E_norm_singularity_correction * eps_dielectric * E_fwd_norm * E_adj_norm
-        vjps = contrib_E
-
-        # compute the tangential H contribution to the gradient (the normal H contribution
-        # is 0 for PEC)
-        H_fwd_perp1 = self._project_in_basis(H_fwd_at_coords, basis_vector=perps1)
-        H_adj_perp1 = self._project_in_basis(H_adj_at_coords, basis_vector=perps1)
-
-        H_fwd_perp2 = self._project_in_basis(H_fwd_at_coords, basis_vector=perps2)
-        H_adj_perp2 = self._project_in_basis(H_adj_at_coords, basis_vector=perps2)
-
-        H_der_perp1 = H_perp_singularity_correction * H_fwd_perp1 * H_adj_perp1
-        H_der_perp2 = H_perp_singularity_correction * H_fwd_perp2 * H_adj_perp2
-
-        H_integration_components = (H_der_perp1, H_der_perp2)
-        if pec_line_integration:
-            # if we are integrating along the line, we choose the H component normal to
-            # the edge which corresponds to a surface current along the edge whereas the other
-            # tangential component corresponds to a surface current along the flat dimension.
-            H_integration_components = tuple(
-                H_comp for idx, H_comp in enumerate(H_integration_components) if flat_perp_dims[idx]
-            )
-
-        # for each of the tangential components we are integrating the H fields over,
-        # adjust weighting to account for pre-weighting of the source by `EPSILON_0`
-        # and multiply by appropriate `MU_0` factor
-        for H_perp in H_integration_components:
-            contrib_H = MU_0 * H_perp / EPSILON_0
-            vjps += contrib_H
-
-        return vjps
 
     @staticmethod
     def _project_component_matrix_in_basis(
@@ -1563,3 +1338,268 @@ __all__ = [
     "transpose_interp_axis",
     "transpose_interp_field_to_dataset",
 ]
+
+
+def dielectric_gradient_from_samples(
+    E_fwd: dict[str, ArrayComplex],
+    E_adj: dict[str, ArrayComplex],
+    D_fwd: dict[str, ArrayComplex],
+    D_adj: dict[str, ArrayComplex],
+    eps_in: dict[str, ArrayComplex],
+    eps_out: dict[str, ArrayComplex],
+    normals: ArrayFloat,
+    perps1: ArrayFloat,
+    perps2: ArrayFloat,
+) -> ArrayComplex:
+    """Dielectric-interface shape-gradient integrand from pre-sampled values.
+
+    The pure-math core of the dielectric surface-integral formulation, shared by the
+    legacy volumetric path (which samples the inputs by interpolation) and the
+    point-cloud path (which reads them from point-cloud monitor data), so the two
+    cannot drift. Field dicts map component names ("Ex".../"Dx"...) to ``(N, F)``
+    sampled values at the surface points; permittivity dicts map "eps_xx"... to
+    ``(N, F)`` side-snapped nearest samples. Returns the per-point, per-frequency
+    integrand ``(N, F)``.
+    """
+    eps_out_diag = DerivativeInfo._stack_diagonal_permittivity_components(eps_out)
+    eps_in_diag = DerivativeInfo._stack_diagonal_permittivity_components(eps_in)
+
+    eps_out_norm = DerivativeInfo._project_diagonal_permittivity_in_basis(
+        eps_out, basis_vector=normals
+    )
+    eps_in_norm = DerivativeInfo._project_diagonal_permittivity_in_basis(
+        eps_in, basis_vector=normals
+    )
+    delta_eps_inv = 1.0 / eps_in_norm - 1.0 / eps_out_norm
+
+    # project fields onto local surface basis (normal + two tangents)
+    D_fwd_norm = DerivativeInfo._project_in_basis(D_fwd, basis_vector=normals)
+    D_adj_norm = DerivativeInfo._project_in_basis(D_adj, basis_vector=normals)
+
+    E_fwd_perp1 = DerivativeInfo._project_in_basis(E_fwd, basis_vector=perps1)
+    E_adj_perp1 = DerivativeInfo._project_in_basis(E_adj, basis_vector=perps1)
+
+    E_fwd_perp2 = DerivativeInfo._project_in_basis(E_fwd, basis_vector=perps2)
+    E_adj_perp2 = DerivativeInfo._project_in_basis(E_adj, basis_vector=perps2)
+
+    eps_parallel_out = DerivativeInfo._modified_tangential_permittivity_tensor(
+        eps_out_diag, normals, eps_out_norm
+    )
+    eps_parallel_in = DerivativeInfo._modified_tangential_permittivity_tensor(
+        eps_in_diag, normals, eps_in_norm
+    )
+    delta_eps_parallel = eps_parallel_in - eps_parallel_out
+
+    E_parallel_fwd = DerivativeInfo._reconstruct_tangential_field_vector(
+        E_fwd_perp1, E_fwd_perp2, perps1, perps2
+    )
+    E_parallel_adj = DerivativeInfo._reconstruct_tangential_field_vector(
+        E_adj_perp1, E_adj_perp2, perps1, perps2
+    )
+
+    D_der_norm = D_fwd_norm * D_adj_norm
+    g_normal = -delta_eps_inv * D_der_norm
+    g_tangential = np.einsum(
+        "nif,nijf,njf->nf",
+        E_parallel_adj,
+        delta_eps_parallel,
+        E_parallel_fwd,
+    )
+
+    return g_normal + g_tangential
+
+
+def pec_gradient_from_samples(
+    E_fwd: dict[str, ArrayComplex],
+    E_adj: dict[str, ArrayComplex],
+    H_fwd: dict[str, ArrayComplex],
+    H_adj: dict[str, ArrayComplex],
+    eps_dielectric: dict[str, ArrayComplex],
+    normals: ArrayFloat,
+    perps1: ArrayFloat,
+    perps2: ArrayFloat,
+    edge_distance_e: ArrayFloat,
+    edge_distance_h: ArrayFloat,
+    line_integration: bool,
+    flat_perp_dims: tuple[bool, bool],
+) -> ArrayComplex:
+    """PEC shape-gradient integrand from pre-sampled one-sided values.
+
+    The pure-math core of the PEC surface-integral formulation, shared by the legacy
+    volumetric path (which side-snaps and nearest-samples the inputs at consumption)
+    and the point-cloud path (which reads them from the per-component side-snapped
+    point-cloud monitors staged at generation). Field dicts map component names to
+    ``(N, F)`` one-sided samples; ``eps_dielectric`` maps "eps_xx"... to the
+    dielectric-side permittivity samples. ``edge_distance_e`` / ``edge_distance_h``
+    are the per-group mean distances from the sampled grid points to the surface
+    points; with ``line_integration`` they form the 2D/edge singularity correction
+    (``pi/2 * distance``), and ``flat_perp_dims`` selects the H integration
+    component. Returns the per-point, per-frequency integrand ``(N, F)``.
+    """
+    eps_norm = DerivativeInfo._project_diagonal_permittivity_in_basis(
+        eps_dielectric, basis_vector=normals
+    )
+
+    def _singularity_correction(edge_distance: ArrayFloat) -> ArrayFloat:
+        if line_integration:
+            return np.expand_dims(0.5 * np.pi * edge_distance, axis=1)
+        return np.ones((edge_distance.shape[0], 1), dtype=edge_distance.dtype)
+
+    E_norm_singularity_correction = _singularity_correction(edge_distance_e)
+    H_perp_singularity_correction = _singularity_correction(edge_distance_h)
+
+    E_fwd_norm = DerivativeInfo._project_in_basis(E_fwd, basis_vector=normals)
+    E_adj_norm = DerivativeInfo._project_in_basis(E_adj, basis_vector=normals)
+
+    # compute the normal E contribution to the gradient (the tangential E contribution
+    # is 0 in the case of PEC since this field component is continuous and thus 0 at
+    # the boundary)
+    contrib_E = E_norm_singularity_correction * eps_norm * E_fwd_norm * E_adj_norm
+    vjps = contrib_E
+
+    # compute the tangential H contribution to the gradient (the normal H contribution
+    # is 0 for PEC)
+    H_fwd_perp1 = DerivativeInfo._project_in_basis(H_fwd, basis_vector=perps1)
+    H_adj_perp1 = DerivativeInfo._project_in_basis(H_adj, basis_vector=perps1)
+
+    H_fwd_perp2 = DerivativeInfo._project_in_basis(H_fwd, basis_vector=perps2)
+    H_adj_perp2 = DerivativeInfo._project_in_basis(H_adj, basis_vector=perps2)
+
+    H_der_perp1 = H_perp_singularity_correction * H_fwd_perp1 * H_adj_perp1
+    H_der_perp2 = H_perp_singularity_correction * H_fwd_perp2 * H_adj_perp2
+
+    H_integration_components = (H_der_perp1, H_der_perp2)
+    if line_integration:
+        # if we are integrating along the line, we choose the H component normal to
+        # the edge which corresponds to a surface current along the edge whereas the other
+        # tangential component corresponds to a surface current along the flat dimension.
+        H_integration_components = tuple(
+            H_comp for idx, H_comp in enumerate(H_integration_components) if flat_perp_dims[idx]
+        )
+
+    # for each of the tangential components we are integrating the H fields over,
+    # adjust weighting to account for pre-weighting of the source by `EPSILON_0`
+    # and multiply by appropriate `MU_0` factor
+    for H_perp in H_integration_components:
+        contrib_H = MU_0 * H_perp / EPSILON_0
+        vjps += contrib_H
+
+    return vjps
+
+
+def clip_active_from_inside_check(
+    clipped_geometry: Any,
+    material_length_scale: float,
+    spatial_coords: ArrayFloat,
+    normals: ArrayFloat,
+) -> NDArray[np.bool_]:
+    """Compute active clip points from p+/-eps*n inside/outside checks.
+
+    Shared by the legacy volumetric consumption path and the point-cloud path so the
+    clip-context masking cannot drift.
+    """
+    probe_eps = CLIP_INSIDE_PROBE_FRACTION * material_length_scale
+    points_minus = spatial_coords - probe_eps * normals
+    points_plus = spatial_coords + probe_eps * normals
+
+    operation = getattr(clipped_geometry, "operation", None)
+    use_bounds_prefilter = operation in ("difference", "intersection")
+
+    if use_bounds_prefilter:
+        clipped_bounds_min = np.asarray(clipped_geometry.bounds[0], dtype=spatial_coords.dtype)
+        clipped_bounds_max = np.asarray(clipped_geometry.bounds[1], dtype=spatial_coords.dtype)
+        clipped_bounds_min -= AUTOGRAD_COORDINATE_TOLERANCE
+        clipped_bounds_max += AUTOGRAD_COORDINATE_TOLERANCE
+
+        in_bounds_minus = np.all(
+            (points_minus >= clipped_bounds_min[None, :])
+            & (points_minus <= clipped_bounds_max[None, :]),
+            axis=1,
+        )
+        in_bounds_plus = np.all(
+            (points_plus >= clipped_bounds_min[None, :])
+            & (points_plus <= clipped_bounds_max[None, :]),
+            axis=1,
+        )
+
+        inside_minus = np.zeros(spatial_coords.shape[0], dtype=bool)
+        inside_plus = np.zeros(spatial_coords.shape[0], dtype=bool)
+
+        if np.any(in_bounds_minus):
+            inside_minus[in_bounds_minus] = DerivativeInfo._evaluate_geometry_inside_points(
+                clipped_geometry, points_minus[in_bounds_minus]
+            )
+        if np.any(in_bounds_plus):
+            inside_plus[in_bounds_plus] = DerivativeInfo._evaluate_geometry_inside_points(
+                clipped_geometry, points_plus[in_bounds_plus]
+            )
+    else:
+        inside_minus = DerivativeInfo._evaluate_geometry_inside_points(
+            clipped_geometry, points_minus
+        )
+        inside_plus = DerivativeInfo._evaluate_geometry_inside_points(clipped_geometry, points_plus)
+
+    return np.logical_or(inside_minus, inside_plus)
+
+
+def blend_pec_dielectric_gradient(
+    vjps_dielectric: ArrayComplex,
+    vjps_pec_fields_outside: ArrayComplex | None,
+    vjps_pec_fields_inside: ArrayComplex | None,
+    mask_pec_outside: ArrayFloat | None,
+    mask_pec_inside: ArrayFloat | None,
+    is_medium_pec: bool,
+    background_medium_is_pec: bool,
+) -> ArrayComplex:
+    """Blend PEC and dielectric shape-gradient integrands by per-point PEC masks.
+
+    The pure blending core of the shape-gradient surface integration, shared by the
+    legacy volumetric path (masks detected from eps data at consumption) and the
+    point-cloud path (masks precomputed against the simulation definition at
+    generation). ``vjps_pec_fields_outside`` / ``vjps_pec_fields_inside`` are the PEC
+    integrands evaluated with fields sampled just outside / just inside the boundary;
+    masks and integrands are ``(N, F)``.
+
+    - A PEC structure (``is_medium_pec``) integrates the PEC formula with fields
+      pulled outside, gated by the inside-PEC mask; a point with PEC detected on
+      BOTH sides is buried inside the metal union and contributes exactly zero
+      (claimed by the PEC branch, never backfilled by the dielectric integrand);
+      where only the outside is PEC, the inside-sampled term enters with a
+      negative sign (reversed interface orientation).
+    - A dielectric structure with PEC outside (``background_medium_is_pec``)
+      integrates the inside-sampled term with a negative sign (inside/outside
+      definitions are switched), gated by the outside-PEC mask.
+    - Everything else is the dielectric-dielectric integrand.
+    """
+    if is_medium_pec:
+        mask_inside = np.array(mask_pec_inside, copy=True)
+        has_pec_outside = mask_pec_outside is not None and bool(np.any(mask_pec_outside > 0))
+        if has_pec_outside and vjps_pec_fields_inside is not None:
+            mask_outside = np.array(mask_pec_outside, copy=True)
+            vjps_pec_outside_term = -vjps_pec_fields_inside
+            # a boundary point with PEC on both sides is buried inside the metal
+            # union: perturbing it changes nothing physically, so its gradient is
+            # exactly zero. The point stays claimed by the PEC branch — the
+            # dielectric integrand must not backfill it, since eps samples inside
+            # metal are meaningless.
+            overlap = (mask_inside == 1) & (mask_outside == 1)
+            mask_inside[overlap] = 0.0
+            mask_outside[overlap] = 0.0
+            vjps_pec = mask_inside * vjps_pec_fields_outside + mask_outside * vjps_pec_outside_term
+            mask_pec = mask_inside + mask_outside
+            mask_pec[overlap] = 1.0
+        else:
+            vjps_pec = mask_inside * vjps_pec_fields_outside
+            mask_pec = mask_inside
+        return vjps_pec + (1.0 - mask_pec) * vjps_dielectric
+
+    if background_medium_is_pec:
+        has_pec_outside = mask_pec_outside is not None and bool(np.any(mask_pec_outside > 0))
+        if has_pec_outside and vjps_pec_fields_inside is not None:
+            return (
+                mask_pec_outside * -vjps_pec_fields_inside
+                + (1.0 - mask_pec_outside) * vjps_dielectric
+            )
+        return vjps_dielectric
+
+    return vjps_dielectric
