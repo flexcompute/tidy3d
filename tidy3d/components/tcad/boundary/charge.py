@@ -39,6 +39,41 @@ class VoltageBC(HeatChargeBC):
         semiconductor. A single Schottky contact must touch exactly one
         semiconductor medium.
 
+        A contact whose faces all lie on an insulator -- a gate over an
+        oxide -- takes its potential reference from the metal work function
+        :math:`W`. Place it on the gate metal's
+        :class:`.StructureBoundary` or on the
+        :class:`.StructureStructureInterface` between the metal and the
+        insulator, with ``work_function`` set on the metal's
+        :class:`.ChargeConductorMedium`. The contacted face must adjoin a metal
+        carrying that property. The potential is then
+        referenced to the vacuum level, so every :class:`.SemiconductorMedium`
+        in the simulation must also carry ``electron_affinity`` -- without it
+        the bands sit at an arbitrary offset from the gate and the flat-band
+        voltage is wrong by whole volts. Reported potentials are measured
+        against the electron affinity :math:`\\chi_\\mathrm{ref}` of the
+        reference semiconductor, so a monitor reads
+        :math:`V - (W - \\chi_\\mathrm{ref})` on the gate face. The reference
+        semiconductor is the background ``medium`` when it is a
+        :class:`.SemiconductorMedium`, and otherwise the first semiconductor
+        structure in priority order (for the default priority mode, the first
+        one listed in ``structures``); with one semiconductor material it is
+        simply that material's :math:`\\chi`. Any ``VoltageBC`` with a face on
+        an insulator -- a gate, or an ohmic or Schottky contact whose metal is
+        clad by an insulator -- is supported only by the accelerated charge
+        solver, because only it references such a face to the metal work
+        function.
+
+        Every ``VoltageBC`` made on one :class:`.ChargeConductorMedium`
+        structure is one terminal: the sweep, the AC drive and the reported
+        terminal current cover all of its faces together, across zones and
+        across several ``boundary_spec`` entries. Two entries naming one metal
+        must therefore agree on their source.
+
+        Contact faces that meet at a point must prescribe the same electric
+        potential there. Touching terminals must also have compatible
+        small-signal drives; separate their boundaries to bias them independently.
+
     Example
     -------
     >>> import tidy3d as td

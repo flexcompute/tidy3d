@@ -94,7 +94,11 @@ class ChargeConductorMedium(AbstractChargeMedium):
         default=None,
         title="Work function",
         description="Metal work function :math:`W` [eV]. Required on the metal "
-        "side of a Schottky contact.",
+        "side of a Schottky contact, and on the metal of a gate -- a "
+        "'VoltageBC' whose faces all lie on an insulator. Such a face is "
+        "offset from its applied voltage by :math:`W`, and reads "
+        ":math:`V - (W - \\chi)` against the semiconductor electron affinity "
+        ":math:`\\chi` that potentials are reported in.",
         json_schema_extra={"units": ELECTRON_VOLT},
     )
 
@@ -300,8 +304,11 @@ class SemiconductorMedium(AbstractChargeMedium):
         default=None,
         title="Electron affinity",
         description=":math:`\\chi` Electron affinity [eV]. Required on the "
-        "semiconductor side of a Schottky contact, and used by the accelerated "
-        "charge solver for semiconductor heterojunction band offsets.",
+        "semiconductor side of a Schottky contact, and on every semiconductor "
+        "of a device carrying a gate -- a 'VoltageBC' on an insulator -- whose "
+        "potential is referenced to the vacuum level rather than to a "
+        "semiconductor contact. Also used by the accelerated charge solver for "
+        "semiconductor heterojunction band offsets.",
         json_schema_extra={"units": ELECTRON_VOLT},
     )
 

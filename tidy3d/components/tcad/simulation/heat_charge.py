@@ -24,6 +24,7 @@ from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
+    ChargeInsulatorMedium,
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
@@ -35,7 +36,7 @@ from tidy3d.components.material.types import MultiPhysicsMedium, StructureMedium
 from tidy3d.components.medium import Medium
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.sources.ac import SSACVoltageSource
-from tidy3d.components.spice.sources.dc import DCVoltageSource
+from tidy3d.components.spice.sources.dc import DCVoltageSource, GroundVoltage
 from tidy3d.components.spice.types import (
     ElectricalAnalysisType,
     IsothermalSSACAnalysis,
@@ -609,6 +610,8 @@ class HeatChargeSimulation(AbstractSimulation):
             # charge simulations, so validate them inside the charge guard;
             # heat-only and conduction-only simulations skip these checks.
             self._call_with_validation_loc(("boundary_spec",), self._check_schottky_supported_modes)
+            self._call_with_validation_loc(("boundary_spec",), self._check_gate_voltage_bcs)
+            self._call_with_validation_loc(("boundary_spec",), self._check_one_bias_per_metal)
             self._call_with_validation_loc(
                 ("boundary_spec",), self._check_surface_recombination_bcs
             )
@@ -1147,6 +1150,192 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
         return self
 
+    def _gate_bc_indices(self) -> list[int]:
+        """Indices of ohmic ``VoltageBC`` entries whose terminal reaches only insulators.
+
+        A gate reaches an insulator and no semiconductor; its metal work
+        function sets the potential reference. Conductor/conductor and
+        metal/fluid interfaces do not qualify.
+
+        Judged from :meth:`_placement_contact_media`, so a
+        ``StructureSimulationBoundary`` counts while ``StructureBoundary`` and
+        ``SimulationBoundary`` stay unresolved until the simulation runs. An
+        unresolved contact on a candidate metal defers that metal; one naming no
+        metal at all could touch any of them and defers the whole simulation.
+        """
+        placements = []
+        metals_touching_semiconductor = set()
+        metals_with_unknown_contacts = set()
+        has_unidentified_contact = False
+        for i, bc in enumerate(self.boundary_spec):
+            condition = bc.condition
+            if not isinstance(condition, VoltageBC):
+                continue
+            sides = self._placement_contact_media(bc.placement)
+            conductor_names = self._placement_conductor_structures(bc.placement)
+            if sides is None:
+                metals_with_unknown_contacts.update(conductor_names)
+                if not conductor_names:
+                    has_unidentified_contact = True
+                continue
+            charge_specs = [self._charge_spec(side) for side in sides]
+            if any(isinstance(spec, SemiconductorMedium) for spec in charge_specs):
+                metals_touching_semiconductor.update(conductor_names)
+            placements.append((i, condition, charge_specs, conductor_names))
+
+        if has_unidentified_contact:
+            return []
+
+        indices = []
+        for i, condition, charge_specs, conductor_names in placements:
+            if condition.model != "ohmic":
+                continue
+            if any(isinstance(spec, SemiconductorMedium) for spec in charge_specs):
+                continue
+            if not any(isinstance(spec, ChargeInsulatorMedium) for spec in charge_specs):
+                continue
+            if conductor_names and any(
+                name in metals_touching_semiconductor or name in metals_with_unknown_contacts
+                for name in conductor_names
+            ):
+                continue
+            indices.append(i)
+        return indices
+
+    def _insulator_face_bc_indices(self) -> list[int]:
+        """Indices of ``VoltageBC`` entries with a face lying on an insulator.
+
+        Such a face has no semiconductor of its own to take its potential
+        reference from; only the accelerated charge solver supports it, so the
+        legacy solver is refused rather than run with a shifted flat-band voltage.
+
+        Wider than :meth:`_gate_bc_indices`: an oxide-clad ohmic contact is not a
+        gate and still has an insulator face. Judged only where
+        :meth:`_placement_contact_media` determines the materials.
+        """
+        indices = []
+        for i, bc in enumerate(self.boundary_spec):
+            if not isinstance(bc.condition, VoltageBC):
+                continue
+            sides = self._placement_contact_media(bc.placement)
+            if sides is None:
+                continue
+            if any(isinstance(self._charge_spec(side), ChargeInsulatorMedium) for side in sides):
+                indices.append(i)
+        return indices
+
+    def _check_gate_voltage_bcs(self) -> Self:
+        """Require the metal work function, and the electron affinity, once a gate is present.
+
+        A gate's potential is referenced to the metal work function, which a
+        contact touching the semiconductor never has to state. The electron
+        affinity cancels out of every potential difference while all contacts
+        touch the semiconductor, but against a gate it sets where the bands sit,
+        and leaving it unset shifts the flat-band voltage by whole volts.
+        """
+        gate_indices = self._gate_bc_indices()
+        if not gate_indices:
+            return self
+
+        for i in gate_indices:
+            charge_specs = [
+                self._charge_spec(side)
+                for side in self._placement_contact_media(self.boundary_spec[i].placement)
+            ]
+            has_metal_w = any(
+                isinstance(spec, ChargeConductorMedium) and spec.work_function is not None
+                for spec in charge_specs
+            )
+            if not has_metal_w:
+                self._raise_validation_error_at_loc(
+                    "'VoltageBC' is placed on an interface where neither side is a "
+                    "'SemiconductorMedium', which makes it a gate on an insulator. A gate's "
+                    "potential is referenced to the metal work function, so one side must be "
+                    "a 'ChargeConductorMedium' carrying 'work_function'. Without it the gate "
+                    "potential is off by the metal work function minus the semiconductor "
+                    "electron affinity and the flat-band voltage is wrong.",
+                    "boundary_spec",
+                    i,
+                    "placement",
+                    log_error=False,
+                )
+
+        for loc, charge in self._iter_semiconductor_charge_media():
+            if charge.electron_affinity is not None:
+                continue
+            self._raise_validation_error_at_loc(
+                "This simulation places a 'VoltageBC' on an insulator (a gate), whose potential "
+                "is referenced to the vacuum level. Every 'SemiconductorMedium' must then carry "
+                "'electron_affinity', or its bands sit at an arbitrary offset from the gate and "
+                "the flat-band voltage is wrong by several volts.",
+                *loc,
+                log_error=False,
+            )
+        return self
+
+    def _check_one_bias_per_metal(self) -> Self:
+        """Reject a ``ChargeConductorMedium`` structure driven by two disagreeing sources.
+
+        A metal is equipotential, so the several ``boundary_spec`` entries that
+        may name one metal structure — its semiconductor contact and its oxide
+        cladding, say — declare one terminal and must agree on its bias.
+        Medium-based placements need geometric adjacency to identify the
+        contacted structures, so their consistency is checked when running.
+        Sources are compared through :meth:`_drive_of`, so differing labels
+        alone are not a disagreement.
+        """
+        source_by_structure: dict[str, tuple[int, Any]] = {}
+        for i, bc in enumerate(self.boundary_spec):
+            if not isinstance(bc.condition, VoltageBC):
+                continue
+            if isinstance(bc.placement, MediumMediumInterface):
+                continue
+            source = self._drive_of(bc.condition.source)
+            for name in self._placement_conductor_structures(bc.placement):
+                first = source_by_structure.setdefault(name, (i, source))
+                if first[1] == source:
+                    continue
+                self._raise_validation_error_at_loc(
+                    f"Structure '{name}' is a 'ChargeConductorMedium' named by two 'VoltageBC' "
+                    f"entries with different sources ('boundary_spec[{first[0]}]' and "
+                    f"'boundary_spec[{i}]'). A metal structure is one terminal and a metal is "
+                    "equipotential, so its contacts must share one source. Give both entries "
+                    "the same source; or, if this structure is several electrically separate "
+                    "pieces of metal -- disjoint islands of one 'GeometryGroup', say -- give "
+                    "each piece its own 'Structure', since one structure cannot carry two "
+                    "potentials.",
+                    "boundary_spec",
+                    i,
+                    "condition",
+                    log_error=False,
+                )
+        return self
+
+    def _placement_conductor_structures(self, placement: BCPlacementType) -> list[str]:
+        """Names of the ``ChargeConductorMedium`` structures a placement names.
+
+        ``MediumMediumInterface`` names media rather than structures, so every
+        structure carrying a named medium counts.
+        """
+        if isinstance(placement, (StructureBoundary, StructureSimulationBoundary)):
+            named = {placement.structure}
+        elif isinstance(placement, StructureStructureInterface):
+            named = set(placement.structures)
+        elif isinstance(placement, MediumMediumInterface):
+            named = {
+                structure.name
+                for structure in self.structures
+                if structure.medium.name in placement.mediums
+            }
+        else:
+            return []
+        return [
+            structure.name
+            for structure in self.structures
+            if structure.name in named
+            and isinstance(self._charge_spec(structure.medium), ChargeConductorMedium)
+        ]
+
     def _check_surface_recombination_bcs(self) -> Self:
         """Run all ``SurfaceRecombinationBC`` setup checks."""
         self._check_surface_recombination_requires_accelerated()
@@ -1158,6 +1347,31 @@ class HeatChargeSimulation(AbstractSimulation):
         self._check_surface_recombination_no_duplicate_placement()
         self._check_surface_recombination_interface_materials()
         return self
+
+    @staticmethod
+    def _charge_spec(medium: Any) -> Any:
+        """The charge medium of ``medium``, reading through a ``MultiPhysicsMedium``.
+
+        A single-physics medium is its own charge spec; media with no charge
+        behaviour (a fluid, say) pass through unchanged and match none of the
+        charge medium classes.
+        """
+        return medium.charge if isinstance(medium, MultiPhysicsMedium) else medium
+
+    @staticmethod
+    def _drive_of(source: Any) -> Any:
+        """The drive ``source`` prescribes, stripped of its name and attributes.
+
+        ``GroundVoltage`` is documented as equivalent to
+        ``DCVoltageSource(voltage=0)`` and compares as that source.
+        """
+        if isinstance(source, GroundVoltage):
+            source = DCVoltageSource(voltage=0)
+        metadata = {"name": None, "attrs": {}}
+        updates = {
+            key: value for key, value in metadata.items() if key in type(source).model_fields
+        }
+        return source.updated_copy(**updates) if updates else source
 
     def _placement_side_media(self, placement: BCPlacementType) -> list | None:
         """The two media a placement names, or ``None`` if it names only one side.
@@ -1183,6 +1397,25 @@ class HeatChargeSimulation(AbstractSimulation):
             return None
         return None if any(side is None for side in sides) else sides
 
+    def _placement_contact_media(self, placement: BCPlacementType) -> list | None:
+        """Every medium a contact on ``placement`` is certainly made against.
+
+        Wider than :meth:`_placement_side_media`, which answers only for
+        placements naming *two* sides: a ``StructureSimulationBoundary`` names one
+        structure and the simulation box, so its contact materials are fully
+        determined by that one medium.
+
+        ``None`` where a side could be any material the geometry puts there
+        (``StructureBoundary``, ``SimulationBoundary``); resolving those needs
+        structure adjacency, which is computed when the simulation runs.
+        """
+        if isinstance(placement, StructureSimulationBoundary):
+            structures_map = {s.name: s for s in self.structures if s.name}
+            named = structures_map.get(placement.structure)
+            medium = named.medium if named is not None else self.medium
+            return None if medium is None else [medium]
+        return self._placement_side_media(placement)
+
     def _check_surface_recombination_interface_materials(self) -> Self:
         """Reject ``SurfaceRecombinationBC`` on an interface that cannot carry it.
 
@@ -1197,11 +1430,10 @@ class HeatChargeSimulation(AbstractSimulation):
             if sides is None:
                 continue
 
-            charge_specs = [
-                side.charge if isinstance(side, MultiPhysicsMedium) else side for side in sides
-            ]
             semiconductors = [
-                spec for spec in charge_specs if isinstance(spec, SemiconductorMedium)
+                spec
+                for spec in (self._charge_spec(side) for side in sides)
+                if isinstance(spec, SemiconductorMedium)
             ]
 
             if not semiconductors:
@@ -3292,6 +3524,9 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
         ):
             features.append("CanaliFieldDependence")
+
+        if self._insulator_face_bc_indices():
+            features.append("'VoltageBC' on an insulator face")
 
         if self._uses_gpu_only_lifetime_model():
             features.append("PalankovskiQuayApproxCarrierLifetime")

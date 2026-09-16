@@ -53,6 +53,33 @@ their excitation from the SPICE source classes documented on the
    compose with DC sweeps, small-signal AC analyses, and Fermi-Dirac
    carrier statistics (``fermi_dirac=True``).
 
+.. note::
+   A :class:`VoltageBC` whose faces all lie on an insulator is a gate: it
+   takes its potential reference from the metal work function :math:`W`.
+   Place it on the gate metal's
+   :class:`StructureBoundary`, or on the
+   :class:`StructureStructureInterface` between the metal and the insulator,
+   with ``work_function`` set on the metal's :class:`ChargeConductorMedium`;
+   the contacted face must adjoin a metal carrying that property.
+   Because the gate potential is referenced to the vacuum level,
+   every :class:`SemiconductorMedium` must then carry ``electron_affinity``.
+   Reported potentials are measured against the electron affinity
+   :math:`\chi_\mathrm{ref}` of the reference semiconductor, so a monitor
+   reads :math:`V - (W - \chi_\mathrm{ref})` on the gate face. The reference
+   semiconductor is the background ``medium`` when it is a
+   :class:`SemiconductorMedium`, and otherwise the first semiconductor
+   structure in priority order (for the default priority mode, the first one
+   listed in ``structures``); in a device with one semiconductor material
+   :math:`\chi_\mathrm{ref}` is simply its :math:`\chi`.
+   Any :class:`VoltageBC` with a face on an insulator -- a gate, or an ohmic
+   or Schottky contact whose metal is clad by an insulator -- is supported
+   only by the accelerated charge solver (``use_accelerated_solver=True``),
+   because only it references such a face to the metal work function.
+
+   Touching contact faces must prescribe the same electric potential at their
+   shared points and have compatible small-signal drives. Separate contact
+   boundaries to bias those terminals independently.
+
 Placement
 ^^^^^^^^^^^^^^^^^
 
