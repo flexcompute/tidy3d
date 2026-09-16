@@ -13,6 +13,8 @@ from tidy3d.components.data.data_array import (
     AbstractSpatialDataArray,
     SpatialDataArray,
     SpatialVoltageDataArray,
+    _check_sample_count,
+    _grid_from_bounds,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.types import HeatChargeMonitorType
@@ -22,7 +24,6 @@ from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from typing import Literal
 
     from tidy3d.compat import Self
@@ -34,12 +35,6 @@ FieldDataset = (
     | discriminated_union(TriangularGridDataset | TetrahedralGridDataset)
 )
 UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
-
-# Ceiling on the Cartesian grid ``to_spatial_data_array`` will build. The array is held in
-# memory whole and interpolated point by point, and a bounds/resolution pair is taken
-# literally, so an innocent-looking resolution over a device-sized box can ask for
-# terabytes.
-MAX_SPATIAL_SAMPLES = 4_000_000
 
 # Tolerance for matching a requested bias against the recorded ones. Both travel as IEEE
 # doubles, so this only absorbs float noise -- it is not a "nearest bias" search.
@@ -186,7 +181,7 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             raise DataError("'bounds' and 'resolution' must be provided together.")
 
         if not coords_given and bounds is not None:
-            x, y, z = self._grid_from_bounds(bounds=bounds, resolution=resolution)
+            x, y, z = _grid_from_bounds(bounds=bounds, resolution=resolution)
             coords_given = True
 
         if coords_given:
@@ -194,7 +189,7 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             # branch below cannot transpose back. The unstructured path normalizes
             # internally; do it here so both accept the scalars the signature advertises.
             x, y, z = (np.atleast_1d(comp) for comp in (x, y, z))
-            self._check_sample_count([x, y, z])
+            _check_sample_count([x, y, z])
 
         if not isinstance(data, (TriangularGridDataset, TetrahedralGridDataset)):
             # Already Cartesian, as a 1D monitor's data always is. Only a plain
@@ -281,67 +276,6 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
                 "so it cannot be converted to a 'SpatialDataArray'."
             )
         return data
-
-    @staticmethod
-    def _check_sample_count(coords: Sequence[ArrayLike]) -> None:
-        """Reject a target grid too large to materialise."""
-        counts = [len(np.atleast_1d(comp)) for comp in coords]
-        total = counts[0] * counts[1] * counts[2]
-        if total > MAX_SPATIAL_SAMPLES:
-            raise DataError(
-                f"The requested grid has {counts[0]}x{counts[1]}x{counts[2]} = {total} "
-                f"points, above the {MAX_SPATIAL_SAMPLES} supported. Coarsen 'resolution' "
-                "or narrow 'bounds'; the array is held in memory whole and sampled point "
-                "by point."
-            )
-
-    @staticmethod
-    def _grid_from_bounds(
-        bounds: Bound, resolution: float | tuple[float, float, float]
-    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
-        """Build per-axis coordinate arrays spanning ``bounds`` at ``resolution``."""
-        # Checked before unpacking: a malformed pair would otherwise surface as a bare
-        # 'not enough values to unpack' from somewhere downstream.
-        if len(bounds) != 2 or any(len(corner) != 3 for corner in bounds):
-            raise DataError(
-                f"'bounds' must be ((xmin, ymin, zmin), (xmax, ymax, zmax)); got {bounds!r}."
-            )
-
-        rmin, rmax = bounds
-        steps = (resolution,) * 3 if np.isscalar(resolution) else tuple(resolution)
-        if len(steps) != 3:
-            raise DataError("'resolution' must be a scalar or a 3-tuple.")
-        if any(step <= 0 for step in steps):
-            raise DataError("'resolution' must be positive.")
-
-        # Sizes first, allocation second: the whole point of the cap is to refuse before
-        # anything large is materialised, and np.linspace on one enormous axis would
-        # already have exhausted memory by the time a post-hoc check ran.
-        counts = []
-        for axis, (lo, hi, step) in enumerate(zip(rmin, rmax, steps)):
-            extent = hi - lo
-            if extent < 0:
-                # Kept distinct from an equal pair: swapped bounds would otherwise collapse
-                # to a single plane and quietly return a field over the wrong region.
-                raise DataError(
-                    f"'bounds' is reversed along {'xyz'[axis]}: the minimum ({lo}) is above "
-                    f"the maximum ({hi}). Expected ((xmin, ymin, zmin), (xmax, ymax, zmax))."
-                )
-            # A zero-thickness axis (a 2D simulation) collapses to one sample plane.
-            counts.append(1 if extent == 0 else max(2, int(np.ceil(extent / step)) + 1))
-
-        total = counts[0] * counts[1] * counts[2]
-        if total > MAX_SPATIAL_SAMPLES:
-            raise DataError(
-                f"'bounds' at this 'resolution' needs {counts[0]}x{counts[1]}x{counts[2]} = "
-                f"{total} points, above the {MAX_SPATIAL_SAMPLES} supported. Coarsen "
-                "'resolution' or narrow 'bounds'."
-            )
-
-        return tuple(
-            np.array([lo]) if count == 1 else np.linspace(lo, hi, count)
-            for lo, hi, count in zip(rmin, rmax, counts)
-        )
 
     def _select_voltage(self, data: FieldDataset, voltage: float | None) -> FieldDataset:
         """Reduce a bias-resolved dataset to the single requested bias point."""

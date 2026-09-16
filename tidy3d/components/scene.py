@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from .data.utils import CustomSpatialDataType
     from .grid.grid import Grid
     from .types import (
+        ArrayLike,
         Ax,
         Bound,
         Coordinate,
@@ -58,6 +59,7 @@ from .data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
     _as_custom_spatial_data,
+    _downsample_custom_spatial_data,
 )
 from .geometry.base import Box
 from .geometry.utils import merging_geometries_on_plane
@@ -1823,6 +1825,7 @@ class Scene(Tidy3dBaseModel):
         electron_density: CustomSpatialDataType | None = None,
         hole_density: CustomSpatialDataType | None = None,
         interp_method: InterpMethod = "linear",
+        downsample_dl: float | ArrayLike | None = None,
     ) -> Self:
         """Return a copy of the scene with heat and/or charge data applied to all mediums
         that have perturbation models specified. That is, such mediums will be replaced with
@@ -1848,6 +1851,14 @@ class Scene(Tidy3dBaseModel):
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied
             at the Yee grids.
+        downsample_dl : Union[float, ArrayLike] = None
+            If given, resample every provided field onto a uniform Cartesian grid spanning its own
+            bounds at roughly this spacing (micron), using ``interp_method``, before applying it. A
+            device-scale charge solve can otherwise embed a multi-hundred-megabyte custom medium in
+            the returned scene. The grid covers the bounds exactly, so the spacing it lands on is
+            ``downsample_dl`` rounded down to a whole number of steps, never up. Features smaller
+            than ``downsample_dl`` are erased or, if a grid node lands on one, widened to
+            ``downsample_dl``, so verify the perturbed mediums before relying on them.
 
         Returns
         -------
@@ -1863,6 +1874,16 @@ class Scene(Tidy3dBaseModel):
                 ("hole_density", hole_density),
             )
         }
+
+        if downsample_dl is not None:
+            array_dict = {
+                name: None
+                if array is None
+                else _downsample_custom_spatial_data(
+                    name=name, field=array, dl=downsample_dl, method=interp_method
+                )
+                for name, array in array_dict.items()
+            }
 
         scene_dict = self.model_dump()
         structures = self.sorted_structures

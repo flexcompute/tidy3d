@@ -35,9 +35,10 @@ from tidy3d.constants import (
     WATT,
 )
 from tidy3d.exceptions import DataError, FileError, format_chained_exception_message
+from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Mapping
+    from collections.abc import Hashable, Mapping, Sequence
     from os import PathLike
 
     from numpy.typing import NDArray
@@ -47,7 +48,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import InterpolationType
     from tidy3d.components.grid.grid import Coords
-    from tidy3d.components.types import Axis, Bound, BoundOptional
+    from tidy3d.components.types import ArrayLike, Axis, Bound, BoundOptional
     from tidy3d.components.types.base import Coordinate
 
 # maps the dimension names to their attributes
@@ -866,6 +867,140 @@ class MixedModeDataArray(DataArray):
     _dims = ("f", "mode_index_0", "mode_index_1")
 
 
+# Ceiling on the Cartesian grid ``_grid_from_bounds`` will build. The array is held in memory
+# whole and interpolated point by point, and a bounds/resolution pair is taken literally, so an
+# innocent-looking resolution over a device-sized box can ask for terabytes.
+MAX_SPATIAL_SAMPLES = 4_000_000
+
+
+def _check_sample_count(coords: Sequence[ArrayLike]) -> None:
+    """Reject a target grid too large to materialise."""
+    counts = [len(np.atleast_1d(comp)) for comp in coords]
+    total = counts[0] * counts[1] * counts[2]
+    if total > MAX_SPATIAL_SAMPLES:
+        raise DataError(
+            f"The requested grid has {counts[0]}x{counts[1]}x{counts[2]} = {total} "
+            f"points, above the {MAX_SPATIAL_SAMPLES} supported. Coarsen 'resolution' "
+            "or narrow 'bounds'; the array is held in memory whole and sampled point "
+            "by point."
+        )
+
+
+def _grid_steps(resolution: float | ArrayLike) -> NDArray:
+    """Validate ``resolution`` as one positive, finite step per axis."""
+    # Broadcasting rather than a size check: it accepts a scalar and a 3-vector and rejects
+    # every other shape, including the nested ones a size check lets through.
+    try:
+        steps = np.broadcast_to(np.asarray(resolution, dtype=float), (3,))
+    except (TypeError, ValueError) as e:
+        raise DataError(
+            format_chained_exception_message(
+                "Grid spacing must be a scalar or one value per 'x', 'y', and 'z'; got "
+                f"{resolution!r}.",
+                e,
+            )
+        ) from e
+    if not np.all(np.isfinite(steps)) or np.any(steps <= 0):
+        raise DataError(f"Grid spacing must be finite and positive; got {resolution!r}.")
+    return steps
+
+
+def _sampling_counts(steps: NDArray, extents: NDArray) -> NDArray:
+    """Nodes per axis that :func:`_grid_from_bounds` places over ``extents`` at ``steps``."""
+    return np.maximum(2, np.ceil(extents / steps) + 1)
+
+
+def _clamp_steps_to_budget(
+    steps: NDArray, extents: NDArray, budget: float, fixed_total: float = 1
+) -> tuple[NDArray, NDArray] | None:
+    """Raise ``steps`` until the grid they build holds at most ``budget`` points.
+
+    ``steps`` and ``extents`` cover only the axes being resampled; ``fixed_total`` is the
+    number of points the remaining axes contribute. Returns the raised steps together with
+    the node counts they land on, or ``None`` if the request already fits.
+
+    Sampling a field onto a grid it cannot support invents detail, and since the result is
+    allocated dense it can ask for hundreds of gigabytes on a device-scale field.
+    """
+    if extents.size == 0:
+        return None
+
+    # Re-counted after every pass rather than scaled once by the excess ratio: the ratio is
+    # continuous and 'ceil' rounds back up, so one pass can land on the same grid it started
+    # from. Every pass grows the steps, so the counts fall monotonically towards the two
+    # endpoints each axis keeps; stop there even if that grid is still above budget.
+    counts = _sampling_counts(steps, extents)
+    if np.prod(counts) * fixed_total <= budget:
+        return None
+
+    clamped = np.array(steps, dtype=float)
+    while np.prod(counts) * fixed_total > budget and np.any(counts > 2):
+        clamped *= (np.prod(counts) * fixed_total / budget) ** (1 / clamped.size)
+        counts = _sampling_counts(clamped, extents)
+    return clamped, counts
+
+
+def _grid_from_bounds(
+    bounds: Bound,
+    resolution: float | ArrayLike,
+    keep_coords: Mapping[str, NDArray] | None = None,
+    max_samples: float = MAX_SPATIAL_SAMPLES,
+) -> tuple[NDArray, NDArray, NDArray]:
+    """Build per-axis coordinate arrays spanning ``bounds`` at ``resolution``.
+
+    ``keep_coords`` maps an axis name to a coordinate returned untouched. It is how a caller
+    holding data already coarser than ``resolution`` along some axis avoids resampling it; such
+    an axis still counts towards ``max_samples``. A caller resampling data it already holds can
+    raise ``max_samples`` to that data's own size: the grid is then refused only if it would be
+    larger than what is in memory already.
+    """
+    # Checked before unpacking: a malformed pair would otherwise surface as a bare
+    # 'not enough values to unpack' from somewhere downstream.
+    if len(bounds) != 2 or any(len(corner) != 3 for corner in bounds):
+        raise DataError(
+            f"'bounds' must be ((xmin, ymin, zmin), (xmax, ymax, zmax)); got {bounds!r}."
+        )
+
+    rmin, rmax = bounds
+    steps = _grid_steps(resolution)
+    keep_coords = keep_coords or {}
+
+    # Sizes first, allocation second: the whole point of the cap is to refuse before
+    # anything large is materialised, and np.linspace on one enormous axis would
+    # already have exhausted memory by the time a post-hoc check ran.
+    counts = []
+    for axis, (lo, hi, step) in enumerate(zip(rmin, rmax, steps)):
+        dim = "xyz"[axis]
+        if dim in keep_coords:
+            counts.append(len(np.atleast_1d(keep_coords[dim])))
+            continue
+        extent = hi - lo
+        if extent < 0:
+            # Kept distinct from an equal pair: swapped bounds would otherwise collapse
+            # to a single plane and quietly return a field over the wrong region.
+            raise DataError(
+                f"'bounds' is reversed along {dim}: the minimum ({lo}) is above "
+                f"the maximum ({hi}). Expected ((xmin, ymin, zmin), (xmax, ymax, zmax))."
+            )
+        # A zero-thickness axis (a 2D simulation) collapses to one sample plane.
+        counts.append(1 if extent == 0 else max(2, int(np.ceil(extent / step)) + 1))
+
+    total = counts[0] * counts[1] * counts[2]
+    if total > max_samples:
+        raise DataError(
+            f"'bounds' at this 'resolution' needs {counts[0]}x{counts[1]}x{counts[2]} = "
+            f"{total} points, above the {int(max_samples)} supported. Coarsen "
+            "'resolution' or narrow 'bounds'."
+        )
+
+    return tuple(
+        np.atleast_1d(keep_coords[dim])
+        if dim in keep_coords
+        else (np.array([lo]) if count == 1 else np.linspace(lo, hi, count))
+        for dim, lo, hi, count in zip("xyz", rmin, rmax, counts)
+    )
+
+
 class AbstractSpatialDataArray(DataArray, ABC):
     """Spatial distribution."""
 
@@ -1140,6 +1275,107 @@ class AbstractSpatialDataArray(DataArray, ABC):
                 self_max[dim] = np.max(coords)
         self_bounds = (tuple(self_min), tuple(self_max))
         return bounds_contains(self_bounds, bounds, rtol=rtol, atol=atol)
+
+    def downsample(self, dl: float | ArrayLike, method: InterpOptions = "linear") -> Self:
+        """Resample onto a uniform Cartesian grid spanning the same bounds, at spacing ``dl``.
+
+        Useful for shrinking a finely resolved field before it is embedded in a simulation --
+        e.g. a charge density handed to
+        :meth:`Simulation.perturbed_mediums_copy <tidy3d.Simulation.perturbed_mediums_copy>`,
+        where the full-resolution field can dominate the uploaded file size. Sampling is at the
+        grid nodes, not averaged over cells, so it does not conserve the integral of the field:
+        a feature thinner than ``dl`` is erased or, if a node lands on it, widened to ``dl``.
+        Check the result before relying on it.
+
+        The grid spans the original bounds exactly, so the spacing it lands on is ``dl`` rounded
+        down to the nearest whole number of steps across each axis, never up. Axes are only ever
+        made coarser: one whose own spacing is already at or above ``dl`` keeps its coordinate,
+        and only a degenerate one reduces to a single point. An axis is compared against its
+        finest gap, so a nonuniform one is resampled over its whole span and can come back with
+        more points than it started with; a ``dl`` that would exceed the largest array that can
+        be sampled -- or this field's own size, if it is already larger -- is raised until it
+        fits, with a warning. Non-spatial dimensions (``f``, ``t``, ...) pass through untouched.
+
+        Parameters
+        ----------
+        dl : Union[float, ArrayLike]
+            Target grid spacing (micron), either isotropic or per ``x``, ``y``, ``z``.
+        method : InterpOptions = "linear"
+            Interpolation method used to sample onto the new grid.
+
+        Returns
+        -------
+        AbstractSpatialDataArray
+            Data sampled on the coarsened grid.
+
+        Example
+        -------
+        >>> x = np.linspace(0, 1, 101)
+        >>> coords = dict(x=x, y=x, z=[0.0])
+        >>> data = SpatialDataArray(np.random.random((101, 101, 1)), coords=coords)
+        >>> coarse = data.downsample(dl=0.1)
+        >>> coarse.shape
+        (11, 11, 1)
+        """
+        sorted_self = self._spatially_sorted
+        current = {dim: np.atleast_1d(sorted_self.coords[dim].values) for dim in "xyz"}
+        bounds = (
+            tuple(float(current[dim][0]) for dim in "xyz"),
+            tuple(float(current[dim][-1]) for dim in "xyz"),
+        )
+        steps = _grid_steps(dl)
+
+        # Compared against the finest gap, not the point count: an axis can hold few points and
+        # still resolve something the request would erase, as [0, 0.01, 1] does at 'dl=0.4'.
+        keep_coords = {
+            dim: current[dim]
+            for ind, dim in enumerate("xyz")
+            if len(current[dim]) < 2 or np.min(np.diff(current[dim])) >= steps[ind]
+        }
+        if len(keep_coords) == 3:
+            return sorted_self
+
+        # A nonuniform axis is resampled over its whole span whenever its finest gap is below
+        # 'dl', so the grid can run past the cap; clamp it here rather than let
+        # '_grid_from_bounds' reject it, naming arguments this method does not take.
+        resampled = np.array([dim not in keep_coords for dim in "xyz"])
+        extents = np.array([current[dim][-1] - current[dim][0] for dim in "xyz"], dtype=float)
+        # Kept axes are not coarsened, so a field already above the cap could never be sampled
+        # at all; its own size is the ceiling instead, which is always reachable because every
+        # resampled axis can fall back to its two endpoints.
+        budget = max(MAX_SPATIAL_SAMPLES, int(np.prod([len(current[dim]) for dim in "xyz"])))
+        raised = _clamp_steps_to_budget(
+            steps[resampled],
+            extents[resampled],
+            budget=budget,
+            fixed_total=np.prod([len(coord) for coord in keep_coords.values()]),
+        )
+        if raised is not None:
+            steps = np.array(steps, dtype=float)
+            steps[resampled], _ = raised
+            log.warning(
+                f"Sampling at '{dl}' needs more than the {budget} points supported in one "
+                f"array; it has been clamped to {np.array2string(steps, precision=4)}. "
+                "Specify a larger down-sampling step to suppress this warning.",
+                log_once=True,
+            )
+
+        coords = dict(
+            zip(
+                "xyz",
+                _grid_from_bounds(
+                    bounds=bounds,
+                    resolution=steps,
+                    keep_coords=keep_coords,
+                    max_samples=budget,
+                ),
+            )
+        )
+
+        # leave untouched axes out of the interpolation: a degenerate one has nothing to
+        # interpolate along and makes scipy divide by a zero-width interval
+        changed = {dim: values for dim, values in coords.items() if dim not in keep_coords}
+        return sorted_self.interp(**changed, method=method)
 
     def reflect(
         self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1

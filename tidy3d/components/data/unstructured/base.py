@@ -17,11 +17,15 @@ from xarray import concat as xr_concat
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import (
     DATA_ARRAY_MAP,
+    MAX_SPATIAL_SAMPLES,
     CellDataArray,
     IndexedDataArray,
     IndexedDataArrayTypes,
     PointDataArray,
     SpatialDataArray,
+    _clamp_steps_to_budget,
+    _grid_from_bounds,
+    _grid_steps,
 )
 from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import DataError, Tidy3dNotImplementedError, ValidationError
@@ -1448,6 +1452,96 @@ class UnstructuredGridDataset(UnstructuredDataset, ABC):
     """Abstract base for datasets that store unstructured grid data."""
 
     """ Interpolation """
+
+    def _clamp_sampling_steps(self, steps: NDArray, dl: float | ArrayLike) -> NDArray:
+        """Raise ``steps`` until the target grid holds no more points than the budget allows.
+
+        An unstructured grid has no per-axis resolution to compare a request against, so the
+        budget is the point count: asking for a spacing the mesh cannot support would invent
+        detail and, since the sampled array is allocated dense, can ask for hundreds of
+        gigabytes on a device-scale mesh. A mesh larger than the global sample cap is held to
+        that cap instead, so an over-fine request is coarsened here rather than rejected by
+        :func:`_grid_from_bounds` naming arguments ``downsample`` does not take.
+        """
+        rmin, rmax = self.bounds
+        extents = np.array(rmax, dtype=float) - np.array(rmin, dtype=float)
+        varying = extents > 0
+        if not np.any(varying):
+            return steps
+
+        budget = min(len(self.points), MAX_SPATIAL_SAMPLES)
+        raised = _clamp_steps_to_budget(steps[varying], extents[varying], budget=budget)
+        if raised is None:
+            return steps
+
+        clamped = np.array(steps, dtype=float)
+        clamped[varying], counts = raised
+        log.warning(
+            f"The requested sampling of '{dl}' is finer than this {len(self.points)}-point "
+            f"grid supports; it has been clamped to {np.array2string(clamped, precision=4)}, "
+            f"for a {'x'.join(str(int(count)) for count in counts)} grid. Specify a larger "
+            "down-sampling step to suppress this warning.",
+            log_once=True,
+        )
+        return clamped
+
+    def downsample(
+        self, dl: float | ArrayLike, method: Literal["linear", "nearest"] = "linear"
+    ) -> SpatialDataArray:
+        """Resample onto a uniform Cartesian grid spanning the same bounds, at spacing ``dl``.
+
+        Unstructured charge and heat fields are typically far finer than the optical simulation
+        that consumes them; sampling onto a coarse Cartesian grid first keeps
+        :meth:`Simulation.perturbed_mediums_copy <tidy3d.Simulation.perturbed_mediums_copy>`
+        from embedding a multi-hundred-megabyte custom medium in every simulation. Sampling is at
+        the grid nodes, not averaged over cells, so it does not conserve the integral of the
+        field: a feature thinner than ``dl`` is erased or, if a node lands on it, widened to
+        ``dl``. Check the result before relying on it.
+
+        A node outside the mesh -- in the empty quadrant of an L-shaped device, or anywhere else
+        the cells do not fill the bounding box -- takes its nearest value, as sampling the same
+        dataset onto a simulation grid does. This differs from
+        :meth:`HeatChargeMonitorData.to_spatial_data_array
+        <tidy3d.HeatChargeMonitorData.to_spatial_data_array>`, which fills such points with zero
+        because a source term has no contribution where nothing was solved.
+
+        The grid spans the original bounds exactly, so the spacing it lands on is ``dl`` rounded
+        down to the nearest whole number of steps across each axis, never up. Only a degenerate
+        axis reduces to a single point, so a planar dataset stays planar while every other axis
+        keeps both its endpoints. A ``dl`` finer than the grid can support is raised until the
+        result holds no more points than the grid itself, with a warning.
+
+        Parameters
+        ----------
+        dl : Union[float, ArrayLike]
+            Target grid spacing (micron), either isotropic or one value per ``x``, ``y``, ``z``.
+        method : Literal["linear", "nearest"] = "linear"
+            Interpolation method used to sample onto the new grid.
+
+        Returns
+        -------
+        :class:`.SpatialDataArray`
+            Data sampled on the coarsened Cartesian grid.
+        """
+        if self._num_fields > 1:
+            raise DataError(
+                "Cannot down-sample a dataset containing multiple field values. Please select "
+                "one before calling this function. This can be done with, e.g., "
+                f"'.sel({self._non_spatial_dims[0]}=...)'."
+            )
+
+        steps = self._clamp_sampling_steps(_grid_steps(dl), dl=dl)
+        x, y, z = _grid_from_bounds(bounds=self.bounds, resolution=steps)
+        result = self.interp(x=x, y=y, z=z, method=method)
+
+        # '.sel()' leaves the selected coordinate behind as a singleton dim; drop it so the
+        # result is a plain 'SpatialDataArray' rather than an untyped 'xarray.DataArray'
+        extra_dims = [dim for dim in result.dims if dim not in ("x", "y", "z")]
+        if extra_dims:
+            result = result.isel(dict.fromkeys(extra_dims, 0), drop=True)
+            result = SpatialDataArray(result.transpose("x", "y", "z"), name=self.values.name)
+
+        return result
 
     def _spatial_interp(
         self,

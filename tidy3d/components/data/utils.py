@@ -10,6 +10,7 @@ import xarray as xr
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import DataError
+from tidy3d.log import log
 
 from .data_array import SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset
@@ -17,7 +18,7 @@ from .unstructured.tetrahedral import TetrahedralGridDataset
 from .unstructured.triangular import TriangularGridDataset
 
 if TYPE_CHECKING:
-    from tidy3d.components.types import ArrayLike
+    from tidy3d.components.types import ArrayLike, InterpMethod
 
     from .data_array import DataArray
 
@@ -463,6 +464,47 @@ def _check_same_coordinates(
             return False
 
     return True
+
+
+def _stored_size(field: CustomSpatialDataType) -> int:
+    """Number of stored numbers, counting an unstructured dataset's points and cell table."""
+    size = np.asarray(field.values).size
+    for grid_attr in ("points", "cells"):
+        grid = getattr(field, grid_attr, None)
+        if grid is not None:
+            size += np.asarray(grid).size
+    return size
+
+
+def _downsample_custom_spatial_data(
+    name: str, field: CustomSpatialDataType, dl: float | ArrayLike, method: InterpMethod
+) -> CustomSpatialDataType:
+    """Return ``field`` resampled onto a uniform Cartesian grid of spacing ``dl``.
+
+    Shared by the ``perturbed_mediums_copy`` implementations on ``Scene`` and ``Simulation``,
+    which otherwise embed the field at its native resolution -- large enough, for a
+    device-scale charge solve, to dominate the uploaded simulation file. ``method`` is the
+    caller's ``interp_method``, so a field resampled here is not smoothed by an interpolation
+    the caller did not ask for.
+    """
+    coarse = field.downsample(dl=dl, method=method)
+
+    before = _stored_size(field)
+    after = _stored_size(coarse)
+    if after < before:
+        log.info(
+            f"Down-sampled '{name}' from {before} to {after} values using 'downsample_dl={dl}'."
+        )
+    elif after > before:
+        # Naming the field keys the once-per-message suppression to it, so a bias sweep
+        # reports each field once rather than once per voltage.
+        log.warning(
+            f"Down-sampling '{name}' with 'downsample_dl={dl}' grew it from {before} to "
+            f"{after} values. Use a coarser 'downsample_dl' to reduce the simulation size.",
+            log_once=True,
+        )
+
+    return coarse
 
 
 def _as_custom_spatial_data(name: str, field: Any) -> CustomSpatialDataType:

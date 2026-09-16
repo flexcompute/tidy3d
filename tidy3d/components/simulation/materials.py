@@ -11,7 +11,10 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import IndexedDataArray
 from tidy3d.components.data.unstructured.tetrahedral import TetrahedralGridDataset
 from tidy3d.components.data.unstructured.triangular import TriangularGridDataset
-from tidy3d.components.data.utils import _as_custom_spatial_data
+from tidy3d.components.data.utils import (
+    _as_custom_spatial_data,
+    _downsample_custom_spatial_data,
+)
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
 from tidy3d.components.medium import (
@@ -49,7 +52,7 @@ if TYPE_CHECKING:
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.medium import MediumType
     from tidy3d.components.structure import Structure
-    from tidy3d.components.types import InterpMethod
+    from tidy3d.components.types import ArrayLike, InterpMethod
 
 
 def _medium_can_be_lossy(medium: AbstractMedium) -> bool:
@@ -500,6 +503,7 @@ def perturbed_mediums_copy(
     electron_density: CustomSpatialDataType = None,
     hole_density: CustomSpatialDataType = None,
     interp_method: InterpMethod = "linear",
+    downsample_dl: float | ArrayLike | None = None,
 ) -> Self:
     """Return a copy of the simulation with heat and/or charge data applied to all mediums
     that have perturbation models specified. That is, such mediums will be replaced with
@@ -518,6 +522,14 @@ def perturbed_mediums_copy(
     interp_method : :class:`.InterpMethod`, optional
         Interpolation method to obtain heat and/or charge values that are not supplied
         at the Yee grids.
+    downsample_dl : Union[float, ArrayLike] = None
+        If given, resample every provided field onto a uniform Cartesian grid spanning its own
+        bounds at roughly this spacing (micron), using ``interp_method``, before applying it. A
+        device-scale charge solve can otherwise embed a multi-hundred-megabyte custom medium in
+        the returned simulation. The grid covers the bounds exactly, so the spacing it lands on
+        is ``downsample_dl`` rounded down to a whole number of steps, never up. Features smaller
+        than ``downsample_dl`` are erased or, if a grid node lands on one, widened to
+        ``downsample_dl``, so verify the perturbed mediums before relying on them.
 
     Returns
     -------
@@ -531,6 +543,20 @@ def perturbed_mediums_copy(
         electron_density = _as_custom_spatial_data(name="electron_density", field=electron_density)
     if hole_density is not None:
         hole_density = _as_custom_spatial_data(name="hole_density", field=hole_density)
+
+    if downsample_dl is not None:
+        temperature, electron_density, hole_density = (
+            None
+            if field is None
+            else _downsample_custom_spatial_data(
+                name=name, field=field, dl=downsample_dl, method=interp_method
+            )
+            for name, field in (
+                ("temperature", temperature),
+                ("electron_density", electron_density),
+                ("hole_density", hole_density),
+            )
+        )
 
     new_carrier_data = {
         "electron_density": electron_density,
