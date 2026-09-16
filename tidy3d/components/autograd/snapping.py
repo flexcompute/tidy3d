@@ -31,6 +31,19 @@ if TYPE_CHECKING:
 GridCentersType = dict[str, np.ndarray]
 
 
+def _nearest_grid_indices(coords: np.ndarray, grid_centers: np.ndarray) -> np.ndarray:
+    """Return nearest sorted-grid indices without materializing an ``N x M`` array."""
+    grid_centers = np.asarray(grid_centers)
+    if grid_centers.size == 1:
+        return np.zeros(np.asarray(coords).shape, dtype=int)
+
+    right = np.searchsorted(grid_centers, coords, side="left")
+    right = np.clip(right, 1, grid_centers.size - 1)
+    left = right - 1
+    choose_right = np.abs(grid_centers[right] - coords) < np.abs(coords - grid_centers[left])
+    return np.where(choose_right, right, left)
+
+
 def snap_coords_to_boundary(
     spatial_coords: ArrayFloat,
     normals: ArrayFloat,
@@ -72,13 +85,12 @@ def snap_coords_to_boundary(
     """
     grid_ddim = np.zeros_like(normals)
     for idx, dim in enumerate("xyz"):
-        expanded_coords = np.expand_dims(spatial_coords[:, idx], axis=1)
         grid_centers_select = grid_centers[dim]
-
-        diff = np.abs(expanded_coords - grid_centers_select)
-
-        nearest_grid = np.argmin(diff, axis=-1)
-        nearest_grid = np.minimum(np.maximum(nearest_grid, 1), len(grid_centers_select) - 1)
+        nearest_grid = np.clip(
+            _nearest_grid_indices(spatial_coords[:, idx], grid_centers_select),
+            1,
+            len(grid_centers_select) - 1,
+        )
 
         # compute the local grid spacing near the boundary
         grid_ddim[:, idx] = (
@@ -145,12 +157,8 @@ def edge_distance_after_snapping(
     """
     edge_distance_squared_sum = np.zeros_like(adjusted_coords[:, 0])
     for idx, dim in enumerate("xyz"):
-        expanded_adjusted_coords = np.expand_dims(adjusted_coords[:, idx], axis=1)
         grid_centers_select = grid_centers[dim]
-
-        # find nearest grid point from the adjusted coordinates
-        diff = np.abs(expanded_adjusted_coords - grid_centers_select)
-        nearest_grid = np.argmin(diff, axis=-1)
+        nearest_grid = _nearest_grid_indices(adjusted_coords[:, idx], grid_centers_select)
 
         # compute edge distance from the nearest interpolated point to the boundary edge
         edge_distance_squared_sum += (
@@ -175,6 +183,7 @@ def nearest_grid_coords(
     nearest = np.empty_like(np.asarray(coords, dtype=float))
     for idx, dim in enumerate("xyz"):
         grid_centers_select = grid_centers[dim]
-        diff = np.abs(np.expand_dims(coords[:, idx], axis=1) - grid_centers_select)
-        nearest[:, idx] = grid_centers_select[np.argmin(diff, axis=-1)]
+        nearest[:, idx] = grid_centers_select[
+            _nearest_grid_indices(coords[:, idx], grid_centers_select)
+        ]
     return nearest
