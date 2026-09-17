@@ -11,7 +11,11 @@ import xarray as xr
 import tidy3d as td
 import tidy3d.system as system_utils
 from tidy3d.components.autograd import get_static
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.derivative_utils import (
+    TRIANGLE_MESH_SURFACE_GRADIENT_MAX_BATCH_SIZE,
+    DerivativeInfo,
+    triangle_mesh_surface_gradient_batch_size,
+)
 from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
 from tidy3d.components.autograd.point_consumption import (
     adjoint_point_cloud_chunk_bounds,
@@ -118,9 +122,24 @@ def _resolve_freq_chunk_size(
     return max(1, min(n_freqs, max_freqs_by_budget))
 
 
+def _resolve_triangle_mesh_surface_gradient_batch_size(num_freqs: int) -> int:
+    """Resolve the runtime TriangleMesh batch size from the host memory budget."""
+    available_bytes = system_utils.get_available_memory_bytes()
+    memory_budget_bytes = (
+        int(available_bytes * config.adjoint.memory_allotment_fraction)
+        if available_bytes > 0
+        else None
+    )
+    return triangle_mesh_surface_gradient_batch_size(
+        num_samples=TRIANGLE_MESH_SURFACE_GRADIENT_MAX_BATCH_SIZE,
+        num_freqs=num_freqs,
+        memory_budget_bytes=memory_budget_bytes,
+    )
+
+
 def _sampling_resolution_fields(
-    sampling_resolution: SamplingResolution | None,
-) -> dict[str, float | None]:
+    sampling_resolution: SamplingResolution | None, num_freqs: int
+) -> dict[str, float | int | None]:
     """Return resolved ``DerivativeInfo`` sampling fields from optional precomputed data."""
 
     if sampling_resolution is None:
@@ -128,11 +147,17 @@ def _sampling_resolution_fields(
             "resolved_adaptive_vjp_spacing": None,
             "resolved_material_length_scale": None,
             "resolved_material_wavelength": None,
+            "resolved_surface_gradient_batch_size": _resolve_triangle_mesh_surface_gradient_batch_size(
+                num_freqs
+            ),
         }
     return {
         "resolved_adaptive_vjp_spacing": sampling_resolution.spacing,
         "resolved_material_length_scale": sampling_resolution.material_length_scale,
         "resolved_material_wavelength": sampling_resolution.material_wavelength,
+        "resolved_surface_gradient_batch_size": _resolve_triangle_mesh_surface_gradient_batch_size(
+            num_freqs
+        ),
     }
 
 
@@ -847,7 +872,7 @@ def _process_structure_gradients(
                 ),
                 clipped_geometry=clipped_geometry,
                 point_integrands=point_integrands_chunk,
-                **_sampling_resolution_fields(sampling_resolution),
+                **_sampling_resolution_fields(sampling_resolution, len(select_adjoint_freqs)),
             )
             vjp_chunk = structure._compute_derivatives(
                 derivative_info, sample_sets=sample_sets.by_key()
@@ -1102,7 +1127,7 @@ def _process_structure_gradients(
             and structure.background_medium.is_pec,
             clipped_geometry=clipped_geometry,
             point_integrands=point_integrands_chunk,
-            **_sampling_resolution_fields(sampling_resolution),
+            **_sampling_resolution_fields(sampling_resolution, len(select_adjoint_freqs)),
         )
 
         if structure_paths:
@@ -1230,7 +1255,9 @@ def _process_structure_gradients(
                         if _geometry_contains_clip_operation(target_structure.geometry)
                         else None
                     ),
-                    **_sampling_resolution_fields(helper_sampling_resolution),
+                    **_sampling_resolution_fields(
+                        helper_sampling_resolution, len(helper_derivative_info.frequencies)
+                    ),
                     interpolators=shared_interpolators,
                     # the helper's sample sets are late-generated for the (possibly
                     # substituted) target geometry: recorded point integrands belong

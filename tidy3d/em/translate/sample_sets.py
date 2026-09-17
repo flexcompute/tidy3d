@@ -120,6 +120,7 @@ def sample_set_integrand(
     derivative_info: DerivativeInfo,
     interpolators: dict | None,
     key: PathType,
+    sample_slice: slice | None = None,
 ) -> np.ndarray:
     """Per-point shape-gradient integrand for one sample set at this boundary.
 
@@ -129,7 +130,9 @@ def sample_set_integrand(
     exceptions.
     """
     try:
-        return _schema_sample_set_integrand(sample_set, derivative_info, interpolators, key)
+        return _schema_sample_set_integrand(
+            sample_set, derivative_info, interpolators, key, sample_slice=sample_slice
+        )
     except _SchemaAdjointError as exc:
         raise AdjointError(str(exc)) from exc
 

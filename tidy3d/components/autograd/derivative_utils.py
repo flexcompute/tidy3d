@@ -38,6 +38,29 @@ ArrayFloat = NDArray[np.floating]
 ArrayComplex = NDArray[np.complexfloating]
 AUTOGRAD_COORDINATE_TOLERANCE = 1e-12
 CLIP_INSIDE_PROBE_FRACTION = 1e-3
+TRIANGLE_MESH_SURFACE_GRADIENT_BYTES_PER_SAMPLE_FREQ = 8192
+TRIANGLE_MESH_SURFACE_GRADIENT_MAX_BATCH_SIZE = 500_000
+
+
+def triangle_mesh_surface_gradient_batch_size(
+    num_samples: int, num_freqs: int, memory_budget_bytes: int | None = None
+) -> int:
+    """Return a bounded TriangleMesh gradient batch size.
+
+    ``memory_budget_bytes`` is supplied by the runtime when available. Without it,
+    keep the fallback bounded across frequencies using the same per-sample estimate.
+    """
+    max_batch_size = min(num_samples, TRIANGLE_MESH_SURFACE_GRADIENT_MAX_BATCH_SIZE)
+    if num_freqs < 1:
+        return max(1, max_batch_size)
+
+    if memory_budget_bytes is None:
+        budget_batch_size = TRIANGLE_MESH_SURFACE_GRADIENT_MAX_BATCH_SIZE // num_freqs
+    else:
+        bytes_per_sample = num_freqs * TRIANGLE_MESH_SURFACE_GRADIENT_BYTES_PER_SAMPLE_FREQ
+        budget_batch_size = memory_budget_bytes // bytes_per_sample
+
+    return max(1, min(max_batch_size, budget_batch_size))
 
 
 class LazyInterpolator:
@@ -202,6 +225,9 @@ class DerivativeInfo:
 
     resolved_material_wavelength: float | None = None
     """Precomputed material wavelength for triangulation-based geometry sampling."""
+
+    resolved_surface_gradient_batch_size: int | None = None
+    """Precomputed runtime batch size for TriangleMesh surface-gradient evaluation."""
 
     # private cache for interpolators
     _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)

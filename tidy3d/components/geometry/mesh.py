@@ -10,6 +10,7 @@ from autograd import numpy as anp
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd import get_static
+from tidy3d.components.autograd.derivative_utils import triangle_mesh_surface_gradient_batch_size
 from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property
@@ -900,26 +901,70 @@ class TriangleMesh(base.Geometry, ABC):
         # threaded interpolators (or None): the legacy volumetric branch materializes
         # its own on demand; the point-cloud path needs none
         interpolators = derivative_info.interpolators
-
-        g = self._sample_set_integrand(
-            sample_set, derivative_info, interpolators, _MESH_SURFACE_KEY
-        )
-
-        # accumulate per-vertex contributions using barycentric weights
-        weights = (sample_set.weights.values * g).real
-        normals = sample_set.normals.values
-        faces = np.asarray(metadata.faces.values).astype(int)
-        bary = np.asarray(metadata.barycentric.values)
-
-        contrib_vec = weights[:, None] * normals
-
         triangle_grads = np.zeros_like(triangles, dtype=config.adjoint.gradient_dtype_float)
-        for vertex_idx in range(3):
-            scaled = contrib_vec * bary[:, vertex_idx][:, None]
-            np.add.at(triangle_grads[:, vertex_idx, :], faces, scaled)
+        num_samples = sample_set.num_points
+        num_freqs = len(np.atleast_1d(derivative_info.frequencies))
+        resolved_batch_size = getattr(derivative_info, "resolved_surface_gradient_batch_size", None)
+        if resolved_batch_size is None:
+            batch_size = self._surface_gradient_batch_size(
+                num_samples=num_samples, num_freqs=num_freqs
+            )
+        else:
+            batch_size = max(1, min(num_samples, resolved_batch_size))
+
+        if derivative_info.point_integrands is not None:
+            gradient_batches = (
+                (
+                    slice(start, stop),
+                    self._sample_set_integrand(
+                        sample_set,
+                        derivative_info,
+                        interpolators,
+                        _MESH_SURFACE_KEY,
+                        sample_slice=slice(start, stop),
+                    ),
+                )
+                for start in range(0, num_samples, batch_size)
+                for stop in (min(start + batch_size, num_samples),)
+            )
+        else:
+            if interpolators is None:
+                interpolators = derivative_info.create_interpolators(
+                    dtype=config.adjoint.gradient_dtype_float
+                )
+            gradient_batches = (
+                (
+                    slice(start, stop),
+                    derivative_info.evaluate_gradient_at_points(
+                        spatial_coords=sample_set.points.values[start:stop],
+                        normals=sample_set.normals.values[start:stop],
+                        perps1=sample_set.perps1.values[start:stop],
+                        perps2=sample_set.perps2.values[start:stop],
+                        interpolators=interpolators,
+                    ),
+                )
+                for start in range(0, num_samples, batch_size)
+                for stop in (min(start + batch_size, num_samples),)
+            )
+
+        for sample_slice, g in gradient_batches:
+            # accumulate per-vertex contributions using barycentric weights
+            weights = (sample_set.weights.values[sample_slice] * g).real
+            normals = sample_set.normals.values[sample_slice]
+            faces = np.asarray(metadata.faces.values[sample_slice]).astype(int)
+            bary = np.asarray(metadata.barycentric.values[sample_slice])
+            contrib_vec = weights[:, None] * normals
+            for vertex_idx in range(3):
+                scaled = contrib_vec * bary[:, vertex_idx][:, None]
+                np.add.at(triangle_grads[:, vertex_idx, :], faces, scaled)
 
         vjps[_MESH_DERIVATIVE_PATH] = triangle_grads
         return vjps
+
+    @staticmethod
+    def _surface_gradient_batch_size(num_samples: int, num_freqs: int) -> int:
+        """Choose a frequency-aware fallback batch size without host inspection."""
+        return triangle_mesh_surface_gradient_batch_size(num_samples, num_freqs)
 
     def _collect_surface_samples(
         self,

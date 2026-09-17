@@ -370,8 +370,8 @@ class AdjointConfig(ConfigSection):
         default=0.75,
         title="Adjoint memory allotment fraction",
         description=(
-            "Fraction of reported available RAM reserved for local adjoint postprocessing "
-            "when auto-selecting frequency chunk sizes."
+            "Fraction of reported available RAM reserved for adjoint postprocessing when "
+            "auto-selecting frequency chunk sizes and TriangleMesh surface-gradient batch sizes."
         ),
         ge=0.0,
         le=1.0,

@@ -214,7 +214,7 @@ grouping.
    * - ``memory_allotment_fraction``
      - ``0.75``
      - Yes
-     - Fraction of reported available RAM reserved for local adjoint postprocessing when auto-selecting frequency chunk sizes (between ``0`` and ``1``).
+     - Fraction of reported available RAM reserved for adjoint postprocessing when auto-selecting frequency chunk sizes and TriangleMesh surface-gradient batch sizes (between ``0`` and ``1``).
    * - ``max_traced_structures``
      - ``500``
      - No
