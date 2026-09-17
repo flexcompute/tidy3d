@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -899,9 +900,10 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         self,
         folder_name: str,
         batch_kwargs: dict[str, Any],
+        use_preprocess_cache: bool = False,
     ) -> Any:
         """Submit the study simulations."""
-        from tidy3d.web import Batch
+        from tidy3d.web import Batch, Job
 
         batch_kwargs = dict(batch_kwargs)
         batch_init_kwargs = {}
@@ -917,17 +919,72 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             if key in batch_kwargs:
                 batch_init_kwargs[key] = batch_kwargs.pop(key)
 
-        batch = Batch(
-            simulations=self.to_simulations(),
+        simulations = self.to_simulations()
+        if not use_preprocess_cache or len(simulations) < 2:
+            batch = Batch(
+                simulations=simulations,
+                folder_name=folder_name,
+                **batch_init_kwargs,
+            )
+            return batch.run(**batch_kwargs)
+
+        producer_name, producer_simulation = next(iter(simulations.items()))
+        producer_init_kwargs = {
+            key: value for key, value in batch_init_kwargs.items() if key in Job.model_fields
+        }
+        producer = Job(
+            simulation=producer_simulation,
+            task_name=producer_name,
             folder_name=folder_name,
+            store_preprocess_cache=True,
+            **producer_init_kwargs,
+        )
+        producer.upload()
+        path_dir = Path(batch_kwargs.get("path_dir", "."))
+        producer_path = path_dir / f"{producer.task_id}.hdf5"
+        producer.start(
+            **{
+                key: batch_kwargs[key]
+                for key in ("priority", "vgpu_allocation", "ignore_memory_limit")
+                if key in batch_kwargs
+            }
+        )
+        producer.monitor()
+        producer.download(path=producer_path)
+
+        consumer_simulations = dict(list(simulations.items())[1:])
+        consumer_batch = Batch(
+            simulations=consumer_simulations,
+            folder_name=folder_name,
+            parent_tasks=dict.fromkeys(consumer_simulations, (producer.task_id,)),
             **batch_init_kwargs,
         )
-        return batch.run(**batch_kwargs)
+        consumer_data = consumer_batch.run(**batch_kwargs)
+
+        complete_jobs = {
+            producer_name: producer._copy_for_serialization(),
+            **{
+                task_name: job._copy_for_serialization()
+                for task_name, job in consumer_batch.jobs.items()
+            },
+        }
+        complete_batch = consumer_batch.updated_copy(
+            simulations=simulations,
+            jobs_cached=complete_jobs,
+        )
+        complete_batch.to_file(path_dir / "batch.hdf5")
+
+        return consumer_data.updated_copy(
+            task_paths={producer_name: str(producer_path), **consumer_data.task_paths},
+            task_ids={producer_name: producer.task_id, **consumer_data.task_ids},
+            cached_tasks={producer_name: False, **(consumer_data.cached_tasks or {})},
+        )
 
     def run(
         self,
         folder_name: str = "dipole_emission",
         return_batch_data: bool = False,
+        use_preprocess_cache: bool = False,
         **batch_kwargs: Any,
     ) -> Any:
         """Run this emission study and return angular radiation intensity.
@@ -948,6 +1005,10 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
             If ``False``, return only the reduced ``DipoleEmissionStudyData``. If
             ``True``, return ``(dipole_data, batch_data)`` so copied diagnostic
             monitors and raw simulation data remain available to the caller.
+        use_preprocess_cache : bool = False
+            If ``True``, run the first simulation as a preprocessing-cache producer,
+            then run the remaining simulations as cache-consuming children. The
+            producer must succeed before the children are submitted.
         **batch_kwargs
             Additional keyword arguments forwarded to ``td.web.Batch(...)`` for
             batch construction options such as ``verbose`` and to
@@ -962,6 +1023,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
         batch_data = self._run_batch(
             folder_name=folder_name,
             batch_kwargs=batch_kwargs,
+            use_preprocess_cache=use_preprocess_cache,
         )
         emission_data = self.compose(batch_data)
         if return_batch_data:

@@ -122,13 +122,21 @@ per-direction angles are read from the ``DipoleEmissionStudyData.theta`` and
        polarizations=("p", "s"),
    )
 
-   data = study.run(folder_name="dipole_emission")
+   data = study.run(
+       folder_name="dipole_emission",
+       use_preprocess_cache=True,
+   )
    angular_transfer = data.angular_radiation_transfer(
        bulk_refractive_index=1.7,
    )
 
 Notes
 -----
+
+Set ``use_preprocess_cache=True`` to run the first angle and polarization task
+as a structural preprocessing-cache producer. The remaining tasks are submitted
+only after that producer succeeds and reuse its cache. The default ``False``
+preserves the ordinary parallel batch workflow.
 
 Dipole-emission submissions require EM Enterprise entitlement in cloud
 environments. The entitlement check is performed by the server-side submission
