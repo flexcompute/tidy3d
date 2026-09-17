@@ -30,8 +30,18 @@ from .base import (
     DEFAULT_MAX_SAMPLES_PER_STEP,
     DEFAULT_TOLERANCE_CELL_FINDING,
     UnstructuredGridDataset,
+    cut_point_neighbor_positions,
     planar_zero_dim_tolerance,
 )
+
+# Separation between the two sides of an interface: a fraction of the sample spacing the
+# grid resolves there, floored by a few ULPs of the coordinate itself. The float64 floor
+# is what makes the two sides distinct coordinates at all, so it always applies; the
+# float32 target is only met when the local spacing leaves room for it, which it does not
+# once a float32 ULP has grown past the spacing the grid resolves.
+INTERFACE_NUDGE_FRACTION = 0.25
+INTERFACE_NUDGE_ULPS_FLOAT64 = 4
+INTERFACE_NUDGE_ULPS_FLOAT32 = 8
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -42,6 +52,73 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.types import ArrayLike, Ax, Bound, Coordinate
+
+
+def _interface_nudge_span(center: float, scale: float, count: int) -> float:
+    """Half-width separating a run of ``count`` coincident samples about ``center``.
+
+    ``scale`` is the sample spacing the grid resolves around the run. The separation aims
+    at a float32 ULP, which keeps the two sides apart through a plot or an export, and
+    never drops below a float64 ULP, which is what makes them distinct at all. Both are
+    then held under ``scale``, so a nudged sample can never reach a neighbour -- where a
+    float32 ULP is coarser than the spacing the grid resolves, only float64 is delivered.
+    """
+
+    # the run is spread across 2 * span, so the float64 floor grows with its length
+    float64_floor = INTERFACE_NUDGE_ULPS_FLOAT64 * count * float(np.spacing(abs(center)))
+    # measured at the local spacing where that exceeds the coordinate: a float32 ULP at
+    # zero is a denormal, which would leave the samples on top of each other
+    magnitude = max(abs(center), scale)
+    if magnitude > float(np.finfo(np.float32).max):
+        # past the float32 range no offset survives the cast, so only float64 is served
+        float32_target = float64_floor
+    else:
+        float32_target = INTERFACE_NUDGE_ULPS_FLOAT32 * float(np.spacing(np.float32(magnitude)))
+    span = max(min(INTERFACE_NUDGE_FRACTION * scale, float32_target), float64_floor)
+    return min(span, 0.5 * scale)
+
+
+def _nudge_repeated_coordinates(coords: np.ndarray) -> np.ndarray:
+    """Separate the coincident coordinates a cut across a material interface leaves.
+
+    The grid holds a node per side of an interface, so the cut returns a sample per
+    side at one coordinate. Left coincident, which side a sample belongs to is carried
+    only by array order, and any sort the caller applies breaks that tie arbitrarily --
+    a band diagram that steps the wrong way. Separating the pair puts the side into the
+    coordinate itself, where no reordering can lose it, at an offset held well under the
+    spacing the grid resolves.
+
+    ``coords`` arrives sorted ascending, as the cut hands it over, and the result is
+    strictly increasing -- enforced here, because it is the only thing standing between a
+    slice and a duplicated coordinate reaching interpolation. That guarantee is a float64
+    one; whether the pair also survives a float32 round-trip depends on the local spacing.
+    """
+
+    nudged = np.asarray(coords, dtype=float).copy()
+    start = 0
+    while start < len(nudged):
+        stop = start + 1
+        while stop < len(nudged) and nudged[stop] == nudged[start]:
+            stop += 1
+        count = stop - start
+        if count > 1:
+            center = nudged[start]
+            left_gap = center - nudged[start - 1] if start > 0 else np.inf
+            right_gap = nudged[stop] - center if stop < len(nudged) else np.inf
+            finite_gaps = [gap for gap in (left_gap, right_gap) if np.isfinite(gap) and gap > 0]
+            # a run with a neighbour on neither side has no resolved spacing to hide under
+            scale = min(finite_gaps) if finite_gaps else max(abs(center), 1.0)
+            span = _interface_nudge_span(center, scale, count)
+            # symmetric, so a run at either end of the array separates like any other
+            nudged[start:stop] = np.linspace(center - span, center + span, count)
+        start = stop
+    if not np.all(np.diff(nudged) > 0):
+        raise DataError(
+            "slice coordinates are not strictly increasing after separating the interface "
+            "samples: they must arrive sorted, and neighbouring samples must be far enough "
+            "apart for float64 to hold the offset between them"
+        )
+    return nudged
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
@@ -277,11 +354,20 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # axis of the resulting line
         slice_axis = 3 - self.normal_axis - axis
 
+        # A line crossing a material interface carries both sides' values at that one
+        # coordinate, so sorting on the coordinate alone leaves their order to the sort's
+        # tie-breaking. Order them by the side their segments reach into, lower side first,
+        # so the profile reads monotonically through the jump.
+        along = points_numpy[:, slice_axis]
+        order = np.lexsort((cut_point_neighbor_positions(slice_vtk, slice_axis), along))
+        along = _nudge_repeated_coordinates(along[order])
+        ordered_values = np.asarray(values.data)[order]
+
         # assemble coords for DataArray
         coords = [None, None, None]
         coords[axis] = [pos]
         coords[self.normal_axis] = [self.normal_pos]
-        coords[slice_axis] = points_numpy[:, slice_axis]
+        coords[slice_axis] = along
         coords_dict = dict(zip("xyz", coords))
         coords_dict.update(self._non_spatial_coords_dict)
 
@@ -289,11 +375,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         new_shape = [1, 1, 1]
         new_shape[slice_axis] = len(values.index)
         new_shape = new_shape + list(np.shape(values.data))[1:]
-        values_reshaped = np.reshape(values.data, new_shape)
+        values_reshaped = np.reshape(ordered_values, new_shape)
 
-        return XrDataArray(values_reshaped, coords=coords_dict, name=self.values.name).sortby(
-            "xyz"[slice_axis]
-        )
+        return XrDataArray(values_reshaped, coords=coords_dict, name=self.values.name)
 
     @requires_vtk
     def line_slice(self, axis: Axis, pos: Coordinate) -> XrDataArray:
@@ -316,9 +400,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
             The line must lie in the plane of the grid. No 3D probing is needed, unlike
             the tetrahedral case: one in-plane slice already reduces the grid to a line.
 
-            Coincident points are merged, as in ``plane_slice``, so a line crossing a
-            material interface carries one value there rather than both sides of a
-            discontinuity such as a band offset.
+            The result holds one sample per mesh node the line crosses. Where the grid
+            carries a node per side of a material interface, both values are kept and
+            their coordinates are separated by a small fraction of the neighboring
+            sample spacing. This preserves the jump while keeping the coordinate unique
+            for selection and interpolation.
         """
 
         if axis == self.normal_axis:

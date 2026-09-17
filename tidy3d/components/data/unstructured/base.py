@@ -56,6 +56,15 @@ DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
 DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 
+# Carries each cell's own index through a plane cut, so a cut point can be traced back to
+# the mesh edge it was interpolated on.
+SOURCE_CELL_ARRAY_NAME = "_tidy3d_source_cell"
+
+# Cut points whose mesh edge is searched for at a time. The search is vectorised over a
+# '(rows, num_edges, 2, 3)' tensor of edge endpoint coordinates, so on a large slice the
+# chunk, not the slice, is what sets its peak memory.
+CUT_POINT_EDGE_SEARCH_CHUNK = 16_384
+
 # Allow boundary roundoff without accepting unstable weights from near-degenerate cells.
 BARYCENTRIC_WEIGHT_TOLERANCE = 1e-6
 
@@ -79,6 +88,200 @@ def _suppress_unstructured_grid_unused_point_warnings() -> Generator[None]:
 def planar_zero_dim_tolerance(size_scale: float) -> float:
     """Tolerance for treating a slice's nominally zero-thickness axis as zero."""
     return max(PLANAR_ZERO_DIM_TOLERANCE_ABS, PLANAR_ZERO_DIM_TOLERANCE_REL * size_scale)
+
+
+def _merge_representative_points(
+    group_of_point: NDArray, source_edges: NDArray, subset: NDArray, num_points: int
+) -> NDArray:
+    """Cut point each cut point merges into: the lowest-indexed one of its merge group.
+
+    Two coincident cut points are the same node when the mesh edges they were interpolated
+    from share an original point, and that relation is transitive -- the several edges
+    meeting at a vertex the plane passes through all collapse together. Solved for the
+    whole slice at once as a connected-components problem: each coincident point is joined
+    to the two ``(coordinate group, original point)`` keys of its edge, so points sharing
+    an original point meet at that key, while a key names one coordinate group by
+    construction and no component can span two coordinates.
+
+    ``source_edges`` holds one row per point selected by ``subset``, in point order.
+    """
+
+    representative = np.arange(num_points)
+    num_rows = len(source_edges)
+    if num_rows == 0:
+        return representative
+
+    # scipy is a dependency but not a module-level import anywhere in the client
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    # one integer per key: both factors are bounded by point counts, so this stays well
+    # inside int64, and packing them lets the labelling sort numbers instead of rows
+    stride = np.int64(source_edges.max()) + 1
+    keys = np.repeat(group_of_point[subset].astype(np.int64), 2) * stride
+    keys += source_edges.ravel()
+    _, key_of_entry = np.unique(keys, return_inverse=True)
+    key_of_entry = key_of_entry.ravel()
+
+    # rows 0..num_rows-1 are the points, the rest are the keys they meet at
+    num_nodes = num_rows + int(key_of_entry.max()) + 1
+    incidence = coo_matrix(
+        (
+            np.ones(len(key_of_entry), dtype=np.int8),
+            (np.repeat(np.arange(num_rows), 2), num_rows + key_of_entry),
+        ),
+        shape=(num_nodes, num_nodes),
+    )
+    _, label_of_row = connected_components(incidence, directed=False, return_labels=True)
+    label_of_row = label_of_row[:num_rows]
+
+    # lowest row of each component, by scattering the rows in reverse so it writes last
+    lowest_row = np.empty(int(label_of_row.max()) + 1, dtype=np.int64)
+    lowest_row[label_of_row[::-1]] = np.arange(num_rows - 1, -1, -1)
+
+    point_of_row = np.flatnonzero(subset)
+    representative[point_of_row] = point_of_row[lowest_row[label_of_row]]
+    return representative
+
+
+@requires_vtk
+def cut_point_neighbor_positions(cut: vtkPolyData, axis: Axis) -> NDArray:
+    """Mean position along ``axis`` of the points each point shares a line segment with.
+
+    Two points of a jump pair sit at one coordinate, so the coordinate alone cannot order
+    them. Their segments can: each connects only to its own side of the interface, so the
+    point whose neighbors lie lower is the lower side's value. Points with no segment
+    report their own position.
+    """
+
+    points = vtk["vtk_to_numpy"](cut.GetPoints().GetData())
+    totals = np.zeros(len(points))
+    counts = np.zeros(len(points))
+
+    lines = cut.GetLines()
+    if lines is not None and lines.GetNumberOfCells() > 0:
+        connectivity = vtk["vtk_to_numpy"](lines.GetConnectivityArray())
+        offsets = vtk["vtk_to_numpy"](lines.GetOffsetsArray())
+        sizes = np.diff(offsets)
+        cell_of_entry = np.repeat(np.arange(len(sizes)), sizes)
+        own = points[connectivity, axis]
+
+        # a point's neighbors are the rest of its cell, so the cell's total less the point
+        # itself. A plane laid on a mesh node cuts zero-length segments that list one point
+        # twice, and a point is not its own neighbor, so every copy of it is discounted.
+        entry_key = cell_of_entry * len(points) + connectivity
+        _, group_of_entry, copies = np.unique(entry_key, return_inverse=True, return_counts=True)
+        copies = copies[group_of_entry]
+
+        cell_totals = np.bincount(cell_of_entry, weights=own, minlength=len(sizes))
+        totals = np.bincount(
+            connectivity, weights=cell_totals[cell_of_entry] - copies * own, minlength=len(points)
+        )
+        counts = np.bincount(
+            connectivity, weights=sizes[cell_of_entry] - copies, minlength=len(points)
+        )
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(counts > 0, totals / np.maximum(counts, 1), points[:, axis])
+
+
+@requires_vtk
+def _cut_cell_point_pairs(cut: vtkPolyData) -> tuple[NDArray, NDArray]:
+    """Every (cut point, original cell) incidence in the cut, as two parallel arrays.
+
+    The cutter is asked not to merge its points, so a point is normally listed by exactly
+    one cut cell. Several means the cutter merged anyway, which the caller checks rather
+    than assumes benign: cut points merged across a material interface name mesh edges
+    with no node in common.
+    """
+
+    source_array = cut.GetCellData().GetArray(SOURCE_CELL_ARRAY_NAME)
+    if source_array is None:
+        raise DataError(
+            f"Cut output carries no '{SOURCE_CELL_ARRAY_NAME}' cell array, so its points cannot "
+            "be traced back to the cells they were cut from."
+        )
+    source_of_cut_cell = vtk["vtk_to_numpy"](source_array)
+
+    points, sources = [], []
+    first_cut_cell = 0
+    for cell_array in _polydata_cell_arrays(cut):
+        num_cut_cells = cell_array.GetNumberOfCells()
+        if num_cut_cells == 0:
+            continue
+        connectivity = vtk["vtk_to_numpy"](cell_array.GetConnectivityArray())
+        offsets = vtk["vtk_to_numpy"](cell_array.GetOffsetsArray())
+        points.append(connectivity)
+        # VTK numbers cells across the arrays in turn, so each array continues the slice
+        sources.append(
+            np.repeat(
+                source_of_cut_cell[first_cut_cell : first_cut_cell + num_cut_cells],
+                np.diff(offsets),
+            )
+        )
+        first_cut_cell += num_cut_cells
+
+    if not points:
+        empty = np.zeros(0, dtype=np.int64)
+        return empty, empty
+    return np.concatenate(points), np.concatenate(sources)
+
+
+@requires_vtk
+def _polydata_cell_arrays(polydata: vtkPolyData) -> list[vtkCellArray]:
+    """The polydata's cell arrays, in the order VTK numbers their cells."""
+
+    arrays = [polydata.GetVerts(), polydata.GetLines(), polydata.GetPolys(), polydata.GetStrips()]
+    return [array for array in arrays if array is not None]
+
+
+@requires_vtk
+def _rebuild_polydata(
+    cut: vtkPolyData, points: NDArray, point_remap: NDArray, kept: NDArray
+) -> vtkPolyData:
+    """Rebuild ``cut`` on a reduced point set, re-indexing cells through ``point_remap``.
+
+    Every buffer handed to VTK is deep-copied: the numpy arrays here are locals, and a
+    shallow wrapper would outlive them.
+    """
+
+    mod = vtk["mod"]
+    out = mod.vtkPolyData()
+
+    vtk_points = mod.vtkPoints()
+    vtk_points.SetData(vtk["numpy_to_vtk"](points, deep=True))
+    out.SetPoints(vtk_points)
+
+    setters = {
+        "Verts": out.SetVerts,
+        "Lines": out.SetLines,
+        "Polys": out.SetPolys,
+        "Strips": out.SetStrips,
+    }
+    for name, setter in setters.items():
+        cell_array = getattr(cut, f"Get{name}")()
+        if cell_array is None or cell_array.GetNumberOfCells() == 0:
+            continue
+        connectivity = vtk["vtk_to_numpy"](cell_array.GetConnectivityArray())
+        offsets = vtk["vtk_to_numpy"](cell_array.GetOffsetsArray())
+        rebuilt = mod.vtkCellArray()
+        rebuilt.SetData(
+            vtk["numpy_to_vtkIdTypeArray"](offsets.astype(vtk["id_type"]), deep=True),
+            vtk["numpy_to_vtkIdTypeArray"](
+                point_remap[connectivity].astype(vtk["id_type"]), deep=True
+            ),
+        )
+        setter(rebuilt)
+
+    source_data, target_data = cut.GetPointData(), out.GetPointData()
+    for array_ind in range(source_data.GetNumberOfArrays()):
+        source_array = source_data.GetArray(array_ind)
+        values = vtk["vtk_to_numpy"](source_array)[kept]
+        target_array = vtk["numpy_to_vtk"](np.ascontiguousarray(values), deep=True)
+        target_array.SetName(source_array.GetName())
+        target_data.AddArray(target_array)
+
+    return out
 
 
 def _as_sequence_selector(value: Any) -> Any:
@@ -120,6 +323,15 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     @abstractmethod
     def _cell_num_vertices(cls) -> PositiveInt:
         """Number of vertices in a cell."""
+
+    @classmethod
+    def _cell_edges(cls) -> NDArray:
+        """Vertex-index pairs of a cell's edges, as (num_edges, 2)."""
+        num_vertices = cls._cell_num_vertices()
+        return np.array(
+            [(i, j) for i in range(num_vertices - 1) for j in range(i + 1, num_vertices)],
+            dtype=int,
+        )
 
     """ Validators """
 
@@ -947,19 +1159,282 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         plane.SetOrigin(origin[0], origin[1], origin[2])
         plane.SetNormal(normal[0], normal[1], normal[2])
 
+        # cut points coincide wherever cells share an edge, whether or not the cutter merged
+        # them itself. Tagging each cell with its own index -- cell data passes through the
+        # cutter untouched -- is what lets the merge below tell those apart from the two sides
+        # of a material interface, which are also coincident but not the same node. See
+        # '_merge_coincident_cut_points'.
+        grid = self._vtk_obj
+        source_cells = vtk["numpy_to_vtk"](
+            np.arange(grid.GetNumberOfCells(), dtype=np.int64), deep=True
+        )
+        source_cells.SetName(SOURCE_CELL_ARRAY_NAME)
+        grid.GetCellData().AddArray(source_cells)
+
         # create cutter
         cutter = vtk["mod"].vtkPlaneCutter()
         cutter.SetPlane(plane)
-        cutter.SetInputData(self._vtk_obj)
+        cutter.SetInputData(grid)
         cutter.InterpolateAttributesOn()
+        # the dataset this cut becomes holds triangles only, and some VTK versions cut a
+        # cell into a polygon unless asked otherwise
+        cutter.GeneratePolygonsOff()
+        # merging by coordinate folds the two sides of a material interface into one point
+        # before the provenance below can tell them apart, and the survivor is then alone at
+        # its coordinate, so nothing downstream can even detect the loss. Off is the default
+        # here, but the cut is not left resting on it. A version that merges anyway is caught
+        # by '_check_shared_cut_point_sources' rather than trusted.
+        cutter.MergePointsOff()
         cutter.Update()
 
-        # clean up the slice
-        cleaner = vtk["mod"].vtkCleanPolyData()
-        cleaner.SetInputData(cutter.GetOutput())
-        cleaner.Update()
+        merged = self._merge_coincident_cut_points(cutter.GetOutput(), axis=axis, pos=pos)
+        self._warn_if_slice_drops_a_side(merged, axis=axis, pos=pos)
 
-        return cleaner.GetOutput()
+        return merged
+
+    @requires_vtk
+    def _merge_coincident_cut_points(self, cut: vtkPolyData, axis: Axis, pos: float) -> vtkPolyData:
+        """Collapse cut points that are the same mesh node, keeping genuine jumps apart.
+
+        Replaces ``vtkCleanPolyData``, which merges by coordinate alone. Where the grid
+        carries per-zone duplicate nodes -- how a heterojunction holds its band offset, or
+        a contact resistance its temperature step -- the cuts of the cells on either side
+        land on one coordinate with different values, and merging by geometry keeps an
+        arbitrary one of them.
+
+        Two coincident cut points are the same node exactly when the mesh edges they were
+        interpolated from share an original point. Cells on one side of an interface share
+        the edge they both cut; cells across it share nothing, because their nodes are
+        duplicated. That test needs no tolerance, and it also merges the several edges
+        meeting at a vertex when the plane passes through one.
+        """
+
+        num_points = cut.GetNumberOfPoints()
+        if num_points == 0:
+            return cut
+
+        points = np.array(vtk["vtk_to_numpy"](cut.GetPoints().GetData()), copy=True)
+
+        # group by exact coordinate, as 'vtkCleanPolyData' does with its default tolerance.
+        # Labelled through a lexicographic sort rather than 'np.unique(points, axis=0)',
+        # which reads each row as raw bytes through a void view -- that both copies the
+        # array and separates values that compare equal, -0.0 from 0.0 among them.
+        order = np.lexsort(points.T)
+        ordered = points[order]
+        opens_group = np.empty(num_points, dtype=bool)
+        opens_group[0] = True
+        np.any(ordered[1:] != ordered[:-1], axis=1, out=opens_group[1:])
+        group_of_point = np.empty(num_points, dtype=np.int64)
+        group_of_point[order] = np.cumsum(opens_group) - 1
+        del order, ordered, opens_group
+
+        # a point alone at its coordinate has nothing to merge with, so the source-edge
+        # search -- which holds a coordinate tensor per candidate cell edge, this slice's
+        # dominant temporary -- is asked about the rest only
+        coincident = np.bincount(group_of_point)[group_of_point] > 1
+
+        # the cutter is asked not to merge its points, so a point listed by several cut cells
+        # means it merged anyway -- and such a point is alone at its coordinate, because the
+        # merge is what removed its twin. 'coincident' would therefore step over exactly the
+        # points whose provenance is in doubt, so they are carried in as well and the check
+        # below sees them. With merging off none exist and this is 'coincident' unchanged.
+        shared = np.bincount(_cut_cell_point_pairs(cut)[0], minlength=num_points) > 1
+        subset = coincident | shared
+
+        source_edges = self._cut_point_source_edges(cut, points, subset, axis, pos)
+        representative = _merge_representative_points(
+            group_of_point, source_edges, subset, num_points
+        )
+
+        kept = np.unique(representative)
+        remap = np.zeros(num_points, dtype=np.int64)
+        remap[kept] = np.arange(len(kept))
+        return _rebuild_polydata(cut, points[kept], remap[representative], kept)
+
+    @requires_vtk
+    def _cut_point_source_edges(
+        self, cut: vtkPolyData, cut_points: NDArray, subset: NDArray, axis: Axis, pos: float
+    ) -> NDArray:
+        """Original point indices of the mesh edge each selected cut point sits on.
+
+        ``subset`` is a boolean mask over ``cut_points``; the result is one row per selected
+        point, in point order. A point that landed on a vertex is on several edges at once
+        and gets an arbitrary one of them; the vertex is an endpoint of each, which is all
+        the merge compares.
+        """
+
+        point_entries, source_entries = _cut_cell_point_pairs(cut)
+
+        # A point listed by several cut cells is resolved once, not once per use: the edge
+        # under every (point, cell) incidence of the subset is found in a single pass, which
+        # is then both what the agreement check reads and what the merge reduces.
+        selected = subset[point_entries]
+        point, source = point_entries[selected], source_entries[selected]
+        del point_entries, source_entries, selected
+        edges = self._mesh_edges_of_cut_points(cut_points[point], source, axis, pos)
+
+        self._check_shared_cut_point_sources(point, edges)
+
+        # one row per selected point, in point order. The incidences of a shared point name
+        # one edge between them -- the check above is exactly that -- so the last write wins
+        # without the choice mattering.
+        found = np.zeros((np.count_nonzero(subset), 2), dtype=edges.dtype)
+        row_of_point = np.cumsum(subset) - 1
+        found[row_of_point[point]] = edges
+        return found
+
+    def _mesh_edges_of_cut_points(
+        self, cut_points: NDArray, source_cell: NDArray, axis: Axis, pos: float
+    ) -> NDArray:
+        """Mesh edge under each cut point, given the cell it was cut from, as ``(N, 2)``.
+
+        The cut point sits on the one edge of its cell that the plane crosses beneath it.
+        Where an edge crosses is fixed by its two endpoints' ``axis`` coordinates alone, so
+        the search reads that single column, places the crossing along the edge, and then
+        compares only the two in-plane coordinates -- every candidate already agrees with the
+        cut point on the third, which is ``pos``. Edges the plane does not reach are excluded
+        outright rather than measured, which is also what keeps an edge parallel to ``axis``
+        from matching on its in-plane coordinates alone.
+
+        Walked in chunks: these arrays are the slice's dominant temporaries, and a chunk
+        bounds them at a fixed cost while leaving the result untouched.
+        """
+
+        cell_vertices = self.cells.data
+        points_3d = np.asarray(self._points_3d_array)
+        cell_edges = self._cell_edges()
+        # the cutter works in 3D, so read the 3D form of the grid's points -- a triangular
+        # grid stores only its two in-plane columns
+        in_plane = [other for other in range(3) if other != axis]
+        along = points_3d[:, axis]
+
+        found = np.empty((len(cut_points), 2), dtype=cell_vertices.dtype)
+        for start in range(0, len(cut_points), CUT_POINT_EDGE_SEARCH_CHUNK):
+            rows = slice(start, start + CUT_POINT_EDGE_SEARCH_CHUNK)
+            # (rows, num_edges, 2) original point indices of the candidate edges
+            edges = cell_vertices[source_cell[rows]][:, cell_edges]
+            behind, ahead = edges[:, :, 0], edges[:, :, 1]
+
+            low, high = along[behind], along[ahead]
+            span = high - low
+            reaches_plane = (np.minimum(low, high) <= pos) & (pos <= np.maximum(low, high))
+
+            with np.errstate(invalid="ignore", divide="ignore"):
+                frac = np.where(span != 0, (pos - low) / span, 0.0)
+            np.clip(frac, 0.0, 1.0, out=frac)
+
+            # squared distance from the cut point to where the plane meets each candidate,
+            # over the coordinates that can still differ. The two are accumulated one at a
+            # time, so nothing wider than '(rows, num_edges)' is ever held and the grid's
+            # points are read through a column view rather than gathered into a copy.
+            residual = np.zeros_like(frac)
+            for coordinate in in_plane:
+                column = points_3d[:, coordinate]
+                crossing = column[behind]
+                offsets = column[ahead] - crossing
+                offsets *= frac
+                offsets += crossing
+                offsets -= cut_points[rows, coordinate][:, None]
+                # a square root would not move the minimum
+                offsets *= offsets
+                residual += offsets
+
+            # the cut point lies on exactly one edge of its cell; pick that edge
+            on_edge = np.argmin(np.where(reaches_plane, residual, np.inf), axis=1)
+            found[rows] = edges[np.arange(len(on_edge)), on_edge]
+
+        return found
+
+    def _check_shared_cut_point_sources(self, point: NDArray, edges: NDArray) -> None:
+        """Check that the cut cells sharing a cut point place it on a common mesh node.
+
+        The merge keeps one incidence's edge and discards the rest, which is sound exactly
+        when they all name a node in common. A point interior to an edge is named by that one
+        edge; a point on a vertex is named by each of the edges meeting there, whose common
+        endpoint is the vertex -- and the endpoints are all the merge goes on to compare. So
+        the edges need not be equal, which they are not once the cutter merges points itself.
+
+        ``point`` and ``edges`` describe the (point, cell) incidences of the merged subset
+        alone -- the points whose edge is actually read -- so a cut whose points are all
+        unshared, or all alone at their coordinate, pays nothing beyond the pass the merge
+        already needed.
+        """
+
+        if len(point) == 0:
+            return
+
+        order = np.argsort(point, kind="stable")
+        point, edge = point[order], edges[order]
+        first = np.flatnonzero(np.concatenate(([True], point[1:] != point[:-1])))
+        counts = np.diff(np.concatenate((first, [len(point)])))
+
+        def every_incidence_touches(side: int) -> NDArray:
+            """Whether every incidence of each point names the first one's ``side`` node."""
+            node = np.repeat(edge[first, side], counts)
+            return np.logical_and.reduceat((edge[:, 0] == node) | (edge[:, 1] == node), first)
+
+        # a node common to every incidence has to be one of the first incidence's two
+        if not np.all(every_incidence_touches(0) | every_incidence_touches(1)):
+            raise DataError(
+                "Cut cells sharing a cut point place it on mesh edges with no node in common, "
+                "so the node behind that point is ambiguous and coincident cut points cannot "
+                "be merged reliably. The cut asks 'vtkPlaneCutter' not to merge its points, so "
+                "a shared point means the installed VTK merged them despite that, folding the "
+                "two sides of a material interface into one; slicing across a material "
+                "interface is not supported on this VTK."
+            )
+
+    @requires_vtk
+    def _warn_if_slice_drops_a_side(self, cut: vtkPolyData, axis: Axis, pos: float) -> None:
+        """Warn when the slice is coplanar with per-zone duplicate nodes.
+
+        A plane lying exactly on a material interface crosses no cell there: it grazes the
+        coplanar faces of both sides, and the cutter keeps whichever the plane normal
+        favours -- which depends on where the interface sits inside the grid's bounds. The
+        result then reports one material with no way to tell which.
+
+        Detected by comparing what survived: a duplicate node group the plane merely
+        crosses keeps one cut point per side, while a coplanar one comes back short.
+        Nothing downstream can recover the missing side, and the grid alone cannot say
+        which side the caller wanted, so this reports the situation rather than guessing.
+        """
+
+        points_3d = np.asarray(self._points_3d_array)
+        in_plane = points_3d[:, axis] == pos
+        if np.count_nonzero(in_plane) < 2:
+            return
+
+        duplicated, counts = np.unique(points_3d[in_plane], axis=0, return_counts=True)
+        duplicated = duplicated[counts > 1]
+        if len(duplicated) == 0:
+            return
+
+        cut_points = (
+            np.array(vtk["vtk_to_numpy"](cut.GetPoints().GetData()), copy=True)
+            if cut.GetNumberOfPoints() > 0
+            else np.zeros((0, 3))
+        )
+        survivors, survivor_counts = (
+            np.unique(cut_points, axis=0, return_counts=True)
+            if len(cut_points) > 0
+            else (np.zeros((0, 3)), np.zeros(0, dtype=int))
+        )
+
+        # one pass instead of a survivor rescan per node: label both sets against their
+        # common unique rows, then read each duplicated node's survivor count by index
+        rows, labels = np.unique(
+            np.concatenate([duplicated, survivors]), axis=0, return_inverse=True
+        )
+        labels = labels.ravel()
+        found = np.zeros(len(rows), dtype=np.int64)
+        found[labels[len(duplicated) :]] = survivor_counts
+        if np.any(found[labels[: len(duplicated)]] < counts[counts > 1]):
+            log.warning(
+                f"The slice at {'xyz'[axis]} = {pos} lies along a material interface, where "
+                "the grid holds one node per side. Only one side's cells are cut there, so "
+                "the result reports a single material and which one is not predictable. "
+                "Offset the slice into the zone you want."
+            )
 
     @abstractmethod
     @requires_vtk
