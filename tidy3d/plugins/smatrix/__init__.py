@@ -1,67 +1,50 @@
-"""Imports from scattering matrix plugin."""
+"""Imports for the modal scattering-matrix plugin."""
 
 from __future__ import annotations
 
-import warnings
-
-from tidy3d.plugins.smatrix.component_modelers.base import (
-    AbstractComponentModeler,
-)
+from tidy3d.plugins.smatrix.component_modelers.base import AbstractComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.terminal import (
-    DirectivityMonitorSpec,
-    ModelerLowFrequencySmoothingSpec,
-    TerminalComponentModeler,
-)
 from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
-from tidy3d.plugins.smatrix.data.data_array import (
-    ModalPortDataArray,
-    PortDataArray,
-    TerminalPortDataArray,
-)
+from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
-from tidy3d.plugins.smatrix.data.terminal import (
-    MicrowaveSMatrixData,
-    TerminalComponentModelerData,
-)
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
-from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
-from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import AstigmaticGaussianPort, GaussianPort, Port
-from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
 
-# Instantiate on plugin import till we unite with toplevel
-warnings.filterwarnings(
-    "once",
-    message="RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'.",
-    category=FutureWarning,
-)
-
-# Legacy type to support previous flows
 ComponentModeler = ModalComponentModeler
 
-__all__ = [
-    "AbstractComponentModeler",
-    "AstigmaticGaussianPort",
+_MIGRATED_RF_NAMES = {
     "CoaxialLumpedPort",
-    "ComponentModeler",
-    "ComponentModelerDataType",
-    "ComponentModelerType",
     "DirectivityMonitorSpec",
-    "GaussianPort",
     "ImpedanceSpec",
     "LumpedPort",
     "MicrowaveSMatrixData",
-    "ModalComponentModeler",
-    "ModalComponentModelerData",
-    "ModalPortDataArray",
     "ModelerLowFrequencySmoothingSpec",
-    "Port",
     "PortDataArray",
     "TerminalComponentModeler",
     "TerminalComponentModelerData",
     "TerminalPortDataArray",
     "TerminalWavePort",
     "WavePort",
+}
+
+
+def __getattr__(name: str) -> None:
+    if name in _MIGRATED_RF_NAMES:
+        from tidy3d._rf_migration import missing_rf_attribute
+
+        missing_rf_attribute(__name__, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "AbstractComponentModeler",
+    "AstigmaticGaussianPort",
+    "ComponentModeler",
+    "ComponentModelerDataType",
+    "ComponentModelerType",
+    "GaussianPort",
+    "ModalComponentModeler",
+    "ModalComponentModelerData",
+    "ModalPortDataArray",
+    "Port",
 ]

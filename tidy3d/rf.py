@@ -1,6 +1,22 @@
+"""RF and microwave classes retained in Tidy3D.
+
+New RF development continues in Flexcompute RF; install ``flexcompute-rf`` and
+import ``flexcompute.rf.tidy3d``. The classes still reachable here are the ones
+defined under ``tidy3d.components``, also available from the top level where
+they have a name there; they are deprecated and will be removed in Tidy3D 3.0.
+The plugin-owned RF classes -- the antenna array calculators, the lobe
+measurer, the RF material library, the microstrip models, and the terminal
+component modeler with its ports and data -- are already gone; import them from
+``flexcompute.rf.tidy3d``.
+"""
+
 from __future__ import annotations
 
-import warnings
+from tidy3d._rf_migration import (
+    missing_rf_attribute,
+    relocated_rf_attribute,
+    warn_rf_deprecated,
+)
 
 # Boundary
 from tidy3d.components.boundary import InternalAbsorber
@@ -47,6 +63,9 @@ from tidy3d.components.microwave.impedance_calculator import (
     ImpedanceCalculator,
     VoltageIntegralType,
 )
+
+# Lumped port impedance specification
+from tidy3d.components.microwave.impedance_spec import ImpedanceSpec
 
 # Microwave mode spec
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
@@ -104,57 +123,62 @@ from tidy3d.components.source.frame import PECFrame
 
 # Subpixel spec
 from tidy3d.components.subpixel_spec import SurfaceImpedance
-from tidy3d.plugins.microwave import models
-from tidy3d.plugins.microwave.array_factor import (
-    BlackmanHarrisWindow,
-    BlackmanWindow,
-    ChebWindow,
-    HammingWindow,
-    HannWindow,
-    KaiserWindow,
-    RadialTaper,
-    RectangularAntennaArrayCalculator,
-    RectangularTaper,
-    TaylorWindow,
-)
-from tidy3d.plugins.microwave.lobe_measurer import LobeMeasurer
-from tidy3d.plugins.microwave.rf_material_library import rf_material_library
-from tidy3d.plugins.smatrix.component_modelers.base import (
-    AbstractComponentModeler,
-)
-from tidy3d.plugins.smatrix.component_modelers.terminal import (
-    DirectivityMonitorSpec,
-    ModelerLowFrequencySmoothingSpec,
-    TerminalComponentModeler,
-)
-from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
-from tidy3d.plugins.smatrix.data.data_array import (
-    PortDataArray,
-    TerminalPortDataArray,
-)
-from tidy3d.plugins.smatrix.data.terminal import (
-    MicrowaveSMatrixData,
-    TerminalComponentModelerData,
-)
-from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
-from tidy3d.plugins.smatrix.ports.base_lumped import ImpedanceSpec
-from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
 
 # Backwards compatibility
 CurrentIntegralTypes = CurrentIntegralType
 VoltageIntegralTypes = VoltageIntegralType
-# Instantiate on plugin import till we unite with toplevel
-warnings.filterwarnings(
-    "once",
-    message="RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'.",
-    category=FutureWarning,
-)
 
+# Shared photonics S-matrix classes that ``tidy3d.rf`` used to re-export. They
+# stayed in Tidy3D with the modal modeler, so point at them rather than
+# Flexcompute RF.
+_RELOCATED_SMATRIX_NAMES = {
+    "AbstractComponentModeler",
+    "ComponentModelerDataType",
+    "ComponentModelerType",
+}
+
+# Plugin-owned RF classes that Flexcompute RF now owns. They were exported from
+# here before the move, so name them explicitly rather than letting access fail
+# with a bare ``AttributeError``.
+_MIGRATED_RF_NAMES = {
+    "BlackmanHarrisWindow",
+    "BlackmanWindow",
+    "ChebWindow",
+    "CoaxialLumpedPort",
+    "DirectivityMonitorSpec",
+    "HammingWindow",
+    "HannWindow",
+    "KaiserWindow",
+    "LobeMeasurer",
+    "LumpedPort",
+    "MicrowaveSMatrixData",
+    "ModelerLowFrequencySmoothingSpec",
+    "PortDataArray",
+    "RadialTaper",
+    "RectangularAntennaArrayCalculator",
+    "RectangularTaper",
+    "TaylorWindow",
+    "TerminalComponentModeler",
+    "TerminalComponentModelerData",
+    "TerminalPortDataArray",
+    "TerminalWavePort",
+    "WavePort",
+    "models",
+    "rf_material_library",
+}
+
+
+def __getattr__(name: str) -> None:
+    if name in _RELOCATED_SMATRIX_NAMES:
+        relocated_rf_attribute(__name__, name, f"tidy3d.plugins.smatrix.{name}")
+    if name in _MIGRATED_RF_NAMES:
+        missing_rf_attribute(__name__, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+warn_rf_deprecated(__name__)
 
 __all__ = [
-    "AbstractComponentModeler",
     "AdmittanceNetwork",
     "AntennaMetricsData",
     "AutoImpedanceSpec",
@@ -167,14 +191,8 @@ __all__ = [
     "BasebandGaussianPulse",
     "BasebandRectangularPulse",
     "BasebandStep",
-    "BlackmanHarrisWindow",
-    "BlackmanWindow",
-    "ChebWindow",
     "CircuitImpedanceModel",
-    "CoaxialLumpedPort",
     "CoaxialLumpedResistor",
-    "ComponentModelerDataType",
-    "ComponentModelerType",
     "CompositeCurrentIntegral",
     "CompositeCurrentIntegralSpec",
     "CornerFinderSpec",
@@ -187,48 +205,28 @@ __all__ = [
     "CustomImpedanceSpec",
     "DirectivityData",
     "DirectivityMonitor",
-    "DirectivityMonitorSpec",
     "HammerstadSurfaceRoughness",
-    "HammingWindow",
-    "HannWindow",
     "HuraySurfaceRoughness",
     "ImpedanceCalculator",
     "ImpedanceSpec",
     "InternalAbsorber",
-    "KaiserWindow",
     "LayerRefinementSpec",
     "LinearLumpedElement",
-    "LobeMeasurer",
     "LossyMetalMedium",
     "LowFrequencySmoothingSpec",
     "LumpedCircuitComponent",
-    "LumpedPort",
     "LumpedResistor",
     "MicrowaveModeData",
     "MicrowaveModeMonitor",
     "MicrowaveModeSolverData",
     "MicrowaveModeSolverMonitor",
     "MicrowaveModeSpec",
-    "MicrowaveSMatrixData",
     "MicrowaveTerminalSource",
-    "ModelerLowFrequencySmoothingSpec",
     "PECFrame",
-    "PortDataArray",
     "RLCNetwork",
-    "RadialTaper",
-    "RectangularAntennaArrayCalculator",
     "RectangularLumpedElement",
-    "RectangularTaper",
     "SurfaceImpedance",
     "SurfaceImpedanceFitterParam",
-    "TaylorWindow",
-    "TerminalComponentModeler",
-    "TerminalComponentModelerData",
-    "TerminalPortDataArray",
-    "TerminalWavePort",
     "VoltageIntegralTypes",
-    "WavePort",
-    "models",
     "path_integrals_from_lumped_element",
-    "rf_material_library",
 ]

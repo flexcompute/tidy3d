@@ -48,7 +48,6 @@ Other Simulation Types
    :template: module.rst
 
    plugins.smatrix.ComponentModeler
-   plugins.smatrix.TerminalComponentModeler
 
 ~~~~
 

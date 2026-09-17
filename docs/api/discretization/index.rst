@@ -191,7 +191,6 @@ More advanced users may opt to define a custom :class:`.SubpixelSpec`. The custo
        dielectric=PolarizedAveraging(),
        metal=Staircasing(),
        pec=PECConformal(),
-       lossy_metal=SurfaceImpedance(),
    )
 
 In the example above, the chosen method of subpixel averaging is specified for each material type. For more details on each subpixel averaging method, please refer to their respective documentation pages below. 
@@ -206,7 +205,6 @@ In the example above, the chosen method of subpixel averaging is specified for e
    PolarizedAveraging
    ContourPathAveraging
    PECConformal
-   SurfaceImpedance
 
 .. seealso::
 

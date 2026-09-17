@@ -43,8 +43,6 @@ These are some of the classes that are used to organize Tidy3D components, but a
    components.monitor.PlanarMonitor
    components.monitor.SurfaceIntegrationMonitor
    components.monitor.AbstractFieldProjectionMonitor
-   components.lumped_element.LumpedElement
-   components.lumped_element.RectangularLumpedElement
    components.grid.grid_spec.GridSpec1d
    components.data.sim_data.AbstractYeeGridSimulationData
    components.data.sim_data.SimulationData
@@ -63,20 +61,14 @@ These are some of the classes that are used to organize Tidy3D components, but a
    components.grid.grid_spec.AbstractAutoGrid
    components.material.tcad.charge.AbstractChargeMedium
    components.material.tcad.heat.AbstractHeatMedium
-   components.medium.AbstractSurfaceRoughness
    components.mode_spec.AbstractModeSpec
    components.base_sim.monitor.AbstractMonitor
    components.monitor.AbstractGaussianOverlapMonitor
    components.monitor.AbstractMediumPropertyMonitor
    components.monitor.AbstractModeMonitor
-   components.microwave.monitor.MicrowaveModeMonitorBase
-   components.microwave.path_integrals.specs.base.AbstractAxesRH
    components.source.field.AbstractAngularSpec
    components.tcad.data.sim_data.AbstractHeatChargeSimulationData
    components.tcad.doping.AbstractDopingBox
    plugins.autograd.invdes.filters.AbstractFilter
    plugins.invdes.base.InvdesBaseModel
    plugins.invdes.design.AbstractInverseDesign
-   plugins.microwave.array_factor.AbstractAntennaArrayCalculator
-   plugins.smatrix.ports.base_lumped.AbstractLumpedPort
-   plugins.smatrix.ports.base_terminal.AbstractTerminalPort

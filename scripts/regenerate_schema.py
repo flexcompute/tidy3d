@@ -197,7 +197,6 @@ def _load_tidy3d_models():
             ModeSimulation,
             Simulation,
         )
-        from tidy3d.plugins.smatrix import TerminalComponentModeler
     except Exception as e:
         print(
             f"Error: Failed to import from 'tidy3d'. Ensure it's installed. Details: {e}",
@@ -210,7 +209,6 @@ def _load_tidy3d_models():
         "EMESimulation": EMESimulation,
         "HeatSimulation": HeatSimulation,
         "HeatChargeSimulation": HeatChargeSimulation,
-        "TerminalComponentModeler": TerminalComponentModeler,
     }
 
 

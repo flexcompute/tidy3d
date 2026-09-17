@@ -22,18 +22,8 @@ from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
 from tidy3d.plugins.mode.mode_solver import ModeSolver
-from tidy3d.plugins.smatrix.component_modelers.modal import (
-    ModalComponentModeler,
-)
-from tidy3d.plugins.smatrix.component_modelers.terminal import (
-    TerminalComponentModeler,
-)
-from tidy3d.plugins.smatrix.data.modal import (
-    ModalComponentModelerData,
-)
-from tidy3d.plugins.smatrix.data.terminal import (
-    TerminalComponentModelerData,
-)
+from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
+from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
@@ -50,7 +40,6 @@ TYPE_MAP: dict[type, TaskType] = {
     ModeSimulation: TaskType.MODE,
     VolumeMesher: TaskType.VOLUME_MESH,
     ModalComponentModeler: TaskType.MODAL_CM,
-    TerminalComponentModeler: TaskType.TERMINAL_CM,
 }
 
 
@@ -238,7 +227,6 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                     ModeSolverData,
                     MicrowaveModeSolverData,
                     ModeSimulationData,
-                    TerminalComponentModelerData,
                     ModalComponentModelerData,
                 ),
             )

@@ -6,9 +6,7 @@ from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
-from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.web import Batch
 from tidy3d.web.api.autograd.types import NumericalStructureConfig
 
@@ -24,18 +22,16 @@ DEFAULT_DATA_DIR = "."
 
 
 def compose_modeler_data(
-    modeler: ModalComponentModeler | TerminalComponentModeler,
+    modeler: ModalComponentModeler,
     indexed_sim_data: SimulationDataMap,
 ) -> ComponentModelerDataType:
     """Create a modeler data object from a modeler and indexed simulation data.
 
-    This function acts as a dispatcher, creating either a
-    `ModalComponentModelerData` or `TerminalComponentModelerData` object based on
-    the type of the input `modeler`.
+    This function creates a `ModalComponentModelerData` object.
 
     Parameters
     ----------
-    modeler : ModalComponentModeler | TerminalComponentModeler
+    modeler : ModalComponentModeler
         The component modeler for which to create the data object.
     indexed_sim_data : SimulationDataMap
         A map of simulation data indexed by port names.
@@ -50,13 +46,9 @@ def compose_modeler_data(
     TypeError
         If the provided `modeler` is not a recognized type.
     """
-    if isinstance(modeler, ModalComponentModeler):
-        modeler_data = ModalComponentModelerData(modeler=modeler, data=indexed_sim_data)
-    elif isinstance(modeler, TerminalComponentModeler):
-        modeler_data = TerminalComponentModelerData(modeler=modeler, data=indexed_sim_data)
-    else:
+    if not isinstance(modeler, ModalComponentModeler):
         raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
-    return modeler_data
+    return ModalComponentModelerData(modeler=modeler, data=indexed_sim_data)
 
 
 def compose_modeler_data_from_batch_data(
@@ -72,8 +64,7 @@ def compose_modeler_data_from_batch_data(
     Parameters
     ----------
     modeler : ComponentModelerType
-        The component modeler, which can be either a `ModalComponentModeler` or
-        a `TerminalComponentModeler`.
+        The modal component modeler.
     batch_data : BatchData
         The results obtained from running the simulation `Batch`.
 

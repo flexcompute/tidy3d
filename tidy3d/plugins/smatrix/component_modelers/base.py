@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from pydantic import Field, field_validator, model_validator
 
@@ -12,7 +12,6 @@ from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.monitor import WARN_NUM_FREQS
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import TYPE_TAG_STR, Complex, FreqArray
-from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.time import SourceTimeType
 from tidy3d.components.validators import (
     assert_unique_names,
@@ -26,25 +25,20 @@ from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
-from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
-from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
-from tidy3d.plugins.smatrix.types import Element, MatrixIndex, NetworkElement, NetworkIndex
+from tidy3d.plugins.smatrix.types import Element, MatrixIndex
 
 if TYPE_CHECKING:
     from pydantic import ValidationInfo
 
     from tidy3d.compat import Self
-    from tidy3d.plugins.smatrix import MicrowaveSMatrixData
     from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray
-    from tidy3d.plugins.smatrix.ports.types import PortType
     from tidy3d.web.core.types import PayType
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
 
-IndexType = MatrixIndex | NetworkIndex
-ElementType = Element | NetworkElement
-TaskNameFormat = Literal["RF", "PF"]
+IndexType = MatrixIndex
+ElementType = Element
 
 
 class AbstractComponentModeler(ABC, Tidy3dBaseModel):
@@ -60,7 +54,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: tuple[discriminated_union(Port | TerminalPortType), ...] = Field(
+    ports: tuple[Port, ...] = Field(
         default=(),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
@@ -113,7 +107,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     @classmethod
     def _warn_refactor_2_10(cls, data: dict) -> dict:
         log.warning(
-            f"'{cls.__name__}' was refactored (tidy3d 'v2.10.0'). Existing functionality is available differently. Please consult the migration documentation: https://docs.flexcompute.com/projects/tidy3d/en/latest/api/microwave/microwave_migration.html",
+            f"'{cls.__name__}' was refactored (tidy3d 'v2.10.0'). Existing functionality is available differently. Please consult the migration documentation: https://docs.flexcompute.com/projects/tidy3d/en/latest/api/plugins/smatrix.html#smatrix-migration",
             log_once=True,
         )
         return data
@@ -205,9 +199,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return self
 
     @staticmethod
-    def get_task_name(
-        port: PortType, mode_index: int | None = None, terminal_label: str | None = None
-    ) -> str:
+    def get_task_name(port: Port, mode_index: int | None = None) -> str:
         """Generates a standardized task name from a port object.
 
         This method creates a unique string identifier for a simulation task based on
@@ -215,49 +207,22 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
         Parameters
         ----------
-        port : PortType
+        port : Port
             The port object from which to derive the base name.
         mode_index : Optional[int], optional
             If provided, this index is appended
             to the port name (e.g., 'port_1@1'). Defaults to `None`, in which case the first
             mode is chosen by default.
-        terminal_label : Optional[str], optional
-            If provided, this label is appended
-            to the port name (e.g., 'port_1@terminal_1'). Defaults to `None`, in which case an error is raised
-            if the port is a :class:`.TerminalWavePort`.
         Returns
         -------
         str
             The formatted task name string.
 
-        Raises
-        ------
-        ValueError
-            If `mode_index` is specified for a lumped port.
         """
 
-        if isinstance(port, LumpedPortType):
-            if mode_index is not None:
-                raise ValueError(
-                    "'mode_index' should not be specified for a lumped port, "
-                    f"but was passed with value '{mode_index}'."
-                )
-            return f"{port.name}"
-        elif isinstance(port, WavePort):
-            # WavePorts default to first mode index
-            if mode_index is not None:
-                return f"{port.name}@{mode_index}"
-            return f"{port.name}@{port._mode_indices()[0]}"
-        elif isinstance(port, TerminalWavePort):
-            # TerminalWavePorts has no default
-            if terminal_label is None:
-                raise ValueError("'terminal_label' must be specified for a terminal port.")
-            return f"{port.name}@{terminal_label}"
-        else:
-            # Modal ports default to 0
-            if mode_index is not None:
-                return f"{port.name}@{mode_index}"
-            return f"{port.name}@0"
+        if mode_index is not None:
+            return f"{port.name}@{mode_index}"
+        return f"{port.name}@0"
 
     def get_port_by_name(self, port_name: str) -> Port:
         """Get the port from the name."""
@@ -325,7 +290,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     def _shift_value_signed(
         self,
-        port: Port | WavePort,
+        port: Port,
         simulation: Simulation,
     ) -> float:
         """How far (signed) to shift the source from the monitor.
@@ -358,7 +323,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         priority: int | None = None,
         local_gradient: bool = False,
         max_num_adjoint_per_fwd: int | None = None,
-    ) -> ModalPortDataArray | MicrowaveSMatrixData:
+    ) -> ModalPortDataArray:
         log.warning(
             "'ComponentModeler.run()' is deprecated and will be removed in a future release. "
             "Use web.run(modeler) instead. 'web.run' returns a 'ComponentModelerData' object; "

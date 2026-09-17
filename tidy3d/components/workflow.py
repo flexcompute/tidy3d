@@ -27,7 +27,6 @@ StepOutputKind = Literal[
     "ModeSimulationData",
     "VolumeMesherData",
     "ModalComponentModelerData",
-    "TerminalComponentModelerData",
 ]
 StepOutputUsage = Literal["dependency", "load", "both"]
 

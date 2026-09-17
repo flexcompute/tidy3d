@@ -3,11 +3,11 @@
 v2.10 Refactor Migration
 ------------------------
 
-In version ``v2.10.0rc1``, ``smatrix`` plugin classes were refactored to improve web and GUI support for RF capabilities. This guide helps you update your scripts to the new, more robust API.
+In version ``v2.10.0rc1``, ``smatrix`` plugin classes were refactored to improve web and GUI support. This guide helps you update your scripts to the new, more robust API.
 
-.. seealso::
+.. note::
 
-   This guide is also included as part of the comprehensive :ref:`microwave_migration` guide, which covers all v2.10 RF/microwave breaking changes.
+   The terminal component modeler now lives in Flexcompute RF (``flexcompute.rf.tidy3d``), which documents its own migration path. See :doc:`../microwave`.
 
 Key Changes
 ~~~~~~~~~~~
@@ -29,32 +29,31 @@ The new workflow is more explicit and aligns with the general ``tidy3d`` API.
     import tidy3d.plugins.smatrix as sm
 
     # Modeler class was mutable and included web parameters
-    tcm = sm.TerminalComponentModeler(
+    cm = sm.ComponentModeler(
         simulation=sim,
-        ports=[LP1, LP2],
+        ports=[port1, port2],
         freqs=freqs,
         verbose=True,
         path_dir="data",
     )
     # The run method was part of the modeler class
-    s_matrix = tcm.run()
+    s_matrix = cm.run()
 
 **After (New API):**
 
 .. code-block:: python
 
+    import tidy3d.plugins.smatrix as sm
     import tidy3d.web as web
-    # Rf classes now found in tidy3d.rf
-    import tidy3d.rf as rf
 
     # Modeler class is now immutable and cleaner
-    tcm = rf.TerminalComponentModeler(
+    cm = sm.ModalComponentModeler(
         simulation=sim,
-        ports=[LP1, LP2],
+        ports=[port1, port2],
         freqs=my_freqs,
     )
     # Use web.run to execute the simulation
-    modeler_data = web.run(tcm, verbose=True, path="data/modeler_data.hdf5")
+    modeler_data = web.run(cm, verbose=True, path="data/modeler_data.hdf5")
     s_matrix = modeler_data.smatrix()
 
 .. note::
@@ -69,14 +68,14 @@ Cost estimation is now done by uploading the modeler to the web API.
 
 .. code-block:: python
 
-    est_flex_credits = tcm.estimate_cost()
-    real_flex_credits = tcm.real_cost()
+    est_flex_credits = cm.estimate_cost()
+    real_flex_credits = cm.real_cost()
 
 **After:**
 
 .. code-block:: python
 
-    task_id = web.upload(tcm)
+    task_id = web.upload(cm)
     est_flex_credits = web.estimate_cost(task_id)
     # After the run is complete
     real_flex_credits = web.real_cost(task_id)
@@ -86,27 +85,24 @@ Data Handling
 
 The new API introduces immutable data containers for simulation results, ensuring that your data is more predictable and easier to manage.
 
-*   :class:`tidy3d.rf.TerminalComponentModeler` returns a :class:`tidy3d.rf.TerminalComponentModelerData` object.
-*   :class:`.ModalComponentModeler` returns a :class:`.ModalComponentModelerData` object.
-
-These data objects contain the S-matrix, port impedance, and other relevant results.
+:class:`.ModalComponentModeler` returns a :class:`.ModalComponentModelerData` object, which contains the S-matrix and other relevant results.
 
 **Before:**
 
 .. code-block:: python
 
     # batch_data was a mutable property of the modeler
-    tcm_batch = tcm.batch_data
-    sim_data = tcm_batch["smatrix_LP1"]
+    cm_batch = cm.batch_data
+    sim_data = cm_batch["smatrix_port1_0"]
 
 **After:**
 
 .. code-block:: python
 
    # web.run returns an immutable data object
-   modeler_data = web.run(tcm)
+   modeler_data = web.run(cm)
    # Access simulation data for each port
-   sim_data = modeler_data.data["smatrix_LP1"]
+   sim_data = modeler_data.data["smatrix_port1_0"]
 
 
 Migration Utilities
@@ -128,7 +124,7 @@ To ease the transition, we provide utilities that mimic the old workflow.
       batch_data = batch.run()
 
 - **Compose data from a batch**:
-  If you have a :class:`tidy3d.web.BatchData` object from a manual run, you can still create the corresponding `ModalComponentModelerData` or `TerminalComponentModelerData` object.
+  If you have a :class:`tidy3d.web.BatchData` object from a manual run, you can still create the corresponding ``ModalComponentModelerData`` object.
 
   .. code-block:: python
 
@@ -150,8 +146,6 @@ For more details, see the API documentation for the new classes and functions:
 
    plugins.smatrix.ModalComponentModeler
    plugins.smatrix.ModalComponentModelerData
-   rf.TerminalComponentModeler
-   rf.TerminalComponentModelerData
    SimulationMap
    SimulationDataMap
    plugins.smatrix.run.create_batch

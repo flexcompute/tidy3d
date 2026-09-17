@@ -14,6 +14,7 @@ def from_tidy3d_file(path: str | PathLike[str]) -> object:
     """Load a public Tidy3D task file and convert it to a schema task object."""
 
     from tidy3d import Tidy3dBaseModel
+    from tidy3d.plugins.smatrix.component_modelers import modal as _modal  # noqa: F401
 
     return from_tidy3d(Tidy3dBaseModel.from_file(path))
 

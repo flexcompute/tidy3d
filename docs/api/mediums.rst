@@ -26,7 +26,6 @@ Combinations are possible, e.g. a spatially-varying, dispersive, anisotropic med
 The material library also provides a growing list of commonly used material models.
 
 + `Material Library <material_library.html>`_
-+ `RF Material Library <microwave/rf_material_library.html>`_
 
 ~~~~
 
@@ -190,10 +189,6 @@ Metallic/PEC/PMC
 
    PECMedium
    PMCMedium
-   rf.LossyMetalMedium
-   rf.SurfaceImpedanceFitterParam
-   rf.HammerstadSurfaceRoughness
-   rf.HuraySurfaceRoughness
 
 At lower frequencies, the EM field typically does not penetrate very far into the metallic medium. In this regime, metallic structures are commonly modeled as boundary conditions. In Tidy3D, a metallic medium is assigned to a structure and the corresponding boundary conditions are automatically applied to its geometric boundaries.
 
@@ -202,14 +197,9 @@ At lower frequencies, the EM field typically does not penetrate very far into th
    # lossless metal
    my_pec = PECMedium()
 
-   # lossy metal (conductivity in S/um)
-   my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
+.. seealso::
 
-The :class:`~tidy3d.rf.LossyMetalMedium` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
-
-.. note::
-   
-   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then :class:`~tidy3d.rf.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead, or set ``penetrable=True`` to solve the fields inside the metal as a regular conductive medium (then ``Simulation.subpixel.dielectric`` is applied; surface roughness, thickness, and the surface-impedance fit are not used).
+   Lossy metals with the surface impedance boundary condition, and the Hammerstad and Huray surface roughness models, are part of the RF feature set. See :doc:`microwave`.
 
 ~~~~
 

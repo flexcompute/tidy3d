@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
     from tidy3d.em.translate.sample_sets import GeometrySampleSets
     from tidy3d.plugins.mode import ModeSolver
-    from tidy3d.plugins.smatrix import ModalComponentModeler, TerminalComponentModeler
+    from tidy3d.plugins.smatrix import ModalComponentModeler
     from tidy3d.web.api.container import BatchData
     from tidy3d.web.core.types import PayType
 
@@ -552,7 +552,7 @@ def run_custom(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModalComponentModeler`, :class:`.TerminalComponentModeler`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModalComponentModeler`]
         Simulation to upload to server.
     task_name : Optional[str] = None
         Name of task. If not provided, a default name will be generated.
@@ -623,7 +623,7 @@ def run_custom(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModalComponentModelerData`, :class:`.TerminalComponentModelerData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModalComponentModelerData`]
         Object containing solver results for the supplied input.
 
     Notes
@@ -702,16 +702,12 @@ def run_custom(
 
     traced_numerical_structures = has_traced_numerical_structures(numerical_structures or [])
 
-    # component modeler path: route autograd-valid modelers to local run
-    from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
+    from tidy3d.plugins.smatrix import ModalComponentModeler
 
-    if numerical_structures and not (
-        isinstance(simulation, td.Simulation)
-        or isinstance(simulation, get_args(ComponentModelerType))
-    ):
+    if numerical_structures and not isinstance(simulation, (td.Simulation, ModalComponentModeler)):
         raise AdjointError(
-            "numerical_structures is only supported for 'Simulation' and ComponentModeler "
-            "workflows."
+            "numerical_structures is only supported for 'Simulation' and "
+            "'ModalComponentModeler' workflows."
         )
 
     stub = Tidy3dStub(simulation=simulation)
@@ -722,7 +718,7 @@ def run_custom(
         Path(path) if path is not None else Path(webapi.default_data_filename(stub.get_type()))
     )
 
-    if isinstance(simulation, get_args(ComponentModelerType)):
+    if isinstance(simulation, ModalComponentModeler):
         sim_dict = simulation.sim_dict
         modeler_numerical_structures = (
             dict.fromkeys(sim_dict, numerical_structures) if numerical_structures else None
@@ -736,17 +732,16 @@ def run_custom(
             custom_vjp=custom_vjp,
             numerical_structures=modeler_numerical_structures,
         )
-        should_use_component_autograd = traced_numerical_structures or any(needs_autograd)
-        contains_numerical_structures = bool(numerical_structures)
-        should_run_local = should_use_component_autograd or contains_numerical_structures
+        should_run_local = (
+            traced_numerical_structures or any(needs_autograd) or bool(numerical_structures)
+        )
 
         if should_run_local:
             from tidy3d.plugins.smatrix import run as smatrix_run
 
-            path_dir = resolved_path.parent
             return smatrix_run._run_local(
                 simulation,
-                path_dir=path_dir,
+                path_dir=resolved_path.parent,
                 folder_name=folder_name,
                 callback_url=callback_url,
                 verbose=verbose,
@@ -857,8 +852,7 @@ def run_async_custom(
         | ModeSolver
         | ModeSimulation
         | VolumeMesher
-        | ModalComponentModeler
-        | TerminalComponentModeler,
+        | ModalComponentModeler,
     ]
     | tuple[
         Simulation
@@ -868,8 +862,7 @@ def run_async_custom(
         | ModeSolver
         | ModeSimulation
         | VolumeMesher
-        | ModalComponentModeler
-        | TerminalComponentModeler,
+        | ModalComponentModeler,
         ...,
     ]
     | list[
@@ -881,7 +874,6 @@ def run_async_custom(
         | ModeSimulation
         | VolumeMesher
         | ModalComponentModeler
-        | TerminalComponentModeler
     ],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
@@ -1287,8 +1279,7 @@ def run_async(
         | ModeSolver
         | ModeSimulation
         | VolumeMesher
-        | ModalComponentModeler
-        | TerminalComponentModeler,
+        | ModalComponentModeler,
     ]
     | tuple[
         Simulation
@@ -1298,8 +1289,7 @@ def run_async(
         | ModeSolver
         | ModeSimulation
         | VolumeMesher
-        | ModalComponentModeler
-        | TerminalComponentModeler,
+        | ModalComponentModeler,
         ...,
     ]
     | list[
@@ -1311,7 +1301,6 @@ def run_async(
         | ModeSimulation
         | VolumeMesher
         | ModalComponentModeler
-        | TerminalComponentModeler
     ],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,

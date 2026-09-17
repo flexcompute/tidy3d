@@ -375,8 +375,8 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    `Lumped Elements <../microwave/ports/lumped.html>`_:
-        Available lumped element types.
+    `Microwave & RF <../microwave.html>`_:
+        Where the RF and microwave APIs live now.
     """
 
     grid_spec: GridSpec = Field(

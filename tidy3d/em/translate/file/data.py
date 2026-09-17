@@ -14,6 +14,7 @@ def from_tidy3d_file(path: str | PathLike[str]) -> object:
     """Load a public Tidy3D result-data file and convert it to schema data."""
 
     from tidy3d import Tidy3dBaseModel
+    from tidy3d.plugins.smatrix.data import modal as _modal  # noqa: F401
 
     return data_from_tidy3d(Tidy3dBaseModel.from_file(path))
 

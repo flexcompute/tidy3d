@@ -1,4 +1,4 @@
-"""Abstract base class for all ports in the component and terminal component modelers."""
+"""Abstract base class for modal component-modeler ports."""
 
 from __future__ import annotations
 

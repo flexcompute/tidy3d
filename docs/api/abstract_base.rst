@@ -27,7 +27,6 @@ Base classes that represent abstractions of common components. Provide inherited
    components.parameter_perturbation.AbstractPerturbation
    components.medium.AbstractCustomMedium
    components.medium.AbstractMedium
-   components.microwave.base.MicrowaveBaseModel
    components.simulation.AbstractYeeGridSimulation
    components.structure.AbstractStructure
    components.time.AbstractTimeDependence

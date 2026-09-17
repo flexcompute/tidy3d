@@ -411,6 +411,10 @@ from .components.medium import (
     medium_from_nk,
 )
 
+# lumped port impedance specification; exported by mistake, but it shipped in
+# 2.12 so 'td.ImpedanceSpec' is pinned until 3.0 (memo 0093)
+from .components.microwave.impedance_spec import ImpedanceSpec
+
 # sources
 from .components.microwave.time import (
     BasebandCustomSourceTime,
@@ -554,9 +558,6 @@ from .log import log, set_logging_console, set_logging_file
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library.material_library import material_library
 from .material_library.parametric_materials import Graphene
-
-# lumped port impedance specification
-from .plugins.smatrix.ports.base_lumped import ImpedanceSpec
 
 # updater
 from .updater import Updater

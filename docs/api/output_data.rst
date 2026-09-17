@@ -60,7 +60,6 @@ List of Monitor Data Types
    FieldProjectionCartesianData
    FieldProjectionKSpaceData
    DiffractionData
-   rf.DirectivityData
    AuxFieldTimeData
    SurfaceFieldData
    SurfaceFieldTimeData

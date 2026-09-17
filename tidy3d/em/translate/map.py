@@ -18,7 +18,6 @@ class Tidy3DSolverTaskMap(str, Enum):
     MODE = "MODE"
     VOLUME_MESH = "VOLUME_MESH"
     MODAL_CM = "MODAL_CM"
-    TERMINAL_CM = "TERMINAL_CM"
     ADAM_OPTIMIZER = "ADAM_OPTIMIZER"
 
 
@@ -34,7 +33,6 @@ class Tidy3DSolverDataMap(str, Enum):
     HEAT_CHARGE = "HEAT_CHARGE"
     VOLUME_MESH = "VOLUME_MESH"
     MODAL_CM = "MODAL_CM"
-    TERMINAL_CM = "TERMINAL_CM"
     ADAM_OPTIMIZER = "ADAM_OPTIMIZER"
 
 
@@ -48,9 +46,6 @@ TASK_PUBLIC_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
     Tidy3DSolverTaskMap.VOLUME_MESH: "tidy3d:VolumeMesher",
     Tidy3DSolverTaskMap.MODAL_CM: (
         "tidy3d.plugins.smatrix.component_modelers.modal:ModalComponentModeler"
-    ),
-    Tidy3DSolverTaskMap.TERMINAL_CM: (
-        "tidy3d.plugins.smatrix.component_modelers.terminal:TerminalComponentModeler"
     ),
     Tidy3DSolverTaskMap.ADAM_OPTIMIZER: "tidy3d.plugins.invdes.optimizer:AdamOptimizer",
 }
@@ -71,9 +66,6 @@ TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
     Tidy3DSolverTaskMap.VOLUME_MESH: "flexcompute.core._migration.em.schema.tidy3d.components.tcad.mesher:VolumeMesher",
     Tidy3DSolverTaskMap.MODAL_CM: (
         "flexcompute.core._migration.em.schema.tidy3d.plugins.smatrix.component_modelers.modal:ModalComponentModeler"
-    ),
-    Tidy3DSolverTaskMap.TERMINAL_CM: (
-        "flexcompute.core._migration.em.schema.tidy3d.plugins.smatrix.component_modelers.terminal:TerminalComponentModeler"
     ),
     Tidy3DSolverTaskMap.ADAM_OPTIMIZER: (
         "flexcompute.core._migration.em.schema.tidy3d.plugins.invdes.optimizer:AdamOptimizer"
@@ -113,10 +105,6 @@ TASK_CONVERTERS: dict[Tidy3DSolverTaskMap, tuple[str, str]] = {
         "tidy3d.em.translate.modal_cm.task:from_task",
         "tidy3d.em.translate.modal_cm.task:to_task",
     ),
-    Tidy3DSolverTaskMap.TERMINAL_CM: (
-        "tidy3d.em.translate.terminal_cm.task:from_task",
-        "tidy3d.em.translate.terminal_cm.task:to_task",
-    ),
     Tidy3DSolverTaskMap.ADAM_OPTIMIZER: (
         "tidy3d.em.translate.adam_optimizer.task:from_task",
         "tidy3d.em.translate.adam_optimizer.task:to_task",
@@ -137,9 +125,6 @@ DATA_PUBLIC_CLASSES: dict[Tidy3DSolverDataMap, str] = {
     Tidy3DSolverDataMap.MODE: "tidy3d.components.mode.data.sim_data:ModeSimulationData",
     Tidy3DSolverDataMap.VOLUME_MESH: "tidy3d.components.tcad.data.sim_data:VolumeMesherData",
     Tidy3DSolverDataMap.MODAL_CM: "tidy3d.plugins.smatrix.data.modal:ModalComponentModelerData",
-    Tidy3DSolverDataMap.TERMINAL_CM: (
-        "tidy3d.plugins.smatrix.data.terminal:TerminalComponentModelerData"
-    ),
     Tidy3DSolverDataMap.ADAM_OPTIMIZER: "tidy3d.plugins.invdes.result:InverseDesignResult",
 }
 
@@ -168,9 +153,6 @@ DATA_SCHEMA_CLASSES: dict[Tidy3DSolverDataMap, str] = {
     ),
     Tidy3DSolverDataMap.MODAL_CM: (
         "flexcompute.core._migration.em.schema.tidy3d.plugins.smatrix.data.modal:ModalComponentModelerData"
-    ),
-    Tidy3DSolverDataMap.TERMINAL_CM: (
-        "flexcompute.core._migration.em.schema.tidy3d.plugins.smatrix.data.terminal:TerminalComponentModelerData"
     ),
     Tidy3DSolverDataMap.ADAM_OPTIMIZER: "flexcompute.core._migration.em.schema.tidy3d.plugins.invdes.result:InverseDesignResult",
 }
@@ -211,10 +193,6 @@ DATA_CONVERTERS: dict[Tidy3DSolverDataMap, tuple[str, str]] = {
     Tidy3DSolverDataMap.MODAL_CM: (
         "tidy3d.em.translate.modal_cm.data:from_data",
         "tidy3d.em.translate.modal_cm.data:to_data",
-    ),
-    Tidy3DSolverDataMap.TERMINAL_CM: (
-        "tidy3d.em.translate.terminal_cm.data:from_data",
-        "tidy3d.em.translate.terminal_cm.data:to_data",
     ),
     Tidy3DSolverDataMap.ADAM_OPTIMIZER: (
         "tidy3d.em.translate.adam_optimizer.data:from_data",

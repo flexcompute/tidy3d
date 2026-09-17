@@ -24,7 +24,7 @@ API |:computer:|
     charge/index
     eme/index
     mode/index
-    microwave/index
+    microwave
     plugins/index
     spice
     constants

@@ -1,59 +1,7 @@
-"""Class and custom data array for representing a scattering-matrix port, which is defined by a pair of terminals."""
+"""Migration shim for terminal-port APIs now owned by Flexcompute RF."""
 
 from __future__ import annotations
 
-from abc import abstractmethod
-from typing import TYPE_CHECKING, Any
+from tidy3d._rf_migration import migrated_rf_module
 
-from tidy3d.components.base import cached_property
-from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
-
-if TYPE_CHECKING:
-    from tidy3d.components.data.data_array import FreqDataArray
-    from tidy3d.components.data.sim_data import SimulationData
-    from tidy3d.components.grid.grid import Grid
-    from tidy3d.components.monitor import FieldMonitor, ModeMonitor
-    from tidy3d.components.source.base import Source
-    from tidy3d.components.source.time import SourceTimeType
-    from tidy3d.components.types import FreqArray
-
-
-class AbstractTerminalPort(AbstractBasePort, MicrowaveBaseModel):
-    """Class representing a single terminal-based port. All terminal ports must provide methods
-    for computing voltage and current. These quantities represent the voltage between the
-    terminals, and the current flowing from one terminal into the other.
-    """
-
-    @cached_property
-    @abstractmethod
-    def injection_axis(self) -> None:
-        """Injection axis of the port."""
-
-    @abstractmethod
-    def to_source(
-        self,
-        source_time: SourceTimeType,
-        snap_center: float | None = None,
-        grid: Grid | None = None,
-        **kwargs: Any,
-    ) -> Source:
-        """Create a current source from a terminal-based port."""
-
-    @abstractmethod
-    def to_monitors(
-        self,
-        freqs: FreqArray,
-        snap_center: float | None = None,
-        grid: Grid | None = None,
-        **kwargs: Any,
-    ) -> list[FieldMonitor] | list[ModeMonitor]:
-        """Monitors used to compute the port voltage and current."""
-
-    @abstractmethod
-    def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute voltage across the port."""
-
-    @abstractmethod
-    def compute_current(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute current flowing into the port."""
+__getattr__ = migrated_rf_module(__name__)

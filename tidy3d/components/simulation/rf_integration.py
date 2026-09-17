@@ -87,7 +87,12 @@ def _warn_rf_license(self: Any) -> None:
             rf_component_breakdown_msg += "\n - Contains monitors defined for RF wavelengths."
             break
 
-    msg = "RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'."
+    msg = (
+        "The RF classes in Tidy3D are deprecated and will be removed in Tidy3D 3.0. "
+        "They remain available until then, from the top level where they have a name "
+        "there and otherwise from 'tidy3d.rf'. New RF development continues in "
+        "Flexcompute RF; install 'flexcompute-rf' and import 'flexcompute.rf.tidy3d'."
+    )
     msg += rf_component_breakdown_msg
     log.warning(msg, log_once=True)
 
