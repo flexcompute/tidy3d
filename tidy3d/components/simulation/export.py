@@ -32,6 +32,25 @@ except ImportError:
     gdstk_available = False
 
 
+def _in_plane_symmetry_transforms(
+    symmetry: tuple[int, int], center: tuple[float, float]
+) -> list[tuple[tuple[float, float], float, bool]]:
+    """Return GDS transforms that expand in-plane symmetry."""
+    reflections = [(False, False)]
+    if symmetry[0] != 0:
+        reflections += [(True, reflect_y) for _, reflect_y in reflections]
+    if symmetry[1] != 0:
+        reflections += [(reflect_x, True) for reflect_x, _ in reflections]
+    return [
+        (
+            (2 * center[0] if reflect_x else 0, 2 * center[1] if reflect_y else 0),
+            np.pi if reflect_x else 0,
+            reflect_x != reflect_y,
+        )
+        for reflect_x, reflect_y in reflections
+    ]
+
+
 def to_gdstk(
     self: Any,
     x: float | None = None,
@@ -73,12 +92,13 @@ def to_gdstk(
     axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
     _, bmin = self.pop_axis(self.bounds[0], axis)
     _, bmax = self.pop_axis(self.bounds[1], axis)
+    _, center = self.pop_axis(self.center, axis)
 
     _, symmetry = self.pop_axis(self.symmetry, axis)
     if symmetry[0] != 0:
-        bmin = (0, bmin[1])
+        bmin = (center[0], bmin[1])
     if symmetry[1] != 0:
-        bmin = (bmin[0], 0)
+        bmin = (bmin[0], center[1])
     clip = gdstk.rectangle(bmin, bmax)
 
     optical_medium_export_key_cache: dict[StructureMediumType | None, OpticalMediumExportKey] = {}
@@ -221,7 +241,7 @@ def to_gds(
     gds_layer_dtype_map: dict[AbstractMedium, tuple[NonNegativeInt, NonNegativeInt]] | None = None,
     pixel_exact: bool = False,
 ) -> None:
-    """Append the simulation structures to a .gds cell.
+    """Append the simulation structures to a .gds cell, expanding in-plane symmetry.
 
     Parameters
     ----------
@@ -256,6 +276,16 @@ def to_gds(
             gds_layer_dtype_map=gds_layer_dtype_map,
             pixel_exact=pixel_exact,
         )
+        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, center = self.pop_axis(self.center, axis)
+        _, symmetry = self.pop_axis(self.symmetry, axis)
+        polygons = [
+            polygon.copy().transform(
+                translation=origin, rotation=rotation, x_reflection=x_reflection
+            )
+            for origin, rotation, x_reflection in _in_plane_symmetry_transforms(symmetry, center)
+            for polygon in polygons
+        ]
         if len(polygons) > 0:
             cell.add(*polygons)
 
@@ -326,8 +356,6 @@ def to_gds_file(
             context="Simulation.to_gds_file()",
         )
         library = gdstk.Library(unit=1e-6, precision=gds_precision * 1e-6)
-        reference = gdstk.Reference
-        rotation = np.pi
     else:
         raise Tidy3dImportError(
             "Python module 'gdstk' not found. To export geometries to .gds "
@@ -336,17 +364,18 @@ def to_gds_file(
     cell = library.new_cell(gds_cell_name)
 
     axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+    _, center = self.pop_axis(self.center, axis)
     _, symmetry = self.pop_axis(self.symmetry, axis)
-    if symmetry[0] != 0:
+    transforms = _in_plane_symmetry_transforms(symmetry, center)
+    if len(transforms) > 1:
         outer_cell = cell
-        cell = library.new_cell(gds_cell_name + "_X")
-        outer_cell.add(reference(cell))
-        outer_cell.add(reference(cell, rotation=rotation, x_reflection=True))
-    if symmetry[1] != 0:
-        outer_cell = cell
-        cell = library.new_cell(gds_cell_name + "_Y")
-        outer_cell.add(reference(cell))
-        outer_cell.add(reference(cell, x_reflection=True))
+        cell = library.new_cell(gds_cell_name + "_SYM")
+        outer_cell.add(
+            *(
+                gdstk.Reference(cell, origin=origin, rotation=rotation, x_reflection=x_reflection)
+                for origin, rotation, x_reflection in transforms
+            )
+        )
 
     if polygons:
         cell.add(*polygons)
