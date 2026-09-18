@@ -294,29 +294,35 @@ one.
 
 `BacktrackingSafeUpdate` is one such strategy. It requires the current parameters to be valid, then
 checks the full proposed step and up to eight successively smaller global steps by default. It always
-checks those global candidates from largest to smallest before recovering the remaining update one
-parameter at a time. Per-parameter recovery can use deterministic parameter order or a reproducible
-random order; deterministic is the default. If no candidate is valid, it keeps the current
+checks those global candidates from largest to smallest before checking the remaining parameter
+updates in the configured order. Per-parameter recovery can use deterministic parameter order or a
+reproducible random order; deterministic is the default. If no candidate is valid, it keeps the current
 parameters and returns a rejected update:
 
 1. The current parameters are checked first; an invalid starting design raises an error.
 2. The full proposal and global backtracks are checked from largest to smallest scale. The first
    valid global candidate becomes the accepted design.
-3. Unless the full proposal was valid, each changed parameter is considered in the configured
-   order. Starting from the accepted design (or the current design when no global candidate passed),
-   the parameter is tried at its proposed value and then at progressively smaller remaining changes.
-   A valid coordinate update is retained before the next parameter is considered.
+3. Unless the full proposal was valid, the configured recovery policy improves the accepted design
+   (or the current design when no global candidate passed).
 
-With a batched checker, each global candidate set and each per-parameter candidate set is evaluated
-in one checker invocation. `SafeUpdateResult.metrics` reports `global_scale`, `retained_fraction`,
+`BacktrackingSafeUpdate` uses `SpeculativePrefixRecovery` by default. At the start of recovery and
+after a full coordinate update, it checks exponentially spaced cumulative full-update prefixes
+(1, 2, 4, ...). The longest valid prefix in a batch is retained; prefix validity need not be
+monotonic. `max_prefix_checks=10` limits each speculative batch to ten candidate checks.
+
+`CoordinateRecovery` is an opt-in policy that considers each remaining parameter in order, first
+at its full proposed change and then at successively smaller changes. Set `recovery=None` to retain
+only the global search.
+
+With a batched checker, each global, prefix, and per-parameter candidate set is evaluated in one
+checker invocation. `SafeUpdateResult.metrics` reports `global_scale`, `retained_fraction`,
 `checks`, and the counts of full, partial, and unchanged parameter updates. `global_scale` applies
 one multiplier to the entire proposal; `retained_fraction` is the norm of the final accepted update
 divided by the norm of the proposal.
 
 The search can be configured with `max_backtracks` (eight by default) and `shrink_factor` (0.5 by
-default). Set `per_parameter_search=False` to retain only the global search. `candidate_order`
-controls the recovery order (`"deterministic"` or `"random"`); use `random_seed` to reproduce a
-random order, or set it to `None` for a different order on each run.
+default). `candidate_order` controls the recovery order (`"deterministic"` or `"random"`); use
+`random_seed` to reproduce a random order, or set it to `None` for a different order on each run.
 
 ```python
 from tidy3d.plugins.autograd import BacktrackingSafeUpdate, adam, optimize
@@ -341,15 +347,17 @@ params, state, history = optimize(
 ```
 
 A `ConstraintChecker` controls how candidates are evaluated. Bare functions are treated as scalar
-checks and are called lazily until an acceptable candidate is found in each global or coordinate
-batch. Wrap a batch function with
-`BatchedConstraintChecker` to evaluate all candidates in one invocation:
+checks. Wrap a batch function with `BatchedConstraintChecker` to evaluate each candidate set in one
+invocation:
 
 ```python
-from tidy3d.plugins.autograd import BatchedConstraintChecker
+from tidy3d.plugins.autograd import BatchedConstraintChecker, SpeculativePrefixRecovery
 
 batch_checker = BatchedConstraintChecker(check_designs)
-safe_update = BacktrackingSafeUpdate(batch_checker)
+safe_update = BacktrackingSafeUpdate(
+    batch_checker,
+    recovery=SpeculativePrefixRecovery(max_prefix_checks=10),
+)
 ```
 
 KLayout DRC is one example of a batched external constraint. `BatchedDRCChecker` implements the

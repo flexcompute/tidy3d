@@ -192,7 +192,7 @@ valid = drc_checker([design_a_parameters, design_b_parameters])
 
 The same checker can be passed to `BacktrackingSafeUpdate` when the designs are candidate updates
 from an optimization. It implements the autograd plugin's `ConstraintChecker` interface, so each
-global or per-parameter backtracking candidate batch is delegated to it directly.
+global or recovery candidate batch is delegated to it directly.
 
 The checker arranges candidates in a near-square grid to limit the stitched layout's coordinate
 range. It automatically separates rows and columns by
@@ -220,4 +220,4 @@ distance. Whole-layout rules such as global density, connectivity, or aggregate 
 couple otherwise separated candidates and should not use `BatchedDRCChecker`. Such rules can still
 be used with `BacktrackingSafeUpdate`: provide a scalar checker that runs KLayout separately for one
 parameterization and returns `results.is_clean`. Scalar checking evaluates candidates lazily and
-stops after the first valid candidate in each global or per-parameter candidate batch.
+one at a time.

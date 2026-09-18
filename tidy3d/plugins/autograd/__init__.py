@@ -44,17 +44,21 @@ from .invdes import (
 )
 from .optimizers import (
     Adam,
-    BacktrackingSafeUpdate,
-    BatchedConstraintChecker,
-    ConstraintChecker,
-    SafeUpdate,
-    SafeUpdateResult,
-    ScalarConstraintChecker,
     adam,
     apply_updates,
     optimize,
 )
 from .primitives import gaussian_filter, interpolate_spline
+from .safe_update import (
+    BacktrackingSafeUpdate,
+    BatchedConstraintChecker,
+    ConstraintChecker,
+    CoordinateRecovery,
+    SafeUpdate,
+    SafeUpdateResult,
+    ScalarConstraintChecker,
+    SpeculativePrefixRecovery,
+)
 from .utilities import chain, get_kernel_size_px, make_kernel, scalar_objective
 
 __all__ = [
@@ -64,12 +68,14 @@ __all__ = [
     "CircularFilter",
     "ConicFilter",
     "ConstraintChecker",
+    "CoordinateRecovery",
     "ErosionDilationPenalty",
     "FilterAndProject",
     "GaussianFilter",
     "SafeUpdate",
     "SafeUpdateResult",
     "ScalarConstraintChecker",
+    "SpeculativePrefixRecovery",
     "adam",
     "add_at",
     "apply_updates",
