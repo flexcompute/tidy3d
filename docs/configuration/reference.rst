@@ -354,7 +354,7 @@ Defaults used for virtual GPU cloud runs.
    * - ``vgpu_allocation``
      - ``None``
      - No
-     - Default virtual GPU allocation for vGPU runs. When set, must be one of ``1``, ``2``, ``4``, or ``8``.
+     - Default virtual GPU allocation for vGPU runs. When set, must be a positive whole number supported by the license.
    * - ``ignore_memory_limit``
      - ``None``
      - No

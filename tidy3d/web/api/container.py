@@ -1444,7 +1444,7 @@ class Job(WebContainer):
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         vgpu_allocation : int = None
-            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
         ignore_memory_limit : Optional[bool] = None
@@ -1724,7 +1724,7 @@ class Job(WebContainer):
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         vgpu_allocation : int = None
-            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
         ignore_memory_limit : Optional[bool] = None
@@ -2607,7 +2607,7 @@ class Batch(WebContainer):
             Downloads the final data even if the file exists, overwriting it. Only
             applies when the completed workflow step is the final step.
         vgpu_allocation : int = None
-            Number of virtual GPUs to allocate for the simulations (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the simulations, from 1 to the license maximum.
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
         ignore_memory_limit : Optional[bool] = None
@@ -2659,7 +2659,7 @@ class Batch(WebContainer):
             Downloads the data even if path exists (overwriting the existing). Applies when
             downloading cached results or when `download_on_success=True`.
         vgpu_allocation : int = None
-            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
         ignore_memory_limit : Optional[bool] = None
@@ -3327,7 +3327,7 @@ class Batch(WebContainer):
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         vgpu_allocation : int = None
-            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
         ignore_memory_limit : Optional[bool] = None

@@ -15,8 +15,8 @@ from pydantic import Field, TypeAdapter
 
 import tidy3d as td
 from tidy3d.config import config
-from tidy3d.config.sections import VALID_VGPU_ALLOCATIONS
 from tidy3d.exceptions import ValidationError, format_chained_exception_message
+from tidy3d.web.api.run_options import validate_vgpu_allocation
 from tidy3d.web.api.states import SUCCESS_STATES
 
 from .cache import FOLDER_CACHE
@@ -700,7 +700,7 @@ class SimulationTask(WebTask):
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         vgpu_allocation : int = None
-            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
         ignore_memory_limit : Optional[bool] = None
@@ -712,6 +712,8 @@ class SimulationTask(WebTask):
             under ``additionalPayload``.
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
+        if vgpu_allocation is not None:
+            validate_vgpu_allocation(vgpu_allocation, apply_config_default=False)
 
         protocol_version = self._resolve_request_protocol_version(solver_version)
 
@@ -1100,7 +1102,7 @@ class BatchTask(WebTask):
         priority : Optional[int], default=None
             Priority of the batch in the vGPU queue, where 1 is lowest and 10 is highest.
         vgpu_allocation : Optional[int], default=None
-            Number of virtual GPUs to allocate for the batch (1, 2, 4, or 8).
+            Number of virtual GPUs to allocate for the batch, from 1 to the license maximum.
         ignore_memory_limit : Optional[bool], default=None
             Not supported for batch tasks. Passing a non-``None`` value raises
             :class:`NotImplementedError`.
@@ -1117,10 +1119,8 @@ class BatchTask(WebTask):
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
         if priority is not None and (priority < 1 or priority > 10):
             raise ValueError("Priority must be between '1' and '10' if specified.")
-        if vgpu_allocation is not None and vgpu_allocation not in VALID_VGPU_ALLOCATIONS:
-            raise ValueError(
-                f"vgpu_allocation must be one of {list(VALID_VGPU_ALLOCATIONS)} if specified."
-            )
+        if vgpu_allocation is not None:
+            validate_vgpu_allocation(vgpu_allocation, apply_config_default=False)
         if ignore_memory_limit is not None:
             raise NotImplementedError(
                 "The 'ignore_memory_limit' argument is not supported for batch tasks; remove it "

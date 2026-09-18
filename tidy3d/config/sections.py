@@ -18,6 +18,7 @@ from pydantic import (
     NonPositiveFloat,
     PositiveInt,
     SecretStr,
+    StrictInt,
     field_serializer,
     field_validator,
 )
@@ -37,8 +38,6 @@ from .registry import register_handler, register_section
 
 if TYPE_CHECKING:
     from os import PathLike
-
-VALID_VGPU_ALLOCATIONS = (1, 2, 4, 8)
 
 TLS_VERSION_CHOICES = {"TLSv1", "TLSv1_1", "TLSv1_2", "TLSv1_3"}
 ParallelAdjointModeDirectionPolicy = Literal[
@@ -494,7 +493,7 @@ class VgpuConfig(ConfigSection):
         description="Default queue priority for vGPU runs (1 = lowest, 10 = highest).",
     )
 
-    vgpu_allocation: int | None = Field(
+    vgpu_allocation: StrictInt | None = Field(
         default=None,
         title="vGPU allocation",
         description="Default virtual GPU allocation for vGPU runs.",
@@ -520,10 +519,8 @@ class VgpuConfig(ConfigSection):
     def _validate_vgpu_allocation(cls, value: int | None) -> int | None:
         if value is None:
             return value
-        if value not in VALID_VGPU_ALLOCATIONS:
-            raise ValueError(
-                f"vgpu_allocation must be one of {list(VALID_VGPU_ALLOCATIONS)} if specified."
-            )
+        if value < 1:
+            raise ValueError(f"vgpu_allocation={value} must be at least 1.")
         return value
 
 

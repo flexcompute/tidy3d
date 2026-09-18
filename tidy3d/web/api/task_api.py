@@ -60,6 +60,7 @@ from .run_options import (
     resolve_run_start_options,
     resolve_upload_options,
     resolve_vgpu_start_options,
+    validate_vgpu_allocation,
 )
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData, task_type_name_of
 
@@ -770,6 +771,7 @@ def start(
     vgpu_allocation: int | None = None,
     ignore_memory_limit: bool | None = None,
 ) -> None:
+    validate_vgpu_allocation(vgpu_allocation, apply_config_default=False)
     task = TaskFactory.get(task_id)
     if not task:
         raise ValueError("Task not found.")

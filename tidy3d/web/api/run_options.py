@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from threading import Lock
+from time import monotonic
 from typing import Any
 
 from tidy3d.config import config
-from tidy3d.config.sections import VALID_VGPU_ALLOCATIONS
 from tidy3d.log import log
+from tidy3d.web.core.http_util import api_key, http
 from tidy3d.web.core.types import PayType
+
+_VGPU_ALLOCATION_LIMIT_TTL = 300
+_VGPU_ALLOCATION_LIMIT_UNAVAILABLE_TTL = 30
+_vgpu_allocation_limits: dict[tuple[str, str | None], tuple[float, int | None]] = {}
+_vgpu_allocation_limit_lock = Lock()
 
 
 @dataclass(frozen=True)
@@ -119,6 +127,69 @@ def resolve_pay_type(
     return PayType.AUTO if resolved_pay_type is None else PayType(resolved_pay_type)
 
 
+def _get_vgpu_allocation_limit() -> int | None:
+    """Get and cache the account's maximum vGPU allocation, if available."""
+
+    key = api_key()
+    cache_key = (
+        config.web.api_endpoint,
+        hashlib.sha256(key.encode()).hexdigest() if key is not None else None,
+    )
+    now = monotonic()
+    with _vgpu_allocation_limit_lock:
+        cached = _vgpu_allocation_limits.get(cache_key)
+        if cached is not None:
+            expires_at, limit = cached
+            if expires_at > now:
+                return limit
+            _vgpu_allocation_limits.pop(cache_key, None)
+        try:
+            quota = http.get("tidy3d/resources/reservedGpu/quota")
+            limit = quota.get("maxConcurrentGpus") if isinstance(quota, dict) else None
+            if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+                limit = None
+        except Exception as exc:
+            log.debug("Unable to determine the vGPU allocation limit: %s", exc)
+            limit = None
+        ttl = (
+            _VGPU_ALLOCATION_LIMIT_TTL
+            if limit is not None
+            else _VGPU_ALLOCATION_LIMIT_UNAVAILABLE_TTL
+        )
+        _vgpu_allocation_limits[cache_key] = (now + ttl, limit)
+        return limit
+
+
+def _validate_vgpu_allocation(value: int | None) -> None:
+    """Validate a requested vGPU allocation against its known account limit."""
+
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"vgpu_allocation must be an integer; got {value!r}.")
+    if value < 1:
+        raise ValueError(f"vgpu_allocation={value} must be at least 1.")
+    limit = _get_vgpu_allocation_limit()
+    if limit is not None and value > limit:
+        raise ValueError(f"vgpu_allocation={value} exceeds the {limit} vGPU on your license.")
+
+
+def validate_vgpu_allocation(
+    vgpu_allocation: int | None, *, apply_config_default: bool = True
+) -> int | None:
+    """Validate a vGPU allocation and optionally apply the configured default."""
+
+    resolved = (
+        vgpu_allocation
+        if vgpu_allocation is not None
+        else config.vgpu.vgpu_allocation
+        if apply_config_default
+        else None
+    )
+    _validate_vgpu_allocation(resolved)
+    return resolved
+
+
 def resolve_vgpu_start_options(
     *,
     priority: int | None,
@@ -138,20 +209,9 @@ def resolve_vgpu_start_options(
     if resolved_priority is not None and (resolved_priority < 1 or resolved_priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
 
-    resolved_vgpu_allocation = (
-        vgpu_allocation
-        if vgpu_allocation is not None
-        else config.vgpu.vgpu_allocation
-        if apply_config_defaults
-        else None
+    resolved_vgpu_allocation = validate_vgpu_allocation(
+        vgpu_allocation, apply_config_default=apply_config_defaults
     )
-    if (
-        resolved_vgpu_allocation is not None
-        and resolved_vgpu_allocation not in VALID_VGPU_ALLOCATIONS
-    ):
-        raise ValueError(
-            f"vgpu_allocation must be one of {list(VALID_VGPU_ALLOCATIONS)} if specified."
-        )
 
     return ResolvedVgpuStartOptions(
         priority=resolved_priority,

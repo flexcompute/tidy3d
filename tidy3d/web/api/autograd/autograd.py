@@ -609,7 +609,7 @@ def run_custom(
         Replacement hook for existing traced structure paths. Each config overrides derivative computation
         for matching structure/path targets in the standard ``("structures", ...)`` path namespace.
     vgpu_allocation : Optional[int] = None
-        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
         Only applies to vGPU license users. If not specified, uses
         ``td.config.vgpu.vgpu_allocation``.
         If that is also unset, the system
@@ -959,7 +959,7 @@ def run_async_custom(
         simulation by specifying a dict with sequence values or a sequence of sequences.
         Custom VJPs require every batch entry to be an FDTD :class:`.Simulation`.
     vgpu_allocation : Optional[int] = None
-        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
         Only applies to vGPU license users. If not specified, uses
         ``td.config.vgpu.vgpu_allocation``.
         If that is also unset, the system

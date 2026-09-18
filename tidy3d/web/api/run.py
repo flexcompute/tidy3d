@@ -186,7 +186,7 @@ def run(
         Whether to load the actual data (``lazy=False``) or return a proxy that loads
         the data when accessed (``lazy=True``).
     vgpu_allocation : Optional[int] = None
-        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Number of virtual GPUs to allocate for the simulation, from 1 to the license maximum.
         Only applies to vGPU license users. If not specified, uses
         ``td.config.vgpu.vgpu_allocation``.
         If that is also unset, the system
