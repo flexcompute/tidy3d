@@ -3063,6 +3063,7 @@ class PolySlab(base.Planar):
             perps1=patch["perps1"],
             perps2=patch["perps2"],
             weights=weights,
+            pec_flat_perp_dims=(False, False),
             metadata=PolySlabSidewallAngleMetadata(),
         )
 
@@ -3189,7 +3190,7 @@ class PolySlab(base.Planar):
             np.zeros_like(xy, dtype=config.adjoint.gradient_dtype_float),
         )
         perps1_xyz = self.unpop_axis_vect(np.zeros(n_pts), dir_vec_plane)
-        perps2_xyz = self.unpop_axis_vect(np.zeros(n_pts), np.zeros_like(dir_vec_plane))
+        perps2_xyz = np.cross(normals_xyz, perps1_xyz)
 
         return SurfaceSampleSet.from_arrays(
             points=centers_xyz,
@@ -3198,6 +3199,7 @@ class PolySlab(base.Planar):
             perps2=perps2_xyz,
             weights=areas,
             metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
+            pec_flat_perp_dims=(False, True),
         )
 
     def _slab_face_surface_samples(
@@ -3296,6 +3298,7 @@ class PolySlab(base.Planar):
             perps1=perps1_xyz,
             perps2=perps2_xyz,
             weights=weights_flat * jacobian,
+            pec_flat_perp_dims=(False, False),
             metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
         )
 
@@ -3356,6 +3359,7 @@ class PolySlab(base.Planar):
             perps2=patch["perps2"],
             weights=areas,
             metadata=metadata,
+            pec_flat_perp_dims=(False, True) if is_2d else (False, False),
         )
 
     def _edge_geometry_arrays(

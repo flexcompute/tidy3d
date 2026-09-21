@@ -328,21 +328,10 @@ def _pec_sampling_data(
         "material_query_points": material_query_points,
     }
 
-    # line-integration facts: a tangent direction is "flat" when the structure has no
-    # extent along it, in which case PEC integration follows an edge and applies the
-    # singularity correction (matching the legacy bounds-based detection)
-    structure_sizes = np.asarray(structure.geometry.bounds[1]) - np.asarray(
-        structure.geometry.bounds[0]
-    )
-    perps1 = np.asarray(sample_set.perps1.values, dtype=float)
-    perps2 = np.asarray(sample_set.perps2.values, dtype=float)
-    is_flat_perp_dim1 = bool(np.isclose(np.abs(np.sum(perps1[0] * structure_sizes)), 0.0))
-    is_flat_perp_dim2 = bool(np.isclose(np.abs(np.sum(perps2[0] * structure_sizes)), 0.0))
-
     return PECSamplingData(
         outside=_pec_side_sampling_data(is_outside=True, **side_kwargs),
         inside=_pec_side_sampling_data(is_outside=False, **side_kwargs),
-        flat_perp_dims=(is_flat_perp_dim1, is_flat_perp_dim2),
+        flat_perp_dims=sample_set.pec_flat_perp_dims,
     )
 
 

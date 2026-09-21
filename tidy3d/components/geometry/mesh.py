@@ -819,6 +819,14 @@ class TriangleMesh(base.Geometry, ABC):
         if _MESH_DERIVATIVE_PATH not in paths:
             return {}
 
+        if not self.trimesh.is_volume:
+            raise AdjointError(
+                "TriangleMesh shape gradients require a closed volume mesh with consistent "
+                "outward-facing normals; zero-volume, non-watertight, and incorrectly "
+                "oriented meshes are unsupported. Try `TriangleMesh.fix_normals` to repair face "
+                "orientation, or repair the mesh topology."
+            )
+
         triangles = np.asarray(self.triangles, dtype=config.adjoint.gradient_dtype_float)
 
         # no samples if geometry is completely outside simulation bounds
@@ -857,6 +865,7 @@ class TriangleMesh(base.Geometry, ABC):
             perps1=samples["perps1"],
             perps2=samples["perps2"],
             weights=samples["weights"],
+            pec_flat_perp_dims=(False, False),
             metadata=metadata,
         )
         return {_MESH_SURFACE_KEY: sample_set}
@@ -875,6 +884,14 @@ class TriangleMesh(base.Geometry, ABC):
 
         if _MESH_DERIVATIVE_PATH not in paths:
             return vjps
+
+        if not self.trimesh.is_volume:
+            raise AdjointError(
+                "TriangleMesh shape gradients require a closed volume mesh with consistent "
+                "outward-facing normals; zero-volume, non-watertight, and incorrectly "
+                "oriented meshes are unsupported. Try `TriangleMesh.fix_normals` to repair face "
+                "orientation, or repair the mesh topology."
+            )
 
         if _MESH_SURFACE_KEY not in sample_sets:
             raise AdjointError(

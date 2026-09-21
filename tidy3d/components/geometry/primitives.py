@@ -477,6 +477,7 @@ class Sphere(base.Centered, base.Circular):
             perps1=perp1[inside_mask],
             perps2=perp2[inside_mask],
             weights=weights[inside_mask],
+            pec_flat_perp_dims=(False, False),
         )
         return {_SPHERE_SURFACE_KEY: sample_set}
 

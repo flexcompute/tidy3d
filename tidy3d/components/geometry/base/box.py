@@ -824,6 +824,7 @@ class Box(SimplePlaneIntersection, Centered):
             return 0.0
 
         is_2d = np.any(is_2d_map)
+        pec_flat_perp_dims = (False, False)
 
         # Build point grid
         adaptive_spacing = derivative_info.adaptive_vjp_spacing()
@@ -855,6 +856,7 @@ class Box(SimplePlaneIntersection, Centered):
         if is_2d:
             # build 1D grid for sampling points along the face, which is an edge in the 2D case
             zero_dim = np.where(is_2d_map)[0][0]
+            pec_flat_perp_dims = (zero_dim == 0, zero_dim == 1)
             # zero dim is one of the perpendicular directions, so the other perpendicular direction
             # is the nonzero dimension
             nonzero_dim = 1 - zero_dim
@@ -920,13 +922,16 @@ class Box(SimplePlaneIntersection, Centered):
         perps1[:, axis_perp[0]] = 1
         perps2[:, axis_perp[1]] = 1
 
-        gradient_at_points = derivative_info.evaluate_gradient_at_points(
-            spatial_coords=grid_points,
-            normals=normals,
-            perps1=perps1,
-            perps2=perps2,
-            interpolators=interpolators,
-        )
+        gradient_kwargs = {
+            "spatial_coords": grid_points,
+            "normals": normals,
+            "perps1": perps1,
+            "perps2": perps2,
+            "interpolators": interpolators,
+        }
+        if any(pec_flat_perp_dims):
+            gradient_kwargs["pec_flat_perp_dims"] = pec_flat_perp_dims
+        gradient_at_points = derivative_info.evaluate_gradient_at_points(**gradient_kwargs)
 
         vjp_value = np.sum(integration_weight * np.real(gradient_at_points))
         return vjp_value
@@ -1077,6 +1082,7 @@ class Box(SimplePlaneIntersection, Centered):
             return None
 
         is_2d = np.any(is_2d_map)
+        pec_flat_perp_dims = (False, False)
 
         # Build point grid
         adaptive_spacing = ctx.spacing
@@ -1108,6 +1114,7 @@ class Box(SimplePlaneIntersection, Centered):
         if is_2d:
             # build 1D grid for sampling points along the face, which is an edge in the 2D case
             zero_dim = np.where(is_2d_map)[0][0]
+            pec_flat_perp_dims = (zero_dim == 0, zero_dim == 1)
             # zero dim is one of the perpendicular directions, so the other perpendicular direction
             # is the nonzero dimension
             nonzero_dim = 1 - zero_dim
@@ -1179,6 +1186,7 @@ class Box(SimplePlaneIntersection, Centered):
             perps1=perps1,
             perps2=perps2,
             weights=np.full(len(grid_points), integration_weight),
+            pec_flat_perp_dims=pec_flat_perp_dims,
         )
 
 

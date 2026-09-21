@@ -429,6 +429,7 @@ class DerivativeInfo:
         perps1: ArrayFloat,
         perps2: ArrayFloat,
         interpolators: dict,
+        pec_flat_perp_dims: tuple[bool, bool] = (False, False),
     ) -> np.ndarray:
         """Compute unclipped shape gradients for the provided point set."""
         if self._outside_snapped_points_reach_simulation_boundary(
@@ -482,6 +483,7 @@ class DerivativeInfo:
                     perps2,
                     interpolators,
                     is_outside=True,
+                    pec_flat_perp_dims=pec_flat_perp_dims,
                 )
 
             if has_pec_outside:
@@ -493,6 +495,7 @@ class DerivativeInfo:
                     perps2,
                     interpolators,
                     is_outside=False,
+                    pec_flat_perp_dims=pec_flat_perp_dims,
                 )
         elif self._eps_data_contains_metal_like_values():
             log.warning(
@@ -523,6 +526,7 @@ class DerivativeInfo:
         perps1: np.ndarray,
         perps2: np.ndarray,
         interpolators: dict | None = None,
+        pec_flat_perp_dims: tuple[bool, bool] = (False, False),
     ) -> np.ndarray:
         """Compute adjoint gradients at surface points for shape optimization.
 
@@ -548,6 +552,9 @@ class DerivativeInfo:
             (N, 3) array of second tangent vectors perpendicular to both normals and perps1.
         interpolators : dict = None
             Pre-computed field interpolators for efficiency.
+        pec_flat_perp_dims : tuple[bool, bool]
+            Tangential directions selected by an explicitly generated 1D PEC edge
+            quadrature. Ordinary surface quadrature uses ``(False, False)``.
 
         Returns
         -------
@@ -573,6 +580,7 @@ class DerivativeInfo:
                 perps1=perps1,
                 perps2=perps2,
                 interpolators=interpolators,
+                pec_flat_perp_dims=pec_flat_perp_dims,
             )
 
         clip_active = self._clip_active_from_inside_check(
@@ -590,6 +598,7 @@ class DerivativeInfo:
             perps1=perps1[active_idx],
             perps2=perps2[active_idx],
             interpolators=interpolators,
+            pec_flat_perp_dims=pec_flat_perp_dims,
         )
 
         invalid_active = ~np.isfinite(vjps_active)
@@ -783,6 +792,7 @@ class DerivativeInfo:
         perps2: np.ndarray,
         interpolators: dict,
         is_outside: bool,
+        pec_flat_perp_dims: tuple[bool, bool],
     ) -> np.ndarray:
         def _snap_coordinate_outside(
             field_components: FieldDataDict,
@@ -868,17 +878,7 @@ class DerivativeInfo:
             )
             for name, interp in interpolators["eps_data"].items()
         }
-        structure_sizes = np.array(
-            [self.bounds[1][idx] - self.bounds[0][idx] for idx in range(len(self.bounds[0]))]
-        )
-
-        is_flat_perp_dim1 = np.isclose(np.abs(np.sum(perps1[0] * structure_sizes)), 0.0)
-        is_flat_perp_dim2 = np.isclose(np.abs(np.sum(perps2[0] * structure_sizes)), 0.0)
-        flat_perp_dims = (bool(is_flat_perp_dim1), bool(is_flat_perp_dim2))
-
-        # check if this integration is happening along an edge in which case we will eliminate
-        # one of the H field integration components and apply singularity correction
-        pec_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
+        pec_line_integration = any(pec_flat_perp_dims)
 
         def _mean_edge_distance(adjustment_: dict[str, dict[str, ArrayFloat]]) -> ArrayFloat:
             """Group-mean distance from the sampled grid points to the surface points."""
@@ -895,8 +895,8 @@ class DerivativeInfo:
             perps2=perps2,
             edge_distance_e=_mean_edge_distance(E_fwd_coords_adjusted),
             edge_distance_h=_mean_edge_distance(H_fwd_coords_adjusted),
-            line_integration=bool(pec_line_integration),
-            flat_perp_dims=flat_perp_dims,
+            line_integration=pec_line_integration,
+            flat_perp_dims=pec_flat_perp_dims,
         )
 
     @staticmethod
