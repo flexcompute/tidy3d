@@ -1105,6 +1105,24 @@ class GradedMesher(Mesher):
         right_dl = np.minimum(max_dl_list, right_dl)
         left_dl = np.minimum(max_dl_list, left_dl)
 
+        # Bound each boundary estimate by geometry, not just by ``max_dl_list``. A neighbor's
+        # last cell cannot exceed that neighbor's own extent, and the current interval's boundary
+        # cell may be at most ``max_scale`` times it; no cell in the current interval can exceed
+        # its length either.
+        # Without this, a ceiling far coarser than the local features leaves every estimate at
+        # the ceiling and this refinement becomes a no-op.
+        len_left_neighbor = np.roll(len_interval_list, shift=1)
+        len_right_neighbor = np.roll(len_interval_list, shift=-1)
+        if not is_periodic:
+            len_left_neighbor[0] = len_interval_list[0]
+            len_right_neighbor[-1] = len_interval_list[-1]
+        left_dl = np.minimum(left_dl, np.minimum(max_scale * len_left_neighbor, len_interval_list))
+        right_dl = np.minimum(
+            right_dl, np.minimum(max_scale * len_right_neighbor, len_interval_list)
+        )
+
+        num_intervals = len_interval_list.size
+
         # Update left and right neighbor step size considering the impact of neighbor intervals
         refine_analy = 1
 
@@ -1122,7 +1140,12 @@ class GradedMesher(Mesher):
 
             if np.any(update_ind):
                 refine_analy = 1
-                left_dl[np.roll(update_ind, shift=1)] = left_to_right_dl[update_ind]
+                # Pair each source with its recipient through integer indices.
+                source_ind = np.flatnonzero(update_ind)
+                recipient_ind = (source_ind + 1) % num_intervals
+                left_dl[recipient_ind] = np.minimum(
+                    left_to_right_dl[source_ind], len_interval_list[recipient_ind]
+                )
 
             # from right to left, grow to fill up len_interval, minimal 1 step
             tmp_step = 1 - len_interval_list / right_dl * (1 - max_scale)
@@ -1136,7 +1159,11 @@ class GradedMesher(Mesher):
 
             if np.any(update_ind):
                 refine_analy = 1
-                right_dl[np.roll(update_ind, shift=-1)] = right_to_left_dl[update_ind]
+                source_ind = np.flatnonzero(update_ind)
+                recipient_ind = (source_ind - 1) % num_intervals
+                right_dl[recipient_ind] = np.minimum(
+                    right_to_left_dl[source_ind], len_interval_list[recipient_ind]
+                )
 
         if not is_periodic:
             left_dl[0] = max_dl_list[0]
