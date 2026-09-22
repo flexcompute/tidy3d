@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
   "pyroots>=0.5.0,<0.6.0",
   "flexcompute-core==0.0.1.dev2",
-  "xarray>=2023.08,<2026.5.0",
+  "xarray>=2023.08,<2026.8.0",
   "importlib-metadata>=6.0.0,<10.0.0",
   "h5netcdf>=1.0.2,<2.0.0",
   "h5py>=3.0.0,<3.17; python_version < '3.14'",
@@ -47,7 +47,7 @@ dependencies = [
   "joblib>=1.5.3,<2.0.0",
   "typing-extensions>=4.15.0,<5.0.0",
   "filelock>=3.20.1,<4.0.0",
-  "tidy3d-mcp==0.16.7",
+  "tidy3d-mcp==0.16.10",
 ]
 
 [project.urls]
@@ -78,7 +78,7 @@ dev = [
   "networkx>=2.6.3,<4.0.0",
   "psutil>=7.2.1,<8.0.0",
   "pre-commit>=4,<5",
-  "pyrefly==1.1.1",
+  "pyrefly==1.3.0",
   "pydata-sphinx-theme>=0.13.3,<0.20.0",
   "pygad==3.7.0",
   "pylint>=4.0.4,<5.0.0",
@@ -105,7 +105,7 @@ dev = [
   "tmm>=0.2.0,<0.3.0",
   "tox>=4.33.0,<5.0.0",
   "towncrier>=25.8.0,<26.0.0",
-  "trimesh>=4.6,<5.0.0",
+  "trimesh>=4.6,<6.0.0",
   "scikit-rf>=1.9.0,<3.0.0",
   "vtk>=9.6.0,<10.0.0",
   "pyvista[jupyter]>=0.45,<0.48.0",
@@ -130,7 +130,7 @@ tests = [
   "pytest-env>=1.1.5,<2.0.0",
   "pytest-cov>=6.0.0,<8.0.0",
   "pytest-testmon>=2.1.3,<3.0.0",
-  "trimesh>=4.6,<5.0.0",
+  "trimesh>=4.6,<6.0.0",
   "networkx>=2.6.3,<4.0.0",
   "rtree==1.4.1",
 ]
@@ -191,13 +191,13 @@ notebooks = [
   "torch>=2.2.0,<3.0.0; sys_platform == 'darwin'",
   "torch>=2.2.0,<3.0.0; sys_platform != 'darwin'",
   "triangle>=20250106,<20260101; python_version < '3.14' and (sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'darwin' and platform_machine == 'arm64'))",
-  "trimesh>=4.6,<5.0.0",
+  "trimesh>=4.6,<6.0.0",
   "vtk>=9.6.0,<10.0.0",
 ]
 gdstk = ["gdstk>=0.9.49,<1.1"]
 scikit-rf = ["scikit-rf>=1.9.0,<3.0.0"]
 trimesh = [
-  "trimesh>=4.6,<5.0.0",
+  "trimesh>=4.6,<6.0.0",
   "networkx>=2.6.3,<4.0.0",
   "rtree==1.4.1",
 ]
@@ -212,7 +212,7 @@ pyvista = [
 ]
 ruff = ["ruff==0.14.1"]
 heatcharge = [
-  "trimesh>=4.6,<5.0.0",
+  "trimesh>=4.6,<6.0.0",
   "networkx>=2.6.3,<4.0.0",
   "rtree==1.4.1",
   "vtk>=9.6.0,<10.0.0",

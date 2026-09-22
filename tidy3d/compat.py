@@ -12,10 +12,7 @@ try:
 except ImportError:
     from xarray.core import alignment
 
-try:
-    from numpy import trapezoid as np_trapezoid
-except ImportError:  # NumPy < 2.0
-    from numpy import trapz as np_trapezoid
+from numpy import trapezoid as np_trapezoid
 
 try:
     from typing import Self, TypeAlias  # Python >= 3.11
