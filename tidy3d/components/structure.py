@@ -839,6 +839,38 @@ class Structure(AbstractStructure):
             )
         return self.medium.eps_comp(row=row, col=col, frequency=frequency)
 
+    def _filter_gdstk_polygons(
+        self,
+        polygons: list[Any],
+        *,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        permittivity_threshold: NonNegativeFloat = 1,
+        frequency: PositiveFloat = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
+        pixel_exact: bool = False,
+    ) -> list[Any]:
+        """Filter precomputed geometry polygons using custom-medium permittivity contours."""
+        optical_medium = self._get_optical_medium(self.medium)
+        if not isinstance(optical_medium, AbstractCustomMedium):
+            return polygons
+
+        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+        bb_min, bb_max = self.geometry.bounds
+        position = (x, y, z)[axis]
+        contours, _, _ = optical_medium._gdstk_contours(
+            axis=axis,
+            plane_position=position,
+            bounds_xyz=(bb_min, bb_max),
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            pixel_exact=pixel_exact,
+        )
+
+        return gdstk.boolean(polygons, contours, "and", layer=gds_layer, datatype=gds_dtype)
+
     def to_gdstk(
         self,
         x: float | None = None,
@@ -879,22 +911,17 @@ class Structure(AbstractStructure):
 
         polygons = self.geometry.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
 
-        if isinstance(self.medium, AbstractCustomMedium):
-            axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-            bb_min, bb_max = self.geometry.bounds
-            position = (x, y, z)[axis]
-            contours, _, _ = self.medium._gdstk_contours(
-                axis=axis,
-                plane_position=position,
-                bounds_xyz=(bb_min, bb_max),
-                permittivity_threshold=permittivity_threshold,
-                frequency=frequency,
-                pixel_exact=pixel_exact,
-            )
-
-            polygons = gdstk.boolean(polygons, contours, "and", layer=gds_layer, datatype=gds_dtype)
-
-        return polygons
+        return self._filter_gdstk_polygons(
+            polygons,
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer=gds_layer,
+            gds_dtype=gds_dtype,
+            pixel_exact=pixel_exact,
+        )
 
     def to_gds(
         self,

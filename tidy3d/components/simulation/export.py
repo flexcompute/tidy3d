@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 
 from tidy3d.components.geometry.base import Geometry
+from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.structure import Structure
 from tidy3d.exceptions import (
     Tidy3dError,
@@ -15,11 +16,12 @@ from tidy3d.exceptions import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from os import PathLike
 
     from pydantic import NonNegativeFloat, NonNegativeInt, PositiveFloat
 
-    from tidy3d.components.material.types import StructureMediumType
+    from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
     from tidy3d.components.medium import AbstractMedium
 
 
@@ -58,7 +60,10 @@ def to_gdstk(
     z: float | None = None,
     permittivity_threshold: NonNegativeFloat = 1,
     frequency: PositiveFloat = 0,
-    gds_layer_dtype_map: dict[AbstractMedium, tuple[NonNegativeInt, NonNegativeInt]] | None = None,
+    gds_layer_dtype_map: Mapping[
+        AbstractMedium | MultiPhysicsMedium, tuple[NonNegativeInt, NonNegativeInt]
+    ]
+    | None = None,
     pixel_exact: bool = False,
 ) -> list:
     """Convert a simulation's planar slice to a .gds type polygon list.
@@ -76,8 +81,10 @@ def to_gdstk(
         medim
     frequency : float = 0
         Frequency for permittivity evaluation in case of custom medium (Hz).
-    gds_layer_dtype_map : Dict
-        Dictionary mapping mediums to GDSII layer and data type tuples.
+    gds_layer_dtype_map : Mapping
+        Mapping from optical media or complete :class:`.MultiPhysicsMedium` wrappers to GDSII
+        layer and data type tuples. For a wrapped medium, an exact wrapper key takes precedence
+        over its optical-medium key. Unmapped media use layer and data type ``(0, 0)``.
     pixel_exact : bool = False
         If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
 
@@ -101,6 +108,19 @@ def to_gdstk(
         bmin = (bmin[0], center[1])
     clip = gdstk.rectangle(bmin, bmax)
 
+    def _clip_to_export_bounds(polygons: list, gds_layer: int, gds_dtype: int) -> list:
+        """Clip polygons to the exported simulation slice."""
+        clipped_polygons = []
+        for polygon in polygons:
+            pmin, pmax = polygon.bounding_box()
+            if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
+                clipped_polygons.extend(
+                    gdstk.boolean(clip, polygon, "and", layer=gds_layer, datatype=gds_dtype)
+                )
+            else:
+                clipped_polygons.append(polygon)
+        return clipped_polygons
+
     optical_medium_export_key_cache: dict[StructureMediumType | None, OpticalMediumExportKey] = {}
     background_medium_key = self._optical_medium_export_key(
         Structure._get_optical_medium(self.medium), optical_medium_export_key_cache
@@ -110,30 +130,65 @@ def to_gdstk(
     deferred_background_polygons_by_layer: dict[tuple[int, int], list] = {}
     layer_has_filled_region: dict[tuple[int, int], bool] = {}
     for structure in self.scene.sorted_structures:
-        gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
-        structure_polygons = []
-        for polygon in structure.to_gdstk(
+        optical_medium = Structure._get_optical_medium(structure.medium)
+        layer_dtype = gds_layer_dtype_map.get(structure.medium)
+        if layer_dtype is None:
+            # Allow wrapped media to use a map keyed by their underlying optical medium.
+            layer_dtype = gds_layer_dtype_map.get(optical_medium, (0, 0))
+        gds_layer, gds_dtype = layer_dtype
+        layer_key = (gds_layer, gds_dtype)
+
+        geometry_polygons = structure.geometry.to_gdstk(
             x=x,
             y=y,
             z=z,
-            permittivity_threshold=permittivity_threshold,
-            frequency=frequency,
             gds_layer=gds_layer,
             gds_dtype=gds_dtype,
-            pixel_exact=pixel_exact,
-        ):
-            pmin, pmax = polygon.bounding_box()
-            if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
-                structure_polygons.extend(
-                    gdstk.boolean(clip, polygon, "and", layer=gds_layer, datatype=gds_dtype)
-                )
-            else:
-                structure_polygons.append(polygon)
+        )
+
+        if isinstance(optical_medium, AbstractCustomMedium):
+            # Custom media replace lower-priority material throughout their geometry, including
+            # regions where their thresholded export has no polygons.
+            override_polygons = _clip_to_export_bounds(geometry_polygons, gds_layer, gds_dtype)
+            if override_polygons:
+                layer_polygons = polygons_by_layer.get(layer_key, [])
+                if layer_polygons:
+                    polygons_by_layer[layer_key] = gdstk.boolean(
+                        layer_polygons,
+                        override_polygons,
+                        "not",
+                        layer=gds_layer,
+                        datatype=gds_dtype,
+                    )
+                deferred_polygons = deferred_background_polygons_by_layer.get(layer_key, [])
+                if deferred_polygons:
+                    deferred_background_polygons_by_layer[layer_key] = gdstk.boolean(
+                        deferred_polygons,
+                        override_polygons,
+                        "not",
+                        layer=gds_layer,
+                        datatype=gds_dtype,
+                    )
+
+        structure_polygons = _clip_to_export_bounds(
+            structure._filter_gdstk_polygons(
+                geometry_polygons,
+                x=x,
+                y=y,
+                z=z,
+                permittivity_threshold=permittivity_threshold,
+                frequency=frequency,
+                gds_layer=gds_layer,
+                gds_dtype=gds_dtype,
+                pixel_exact=pixel_exact,
+            ),
+            gds_layer,
+            gds_dtype,
+        )
 
         if not structure_polygons:
             continue
 
-        layer_key = (gds_layer, gds_dtype)
         layer_polygons = polygons_by_layer.get(layer_key, [])
         if self._structure_exports_as_filled_region(
             structure,
@@ -238,7 +293,10 @@ def to_gds(
     z: float | None = None,
     permittivity_threshold: NonNegativeFloat = 1,
     frequency: PositiveFloat = 0,
-    gds_layer_dtype_map: dict[AbstractMedium, tuple[NonNegativeInt, NonNegativeInt]] | None = None,
+    gds_layer_dtype_map: Mapping[
+        AbstractMedium | MultiPhysicsMedium, tuple[NonNegativeInt, NonNegativeInt]
+    ]
+    | None = None,
     pixel_exact: bool = False,
 ) -> None:
     """Append the simulation structures to a .gds cell, expanding in-plane symmetry.
@@ -258,8 +316,10 @@ def to_gds(
         medim
     frequency : float = 0
         Frequency for permittivity evaluation in case of custom medium (Hz).
-    gds_layer_dtype_map : Dict
-        Dictionary mapping mediums to GDSII layer and data type tuples.
+    gds_layer_dtype_map : Mapping
+        Mapping from optical media or complete :class:`.MultiPhysicsMedium` wrappers to GDSII
+        layer and data type tuples. For a wrapped medium, an exact wrapper key takes precedence
+        over its optical-medium key. Unmapped media use layer and data type ``(0, 0)``.
     pixel_exact : bool = False
         If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
     """
@@ -305,7 +365,10 @@ def to_gds_file(
     z: float | None = None,
     permittivity_threshold: NonNegativeFloat = 1,
     frequency: PositiveFloat = 0,
-    gds_layer_dtype_map: dict[AbstractMedium, tuple[NonNegativeInt, NonNegativeInt]] | None = None,
+    gds_layer_dtype_map: Mapping[
+        AbstractMedium | MultiPhysicsMedium, tuple[NonNegativeInt, NonNegativeInt]
+    ]
+    | None = None,
     gds_cell_name: str = "MAIN",
     pixel_exact: bool = False,
     gds_precision: PositiveFloat = 1e-3,
@@ -327,8 +390,10 @@ def to_gds_file(
         medim
     frequency : float = 0
         Frequency for permittivity evaluation in case of custom medium (Hz).
-    gds_layer_dtype_map : Dict
-        Dictionary mapping mediums to GDSII layer and data type tuples.
+    gds_layer_dtype_map : Mapping
+        Mapping from optical media or complete :class:`.MultiPhysicsMedium` wrappers to GDSII
+        layer and data type tuples. For a wrapped medium, an exact wrapper key takes precedence
+        over its optical-medium key. Unmapped media use layer and data type ``(0, 0)``.
     gds_cell_name : str = 'MAIN'
         Name of the cell created in the .gds file to store the geometry.
     pixel_exact : bool = False
