@@ -359,10 +359,11 @@ class _PolyBulgeUtil:
         # Build a lookup: edge index -> position in arc arrays
         edge_to_arc_idx = dict(zip(arc_indices, range(len(arc_indices))))
 
-        # Loop to assemble variable-length per-arc points
+        # Collect per-vertex and per-arc coordinate blocks, then concatenate once: appending
+        # individual points instead makes assembly dominate the cost on arc-heavy models.
         all_points = []
         for vertex_idx in range(num_vertices):
-            all_points.append(vertices[vertex_idx])
+            all_points.append(vertices[vertex_idx : vertex_idx + 1])
 
             if vertex_idx in edge_to_arc_idx:
                 arc_pos = edge_to_arc_idx[vertex_idx]
@@ -386,9 +387,9 @@ class _PolyBulgeUtil:
                     arc_points = np.column_stack(
                         [center[0] + radius * np.cos(angles), center[1] + radius * np.sin(angles)]
                     )
-                    all_points.extend(arc_points)
+                    all_points.append(arc_points)
 
-        return np.array(all_points)
+        return np.concatenate(all_points, axis=0)
 
     @staticmethod
     def _arc_segment_area(bulge_data: dict) -> float:
