@@ -1524,6 +1524,8 @@ def clip_active_from_inside_check(
     Shared by the legacy volumetric consumption path and the point-cloud path so the
     clip-context masking cannot drift.
     """
+    spatial_coords = np.asarray(spatial_coords, dtype=float)
+    normals = np.asarray(normals, dtype=float)
     probe_eps = CLIP_INSIDE_PROBE_FRACTION * material_length_scale
     points_minus = spatial_coords - probe_eps * normals
     points_plus = spatial_coords + probe_eps * normals
