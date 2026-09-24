@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from inspect import signature
 from typing import TYPE_CHECKING, Annotated, Any, Literal, overload
 
 import numpy as np
@@ -498,7 +499,17 @@ class MethodBayOpt(MethodOptimize, ABC):
         return opt, opt.suggest
 
     def _build_bayopt_acquisition(self, acquisition_cls: Any, **kwargs: Any) -> Any:
-        """Instantiate bayes_opt acquisition classes with/without random_state support."""
+        """Instantiate a bayes_opt acquisition with the version-appropriate random state."""
+        try:
+            suggest_parameters = signature(acquisition_cls.suggest).parameters
+        except (AttributeError, TypeError, ValueError):
+            suggest_parameters = {}
+
+        # bayesian-optimization 3.x passes the optimizer's RNG into suggest(); 2.x does not,
+        # so 2.x acquisition objects must receive the seed during construction.
+        if "random_state" in suggest_parameters:
+            return acquisition_cls(**kwargs)
+
         try:
             return acquisition_cls(random_state=self.seed, **kwargs)
         except TypeError:

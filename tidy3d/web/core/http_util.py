@@ -257,7 +257,11 @@ def ssl_context_for_config(*, cert_reqs: int | None = None) -> ssl.SSLContext:
     except KeyError:
         log.warning(f"Invalid SSL/TLS version '{config.web.ssl_version}', using default")
         ssl_version = None
-    return create_urllib3_context(ssl_version=ssl_version, cert_reqs=cert_reqs)
+    return create_urllib3_context(
+        ssl_minimum_version=ssl_version,
+        ssl_maximum_version=ssl_version,
+        cert_reqs=cert_reqs,
+    )
 
 
 class TLSAdapter(HTTPAdapter):
