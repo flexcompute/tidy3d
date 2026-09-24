@@ -144,11 +144,16 @@ def _validate_preprocess_cache_eligibility(simulation: WorkflowOperationType, mo
         raise DataError(f"Invalid preprocess-cache simulation{suffix}: {message}")
 
 
+# RF clients identify with the flex-rf: protocol family; the service recognizes RF requests by
+# this prefix, which is a wire identifier, not the package name.
+RF_PROTOCOL_PREFIX = "flex-rf:"
+
+
 def _active_product_protocol() -> str | None:
     """Return the product protocol owned by the active client context, if any."""
     identity = get_client_identity()
     protocol = identity.protocol_version if identity is not None else None
-    return protocol if protocol and protocol.startswith("flex-rf:") else None
+    return protocol if protocol and protocol.startswith(RF_PROTOCOL_PREFIX) else None
 
 
 @dataclass(frozen=True)
@@ -1248,7 +1253,7 @@ def load(
             workflow_type = task_type_name_of(cache_simulation)
         else:
             info = get_info(task_id, verbose=False)
-            if (getattr(info, "protocolVersion", None) or "").startswith("flex-rf:"):
+            if (getattr(info, "protocolVersion", None) or "").startswith(RF_PROTOCOL_PREFIX):
                 return stub_data
             workflow_type = getattr(info, "taskType", None)
         if workflow_type != TaskType.MODE_SOLVER.name:

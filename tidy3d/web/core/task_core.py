@@ -61,6 +61,7 @@ def validate_protocol_version(protocol_version: str | None) -> str | None:
     if protocol_version is None:
         return None
     family, separator, version = protocol_version.partition(":")
+    # flex-rf is the RF client's protocol family, a wire identifier rather than the package name.
     if separator and family not in {"tidy3d", "flex-rf"}:
         version = ""
     elif not separator:

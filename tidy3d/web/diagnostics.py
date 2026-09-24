@@ -864,11 +864,11 @@ def diagnose_connection(
 
 # Packages worth capturing for support tickets. Absence is signalled with ``version=None`` so
 # support engineers can distinguish "not installed" from "unknown". Only the public distribution
-# names are listed; ``flex-rf`` is the public name for the RF client.
+# names are listed; ``flexcompute-rf`` is the public name for the RF client.
 FLEXCOMPUTE_PACKAGES = (
     "tidy3d",
     "tidy3d-extras",
-    "flex-rf",
+    "flexcompute-rf",
     "photonforge",
     "flow360",
 )

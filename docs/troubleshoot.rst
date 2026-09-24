@@ -99,7 +99,7 @@ Report Layout
 1. **Issue template** — the seven questions, filled from your answers plus
    the auto-detected Tidy3D version and task ID.
 2. **Environment** — Python, platform, Flexcompute distributions
-   (``tidy3d``, ``tidy3d-extras``, ``flex-rf``, ``photonforge``, ``flow360``),
+   (``tidy3d``, ``tidy3d-extras``, ``flexcompute-rf``, ``photonforge``, ``flow360``),
    and a full ``pip freeze``.
 3. **Configuration** — redacted API endpoint, SSL settings, proxy /
    certificate / Tidy3D env vars.
