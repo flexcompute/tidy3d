@@ -78,8 +78,9 @@ Advanced controls (leave at their defaults):
 These rarely need changing. Non-default values emit a warning and can cause long
 runtimes or non-convergence:
 
-- ``cfl_number`` (default ``1e9``)
-- ``cfl_min`` (default ``None``)
+- ``cfl_number`` (default ``1e9``) -- the upper bound of the adaptive CFL
+  controller.
+- ``cfl_min`` (default ``None``, meaning ``1``) -- its lower bound.
 - ``preconditioner_iterations`` (default ``50``)
 
 Troubleshooting convergence (accelerated solver)
@@ -90,20 +91,51 @@ solver does not converge, work through these in order:
 
 #. **Look at the convergence history first.** Inspect
    ``sim_data.device_characteristics.dc_convergence`` -- its ``converged``,
-   ``n_iters`` and ``residual_history`` fields (see
+   ``n_iters``, ``residual_history`` and ``cfl_history`` fields (see
    :class:`SteadyConvergenceData`)::
 
        conv = sim_data.device_characteristics.dc_convergence
-       conv.converged, conv.n_iters, conv.residual_history
+       conv.converged, conv.n_iters, conv.residual_history, conv.cfl_history
 
-   This tells you whether the residual was still decreasing (the solver simply
-   needs more iterations) or had stagnated above the tolerance (it will not
-   converge further without other changes).
-#. **Residual still decreasing -- give it more iterations.** Raise ``max_iters``
-   first. If the residual is still dropping when ``n_iters`` reaches the cap,
-   also raise ``max_pseudo_steps``. A non-default ``max_pseudo_steps`` emits a
-   warning about long runtimes and convergence; that warning is conservative and
-   is expected in this case.
+   ``residual_history`` tells you whether the residual was still decreasing (the
+   solver simply needs more iterations) or had stagnated above the tolerance (it
+   will not converge further without other changes).
+
+   ``cfl_history`` tells you how the pseudo-time damping evolved. The solver
+   damps the Newton iteration by adding a pseudo-time term that scales as
+   ``1 / CFL``; the controller adapts the CFL between ``cfl_min`` and
+   ``cfl_number`` as the solve proceeds. At a non-converged bias::
+
+       stuck = conv.cfl_history.sel(v=0.7)
+
+   * **CFL at its lower bound** (``cfl_min``, default ``1``): the controller
+     cut the CFL as far as it is allowed. It lowers the CFL for several
+     reasons, so this says where the controller ended, not why.
+   * **CFL at its upper bound** (``cfl_number``, default ``1e9``): the
+     pseudo-time term was at its smallest allowed value. If the residual was
+     still decreasing, go to step 2; if it had stagnated, look at the setup --
+     mesh, doping, operating point -- rather than at the solver controls.
+   * **CFL still moving between the two bounds**: the controller was still
+     adapting. Read ``residual_history`` and follow steps 2 and 3 as usual.
+
+   With ``cfl_min == cfl_number`` the CFL is held constant and the trace says
+   nothing about the bounds.
+
+   A drop between consecutive samples means the controller backed off; only
+   one sample per ``pseudo_step`` is recorded. Traces are not independent
+   across biases: the first bias solved starts at ``1`` before any bound is
+   applied, so its first sample can lie outside ``[cfl_min, cfl_number]`` on
+   either side; each later bias starts from the CFL carried over from the
+   previous one, brought within range and lowered after a bias that had to
+   back off.
+
+   When the trace for a non-converged bias conclusively ends on one bound, the
+   non-convergence warning issued when the simulation finishes names it.
+#. **Residual still decreasing -- give it more iterations.** Raise
+   ``max_iters`` first. If the residual is still dropping when ``n_iters``
+   reaches the cap, also raise ``max_pseudo_steps``. A non-default
+   ``max_pseudo_steps`` emits a warning about long runtimes and convergence;
+   that warning is conservative and is expected in this case.
 #. **A high-bias point in a sweep fails or oscillates.** Lower
    ``convergence_dv`` so the solver approaches it through smaller intermediate
    bias steps. For a single requested voltage ``convergence_dv`` has no

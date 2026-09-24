@@ -204,6 +204,7 @@ from .components.boundary import (
 # data
 from .components.data.data_array import (
     CellDataArray,
+    CFLHistoryDataArray,
     ChargeDataArray,
     ConvergenceHistoryDataArray,
     DiffractionDataArray,
@@ -636,6 +637,7 @@ __all__ = [
     "BroadbandModeABCFitterParam",
     "BroadbandModeABCSpec",
     "BroadbandPulse",
+    "CFLHistoryDataArray",
     "CanaliFieldDependence",
     "CaugheyThomasMobility",
     "CellDataArray",

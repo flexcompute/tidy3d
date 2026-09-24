@@ -13,6 +13,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
     AbstractSpatialDataArray,
+    CFLHistoryDataArray,
     ConvergenceHistoryDataArray,
     FreqVoltageDataArray,
     SteadyVoltageDataArray,
@@ -142,6 +143,19 @@ class SteadyConvergenceData(Tidy3dBaseModel):
         "``(v, pseudo_step, component)``; ragged biases are NaN-padded along "
         "``pseudo_step`` to the longest trace -- use ``n_iters`` for the unpadded "
         "length per bias.",
+    )
+
+    cfl_history: CFLHistoryDataArray | None = Field(
+        default=None,
+        title="Per-pseudo-step CFL trace",
+        description="Per-bias trace of the CFL number in force at each Newton "
+        "iteration. Dimensions are ``(v, pseudo_step)``, NaN-padded along "
+        "``pseudo_step`` like ``residual_history`` so the two share that axis. "
+        "Read against ``residual_history`` at a bias that did not converge to see "
+        "whether the controller reached its lower bound "
+        "(``ChargeToleranceSpec.cfl_min``), reached its upper bound "
+        "(``ChargeToleranceSpec.cfl_number``), or was still adapting between them. "
+        "``None`` on results that predate this field.",
     )
 
 
