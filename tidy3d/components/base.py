@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from typing import NoReturn
 
+    from flexcompute.core._migration.em.validation import ValidationPath, ValidationReport
     from pydantic import ValidationInfo
     from pydantic.fields import FieldInfo
     from pydantic.functional_validators import ModelWrapValidatorHandler
@@ -508,6 +509,71 @@ class Tidy3dBaseModel(BaseModel):
             return func(*args, **kwargs)
         except Tidy3dError as error:
             self._raise_validation_error_at_loc(str(error), *loc, log_error=False)
+
+    def _translate_migrated_validation_scope(self) -> object | None:
+        """Return the migrated schema object this model validates, or ``None`` to opt out."""
+        return None
+
+    def _validate_migrated_validation_scope(
+        self,
+        migrated_scope: object,
+        *,
+        context: Mapping[str, Any],
+    ) -> ValidationReport | None:
+        """Validate a translated scope. Participating models override this hook."""
+        return None
+
+    def _run_migrated_validation_bridge(
+        self,
+        *,
+        context: Mapping[str, Any] | None = None,
+        path: ValidationPath = (),
+    ) -> ValidationReport | None:
+        """Translate and validate this model's migrated scope, then map its paths.
+
+        Opted-in models call this from their ordered after-validator or from an
+        explicit pre-upload check, and present the result with
+        :meth:`_present_migrated_validation_report`.
+        """
+        migrated_scope = self._translate_migrated_validation_scope()
+        if migrated_scope is None:
+            return None
+        report = self._validate_migrated_validation_scope(migrated_scope, context=context or {})
+        if report is None:
+            return None
+        return self._map_migrated_validation_report(report, path=path)
+
+    def _map_migrated_validation_report(
+        self,
+        report: ValidationReport,
+        *,
+        path: ValidationPath,
+    ) -> ValidationReport:
+        """Map scope-relative diagnostic paths to this model's public paths.
+
+        By default every path is prefixed with ``path``, so a parent validating a
+        nested scope reports ``("spec", "monitors", 2)`` instead of ``("monitors", 2)``.
+        Override when the migrated schema and the public model do not share field names.
+        """
+        diagnostics = tuple(
+            diagnostic.model_copy(update={"path": path + diagnostic.path})
+            for diagnostic in report.diagnostics
+        )
+        return report.model_copy(update={"diagnostics": diagnostics})
+
+    def _present_migrated_validation_report(self, report: ValidationReport | None) -> Self:
+        """Log warnings in report order, then raise the first error at its path.
+
+        Diagnostics after the first error are not presented.
+        """
+        if report is None:
+            return self
+        for diagnostic in report.diagnostics:
+            if diagnostic.severity == "warning":
+                log.warning(diagnostic.message, custom_loc=list(diagnostic.path))
+            else:
+                self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
+        return self
 
     def __hash__(self) -> int:
         """Hash method."""
