@@ -335,16 +335,20 @@ class MasettiMobility(Tidy3dBaseModel):
         .. math::
 
             \\mu(N,T) =
-            \\mu_0\\left(\\frac{T}{T_{ref}}\\right)^{\\gamma_0}
+            \\mu_0\\left(\\frac{T}{T_{ref}}\\right)^{\\gamma_0} e^{-P_c/N}
             + \\frac{
                 \\mu_{max}\\left(\\frac{T}{T_{ref}}\\right)^{\\gamma_{max}}
-                - \\mu_0\\left(\\frac{T}{T_{ref}}\\right)^{\\gamma_0}}
+                - \\mu_{min2}\\left(\\frac{T}{T_{ref}}\\right)^{\\gamma_0}}
                 {1 + \\left(N/C_r\\right)^{\\alpha}}
             - \\frac{\\mu_1}{1 + \\left(C_s/N\\right)^{\\beta}}
 
     where :math:`N` is the total ionized doping concentration (acceptors + donors) and
     :math:`T_{ref}` is 300 K. The final subtractive term captures the high-doping
-    clustering behavior absent from the Caughey-Thomas model.
+    clustering behavior absent from the Caughey-Thomas model. The exponential factor
+    suppresses the :math:`\\mu_0` floor at low doping; Masetti et al. use it for
+    boron-doped silicon (:math:`P_c > 0`, :math:`\\mu_{min2} = 0`). The defaults
+    :math:`P_c = 0` and :math:`\\mu_{min2} = \\mu_0` give their arsenic and
+    phosphorus form.
 
     This model is supported only by the accelerated charge solver. It must be
     used for both electron and hole mobility within a semiconductor medium.
@@ -365,9 +369,15 @@ class MasettiMobility(Tidy3dBaseModel):
        * - :math:`\\mu_0`
          - ``mu_0``
          - Mid-doping floor at 300 K.
+       * - :math:`\\mu_{min2}`
+         - ``mu_min2``
+         - Floor subtracted from the plateau in the transition term at 300 K.
        * - :math:`\\mu_1`
          - ``mu_1``
          - High-doping clustering amplitude.
+       * - :math:`P_c`
+         - ``Pc``
+         - Low-doping cutoff concentration of the :math:`\\mu_0` floor.
        * - :math:`C_r`
          - ``Cr``
          - First transition doping concentration.
@@ -385,7 +395,7 @@ class MasettiMobility(Tidy3dBaseModel):
          - Temperature exponent for ``mu_max``.
        * - :math:`\\gamma_0`
          - ``exp_0``
-         - Temperature exponent for ``mu_0``.
+         - Temperature exponent for ``mu_0`` and ``mu_min2``.
 
     .. [1] G. Masetti, M. Severi, and S. Solmi. Modeling of carrier mobility against
            carrier concentration in arsenic-, phosphorus-, and boron-doped silicon.
@@ -408,7 +418,9 @@ class MasettiMobility(Tidy3dBaseModel):
         >>> mobility_Si_p = td.MasettiMobility(
         ...   mu_max=470.5,
         ...   mu_0=44.9,
+        ...   mu_min2=0.0,
         ...   mu_1=29.0,
+        ...   Pc=9.23e16,
         ...   Cr=2.23e17,
         ...   Cs=6.10e20,
         ...   alpha=0.719,
@@ -430,10 +442,27 @@ class MasettiMobility(Tidy3dBaseModel):
         json_schema_extra={"units": "cm^2/V-s"},
     )
 
+    mu_min2: NonNegativeFloat | None = Field(
+        default=None,
+        title="Transition-term low mobility",
+        description="Floor subtracted from 'mu_max' in the transition term at reference "
+        "temperature (300K). Scales with temperature through 'exp_0'. When ``None``, it "
+        "equals 'mu_0'.",
+        json_schema_extra={"units": "cm^2/V-s"},
+    )
+
     mu_1: NonNegativeFloat = Field(
         title="Clustering mobility",
         description="High-doping clustering mobility amplitude.",
         json_schema_extra={"units": "cm^2/V-s"},
+    )
+
+    Pc: NonNegativeFloat = Field(
+        default=0.0,
+        title="Cutoff doping",
+        description="Low-doping cutoff concentration of the 'mu_0' floor, which is "
+        "weighted by 'exp(-Pc/N)'. Zero disables the cutoff.",
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     Cr: PositiveFloat = Field(
@@ -485,3 +514,18 @@ class MasettiMobility(Tidy3dBaseModel):
                 "mu_0 * (T/300)**exp_0 - mu_1."
             )
         return self
+
+    @model_validator(mode="after")
+    def _validate_reference_low_doping_limit(self) -> Self:
+        """Ensure the low-doping plateau is positive at the reference temperature."""
+        if self.mu_min2_resolved >= self.mu_max:
+            raise ValueError(
+                "'mu_min2' must be smaller than 'mu_max' so the Masetti low-doping "
+                "mobility plateau remains positive at the reference temperature (300 K)."
+            )
+        return self
+
+    @property
+    def mu_min2_resolved(self) -> float:
+        """'mu_min2', or 'mu_0' when it is not set."""
+        return self.mu_0 if self.mu_min2 is None else self.mu_min2
