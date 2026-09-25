@@ -761,6 +761,30 @@ class FieldSourcePCAProcessor:
         set of per-frequency coefficients. ``None`` means the batch was oversized,
         had no retained numerical rank, or needs more than ``max_modes`` modes to
         reach the requested per-block coverage.
+
+        ``max_modes`` is a policy applied to the finished decomposition rather than an
+        input to it, so a decomposition computed without one can be reused by a caller
+        that imposes one -- see :meth:`decompose_batch_uncapped`.
+        """
+
+        decomposition = self.decompose_batch_uncapped(batch, min_coverage=min_coverage)
+        if decomposition is None:
+            return None
+        if max_modes is not None and decomposition.coefficients.shape[0] > max_modes:
+            return None
+        return decomposition
+
+    def decompose_batch_uncapped(
+        self,
+        batch: tuple[SourceSupportSeries, ...],
+        *,
+        min_coverage: float,
+    ) -> BatchDecomposition | None:
+        """Decompose one exact batch with no limit on the retained mode count.
+
+        This is the shareable half of :meth:`decompose_batch`: the result depends only
+        on the batch and ``min_coverage``, so two callers applying different mode-count
+        policies can decompose once between them.
         """
 
         if not batch:
@@ -789,10 +813,6 @@ class FieldSourcePCAProcessor:
             return None
         coefficients, coverage = basis_result
 
-        num_modes = coefficients.shape[0]
-        if max_modes is not None and num_modes > max_modes:
-            return None
-
         # least-squares projection per row; the quadrature weights drop out because
         # the coefficient rows are orthonormal and the weighting is row-diagonal
         series_modes = [
@@ -812,8 +832,13 @@ class FieldSourcePCAProcessor:
         batch: tuple[SourceSupportSeries, ...],
         *,
         min_coverage: float,
+        decomposition: BatchDecomposition | None = None,
     ) -> tuple[list[FieldSourcePCAInfo], float] | None:
         """Run one exact PCA batch and build broadband PCA source groups.
+
+        ``decomposition`` supplies an already-computed uncapped result for this batch,
+        so a caller that needed it for another purpose does not pay for it twice; the
+        mode-count policy is applied here either way.
 
         ``None`` means the batch did not reduce source count, was oversized, or had
         no retained numerical rank. The caller should then route all batch sources
@@ -827,11 +852,13 @@ class FieldSourcePCAProcessor:
         if len(frequencies) < 2:
             return None
 
-        decomposition = self.decompose_batch(
-            batch,
-            min_coverage=min_coverage,
-            max_modes=len(frequencies) - 1,
-        )
+        max_modes = len(frequencies) - 1
+        if decomposition is None:
+            decomposition = self.decompose_batch(
+                batch, min_coverage=min_coverage, max_modes=max_modes
+            )
+        elif decomposition.coefficients.shape[0] > max_modes:
+            decomposition = None
         if decomposition is None:
             return None
 
@@ -868,8 +895,17 @@ class FieldSourcePCAProcessor:
         adj_srcs: list[SourceType],
         *,
         min_coverage: float,
+        share_decompositions: dict[tuple[Any, ...], BatchDecomposition] | None = None,
     ) -> tuple[list[FieldSourcePCAInfo], list[SourceType]]:
-        """Return PCA source infos and sources that should use standard grouping."""
+        """Return PCA source infos and sources that should use standard grouping.
+
+        Pass ``share_decompositions`` to record the uncapped outcome of every batch,
+        keyed by batch identity, for a later caller that applies a different mode-count
+        policy. A batch that could not be decomposed is recorded as ``None`` so that
+        caller does not retry it. Collecting costs the mode projections for batches this
+        path rejects, which it would otherwise skip, so it is opt-in rather than
+        automatic.
+        """
 
         support_series, leftovers = self.partition_sources(adj_srcs)
         batches: dict[tuple[Any, ...], list[SourceSupportSeries]] = defaultdict(list)
@@ -879,7 +915,18 @@ class FieldSourcePCAProcessor:
         pca_infos = []
         for batch_key in sorted(batches):
             batch = tuple(sorted(batches[batch_key], key=lambda series: series.support_key))
-            result = self.process_batch(batch, min_coverage=min_coverage)
+            decomposition = None
+            if share_decompositions is not None:
+                decomposition = self.decompose_batch_uncapped(batch, min_coverage=min_coverage)
+                share_decompositions[self.shared_batch_identity(batch)] = decomposition
+                if decomposition is None:
+                    # process_batch would repeat the attempt only to fail the same way
+                    for series in batch:
+                        leftovers.extend(series.original_sources)
+                    continue
+            result = self.process_batch(
+                batch, min_coverage=min_coverage, decomposition=decomposition
+            )
             if result is None:
                 for series in batch:
                     leftovers.extend(series.original_sources)
@@ -888,3 +935,14 @@ class FieldSourcePCAProcessor:
             pca_infos.extend(batch_infos)
 
         return pca_infos, leftovers
+
+    @classmethod
+    def shared_batch_identity(cls, batch: tuple[SourceSupportSeries, ...]) -> tuple[Any, ...]:
+        """Return a key identifying one batch across two independent partitions.
+
+        The batch key alone is not enough: it fixes the dimension, frequencies and
+        components but not which supports carry them, so the member support keys are
+        part of the identity.
+        """
+
+        return (cls.batch_key(batch[0]), tuple(series.support_key for series in batch))

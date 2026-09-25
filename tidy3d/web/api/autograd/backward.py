@@ -430,6 +430,56 @@ def _to_sim_fields_vjp(
     return sim_fields_vjp
 
 
+def _warn_if_adjoint_did_not_decay(
+    sim_data_adj: td.SimulationData, sim_data_fwd: td.SimulationData
+) -> None:
+    """Warn when an adjoint run ended with its fields still ringing but the forward's had not.
+
+    Every adjoint run time is derived from the forward one, either by inheriting it or, for
+    a combined temporal simulation, from the duration the forward actually ran. Neither is
+    a guarantee about the adjoint itself: adjoint sources can excite longer-lived content
+    than the forward sources did, and an adjoint truncated mid-ring-down biases its
+    gradients without failing in any visible way. Comparing against the forward keeps this
+    to the case worth acting on -- a forward that never converged is its own problem, and
+    the forward pipeline already reports it.
+
+    The forward record is the original simulation data, which is what the adjoint plan is
+    built from and what a temporal pulse is sized against. A forward carrying no solver
+    log is skipped rather than read from some other container: without that log the
+    reduction could not verify the measured duration either, so no adjoint run was
+    shortened and there is nothing here that standard grouping would not also face.
+    """
+
+    shutoff = sim_data_adj.simulation.shutoff
+    if shutoff <= 0.0:
+        return
+    # checked rather than caught: 'field_decay' raises for a missing log, and a raised
+    # 'Tidy3dError' logs itself, so catching it would emit the noise this guard avoids
+    if sim_data_adj.log is None or sim_data_fwd.log is None:
+        return
+
+    adjoint_decay_data = sim_data_adj.field_decay
+    forward_decay_data = sim_data_fwd.field_decay
+    if len(adjoint_decay_data) == 0 or len(forward_decay_data) == 0:
+        return
+
+    adjoint_decay = float(adjoint_decay_data.values[-1])
+    forward_decay = float(forward_decay_data.values[-1])
+    if adjoint_decay <= shutoff or forward_decay > shutoff:
+        return
+
+    log.warning(
+        "The adjoint simulation ended before its fields decayed below the shutoff "
+        f"threshold (final field decay {adjoint_decay:.3g} vs threshold {shutoff:g}), "
+        "while the forward simulation did decay. Adjoint sources can excite longer-lived "
+        "content than the forward sources did, so the gradients from this run may be "
+        "truncated. Consider increasing 'run_time' on the forward simulation; if this "
+        "adjoint came from a combined field-source reduction, raising "
+        "'config.adjoint.field_source_temporal_max_run_time_ratio' lengthens it.",
+        log_once=True,
+    )
+
+
 @disable_local_subpixel
 def postprocess_adj(
     sim_data_adj: td.SimulationData,
@@ -439,6 +489,8 @@ def postprocess_adj(
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
     sim_data_orig = postprocess_inputs.sim_data_orig
     sim_data_fwd = postprocess_inputs.sim_data_fwd
+
+    _warn_if_adjoint_did_not_decay(sim_data_adj, sim_data_orig)
     sim_fields_keys = postprocess_inputs.sim_fields_keys
     numerical_structure_map = postprocess_inputs.numerical_structure_map
     custom_vjp = postprocess_inputs.custom_vjp

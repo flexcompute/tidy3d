@@ -71,20 +71,60 @@ The number of adjoint simulations depends on which simulation outputs the object
 
 Unused frequencies in monitors increase forward-run field and permittivity data size, but they do not by themselves create adjoint simulations. Only frequencies that participate in the objective contribute adjoint sources.
 
-### Experimental FieldData PCA Source Compression
+### Experimental FieldData Source Compression
 
-Objectives built from `FieldMonitor` data, such as custom flux or field-overlap figures of merit, can generate one `CustomCurrentSource` adjoint source for each frequency. When those source profiles are nearly linearly dependent, Tidy3D can optionally replace the original frequency-indexed source set with a smaller set of broadband principal-component sources. Each retained PCA component is run as one adjoint simulation, and the per-frequency adjoint contribution is reconstructed through the usual post-run normalization coefficients.
+Objectives built from `FieldMonitor` data, such as custom flux or field-overlap figures of merit, can generate one `CustomCurrentSource` adjoint source for each frequency. When those source profiles are nearly linearly dependent, Tidy3D can optionally replace the original frequency-indexed source set with a smaller set of broadband principal-component sources, reconstructing the per-frequency adjoint contribution through the usual post-run normalization coefficients.
 
-Enable this experimental path with:
+Three modes share that spatial decomposition and differ only in how the retained modes are injected:
+
+| Mode | Adjoint simulations | Falls back to standard grouping when |
+| --- | --- | --- |
+| `"pca"` | one per retained spatial mode | the sources cannot be batched (see [Eligibility and fallback rules](#eligibility-and-fallback-rules)), the profile matrix exceeds `field_source_pca_max_matrix_entries`, or the plan would not use fewer simulations than standard grouping |
+| `"temporal"` | one holding every batched mode, injected through synthesized multi-tone waveforms, plus standard groups for any sources the synthesis could not take | the sources cannot be batched (same rules as `"pca"`), the waveforms miss their accuracy or amplitude gates at every attempted duration, more than `field_source_temporal_max_sources` source objects would be needed, or the forward run's duration cannot be verified from its field-decay record |
+| `"auto"` | the PCA path while its plan needs at most `field_source_reduction_max_separate_sims` simulations, otherwise the temporal path | neither path applies — a larger plan first attempts temporal synthesis and, if that is not feasible, runs the PCA plan instead, which itself reverts to standard grouping when it would not reduce the count |
+
+Every mode is therefore a best-effort optimization: whenever a reduction is not feasible, is not accurate enough, or would not actually save simulations, the sources revert to standard port-versus-frequency grouping, so enabling a mode never costs more adjoint simulations than leaving it off.
+
+Those counts are simulations, not total time stepping. Every adjoint simulation inherits the forward `run_time` and is ended by the solver's own shutoff, except the combined temporal one: its synthesized pulse can outlast the forward run, so it is given an explicit run time bounded by `field_source_temporal_max_run_time_ratio` times the duration the forward simulation actually ran (default `2.0`). `"temporal"` therefore trades count for length — many simulations become one that may run up to twice as long, which is a saving when the count drops by more than that factor and a wash when it does not.
+
+Enable this experimental path by choosing a mode:
 
 ```python
-td.config.adjoint.field_source_reduction_mode = "pca"
-td.config.adjoint.field_source_pca_min_energy_coverage = 0.999
+td.config.adjoint.field_source_reduction_mode = "pca"  # or "temporal", "auto"
 ```
+
+Every option below is set the same way, as an attribute on `td.config.adjoint`:
+
+| Option | Default | Used by | Purpose |
+| --- | --- | --- | --- |
+| `field_source_reduction_mode` | `None` | — | selects the path: `None` (no reduction), `"pca"`, `"temporal"`, or `"auto"` |
+| `field_source_pca_min_energy_coverage` | `0.999` | all three modes | fraction of weighted source-profile energy retained per current type by the shared spatial decomposition; `1.0` keeps the full numerical rank. Between `0` and `1` |
+| `field_source_pca_max_matrix_entries` | `20000000` | all three modes | cap on dense complex entries in one profile matrix; oversized batches skip the decomposition. Positive integer |
+| `field_source_reduction_max_separate_sims` | `2` | `"auto"` | largest planned simulation count that still takes the PCA path; `0` always attempts the temporal combination first. Non-negative integer |
+| `field_source_temporal_pulse_scale` | `1.0` | `"temporal"`, `"auto"` | scales where the duration search *starts*, as a multiple of the measured forward duration. Positive |
+| `field_source_temporal_max_run_time_ratio` | `2.0` | `"temporal"`, `"auto"` | bounds the whole combined adjoint simulation, as a multiple of the measured forward duration; `2.0` means an adjoint no longer than twice the forward run. Greater than `1.0` |
+| `field_source_temporal_max_sources` | `64` | `"temporal"`, `"auto"` | most source objects allowed in the combined simulation, counting one per retained mode per support; larger plans abandon the synthesis with a warning naming this setting. Positive integer |
+| `field_source_temporal_max_waveform_entries` | `20000000` | `"temporal"`, `"auto"` | cap on the dense complex values a plan allocates and retains while it is built; the count grows with time samples x frequencies, with the square of the frequency count, and with the number of synthesized waveforms. Each value is a complex128, so the default is about 320 MB — an estimate of peak usage, not an exact bound. Planning cost grows with the cube of the frequency count, faster than the budget itself. Positive integer |
+| `field_source_temporal_spectrum_rtol` | `1e-3` | `"temporal"`, `"auto"` | accuracy gate on each waveform's spectrum against its complex targets; constrains the injected sources, not the gradient directly. Greater than `0`, at most `0.1` |
+
+Note that the two `field_source_pca_*` options are not specific to `"pca"`. They govern the
+spatial decomposition, which every mode shares, so they apply in `"temporal"` and `"auto"`
+as well; only the `field_source_temporal_*` options and the separate-simulation budget are
+mode-specific. The `"auto"` path uses all of them, since it may run either branch.
+
+In `"temporal"` mode each retained spatial mode gets one `CustomSourceTime` waveform synthesized to hit its complex target at every adjoint frequency, zero at other monitors' frequencies, and zero complex DC — a nonzero time integral deposits static charge that blocks shutoff. The spectral match is accurate to `field_source_temporal_spectrum_rtol`, measured against the largest target in that waveform, so a much weaker frequency sharing the same waveform is held to that absolute level rather than to its own magnitude.
+
+Everything about the combined run is measured against the duration the forward simulation *actually* ran, which shutoff often ends well before the nominal `run_time`. The adjoint decays in the same structure, so it gets that same duration as a ring-down margin after its pulse ends, making its total run time `pulse + measured`. `field_source_temporal_max_run_time_ratio` bounds that total: at the default `2.0` the pulse may be at most one measured duration long and the adjoint simulation at most twice it. Pulses start at `field_source_temporal_pulse_scale` times the measured duration and escalate only when the accuracy or amplitude gates fail, never past the bound — a plan that cannot fit falls back instead of overrunning it.
+
+Only the combined simulation gets an explicit run time. Separate simulations -- the PCA modes, anything the synthesis could not take, and every fallback -- inject and decay like standard-grouping runs, so they inherit the forward `run_time` and the solver's own shutoff ends them once their fields decay, billed for what they used.
+
+`"auto"` prefers the separate PCA simulations for small plans, since short independent runs parallelize well and skip synthesis risk, and reaches for the temporal combination only once the plan grows past the budget. Setting `field_source_reduction_max_separate_sims` to `0` always attempts the combined simulation first.
 
 The coverage controls the retained weighted source-profile energy per current type. Use `1.0` to retain the full numerical rank of each compatible source matrix. Electric and magnetic current blocks are truncated independently, each in its own physical units, and the retained modes share one coefficient basis formed from the union of the two blocks' frequency subspaces. Within a support, samples carry grid-measure weights so the truncation is not biased by nonuniform meshing. No material properties are sampled, so the compression is valid in dispersive, lossy, and anisotropic backgrounds.
 
 The coverage is enforced on the summed energy of everything decomposed together, not monitor by monitor or frequency by frequency. A monitor holding a small share of that energy can therefore be represented coarsely, or dropped, while the requested coverage is still met, and that weak monitor's own gradient may then be inaccurate. Note that the retained fraction describes the injected source profiles, not the gradient: the discarded component still contributes through the simulated field response, which can amplify it, so coverage constrains gradient error indirectly rather than bounding it. Coverage is also an energy measure, so a target of `0.999` can discard up to roughly 3% of the source amplitude. Use `1.0` when a weak monitor's gradient matters in its own right, since the full numerical rank represents every source and frequency exactly.
+
+#### Eligibility and fallback rules
 
 This compression is intentionally conservative:
 
@@ -92,9 +132,10 @@ This compression is intentionally conservative:
 * Sources are batched only when they share the exact same support dimension (point, line, or plane), frequency tuple, and field-component tuple.
 * Sources that split field components across monitors on one support are merged first, so the plan does not depend on whether components were recorded by one monitor or several.
 * Different monitor supports may be compressed together in one batch, but each support must have a consistent spatial/component layout across its frequencies.
-* Volumetric sources, duplicate frequencies on the same support, unsupported layouts, and oversized PCA matrices fall back to standard grouping.
+* Volumetric sources, duplicate frequencies on the same support, unsupported layouts, and profile matrices exceeding `field_source_pca_max_matrix_entries` fall back to standard grouping.
 * Simulations using symmetry currently use the standard grouping path.
 * The PCA result is used only when the final number of adjoint source groups is strictly smaller than the standard frequency-versus-port grouping result.
+* Temporal synthesis additionally requires a readable field-decay record showing the forward run decayed below its shutoff threshold, because it sizes the synthesized pulses from the measured forward duration and its frequency-domain equivalence assumes the forward fields decayed. Without that record, or when the forward ended at its `run_time` cap, the synthesis is skipped with a warning and a fallback pipeline handles the sources. This means the forward simulation must keep a positive `shutoff`: with the criterion disabled there is no decay threshold to reach, and the warning says so rather than suggesting a longer run.
 
 For the configuration fields and defaults, see the [configuration reference](https://docs.flexcompute.com/projects/tidy3d/en/latest/configuration/reference.html).
 

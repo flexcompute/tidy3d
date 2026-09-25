@@ -104,7 +104,24 @@ numerical tolerances. Local-gradient overrides apply only when ``local_gradient`
 field-source PCA options instead apply during client-side adjoint source planning.
 
 Field-source compression is experimental and disabled by default (the mode is ``None``). Set
-``config.adjoint.field_source_reduction_mode = "pca"`` to opt in. The default coverage of ``0.999``
+``config.adjoint.field_source_reduction_mode`` to ``"pca"``, ``"temporal"``, or ``"auto"`` to opt
+in. All three share the same spatial decomposition and differ only in how the retained modes are
+injected: ``"pca"`` runs one adjoint simulation per mode, ``"temporal"`` synthesizes one multi-tone
+waveform per mode so every batched mode is injected in one adjoint simulation, and ``"auto"`` takes the
+PCA path while its plan needs at most
+``config.adjoint.field_source_reduction_max_separate_sims`` simulations — short independent runs
+parallelize well and skip synthesis risk — and otherwise takes the temporal path, reverting to the
+PCA plan if the synthesis is not feasible.
+
+Every mode is best-effort. Whenever a reduction does not apply, misses its accuracy gates, or would
+not actually use fewer simulations than standard port-versus-frequency grouping, the sources revert
+to that standard grouping, so enabling a mode never costs more adjoint simulations than leaving it
+off. Only the combined temporal simulation is given an explicit run time, since its synthesized
+pulse can outlast the forward run; every separate simulation inherits the forward ``run_time`` and is
+ended by the solver's own shutoff once its fields decay. Temporal synthesis additionally requires a readable
+field-decay record showing the forward simulation decayed below a positive shutoff threshold, since it
+sizes the synthesized pulses from the duration the forward run actually took; without that it is
+skipped with a warning. The default coverage of ``0.999``
 allows an approximate source reconstruction; set it to ``1.0`` to retain the full numerical rank
 of each compatible source-profile matrix. Coverage applies per current type: electric and magnetic
 current blocks are truncated independently, each in its own physical units, so no material
@@ -174,15 +191,39 @@ grouping.
    * - ``field_source_reduction_mode``
      - ``None``
      - No
-     - Strategy for compressing compatible ``FieldData``-derived adjoint current sources before adjoint simulations are launched. ``None`` applies no reduction and uses standard adjoint source grouping; ``"pca"`` compresses sources into principal components, running one adjoint simulation per component.
+     - Strategy for compressing compatible ``FieldData``-derived adjoint current sources before adjoint simulations are launched. ``None`` applies no reduction and uses standard adjoint source grouping; ``"pca"`` compresses sources into principal components, running one adjoint simulation per component; ``"temporal"`` combines those components into a single adjoint simulation with synthesized multi-tone source waveforms; ``"auto"`` takes the PCA path while its plan needs at most ``field_source_reduction_max_separate_sims`` simulations and otherwise takes the temporal path. Every mode reverts to standard grouping when its reduction does not apply, misses its accuracy gates, or would not use fewer simulations. The temporal path additionally requires a forward simulation that kept a positive ``shutoff`` and decayed below it, since it sizes its waveforms from the duration that run actually took.
+   * - ``field_source_reduction_max_separate_sims``
+     - ``2``
+     - No
+     - In ``"auto"`` mode, the largest number of planned adjoint simulations for which separate PCA component simulations are preferred over the single combined temporal simulation. ``0`` always attempts the combined simulation first.
    * - ``field_source_pca_min_energy_coverage``
      - ``0.999``
      - No
-     - Fraction of weighted source-profile energy retained per current type by the field-source PCA decomposition. Must be between ``0`` and ``1``; ``1.0`` retains the full numerical rank.
+     - Fraction of weighted source-profile energy retained per current type by the field-source PCA decomposition, shared by the ``"pca"``, ``"temporal"``, and ``"auto"`` modes. Must be between ``0`` and ``1``; ``1.0`` retains the full numerical rank.
    * - ``field_source_pca_max_matrix_entries``
-     - ``20000000``
+     - ``20_000_000``
      - Yes
      - Maximum positive number of dense complex entries in one PCA profile matrix. Oversized blocks use standard port-versus-frequency grouping. This bounds stored entries only: peak memory during the decomposition is several times larger, and decomposition time also grows with the frequency count, so equally sized blocks can take very different times.
+   * - ``field_source_temporal_pulse_scale``
+     - ``1.0``
+     - No
+     - Positive scale factor setting where the synthesized pulse duration search starts, as a multiple of the duration the forward simulation actually ran. The synthesis escalates only when the spectral targets cannot be met accurately at that length, and never past the bound set by ``field_source_temporal_max_run_time_ratio``.
+   * - ``field_source_temporal_max_run_time_ratio``
+     - ``2.0``
+     - No
+     - Upper bound on the combined temporal adjoint simulation's run time, as a multiple of the duration the forward simulation actually ran. The adjoint decays in the same structure, so it receives that measured duration as a ring-down margin after its pulse ends, and the pulse itself is capped at this ratio minus one times the measured duration. Must exceed ``1.0``, since the margin alone accounts for one whole multiple. Plans that cannot synthesize a valid pulse within the budget fall back rather than exceed it.
+   * - ``field_source_temporal_max_sources``
+     - ``64``
+     - No
+     - Maximum positive number of source objects allowed in the combined temporal adjoint simulation, counting one per retained spatial mode per support. This bounds what the reduction will plan, so that it does not collapse into one large, poorly conditioned simulation; it is not a constraint on what a simulation may contain. Larger plans fall back to the other reduction paths with a warning naming this setting.
+   * - ``field_source_temporal_max_waveform_entries``
+     - ``20_000_000``
+     - Yes
+     - Maximum positive number of dense complex values a temporal plan may allocate and retain while it is built. The count grows with the number of time samples times the number of adjoint frequencies, with the square of the frequency count, and with the number of synthesized waveforms. Each value is a complex128, so the default is roughly 320 MB. This estimates peak usage rather than bounding it exactly. Time samples are already bounded by ``field_source_temporal_max_run_time_ratio``, so this guards the remaining axis: an objective spanning very many adjoint frequencies. Larger plans fall back before anything is allocated, with a warning naming this setting. Note that it counts values, not work: the cost of planning grows with the cube of the frequency count, faster than the budget itself.
+   * - ``field_source_temporal_spectrum_rtol``
+     - ``0.001``
+     - No
+     - Maximum relative error allowed between each synthesized waveform's spectrum and its complex adjoint targets, greater than ``0`` and at most ``0.1``. Like the coverage setting, this constrains the injected sources rather than the gradient: the spectral mismatch still reaches the gradient through the simulated field response, which can amplify it.
    * - ``gradient_precision``
      - ``"single"``
      - No

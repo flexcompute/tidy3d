@@ -155,6 +155,16 @@ class AdjointSourceInfo(Tidy3dBaseModel):
         "given the adjoint source pipeline used.",
     )
 
+    run_time: float | None = Field(
+        default=None,
+        title="Adjoint Run Time",
+        description="Optional run time for the adjoint simulation. When ``None``, the "
+        "adjoint simulation inherits the forward simulation run time, which is the case "
+        "for every group a standard or spatially reduced plan produces. Only the combined "
+        "temporal simulation sets this, because its synthesized pulse can outlast the "
+        "forward run and would otherwise be truncated during injection.",
+    )
+
 
 @dataclass(frozen=True)
 class _AdjointSimulationSetupResult:
@@ -1483,6 +1493,40 @@ class SimulationData(AbstractYeeGridSimulationData):
             return 1.0
         return float(field_decay.values[-1])
 
+    def _measured_run_duration(self) -> float | None:
+        """Return the duration the simulation actually ran, from field-decay data.
+
+        When ``final_decay_value`` shows the shutoff threshold was reached, the run
+        ended near the last recorded decay check, so that step plus one check
+        interval bounds the executed duration -- often well below the nominal
+        ``run_time``. A run that decayed before its second check leaves a single
+        record, whose step is itself the check interval. When shutoff is disabled or was never reached, the run used
+        its full nominal run time. ``None`` means no usable decay record is
+        available (for example, no solver log was stored).
+        """
+        run_time_nominal = float(self.simulation._run_time)
+        if self.log is None:
+            return None
+        try:
+            decay_steps = np.asarray(self.field_decay.coords["t"].values, dtype=float)
+        except DataError:
+            return None
+        if decay_steps.size == 0:
+            return None
+
+        shutoff = self.simulation.shutoff
+        if shutoff <= 0.0 or self.final_decay_value > shutoff:
+            return run_time_nominal
+
+        # decay checks land on multiples of their interval, so a lone record is the first
+        # check and its step is the interval itself: the bound stays "last check plus one
+        # interval" rather than dropping the margin for a run that shut off that early
+        last_step = float(decay_steps[-1])
+        check_interval = (
+            float(decay_steps[-1] - decay_steps[-2]) if decay_steps.size > 1 else last_step
+        )
+        return min((last_step + check_interval) * self.simulation.dt, run_time_nominal)
+
     def source_spectrum(self, source_index: int) -> Callable:
         """Get a spectrum normalization function for a given source index."""
 
@@ -1829,12 +1873,14 @@ class SimulationData(AbstractYeeGridSimulationData):
         adj_srcs: list[SourceType],
         *,
         min_coverage: float,
+        share_decompositions: dict | None = None,
     ) -> tuple[list[AdjointSourceInfo], list[SourceType]]:
         """Build PCA source infos and return sources not handled that way."""
 
         processor = self._field_source_pca_processor()
         pca_infos, remaining_sources = processor.adjoint_infos(
             adj_srcs,
+            share_decompositions=share_decompositions,
             min_coverage=min_coverage,
         )
         return (
@@ -1934,36 +1980,44 @@ class SimulationData(AbstractYeeGridSimulationData):
             )
         return adjoint_infos
 
-    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
-        """Compute final adjoint source infos, optionally reducing FieldData current sources."""
+    def _pca_adjoint_infos_with_leftovers(
+        self, adj_srcs: list[SourceType], *, share_decompositions: dict | None = None
+    ) -> tuple[list[AdjointSourceInfo], list[AdjointSourceInfo], list[AdjointSourceInfo]]:
+        """Plan the PCA reduction and return (pca, leftover-standard, baseline) infos.
+
+        None of the three carries a run time: a separate reduced simulation injects and
+        decays like a standard-grouping one, so it inherits the forward ``run_time`` and
+        the solver's own shutoff ends it when its fields decay.
+        """
 
         from tidy3d.config import config
 
-        if config.adjoint.field_source_reduction_mode is None:
-            return self._process_adjoint_sources_standard(adj_srcs)
-
-        if any(self.simulation.symmetry):
-            return self._process_adjoint_sources_standard(adj_srcs)
-
-        min_coverage = config.adjoint.field_source_pca_min_energy_coverage
         processed_sources = self._adjoint_src_width_single(adj_srcs)
         baseline_infos = self._process_adjoint_sources_standard(
             processed_sources,
             adjust_fwidth=False,
         )
-
         pca_infos, remaining_sources = self._field_source_pca_adjoint_infos(
             processed_sources,
-            min_coverage=min_coverage,
+            share_decompositions=share_decompositions,
+            min_coverage=config.adjoint.field_source_pca_min_energy_coverage,
         )
-        adjoint_infos = list(pca_infos)
-        if pca_infos:
-            adjoint_infos.extend(
-                self._process_adjoint_sources_standard(
-                    remaining_sources,
-                    adjust_fwidth=False,
-                )
-            )
+        # a plan with no PCA infos is always discarded, so its leftovers never get used
+        leftover_infos = (
+            self._process_adjoint_sources_standard(remaining_sources, adjust_fwidth=False)
+            if pca_infos and remaining_sources
+            else []
+        )
+        return pca_infos, leftover_infos, baseline_infos
+
+    def _process_adjoint_sources_pca(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+        """Reduce FieldData current sources with PCA when it lowers the group count."""
+
+        if any(self.simulation.symmetry):
+            return self._process_adjoint_sources_standard(adj_srcs)
+
+        pca_infos, leftover_infos, baseline_infos = self._pca_adjoint_infos_with_leftovers(adj_srcs)
+        adjoint_infos = [*pca_infos, *leftover_infos]
 
         if not pca_infos or len(adjoint_infos) >= len(baseline_infos):
             log.info(
@@ -1978,6 +2032,217 @@ class SimulationData(AbstractYeeGridSimulationData):
             f"(standard grouping would create {len(baseline_infos)})."
         )
         return adjoint_infos
+
+    def _verified_forward_duration_for_temporal(self) -> float | None:
+        """Return the verified measured forward duration, or warn and return ``None``.
+
+        Temporal field-source reduction sizes its synthesized pulses from the duration
+        the forward simulation actually ran, and its frequency-domain equivalence
+        assumes the forward fields decayed. Without a readable field-decay record, or
+        when the forward ended at its ``run_time`` cap without reaching the shutoff
+        threshold, the reduction is skipped with a warning so a fallback pipeline
+        handles the sources instead.
+
+        This is :meth:`_measured_run_duration` under a stricter policy: it refuses those
+        cases rather than falling back to the nominal run time, and says why in the log.
+        """
+        no_record_message = (
+            "Skipping temporal field-source reduction: the forward simulation data "
+            "carries no readable field-decay record, so the actually simulated duration "
+            "cannot be verified."
+        )
+        if self.log is None:
+            log.warning(no_record_message, log_once=True)
+            return None
+        try:
+            decay_steps = np.asarray(self.field_decay.coords["t"].values, dtype=float)
+        except DataError:
+            log.warning(no_record_message, log_once=True)
+            return None
+        if decay_steps.size == 0:
+            log.warning(no_record_message, log_once=True)
+            return None
+
+        shutoff = self.simulation.shutoff
+        if shutoff <= 0.0:
+            # a longer run cannot help here: with the criterion disabled there is no
+            # decay threshold to reach, so the remedy is to enable one
+            log.warning(
+                "Skipping temporal field-source reduction: the forward simulation ran with "
+                "its field-decay shutoff criterion disabled ('shutoff=0'), so there is no "
+                "record that its fields decayed, which the synthesis assumes for its "
+                "frequency-domain equivalence. Set a positive 'shutoff' on the forward "
+                "simulation to use this mode.",
+                log_once=True,
+            )
+            return None
+        if self.final_decay_value > shutoff:
+            log.warning(
+                "Skipping temporal field-source reduction: the forward simulation did "
+                f"not decay below its shutoff threshold (final field decay "
+                f"{self.final_decay_value:.3g} vs threshold {shutoff:g}), so the "
+                "frequency-domain adjoint data may not be converged. Consider increasing "
+                "'run_time'.",
+                log_once=True,
+            )
+            return None
+
+        # every guard the measured duration applies has passed here, and its
+        # shutoff-not-reached branch is unreachable because that case returned above, so
+        # it computes exactly this window -- one definition of "how long the forward ran"
+        return self._measured_run_duration()
+
+    def _temporal_adjoint_infos(
+        self, adj_srcs: list[SourceType], *, shared_decompositions: dict | None = None
+    ) -> list[AdjointSourceInfo] | None:
+        """Combine FieldData current sources into one synthesized temporal simulation.
+
+        ``None`` means the synthesis was not applicable, failed its accuracy and
+        amplitude gates, or the forward run's actual duration could not be verified
+        from its field-decay record; the caller decides the fallback.
+        """
+
+        from tidy3d.components.autograd.field_source_temporal import (
+            FieldSourceTemporalProcessor,
+        )
+        from tidy3d.config import config
+
+        forward_duration = self._verified_forward_duration_for_temporal()
+        if forward_duration is None:
+            return None
+
+        processor = FieldSourceTemporalProcessor(
+            simulation=self.simulation,
+            forward_duration=forward_duration,
+        )
+        info, remaining_sources = processor.adjoint_info(
+            adj_srcs,
+            min_coverage=config.adjoint.field_source_pca_min_energy_coverage,
+            pulse_scale=config.adjoint.field_source_temporal_pulse_scale,
+            max_run_time_ratio=config.adjoint.field_source_temporal_max_run_time_ratio,
+            max_sources=config.adjoint.field_source_temporal_max_sources,
+            spectrum_rtol=config.adjoint.field_source_temporal_spectrum_rtol,
+            shared_decompositions=shared_decompositions,
+        )
+        if info is None:
+            return None
+
+        adjoint_infos = [
+            AdjointSourceInfo(
+                sources=info.sources,
+                post_norm=info.post_norm,
+                normalize_sim=False,
+                run_time=info.run_time,
+            )
+        ]
+        if remaining_sources:
+            adjoint_infos.extend(self._process_adjoint_sources_standard(remaining_sources))
+        return adjoint_infos
+
+    def _process_adjoint_sources_temporal(
+        self, adj_srcs: list[SourceType]
+    ) -> list[AdjointSourceInfo]:
+        """Use the combined temporal simulation, or standard grouping if it fails.
+
+        Simulations using symmetry take standard grouping, matching the spatial
+        reduction: each mode carries its own time waveform, so the injected current is
+        symmetric at every instant only if every mode is individually symmetric.
+        """
+
+        if any(self.simulation.symmetry):
+            return self._process_adjoint_sources_standard(adj_srcs)
+
+        # the combined plan needs at least one group, so a baseline already down to one
+        # cannot be beaten and the synthesis would be discarded whatever it produced
+        baseline_infos = self._process_adjoint_sources_standard(adj_srcs)
+        if len(baseline_infos) <= 1:
+            return baseline_infos
+
+        adjoint_infos = self._temporal_adjoint_infos(adj_srcs)
+        # a partial combination still adds standard groups for whatever could not be
+        # synthesized, so the combined plan is only worth running when it is smaller
+        if adjoint_infos is None or len(adjoint_infos) >= len(baseline_infos):
+            log.info(
+                "Temporal field-source reduction did not reduce the number of adjoint "
+                "source groups; using standard adjoint source grouping."
+            )
+            return baseline_infos
+        log.info(
+            f"Created {len(adjoint_infos)} adjoint source groups with temporal "
+            f"field-source reduction (standard grouping would create "
+            f"{len(baseline_infos)})."
+        )
+        return adjoint_infos
+
+    def _process_adjoint_sources_auto(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+        """Choose between separate PCA simulations and the combined temporal one.
+
+        The PCA plan runs first: when its total simulation count is small enough,
+        separate short simulations parallelize well and skip synthesis risk. Larger
+        plans attempt the single combined temporal simulation, falling back to the
+        PCA-versus-standard comparison when the synthesis fails its gates.
+
+        Simulations using symmetry take standard grouping, matching the spatial
+        reduction. Each spatial mode is injected with its own time waveform, so the
+        total current is symmetric at every instant only if every mode is individually
+        symmetric, which the decomposition does not guarantee -- combining the modes
+        into one simulation does not recover that.
+        """
+
+        from tidy3d.config import config
+
+        if any(self.simulation.symmetry):
+            return self._process_adjoint_sources_standard(adj_srcs)
+
+        # only this path may reach the temporal branch, so only this path collects the
+        # decompositions for it; the spatial-only mode keeps skipping the projections
+        # for batches its mode cap rejects
+        shared_decompositions: dict = {}
+        pca_infos, leftover_infos, baseline_infos = self._pca_adjoint_infos_with_leftovers(
+            adj_srcs, share_decompositions=shared_decompositions
+        )
+        planned_infos = [*pca_infos, *leftover_infos]
+        if not pca_infos or len(planned_infos) >= len(baseline_infos):
+            planned_infos = baseline_infos
+
+        if len(planned_infos) <= config.adjoint.field_source_reduction_max_separate_sims:
+            log.info(
+                f"Field-source reduction (auto): running {len(planned_infos)} separate "
+                "adjoint simulations."
+            )
+            return planned_infos
+
+        adjoint_infos = self._temporal_adjoint_infos(
+            adj_srcs, shared_decompositions=shared_decompositions
+        )
+        # sources the synthesis could not take are still grouped normally alongside the
+        # combined one, so a partial plan can be larger than the one it replaces
+        if adjoint_infos is not None and len(adjoint_infos) < len(planned_infos):
+            log.info(
+                f"Field-source reduction (auto): combined {len(planned_infos)} planned "
+                f"adjoint simulations into {len(adjoint_infos)} with temporal synthesis."
+            )
+            return adjoint_infos
+
+        log.info(
+            "Field-source reduction (auto): temporal synthesis unavailable or not smaller; "
+            f"using {len(planned_infos)} separate adjoint simulations."
+        )
+        return planned_infos
+
+    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+        """Compute final adjoint source infos, optionally reducing FieldData current sources."""
+
+        from tidy3d.config import config
+
+        mode = config.adjoint.field_source_reduction_mode
+        if mode == "pca":
+            return self._process_adjoint_sources_pca(adj_srcs)
+        if mode == "temporal":
+            return self._process_adjoint_sources_temporal(adj_srcs)
+        if mode == "auto":
+            return self._process_adjoint_sources_auto(adj_srcs)
+        return self._process_adjoint_sources_standard(adj_srcs)
 
     def _process_adjoint_sources_broadband(
         self, adj_srcs: list[SourceType]
@@ -2203,5 +2468,8 @@ def make_adjoint_simulation(
         normalize_index_adj = None
 
     sim_adj_update_dict["normalize_index"] = normalize_index_adj
+
+    if adjoint_source_info.run_time is not None:
+        sim_adj_update_dict["run_time"] = adjoint_source_info.run_time
 
     return sim_original.updated_copy(**sim_adj_update_dict)

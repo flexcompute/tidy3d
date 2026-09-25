@@ -16,6 +16,7 @@ from pydantic import (
     NonNegativeFloat,
     NonNegativeInt,
     NonPositiveFloat,
+    PositiveFloat,
     PositiveInt,
     SecretStr,
     StrictInt,
@@ -250,14 +251,31 @@ class AdjointConfig(ConfigSection):
         json_schema_extra={"persist": True},
     )
 
-    field_source_reduction_mode: Literal["pca"] | None = Field(
+    field_source_reduction_mode: Literal["pca", "temporal", "auto"] | None = Field(
         default=None,
         title="Field-source adjoint reduction mode",
         description=(
             "Strategy for compressing compatible FieldData-derived adjoint current sources. "
             "None applies no reduction and uses standard adjoint source grouping. 'pca' "
             "compresses sources into principal components, one adjoint simulation per "
-            "component."
+            "component. 'temporal' combines those components into a single adjoint simulation "
+            "by synthesizing multi-tone source waveforms. 'auto' plans the PCA reduction first "
+            "and keeps its separate simulations when they number at most "
+            "'field_source_reduction_max_separate_sims'; otherwise it attempts the temporal "
+            "combination and falls back to PCA, then to standard grouping. The temporal "
+            "combination additionally requires a forward simulation that kept a positive "
+            "'shutoff' and decayed below it, since it sizes its waveforms from the duration "
+            "that run actually took; otherwise it is skipped with a warning."
+        ),
+    )
+
+    field_source_reduction_max_separate_sims: NonNegativeInt = Field(
+        default=2,
+        title="Field-source reduction max separate simulations",
+        description=(
+            "In 'auto' reduction mode, the largest number of planned adjoint simulations for "
+            "which the separate PCA component simulations are preferred over the single "
+            "combined temporal simulation. Zero always attempts the combined simulation first."
         ),
     )
 
@@ -267,7 +285,8 @@ class AdjointConfig(ConfigSection):
         description=(
             "Minimum fraction of weighted current-source profile energy retained per "
             "current type (electric and magnetic blocks are truncated independently, each "
-            "in its own units) by the field-source PCA spatial decomposition. The fraction "
+            "in its own units) by the field-source PCA spatial decomposition, which is shared "
+            "by the 'pca', 'temporal', and 'auto' reduction modes. The fraction "
             "is measured over all sources decomposed together, so a monitor holding a small "
             "share of that energy can be represented coarsely, or dropped, while the "
             "requested coverage is still reported as met. The retained fraction describes "
@@ -296,6 +315,86 @@ class AdjointConfig(ConfigSection):
             "blocks with equal entry counts can take very different times."
         ),
         json_schema_extra={"persist": True},
+    )
+
+    field_source_temporal_pulse_scale: PositiveFloat = Field(
+        default=1.0,
+        allow_inf_nan=False,
+        title="Temporal field-source pulse duration scale",
+        description=(
+            "Scale factor applied to the initial duration of the synthesized adjoint source "
+            "pulses. The initial duration is the time the forward simulation actually ran, "
+            "measured from its recorded field-decay data; when that duration cannot be "
+            "verified, temporal synthesis is skipped entirely and the sources fall back to "
+            "the other reduction paths. The synthesis escalates the duration only when the "
+            "spectral targets cannot be reached accurately at this length. Must be positive: "
+            "this scales where the duration search starts, so a zero-length pulse has no "
+            "meaning and would leave the search with nothing to escalate from."
+        ),
+    )
+
+    field_source_temporal_max_run_time_ratio: float = Field(
+        default=2.0,
+        title="Temporal field-source maximum adjoint run time ratio",
+        description=(
+            "Upper bound on the combined temporal adjoint simulation's run time, as a multiple "
+            "of the duration the forward simulation actually ran. The adjoint decays in the "
+            "same structure, so it is given that measured duration as a ring-down margin after "
+            "its pulse ends; the synthesized pulse is therefore capped at this ratio minus one "
+            "times the measured duration. A value of 2.0 allows a pulse no longer than the "
+            "forward run and an adjoint simulation no longer than twice it. Must exceed 1.0, "
+            "since the ring-down margin alone accounts for one whole multiple. Plans that "
+            "cannot synthesize a valid pulse within the budget fall back instead of exceeding "
+            "it."
+        ),
+        gt=1.0,
+        allow_inf_nan=False,
+    )
+
+    field_source_temporal_max_sources: PositiveInt = Field(
+        default=64,
+        title="Temporal field-source maximum synthesized sources",
+        description=(
+            "Maximum number of source objects allowed in the combined temporal adjoint "
+            "simulation, counting one per retained spatial mode per support. This bounds "
+            "what the reduction will plan, so that it does not collapse into one large, "
+            "poorly conditioned simulation; it is not a constraint on what a simulation "
+            "may contain. Larger plans fall back to the other reduction paths with a "
+            "warning naming this setting."
+        ),
+    )
+
+    field_source_temporal_max_waveform_entries: PositiveInt = Field(
+        default=20_000_000,
+        title="Temporal field-source max waveform entries",
+        description=(
+            "Maximum number of dense complex values a temporal plan may allocate and retain "
+            "while it is built. The count grows with the number of time samples times the "
+            "number of adjoint frequencies, with the square of the frequency count, and with "
+            "the number of synthesized waveforms. Each value is a complex128, so the default "
+            "is roughly 320 MB. This estimates peak usage rather than bounding it exactly. "
+            "Time samples are already bounded by "
+            "'field_source_temporal_max_run_time_ratio', so this guards the remaining axis: an "
+            "objective spanning very many adjoint frequencies. Larger plans fall back before "
+            "anything is allocated, with a warning naming this setting. Note that it counts "
+            "values, not work: the cost of planning grows with the cube of the frequency "
+            "count, faster than the budget itself."
+        ),
+        json_schema_extra={"persist": True},
+    )
+
+    field_source_temporal_spectrum_rtol: float = Field(
+        default=1e-3,
+        title="Temporal field-source spectrum tolerance",
+        description=(
+            "Maximum relative error allowed between each synthesized waveform's spectrum and "
+            "its complex adjoint targets. Looser tolerances permit shorter synthesized pulses "
+            "at nearby adjoint frequencies. Like the coverage setting, this constrains the "
+            "injected sources rather than the gradient: the spectral mismatch still reaches "
+            "the gradient through the simulated field response, which can amplify it."
+        ),
+        gt=0.0,
+        le=0.1,
     )
 
     gradient_precision: Literal["single", "double"] = Field(
@@ -417,8 +516,14 @@ def apply_adjoint(config: AdjointConfig) -> None:
 
     client_side_fields = {
         "field_source_reduction_mode",
+        "field_source_reduction_max_separate_sims",
         "field_source_pca_min_energy_coverage",
         "field_source_pca_max_matrix_entries",
+        "field_source_temporal_pulse_scale",
+        "field_source_temporal_max_run_time_ratio",
+        "field_source_temporal_max_sources",
+        "field_source_temporal_max_waveform_entries",
+        "field_source_temporal_spectrum_rtol",
     }
     defaults = AdjointConfig()
     overridden = [
