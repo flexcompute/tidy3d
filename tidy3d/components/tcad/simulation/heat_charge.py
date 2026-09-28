@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import Field, field_validator, model_validator
@@ -35,6 +35,7 @@ from tidy3d.components.material.tcad.heat import (
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
 from tidy3d.components.scene import Scene
+from tidy3d.components.spice.analysis.dc import ITERATIVE_ONLY_TOLERANCE_FIELDS
 from tidy3d.components.spice.sources.ac import SSACVoltageSource
 from tidy3d.components.spice.sources.dc import DCVoltageSource, GroundVoltage
 from tidy3d.components.spice.types import (
@@ -112,7 +113,6 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Literal
 
     from pydantic import FiniteFloat
 
@@ -476,6 +476,23 @@ class HeatChargeSimulation(AbstractSimulation):
         "always run on the GPU accelerated solver, so ``False`` is not allowed for them.",
     )
 
+    linear_solver: Literal["iterative", "direct"] = Field(
+        default="iterative",
+        title="Linear solver",
+        description="Selects how the linear system arising at each nonlinear iteration is "
+        "solved, in every solver this simulation runs. ``'iterative'`` (the default) uses a "
+        "preconditioned Krylov method. ``'direct'`` factorizes the system matrix instead, "
+        "which removes linear-solver error as a cause of nonlinear stall and is therefore "
+        "more robust on cases where the iterative solver converges slowly or fails; in "
+        "exchange it needs substantially more memory, increasingly so as the mesh grows, "
+        "and can be slower. One setting covers the whole run: a charge analysis that also "
+        "solves for the lattice temperature uses the same back-end for the coupled heat "
+        "solve, and the two factorizations are sized together before either is allocated. "
+        "On a charge analysis the iterative-solver settings in ``ChargeToleranceSpec`` "
+        "(``max_iters``, ``preconditioner_iterations``) are ignored when ``'direct'`` is "
+        "selected. A charge analysis requires the accelerated solver.",
+    )
+
     @field_validator("structures")
     @classmethod
     def _check_unsupported_geometries(cls, val: tuple[Structure, ...]) -> tuple[Structure, ...]:
@@ -658,6 +675,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("use_accelerated_solver",), self._check_use_accelerated_solver
         )
+        self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
     def _check_monitor_dimensionality(self) -> Self:
@@ -3540,6 +3558,9 @@ class HeatChargeSimulation(AbstractSimulation):
         if self._ssac_uses_bias_point_selection():
             features.append("SSAC 'at_voltages' bias-point selection")
 
+        if self.linear_solver == "direct":
+            features.append("linear_solver='direct'")
+
         return features
 
     def _iter_semiconductor_charge_media(
@@ -3771,6 +3792,44 @@ class HeatChargeSimulation(AbstractSimulation):
                             "accelerated charge solver clamps to. Adjust 'beta' or 'exp_beta'.",
                             *loc,
                         )
+        return self
+
+    def _warn_direct_linear_solver(self) -> Self:
+        """Warn about the direct solver's cost, and about the settings it ignores.
+
+        Both warn rather than raise: neither is a misconfiguration, and the direct path is
+        chosen precisely when robustness is worth paying for. The ignored-settings warning
+        exists because a user who raised the iterative limits to chase a stall, then
+        switched to ``'direct'`` to fix it, would otherwise never learn that the first half
+        of that change stopped doing anything. It is charge-only: the heat and conduction
+        solvers take their iterative settings from the backend, not from the simulation.
+        """
+        if self.linear_solver != "direct":
+            return self
+
+        log.warning(
+            "linear_solver='direct' factorizes the system matrix instead of iterating "
+            "on it. This is more robust where the iterative solver converges slowly or "
+            "fails, but it uses considerably more memory, particularly on large meshes, "
+            "and can be slower."
+        )
+
+        if not isinstance(self.analysis_spec, SteadyChargeDCAnalysis):
+            return self
+
+        tolerance_settings = self.analysis_spec.tolerance_settings
+        tolerance_fields = type(tolerance_settings).model_fields
+        ignored = [
+            name
+            for name in ITERATIVE_ONLY_TOLERANCE_FIELDS
+            if getattr(tolerance_settings, name) != tolerance_fields[name].default
+        ]
+        if ignored:
+            log.warning(
+                f"{', '.join(ignored)} in 'ChargeToleranceSpec' "
+                f"{'configure' if len(ignored) > 1 else 'configures'} the iterative linear "
+                "solver and will be ignored with linear_solver='direct'."
+            )
         return self
 
     def _check_use_accelerated_solver(self) -> Self:

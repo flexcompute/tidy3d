@@ -14,6 +14,11 @@ from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import KELVIN
 from tidy3d.log import log
 
+# 'ChargeToleranceSpec' fields that only configure the iterative linear solver, and so mean
+# nothing once the Jacobian is factorized. The nonlinear controls ('rel_tol', the CFL and
+# pseudo-step settings) still apply on both paths and are deliberately absent.
+ITERATIVE_ONLY_TOLERANCE_FIELDS = ("max_iters", "preconditioner_iterations")
+
 
 class ChargeToleranceSpec(Tidy3dBaseModel):
     """
@@ -44,7 +49,9 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         title="Maximum number of iterations.",
         description="Indicates the maximum number of iterations to be run. "
         "The solver will stop either when this maximum of iterations is met "
-        "or when the tolerance criteria has been met.",
+        "or when the tolerance criteria has been met. "
+        "This setting configures the iterative linear solver and is ignored when "
+        "``HeatChargeSimulation.linear_solver='direct'``.",
     )
 
     ramp_up_iters: PositiveInt = Field(
@@ -85,7 +92,9 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         default=50,
         title="Preconditioner iterations.",
         description="Maximum number of preconditioner iterations in "
-        "the linear solver of the drift-diffusion solver.",
+        "the linear solver of the drift-diffusion solver. "
+        "This setting configures the iterative linear solver and is ignored when "
+        "``HeatChargeSimulation.linear_solver='direct'``.",
     )
 
     @model_validator(mode="after")
