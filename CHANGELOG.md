@@ -9,6 +9,189 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.13.0.dev0] - 2026-09-30
+
+### Added
+
+- Added `tidy3d.plugins.autograd.SafeUpdate` and `tidy3d.plugins.autograd.BacktrackingSafeUpdate`, integrated through `tidy3d.plugins.autograd.optimize(..., safe_update=...)`. The latter checks global backtracking candidates first, then optionally recovers the remaining update one parameter at a time. `bounds` and `safe_update` apply to the initial parameters before optimizer initialization and the first objective evaluation.
+- `downsample` on `SpatialDataArray`, `TriangularGridDataset` and `TetrahedralGridDataset`, resampling a field onto a coarser uniform Cartesian grid.
+- Added `tidy3d.plugins.klayout.BatchedDRCChecker` for hierarchical batched KLayout DRC and `max_results_per_cell` support in `tidy3d.plugins.klayout.DRCRunner.run()`, `tidy3d.plugins.klayout.run_drc_on_gds()`, and `tidy3d.plugins.klayout.DRCResults.load()`.
+- Optional `downsample_dl` argument to `Scene.perturbed_mediums_copy` and `Simulation.perturbed_mediums_copy`, to help reduce custom medium size in large perturbed simulations.
+- Added `AutoUnstructuredGrid` for TCAD meshing, including ratio-based baseline and targeted interface refinement, reference-relative manual region and line refinements, and helpers for mapping `DistanceUnstructuredGrid` sizing controls. The mapping preserves sizing parameters, but `AutoUnstructuredGrid` may refine explicit interface-boundary-condition surfaces that legacy `DistanceUnstructuredGrid` skipped.
+- Field projection monitors, including `DirectivityMonitor`, accept `use_colocated_integration=False` to compute the far-field surface currents from fields at their native in-plane Yee-grid positions, including with `interval_space` spatial downsampling.
+- Multi-mode `ModeABCBoundary`: pass a tuple of mode indices to `mode_index` to absorb several waveguide modes simultaneously at an `InternalAbsorber`. `primary_mode_index` selects the expected dominant mode and `tolerance` groups modes whose effective index is near-equal to the primary mode's at the central absorption frequency. The multi-mode form is only valid as `InternalAbsorber.boundary_spec`; the single-integer form is unchanged and remains valid as a domain boundary. A multi-mode absorber must also keep at least two grid cells between itself and the domain boundary it samples: below itself when absorbing in `+`, above when absorbing in `-`.
+- `FieldTimeMonitor` and `FluxTimeMonitor` can now specify their temporal recording cadence by physical time (`sampling_dt`, seconds) or by a fixed number of uniformly spaced samples (`num_samples`), as alternatives to the integer-step `interval`. The three fields are mutually exclusive; an unset cadence still defaults to `interval=1`, so switching an existing monitor to a physical cadence requires clearing the interval in the same update, e.g. `monitor.updated_copy(interval=None, sampling_dt=...)`. Cadences finer than the simulation time step are clamped to one sample per step, and the field-decay shutoff can end the recording before the requested schedule completes.
+- A `FieldStructureMonitor` and its `FieldStructureData` record matched electric field, diagonal complex permittivity, and per-Yee-component structure-ownership maps on their native Yee grids, exposing the derived displacement field `Dx`/`Dy`/`Dz` (in E-field units, with `colocate_displacement`) and `absorbed_power_density`. `SimulationData.plot_field(...)` also accepts these displacement components and `'D'` (their vector magnitude). `SimulationData.optical_generation(...)` turns that data into an `OpticalGenerationData` with absorbed power, band-gap-gated `generation_rate`, and `thermalization_heat_rate`, ready to feed the Heat/Charge solvers via `DistributedGeneration`/`HeatSource` for coupled optical→charge/heat workflows. `SimulationData.per_component_optical_generation(...)` returns the same quantities per electric-field component on each native Yee grid (no colocation), each tagged with its `component`, for interface-accurate per-component downstream use.
+- Added experimental, opt-in PCA compression for compatible point, line, and planar
+  ``FieldData``-derived adjoint current sources with exact matching frequency and component sets.
+  Enable it with ``config.adjoint.field_source_reduction_mode = "pca"``; the default ``0.999``
+  energy coverage permits approximate compression, while ``1.0`` retains the full numerical rank.
+- Added the material-local quasi-Fermi-gradient formulation to the Selberherr impact-ionization model for accelerated isothermal charge simulations in two and three dimensions.
+- `SelfHeatingMonitor` and `SelfHeatingData` record the volumetric heat a `Conduction` or isothermal `Charge` simulation generates. `to_spatial_data_array(...)`, available on any heat-charge monitor data, converts a recorded field into a `HeatSource` rate for a separate `Heat` simulation, and `SelfHeatingData.total_power()` integrates the heat rate so the cost of that resampling can be checked. `HeatFromElectricSource` is no longer accepted in an isothermal charge simulation, which solves at several bias points; use the monitor instead. On a non-isothermal charge simulation it is ignored with a warning, since that already couples heat self-consistently.
+- `SteadyChargeDCAnalysis.temperature` accepts a `SpatialDataArray`, so a `Charge` simulation can run on a prescribed, spatially varying lattice temperature: the temperature-dependent physics is evaluated on the supplied field, with no thermal solve and no feedback from the device. Leaving it `None` keeps the existing self-consistent coupling. Together with `SelfHeatingMonitor` this enables a manual charge → heat → charge iteration. Requires the accelerated charge solver, and warns if the field does not cover the semiconductor region.
+- Added `SteadyGenerationRecombinationMonitor`, reporting the per-node net generation-recombination rate `U = R - G` entering the carrier continuity equations (recombination positive, generation negative), including every active mechanism, together with a per-mechanism breakdown, of which only impact-ionization generation is currently reported. Available only on the accelerated charge solver.
+- Added ``"temporal"`` and ``"auto"`` field-source adjoint reduction modes to ``config.adjoint.field_source_reduction_mode``: ``"temporal"`` combines the retained spatial modes into one adjoint simulation using synthesized multi-tone source waveforms, and ``"auto"`` picks between that and the separate per-mode simulations.
+- Added the `TIDY3D_EXECUTION_FLEXCREDIT_LIMIT` environment variable for setting a process-wide cumulative maximum FlexCredit estimate for Tidy3D cloud task execution. Blocked submissions raise `FlexCreditLimitExceededError` before any proposed task starts, and `web.execution_flexcredit_status()` reports the current maximum-cost reservations.
+- Added `CanaliFieldDependence`, an extended Canali high-field velocity-saturation model that can be attached to `ConstantMobilityModel`, `CaugheyThomasMobility`, and `MasettiMobility` through their new `field_dependence` parameter (accelerated charge solver only). Velocity saturation must be specified for both carriers of a medium or for neither. Every mobility model now serializes `field_dependence`.
+- Added structural preprocessing cache reuse for compatible ordinary FDTD simulations. Set
+  `store_preprocess_cache=True` on a producer job, then pass its task ID through `parent_tasks` to
+  compatible child runs. See [How do I reuse structural preprocessing in a source
+  sweep?](https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/faq/how-do-i-reuse-structural-preprocessing-in-a-source-sweep.html).
+- Added `MethodZip` for deterministic paired parameter sweeps, pairing values by index across named parameters and producing N cases from N values per parameter; unequal lengths are rejected.
+- Added `HurkxTrapAssistedTunneling`, a field enhancement of Shockley-Read-Hall recombination by elastic band-to-trap tunneling, set through the new `field_enhancement` parameter of `ShockleyReedHallRecombination` and `SurfaceShockleyReedHallRecombination`: it shortens the bulk carrier lifetimes and raises the surface recombination velocities according to the local electric field and the tunneling effective masses `m_t_n`, `m_t_p`. Available only on the accelerated charge solver.
+- 1D (line) and point monitors now work in `Charge` simulations. Such a monitor has no unstructured representation, so its recorded field comes back as a bias-resolved Cartesian `SpatialVoltageDataArray`; select a bias with `to_spatial_data_array(voltage=...)`. A line monitor's field can be plotted with `plot_field(...)` or `SteadyEnergyBandData.plot(...)`; a point monitor holds one value per bias, which is read from the data array directly.
+- `UnsteadyHeatAnalysis.initial_temperature` accepts a spatially varying `SpatialDataArray` in addition to a scalar, e.g. the temperature profile of a previous heat simulation, for cooling or heater shut-off analyses. Mesh nodes outside the field's bounding box start at the new `background_temperature` (default 300 K).
+- Added `HeatChargeSimulation.linear_solver`, selecting between the default iterative linear solver and a sparse direct one that is more robust where the iterative solver stalls. On large meshes the direct solver's larger memory requirement can increase queue time, and its runtime can be longer or shorter than the iterative solver's depending on the case. It applies to charge, heat and conduction simulations alike.
+- `SteadyConvergenceData.cfl_history` (new `CFLHistoryDataArray`) records the CFL number the charge solver held at each Newton iteration of every sweep bias, dimensioned `(v, pseudo_step)` to share the `pseudo_step` axis with `residual_history`. Reading the two together shows, for a bias that did not converge, whether the CFL had reached its `cfl_min` bound, its `cfl_number` bound, or was still adapting between them. When the trace for a non-converged bias conclusively ends on one bound, the non-convergence warning issued when the simulation finishes now names it.
+- Added the `Pc` low-doping cutoff and `mu_min2` transition-term floor to `MasettiMobility`, completing the Masetti model for boron-doped silicon; the defaults (`Pc=0`, `mu_min2` equal to `mu_0`) keep existing results unchanged.
+- Added direct autograd support for the parameters of uniform `Lorentz`, `Drude`, `Debye`, and `Sellmeier` media (`eps_inf` and `coeffs`); gradients for those media and for the poles and residues of `PoleResidue` and `CustomPoleResidue` now agree with finite differences.
+- Remote adjoint gradients now reject surface sample sets larger than 5 GB before upload, with an error that names the largest structures and the settings to change to reduce the size.
+- Added optional structural preprocessing-cache reuse to dipole emission studies.
+
+### Changed
+
+- `config.adjoint.monitor_interval_poly` and `config.adjoint.monitor_interval_custom` no longer affect standard shape (geometry) gradients, whose surface point-cloud sampling density is controlled by `config.adjoint.default_wavelength_fraction`; the interval settings still apply to the volumetric adjoint monitors used for medium, numerical-structure, and custom-vjp derivative paths.
+- `SurfaceRecombinationBC` is now rejected at setup time when its placement names both sides of an interface that has no semiconductor side, or that is a heterojunction.
+- A `VoltageBC` with `model="ohmic"` is now rejected at setup time when its placement names both sides of an interface with an insulator side and no semiconductor side, unless the other side is a `ChargeConductorMedium` carrying `work_function`.
+- Shape gradients at boundary points with PEC on both sides are now exactly zero (previously a half-weighted PEC/dielectric blend), so gradients of overlapping PEC structures may change.
+- `SurfaceRecombinationBC` no longer adds recombination where its surface meets an ohmic contact, which already fixes the carrier concentrations there, so results shift slightly for setups with that arrangement.
+- `electron_affinity` is required on every `SemiconductorMedium`, including the background `medium`, when a charge simulation includes an insulator-only gate terminal. Different semiconductor electron affinities establish heterojunction band offsets and can change results.
+- Charge terminals are now identified by the `ChargeConductorMedium` structure a contact is made on. One metal declared through several `boundary_spec` entries, or spanning several material zones, is swept, driven and current-summed as a single electrode; two different metals no longer merge into one contact even when they share a bias. A metal named by two `VoltageBC` entries whose sources prescribe different drives is rejected at validation time, so a saved simulation with such a setup no longer loads: a metal is equipotential. Sources are compared by what they prescribe, so a different `name` or `attrs` is not a disagreement and `GroundVoltage()` counts as `DCVoltageSource(voltage=0)`.
+- A `VoltageBC` whose placement puts a contact face on an insulator requires the accelerated charge solver; `use_accelerated_solver=False` is now rejected for such a simulation. This covers both a gate over an oxide and an ohmic or Schottky contact whose metal is clad by an insulator, because only the accelerated solver references such a face to the metal work function.
+- A charge `VoltageBC` that matches no meshed face is now reported even when another `VoltageBC` with identical settings does match, and two `VoltageBC` entries with different contact models that resolve to the same face are rejected.
+- The accelerated charge solver rejects an insulator contact face whose terminal reaches the semiconductor but shares no mesh node with it, since such a face cannot take its potential reference from the semiconductor. It also rejects touching contacts of different terminals that prescribe incompatible potentials or small-signal drives at a shared point, and warns once when the built-in potential along a contact tied to an insulator face varies by more than kT/q.
+- Reduced peak memory when computing `TriangleMesh` geometry gradients by chunking surface-gradient interpolation and accumulation.
+- `colocate` is locked to `True` for flux and field-projection monitors; the surface-integration scheme is controlled solely by `use_colocated_integration`.
+- An `InternalAbsorber` placed against a domain boundary is now rejected: its PEC backing plate sits on the absorber's non-absorbing side and would fall outside the simulation. Move the absorber one cell further in, or absorb at the edge with a domain boundary condition.
+
+  When a `ModeABCBoundary` absorbs more than one mode as `InternalAbsorber.boundary_spec`, its `plane` no longer has any effect: the absorber's own box and position determine where the modes are solved.
+- Changed adaptive shape-gradient sampling to resolve per structure from the simulation definition
+  and all adjoint frequencies; ``config.adjoint.minimum_spacing_fraction`` remains the active lower
+  bound as a fraction of the shortest free-space adjoint wavelength.
+
+  Geometry sampling metadata on ``DerivativeInfo`` (``adaptive_vjp_spacing()``,
+  ``discretization_wavelength()``, and the clip-context material length scale) is now resolved per
+  structure from the simulation definition rather than from chunked permittivity data, and only for
+  structures with a traced geometry path. A ``custom_vjp`` callback on a structure whose traced fields
+  are all under ``medium`` now raises ``AdjointError`` from those accessors instead of returning a
+  value derived from the adjoint monitor data; all other derivative inputs are unchanged.
+- Changed cylinder geometry adjoint calculations to use symmetric angular sampling of the cylinder surface.
+- The ``"Selberherr"`` and ``"PQ"`` impact-ionization formulations now take their driving force from the conduction-band-edge gradient rather than the electric field, and their generation rate vanishes at zero bias. Ionization is unchanged in a uniform material under bias; a band offset across a heterojunction no longer acts as a driving force.
+- `TriangleMesh.inside()` now warns once when it uses `trimesh`'s slower pure-Python `ray_triangle` backend instead of Embree.
+- Adjoint simulations now warn when they end before their fields decay below the shutoff threshold that the forward simulation reached, since gradients from a truncated adjoint are biased without any visible failure.
+- Charge simulations with a non-uniform lattice temperature (self-heating or a prescribed temperature field) now evaluate carrier flux, terminal currents and small-signal response with one temperature per mesh edge, so terminal currents balance under a temperature gradient. With Fermi-Dirac statistics the degeneracy-factor terms of the Jacobian and small-signal response use that same edge temperature, and the self-heating source is assembled with that edge temperature and with the carrier mobility the transport uses, so its power balance closes under a temperature gradient and with velocity saturation. Results for such simulations may shift slightly; isothermal simulations are unaffected.
+- EME now reports setup errors earlier for unsupported mode-solver settings, including group-index calculation and non-increasing custom interpolation frequencies. If an older EME data file reports inconsistent mode frequencies during extraction or basis conversion, re-run the simulation to regenerate it.
+- Reduced the size of gzip-packaged SimulationData results containing large monitor arrays.
+- Changed `tidy3d mcp` to delegate to the independently released `tidy3d-mcp` runtime while preserving the integrated Tidy3D command.
+- Documented the Tidy3D units of `SolidMedium.capacity` and `FluidMedium.specific_heat`, and recommend their `from_si_units()` constructors as the entry point.
+- Shape (geometry) gradients in `autograd` are now substantially cheaper to compute — adjoint fields are recorded only at structure surfaces (pre-sampled point clouds) instead of over entire structure volumes, which shrinks recorded monitor data, downloads, and gradient postprocessing time and memory.
+- The default `ChargeToleranceSpec.cfl_min` is now `1`. Charge simulations that do not set `cfl_min` may behave slightly differently.
+- Users can now request any positive whole-number vGPU allocation supported by their license instead of being limited to 1, 2, 4, or 8. Requests above the license limit are rejected with a clear message before submission.
+- Improved `PolySlab` arc-discretization performance without changing the generated coordinates.
+- `TriangleMesh` shape gradients use fewer surface sample points on long, thin triangles.
+- Adjoint shape-gradient surface-sampling spacing is now bounded below by the smallest grid step near each traced structure as well as by `config.adjoint.minimum_spacing_fraction` of the shortest adjoint wavelength, whichever is larger, so surfaces are no longer sampled more finely than the simulation grid; this reduces the number of sample points and memory for PEC and metal structures.
+
+### Fixed
+
+- Fixed mode solver material classification to inspect the optical component of a `MultiPhysicsMedium`, so a wrapped `FullyAnisotropicMedium` selects the tensorial solver and a wrapped `LossyMetalMedium` is seen by the surface-impedance conductor check behind `precision="auto"`.
+- Fixed PEC shape gradients so ordinary surface samples are no longer handled as one-dimensional
+  edges.
+- NumPy arrays and other array-likes now work as selectors along non-spatial dimensions of unstructured datasets, in `sel()`, `isel()`, and `interp()`.
+- Fixed `SurfaceRecombinationBC` being rejected on an interface between two materials that both take part in the charge simulation, such as a semiconductor/insulator interface or a junction between two differently doped regions of the same material.
+- Fixed longitudinal mode-field grid corrections and near-zero clipping at simulation boundaries.
+- Fixed `VoltageBC` contacts placed on an insulator (a gate over an oxide) in charge simulations: the gate potential is now referenced to the metal's `work_function`, giving the correct flat-band voltage instead of one shifted by the work function minus the semiconductor electron affinity. Two existing setups shift with it: a gate whose metal already carried a `work_function` for an unrelated Schottky contact, and the oxide-clad face of a Schottky contact that reaches no semiconductor node of its own.
+- `AutoGrid` no longer over-refines the regions on either side of a narrow feature when the maximum step size in effect there is much coarser than the spacing between nearby structure boundaries. Steps now coarsen away from the feature by up to the `max_scale` ratio instead of one side being tiled uniformly at the feature's own step size, which also made two regions equally distant from the feature grid differently. `QuasiUniformGrid` is affected in the same way: when an interval between structure boundaries or snapping points is shorter than the requested `dl`, the rest of the axis is no longer refined below `dl` on account of it, and the cells stay within `dl` and the `max_scale` ratio while generally being fewer and coarser.
+- Reduced mode-solver setup time when `precision="auto"` or a tensorial solver has to be selected, with classification results unchanged. Most noticeable for EME, where every cell plane paid this cost.
+- TriangleMesh shape gradients now require a closed, outward-oriented volume mesh.
+- `perturbed_mediums_copy()` accepts a plain spatial `xarray.DataArray` on every path, and rejects one still carrying a non-spatial coordinate with a message naming the field and how to drop it.
+- Fixed fully anisotropic mode operators for magnetic coupling, invariant dimensions, PML, and backward propagation.
+- On a periodic axis whose neighbouring regions have different step sizes, `AutoGrid` now sizes the cells near the boundary from the region actually adjacent across it; they could previously come out coarser or finer than intended, while still respecting the local maximum step size and the `max_scale` ratio.
+- The error from `Job.task_id` on a multi-step job, which every `HeatSimulation` and `HeatChargeSimulation` job is, now names `job.estimate_cost()` and `job.real_cost()` alongside `job.task_ids`.
+- Fixed mode-field rotation across the angular branch cut and bend preprocessing of off-plane media.
+- Fixed subpixel continuity for derived custom media whose parent is the first material entry.
+- Fixed slanted `PolySlab.inside()` and `Transformed.inside()` for same-shape coordinate inputs supplied as scalars, lists, or arrays, and fixed `Transformed.inside_meshgrid()` for transformed slanted `PolySlab` geometries with 1D coordinate vectors.
+- Fixed the local field projection (`FieldProjector`) handling of integration bounds, spatially downsampled near fields, and projection windowing, so that locally projected fields agree much more closely with server-side projections of the same near-field data.
+- Fixed slightly mistuned absorption in `ABCBoundary` and `ModeABCBoundary`: the propagation index, including an explicitly set `permittivity`, now accounts for the grid's numerical dispersion, which improves absorption most on coarse meshes.
+- Surface monitors now reject an empty `fields` tuple up front, rather than being accepted and then failing when their data is loaded.
+- Fixed inaccurate adjoint shape gradients for field-monitor objectives with staggered field samples near absorbing simulation boundaries.
+- Fixed a small permittivity error at dielectric-vacuum interfaces when `edge_singularity_correction` is enabled, which slightly shifted results for geometries such as metal traces on a substrate.
+- Fixed excess reflection from `InternalAbsorber` / `ModeABCBoundary` absorbers when a conductor passes through the absorber plane with `edge_singularity_correction` enabled.
+- Fixed the small-signal AC conductance of charge simulations with Fermi-Dirac statistics, which omitted the carrier-density dependence of the degeneracy factor and was overestimated at high doping.
+- A `HeatSource` with a spatially varying `rate` (a `SpatialDataArray`) is now applied instead of being silently ignored, so affected heat simulations no longer solve as if no heat were generated.
+- Fixed vacuum fallback when serialized `CustomMedium` data arrays are unavailable.
+- Fixed `CustomMedium` adjoint validation to reject gradients for inactive data representations.
+- `CustomAnisotropicMedium.is_spatially_uniform` now returns `True` only when all tensor components are spatially uniform, and `False` when any component varies in space.
+- A `TemperatureMonitor` in an isothermal `Charge` simulation now reports the uniform lattice temperature the run was solved at instead of 0 K.
+- Fixed instability of an `InternalAbsorber` whose plane crosses a conductor, which could make the simulation diverge while the equivalent `ModeABCBoundary` placed at a domain edge stayed stable.
+- A `MeshOverrideStructure` with `shadow=False` whose boundary falls very close to a grid snapping point now reuses that snapping point as its boundary, instead of adding a separate grid line beside it and refining the resulting sliver. Meshes in affected setups may have slightly fewer or shifted grid lines than before.
+- Fixed batches restored with `Batch.from_file()` failing to serialize again or load in a fresh Python process.
+- The ``fill_fraction_box`` metric now uses the tangential projection of the bounding box, so direct queries, filtering, and sorting ignore its position and extent along the mode-plane normal axis. Mode sources and monitors in ``Simulation``, user-supplied mode monitors and cell modes in ``EMESimulation``, ``ModeSimulation``, and ``ModeSolver`` now validate that the box intersects the effective mode-solving domain along both tangential axes before solving. Direct ``ModeSolverData.sort_modes()`` calls remain permissive: a tangentially disjoint box produces an all-zero metric.
+- Fixed `ModeSolver` accepting custom microwave impedance paths outside the mode plane.
+- Fixed `web.load_simulation()` and `web.download_json()` failing for mode solver and component modeler tasks, and `web.download_simulation()` failing for component modeler tasks (modeler batch ids remain unsupported by these functions).
+- Lossy conductive media are no longer treated as perfect conductors by the mode solver at low frequency.
+- Fixed validation so semiconductor simulations with electrical boundary conditions require an
+  explicit charge `analysis_spec`.
+- Fixed `ModeSimulation.reduced_simulation_copy` to preserve permittivity and medium monitors and their complete sampled regions.
+- Fixed EME mode-solver monitor frequency handling for interpolated cell modes, including reduced-data storage, basis conversion, and cases where some requested modes are unavailable.
+- Fixed mode solves failing with an `IndexError` when the mode plane coincided with, or lay beyond, the outermost grid point along its normal direction. Where the correction could still be computed it was in some cases taken from the wrong side of the plane. Finite-grid corrections are now computed against the original simulation grid, and are skipped with a warning when the plane is not bracketed by that grid. A mode plane placed exactly on the simulation boundary is now rejected with an explanatory error instead of failing inside the grid machinery.
+- Fixed `Simulation.to_gds_file()` retaining lower-priority geometry on the same GDS layer beneath thresholded custom-medium structures, including custom optical media wrapped in `MultiPhysicsMedium`.
+- Fixed EME validation and classification to inspect the electromagnetic material stored in `MultiPhysicsMedium.optical`. A wrapped `AnisotropicMedium`, `FullyAnisotropicMedium` or custom medium is now seen by the bent-anisotropy checks, the global-frame custom-medium guard, and the reciprocity check that rejects non-reciprocal fully anisotropic media, all of which previously treated a wrapped medium as absent.
+- Fixed 2D unstructured charge monitor data to preserve separate material-side values at coincident interface nodes.
+- Fixed frequency tracking rotating mode phases instead of aligning them, and mode profiles not being normalized in the dot-product convention their amplitudes are decomposed in. Recorded amplitudes and phases can change for lossy modes, so stored results may need re-baselining.
+- Adjoint runs now immediately report failed simulation tasks, including server-provided failure details, instead of processing unavailable gradient data.
+- Fixed a duplicated density unit conversion that made the transient heat characteristic-time estimate 1e18 too small, so the excessive-simulation-time warning fired for every physically meaningful `UnsteadyHeatAnalysis`.
+- In a 2D `Charge` simulation, a monitor that is also flat along one of the two resolved axes now records a line instead of failing. `SteadyCapacitanceMonitor`, `SteadyElectricFieldMonitor` and `SteadyCurrentDensityMonitor` still need two non-zero dimensions, and now say so before the simulation runs rather than failing during postprocessing.
+- `HeatChargeSimulation` now reports a heat boundary condition placed where no solid material is present: an error when nothing else anchors the temperature -- previously the condition was silently dropped, and a steady solve left unanchored that way returned non-physical values under a successful task status -- and a warning when another condition still anchors it.
+- A slice taken across a material interface no longer reports one material on both sides of it. Where the grid holds a node per side — how a heterojunction carries its band offset, or a contact resistance its temperature step — a line profile now keeps both values at distinct coordinates, separated by a small fraction of the local sample spacing, so the step is no longer merged away when the profile is selected from, interpolated, or reordered. Because both samples now sit just off the interface, its own coordinate no longer names one: select a side, or pass `method="nearest"`. A 2D plane slice of a 3D simulation is fixed the same way. A slice lying exactly along an interface can only report one side and now warns, instead of silently choosing one by its position in the grid. Slicing a tetrahedral dataset works again where the plane cuts a cell at more than two of its vertices.
+- `UnsteadyHeatAnalysis.initial_temperature` and `background_temperature` now reject infinite and NaN scalars, and a `SpatialDataArray` initial temperature must be real, non-empty and on finite coordinates. These previously passed validation and reached the solver as an unusable initial condition.
+- Custom doping is no longer dropped at a doping box face whose coordinate is not representable in single precision, such as the ±0.11 µm bounds of a 220 nm layer. A mesh node sitting exactly on such a face was treated as outside the box and doped to zero; it now takes the box's concentration. Charge results for devices with a junction on a layer face change accordingly.
+- Fixed two-element real arrays being incorrectly parsed as complex numbers during deserialization.
+- Fixed symmetric ``Simulation.to_gds`` and ``Simulation.to_gds_file`` exports for nonzero simulation centers to reflect around the simulation center.
+- Changing `config.adjoint.default_wavelength_fraction` or `config.adjoint.minimum_spacing_fraction` no longer warns that remote gradients ignore them; both now take effect for remote gradients.
+- Fixed 3D PEC shape gradients so that surface points within half a grid cell of an edge are integrated as PEC instead of dielectric.
+
+### Removed
+
+- Removed `tidy3d.plugins.microwave` and the terminal half of `tidy3d.plugins.smatrix`, including `TerminalComponentModeler`, its lumped and wave ports and the RF material library, after their move to `flexcompute-rf`; the old import paths now report the `flexcompute.rf.tidy3d` replacement before they fail, and the modal component modeler is unaffected.
+
+### Breaking Changes
+
+- Removed `sweep_index` from sweep-invariant EME mode, flux, correction, and aggregate-overlap data; singleton axes in released legacy result datasets are normalized, while multi-entry legacy axes must be selected or migrated before loading.
+- Removed `EMESweepSpec.sweep_modes` and `EMESimulationData.port_modes_list_sweep`; `EMESimulationData.port_modes_tuple` now exposes the single shared port basis used by all supported sweeps.
+- EME overlap FlexCredit estimates now include both per-cell self-overlap and per-interface cross-overlap tasks, including the union of interfaces required by periodicity sweeps, so estimated costs increase for existing jobs.
+- Removed the deprecated `EMEFreqSweep`; list physical frequencies directly in `EMESimulation.freqs` and use `EMEModeSpec.interp_spec`, or migrate saved frequency-sweep results with an earlier Tidy3D version by multiplying their base frequencies by `freq_scale_factors`.
+- Selecting a `voltage` when plotting charge monitor data now requires a bias the simulation solved at; a value between two recorded bias points raises `DataError` instead of quietly snapping to the nearest one. This applies to unstructured (2D and 3D) monitor data as well as the Cartesian data recorded by a line or point monitor.
+
+### Planned Deprecation
+
+- Deprecated the `FieldProjector.trapezoid` helper, which is no longer used by the local field projection and will be removed in Tidy3D 2.13; use `numpy.trapezoid` instead.
+- `tidy3d.rf` now carries only the RF classes defined under `tidy3d.components` and will be removed in 3.0; RF development continues in `flexcompute.rf.tidy3d`.
+- Explicitly setting ``precision="single"`` or ``precision="auto"`` on optical, EME, or microwave/RF mode specs is deprecated; use ``"double"`` instead, which is already the default for all of them. ``"auto"`` resolves to single precision unless the mode solve contains a good conductor, so it carries the same accuracy risk.
+- `unstructured=False` is deprecated on `TemperatureMonitor` and `SteadyPotentialMonitor`, the only heat-charge monitors that still accept it, and will be removed in Tidy3D 3.0; use `to_spatial_data_array()` on the monitor data where a Cartesian `SpatialDataArray` is needed.
+
+## [2.12.1] - 2026-09-29
+
+### Added
+
+- Added `config.validation.mode = "fast"` and `from_file(..., validate="fast")`, which skip tidy3d's check validators while keeping pydantic type checking, every validator that derives a value, and serialization, so already validated data loads several times faster; the per-call override is context-local and the option is never saved to disk.
+- Added `DipoleEmissionStudyData.angular_radiation_transfer()` and `angular_radiation_transfer_at_positions()` for bulk-normalized dipole radiation into each far-field direction.
+
+### Changed
+
+- Changed the dipole emission plugin to deprecate `DipoleEmissionStudyData.radiation_intensity_transfer()` and its position-resolved counterpart in favor of the angular radiation transfer methods.
+
+### Fixed
+
+- Reduced validation time when bent anisotropic EME simulations use length sweeps or are reused during mode-solver setup.
+- `HeatChargeSimulation` now detects invalid volume-mesh connectivity early and retries automatically instead of failing later with an unclear conversion error.
+- `HeatChargeSimulation` now warns when `relative_min_dl` overrides a mesh size requested through `dl_bulk` or through a grid refinement region or line.
+- Fixed the dipole emission plugin's radiation intensity for non-unit collection index and source amplitude, and matched `DipoleEmissionStudyData` transfer normalization to the simulated source spectrum.
+- Setting `config.microwave.suppress_rf_license_warning` to `True` now suppresses the RF license warning emitted during simulation validation.
+
+### Planned Deprecation
+
+- `tidy3d.plugins.microwave` and the terminal component modeler with its lumped, coaxial and wave ports are deprecated and move to Flexcompute RF (`flexcompute.rf.tidy3d`) in Tidy3D 2.13; the remaining RF classes are deprecated and will be removed in 3.0.
+
 ## [2.12.0] - 2026-07-24
 
 ### Added
@@ -2279,6 +2462,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.13.0.dev0]: https://github.com/flexcompute/tidy3d/compare/v2.12.1...v2.13.0.dev0
+[2.12.1]: https://github.com/flexcompute/tidy3d/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/flexcompute/tidy3d/compare/v2.11.2...v2.12.0
 [2.11.2]: https://github.com/flexcompute/tidy3d/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0...v2.11.1
