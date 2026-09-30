@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from tidy3d.config import config
+from tidy3d.constants import fp_eps
 from tidy3d.em.translate.sample_sets import (
     IndexedDataArray,
     MaterialQueryPoints,
@@ -197,16 +198,28 @@ def effective_is_pec_at_points(
     Returns a float array (``1.0`` where PEC) matching the legacy detection's dtype.
     """
     mask = np.full(points.shape[0], float(simulation.medium.is_pec))
-    x, y, z = points[:, 0], points[:, 1], points[:, 2]
     points_min, points_max = points.min(axis=0), points.max(axis=0)
     for candidate, cand_min, cand_max in zip(
         scan_index.structures, scan_index.bounds_min, scan_index.bounds_max
     ):
-        if np.any(cand_min > points_max) or np.any(cand_max < points_min):
+        # Some geometries intentionally include a small tolerance at their boundary.
+        # Keep those points for the exact ``inside`` predicate rather than changing
+        # the legacy effective-medium decision at a surface.
+        bounds_scale = np.maximum(1.0, np.maximum(np.abs(cand_min), np.abs(cand_max)))
+        bounds_padding = np.where(np.isfinite(bounds_scale), fp_eps * bounds_scale, 0.0)
+        candidate_min, candidate_max = cand_min - bounds_padding, cand_max + bounds_padding
+        if np.any(candidate_min > points_max) or np.any(candidate_max < points_min):
             continue
-        inside = candidate.geometry.inside(x, y, z)
+        candidate_mask = np.all((points >= candidate_min) & (points <= candidate_max), axis=1)
+        candidate_indices = np.flatnonzero(candidate_mask)
+        if candidate_indices.size == 0:
+            continue
+        candidate_points = points[candidate_indices]
+        inside = candidate.geometry.inside(
+            candidate_points[:, 0], candidate_points[:, 1], candidate_points[:, 2]
+        )
         if np.any(inside):
-            mask[inside] = float(candidate.medium.is_pec)
+            mask[candidate_indices[inside]] = float(candidate.medium.is_pec)
     return mask
 
 

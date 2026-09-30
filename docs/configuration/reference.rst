@@ -163,7 +163,7 @@ grouping.
    * - ``minimum_spacing_fraction``
      - ``0.001``
      - No
-     - Minimum fraction of the shortest free-space adjoint wavelength used as the lower bound for adaptive shape-gradient surface-sampling spacing (must be ``>= 0``). This remains active when spacing is precomputed per structure.
+     - Fraction of the shortest free-space adjoint wavelength used as a lower bound for adaptive shape-gradient surface-sampling spacing (must be ``>= 0``). The spacing is also never finer than the smallest grid step near the traced structure, so the larger of the two bounds applies.
    * - ``boundary_snapping_fraction``
      - ``1.0``
      - No

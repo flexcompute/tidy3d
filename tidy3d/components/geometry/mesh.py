@@ -45,6 +45,9 @@ if TYPE_CHECKING:
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
 AREA_SIZE_THRESHOLD = 1e-36
+# triangles with longest edge**2 / area above this (and longer than the sampling
+# spacing) are split before sampling; uniform sampling oversamples by about ratio / 4
+SLIVER_ASPECT_THRESHOLD = 8.0
 _TRIMESH_PYTHON_RAY_BACKEND = "trimesh.ray.ray_triangle"
 
 
@@ -1207,10 +1210,19 @@ class TriangleMesh(base.Geometry, ABC):
             np.linalg.norm(triangle[2] - triangle[1]),
             np.linalg.norm(triangle[0] - triangle[2]),
         )
+        max_edge = max(edge_lengths)
         subdivisions = self._subdivision_count(area, spacing, edge_lengths)
-        barycentric = self._get_barycentric_samples(subdivisions, dtype)
-        num_samples = barycentric.shape[0]
-        base_weight = area / num_samples
+        sliver_samples = None
+        if max_edge**2 > SLIVER_ASPECT_THRESHOLD * area and max_edge > spacing:
+            original_num_samples = subdivisions * (subdivisions + 1) // 2
+            sliver_samples = self._sliver_samples(
+                triangle, area, spacing, dtype, max_num_samples=original_num_samples
+            )
+        if sliver_samples is None:
+            barycentric = self._get_barycentric_samples(subdivisions, dtype)
+            weights = np.full(barycentric.shape[0], area / barycentric.shape[0], dtype=dtype)
+        else:
+            barycentric, weights = sliver_samples
 
         sample_points = barycentric @ triangle
 
@@ -1228,7 +1240,7 @@ class TriangleMesh(base.Geometry, ABC):
         normal_tile = np.repeat(normal[None, :], n_samples_inside, axis=0)
         perp1_tile = np.repeat(perp1[None, :], n_samples_inside, axis=0)
         perp2_tile = np.repeat(perp2[None, :], n_samples_inside, axis=0)
-        weights_tile = np.full(n_samples_inside, base_weight, dtype=dtype)
+        weights_tile = weights[inside_mask]
         faces_tile = np.full(n_samples_inside, face_index, dtype=int)
 
         samples = {
@@ -1241,6 +1253,97 @@ class TriangleMesh(base.Geometry, ABC):
             "barycentric": bary_inside,
         }
         return samples, outside_bounds
+
+    def _sliver_samples(
+        self,
+        triangle: NDArray,
+        area: float,
+        spacing: float,
+        dtype: np.dtype,
+        max_num_samples: int | None = None,
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        """Barycentric samples and weights for a sliver, sampled as well-shaped pieces.
+
+        Uniform barycentric sampling takes its density from the longest edge, so it
+        oversamples a triangle by about ``(longest edge**2 / area) / 4``. The altitude
+        onto the longest edge splits the sliver into two right triangles, and each is cut
+        into strips across its long leg, each strip about as long as the triangle is wide
+        (and no shorter than ``spacing``). Every piece is then sampled with the uniform
+        rule. Piece corners are kept in barycentric coordinates of the original triangle,
+        so samples map back exactly, the weights sum to ``area``, and linear functions
+        (the per-vertex hat functions) integrate exactly. When ``max_num_samples`` is
+        set, return ``None`` unless splitting reduces the sample count.
+        """
+
+        xyz = np.asarray(triangle, dtype=float)
+        corners = np.eye(3)
+        edges = np.linalg.norm(xyz - np.roll(xyz, -1, axis=0), axis=1)  # edge i: corner i -> i + 1
+        longest = int(np.argmax(edges))
+        start, end, apex = (corners[(longest + k) % 3] for k in range(3))
+        edge_vec = (end - start) @ xyz
+        t = np.clip(np.dot((apex - start) @ xyz, edge_vec) / np.dot(edge_vec, edge_vec), 0.0, 1.0)
+        foot = (1.0 - t) * start + t * end
+
+        pieces = np.concatenate(
+            [
+                self._right_triangle_strips(foot, apex, start, xyz, spacing),
+                self._right_triangle_strips(foot, apex, end, xyz, spacing),
+            ]
+        )
+        piece_xyz = pieces @ xyz
+        piece_areas = 0.5 * np.linalg.norm(
+            np.cross(piece_xyz[:, 1] - piece_xyz[:, 0], piece_xyz[:, 2] - piece_xyz[:, 0]), axis=1
+        )
+        keep = piece_areas > max(AREA_SIZE_THRESHOLD, 1e-12 * area)
+        pieces, piece_xyz, piece_areas = pieces[keep], piece_xyz[keep], piece_areas[keep]
+        piece_edges = np.linalg.norm(piece_xyz - np.roll(piece_xyz, -1, axis=1), axis=2)
+        counts = np.array(
+            [
+                self._subdivision_count(piece_area, spacing, tuple(edge_lengths))
+                for piece_area, edge_lengths in zip(piece_areas, piece_edges)
+            ]
+        )
+        num_samples = int(np.sum(counts * (counts + 1) // 2))
+        if max_num_samples is not None and num_samples >= max_num_samples:
+            return None
+
+        barycentric, weights = [], []
+        for count in np.unique(counts):
+            selected = counts == count
+            piece_samples = self._get_barycentric_samples(int(count), float)
+            barycentric.append((piece_samples[None] @ pieces[selected]).reshape(-1, 3))
+            weights.append(
+                np.repeat(piece_areas[selected] / len(piece_samples), len(piece_samples))
+            )
+        return (
+            np.concatenate(barycentric).astype(dtype, copy=False),
+            np.concatenate(weights).astype(dtype, copy=False),
+        )
+
+    @staticmethod
+    def _right_triangle_strips(
+        right: np.ndarray, leg_a: np.ndarray, leg_b: np.ndarray, xyz: np.ndarray, spacing: float
+    ) -> np.ndarray:
+        """Cut the right triangle ``(right, leg_a, leg_b)`` into strips across its long leg.
+
+        Corners are barycentric rows of the parent triangle ``xyz``. Returns pieces as a
+        ``(num_pieces, 3, 3)`` array; the tip strip yields one degenerate piece.
+        """
+
+        length_a = np.linalg.norm((leg_a - right) @ xyz)
+        length_b = np.linalg.norm((leg_b - right) @ xyz)
+        short, tip = (leg_a, leg_b) if length_a <= length_b else (leg_b, leg_a)
+        width, length = sorted((length_a, length_b))
+        num_strips = max(1, int(np.ceil(length / max(width, spacing))))
+        frac = np.linspace(0.0, 1.0, num_strips + 1)[:, None]
+        base = (1.0 - frac) * right + frac * tip  # along the long leg
+        top = (1.0 - frac) * short + frac * tip  # along the hypotenuse
+        return np.concatenate(
+            [
+                np.stack([base[:-1], base[1:], top[1:]], axis=1),
+                np.stack([base[:-1], top[1:], top[:-1]], axis=1),
+            ]
+        )
 
     @staticmethod
     def _triangle_area_and_normal(triangle: NDArray) -> tuple[float, np.ndarray]:

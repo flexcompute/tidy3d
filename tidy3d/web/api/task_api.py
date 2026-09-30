@@ -585,11 +585,18 @@ def load_simulation_if_cached(
 
 def _upload_sidecar_artifacts(
     resource_id: TaskId,
-    sidecar_artifacts: Mapping[str, Tidy3dBaseModel],
+    sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path],
     verbose: bool,
 ) -> None:
-    """Serialize and upload internal sidecar artifacts for an allocated task."""
+    """Serialize and upload internal sidecar artifacts for an allocated task.
+
+    A ``Path`` value is a file the caller already serialized (and owns); it is uploaded
+    as-is.
+    """
     for remote_filename, artifact in sidecar_artifacts.items():
+        if isinstance(artifact, Path):
+            upload_file(resource_id, artifact, remote_filename, verbose=verbose)
+            continue
         suffix = "".join(Path(remote_filename).suffixes) or ".hdf5"
         handle, fname = tempfile.mkstemp(suffix=suffix)
         os.close(handle)
@@ -654,7 +661,7 @@ def _upload(
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose_estimate_cost: bool | None = None,
     _workflow_step: bool = False,
-    _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+    _sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path] | None = None,
     store_preprocess_cache: bool = False,
 ) -> TaskId:
     """Private upload implementation with optional internal sidecar artifacts."""

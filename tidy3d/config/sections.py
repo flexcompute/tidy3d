@@ -184,8 +184,10 @@ class AdjointConfig(ConfigSection):
         default=1e-3,
         title="Minimum spacing fraction",
         description=(
-            "Minimum fraction of the shortest free-space adjoint wavelength used as the lower "
-            "bound for adaptive shape-gradient surface-sampling spacing."
+            "Fraction of the shortest free-space adjoint wavelength used as a lower bound for "
+            "adaptive shape-gradient surface-sampling spacing. The spacing is also never finer "
+            "than the smallest grid step near the traced structure, so the larger of the two "
+            "bounds applies."
         ),
         ge=0.0,
     )
@@ -410,8 +412,9 @@ class AdjointConfig(ConfigSection):
             "Spatial interval (in cells) between samples for the volumetric adjoint monitors "
             "of geometry paths handled volumetrically (numerical structures and "
             "custom-vjp-owned paths). Standard shape gradients record surface point clouds "
-            "instead; their sampling density is set by 'default_wavelength_fraction', not by "
-            "this interval."
+            "instead; their sampling density is set by the adaptive surface-sampling spacing "
+            "('default_wavelength_fraction', bounded below by 'minimum_spacing_fraction' and "
+            "the local grid step), not by this interval."
         ),
     )
 
@@ -515,6 +518,9 @@ def apply_adjoint(config: AdjointConfig) -> None:
         return
 
     client_side_fields = {
+        # surface sampling spacing is resolved at client-side sample-set collection
+        "default_wavelength_fraction",
+        "minimum_spacing_fraction",
         "field_source_reduction_mode",
         "field_source_reduction_max_separate_sims",
         "field_source_pca_min_energy_coverage",

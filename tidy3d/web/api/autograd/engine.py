@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import numpy as np
 
 import tidy3d as td
 from tidy3d.components.autograd.collection import collect_adjoint_sample_sets
 from tidy3d.components.autograd.field_map import TracerKeys
+from tidy3d.components.simulation import constants as simulation_constants
 from tidy3d.components.workflow import Workflow
-from tidy3d.exceptions import DataError, WebError
+from tidy3d.exceptions import AdjointError, DataError, WebError
 from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.states import ERROR_STATES
@@ -16,6 +21,8 @@ from .constants import SAMPLE_SETS_FILE, SIM_FIELDS_KEYS_FILE
 from .io_utils import get_cached_vjp_traced_fields, get_vjp_traced_fields
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from tidy3d.components.base import Tidy3dBaseModel
     from tidy3d.em.translate.sample_sets import GeometrySampleSets
 
@@ -24,28 +31,47 @@ if TYPE_CHECKING:
 _SAMPLE_SETS_SIZE_INFO_BYTES = 50e6
 
 
-def _data_array_nbytes(value: Any) -> int:
-    """Total bytes of the data arrays reachable from a model tree.
+def _validate_sample_sets_size(num_bytes: float, sample_sets: GeometrySampleSets) -> None:
+    """Reject an oversized sample-set artifact before upload.
 
-    Generic traversal so the upload estimate stays truthful as the sample-set
-    payload evolves (quadrature arrays, staged query points, PEC sampling data).
+    Client preflight of the backend limit (``MAX_ADJOINT_SAMPLE_SETS_SIZE_GB``, enforced
+    authoritatively by the solver before it loads the artifact), with guidance in public
+    vocabulary.
     """
-    values = getattr(value, "values", None)
-    if values is not None and hasattr(values, "nbytes"):
-        return int(values.nbytes)
-    if isinstance(value, (tuple, list)):
-        return sum(_data_array_nbytes(item) for item in value)
-    model_fields = getattr(type(value), "model_fields", None)
-    if model_fields:
-        return sum(_data_array_nbytes(getattr(value, name)) for name in model_fields)
-    return 0
+    max_bytes = simulation_constants.MAX_ADJOINT_SAMPLE_SETS_SIZE_GB * 1e9
+    if num_bytes <= max_bytes:
+        return
+
+    top = sorted(sample_sets.entries, key=lambda e: e.sample_sets.num_points, reverse=True)
+    largest = ", ".join(
+        f"structure {e.structure_index} ({e.sample_sets.num_points:,} points at "
+        f"{e.sample_sets.spacing:.3g} um spacing)"
+        for e in top[:3]
+    )
+    # surface point count scales with 1 / spacing**2
+    spacing_factor = float(np.sqrt(num_bytes / max_bytes))
+    raise AdjointError(
+        f"The adjoint surface sample sets for this simulation are {num_bytes / 1e9:.2f} GB, "
+        f"above the {max_bytes / 1e9:.1f} GB limit for server-side gradients. Largest "
+        f"contributors: {largest}. Shape gradients record fields at every surface sample "
+        "point, so the size grows with the traced surface area divided by the square of the "
+        f"sampling spacing: coarsen the spacing by at least ~{spacing_factor:.1f}x. The "
+        "spacing is 'config.adjoint.default_wavelength_fraction' times the shortest material "
+        "length scale, bounded below by 'config.adjoint.minimum_spacing_fraction' times the "
+        "shortest adjoint wavelength and by the local grid step. For PEC and other metals the "
+        "material length scale is negligible, so raise "
+        "'config.adjoint.minimum_spacing_fraction' (or coarsen the grid near the traced "
+        "surfaces); for dielectrics raise 'config.adjoint.default_wavelength_fraction'. "
+        "Tracing only the surfaces that need gradients (keeping large static parts untraced) "
+        "also reduces the size."
+    )
 
 
 def _autograd_forward_sidecar_artifacts(
     simulation: td.Simulation,
     sim_fields_keys: list[tuple],
     sample_sets: GeometrySampleSets | None = None,
-) -> dict[str, Tidy3dBaseModel]:
+) -> dict[str, Tidy3dBaseModel | Path]:
     """Build sidecar artifacts uploaded alongside an autograd forward task.
 
     ``sample_sets`` is the artifact instance the strategy prepared the forward with
@@ -54,22 +80,43 @@ def _autograd_forward_sidecar_artifacts(
     without exclusions: sidecars only ride remote-gradient forward uploads, and
     custom vjps / numerical structures (the only sources of exclusions) force
     ``local_gradient=True``.
+
+    The sample-set artifact is serialized here, and that file is both what the size
+    limit is checked against and what is uploaded, so the preflight measures exactly
+    the bytes the backend receives, before any task is created. The caller owns the
+    file and removes it after upload with :func:`_remove_sidecar_files`.
     """
     if sample_sets is None:
         sample_sets = collect_adjoint_sample_sets(simulation, sim_fields_keys)
-    est_bytes = _data_array_nbytes(sample_sets)
-    size_message = (
-        f"Uploading adjoint sample-set artifact: {sample_sets.num_points} surface points, "
-        f"approximately {est_bytes / 1e6:.1f} MB."
-    )
-    if est_bytes > _SAMPLE_SETS_SIZE_INFO_BYTES:
-        td.log.info(size_message)
-    else:
-        td.log.debug(size_message)
+    handle, fname = tempfile.mkstemp(suffix=".hdf5")
+    os.close(handle)
+    sample_sets_file = Path(fname)
+    try:
+        sample_sets.to_file(fname)
+        num_bytes = sample_sets_file.stat().st_size
+        size_message = (
+            f"Uploading adjoint sample-set artifact: {sample_sets.num_points} surface points, "
+            f"{num_bytes / 1e6:.1f} MB."
+        )
+        if num_bytes > _SAMPLE_SETS_SIZE_INFO_BYTES:
+            td.log.info(size_message)
+        else:
+            td.log.debug(size_message)
+        _validate_sample_sets_size(num_bytes, sample_sets)
+    except BaseException:
+        sample_sets_file.unlink(missing_ok=True)
+        raise
     return {
         SIM_FIELDS_KEYS_FILE: TracerKeys(keys=sim_fields_keys),
-        SAMPLE_SETS_FILE: sample_sets,
+        SAMPLE_SETS_FILE: sample_sets_file,
     }
+
+
+def _remove_sidecar_files(sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path]) -> None:
+    """Delete the sidecar files pre-serialized by :func:`_autograd_forward_sidecar_artifacts`."""
+    for artifact in sidecar_artifacts.values():
+        if isinstance(artifact, Path):
+            artifact.unlink(missing_ok=True)
 
 
 def parse_run_kwargs(*, include_workflow: bool = False, **run_kwargs: Any) -> dict[str, Any]:
@@ -145,14 +192,15 @@ def _run_tidy3d(
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
     if job.simulation_type == "autograd_fwd":
-        job._upload_and_cache(
-            verbose_estimate_cost=False,
-            _sidecar_artifacts=_autograd_forward_sidecar_artifacts(
-                simulation,
-                run_kwargs["sim_fields_keys"],
-                sample_sets=run_kwargs.get("sample_sets"),
-            ),
+        sidecar_artifacts = _autograd_forward_sidecar_artifacts(
+            simulation,
+            run_kwargs["sim_fields_keys"],
+            sample_sets=run_kwargs.get("sample_sets"),
         )
+        try:
+            job._upload_and_cache(verbose_estimate_cost=False, _sidecar_artifacts=sidecar_artifacts)
+        finally:
+            _remove_sidecar_files(sidecar_artifacts)
     path_arg = run_kwargs.get("path")
     if path_arg is None:
         path = webapi._resolve_output_path(None, job._task_type_hint())
@@ -200,13 +248,16 @@ def _run_async_tidy3d(
         batch = batch.updated_copy(simulations=sims)
 
         sample_sets_dict = run_kwargs.get("sample_sets_dict") or {}
-        sidecar_artifacts_by_task = {
-            task_name: _autograd_forward_sidecar_artifacts(
-                sims[task_name], sim_fields_keys, sample_sets=sample_sets_dict.get(task_name)
-            )
-            for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items()
-        }
-        batch._upload_jobs(_sidecar_artifacts_by_task=sidecar_artifacts_by_task)
+        sidecar_artifacts_by_task = {}
+        try:
+            for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
+                sidecar_artifacts_by_task[task_name] = _autograd_forward_sidecar_artifacts(
+                    sims[task_name], sim_fields_keys, sample_sets=sample_sets_dict.get(task_name)
+                )
+            batch._upload_jobs(_sidecar_artifacts_by_task=sidecar_artifacts_by_task)
+        finally:
+            for sidecar_artifacts in sidecar_artifacts_by_task.values():
+                _remove_sidecar_files(sidecar_artifacts)
 
     if path_dir is not None:
         batch_data = batch.run(

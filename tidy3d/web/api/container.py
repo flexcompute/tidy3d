@@ -1095,7 +1095,7 @@ class Job(WebContainer):
         progress_callback: Callable[[float], None] | None = None,
         verbose: bool | None = None,
         verbose_estimate_cost: bool | None = None,
-        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path] | None = None,
     ) -> TaskId:
         """Upload workflow step if needed and return its task id."""
         with self._state_lock:
@@ -1598,7 +1598,7 @@ class Job(WebContainer):
         self,
         progress_callback: Callable[[float], None] | None = None,
         verbose_estimate_cost: bool | None = None,
-        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path] | None = None,
     ) -> TaskId:
         """Upload this job and return the task ID for handling."""
         step = self.steps[0]
@@ -1617,7 +1617,7 @@ class Job(WebContainer):
         self,
         progress_callback: Callable[[float], None] | None = None,
         verbose_estimate_cost: bool | None = None,
-        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel] | None = None,
+        _sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path] | None = None,
     ) -> None:
         """Upload this job and cache the resulting task ID."""
         if self.is_multi_step:
@@ -3214,7 +3214,8 @@ class Batch(WebContainer):
     def _upload_jobs(
         self,
         jobs_to_upload: list[Job | WorkflowStepJobAdapter] | None = None,
-        _sidecar_artifacts_by_task: Mapping[TaskName, Mapping[str, Tidy3dBaseModel]] | None = None,
+        _sidecar_artifacts_by_task: Mapping[TaskName, Mapping[str, Tidy3dBaseModel | Path]]
+        | None = None,
     ) -> None:
         """Upload already-filtered single-step jobs using the historical batch pipeline."""
         if jobs_to_upload is None:

@@ -24,6 +24,7 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.components.geometry.base import Box
+    from tidy3d.components.grid.grid import Grid
     from tidy3d.components.medium import MediumType
     from tidy3d.components.simulation import Simulation
 
@@ -157,7 +158,9 @@ def adjoint_sampling_resolution(
 
     return SamplingResolution(
         spacing=_adaptive_spacing(
-            material_length_scale=material_length_scale, wavelength_min=wavelength_min
+            material_length_scale=material_length_scale,
+            wavelength_min=wavelength_min,
+            grid_step_min=_min_grid_step(grid=simulation.grid, box=monitor_box),
         ),
         material_length_scale=material_length_scale,
         material_wavelength=_material_wavelength(
@@ -286,13 +289,37 @@ def _min_spacing_from_eps(
     return min(dx_candidates)
 
 
-def _adaptive_spacing(material_length_scale: float, wavelength_min: float) -> float:
-    """Return adaptive quadrature spacing with the same clipping rule as VJP code."""
+def _min_grid_step(grid: Grid, box: Box) -> float:
+    """Smallest simulation cell size inside ``box``, over axes with more than one cell.
+
+    Collapsed axes (the zero-size dimension of a 2D simulation) are skipped: surface
+    samples never resolve along them. Returns ``0.0`` when no axis qualifies.
+    """
+
+    steps = [
+        np.diff(boundaries)[start:stop].min()
+        for boundaries, (start, stop) in zip(grid.boundaries.to_list, grid.discretize_inds(box))
+        if len(boundaries) > 2 and stop > start
+    ]
+    return float(min(steps, default=0.0))
+
+
+def _adaptive_spacing(
+    material_length_scale: float, wavelength_min: float, grid_step_min: float = 0.0
+) -> float:
+    """Return adaptive quadrature spacing with the same clipping rule as VJP code.
+
+    The spacing is never finer than the smallest local grid step: point-cloud monitors
+    interpolate (or, for PEC, snap to) the simulation grid, so sub-cell samples only
+    multiply the point count without adding field information. This floor is what
+    keeps metals, whose skin-depth length scale is far below any grid step, from
+    exploding the sample count.
+    """
 
     computed_spacing = config.adjoint.default_wavelength_fraction * material_length_scale
     min_allowed_spacing = wavelength_min * config.adjoint.minimum_spacing_fraction
 
-    if computed_spacing < min_allowed_spacing:
+    if computed_spacing < min_allowed_spacing and grid_step_min < min_allowed_spacing:
         log.warning(
             f"Based on the material, the adaptive spacing for adjoint surface sampling "
             f"would be {computed_spacing:.3e} μm. The spacing has been clipped to "
@@ -300,7 +327,7 @@ def _adaptive_spacing(material_length_scale: float, wavelength_min: float) -> fl
             log_once=True,
         )
 
-    return max(computed_spacing, min_allowed_spacing)
+    return max(computed_spacing, min_allowed_spacing, grid_step_min)
 
 
 def _material_wavelength(eps_values: np.ndarray, wavelength_min: float) -> float:
