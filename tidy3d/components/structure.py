@@ -424,9 +424,11 @@ class Structure(AbstractStructure):
             return self.priority
 
         if priority_mode == "conductor":
-            if self.medium.is_pec:
+            # classify the optical medium, or a wrapped conductor sorts as a plain dielectric
+            medium = self._required_optical_medium
+            if medium.is_pec:
                 return 100
-            if isinstance(self.medium, LossyMetalMedium):
+            if isinstance(medium, LossyMetalMedium):
                 return 90
         return 0
 
@@ -447,9 +449,11 @@ class Structure(AbstractStructure):
         complex
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
-        if isinstance(self.medium, AbstractCustomMedium):
-            return self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
-        return self.medium.eps_diagonal(frequency=frequency)
+        # resolve the optical portion of a 'MultiPhysicsMedium', as the solvers already do
+        medium = self._required_optical_medium
+        if isinstance(medium, AbstractCustomMedium):
+            return medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
+        return medium.eps_diagonal(frequency=frequency)
 
     @staticmethod
     def _get_optical_medium(medium: MultiPhysicsMedium) -> StructureMediumType | None:
@@ -457,15 +461,38 @@ class Structure(AbstractStructure):
         return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
 
     @property
-    def _optical_medium(self) -> StructureMediumType:
-        """Optical medium of the structure."""
+    def _optical_medium(self) -> StructureMediumType | None:
+        """Optical medium of the structure, or ``None`` if the medium defines no optical portion."""
         return self._get_optical_medium(self.medium)
+
+    @property
+    def _required_optical_medium(self) -> StructureMediumType:
+        """Optical medium of the structure, raising if it defines no optical portion."""
+        medium = self._optical_medium
+        if medium is None:
+            name = f" '{self.name}'" if self.name else ""
+            raise SetupError(
+                f"Structure{name} has a 'MultiPhysicsMedium' without an 'optical' medium, so its "
+                "optical properties are undefined. Set 'MultiPhysicsMedium.optical'."
+            )
+        return medium
 
     @model_validator(mode="after")
     def _check_2d_geometry(self) -> Self:
-        """Medium2D is only consistent with certain geometry types"""
+        """Medium2D is only consistent with certain geometry types, and only when unwrapped."""
         val = self.medium
         geom = self.geometry
+
+        if isinstance(val, MultiPhysicsMedium) and isinstance(self._optical_medium, Medium2D):
+            self._raise_validation_error_at_loc(
+                SetupError(
+                    "Found a 'Structure' whose 'MultiPhysicsMedium' wraps a 'Medium2D'. A 2D "
+                    "material inside a 'MultiPhysicsMedium' is not supported, because it would "
+                    "skip the conversion to a volumetric equivalent and report an unphysical "
+                    "permittivity. Use the 'Medium2D' directly as the structure's medium."
+                ),
+                "medium",
+            )
 
         if isinstance(val, Medium2D):
             # the geometry needs to be supported by 2d materials
@@ -835,11 +862,11 @@ class Structure(AbstractStructure):
         complex
            Element of the relative permittivity tensor evaluated at ``frequency``.
         """
-        if isinstance(self.medium, AbstractCustomMedium):
-            return self.medium.eps_comp_on_grid(
-                row=row, col=col, frequency=frequency, coords=coords
-            )
-        return self.medium.eps_comp(row=row, col=col, frequency=frequency)
+        # see 'eps_diagonal': 'MultiPhysicsMedium' resolves to its optical portion
+        medium = self._required_optical_medium
+        if isinstance(medium, AbstractCustomMedium):
+            return medium.eps_comp_on_grid(row=row, col=col, frequency=frequency, coords=coords)
+        return medium.eps_comp(row=row, col=col, frequency=frequency)
 
     def _filter_gdstk_polygons(
         self,
