@@ -14,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d._runtime import always_validate
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import Progress, get_logging_console, log
@@ -217,6 +218,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
 
     @field_validator("weights")
     @classmethod
+    @always_validate
     def _weights_average_to_one(
         cls, val: tuple[NonNegativeFloat, NonNegativeFloat] | None
     ) -> tuple[NonNegativeFloat, NonNegativeFloat] | None:
@@ -304,6 +306,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def _generate_initial_poles(self) -> Self:
         """Generate initial poles."""
         val = self.poles
@@ -329,6 +332,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def _generate_initial_residues(self) -> Self:
         """Generate initial residues."""
         if self.residues is not None:

@@ -77,6 +77,31 @@ Optional overrides that tweak solver behavior at runtime.
        See :doc:`../extras/index` for more details.
 
 
+Validation (``config.validation``)
+----------------------------------
+
+Controls how much validation runs when models are built or loaded.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 18 10 50
+
+   * - Option
+     - Default
+     - Persisted
+     - Description
+   * - ``mode``
+     - ``"full"``
+     - No
+     - ``"full"`` runs tidy3d's validators on construction and parsing. ``"fast"`` skips the
+       check validators and keeps pydantic's type checking, field constraints, coercion, every
+       validator that normalises or derives a value, and serialization, so already validated
+       data loads several times faster and dumps identically. Use it only for data that was
+       already validated, such as files accepted by the server; ``validate_pre_upload`` is
+       unaffected. ``from_file(..., validate=...)`` overrides it for one call, context-locally.
+       Never written to disk, not even with a named profile: it applies to the current process
+       only.
+
 Microwave (``config.microwave``)
 --------------------------------
 

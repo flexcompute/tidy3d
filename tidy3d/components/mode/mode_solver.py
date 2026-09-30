@@ -13,6 +13,7 @@ import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import (
     Tidy3dBaseModel,
     cached_property,
@@ -291,6 +292,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @field_validator("simulation")
     @classmethod
+    @always_validate
     def _convert_to_simulation(cls, val: MODE_SIMULATION_TYPE) -> MODE_SIMULATION_TYPE:
         """Convert legacy differentiable simulation wrappers to regular Simulation."""
         if hasattr(val, "to_simulation"):

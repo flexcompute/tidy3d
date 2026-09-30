@@ -9,6 +9,7 @@ import numpy as np
 import xarray as xr
 from pydantic import Field, PrivateAttr, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.autograd.functions import trapz
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.monitor_data import FieldData
@@ -111,6 +112,7 @@ class FieldProjector(
     _RAW_CONTEXT_KEY: ClassVar[str] = "raw_projection_context"
 
     @model_validator(mode="after")
+    @always_validate
     def _check_origin_set(self) -> Self:
         """Sets ``.origin`` as the average of centers of all surface monitors if not provided."""
         if self.origin is None:
@@ -187,6 +189,7 @@ class FieldProjector(
         return surface_mediums[0]
 
     @model_validator(mode="after")
+    @always_validate
     def _configure_projection_context(self, info: ValidationInfo) -> Self:
         """Configure either simulation-backed or raw-field-backed projection context."""
         raw_context = None if info.context is None else info.context.get(self._RAW_CONTEXT_KEY)

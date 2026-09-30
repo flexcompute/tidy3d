@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import PointDataArray, SphericalAngleDataArray
 from tidy3d.components.data.point_cloud import canonicalize_point_cloud_points
@@ -205,6 +206,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
 
     @field_validator("positions")
     @classmethod
+    @always_validate
     def _validate_positions(cls, val: PointDataArray) -> PointDataArray:
         """Validate sampled dipole positions."""
         try:
@@ -222,6 +224,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
 
     @field_validator("store_position_indexes")
     @classmethod
+    @always_validate
     def _validate_store_position_indexes(cls, val: Sequence[int]) -> tuple[int, ...]:
         """Validate optional stored position indexes."""
         indexes = tuple(index for index in val)
@@ -233,6 +236,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
 
     @field_validator("freqs")
     @classmethod
+    @always_validate
     def _validate_freqs(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Validate positive output frequencies."""
         freqs = np.asarray(val, dtype=float)
@@ -246,6 +250,7 @@ class DipoleEmissionStudy(Tidy3dBaseModel):
 
     @field_validator("polarizations")
     @classmethod
+    @always_validate
     def _validate_polarizations(cls, val: Sequence[Polarization]) -> tuple[Polarization, ...]:
         """Validate requested emission-polarization labels."""
         if len(val) == 0:

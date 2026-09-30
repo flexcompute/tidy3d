@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as anp
 from pydantic import Field, field_validator
 
+from tidy3d._runtime import always_validate
+
 from .base import Expression
 from .types import NumberOrExpression
 
@@ -26,6 +28,7 @@ class Function(Expression):
 
     @field_validator("operand")
     @classmethod
+    @always_validate
     def validate_operand(cls, v: NumberOrExpression) -> ExpressionType:
         """
         Validate and convert operand to an expression.

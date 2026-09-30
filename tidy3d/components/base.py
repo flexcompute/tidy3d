@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import inspect
 import io
@@ -11,6 +12,7 @@ import os
 import tempfile
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 from functools import total_ordering, wraps
 from math import ceil
 from os import PathLike
@@ -41,6 +43,11 @@ from pydantic import (
 )
 from pydantic_core import InitErrorDetails, PydanticCustomError
 
+from tidy3d._runtime import (
+    VALIDATE_OVERRIDE,
+    VALIDATION_MODES,
+    fast_validation_active,
+)
 from tidy3d.exceptions import FileError, Tidy3dError, format_chained_exception_message
 from tidy3d.log import log
 
@@ -63,7 +70,7 @@ from .file_util import (
 from .types import TYPE_TAG_STR, Undefined
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator, Iterator
     from typing import NoReturn
 
     from flexcompute.core._migration.em.validation import ValidationPath, ValidationReport
@@ -294,6 +301,72 @@ def annotation_has_discriminator(annotation: Any) -> bool:
     return False
 
 
+def _skippable(func: Callable[..., Any], mode: str) -> Callable[..., Any]:
+    """Wrap a decorated check validator so it becomes a pass-through in ``fast`` mode.
+
+    Only ``after`` and ``wrap`` validators that merely check are wrapped. ``before`` validators
+    normalise input into its canonical form (derived fields such as a surface monitor's
+    ``colocate`` or a mode spec's default ``sort_order``) and always run, as do ``plain``
+    validators, which replace pydantic's own validation of a field, and any validator marked
+    with ``always_validate`` because it derives or changes a value.
+    Pydantic-core calls the stored callable as ``(value[, info])`` or, for wrap validators,
+    ``(value, handler[, info])``; ``functools.wraps`` keeps the original signature visible so
+    pydantic still passes ``info`` and ``handler`` exactly as before.
+    """
+    if (
+        mode in ("before", "plain")
+        or getattr(func, "_tidy3d_always_validate", False)
+        or getattr(func, "_tidy3d_skippable", False)
+    ):
+        return func
+    if mode == "wrap":
+
+        @functools.wraps(func)
+        def wrapper(value: Any, handler: Any, *args: Any, **kwargs: Any) -> Any:
+            return (
+                handler(value)
+                if fast_validation_active()
+                else func(value, handler, *args, **kwargs)
+            )
+
+    else:
+
+        @functools.wraps(func)
+        def wrapper(value: Any, *args: Any, **kwargs: Any) -> Any:
+            return value if fast_validation_active() else func(value, *args, **kwargs)
+
+    wrapper._tidy3d_skippable = True  # type: ignore[attr-defined]
+    return wrapper
+
+
+@contextmanager
+def fast_validation() -> Generator[None, None, None]:
+    """Construct and parse tidy3d models without tidy3d's check validators, in this context only.
+
+    Pydantic's type coercion, field constraints, discriminated unions, defaults and the
+    serializer are untouched, and every validator that normalises or derives a value still
+    runs, so well-formed input produces objects that dump identically to fully validated ones.
+    Meant for data that was already validated, such as files accepted by the server;
+    ``validate_pre_upload`` still runs its own checks. The override is context-local
+    (``contextvars``), so other threads and tasks keep their own mode.
+    """
+    token = VALIDATE_OVERRIDE.set("fast")
+    try:
+        yield
+    finally:
+        VALIDATE_OVERRIDE.reset(token)
+
+
+@contextmanager
+def full_validation() -> Generator[None, None, None]:
+    """Run tidy3d's check validators in this context even while ``fast`` mode is active."""
+    token = VALIDATE_OVERRIDE.set("full")
+    try:
+        yield
+    finally:
+        VALIDATE_OVERRIDE.reset(token)
+
+
 @total_ordering
 class Tidy3dBaseModel(BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
@@ -407,6 +480,15 @@ class Tidy3dBaseModel(BaseModel):
     @classmethod
     def __pydantic_init_subclass__(cls: type[T], **kwargs: Any) -> None:
         super().__pydantic_init_subclass__(**kwargs)
+
+        # make every decorated check validator a pass-through while fast mode is on; the
+        # schema is built lazily after this, so pydantic compiles the wrapped functions
+        decorators = cls.__pydantic_decorators__
+        for decorator in (
+            *decorators.field_validators.values(),
+            *decorators.model_validators.values(),
+        ):
+            decorator.func = _skippable(decorator.func, decorator.info.mode)
 
         # add docstring once pydantic is done constructing the class
         if _DOCSTRING_RAW_ATTR not in cls.__dict__:
@@ -720,6 +802,15 @@ class Tidy3dBaseModel(BaseModel):
         cls, model_dict: dict[str, Any], **parse_obj_kwargs: Any
     ) -> Tidy3dBaseModel:
         """Parse ``model_dict`` while optionally auto-dispatching when called on the base class."""
+        validate = parse_obj_kwargs.pop("validate", None)
+        if validate is not None:
+            context = {"fast": fast_validation, "full": full_validation}.get(validate)
+            if context is None:
+                raise ValueError(
+                    f"Unknown validate mode {validate!r}; expected 'full', 'fast' or None."
+                )
+            with context():
+                return cls._validate_model_dict(model_dict, **parse_obj_kwargs)
         parse_obj_kwargs = dict(parse_obj_kwargs)
         context = parse_obj_kwargs.get("context")
         context = {} if context is None else dict(context)
@@ -1167,6 +1258,7 @@ class Tidy3dBaseModel(BaseModel):
         group_path: str | None = None,
         lazy: bool = False,
         on_load: Callable[[Any], None] | None = None,
+        validate: Literal["full", "fast"] | None = None,
         **parse_obj_kwargs: Any,
     ) -> Self:
         """Loads a :class:`~tidy3d.Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
@@ -1186,6 +1278,11 @@ class Tidy3dBaseModel(BaseModel):
             Only used if ``lazy=True``. The callback is invoked with the loaded
             instance as its sole argument, enabling post-processing such as
             validation, logging, or warnings checks.
+        validate : Optional[Literal["full", "fast"]] = None
+            ``"fast"`` skips tidy3d's check validators for this call and keeps pydantic's type
+            checking, constraints, coercion and every validator that normalises or derives a
+            value; ``"full"`` forces the checks on; ``None`` follows ``config.validation.mode``.
+            Meant for files that were already validated.
         **model_validate_kwargs
             Keyword arguments passed to pydantic's ``model_validate`` method when loading model.
 
@@ -1198,6 +1295,12 @@ class Tidy3dBaseModel(BaseModel):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
+        if validate is not None:
+            if validate not in VALIDATION_MODES:
+                raise ValueError(
+                    f"Unknown validate mode {validate!r}; expected one of {VALIDATION_MODES} or None."
+                )
+            parse_obj_kwargs["validate"] = validate
         if lazy:
             target_cls = cls._target_cls_from_file(fname=fname, group_path=group_path)
             Proxy = _make_lazy_proxy(target_cls, on_load=on_load)

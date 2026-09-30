@@ -8,6 +8,7 @@ import numpy
 from matplotlib import pyplot
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.boundary import BoundarySpec, Periodic
 from tidy3d.components.geometry.base import Box
@@ -218,6 +219,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @field_validator("wavelength", "core_width", "gap")
     @classmethod
+    @always_validate
     def _set_non_negative_array(cls, val: float | ArrayFloat1D) -> float | ArrayFloat1D:
         """Ensure values are not negative and convert to numpy arrays."""
         val = numpy.array(val, ndmin=1)
@@ -247,6 +249,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return val
 
     @model_validator(mode="after")
+    @always_validate
     def _validate_gaps(self) -> Self:
         """Ensure the number of gaps is compatible with the number of cores supplied."""
         if self.gap.size == 1 and self.core_width.size != 2:
@@ -258,6 +261,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def _set_box_medium(self) -> Self:
         """Set BOX medium same as cladding as default value."""
         if self.box_medium is None:
@@ -270,6 +274,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def _set_clad_thickness(self) -> Self:
         """Set default clad/BOX thickness based on the max wavelength in the medium."""
         for side in ("clad", "box"):
@@ -310,6 +315,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def _set_side_margin(self) -> Self:
         """Set default side margin based on BOX and cladding thicknesses."""
         clad_thickness = self.clad_thickness

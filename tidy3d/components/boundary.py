@@ -15,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.validators import _assert_min_freq, assert_plane
 from tidy3d.components.viz import ARROW_ALPHA, ARROW_COLOR_ABSORBER, plot_params_absorber
 from tidy3d.constants import C_0, CONDUCTIVITY, EPSILON_0, HERTZ, MU_0, PML_SIGMA
@@ -1240,6 +1241,7 @@ class Boundary(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def periodic_with_pec_pmc(self) -> Self:
         """
         If a PBC is specified along with PEC or PMC on the other side, manually set the PBC

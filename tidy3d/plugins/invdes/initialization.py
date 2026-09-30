@@ -9,6 +9,7 @@ import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
 import tidy3d as td
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayLike
 from tidy3d.exceptions import ValidationError
@@ -104,6 +105,7 @@ class CustomInitializationSpec(AbstractInitializationSpec):
 
     @field_validator("params")
     @classmethod
+    @always_validate
     def _validate_params_dtype(cls, val: NDArray) -> NDArray:
         """Ensure that params is real-valued."""
         if np.issubdtype(val.dtype, np.bool_):

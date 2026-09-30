@@ -9,6 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import field_validator, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
@@ -697,6 +698,7 @@ def _warn_unsupported_traced_argument(
 ) -> Callable[[type, Any, FieldValidationInfo], Any]:
     @field_validator(*names)
     @classmethod
+    @always_validate
     def _warn_traced_arg(cls: type, val: Any, info: FieldValidationInfo) -> Any:
         if hasbox(val):
             log.warning(

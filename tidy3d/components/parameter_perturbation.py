@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 import numpy as np
 from pydantic import Field, NonNegativeFloat, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.types.base import ArrayComplex, ArrayFloat, discriminated_union
 from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
 from tidy3d.exceptions import DataError
@@ -323,6 +324,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
     @model_validator(mode="after")
+    @always_validate
     def compute_temperature_range(self) -> Self:
         """Compute and set temperature range based on provided ``perturbation_values``."""
 
@@ -760,6 +762,7 @@ class CustomChargePerturbation(ChargePerturbation):
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
     @model_validator(mode="after")
+    @always_validate
     def compute_eh_ranges(self) -> Self:
         """Compute and set electron and hole density ranges based on provided
         ``perturbation_values``.

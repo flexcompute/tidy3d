@@ -12,6 +12,7 @@ import numpy as np
 from autograd.extend import Box as AutogradBox
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.config import config
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import (
@@ -252,6 +253,7 @@ class AbstractStructure(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
+    @always_validate
     def _handle_background_mediums(self) -> Self:
         """Handle background medium combinations, including deprecation."""
 
@@ -1363,6 +1365,7 @@ class MeshOverrideStructure(AbstractStructure):
 
     @field_validator("geometry")
     @classmethod
+    @always_validate
     def _box_only(cls, val: GeometryType) -> GeometryType:
         """Ensure this is a box."""
         if isinstance(val, Geometry):

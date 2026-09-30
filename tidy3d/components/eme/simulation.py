@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
+from tidy3d._runtime import always_validate, fast_validation_active
 from tidy3d.components.base import cached_property, keyed_cache
 from tidy3d.components.boundary import BoundarySpec, PECBoundary
 from tidy3d.components.data.monitor_data import ElectromagneticFieldData, ModeSolverData
@@ -938,8 +939,14 @@ class EMESimulation(AbstractYeeGridSimulation):
         )
 
     @model_validator(mode="after")
+    @always_validate
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
+        if fast_validation_active():
+            # fast mode keeps only the step that changes the model; every other call
+            # in this chain checks and would be skipped by the class-level guard
+            call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
+            return self
         self._structures_not_at_edges()
         self._validate_scene()
         call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)

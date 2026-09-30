@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import Field, PositiveInt, field_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel
 
 if TYPE_CHECKING:
@@ -108,6 +109,7 @@ class ParameterFloat(ParameterNumeric):
 
     @field_validator("span")
     @classmethod
+    @always_validate
     def _span_is_float(cls, val: tuple[float | int, float | int]) -> tuple[float, float]:
         """Make sure the span contains floats."""
         low, high = val
@@ -149,6 +151,7 @@ class ParameterInt(ParameterNumeric):
 
     @field_validator("span")
     @classmethod
+    @always_validate
     def _span_is_int(cls, val: tuple[float | int, float | int]) -> tuple[int, int]:
         """Make sure the span contains ints."""
         low, high = val

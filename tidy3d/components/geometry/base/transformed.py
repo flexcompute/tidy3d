@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import (
@@ -58,6 +59,7 @@ class Transformed(Geometry):
         return val
 
     @model_validator(mode="after")
+    @always_validate
     def _apply_transforms(self: dict[str, Any]) -> dict[str, Any]:
         while isinstance(self.geometry, Transformed):
             inner = self.geometry

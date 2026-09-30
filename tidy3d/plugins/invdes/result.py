@@ -8,6 +8,7 @@ import numpy as np
 from pydantic import Field, field_validator
 
 import tidy3d as td
+from tidy3d._runtime import always_validate
 from tidy3d.components.types import ArrayLike
 
 from .base import InvdesBaseModel
@@ -68,6 +69,7 @@ class InverseDesignResult(InvdesBaseModel):
 
     @field_validator("params")
     @classmethod
+    @always_validate
     def _validate_and_clip_params(
         cls, params_tuple: tuple[ArrayLike, ...]
     ) -> tuple[ArrayLike, ...]:

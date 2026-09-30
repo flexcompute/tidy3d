@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 from pydantic import Field, field_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.constants import RADIAN
 from tidy3d.exceptions import ValidationError
 
@@ -111,6 +112,7 @@ class RotationAroundAxis(AbstractRotation):
 
     @field_validator("axis")
     @classmethod
+    @always_validate
     def _validate_axis_vector(cls, val: Axis | Coordinate) -> Coordinate:
         if not isinstance(val, tuple):
             axis = [0.0, 0.0, 0.0]

@@ -265,10 +265,10 @@ class ConfigManager(CoreConfigManager):
             self._loader.save_base(base_without_env)
         else:
             # For profile overrides: save any field that differs from baseline
-            # (don't filter by persist flag - profiles should save all customizations)
+            # (profiles keep every customization except fields marked persist=False, which are session-only)
             base_without_env = self._compose_without_env()
             baseline = deep_merge(self._builtin_data, self._base_data)
-            diff = deep_diff(baseline, base_without_env)
+            diff = _drop_never_persisted(deep_diff(baseline, base_without_env))
             self._loader.save_profile(self._profile, diff)
         # refresh cached base/profile data after saving
         self._base_data = self._loader.load_base(validation_profile=self._profile)
@@ -644,6 +644,21 @@ def _model_dict(model: BaseModel) -> dict[str, Any]:
         if hasattr(value, "get_secret_value"):
             data[key] = value.get_secret_value()
     return data
+
+
+def _drop_never_persisted(tree: dict[str, Any]) -> dict[str, Any]:
+    """Remove fields marked ``persist=False`` (session-only options) before a profile is saved."""
+    for name, schema in get_sections().items():
+        section = tree.get(name)
+        if not isinstance(section, dict):
+            continue
+        for field_name, field in schema.model_fields.items():
+            extra = field.json_schema_extra
+            if isinstance(extra, dict) and extra.get("persist") is False:
+                section.pop(field_name, None)
+        if not section:
+            tree.pop(name, None)
+    return tree
 
 
 def _extract_persisted(schema: type[BaseModel], data: dict[str, Any]) -> dict[str, Any]:

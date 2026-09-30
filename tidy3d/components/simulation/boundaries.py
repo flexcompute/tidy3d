@@ -9,6 +9,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import (
     CLIPPING_MARGIN,
@@ -52,6 +53,7 @@ def validate_boundaries_for_zero_dims(
     """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
 
     @model_validator(mode="after")
+    @always_validate
     def boundaries_for_zero_dims(self: Any) -> Any:
         """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         val = self.boundary_spec

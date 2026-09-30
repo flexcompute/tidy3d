@@ -12,6 +12,7 @@ import scipy.optimize as opt
 from pydantic import Field, field_validator, model_validator
 from rich.progress import Progress
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.medium import AbstractMedium, PoleResidue
 from tidy3d.components.types import ArrayFloat1D
@@ -81,6 +82,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
+    @always_validate
     def _kdata_setup_and_length_match(self) -> Self:
         """Validate the length of k_data, or setup k if it's None."""
         if self.k_data is None:

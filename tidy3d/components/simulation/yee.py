@@ -11,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.boundary import InternalAbsorber
@@ -216,6 +217,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     @field_validator("simulation_type")
     @classmethod
+    @always_validate
     def _validate_simulation_type_tidy3d(
         cls, val: Literal["autograd_fwd", "autograd_bwd", "tidy3d"] | None
     ) -> Literal["autograd_fwd", "autograd_bwd", "tidy3d"]:

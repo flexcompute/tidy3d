@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_validator
 
+from tidy3d._runtime import always_validate
+
 from .base import Expression
 from .types import NumberOrExpression
 
@@ -30,6 +32,7 @@ class UnaryOperator(Expression):
 
     @field_validator("operand")
     @classmethod
+    @always_validate
     def validate_operand(cls, v: NumberOrExpression) -> ExpressionType:
         return cls._to_expression(v)
 
@@ -60,6 +63,7 @@ class BinaryOperator(Expression):
 
     @field_validator("left", "right")
     @classmethod
+    @always_validate
     def validate_operands(cls, v: NumberOrExpression) -> ExpressionType:
         return cls._to_expression(v)
 

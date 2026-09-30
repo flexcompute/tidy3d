@@ -24,7 +24,7 @@ from pydantic import (
     field_validator,
 )
 
-from tidy3d._runtime import WASM_BUILD
+from tidy3d._runtime import WASM_BUILD, set_validation_mode
 from tidy3d.log import (
     DEFAULT_LEVEL,
     LogLevel,
@@ -864,6 +864,31 @@ class BatchDataCacheConfig(ConfigSection):
     )
 
 
+@register_section("validation")
+class ValidationConfig(ConfigSection):
+    """Validation configuration."""
+
+    mode: Literal["full", "fast"] = Field(
+        default="full",
+        title="Validation mode",
+        description=(
+            "'full' runs tidy3d's validators on construction and parsing. 'fast' skips the "
+            "check validators and keeps pydantic's type checking, constraints, coercion, every "
+            "validator that normalises or derives a value, and serialization, which makes building "
+            "and loading models several times faster; use it for data that was already validated, "
+            "such as files accepted by the server. Never written to disk, not even in a named "
+            "profile. 'validate_pre_upload' is unaffected."
+        ),
+        json_schema_extra={"persist": False},
+    )
+
+
+@register_handler("validation")
+def apply_validation(config: ValidationConfig) -> None:
+    """Apply the validation mode process-wide."""
+    set_validation_mode(config.mode)
+
+
 @register_section("plugins")
 class PluginsContainer(ConfigSection):
     """Container that holds plugin-specific configuration sections."""
@@ -889,5 +914,6 @@ __all__ = [
     "PluginsContainer",
     "RunConfig",
     "SimulationConfig",
+    "ValidationConfig",
     "WebConfig",
 ]

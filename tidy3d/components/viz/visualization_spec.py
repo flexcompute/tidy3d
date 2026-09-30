@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field, field_validator
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.log import log
 
@@ -80,6 +81,7 @@ class VisualizationSpec(Tidy3dBaseModel):
 
     @field_validator("edgecolor")
     @classmethod
+    @always_validate
     def _ensure_edgecolor(cls, value: str, info: ValidationInfo) -> str:
         # if no explicit edgecolor given, fall back to facecolor
         if (value == "") and "facecolor" in info.data:

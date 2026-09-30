@@ -14,6 +14,7 @@ from pydantic import Field, field_validator, model_validator
 from xarray import DataArray as XrDataArray
 from xarray import concat as xr_concat
 
+from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import (
     DATA_ARRAY_MAP,
@@ -401,6 +402,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     @field_validator("cells")
     @classmethod
+    @always_validate
     def match_cells_to_vtk_type(cls, val: CellDataArray) -> CellDataArray:
         """Check that cell connections does not have duplicate points."""
         if vtk is None:
