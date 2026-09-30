@@ -10,7 +10,7 @@ from tidy3d.components.spice.sources.types import CurrentSourceType, VoltageSour
 from tidy3d.components.tcad.boundary.abstract import HeatChargeBC
 from tidy3d.components.tcad.generation_recombination import SurfaceRecombinationModelType
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.constants import CURRENT_DENSITY, VOLT
+from tidy3d.constants import AMP, VOLT
 
 ContactModelType = Literal["ohmic", "schottky_mott"]
 
@@ -101,22 +101,36 @@ class VoltageBC(HeatChargeBC):
 
 
 class CurrentBC(HeatChargeBC):
-    """
-    Current boundary conditions.
+    """Drive a contact with a prescribed total current and solve its potential.
+
+    Current is positive into the device and, in 2D, is per micron of device
+    depth. All faces of one :class:`.ChargeConductorMedium` form one terminal.
+    At most one terminal may be current-driven, and at least one
+    :class:`.VoltageBC` must provide the potential reference. ``current=0``
+    makes the contact float. A contact reaching only an insulator is a gate and
+    is rejected, including at ``current=0``; drive a gate with
+    :class:`.VoltageBC`. Supported only by the accelerated charge solver; not
+    supported for a conduction simulation, where :class:`.VoltageBC` should
+    be used instead.
+
+    There is no current continuation: if the device's current-voltage curve
+    passes through the requested current at more than one voltage (for
+    example, a negative differential resistance region), the voltage this
+    boundary condition settles on depends on where the simulation starts,
+    not only on the requested current.
 
     Example
     -------
     >>> import tidy3d as td
-    >>> current_source = td.DCCurrentSource(current=1)
+    >>> current_source = td.DCCurrentSource(current=1e-3)
     >>> current_bc = CurrentBC(source=current_source)
     """
 
     source: CurrentSourceType = Field(
         title="Current Source",
-        description="A current source",
-        json_schema_extra={"units": CURRENT_DENSITY},
+        description="Total current through this terminal, positive into the device and, in 2D, per micron of device depth.",
+        json_schema_extra={"units": AMP},
     )
-    # TODO translation between currentsource amps and currentdensity, why not amps here?
 
 
 class InsulatingBC(HeatChargeBC):
