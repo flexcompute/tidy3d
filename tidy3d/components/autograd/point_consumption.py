@@ -347,9 +347,23 @@ def compute_point_integrands(
                 )
 
                 if is_medium_pec:
-                    mask_pec_inside = np.asarray(pec.inside.pec_mask.values, dtype=float_dtype)[
-                        set_slice, None
-                    ]
+                    # the staged mask classifies the inside node against the analytic
+                    # geometry, which is ambiguous for nodes lying on a face (grid/bound
+                    # round-off); a PEC-like recorded eps_in also marks the inside as PEC,
+                    # as the legacy value-based detection did, so the dielectric integrand
+                    # never sees metal permittivity
+                    # reduced over components and frequencies: (N, 1) like the staged mask
+                    eps_in_is_pec = np.any(
+                        [
+                            eps.real < config.adjoint.pec_detection_threshold
+                            for eps in eps_in.values()
+                        ],
+                        axis=(0, 2),
+                    )[:, None]
+                    mask_pec_inside = np.maximum(
+                        np.asarray(pec.inside.pec_mask.values, dtype=float_dtype)[set_slice, None],
+                        eps_in_is_pec,
+                    )
                     # fields pulled outside the boundary use the outside-side eps samples
                     vjps_pec_fields_outside = _pec_side_vjps("out", eps_out)
                 if has_pec_outside:
