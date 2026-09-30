@@ -5,13 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
-from pydantic import (
-    Field,
-    PositiveFloat,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, field_validator, model_validator
 
+from tidy3d.components.autograd.types import TracedFloat, TracedPositiveFloat
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.data.utils import (
     _get_numpy_array,
@@ -31,6 +27,7 @@ if TYPE_CHECKING:
 
     from autograd.numpy.numpy_boxes import ArrayBox
     from numpy.typing import NDArray
+    from pydantic import PositiveFloat
 
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
@@ -91,7 +88,7 @@ class Sellmeier(DispersiveMedium):
 
     _traced_indexed_root: ClassVar[str] = "coeffs"
 
-    coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
+    coeffs: tuple[tuple[TracedFloat, TracedPositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         json_schema_extra={"units": (None, MICROMETER + "^2")},

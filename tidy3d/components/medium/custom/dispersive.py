@@ -534,7 +534,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 poles_vals=poles_vals,
                 omega=2 * np.pi * freq,
                 requested_paths=derivative_info.paths,
-                project_real=False,
             )
             for path, vjp in vjps_f.items():
                 if path not in vjps_total:

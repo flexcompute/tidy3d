@@ -9,7 +9,13 @@ import autograd.numpy as anp
 from autograd.builtins import dict as TracedDict
 from autograd.extend import Box, defvjp, primitive
 from autograd.numpy.numpy_boxes import ArrayBox
-from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, TypeAdapter
+from pydantic import (
+    BeforeValidator,
+    NonNegativeFloat,
+    PlainSerializer,
+    PositiveFloat,
+    TypeAdapter,
+)
 
 from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
 from tidy3d.components.types.base import _auto_serializer, _from_complex_dict
@@ -149,6 +155,7 @@ TracedArrayLike = traced_alias(ArrayLike)
 TracedArrayFloat2D = traced_alias(ArrayFloat2D)
 TracedFloat = traced_alias(float)
 TracedPositiveFloat = traced_alias(PositiveFloat)
+TracedNonNegativeFloat = traced_alias(NonNegativeFloat)
 TracedComplex = traced_alias(Complex)
 TracedSize1D = traced_alias(Size1D)
 
@@ -174,6 +181,7 @@ __all__ = [
     "TracedCoordinate",
     "TracedDict",
     "TracedFloat",
+    "TracedNonNegativeFloat",
     "TracedPoleAndResidue",
     "TracedPolesAndResidues",
     "TracedPositiveFloat",

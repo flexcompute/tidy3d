@@ -5,17 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
-from pydantic import (
-    Field,
-    PositiveFloat,
-    model_validator,
-)
+from pydantic import Field, model_validator
 
 from tidy3d.components.autograd.path_utils import (
     traced_paths,
 )
 from tidy3d.components.autograd.types import (
     PathType,
+    TracedFloat,
+    TracedPositiveFloat,
 )
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.data.utils import (
@@ -33,6 +31,7 @@ if TYPE_CHECKING:
 
     from autograd.numpy.numpy_boxes import ArrayBox
     from numpy.typing import NDArray
+    from pydantic import PositiveFloat
 
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
@@ -87,14 +86,14 @@ class Debye(DispersiveMedium):
     _traced_indexed_root: ClassVar[str] = "coeffs"
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
-    eps_inf: PositiveFloat = Field(
+    eps_inf: TracedPositiveFloat = Field(
         default=1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
-    coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
+    coeffs: tuple[tuple[TracedFloat, TracedPositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
         json_schema_extra={"units": (PERMITTIVITY, SECOND)},

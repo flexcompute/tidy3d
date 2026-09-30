@@ -6,19 +6,16 @@ from math import isclose
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
-from pydantic import (
-    Field,
-    NonNegativeFloat,
-    PositiveFloat,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd.path_utils import (
     traced_paths,
 )
 from tidy3d.components.autograd.types import (
     PathType,
+    TracedFloat,
+    TracedNonNegativeFloat,
+    TracedPositiveFloat,
 )
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.data.utils import (
@@ -37,6 +34,7 @@ if TYPE_CHECKING:
 
     from autograd.numpy.numpy_boxes import ArrayBox
     from numpy.typing import NDArray
+    from pydantic import PositiveFloat
 
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
@@ -87,14 +85,14 @@ class Lorentz(DispersiveMedium):
     _traced_indexed_root: ClassVar[str] = "coeffs"
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
-    eps_inf: PositiveFloat = Field(
+    eps_inf: TracedPositiveFloat = Field(
         default=1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
-    coeffs: tuple[tuple[float, float, NonNegativeFloat], ...] = Field(
+    coeffs: tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         json_schema_extra={"units": (PERMITTIVITY, HERTZ, HERTZ)},
@@ -103,8 +101,8 @@ class Lorentz(DispersiveMedium):
     @field_validator("coeffs")
     @classmethod
     def _coeffs_unequal_f_delta(
-        cls, val: tuple[tuple[float, float, NonNegativeFloat], ...]
-    ) -> tuple[tuple[float, float, NonNegativeFloat], ...]:
+        cls, val: tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...]
+    ) -> tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...]:
         """f**2 and delta**2 cannot be exactly the same."""
         for _, f, delta in val:
             if f**2 == delta**2:

@@ -212,7 +212,10 @@ class DispersiveMedium(AbstractMedium, ABC):
         )
         freqs = np.asarray(derivative_info.frequencies, float)
         dJv = np.asarray(getattr(dJ, "values", dJ))
-        return freqs, pack_complex_vec(dJv)
+        # The TJP of the packed [Re(eps); Im(eps)] model computes
+        # Re(v)·d(Re eps)/dp + Im(v)·d(Im eps)/dp = Re(v·conj(d eps/dp)). The parameter VJP is
+        # Re(dJ · d eps/dp), so the packed adjoint vector is conj(dJ).
+        return freqs, pack_complex_vec(np.conj(dJv))
 
     @staticmethod
     def _tjp_grad(
@@ -558,7 +561,6 @@ class PoleResidue(DispersiveMedium):
         poles_vals: list[tuple[ComplexArrayOrScalar, ComplexArrayOrScalar]],
         omega: float,
         requested_paths: list[tuple],
-        project_real: bool = False,
     ) -> AutogradFieldMap:
         """
         Static helper to compute VJPs from parameters using the analytical chain rule.
@@ -568,9 +570,11 @@ class PoleResidue(DispersiveMedium):
         - poles_vals: Sequence of (a_i, c_i) pole parameters to differentiate with respect to.
         - omega: Angular frequency for this VJP evaluation.
         - requested_paths: Paths requested by the caller; used to filter outputs.
-        - project_real: If True, project pole-parameter VJPs to their real part.
-          Use True for uniform PoleResidue to match real-valued objectives; use False for
-          CustomPoleResidue where parameters are complex and complex VJPs are required.
+
+        Each pole enters epsilon twice, as ``-c / (jw + a)`` and as its conjugate pair
+        ``-conj(c) / (jw + conj(a))``, so a complex parameter ``z`` gets the VJP
+        ``dJ * d(eps)/dz + conj(dJ * d(eps)/d(conj z))``. Autograd reads
+        ``dJ/dRe(z) = Re(vjp)`` and ``dJ/dIm(z) = -Im(vjp)`` from it.
         """
         jw = 1j * omega
         vjps = {}
@@ -582,12 +586,16 @@ class PoleResidue(DispersiveMedium):
             if any(path[1] == i for path in requested_paths if path[0] == "poles"):
                 if ("poles", i, 0) in requested_paths:
                     deps_da = c_val / (jw + a_val) ** 2
-                    dJ_da = dJ_deps_complex * deps_da
-                    vjps[("poles", i, 0)] = np.real(dJ_da) if project_real else dJ_da
+                    deps_da_conj = np.conj(c_val) / (jw + np.conj(a_val)) ** 2
+                    vjps[("poles", i, 0)] = dJ_deps_complex * deps_da + np.conj(
+                        dJ_deps_complex * deps_da_conj
+                    )
                 if ("poles", i, 1) in requested_paths:
                     deps_dc = -1 / (jw + a_val)
-                    dJ_dc = dJ_deps_complex * deps_dc
-                    vjps[("poles", i, 1)] = np.real(dJ_dc) if project_real else dJ_dc
+                    deps_dc_conj = -1 / (jw + np.conj(a_val))
+                    vjps[("poles", i, 1)] = dJ_deps_complex * deps_dc + np.conj(
+                        dJ_deps_complex * deps_dc_conj
+                    )
 
         return vjps
 
@@ -611,7 +619,6 @@ class PoleResidue(DispersiveMedium):
                 poles_vals=poles_vals,
                 omega=2 * np.pi * freq,
                 requested_paths=derivative_info.paths,
-                project_real=True,
             )
             for path, vjp in vjps_f.items():
                 if path not in vjps_total:
