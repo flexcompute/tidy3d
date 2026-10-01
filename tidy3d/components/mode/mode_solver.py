@@ -757,14 +757,30 @@ class ModeSolver(Tidy3dBaseModel):
             plane=self.plane,
         )
 
+    @cached_property
+    def _grid_snapped_untruncated(self) -> Grid:
+        """``grid_snapped`` spanning both halves of every symmetry plane.
+
+        The output grid is truncated to the symmetry quadrant, which is the right domain to record
+        on but the wrong one to describe the result: symmetry expansion mirrors the quadrant back
+        out, and needs the untruncated coordinates to mirror onto.
+        """
+        return self._grid_snapped(
+            simulation=self.simulation,
+            plane=self.plane,
+            truncate_symmetry=False,
+        )
+
     @classmethod
-    def _grid_snapped(cls, simulation: Simulation, plane: Box) -> Grid:
+    def _grid_snapped(
+        cls, simulation: Simulation, plane: Box, truncate_symmetry: bool = True
+    ) -> Grid:
         """Grid snapped to the plane normal and to simulation 0-sized dims if any."""
         mode_grid = cls._get_output_grid(
             simulation=simulation,
             plane=plane,
             keep_additional_layers=False,
-            truncate_symmetry=True,
+            truncate_symmetry=truncate_symmetry,
         )
 
         # snap to plane center along normal direction

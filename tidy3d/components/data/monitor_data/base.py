@@ -153,7 +153,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         will break."""
         field_comps = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
         if self.grid_expanded is None and any(
-            getattr(self, comp) is not None for comp in field_comps
+            getattr(self, comp, None) is not None for comp in field_comps
         ):
             log.warning(
                 "Monitor data requires 'grid_expanded' to be defined to compute values like "

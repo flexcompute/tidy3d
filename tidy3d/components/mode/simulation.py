@@ -16,6 +16,7 @@ from tidy3d.components.monitor import (
     MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
+    ModeStructureMonitor,
     PermittivityMonitor,
 )
 from tidy3d.components.simulation import (
@@ -44,7 +45,7 @@ if TYPE_CHECKING:
     from tidy3d.components.mode.data.sim_data import ModeSimulationData
     from tidy3d.components.types import Ax
 
-ModeSimulationMonitorType = PermittivityMonitor | MediumMonitor
+ModeSimulationMonitorType = PermittivityMonitor | MediumMonitor | ModeStructureMonitor
 
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
@@ -275,6 +276,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         super()._run_after_validators()
         self._plane_in_sim_bounds()
         self._validate_mode_sort_spec_bounding_box()
+        self._validate_mode_structure_monitors()
         self._validate_mode_solver()
         self._validate_grid()
         return self
@@ -308,6 +310,95 @@ class ModeSimulation(AbstractYeeGridSimulation):
                 "bounding_box",
             )
         return self
+
+    @cached_property
+    def monitors_data_size(self) -> dict[str, float]:
+        """Dictionary mapping monitor names to their estimated storage size in bytes.
+
+        A :class:`.ModeStructureMonitor` records permittivity at every :attr:`freqs`, a count the
+        monitor does not carry itself, so its estimate is resolved here -- the size a mode task has
+        to provision for.
+        """
+        data_size = {}
+        for monitor in self.monitors:
+            num_cells = self._monitor_num_cells(monitor)
+            if isinstance(monitor, ModeStructureMonitor):
+                size = monitor._storage_size_freqs(num_cells=num_cells, num_freqs=len(self.freqs))
+            else:
+                size = monitor.storage_size(num_cells=num_cells, tmesh=[])
+            data_size[monitor.name] = float(size)
+        return data_size
+
+    def _validate_mode_structure_monitors(self) -> Self:
+        """Check the simulation can supply what a ``ModeStructureMonitor`` has to pair with.
+
+        The monitor records permittivity and ownership only; the electric field is paired in from
+        the ordinary mode result at read time, which is matched to them just as long as the fields
+        stay on the Yee grid and all three components are kept (RFC EMSOLVER-0010).
+        """
+        for index, monitor in enumerate(self.monitors):
+            if not isinstance(monitor, ModeStructureMonitor):
+                continue
+
+            if self.colocate:
+                self._raise_validation_error_at_loc(
+                    f"'ModeSimulation.colocate' must be 'False' when the 'ModeStructureMonitor' "
+                    f"'{monitor.name}' is present. The monitor's permittivity and "
+                    "structure-ownership maps are recorded on the native Yee grid, and the "
+                    "electric field is paired with them from the mode result, so a colocated "
+                    "mode result would no longer match them. Set 'colocate=False'.",
+                    "colocate",
+                )
+
+            missing = [field for field in ("Ex", "Ey", "Ez") if field not in self.fields]
+            if missing:
+                self._raise_validation_error_at_loc(
+                    f"'ModeSimulation.fields' is missing {missing}, which the "
+                    f"'ModeStructureMonitor' '{monitor.name}' needs: the displacement field and "
+                    "absorbed power sum over all three electric-field components. Add them to "
+                    "'fields'.",
+                    "fields",
+                )
+
+            self._validate_monitor_in_mode_plane(monitor, index)
+        return self
+
+    def _validate_monitor_in_mode_plane(self, monitor: ModeStructureMonitor, index: int) -> None:
+        """Check a ``ModeStructureMonitor`` lies in the mode plane and overlaps it.
+
+        The recorded data only exists on the mode plane, so a monitor on a different plane (or
+        beside it) would silently yield empty data rather than an error.
+        """
+        normal_axis = self.plane.zero_dims[0]
+        if monitor.normal_axis != normal_axis:
+            self._raise_validation_error_at_loc(
+                f"'ModeStructureMonitor' '{monitor.name}' is normal to axis "
+                f"{monitor.normal_axis}, but the mode plane is normal to axis {normal_axis}. "
+                "The monitor must lie in the mode plane.",
+                "monitors",
+                index,
+                "size",
+            )
+
+        mode_plane = effective_mode_plane(self.plane, Box(size=self.size, center=self.center))
+        if not np.isclose(monitor.center[normal_axis], mode_plane.center[normal_axis]):
+            self._raise_validation_error_at_loc(
+                f"'ModeStructureMonitor' '{monitor.name}' is at "
+                f"{'xyz'[normal_axis]}={monitor.center[normal_axis]}, but the mode plane is at "
+                f"{'xyz'[normal_axis]}={mode_plane.center[normal_axis]}. "
+                "The monitor must lie in the mode plane.",
+                "monitors",
+                index,
+                "center",
+            )
+
+        if not mode_plane.intersects(Box(center=monitor.center, size=monitor.size)):
+            self._raise_validation_error_at_loc(
+                f"'ModeStructureMonitor' '{monitor.name}' does not overlap the mode plane, so it "
+                "would record no data. Move or resize it to intersect the plane.",
+                "monitors",
+                index,
+            )
 
     def _validate_mode_solver(self) -> Self:
         _ = self._mode_solver
@@ -355,6 +446,21 @@ class ModeSimulation(AbstractYeeGridSimulation):
                     "Alternatively, 'ModeSimulation.epsilon' may be "
                     "used to obtain the non-subpixel-averaged "
                     "permittivity."
+                )
+            if isinstance(mnt, ModeStructureMonitor):
+                # A non-subpixel ownership map is not offered as a fallback: the band-gap gate is
+                # discrete, so a Yee point assigned to the wrong structure moves that cell's entire
+                # absorption to a different band gap. Permittivity is already declined on this path
+                # for the same reason, and 'ModeStructureData' requires it.
+                raise SetupError(
+                    "The package 'tidy3d-extras' is required for local "
+                    f"'ModeStructureMonitor' handling ('{mnt.name}'). Please install it using, "
+                    "for example, 'pip install \"tidy3d[extras]\"', and ensure "
+                    "'config.simulation.use_local_subpixel' is not 'False'. Without subpixel "
+                    "averaging the recorded permittivity and structure-ownership maps would "
+                    "disagree with the remote solver, and the band-gap gate of "
+                    "'ModeSimulationData.optical_generation' would be placed differently at "
+                    "material interfaces."
                 )
 
         from .data.sim_data import ModeSimulationData

@@ -8,17 +8,28 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.monitor_data import MediumData, PermittivityData
+from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.monitor_data import (
+    MediumData,
+    ModeFieldStructureData,
+    ModeStructureData,
+    PermittivityData,
+)
+from tidy3d.components.data.optical_generation import (
+    compute_optical_generation,
+    compute_per_component_optical_generation,
+    match_recorded_frequency,
+)
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.components.viz.layout import estimate_field_components_figsize
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.log import log
 
-ModeSimulationMonitorDataType = PermittivityData | MediumData
+ModeSimulationMonitorDataType = PermittivityData | MediumData | ModeStructureData
 FIELD_COMPONENT_TITLE_PAD = 14
 
 if TYPE_CHECKING:
@@ -27,6 +38,7 @@ if TYPE_CHECKING:
     from matplotlib.colors import Colormap
     from matplotlib.figure import Figure
 
+    from tidy3d.components.data.optical_generation import OpticalGenerationData
     from tidy3d.components.mode_spec import ModeSortSpec
     from tidy3d.components.types import Ax, PlotScale
 
@@ -324,3 +336,195 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         return data_sorted.updated_copy(
             path="simulation", mode_spec=modes_sorted.monitor.mode_spec, deep=False, validate=False
         )
+
+    def field_structure(
+        self,
+        monitor_name: str,
+        *,
+        mode_index: int = 0,
+        freq: float | None = None,
+    ) -> ModeFieldStructureData:
+        """Pair a :class:`.ModeStructureMonitor`'s data with the electric field of one mode.
+
+        The monitor records permittivity and structure ownership only; this assembles the matched
+        set by selecting ``Ex``/``Ey``/``Ez`` out of the mode result at the coordinates the monitor
+        recorded, which is what the derived quantities (``Dx``/``Dy``/``Dz``,
+        ``absorbed_power_density``) and :meth:`optical_generation` are computed from. The mode-side
+        counterpart of indexing ``sim_data["field_structure"]`` in FDTD.
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name of the :class:`.ModeStructureMonitor` whose data to pair.
+        mode_index : int = 0
+            Index of the mode to pair in, in the ordinary mode data's indexing -- that is, after
+            any :class:`.ModeSpec` filtering, sorting and tracking.
+        freq : Optional[float] = None
+            Frequency [Hz] to narrow to, which must match a recorded one. ``None`` keeps every
+            recorded frequency.
+
+        Returns
+        -------
+        :class:`.ModeFieldStructureData`
+            The nine matched primitives on their native Yee grids.
+        """
+        recorded = self._mode_structure_data(monitor_name).symmetry_expanded
+        eps_freqs = np.asarray(recorded.eps_xx.coords["f"].values)
+        if freq is not None:
+            eps_freqs = np.array([match_recorded_frequency(eps_freqs, freq)])
+
+        modes = self._modes_at(eps_freqs)
+        components = {}
+        for e_name, eps_name, index_name in zip(
+            ("Ex", "Ey", "Ez"),
+            ("eps_xx", "eps_yy", "eps_zz"),
+            ("structure_index_x", "structure_index_y", "structure_index_z"),
+        ):
+            eps = getattr(recorded, eps_name).sel(f=eps_freqs)
+            components[eps_name] = eps
+            components[index_name] = getattr(recorded, index_name)
+            components[e_name] = self._select_mode_field(
+                modes, e_name, mode_index=mode_index, coords=eps.coords
+            )
+
+        return ModeFieldStructureData(
+            monitor=recorded.monitor,
+            grid_expanded=recorded.grid_expanded,
+            **components,
+        )
+
+    def _modes_at(self, freqs: np.ndarray) -> ModeSolverDataType:
+        """Mode data covering ``freqs``, interpolating only where the solve already would have.
+
+        A ``ModeSpec.interp_spec`` with ``reduce_data`` leaves the mode result on the frequencies
+        that were sampled, while the monitor records every simulation frequency; filling the rest
+        in is the interpolation that spec already defines, not a second one introduced here.
+        """
+        modes = self.modes
+        if np.all(np.isin(freqs, np.asarray(modes.Ex.coords["f"].values))):
+            return modes
+        return modes.interpolated_copy
+
+    @staticmethod
+    def _select_mode_field(
+        modes: ModeSolverDataType,
+        e_name: str,
+        *,
+        mode_index: int,
+        coords: Any,
+    ) -> ScalarFieldDataArray:
+        """One electric-field component of one mode, at the coordinates the monitor recorded.
+
+        Selection, never interpolation: the mode fields and the recorded arrays sit on the same
+        plane-snapped, symmetry-expanded grid, so any coordinate the monitor holds must be present
+        in the mode data. A mismatch means the two were built from different grids, which would
+        silently misalign the field from the permittivity it is paired with, so it raises.
+        """
+        field = getattr(modes, e_name)
+        num_modes = field.sizes["mode_index"]
+        if not 0 <= mode_index < num_modes:
+            raise DataError(
+                f"'mode_index={mode_index}' is out of range: the mode data carries "
+                f"{num_modes} mode(s), so valid indices are 0 to {num_modes - 1}."
+            )
+        try:
+            selected = field.sel(
+                mode_index=mode_index,
+                f=coords["f"],
+                x=coords["x"],
+                y=coords["y"],
+                z=coords["z"],
+                # the selected mode leaves a scalar coordinate behind, which the FDTD producer's
+                # data does not carry and every derived quantity would then propagate
+                drop=True,
+            )
+        except KeyError as exc:
+            raise DataError(  # blind-chaining: ignore
+                f"Component '{e_name}' of the mode data does not carry every coordinate the "
+                "mode–structure monitor recorded, so the two cannot be matched. This means they "
+                "were built on different grids; please report it."
+            ) from exc
+        ordered = selected.transpose("x", "y", "z", "f")
+        return ScalarFieldDataArray(ordered.values, coords=ordered.coords)
+
+    def optical_generation(
+        self,
+        monitor_name: str,
+        *,
+        mode_index: int = 0,
+        freq: float | None = None,
+        temperature: float = 300.0,
+        power_scale: float = 1.0,
+    ) -> OpticalGenerationData:
+        """Compute optical carrier generation and thermalization heat from a mode–structure monitor.
+
+        The mode-solver counterpart of :meth:`.SimulationData.optical_generation`, running the
+        identical kernel on the identical primitives — see it for the physics, the band-gap gate,
+        and the charge-media contract.
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name of the :class:`.ModeStructureMonitor` whose data to use.
+        mode_index : int = 0
+            Index of the mode whose field is paired with the recorded data, in the ordinary mode
+            data's indexing -- that is, after any :class:`.ModeSpec` filtering, sorting and
+            tracking.
+        freq : Optional[float] = None
+            Frequency [Hz] to evaluate. If a single frequency was recorded it is used; otherwise
+            ``freq`` must match a recorded frequency within a small relative tolerance.
+        temperature : float = 300.0
+            Temperature [K] used to evaluate the band-gap models.
+        power_scale : float = 1.0
+            Multiplies the absorbed power. Mode fields are power-normalized to 1 W, so this is
+            the guided power in watts.
+
+        Returns
+        -------
+        :class:`.OpticalGenerationData`
+            Absorbed power, band-gap-gated generation rate, thermalization heat, and pair power.
+        """
+        return compute_optical_generation(
+            self.field_structure(monitor_name, mode_index=mode_index, freq=freq),
+            list(self.simulation.structures),
+            freq=freq,
+            temperature=temperature,
+            power_scale=power_scale,
+        )
+
+    def per_component_optical_generation(
+        self,
+        monitor_name: str,
+        *,
+        mode_index: int = 0,
+        freq: float | None = None,
+        temperature: float = 300.0,
+        power_scale: float = 1.0,
+    ) -> dict[Literal["x", "y", "z"], OpticalGenerationData]:
+        """Per-component optical generation on each native Yee grid (no colocation).
+
+        The mode-solver counterpart of :meth:`.SimulationData.per_component_optical_generation`.
+        Parameters match :meth:`optical_generation`.
+        """
+        return compute_per_component_optical_generation(
+            self.field_structure(monitor_name, mode_index=mode_index, freq=freq),
+            list(self.simulation.structures),
+            freq=freq,
+            temperature=temperature,
+            power_scale=power_scale,
+        )
+
+    def _mode_structure_data(self, monitor_name: str) -> ModeStructureData:
+        """Fetch and type-check a :class:`.ModeStructureData` by monitor name."""
+        try:
+            mode_structure = self[monitor_name]
+        except KeyError as exc:
+            raise DataError(  # blind-chaining: ignore
+                f"Monitor '{monitor_name}' not found in the simulation data."
+            ) from exc
+        if not isinstance(mode_structure, ModeStructureData):
+            raise DataError(
+                f"pairing the mode fields requires a 'ModeStructureMonitor'; monitor "
+                f"'{monitor_name}' produced '{mode_structure.type}'."
+            )
+        return mode_structure

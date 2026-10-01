@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from .data import FieldData
-from .diagnostic import FieldStructureData, MediumData, PermittivityData
+from .diagnostic import (
+    FieldStructureData,
+    MediumData,
+    ModeFieldStructureData,
+    ModeStructureData,
+    PermittivityData,
+)
 from .dipole import DipoleEmissionData
 from .electromagnetic import ElectromagneticFieldData
 from .point_cloud import PointCloudFieldData, PointCloudPermittivityData
@@ -19,6 +25,8 @@ __all__ = [
     "FieldStructureData",
     "FieldTimeData",
     "MediumData",
+    "ModeFieldStructureData",
+    "ModeStructureData",
     "PermittivityData",
     "PointCloudFieldData",
     "PointCloudPermittivityData",

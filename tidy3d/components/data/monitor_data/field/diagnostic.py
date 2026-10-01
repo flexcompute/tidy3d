@@ -10,6 +10,7 @@ from tidy3d.components.data.dataset import (
     FIELD_STRUCTURE_E_COMPONENTS,
     FieldStructureDataset,
     MediumDataset,
+    ModeStructureDataset,
     PermittivityDataset,
 )
 from tidy3d.components.data.em_fields import frequency_normalized_field_components
@@ -20,11 +21,13 @@ if TYPE_CHECKING:
 
     import xarray as xr
 
+    from tidy3d.compat import Self
     from tidy3d.components.source.base import Source
     from tidy3d.components.types import ArrayFloat1D
 from tidy3d.components.monitor import (
     FieldStructureMonitor,
     MediumMonitor,
+    ModeStructureMonitor,
     PermittivityMonitor,
 )
 from tidy3d.constants import EPSILON_0
@@ -32,6 +35,22 @@ from tidy3d.exceptions import (
     AdjointError,
     DataError,
 )
+
+
+def _diagnostic_adjoint_error(
+    monitor_name: str, monitor_type: str, alternative: str
+) -> AdjointError:
+    """Error for an objective built on a diagnostic monitor's data, which has no adjoint.
+
+    The inherited default returns no sources, which would silently produce zero-looking gradients
+    instead of an error.
+    """
+    return AdjointError(
+        f"Objective functions depending on data of '{monitor_type}' '{monitor_name}' are not "
+        "supported: it is a diagnostic monitor with no adjoint implementation. Base the objective "
+        f"on a supported monitor type instead (e.g. '{alternative}'). The '{monitor_type}' can "
+        "still be carried in the simulation as long as the objective does not depend on its data."
+    )
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
@@ -97,50 +116,17 @@ class MediumData(MediumDataset, AbstractFieldData):
     )
 
 
-class FieldStructureData(FieldStructureDataset, AbstractFieldData):
-    """Data for a :class:`.FieldStructureMonitor`: matched electric field, permittivity, and
-    per-Yee structure-ownership components on their native Yee grids, plus the derived
-    displacement field and absorbed power density.
+class _FieldStructureDerivedMixin(FieldStructureDataset):
+    """Derived quantities shared by every producer of matched field/permittivity/ownership data.
 
-    Notes
-    -----
+    Hosts the electromagnetic quantities that follow from the nine stored primitives — the
+    displacement field, the per-component absorbed power, and the shared ``interval_space``-aware
+    colocation — so that each producer's data class (FDTD and mode solver) only has to supply the
+    primitives themselves. Nothing here is specific to how the data was produced.
 
-        The stored primitives (``Ex``/``Ey``/``Ez``, ``eps_xx``/``eps_yy``/``eps_zz``,
-        ``structure_index_x``/``structure_index_y``/``structure_index_z``) are recorded on their
-        native Yee grids. The derived displacement field components ``Dx``/``Dy``/``Dz`` and the
-        ``absorbed_power_density`` are computed on demand from the raw ``self`` arrays; access the
-        symmetry-expanded quantities via ``self.symmetry_expanded``.
-
-        Following :class:`.PointCloudFieldMonitor`, the displacement components are stored in
-        **electric-field units**, i.e. scaled only by the *relative* permittivity
-        (``D / epsilon_0 = eps_rel * E``).
-
-    Example
-    -------
-    >>> from tidy3d import Grid, ScalarFieldDataArray, SpatialDataArray
-    >>> from tidy3d.components.grid.grid import Coords
-    >>> x = [-1,1,3]
-    >>> y = [-2,0,2,4]
-    >>> z = [-3,-1,1,3,5]
-    >>> f = [2e14, 3e14]
-    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f)
-    >>> scoords = dict(x=x[:-1], y=y[:-1], z=z[:-1])
-    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
-    >>> fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
-    >>> idx = SpatialDataArray(np.zeros((2,3,4)), coords=scoords)
-    >>> monitor = FieldStructureMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field_structure')
-    >>> data = FieldStructureData(
-    ...     monitor=monitor, Ex=fld, Ey=fld, Ez=fld,
-    ...     eps_xx=fld, eps_yy=fld, eps_zz=fld,
-    ...     structure_index_x=idx, structure_index_y=idx, structure_index_z=idx,
-    ...     grid_expanded=grid,
-    ... )
+    Mixed into a concrete monitor-data class, which must additionally provide ``monitor`` (for
+    ``center`` and ``downsample``) and ``colocation_boundaries``.
     """
-
-    monitor: FieldStructureMonitor = Field(
-        title="Monitor",
-        description="Field–medium monitor associated with the data.",
-    )
 
     def _displacement_component(self, e_name: str, eps_name: str) -> ScalarFieldDataArray:
         """Single displacement component ``D_i / epsilon_0 = eps_ii * E_i`` (in E-field units).
@@ -210,20 +196,6 @@ class FieldStructureData(FieldStructureDataset, AbstractFieldData):
         # preserve traced arrays on item access so an (unsupported) objective built from the
         # result still registers a VJP path and reaches the explicit AdjointError below
         return self.package_colocate_results(centered)
-
-    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
-        """Objectives through this diagnostic monitor's data are unsupported: fail loudly.
-
-        The inherited default returns no sources, which would silently produce zero-looking
-        gradients instead of an error.
-        """
-        raise AdjointError(
-            f"Objective functions depending on data of 'FieldStructureMonitor' "
-            f"'{self.monitor.name}' are not supported: it is a diagnostic monitor with no "
-            "adjoint implementation. Base the objective on a supported monitor type instead "
-            "(e.g. 'FieldMonitor'). The 'FieldStructureMonitor' can still be carried in the "
-            "simulation as long as the objective does not depend on its data."
-        )
 
     @property
     def per_component_absorbed_power(self) -> dict[str, xr.DataArray]:
@@ -305,15 +277,62 @@ class FieldStructureData(FieldStructureDataset, AbstractFieldData):
         native Yee grid, then colocated onto the common grid-boundary coordinates and summed.
         Computed from the raw ``self`` arrays; use ``self.symmetry_expanded`` for the full domain.
 
-        The electric field components are source-normalized (like all frequency-domain field data),
-        so ``P_abs`` is per unit source power; scale to a physical input power via
-        :meth:`.SimulationData.optical_generation`'s ``power_scale``.
+        Scale to a physical input power with the ``power_scale`` argument of the owning simulation
+        data's ``optical_generation``. What it scales from depends on the producer: FDTD field
+        components are source-normalized, so ``P_abs`` is per unit source power, while mode fields
+        are power-normalized to 1 W, so it is per watt of guided power.
         """
         total = self._colocate_and_sum_axes(self.per_component_absorbed_power)
         ordered = total.real.transpose(*[dim for dim in ("x", "y", "z", "f") if dim in total.dims])
         return ScalarFieldDataArray(ordered.data, coords=ordered.coords)
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> FieldStructureData:
+
+class FieldStructureData(_FieldStructureDerivedMixin, AbstractFieldData):
+    """Data for a :class:`.FieldStructureMonitor`: matched electric field, permittivity, and
+    per-Yee structure-ownership components on their native Yee grids, plus the derived
+    displacement field and absorbed power density.
+
+    Notes
+    -----
+
+        The stored primitives (``Ex``/``Ey``/``Ez``, ``eps_xx``/``eps_yy``/``eps_zz``,
+        ``structure_index_x``/``structure_index_y``/``structure_index_z``) are recorded on their
+        native Yee grids. The derived displacement field components ``Dx``/``Dy``/``Dz`` and the
+        ``absorbed_power_density`` are computed on demand from the raw ``self`` arrays; access the
+        symmetry-expanded quantities via ``self.symmetry_expanded``.
+
+        Following :class:`.PointCloudFieldMonitor`, the displacement components are stored in
+        **electric-field units**, i.e. scaled only by the *relative* permittivity
+        (``D / epsilon_0 = eps_rel * E``).
+
+    Example
+    -------
+    >>> from tidy3d import Grid, ScalarFieldDataArray, SpatialDataArray
+    >>> from tidy3d.components.grid.grid import Coords
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f)
+    >>> scoords = dict(x=x[:-1], y=y[:-1], z=z[:-1])
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
+    >>> fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> idx = SpatialDataArray(np.zeros((2,3,4)), coords=scoords)
+    >>> monitor = FieldStructureMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='field_structure')
+    >>> data = FieldStructureData(
+    ...     monitor=monitor, Ex=fld, Ey=fld, Ez=fld,
+    ...     eps_xx=fld, eps_yy=fld, eps_zz=fld,
+    ...     structure_index_x=idx, structure_index_y=idx, structure_index_z=idx,
+    ...     grid_expanded=grid,
+    ... )
+    """
+
+    monitor: FieldStructureMonitor = Field(
+        title="Monitor",
+        description="Field–medium monitor associated with the data.",
+    )
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Self:
         """Return copy of self with only the electric field components source-normalized.
 
         ``Ex``/``Ey``/``Ez`` are divided by the source spectrum; the permittivity (``eps_*``) and
@@ -330,4 +349,88 @@ class FieldStructureData(FieldStructureDataset, AbstractFieldData):
         return self.copy(
             deep=False,
             update=frequency_normalized_field_components(e_components, source_spectrum_fn),
+        )
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Objectives through this diagnostic monitor's data are unsupported: fail loudly."""
+        raise _diagnostic_adjoint_error(
+            self.monitor.name, "FieldStructureMonitor", alternative="FieldMonitor"
+        )
+
+
+class ModeStructureData(ModeStructureDataset, AbstractFieldData):
+    """Data for a :class:`.ModeStructureMonitor`: the permittivity and per-Yee structure-ownership
+    components recorded in the mode plane, on their native Yee grids.
+
+    Notes
+    -----
+
+        Half of the matched set its FDTD sibling :class:`.FieldStructureData` carries: the
+        electric field is not recorded here but paired in from the ordinary mode result at read
+        time. The derived quantities (``Dx``/``Dy``/``Dz``, ``absorbed_power_density``) therefore
+        live on what :meth:`.ModeSimulationData.field_structure` assembles, not on this class; use
+        :meth:`.ModeSimulationData.optical_generation` for carrier generation.
+
+    Example
+    -------
+    >>> from tidy3d import Grid, ScalarFieldDataArray, SpatialDataArray
+    >>> from tidy3d.components.grid.grid import Coords
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [0]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z, f=f)
+    >>> scoords = dict(x=x[:-1], y=y[:-1], z=z)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=[-1, 1]))
+    >>> fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,1,2)), coords=coords)
+    >>> idx = SpatialDataArray(np.zeros((2,3,1)), coords=scoords)
+    >>> monitor = ModeStructureMonitor(size=(2,4,0), name='mode_structure')
+    >>> data = ModeStructureData(
+    ...     monitor=monitor,
+    ...     eps_xx=fld, eps_yy=fld, eps_zz=fld,
+    ...     structure_index_x=idx, structure_index_y=idx, structure_index_z=idx,
+    ...     grid_expanded=grid,
+    ... )
+    """
+
+    monitor: ModeStructureMonitor = Field(
+        title="Monitor",
+        description="Mode–structure monitor associated with the data.",
+    )
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Objectives through this diagnostic monitor's data are unsupported: fail loudly."""
+        raise _diagnostic_adjoint_error(
+            self.monitor.name, "ModeStructureMonitor", alternative="ModeMonitor"
+        )
+
+
+class ModeFieldStructureData(_FieldStructureDerivedMixin, AbstractFieldData):
+    """The matched set for one mode: recorded permittivity and structure ownership paired with the
+    electric field of the ordinary mode result.
+
+    Notes
+    -----
+
+        Assembled at read time by :meth:`.ModeSimulationData.field_structure`, which selects
+        ``Ex``/``Ey``/``Ez`` out of the mode data at the coordinates the monitor recorded, so the
+        nine primitives are matched on their native Yee grids exactly as
+        :class:`.FieldStructureData` carries them in FDTD -- and serves the same derived
+        quantities (``Dx``/``Dy``/``Dz``, ``absorbed_power_density``). Never produced by a solver
+        and never serialized: it is a read-time view over :class:`.ModeStructureData` and the mode
+        fields.
+
+        Mode fields are power-normalized to 1 W, so the ``power_scale`` of
+        :meth:`.ModeSimulationData.optical_generation` is the guided power in watts.
+    """
+
+    monitor: ModeStructureMonitor = Field(
+        title="Monitor",
+        description="Mode–structure monitor whose recorded data was paired with the mode fields.",
+    )
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Objectives through this diagnostic monitor's data are unsupported: fail loudly."""
+        raise _diagnostic_adjoint_error(
+            self.monitor.name, "ModeStructureMonitor", alternative="ModeMonitor"
         )

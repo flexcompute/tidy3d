@@ -1122,6 +1122,84 @@ class FieldStructureMonitor(AbstractFieldMonitor, FreqMonitor):
         return field_structure_size
 
 
+class ModeStructureMonitor(PlanarMonitor):
+    """:class:`~tidy3d.Monitor` that records permittivity and per-Yee structure ownership in the
+    plane of a :class:`.ModeSimulation`, to be paired with the mode fields.
+
+    Notes
+    -----
+
+        The mode-solver counterpart of :class:`.FieldStructureMonitor`, and a deliberately thinner
+        one: it records only the half of the matched set the mode solve does not already produce,
+
+        - the diagonal, complex relative permittivity ``eps_xx``, ``eps_yy``, ``eps_zz`` (each on
+          the matching ``Ex``/``Ey``/``Ez`` Yee grid), at every :attr:`.ModeSimulation.freqs`;
+        - the per-component structure-ownership maps ``structure_index_x``, ``structure_index_y``,
+          ``structure_index_z`` (``-1`` for the background medium, ``i`` for
+          ``simulation.structures[i]``), recorded once -- ownership is frequency- and
+          mode-independent.
+
+        The electric field comes from the ordinary mode result, paired with these arrays at read
+        time by :meth:`.ModeSimulationData.field_structure` and
+        :meth:`.ModeSimulationData.optical_generation`, which take the ``mode_index`` and ``freq``
+        to evaluate. Selection stays with :class:`.ModeSimulation` and :class:`.ModeSpec`, which
+        already own ``freqs``, frequency interpolation, and the filtering and sorting that define
+        what ``mode_index`` means, so the monitor carries no ``fields``, ``freqs`` or
+        ``mode_index`` of its own.
+
+        That pairing is only matched while the fields sit at the same Yee positions as the
+        recorded permittivity, so a :class:`.ModeSimulation` carrying this monitor must set
+        ``colocate=False`` and keep all three electric-field components in its ``fields``; both are
+        validated.
+
+        Because mode fields are power-normalized to 1 W, the ``power_scale`` of
+        :meth:`.ModeSimulationData.optical_generation` is the guided power in watts.
+
+        The permittivity recorded here is subpixel-averaged, which
+        :meth:`.ModeSimulation.run_local` can only produce with ``tidy3d-extras`` installed --
+        without it a simulation carrying this monitor is rejected rather than run at reduced
+        accuracy.
+
+    Example
+    -------
+    >>> monitor = ModeStructureMonitor(
+    ...     center=(1,2,0),
+    ...     size=(2,2,0),
+    ...     name='mode_structure')
+    """
+
+    colocate: Literal[False] = Field(
+        default=False,
+        title="Colocate Fields",
+        description="Mode–structure monitors record their constituents on the native Yee grid. "
+        "Colocation is applied only when a colocated derived quantity is requested from the "
+        "matched set assembled by :meth:`.ModeSimulationData.field_structure`.",
+    )
+
+    # ``interval_space`` stays at the base ``Monitor``'s pinned ``(1, 1, 1)``, a deliberate
+    # divergence from :class:`.FieldStructureMonitor` (which inherits a ``PositiveInt`` triple from
+    # ``AbstractFieldMonitor``): downsampling buys little on a single mode cross-section, each
+    # downsampled ownership map is another way for the band-gap gate to land on the wrong side of a
+    # material interface, and downsampled permittivity would no longer line up with the mode fields
+    # it has to pair with.
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization.
+
+        The recorded frequencies are the simulation's, which a monitor does not know on its own;
+        this sizes one frequency, and :attr:`.ModeSimulation.monitors_data_size` resolves the rest.
+        """
+        return self._storage_size_freqs(num_cells=num_cells, num_freqs=1)
+
+    def _storage_size_freqs(self, num_cells: int, num_freqs: int) -> int:
+        """Storage for ``num_freqs`` recorded frequencies over ``num_cells`` cells."""
+        # per cell, per frequency: one complex permittivity per component
+        mode_structure_size = BYTES_COMPLEX * num_cells * num_freqs * 3
+        # per cell: one int32 structure-ownership index per component (frequency-independent)
+        mode_structure_size += BYTES_REAL * num_cells * 3
+        return mode_structure_size
+
+
 class PointCloudFieldMonitor(FreqMonitor):
     """:class:`~tidy3d.Monitor` that records electromagnetic fields at arbitrary points.
 

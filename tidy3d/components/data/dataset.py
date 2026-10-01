@@ -1340,6 +1340,68 @@ class FieldStructureDataset(AbstractFieldDataset):
         return set(FIELD_STRUCTURE_E_COMPONENTS)
 
 
+class ModeStructureDataset(AbstractMediumPropertyDataset):
+    """Dataset storing permittivity and structure-ownership components, without fields.
+
+    What a :class:`.ModeStructureMonitor` records: the diagonal complex relative permittivity
+    ``eps_xx``/``eps_yy``/``eps_zz`` and the per-Yee-component ownership maps
+    ``structure_index_x``/``structure_index_y``/``structure_index_z`` (``-1`` for the background
+    medium, ``i`` for ``simulation.structures[i]``), each on its native Yee grid. The electric
+    field is not recorded here: it is paired in from the ordinary mode result at read time (see
+    :meth:`.ModeSimulationData.field_structure`), which is why this dataset is the permittivity
+    half of :class:`.FieldStructureDataset` rather than the whole matched set.
+    """
+
+    structure_index_x: SpatialDataArray = Field(
+        title="Structure Index (x)",
+        description="Owning structure index at each ``Ex`` Yee point; ``-1`` for the background "
+        "medium, ``i`` for ``simulation.structures[i]``.",
+    )
+    structure_index_y: SpatialDataArray = Field(
+        title="Structure Index (y)",
+        description="Owning structure index at each ``Ey`` Yee point; ``-1`` for the background "
+        "medium, ``i`` for ``simulation.structures[i]``.",
+    )
+    structure_index_z: SpatialDataArray = Field(
+        title="Structure Index (z)",
+        description="Owning structure index at each ``Ez`` Yee point; ``-1`` for the background "
+        "medium, ``i`` for ``simulation.structures[i]``.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the permittivity and structure-index components to their data."""
+        return {
+            name: getattr(self, name)
+            for name in (*FIELD_STRUCTURE_EPS_COMPONENTS, *FIELD_STRUCTURE_INDEX_COMPONENTS)
+        }
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps each component to the string key of its grid location on the Yee lattice."""
+        return {
+            "eps_xx": "Ex",
+            "eps_yy": "Ey",
+            "eps_zz": "Ez",
+            "structure_index_x": "Ex",
+            "structure_index_y": "Ey",
+            "structure_index_z": "Ez",
+        }
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float] | None]:
+        """Permittivity and structure ownership are scalars, invariant under reflection."""
+        return dict.fromkeys(
+            (*FIELD_STRUCTURE_EPS_COMPONENTS, *FIELD_STRUCTURE_INDEX_COMPONENTS), None
+        )
+
+    @property
+    def nearest_neighbor_components(self) -> set[str]:
+        """Structure-ownership indices are categorical, so regridding must snap to the nearest
+        owning structure rather than linearly interpolating (blended) index values."""
+        return set(FIELD_STRUCTURE_INDEX_COMPONENTS)
+
+
 class TriangleMeshDataset(Dataset):
     """Dataset for storing triangular surface data."""
 

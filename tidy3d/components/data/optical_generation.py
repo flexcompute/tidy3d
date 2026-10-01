@@ -19,7 +19,15 @@ from tidy3d.log import log
 if TYPE_CHECKING:
     import xarray as xr
 
-    from tidy3d.components.data.monitor_data import FieldStructureData
+    from tidy3d.components.data.monitor_data.field.diagnostic import (
+        FieldStructureData,
+        ModeFieldStructureData,
+        _FieldStructureDerivedMixin,
+    )
+
+    # the two producers of the matched primitives: recorded whole by FDTD, assembled at read time
+    # on the mode path, both supplying the shared derived quantities
+    FieldStructureDataType = FieldStructureData | ModeFieldStructureData
     from tidy3d.components.structure import Structure
 
 # frequency-matching tolerance for a requested vs. recorded frequency
@@ -115,13 +123,18 @@ class OpticalGenerationData(Tidy3dBaseModel):
         return DistributedGeneration.from_rate_um3(gen_um3=self.generation_rate)
 
 
-def _resolve_frequency(field_structure: FieldStructureData, freq: float | None) -> float:
-    """Resolve the single frequency to evaluate against the monitor's recorded frequencies."""
-    recorded = np.atleast_1d(np.asarray(field_structure.monitor.freqs, dtype=float))
+def match_recorded_frequency(recorded: np.ndarray, freq: float | None) -> float:
+    """Pick the recorded frequency to evaluate at, requiring an (almost) exact match.
+
+    ``freq=None`` is only unambiguous when a single frequency was recorded. A requested frequency
+    must coincide with a recorded one: the electric field exists only where the modes were solved,
+    and the permittivity only where it was recorded, so there is nothing to interpolate between.
+    """
+    recorded = np.atleast_1d(np.asarray(recorded, dtype=float))
     if freq is None:
         if recorded.size != 1:
             raise SetupError(
-                "'optical_generation' is single-frequency: the monitor recorded "
+                "'optical_generation' is single-frequency: the data carries "
                 f"{recorded.size} frequencies, so 'freq' must be specified."
             )
         return float(recorded[0])
@@ -129,10 +142,19 @@ def _resolve_frequency(field_structure: FieldStructureData, freq: float | None) 
     closest = int(np.argmin(np.abs(recorded - freq)))
     if not np.isclose(recorded[closest], freq, rtol=FREQ_RTOL, atol=0.0):
         raise SetupError(
-            f"Requested 'freq={freq}' does not match any recorded monitor frequency within a "
+            f"Requested 'freq={freq}' does not match any recorded frequency within a "
             f"relative tolerance of {FREQ_RTOL}. Recorded frequencies: {recorded.tolist()}."
         )
     return float(recorded[closest])
+
+
+def _resolve_frequency(field_structure: FieldStructureDataType, freq: float | None) -> float:
+    """Resolve the single frequency to evaluate against the data's own recorded frequencies.
+
+    Read off the data rather than the monitor: the mode producer's frequencies come from its
+    ``ModeSimulation``, and its data may already have been narrowed to one of them.
+    """
+    return match_recorded_frequency(field_structure.eps_xx.coords["f"].values, freq)
 
 
 def _energy_gap_map(
@@ -154,7 +176,7 @@ def _energy_gap_map(
         if out_of_range.size:
             raise DataError(
                 f"Structure-ownership index {int(out_of_range.flat[0])} is out of range for a "
-                f"simulation with {len(structures)} structures; the 'FieldStructureData' "
+                f"simulation with {len(structures)} structures; the recorded "
                 "'structure_index_*' maps do not match 'simulation.structures'."
             )
 
@@ -185,14 +207,14 @@ def _as_spatial(data_array: xr.DataArray) -> SpatialDataArray:
 
 
 def _gated_per_axis(
-    field_structure: FieldStructureData,
+    field_structure: FieldStructureDataType,
     structures: list[Structure],
     *,
     freq: float | None,
     temperature: float,
     power_scale: float,
 ) -> tuple[
-    FieldStructureData,
+    _FieldStructureDerivedMixin,
     dict[str, xr.DataArray],
     dict[str, xr.DataArray],
     dict[str, xr.DataArray],
@@ -257,14 +279,18 @@ def _gated_per_axis(
 
 
 def compute_optical_generation(
-    field_structure: FieldStructureData,
+    field_structure: FieldStructureDataType,
     structures: list[Structure],
     *,
     freq: float | None = None,
     temperature: float = 300.0,
     power_scale: float = 1.0,
 ) -> OpticalGenerationData:
-    """Compute the whole-domain :class:`.OpticalGenerationData` from a :class:`.FieldStructureData`.
+    """Compute the whole-domain :class:`.OpticalGenerationData` from matched field-structure data.
+
+    Producer-agnostic: takes :class:`.FieldStructureData` (FDTD) or the
+    :class:`.ModeFieldStructureData` the mode path assembles, which carry the identical
+    primitives.
 
     Per-component absorbed power is formed on each native Yee grid, gated per component using the
     recorded structure-ownership index (resolving each owning structure's ``charge`` band gap), and
@@ -284,7 +310,7 @@ def compute_optical_generation(
 
 
 def compute_per_component_optical_generation(
-    field_structure: FieldStructureData,
+    field_structure: FieldStructureDataType,
     structures: list[Structure],
     *,
     freq: float | None = None,
