@@ -622,9 +622,11 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         generation and recombination mechanism active in the simulation's media.
         Recombination is positive (removes carriers) and generation is negative
         (adds carriers). The remaining fields hold the individual mechanism
-        contributions that make it up; of those, only ``impact_ionization`` is
-        reported (when an impact-ionization model is active), and the rest stay
-        ``None``. Rates are in :math:`cm^{-3}\\,s^{-1}`.
+        contributions that make it up; each is reported when its mechanism is
+        active in some medium and stays ``None`` otherwise, and together they sum
+        to ``net_recombination``. ``shockley_reed_hall`` includes any
+        trap-assisted-tunneling field enhancement. Rates are in
+        :math:`cm^{-3}\\,s^{-1}`.
     """
 
     monitor: SteadyGenerationRecombinationMonitor = Field(
@@ -654,7 +656,9 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         default=None,
         title="Shockley-Reed-Hall recombination rate",
         description="Signed contribution of Shockley-Reed-Hall recombination, "
-        ":math:`R_\\mathrm{SRH}` (positive). Not currently reported; stays ``None``.",
+        ":math:`R_\\mathrm{SRH}`, positive where :math:`np > n_i^2` and "
+        "negative where :math:`np < n_i^2`. Present only when the mechanism is "
+        "active.",
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
@@ -662,7 +666,9 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         default=None,
         title="Auger recombination rate",
         description="Signed contribution of Auger recombination, "
-        ":math:`R_\\mathrm{Auger}` (positive). Not currently reported; stays ``None``.",
+        ":math:`R_\\mathrm{Auger}`, positive where :math:`np > n_i^2` and "
+        "negative where :math:`np < n_i^2`. Present only when the mechanism is "
+        "active.",
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
@@ -670,16 +676,19 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         default=None,
         title="Radiative recombination rate",
         description="Signed contribution of radiative recombination, "
-        ":math:`R_\\mathrm{rad}` (positive). Not currently reported; stays ``None``.",
+        ":math:`R_\\mathrm{rad}`, positive where :math:`np > n_i^2` and "
+        "negative where :math:`np < n_i^2`. Present only when the mechanism is "
+        "active.",
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
     band_to_band_tunneling: VoltageFieldDataset | None = Field(
         default=None,
-        title="Band-to-band tunneling generation rate",
-        description="Signed contribution of band-to-band tunneling generation, "
-        ":math:`-G_\\mathrm{btbt}` (negative, since generation adds carriers). "
-        "Not currently reported; stays ``None``.",
+        title="Band-to-band tunneling rate",
+        description="Signed contribution of band-to-band tunneling, "
+        ":math:`-G_\\mathrm{btbt}`, negative (net generation) where "
+        ":math:`np < n_i^2`, as in a reverse-biased junction, and positive where "
+        ":math:`np > n_i^2`. Present only when the mechanism is active.",
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
@@ -688,7 +697,7 @@ class SteadyGenerationRecombinationData(HeatChargeMonitorData):
         title="Distributed carrier generation rate",
         description="Signed contribution of distributed carrier generation, "
         ":math:`-G_\\mathrm{dist}` (negative, since generation adds carriers). "
-        "Not currently reported; stays ``None``.",
+        "Present only when the mechanism is active.",
         json_schema_extra={"units": "1/(cm^3 s)"},
     )
 

@@ -134,9 +134,9 @@ class SteadyGenerationRecombinationMonitor(HeatChargeMonitor):
     media — Shockley-Reed-Hall, Auger, radiative, band-to-band tunneling,
     distributed carrier generation, and impact ionization — and each has its own
     breakdown field. Surface recombination is a boundary flux, not part of this
-    per-node volume rate. Of the breakdown fields, only ``impact_ionization`` is
-    reported, as a negative contribution, when an impact-ionization model is
-    active; the others stay ``None``. Rates are in :math:`cm^{-3}\\,s^{-1}`.
+    per-node volume rate. Each breakdown field is reported when its mechanism is
+    active in some medium and stays ``None`` otherwise; the breakdown fields sum to
+    ``net_recombination``. Rates are in :math:`cm^{-3}\\,s^{-1}`.
     Available only on the accelerated solver.
 
     Example
