@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import inspect
+import sys
 from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -90,10 +90,10 @@ class LogHandler:
     def handle(self, level: int, level_name: str, message: str) -> None:
         """Output log messages depending on log level"""
         if level >= self.level:
-            stack = inspect.stack()
             console = self.console
             offset = 4
-            if stack[offset - 1].filename.endswith("exceptions.py"):
+            # sys._getframe instead of inspect.stack(), which reads the source of every frame
+            if sys._getframe(offset - 1).f_code.co_filename.endswith("exceptions.py"):
                 # We want the calling site for exceptions.py
                 offset += 1
             prefix, msg = self.log_level_format(level_name, message)
