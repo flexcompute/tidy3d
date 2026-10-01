@@ -21,7 +21,8 @@ Mobility
 
 Models contributing to carrier mobility, assigned to
 ``SemiconductorMedium.mobility_n`` and ``mobility_p`` or, for
-``CanaliFieldDependence``, attached to those models through ``field_dependence``.
+``CanaliFieldDependence`` and ``LombardiSurfaceDependence``, attached to those
+models through ``field_dependence`` and ``surface_dependence``.
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -31,12 +32,16 @@ Models contributing to carrier mobility, assigned to
    CaugheyThomasMobility
    MasettiMobility
    CanaliFieldDependence
+   LombardiSurfaceDependence
 
 .. note::
-   ``MasettiMobility`` is supported only on the accelerated solver, as is
-   ``CanaliFieldDependence``, which adds high-field velocity saturation on top
-   of any of the low-field mobility models through their ``field_dependence``
-   parameter.
+   ``MasettiMobility``, ``CanaliFieldDependence`` and
+   ``LombardiSurfaceDependence`` are supported only on the accelerated solver.
+   ``CanaliFieldDependence`` adds high-field velocity saturation to any of the
+   low-field mobility models through ``field_dependence``, and
+   ``LombardiSurfaceDependence`` adds surface degradation near
+   semiconductor/insulator interfaces to ``CaugheyThomasMobility`` and
+   ``MasettiMobility`` through ``surface_dependence``.
 
 Generation Recombination
 ^^^^^^^^^^^^^^^^^^^^^^^^^

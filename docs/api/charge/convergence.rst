@@ -178,6 +178,9 @@ names the offending feature:
 - ``MasettiMobility``
 - ``CanaliFieldDependence`` (high-field velocity saturation, attached to any
   mobility model through ``field_dependence``)
+- ``LombardiSurfaceDependence`` (surface mobility degradation, attached to
+  ``CaugheyThomasMobility`` and ``MasettiMobility`` through
+  ``surface_dependence``)
 - SSAC ``at_voltages`` bias-point selection
 - ``SteadyChargeResidualMonitor`` (per-node residual debug monitor)
 - ``SteadyGenerationRecombinationMonitor`` (per-node generation-recombination

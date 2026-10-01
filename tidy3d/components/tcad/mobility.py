@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.constants import PERCMCUBE
+from tidy3d.constants import MICROMETER, PERCMCUBE
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
@@ -19,6 +19,14 @@ if TYPE_CHECKING:
 CANALI_V_SAT_FLOOR = 5e5
 CANALI_BETA_MIN = 0.1
 CANALI_BETA_MAX = 20.0
+
+_SURFACE_DEPENDENCE_DESCRIPTION = (
+    "Optional surface mobility degradation near semiconductor/insulator interfaces, "
+    "combined with the low-field mobility computed by this model by Matthiessen's rule. "
+    "When ``None``, the mobility does not depend on the transverse field. Supported only "
+    "by the accelerated charge solver, and must be set on both the electron and hole "
+    "mobility models of a medium or on neither."
+)
 
 _FIELD_DEPENDENCE_DESCRIPTION = (
     "Optional high-field velocity-saturation model applied on top of the low-field "
@@ -153,6 +161,161 @@ class CanaliFieldDependence(Tidy3dBaseModel):
     )
 
 
+class LombardiSurfaceDependence(Tidy3dBaseModel):
+    """Surface mobility degradation with the Lombardi model.
+
+    Notes
+    -----
+        The Lombardi model [1]_ adds the acoustic-phonon and surface-roughness
+        scattering of carriers confined against a semiconductor/insulator
+        interface, such as a MOSFET inversion layer, to the low-field mobility
+        :math:`\\mu_b` of the mobility model it is attached to:
+
+        .. math::
+
+            \\frac{1}{\\mu} = \\frac{1}{\\mu_b}
+            + \\frac{D}{\\mu_{ac}} + \\frac{D}{\\mu_{sr}},
+            \\qquad
+            D = \\operatorname{sech}\\left(\\left(d / l_{crit}\\right)^2\\right)
+
+        with
+
+        .. math::
+
+            \\mu_{ac} = \\frac{B}{E_\\perp}
+            + \\frac{C \\left(N / 1\\,\\text{cm}^{-3}\\right)^{\\lambda}}
+            {\\left(T / 300\\,\\text{K}\\right)^{k} E_\\perp^{1/3}},
+            \\qquad
+            \\mu_{sr} = \\frac{\\delta}{E_\\perp^{\\gamma}}
+
+    where :math:`N` is the total doping concentration, :math:`T` the lattice
+    temperature and :math:`d` the distance to the nearest semiconductor/insulator
+    interface. The weight :math:`D` is the surface-to-bulk transition of [2]_,
+    applied here to the terms of [1]_: it is close to 1 across the inversion layer
+    and vanishes beyond a few :math:`l_{crit}`. :math:`E_\\perp` [V/cm] is the
+    component, along the direction toward that interface, of the field driving
+    the carrier (electrostatic plus band-structure and thermal-gradient
+    contributions, without the degeneracy term of Fermi-Dirac statistics). Only
+    a field pushing the carrier toward the interface degrades its mobility.
+
+    With :class:`CanaliFieldDependence` on the same mobility model, the degraded
+    mobility is the low-field input of the velocity saturation, and the field that
+    saturates the velocity loses its interface-normal component in proportion to
+    :math:`D`: no current crosses an insulator, so near the interface the current
+    runs along it. Within :math:`6.5\\,l_{crit}` of the interface, that field also
+    comes from a gradient fit that resolves the potential's curvature normal to the
+    interface, so this model changes the velocity saturation there even where
+    :math:`D` is negligible.
+
+    Where the nearest interface switches, as across the bisector of a corner or
+    the middle of a film between two insulators, the direction of
+    :math:`E_\\perp`, and with it the mobility, can change abruptly.
+
+    .. [1] C. Lombardi, S. Manzini, A. Saporito, and M. Vanzi. A physically based
+           mobility model for numerical simulation of nonplanar devices. IEEE
+           Transactions on Computer-Aided Design, 7(11):1164-1171, 1988.
+    .. [2] S. Selberherr, W. Hänsch, M. Seavey, and J. Slotboom. The evolution of
+           the MINIMOS mobility model. Solid-State Electronics, 33(11):1425-1436,
+           1990.
+
+    Note
+    ----
+    The mesh must resolve the inversion layer: about 0.1 nm normal to the
+    interface in the first rows of semiconductor nodes.
+
+    Example
+    -------
+    The silicon parameters of [1]_, with :math:`C` divided by 300 K for the
+    :math:`T / 300\\,\\text{K}` scaling and the hole :math:`B` of
+    :math:`9.93 \\times 10^6` cm/s that its fits require (its Table II prints
+    :math:`9.93 \\times 10^7`):
+
+        >>> import tidy3d as td
+        >>> lombardi_Si_n = td.LombardiSurfaceDependence(
+        ...   B=4.75e7,
+        ...   C=580.0,
+        ...   exp_N=0.125,
+        ...   delta=5.82e14,
+        ... )
+        >>> lombardi_Si_p = td.LombardiSurfaceDependence(
+        ...   B=9.93e6,
+        ...   C=2947.0,
+        ...   exp_N=0.0317,
+        ...   delta=2.05e14,
+        ... )
+
+    attached to the low-field model of each carrier:
+
+        >>> mobility_n = td.MasettiMobility(
+        ...   mu_max=1417.0,
+        ...   mu_0=52.2,
+        ...   mu_1=43.4,
+        ...   Cr=9.68e16,
+        ...   Cs=3.43e20,
+        ...   alpha=0.68,
+        ...   beta=2.0,
+        ...   exp_max=-2.5,
+        ...   exp_0=-0.57,
+        ...   surface_dependence=lombardi_Si_n,
+        ... )
+    """
+
+    B: PositiveFloat = Field(
+        allow_inf_nan=False,
+        title="Acoustic-phonon coefficient",
+        description="Coefficient :math:`B` of the field-limited acoustic-phonon term.",
+        json_schema_extra={"units": "cm/s"},
+    )
+
+    C: NonNegativeFloat = Field(
+        allow_inf_nan=False,
+        title="Doping-dependent acoustic-phonon coefficient",
+        description="Coefficient :math:`C` of the doping- and temperature-dependent "
+        "acoustic-phonon term at the reference temperature (300K).",
+        json_schema_extra={"units": "cm^(5/3)/(V^(2/3) s)"},
+    )
+
+    exp_N: NonNegativeFloat = Field(
+        allow_inf_nan=False,
+        title="Doping exponent",
+        description="Exponent :math:`\\lambda` of the doping dependence of the "
+        "acoustic-phonon term.",
+    )
+
+    exp_T: float = Field(
+        default=1.0,
+        allow_inf_nan=False,
+        title="Temperature exponent",
+        description="Exponent :math:`k` of the temperature dependence of the "
+        "acoustic-phonon term, which scales as ``(T/300)**(-exp_T)``.",
+    )
+
+    delta: PositiveFloat = Field(
+        allow_inf_nan=False,
+        title="Surface-roughness coefficient",
+        description="Coefficient :math:`\\delta` of the surface-roughness term.",
+        json_schema_extra={"units": "cm^2/V-s (V/cm)^exp_E"},
+    )
+
+    exp_E: float = Field(
+        default=2.0,
+        ge=1.0,
+        allow_inf_nan=False,
+        title="Surface-roughness field exponent",
+        description="Exponent :math:`\\gamma` of the transverse-field dependence of the "
+        "surface-roughness term. Must be at least 1.",
+    )
+
+    l_crit: PositiveFloat = Field(
+        default=0.01,
+        allow_inf_nan=False,
+        title="Decay length",
+        description="Length :math:`l_{crit}` over which the surface terms decay with the "
+        "distance to the nearest semiconductor/insulator interface.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
+
 class ConstantMobilityModel(Tidy3dBaseModel):
     """Constant mobility model
 
@@ -268,7 +431,9 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     Note
     ----
     High-field velocity saturation can be enabled by supplying a
-    :class:`CanaliFieldDependence` model through ``field_dependence``.
+    :class:`CanaliFieldDependence` model through ``field_dependence``, and
+    surface degradation near insulator interfaces by supplying a
+    :class:`LombardiSurfaceDependence` model through ``surface_dependence``.
     """
 
     # mobilities
@@ -322,6 +487,12 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
         default=None,
         title="High-field mobility dependence",
         description=_FIELD_DEPENDENCE_DESCRIPTION,
+    )
+
+    surface_dependence: LombardiSurfaceDependence | None = Field(
+        default=None,
+        title="Surface mobility dependence",
+        description=_SURFACE_DEPENDENCE_DESCRIPTION,
     )
 
 
@@ -501,6 +672,12 @@ class MasettiMobility(Tidy3dBaseModel):
         default=None,
         title="High-field mobility dependence",
         description=_FIELD_DEPENDENCE_DESCRIPTION,
+    )
+
+    surface_dependence: LombardiSurfaceDependence | None = Field(
+        default=None,
+        title="Surface mobility dependence",
+        description=_SURFACE_DEPENDENCE_DESCRIPTION,
     )
 
     @model_validator(mode="after")

@@ -111,7 +111,7 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
 )
 from tidy3d.components.tcad.mesher import VolumeMesher
-from tidy3d.components.tcad.mobility import CanaliFieldDependence
+from tidy3d.components.tcad.mobility import CanaliFieldDependence, LombardiSurfaceDependence
 from tidy3d.components.tcad.monitors.charge import (
     SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
@@ -849,6 +849,7 @@ __all__ = [
     "LinearChargePerturbation",
     "LinearHeatPerturbation",
     "LinearLumpedElement",
+    "LombardiSurfaceDependence",
     "Lorentz",
     "LossyMetalMedium",
     "LowFrequencySmoothingSpec",

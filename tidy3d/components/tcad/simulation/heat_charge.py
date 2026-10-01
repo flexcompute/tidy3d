@@ -623,6 +623,9 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._check_field_dependence_mobility_models
             )
+            self._call_with_validation_loc(
+                ("structures",), self._check_surface_dependence_mobility_models
+            )
             # Schottky contacts and surface recombination apply only to
             # charge simulations, so validate them inside the charge guard;
             # heat-only and conduction-only simulations skip these checks.
@@ -3734,6 +3737,12 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
         ):
             features.append("CanaliFieldDependence")
+        if any(
+            self._surface_dependence(charge.mobility_n) is not None
+            or self._surface_dependence(charge.mobility_p) is not None
+            for _loc, charge in self._iter_semiconductor_charge_media()
+        ):
+            features.append("LombardiSurfaceDependence")
 
         if self._insulator_face_bc_indices():
             features.append("'VoltageBC' on an insulator face")
@@ -3926,6 +3935,39 @@ class HeatChargeSimulation(AbstractSimulation):
                         "increase 'mu_0', or lower the lattice temperature.",
                         *loc,
                     )
+        return self
+
+    @staticmethod
+    def _surface_dependence(mobility: Any) -> Any:
+        """The ``surface_dependence`` of a mobility model, ``None`` for models without one."""
+        return getattr(mobility, "surface_dependence", None)
+
+    def _check_surface_dependence_mobility_models(self) -> Self:
+        """Error if surface degradation is set on one carrier only; warn without an insulator."""
+        any_surface_dependence = False
+        for loc, charge in self._iter_semiconductor_charge_media():
+            surface_n = self._surface_dependence(charge.mobility_n)
+            surface_p = self._surface_dependence(charge.mobility_p)
+            any_surface_dependence = any_surface_dependence or surface_n is not None
+            if (surface_n is None) != (surface_p is None):
+                present, missing = (
+                    ("electron", "hole") if surface_p is None else ("hole", "electron")
+                )
+                self._raise_validation_error_at_loc(
+                    f"'surface_dependence' is set on the {present} mobility model but not on "
+                    f"the {missing} one; surface mobility degradation must be enabled for both "
+                    "carriers or neither.",
+                    *loc,
+                )
+        if any_surface_dependence and not any(
+            isinstance(self._charge_spec(medium), ChargeInsulatorMedium)
+            for medium in [self.medium, *(structure.medium for structure in self.structures)]
+        ):
+            log.warning(
+                "'surface_dependence' is set on a semiconductor mobility model, but the "
+                "simulation has no insulator medium. The Lombardi surface terms act only "
+                "near semiconductor/insulator interfaces and will have no effect."
+            )
         return self
 
     def _check_field_dependence_mobility_models(self) -> Self:
