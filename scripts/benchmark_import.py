@@ -1,25 +1,32 @@
+"""Print one JSON line of ``import tidy3d`` costs; run in a fresh interpreter.
+
+``seconds`` is the tidy3d import time, ``ratio`` divides it by the numpy + pydantic +
+xarray import time in the same process, and ``built`` counts models whose pydantic
+schema was built during import. ``tests/test_package/test_import_budget.py`` budgets these.
+"""
+
 from __future__ import annotations
 
+import json
+import time
+from collections.abc import Iterator
 
-def test_import():
-    import subprocess
-    import time
+t0 = time.perf_counter()
+import numpy  # noqa: E402, F401
+import pydantic  # noqa: E402, F401
+import xarray  # noqa: E402, F401
 
-    n = 100
-    python_load_time = 0
-    tidy3d_load_time = 0
+t1 = time.perf_counter()
+import tidy3d as td  # noqa: E402
 
-    for _ in range(n):
-        s = time.time()
-        subprocess.call(["python", "-c", "import tidy3d"])
-        tidy3d_load_time += time.time() - s
-
-        s = time.time()
-        subprocess.call(["python", "-c", "pass"])
-        python_load_time += time.time() - s
-
-    print(f"average tidy3d load time = {(tidy3d_load_time - python_load_time) / n}")
+t2 = time.perf_counter()
 
 
-if __name__ == "__main__":
-    test_import()
+def subclasses(cls: type) -> Iterator[type]:
+    for sub in cls.__subclasses__():
+        yield sub
+        yield from subclasses(sub)
+
+
+built = {c for c in subclasses(td.Tidy3dBaseModel) if c.__pydantic_complete__}
+print(json.dumps({"seconds": t2 - t1, "built": len(built), "ratio": (t2 - t1) / (t1 - t0)}))

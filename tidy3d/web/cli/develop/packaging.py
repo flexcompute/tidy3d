@@ -24,7 +24,7 @@ __all__ = [
 
 output_timing_log = ["python", "-X", "importtime", "-c", "import tidy3d"]
 
-# Runs the import 100 times.
+# Prints one JSON line of import costs (time, ratio, built schemas).
 average_test_import = [
     "python",
     str(Path("scripts", "benchmark_import.py")),
