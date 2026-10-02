@@ -108,6 +108,21 @@ def to_gdstk(
         bmin = (bmin[0], center[1])
     clip = gdstk.rectangle(bmin, bmax)
 
+    def _limit_infinite_extent(polygon: Any) -> Any:
+        """Replace infinite coordinates by the exported slice bounds.
+
+        Structures that are infinite in the plane, such as a substrate, give polygons with infinite
+        coordinates. Everything beyond the exported slice is clipped away anyway, and ``gdstk`` does
+        not handle non-finite coordinates in boolean operations.
+        """
+        points = np.asarray(polygon.points)
+        if np.isfinite(points).all():
+            return polygon
+        lower = np.asarray(bmin, dtype=float)
+        upper = np.asarray(bmax, dtype=float)
+        points = np.where(np.isposinf(points), upper, np.where(np.isneginf(points), lower, points))
+        return gdstk.Polygon(points, layer=polygon.layer, datatype=polygon.datatype)
+
     def _clip_to_export_bounds(polygons: list, gds_layer: int, gds_dtype: int) -> list:
         """Clip polygons to the exported simulation slice."""
         clipped_polygons = []
@@ -138,13 +153,16 @@ def to_gdstk(
         gds_layer, gds_dtype = layer_dtype
         layer_key = (gds_layer, gds_dtype)
 
-        geometry_polygons = structure.geometry.to_gdstk(
-            x=x,
-            y=y,
-            z=z,
-            gds_layer=gds_layer,
-            gds_dtype=gds_dtype,
-        )
+        geometry_polygons = [
+            _limit_infinite_extent(polygon)
+            for polygon in structure.geometry.to_gdstk(
+                x=x,
+                y=y,
+                z=z,
+                gds_layer=gds_layer,
+                gds_dtype=gds_dtype,
+            )
+        ]
 
         if isinstance(optical_medium, AbstractCustomMedium):
             # Custom media replace lower-priority material throughout their geometry, including
@@ -181,6 +199,7 @@ def to_gdstk(
                 gds_layer=gds_layer,
                 gds_dtype=gds_dtype,
                 pixel_exact=pixel_exact,
+                bounds=self.bounds,
             ),
             gds_layer,
             gds_dtype,

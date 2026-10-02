@@ -880,14 +880,27 @@ class Structure(AbstractStructure):
         gds_layer: NonNegativeInt = 0,
         gds_dtype: NonNegativeInt = 0,
         pixel_exact: bool = False,
+        bounds: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None,
     ) -> list[Any]:
-        """Filter precomputed geometry polygons using custom-medium permittivity contours."""
+        """Filter precomputed geometry polygons using custom-medium permittivity contours.
+
+        The permittivity contours are computed within the bounds of the geometry. If ``bounds`` are
+        given, they replace the infinite bounds of a geometry that is infinite along an axis; they
+        must contain everything that is exported.
+        """
         optical_medium = self._get_optical_medium(self.medium)
         if not isinstance(optical_medium, AbstractCustomMedium):
             return polygons
 
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         bb_min, bb_max = self.geometry.bounds
+        if bounds is not None:
+            bb_min = tuple(
+                limit if np.isneginf(value) else value for value, limit in zip(bb_min, bounds[0])
+            )
+            bb_max = tuple(
+                limit if np.isposinf(value) else value for value, limit in zip(bb_max, bounds[1])
+            )
         position = (x, y, z)[axis]
         contours, _, _ = optical_medium._gdstk_contours(
             axis=axis,
