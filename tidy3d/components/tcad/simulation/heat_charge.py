@@ -2741,9 +2741,7 @@ class HeatChargeSimulation(AbstractSimulation):
         """Reject heat-only-solver features in non-isothermal charge simulations.
 
         Solid-medium advection ('SolidMedium.velocity'), anisotropic thermal conductivity
-        ('AnisotropicConductivity'), temperature-dependent thermal properties
-        ('SolidMedium.conductivity' / 'capacity' models),
-        resistive interfaces ('ThermalContactResistance'), and
+        ('AnisotropicConductivity'), resistive interfaces ('ThermalContactResistance'), and
         gray-body surface radiation ('RadiationBC', 'ConvectionBC.emissivity') are honored by
         the heat solver, including when it is coupled with electrical conduction. The coupled
         thermal solve that runs alongside a non-isothermal charge analysis does not support any
@@ -2753,8 +2751,8 @@ class HeatChargeSimulation(AbstractSimulation):
         if not self._thermal_solver_active:
             return self
 
-        # Advection velocity, anisotropic conductivity and temperature models, on the
-        # background medium or any structure's solid heat spec.
+        # Advection velocity and anisotropic conductivity, on the background medium or any
+        # structure's solid heat spec.
         media_sources = [(("medium",), self.medium)]
         media_sources.extend(
             (("structures", i), struct.medium) for i, struct in enumerate(self.structures)
@@ -2784,21 +2782,6 @@ class HeatChargeSimulation(AbstractSimulation):
                     "'conductivity' to run this charge simulation.",
                     *loc,
                 )
-            for field, model_type in (
-                ("conductivity", AbstractConductivityModel),
-                ("capacity", AbstractHeatCapacityModel),
-            ):
-                model = getattr(heat_spec, field)
-                if isinstance(model, model_type):
-                    self._raise_validation_error_at_loc(
-                        f"A temperature-dependent 'SolidMedium.{field}' "
-                        f"('{type(model).__name__}') is not yet supported in non-isothermal "
-                        "charge (coupled charge+heat) simulations: the coupled thermal solve "
-                        "uses constant properties, so the temperature dependence would be "
-                        f"silently ignored. Provide a constant '{field}' to run this charge "
-                        "simulation.",
-                        *loc,
-                    )
 
         # Resistive interfaces and surface radiation.
         for i, bc in enumerate(self.boundary_spec):
@@ -3783,7 +3766,24 @@ class HeatChargeSimulation(AbstractSimulation):
         if self.linear_solver == "direct":
             features.append("linear_solver='direct'")
 
+        if self._thermal_solver_active and self._uses_temperature_dependent_thermal_properties():
+            features.append("Temperature-dependent thermal properties in a non-isothermal run")
+
         return features
+
+    def _uses_temperature_dependent_thermal_properties(self) -> bool:
+        """Whether any solid heat spec has a temperature-dependent conductivity or capacity."""
+        media = [self.medium] + [struct.medium for struct in self.structures]
+        for medium in media:
+            heat_spec = (
+                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
+            )
+            if isinstance(heat_spec, SolidMedium) and (
+                isinstance(heat_spec.conductivity, AbstractConductivityModel)
+                or isinstance(heat_spec.capacity, AbstractHeatCapacityModel)
+            ):
+                return True
+        return False
 
     def _iter_semiconductor_charge_media(
         self,

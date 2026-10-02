@@ -668,9 +668,9 @@ class SolidMedium(AbstractHeatMedium):
         "``conductivity`` and ``density``, both of which do differ from their SI units. "
         "Either a constant, or a temperature-dependent model (``PowerLawHeatCapacity``, "
         "``PolynomialHeatCapacity``), used in unsteady heat simulations and in the convective "
-        "term of an advecting solid. A temperature-dependent model is not supported in "
-        "non-isothermal charge (coupled charge+heat) simulations, where it raises a setup "
-        "error.",
+        "term of an advecting solid. A non-isothermal charge analysis is steady, so a "
+        "temperature-dependent model has no effect there; it still requires "
+        "``use_accelerated_solver=True`` (the default).",
         json_schema_extra={"units": SPECIFIC_HEAT_CAPACITY},
     )
 
@@ -682,10 +682,11 @@ class SolidMedium(AbstractHeatMedium):
         "rotated) tensor, or a temperature-dependent model (``PowerLawConductivity``, "
         "``PolynomialConductivity``, ``InversePolynomialConductivity``) whose reference value "
         "is either of those. The tensor and temperature-dependent forms are applied by the "
-        "heat solver, including when heat is coupled with electrical conduction. They are not "
-        "supported in non-isothermal charge (coupled charge+heat) simulations, where the "
-        "coupled thermal solve only handles a constant scalar conductivity, so they raise a "
-        "setup error there.",
+        "heat solver, including when heat is coupled with electrical conduction. In "
+        "non-isothermal charge (coupled charge+heat) simulations a temperature-dependent model "
+        "requires ``use_accelerated_solver=True`` (the default), and the tensor form is not "
+        "supported: the coupled thermal solve only handles a scalar conductivity, so it raises "
+        "a setup error there.",
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
 
