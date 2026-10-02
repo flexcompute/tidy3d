@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import inspect
 import io
@@ -310,8 +309,9 @@ def _skippable(func: Callable[..., Any], mode: str) -> Callable[..., Any]:
     validators, which replace pydantic's own validation of a field, and any validator marked
     with ``always_validate`` because it derives or changes a value.
     Pydantic-core calls the stored callable as ``(value[, info])`` or, for wrap validators,
-    ``(value, handler[, info])``; ``functools.wraps`` keeps the original signature visible so
-    pydantic still passes ``info`` and ``handler`` exactly as before.
+    ``(value, handler[, info])``; ``__wrapped__`` (not the full ``functools.wraps``, which is slow
+    in Pyodide when run for every validator) keeps the original signature visible to
+    ``inspect.signature`` so pydantic still passes ``info`` and ``handler`` exactly as before.
     """
     if (
         mode in ("before", "plain")
@@ -321,7 +321,6 @@ def _skippable(func: Callable[..., Any], mode: str) -> Callable[..., Any]:
         return func
     if mode == "wrap":
 
-        @functools.wraps(func)
         def wrapper(value: Any, handler: Any, *args: Any, **kwargs: Any) -> Any:
             return (
                 handler(value)
@@ -331,10 +330,10 @@ def _skippable(func: Callable[..., Any], mode: str) -> Callable[..., Any]:
 
     else:
 
-        @functools.wraps(func)
         def wrapper(value: Any, *args: Any, **kwargs: Any) -> Any:
             return value if fast_validation_active() else func(value, *args, **kwargs)
 
+    wrapper.__wrapped__ = func  # type: ignore[attr-defined]
     wrapper._tidy3d_skippable = True  # type: ignore[attr-defined]
     return wrapper
 
