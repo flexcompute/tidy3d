@@ -28,6 +28,8 @@ from tidy3d.components.material.tcad.charge import (
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
+    AbstractConductivityModel,
+    AbstractHeatCapacityModel,
     AnisotropicConductivity,
     FluidMedium,
     SolidMedium,
@@ -2601,10 +2603,10 @@ class HeatChargeSimulation(AbstractSimulation):
 
             if isinstance(heat_properties, SolidMedium):
                 if heat_properties.capacity is not None:
-                    capacities.append(heat_properties.capacity)
+                    capacities.append(heat_properties._reference_capacity)
                 if heat_properties.density is not None:
                     densities.append(heat_properties.density)
-                conductivity = heat_properties.conductivity
+                conductivity = heat_properties._reference_conductivity
                 # Scalar diffusion-time estimate: reduce a tensor to its mean principal value.
                 if isinstance(conductivity, AnisotropicConductivity):
                     conductivity = (conductivity.xx + conductivity.yy + conductivity.zz) / 3
@@ -2739,7 +2741,9 @@ class HeatChargeSimulation(AbstractSimulation):
         """Reject heat-only-solver features in non-isothermal charge simulations.
 
         Solid-medium advection ('SolidMedium.velocity'), anisotropic thermal conductivity
-        ('AnisotropicConductivity'), resistive interfaces ('ThermalContactResistance'), and
+        ('AnisotropicConductivity'), temperature-dependent thermal properties
+        ('SolidMedium.conductivity' / 'capacity' models),
+        resistive interfaces ('ThermalContactResistance'), and
         gray-body surface radiation ('RadiationBC', 'ConvectionBC.emissivity') are honored by
         the heat solver, including when it is coupled with electrical conduction. The coupled
         thermal solve that runs alongside a non-isothermal charge analysis does not support any
@@ -2749,8 +2753,8 @@ class HeatChargeSimulation(AbstractSimulation):
         if not self._thermal_solver_active:
             return self
 
-        # Advection velocity and anisotropic conductivity, on the background medium or any
-        # structure's solid heat spec.
+        # Advection velocity, anisotropic conductivity and temperature models, on the
+        # background medium or any structure's solid heat spec.
         media_sources = [(("medium",), self.medium)]
         media_sources.extend(
             (("structures", i), struct.medium) for i, struct in enumerate(self.structures)
@@ -2764,12 +2768,14 @@ class HeatChargeSimulation(AbstractSimulation):
                 self._raise_validation_error_at_loc(
                     "Solid-medium advection ('SolidMedium.velocity') is not supported in "
                     "non-isothermal charge (coupled charge+heat) simulations: the coupled "
-                    "thermal solve does not apply the convective transport term "
-                    "'rho * cp * V . grad(T)', so this velocity would be silently ignored. "
+                    "thermal solve does not apply convective transport, so this velocity "
+                    "would be silently ignored. "
                     "Remove 'velocity' (or set it to 'None') to run this charge simulation.",
                     *loc,
                 )
-            if isinstance(getattr(heat_spec, "conductivity", None), AnisotropicConductivity):
+            if not isinstance(heat_spec, SolidMedium):
+                continue
+            if isinstance(heat_spec._reference_conductivity, AnisotropicConductivity):
                 self._raise_validation_error_at_loc(
                     "Anisotropic thermal conductivity ('AnisotropicConductivity') is not "
                     "supported in non-isothermal charge (coupled charge+heat) simulations: the "
@@ -2778,6 +2784,21 @@ class HeatChargeSimulation(AbstractSimulation):
                     "'conductivity' to run this charge simulation.",
                     *loc,
                 )
+            for field, model_type in (
+                ("conductivity", AbstractConductivityModel),
+                ("capacity", AbstractHeatCapacityModel),
+            ):
+                model = getattr(heat_spec, field)
+                if isinstance(model, model_type):
+                    self._raise_validation_error_at_loc(
+                        f"A temperature-dependent 'SolidMedium.{field}' "
+                        f"('{type(model).__name__}') is not yet supported in non-isothermal "
+                        "charge (coupled charge+heat) simulations: the coupled thermal solve "
+                        "uses constant properties, so the temperature dependence would be "
+                        f"silently ignored. Provide a constant '{field}' to run this charge "
+                        "simulation.",
+                        *loc,
+                    )
 
         # Resistive interfaces and surface radiation.
         for i, bc in enumerate(self.boundary_spec):

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from math import isfinite
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
+from numpy.polynomial import polynomial
+from pydantic import Field, FiniteFloat, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.transformation import RotationAroundAxis, RotationType
@@ -15,6 +16,7 @@ from tidy3d.components.types import Coordinate
 from tidy3d.constants import (
     DENSITY,
     DYNAMIC_VISCOSITY,
+    KELVIN,
     SPECIFIC_HEAT,
     SPECIFIC_HEAT_CAPACITY,
     THERMAL_CONDUCTIVITY,
@@ -25,6 +27,10 @@ from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.types.base import ArrayFloat
+
+# The constant term is fixed at 1, so this is also the polynomial degree.
+POLYNOMIAL_MODEL_MAX_COEFFICIENTS = 4
 
 
 # Liquid class
@@ -296,6 +302,324 @@ class AnisotropicConductivity(Tidy3dBaseModel):
         )
 
 
+class AbstractThermalPropertyModel(ABC, Tidy3dBaseModel):
+    """Temperature-dependent thermal property of a solid: a reference value, the property at
+    ``reference_temperature``, times a dimensionless factor ``f(T)`` with ``f = 1`` there.
+
+    Notes
+    -----
+    The temperature is clamped into ``temperature_range`` before ``f`` is evaluated, so the
+    model is never extrapolated. ``f`` must be positive over the whole range.
+    """
+
+    reference_temperature: PositiveFloat = Field(
+        default=300.0,
+        title="Reference temperature",
+        description="Temperature at which the property equals its reference value. Must lie "
+        "within ``temperature_range``.",
+        json_schema_extra={"units": KELVIN},
+    )
+
+    temperature_range: tuple[NonNegativeFloat, PositiveFloat] = Field(
+        title="Temperature range",
+        description="Temperatures ``(T_min, T_max)`` over which the model is valid. Outside "
+        "this range the property is held at its value at the nearest end.",
+        json_schema_extra={"units": KELVIN},
+    )
+
+    @model_validator(mode="after")
+    def _check_temperature_range_and_positivity(self) -> Self:
+        """The range must be ordered, finite and contain the reference temperature, and the
+        factor positive over it, since it multiplies a positive reference property."""
+        t_min, t_max = self.temperature_range
+        if not (isfinite(t_max) and t_min < t_max):
+            self._raise_validation_error_at_loc(
+                f"'temperature_range' must satisfy T_min < T_max < inf, got {self.temperature_range}.",
+                "temperature_range",
+            )
+        if not t_min <= self.reference_temperature <= t_max:
+            self._raise_validation_error_at_loc(
+                f"'reference_temperature' = {self.reference_temperature} K must lie within "
+                f"'temperature_range' {self.temperature_range}.",
+                "reference_temperature",
+            )
+        self._check_positive()
+        return self
+
+    def _check_positive(self) -> None:
+        """Raise if the factor is not positive and finite over ``temperature_range``."""
+
+    @abstractmethod
+    def _factor(self, temperature: np.ndarray) -> np.ndarray:
+        """Factor at temperatures already clamped into ``temperature_range``."""
+
+    def _clamped_factor(self, temperature: ArrayFloat) -> np.ndarray:
+        """Factor at ``temperature`` (in K), clamped into ``temperature_range`` first."""
+        clamped = np.clip(np.asarray(temperature, dtype=float), *self.temperature_range)
+        return self._factor(clamped)
+
+
+class AbstractPowerLawModel(AbstractThermalPropertyModel):
+    """Power-law factor ``f(T) = (T / reference_temperature) ** exponent``."""
+
+    exponent: FiniteFloat = Field(
+        title="Exponent",
+        description="Power-law exponent.",
+    )
+
+    def _check_positive(self) -> None:
+        if self.temperature_range[0] <= 0:
+            self._raise_validation_error_at_loc(
+                "A power law needs a positive lower temperature bound, got "
+                f"'temperature_range' = {self.temperature_range}.",
+                "temperature_range",
+            )
+
+    def _factor(self, temperature: np.ndarray) -> np.ndarray:
+        return (temperature / self.reference_temperature) ** self.exponent
+
+
+class AbstractPolynomialModel(AbstractThermalPropertyModel):
+    """Model built on ``p(T) = 1 + a1 dT + ... + a4 dT^4`` with
+    ``dT = T - reference_temperature``, required to be positive over ``temperature_range``."""
+
+    coefficients: tuple[FiniteFloat, ...] = Field(
+        title="Temperature coefficients",
+        description="Coefficients ``(a1, a2, ...)`` of increasing powers of "
+        "``T - reference_temperature`` in the polynomial ``1 + a1 dT + ... + a4 dT^4``, at most "
+        f"{POLYNOMIAL_MODEL_MAX_COEFFICIENTS} values. ``a_i`` has units of ``1/K^i``. For "
+        "``InversePolynomialConductivity`` the polynomial is the denominator.",
+        min_length=1,
+        max_length=POLYNOMIAL_MODEL_MAX_COEFFICIENTS,
+    )
+
+    @property
+    def _coefficients_in_dT(self) -> tuple[float, ...]:
+        """Coefficients of ``p`` in increasing powers of ``T - reference_temperature``."""
+        return (1.0, *self.coefficients)
+
+    def _coefficients_in_T(self) -> tuple[float, ...]:
+        """Coefficients of ``p`` in increasing powers of ``T`` itself."""
+        shifted = polynomial.Polynomial(self._coefficients_in_dT)(
+            polynomial.Polynomial([-self.reference_temperature, 1.0])
+        )
+        return tuple(float(c) for c in shifted.coef)
+
+    def _check_positive(self) -> None:
+        # The minimum over the range sits at an end or at a stationary point inside it.
+        offsets = [t - self.reference_temperature for t in self.temperature_range]
+        coefficients = self._coefficients_in_dT
+        stationary = polynomial.polyroots(polynomial.polyder(coefficients))
+        candidates = offsets + [
+            root.real
+            for root in np.atleast_1d(stationary)
+            if abs(root.imag) <= 1e-12 * max(1.0, abs(root.real))
+            and offsets[0] < root.real < offsets[1]
+        ]
+        lowest = min(candidates, key=lambda dt: polynomial.polyval(dt, coefficients))
+        value = polynomial.polyval(lowest, coefficients)
+        if not value > 0:
+            self._raise_validation_error_at_loc(
+                "The polynomial must be positive over 'temperature_range' "
+                f"{self.temperature_range}, but it reaches {value:.6g} at "
+                f"T = {lowest + self.reference_temperature:.6g} K.",
+                "coefficients",
+            )
+
+    def _polynomial(self, temperature: np.ndarray) -> np.ndarray:
+        return polynomial.polyval(
+            temperature - self.reference_temperature, self._coefficients_in_dT
+        )
+
+    def _factor(self, temperature: np.ndarray) -> np.ndarray:
+        return self._polynomial(temperature)
+
+
+class AbstractConductivityModel(AbstractThermalPropertyModel):
+    """Temperature-dependent thermal conductivity ``K(T) = k_ref * f(T)``. A tensor ``k_ref``
+    is scaled as a whole, so its anisotropy ratios and principal axes stay fixed."""
+
+    k_ref: PositiveFloat | AnisotropicConductivity = Field(
+        title="Reference conductivity",
+        description="Thermal conductivity at ``reference_temperature`` in units of "
+        f"{THERMAL_CONDUCTIVITY}. Either an isotropic scalar or an ``AnisotropicConductivity``.",
+        json_schema_extra={"units": THERMAL_CONDUCTIVITY},
+    )
+
+    def conductivity(self, temperature: ArrayFloat) -> np.ndarray:
+        """Evaluate the thermal conductivity.
+
+        Parameters
+        ----------
+        temperature : ArrayFloat
+            Temperature(s) in K. Values outside ``temperature_range`` are clamped into it.
+
+        Returns
+        -------
+        np.ndarray
+            ``K(T)`` in units of W/(um*K), shaped like ``temperature``. For an
+            ``AnisotropicConductivity`` ``k_ref``, with a trailing axis of the six packed
+            components ``[kxx, kyy, kzz, kxy, kxz, kyz]``.
+        """
+        factor = self._clamped_factor(temperature)
+        if isinstance(self.k_ref, AnisotropicConductivity):
+            return np.multiply.outer(factor, self.k_ref.to_tensor())
+        return factor * self.k_ref
+
+
+class AbstractHeatCapacityModel(AbstractThermalPropertyModel):
+    """Temperature-dependent specific heat capacity ``cp(T) = cp_ref * f(T)``."""
+
+    cp_ref: PositiveFloat = Field(
+        title="Reference heat capacity",
+        description="Specific heat capacity at ``reference_temperature`` in units of "
+        f"{SPECIFIC_HEAT_CAPACITY}.",
+        json_schema_extra={"units": SPECIFIC_HEAT_CAPACITY},
+    )
+
+    def heat_capacity(self, temperature: ArrayFloat) -> np.ndarray:
+        """Evaluate the specific heat capacity.
+
+        Parameters
+        ----------
+        temperature : ArrayFloat
+            Temperature(s) in K. Values outside ``temperature_range`` are clamped into it.
+
+        Returns
+        -------
+        np.ndarray
+            ``cp(T)`` in units of J/(kg*K), shaped like ``temperature``.
+        """
+        return self._clamped_factor(temperature) * self.cp_ref
+
+
+class PowerLawConductivity(AbstractConductivityModel, AbstractPowerLawModel):
+    """Power-law thermal conductivity ``K(T) = k_ref * (T / reference_temperature) ** exponent``.
+
+    Notes
+    -----
+    A negative exponent describes the falling conductivity of crystalline semiconductors,
+    e.g. about ``-1.3`` for silicon near room temperature.
+
+    Example
+    -------
+    >>> silicon_k = PowerLawConductivity(k_ref=1.48e-4, exponent=-1.3, temperature_range=(200, 800))
+    >>> tensor_k = PowerLawConductivity(
+    ...     k_ref=AnisotropicConductivity(xx=1e-4, yy=1e-4, zz=5e-5),
+    ...     exponent=-1.0,
+    ...     temperature_range=(200, 800),
+    ... )
+    """
+
+
+class PolynomialConductivity(AbstractConductivityModel, AbstractPolynomialModel):
+    """Polynomial thermal conductivity
+    ``K(T) = k_ref * (1 + a1 dT + ... + a4 dT^4)``, with ``dT = T - reference_temperature``.
+
+    Example
+    -------
+    >>> # 0.1% per K rise around 300 K
+    >>> k_model = PolynomialConductivity(
+    ...     k_ref=1e-6, coefficients=(1e-3,), temperature_range=(100, 1200)
+    ... )
+    """
+
+
+class InversePolynomialConductivity(AbstractConductivityModel, AbstractPolynomialModel):
+    """Thermal conductivity from a thermal-resistivity polynomial
+    ``K(T) = k_ref / (1 + b1 dT + ... + b4 dT^4)``, with ``dT = T - reference_temperature``.
+
+    Notes
+    -----
+    Suited to the common ``1 / (a + b T + c T^2)`` fits of crystalline semiconductors.
+
+    Example
+    -------
+    >>> k_model = InversePolynomialConductivity(
+    ...     k_ref=1.48e-4, coefficients=(3e-3, 2e-6), temperature_range=(250, 600)
+    ... )
+    >>> # Silicon from a published resistivity fit 0.03 + 1.56e-3 T + 1.65e-6 T^2 in cm*K/W
+    >>> silicon_k = InversePolynomialConductivity.from_resistivity(
+    ...     coefficients=(300, 15.6, 1.65e-2), temperature_range=(250, 600)
+    ... )
+    """
+
+    @classmethod
+    def from_resistivity(
+        cls,
+        coefficients: tuple[float, ...],
+        temperature_range: tuple[float, float],
+        reference_temperature: float = 300.0,
+    ) -> Self:
+        """Create from a thermal-resistivity fit ``W(T) = w0 + w1 T + ... + w4 T^4`` in powers
+        of ``T`` itself, the form such fits are usually published in.
+
+        Parameters
+        ----------
+        coefficients : tuple[float, ...]
+            ``(w0, w1, ...)``, at most five values, with ``w_i`` in units of um*K/W/K^i
+            (``1 cm*K/W = 1e4 um*K/W``).
+        temperature_range : tuple[float, float]
+            Temperatures ``(T_min, T_max)`` in K over which the fit is valid.
+        reference_temperature : float = 300.0
+            Temperature in K at which ``k_ref = 1 / W(reference_temperature)``.
+
+        Returns
+        -------
+        :class:`InversePolynomialConductivity`
+            Model with ``K(T) = 1 / W(T)`` over ``temperature_range``.
+        """
+        # Re-center W on the reference temperature and normalize it by W(reference_temperature).
+        shifted = polynomial.Polynomial(coefficients)(
+            polynomial.Polynomial([reference_temperature, 1.0])
+        ).coef
+        w_ref = float(shifted[0])
+        if not w_ref > 0:
+            raise ValidationError(
+                "'InversePolynomialConductivity.from_resistivity' requires a positive "
+                f"resistivity at the reference temperature, got W({reference_temperature}) = "
+                f"{w_ref:.6g}."
+            )
+        return cls(
+            k_ref=1.0 / w_ref,
+            coefficients=tuple(float(c) / w_ref for c in shifted[1:]) or (0.0,),
+            reference_temperature=reference_temperature,
+            temperature_range=temperature_range,
+        )
+
+    def _factor(self, temperature: np.ndarray) -> np.ndarray:
+        return 1.0 / self._polynomial(temperature)
+
+
+class PowerLawHeatCapacity(AbstractHeatCapacityModel, AbstractPowerLawModel):
+    """Power-law specific heat capacity
+    ``cp(T) = cp_ref * (T / reference_temperature) ** exponent``.
+
+    Example
+    -------
+    >>> cp_model = PowerLawHeatCapacity(cp_ref=700, exponent=0.3, temperature_range=(200, 800))
+    """
+
+
+class PolynomialHeatCapacity(AbstractHeatCapacityModel, AbstractPolynomialModel):
+    """Polynomial specific heat capacity
+    ``cp(T) = cp_ref * (1 + a1 dT + ... + a4 dT^4)``, with ``dT = T - reference_temperature``.
+
+    Example
+    -------
+    >>> # 0.2% per K rise around 300 K
+    >>> cp_model = PolynomialHeatCapacity(
+    ...     cp_ref=700, coefficients=(2e-3,), temperature_range=(100, 1200)
+    ... )
+    """
+
+
+ConductivityModelType = (
+    PowerLawConductivity | PolynomialConductivity | InversePolynomialConductivity
+)
+HeatCapacityModelType = PowerLawHeatCapacity | PolynomialHeatCapacity
+
+
 class SolidMedium(AbstractHeatMedium):
     """Solid medium for heat simulations.
 
@@ -323,28 +647,45 @@ class SolidMedium(AbstractHeatMedium):
     ...     capacity=700,
     ...     density=2.33e-15,
     ... )
+
+    >>> # Conductivity and capacity also accept temperature-dependent models. The following
+    >>> # silicon has k ~ T^-1.3 around 300 K, from SI units.
+    >>> silicon_hot = SolidMedium.from_si_units(
+    ...     conductivity=PowerLawConductivity(
+    ...         k_ref=148, exponent=-1.3, temperature_range=(200, 800)
+    ...     ),
+    ...     capacity=700,
+    ...     density=2330,
+    ... )
     """
 
-    capacity: PositiveFloat | None = Field(
+    capacity: PositiveFloat | HeatCapacityModelType | None = Field(
         default=None,
         title="Heat capacity",
         description=f"Specific heat capacity in units of {SPECIFIC_HEAT_CAPACITY}, which is "
         "already the SI unit, so no conversion is needed for this field. Prefer "
         "``SolidMedium.from_si_units()``, which takes every property in SI units and converts "
-        "``conductivity`` and ``density``, both of which do differ from their SI units.",
+        "``conductivity`` and ``density``, both of which do differ from their SI units. "
+        "Either a constant, or a temperature-dependent model (``PowerLawHeatCapacity``, "
+        "``PolynomialHeatCapacity``), used in unsteady heat simulations and in the convective "
+        "term of an advecting solid. A temperature-dependent model is not supported in "
+        "non-isothermal charge (coupled charge+heat) simulations, where it raises a setup "
+        "error.",
         json_schema_extra={"units": SPECIFIC_HEAT_CAPACITY},
     )
 
-    conductivity: PositiveFloat | AnisotropicConductivity = Field(
+    conductivity: PositiveFloat | AnisotropicConductivity | ConductivityModelType = Field(
         title="Thermal conductivity",
         description="Thermal conductivity of material in units of "
-        f"{THERMAL_CONDUCTIVITY}. Either an isotropic scalar, or an "
+        f"{THERMAL_CONDUCTIVITY}. Either an isotropic scalar, an "
         "``AnisotropicConductivity`` giving a symmetric positive-definite (optionally "
-        "rotated) tensor. The tensor "
-        "form is applied by the heat solver, including when heat is coupled with electrical "
-        "conduction. It is not supported in non-isothermal charge (coupled charge+heat) "
-        "simulations, where the coupled thermal solve only handles a scalar conductivity, so "
-        "an ``AnisotropicConductivity`` there raises a setup error.",
+        "rotated) tensor, or a temperature-dependent model (``PowerLawConductivity``, "
+        "``PolynomialConductivity``, ``InversePolynomialConductivity``) whose reference value "
+        "is either of those. The tensor and temperature-dependent forms are applied by the "
+        "heat solver, including when heat is coupled with electrical conduction. They are not "
+        "supported in non-isothermal charge (coupled charge+heat) simulations, where the "
+        "coupled thermal solve only handles a constant scalar conductivity, so they raise a "
+        "setup error there.",
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
 
@@ -360,13 +701,13 @@ class SolidMedium(AbstractHeatMedium):
         title="Advection velocity",
         description="Constant advection velocity ``(vx, vy, vz)`` of the solid medium in units "
         f"of {VELOCITY}. When set to a nonzero value, the heat solver adds a convective "
-        "transport term ``rho * cp * V . grad(T)`` for structures using this medium; both "
-        "``capacity`` and ``density`` must then be provided, since the ``rho * cp`` coefficient "
-        "is ``capacity * density``. Leave as ``None`` (the default) for pure conduction. Note: a "
-        "velocity with a nonzero component normal to an interface between two touching solids is "
-        "only supported when ``rho * cp * V . n`` matches across the face; a normal-flux jump at "
-        "such an interface is ill-posed and unsupported (velocities tangential to the interface "
-        "are fine). This term is applied by the heat solver, including when heat is coupled "
+        "transport term ``V . grad(H)`` for structures using this medium, where the enthalpy "
+        "``H`` has ``dH/dT = density * capacity`` (``rho * cp * V . grad(T)`` for a constant "
+        "``capacity``); both ``capacity`` and ``density`` must then be provided. Leave as "
+        "``None`` (the default) for pure conduction. A velocity component normal to an "
+        "interface between two solids is not allowed. This is not validated, and a simulation "
+        "that has one gives physically inconsistent results. Velocities tangential to such an "
+        "interface are fine. This term is applied by the heat solver, including when heat is coupled "
         "with electrical conduction. It is not supported in non-isothermal charge "
         "(coupled charge+heat) simulations, where the coupled thermal solve does not apply "
         "it, so setting a nonzero ``velocity`` there raises a setup error.",
@@ -377,7 +718,7 @@ class SolidMedium(AbstractHeatMedium):
     def _check_velocity_requires_capacity_and_density(self) -> Self:
         """Velocity components must be finite, since the solver consumes them as a
         real advection speed. A nonzero ``velocity`` also enables convective transport,
-        whose ``rho * cp`` coefficient is ``capacity * density``; require both so the
+        whose coefficient is ``capacity * density``; require both so the
         solver receives a positive coefficient instead of an unset-property sentinel."""
         if self.velocity is not None:
             if any(not isfinite(v) for v in self.velocity):
@@ -396,27 +737,52 @@ class SolidMedium(AbstractHeatMedium):
                 )
         return self
 
+    @property
+    def _reference_conductivity(self) -> float | AnisotropicConductivity:
+        """Conductivity without its temperature dependence: a model's ``k_ref``, otherwise
+        ``conductivity`` itself."""
+        if isinstance(self.conductivity, AbstractConductivityModel):
+            return self.conductivity.k_ref
+        return self.conductivity
+
+    @property
+    def _reference_capacity(self) -> float | None:
+        """Heat capacity without its temperature dependence: a model's ``cp_ref``, otherwise
+        ``capacity`` itself."""
+        if isinstance(self.capacity, AbstractHeatCapacityModel):
+            return self.capacity.cp_ref
+        return self.capacity
+
     @classmethod
     def from_si_units(
         cls,
-        conductivity: PositiveFloat | AnisotropicConductivity,
-        capacity: PositiveFloat | None = None,
+        conductivity: PositiveFloat | AnisotropicConductivity | ConductivityModelType,
+        capacity: PositiveFloat | HeatCapacityModelType | None = None,
         density: PositiveFloat | None = None,
         velocity: Coordinate | None = None,
     ) -> Self:
-        """Create a SolidMedium using SI units. ``conductivity`` may be a scalar or an
-        ``AnisotropicConductivity`` given in SI units; its principals are converted too.
-        ``capacity`` is passed through unchanged, since J/(kg*K) is both the SI unit and the
-        Tidy3D convention for solids."""
-        # W/(m*K) -> W/(um*K). For a tensor, scale the principals (rotation is unitless).
-        if isinstance(conductivity, AnisotropicConductivity):
+        """Create a SolidMedium using SI units. ``conductivity`` may be a scalar, an
+        ``AnisotropicConductivity`` or a temperature-dependent model given in SI units; the
+        principals and a model's ``k_ref`` are converted too. ``capacity`` is passed through
+        unchanged, since J/(kg*K) is both the SI unit and the Tidy3D convention for solids."""
+
+        def to_tidy3d_conductivity(
+            value: PositiveFloat | AnisotropicConductivity,
+        ) -> PositiveFloat | AnisotropicConductivity:
+            # W/(m*K) -> W/(um*K). For a tensor, scale the principals (rotation is unitless).
+            if isinstance(value, AnisotropicConductivity):
+                return value.updated_copy(
+                    xx=value.xx * 1e-6, yy=value.yy * 1e-6, zz=value.zz * 1e-6
+                )
+            return value * 1e-6
+
+        # A model's temperature coefficients are relative, so only its reference is scaled.
+        if isinstance(conductivity, AbstractConductivityModel):
             new_conductivity = conductivity.updated_copy(
-                xx=conductivity.xx * 1e-6,
-                yy=conductivity.yy * 1e-6,
-                zz=conductivity.zz * 1e-6,
+                k_ref=to_tidy3d_conductivity(conductivity.k_ref)
             )
         else:
-            new_conductivity = conductivity * 1e-6
+            new_conductivity = to_tidy3d_conductivity(conductivity)
         new_capacity = capacity
         new_density = density
         new_velocity = velocity

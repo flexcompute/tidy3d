@@ -15,6 +15,12 @@ Material Thermal
 
    AnisotropicConductivity
 
+   PowerLawConductivity
+   PolynomialConductivity
+   InversePolynomialConductivity
+   PowerLawHeatCapacity
+   PolynomialHeatCapacity
+
 
 Thermal Perturbation Specification
 ------------------------------------

@@ -1733,7 +1733,8 @@ class Scene(Tidy3dBaseModel):
                 medium for medium in medium_list if isinstance(medium.heat_spec, SolidType)
             ]
             cond_list = [
-                _heat_conductivity_scalar(medium.heat_spec.conductivity) for medium in medium_list
+                _heat_conductivity_scalar(medium.heat_spec._reference_conductivity)
+                for medium in medium_list
             ]
         elif property == "electric_conductivity":
             cond_mediums = [
@@ -1771,7 +1772,7 @@ class Scene(Tidy3dBaseModel):
         cond_medium = None
         SolidType = (SolidSpec, SolidMedium)
         if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidType):
-            cond_medium = _heat_conductivity_scalar(medium.heat_spec.conductivity)
+            cond_medium = _heat_conductivity_scalar(medium.heat_spec._reference_conductivity)
         elif property == "electric_conductivity" and isinstance(
             medium.charge, ChargeConductorMedium
         ):
