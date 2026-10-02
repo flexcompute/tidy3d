@@ -36,6 +36,7 @@ import xarray as xr
 import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
+from flexcompute.core.validation import ValidationReport
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from pydantic import (
     ValidationError as PydanticValidationError,
@@ -72,7 +73,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterator
     from typing import NoReturn
 
-    from flexcompute.core._migration.em.validation import ValidationPath, ValidationReport
+    from flexcompute.core.validation import ValidationDiagnostic, ValidationPath
     from pydantic import ValidationInfo
     from pydantic.fields import FieldInfo
     from pydantic.functional_validators import ModelWrapValidatorHandler
@@ -595,6 +596,16 @@ class Tidy3dBaseModel(BaseModel):
         """Return the migrated schema object this model validates, or ``None`` to opt out."""
         return None
 
+    @cached_property
+    def _migrated_validation_scope(self) -> object | None:
+        """This model's migrated schema, translated once per instance.
+
+        Model-level adapters and :meth:`_run_migrated_validation_bridge` read this
+        instead of calling the translation hook, so a model with several model-level
+        rules, or a parent validating it later, translates it once.
+        """
+        return self._translate_migrated_validation_scope()
+
     def _validate_migrated_validation_scope(
         self,
         migrated_scope: object,
@@ -610,13 +621,13 @@ class Tidy3dBaseModel(BaseModel):
         context: Mapping[str, Any] | None = None,
         path: ValidationPath = (),
     ) -> ValidationReport | None:
-        """Translate and validate this model's migrated scope, then map its paths.
+        """Validate this model's cached migrated scope, then map its paths.
 
         Opted-in models call this from their ordered after-validator or from an
         explicit pre-upload check, and present the result with
         :meth:`_present_migrated_validation_report`.
         """
-        migrated_scope = self._translate_migrated_validation_scope()
+        migrated_scope = self._migrated_validation_scope
         if migrated_scope is None:
             return None
         report = self._validate_migrated_validation_scope(migrated_scope, context=context or {})
@@ -655,6 +666,21 @@ class Tidy3dBaseModel(BaseModel):
             else:
                 self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
         return self
+
+    def _present_migrated_validation_diagnostics(
+        self, diagnostics: tuple[ValidationDiagnostic, ...]
+    ) -> Self:
+        """Present one rule's diagnostics at this model's public paths.
+
+        Model-level adapters call this with a rule run on
+        :attr:`_migrated_validation_scope`. The rule reports migrated-schema paths;
+        :meth:`_map_migrated_validation_report` maps them to this model's fields, so
+        the error points at the field the user set.
+        """
+        report = ValidationReport(diagnostics=diagnostics)
+        return self._present_migrated_validation_report(
+            self._map_migrated_validation_report(report, path=())
+        )
 
     def __hash__(self) -> int:
         """Hash method."""
@@ -944,6 +970,16 @@ class Tidy3dBaseModel(BaseModel):
                 processed[field_name] = value
 
         return processed
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """Copy without validation, discarding a migrated scope invalidated by updates."""
+        copied = super().model_copy(update=update, deep=deep)
+        if update:
+            # A shallow Pydantic copy shares this private cache with its source.
+            # Isolate the cache before removing the translated scope from the copy.
+            copied._cached_properties = dict(copied._cached_properties)
+            copied._cached_properties.pop("_migrated_validation_scope", None)
+        return copied
 
     def copy(
         self,
