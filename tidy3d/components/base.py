@@ -404,6 +404,7 @@ class Tidy3dBaseModel(BaseModel):
 
     _cached_properties: dict = PrivateAttr(default_factory=dict)
     _has_tracers: bool | None = PrivateAttr(default=None)
+    _migrated_model_rules_passed: bool = PrivateAttr(default=False)
 
     def model_dump_json(self, *args: Any, **kwargs: Any) -> str:
         """Serialize with stable float exponent formatting across pydantic_core versions."""
@@ -596,16 +597,6 @@ class Tidy3dBaseModel(BaseModel):
         """Return the migrated schema object this model validates, or ``None`` to opt out."""
         return None
 
-    @cached_property
-    def _migrated_validation_scope(self) -> object | None:
-        """This model's migrated schema, translated once per instance.
-
-        Model-level adapters and :meth:`_run_migrated_validation_bridge` read this
-        instead of calling the translation hook, so a model with several model-level
-        rules, or a parent validating it later, translates it once.
-        """
-        return self._translate_migrated_validation_scope()
-
     def _validate_migrated_validation_scope(
         self,
         migrated_scope: object,
@@ -621,13 +612,13 @@ class Tidy3dBaseModel(BaseModel):
         context: Mapping[str, Any] | None = None,
         path: ValidationPath = (),
     ) -> ValidationReport | None:
-        """Validate this model's cached migrated scope, then map its paths.
+        """Translate this model, validate the translation, then map its paths.
 
-        Opted-in models call this from their ordered after-validator or from an
-        explicit pre-upload check, and present the result with
-        :meth:`_present_migrated_validation_report`.
+        Parents and explicit pre-upload checks call this and present the result with
+        :meth:`_present_migrated_validation_report`. Each call translates; the
+        instance keeps no translation.
         """
-        migrated_scope = self._migrated_validation_scope
+        migrated_scope = self._translate_migrated_validation_scope()
         if migrated_scope is None:
             return None
         report = self._validate_migrated_validation_scope(migrated_scope, context=context or {})
@@ -653,34 +644,79 @@ class Tidy3dBaseModel(BaseModel):
         )
         return report.model_copy(update={"diagnostics": diagnostics})
 
-    def _present_migrated_validation_report(self, report: ValidationReport | None) -> Self:
-        """Log warnings in report order, then raise the first error at its path.
+    def _present_migrated_validation_report(
+        self,
+        report: ValidationReport | None,
+        *,
+        error_types: Mapping[str, type[Exception]] | None = None,
+    ) -> Self:
+        """Log warnings in report order, then raise the first error.
 
-        Diagnostics after the first error are not presented.
+        An error with a path raises there through the Pydantic location helper. An
+        error with an empty path raises as the type ``error_types`` gives for its
+        code, ``ValueError`` by default, as a model validator raises an unlocated
+        error. Diagnostics after the first error are not presented.
         """
         if report is None:
             return self
         for diagnostic in report.diagnostics:
             if diagnostic.severity == "warning":
                 log.warning(diagnostic.message, custom_loc=list(diagnostic.path))
-            else:
+            elif diagnostic.path:
                 self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
+            else:
+                error_type = (error_types or {}).get(diagnostic.code, ValueError)
+                raise error_type(diagnostic.message)
         return self
 
     def _present_migrated_validation_diagnostics(
-        self, diagnostics: tuple[ValidationDiagnostic, ...]
+        self,
+        diagnostics: tuple[ValidationDiagnostic, ...],
+        *,
+        error_types: Mapping[str, type[Exception]] | None = None,
     ) -> Self:
-        """Present one rule's diagnostics at this model's public paths.
+        """Present a scope's model-level diagnostics at this model's public paths.
 
-        Model-level adapters call this with a rule run on
-        :attr:`_migrated_validation_scope`. The rule reports migrated-schema paths;
+        ``_validate_model`` calls this with the diagnostics of its scope's
+        ``validate_model_rules``, which carry migrated-schema paths;
         :meth:`_map_migrated_validation_report` maps them to this model's fields, so
         the error points at the field the user set.
         """
         report = ValidationReport(diagnostics=diagnostics)
         return self._present_migrated_validation_report(
-            self._map_migrated_validation_report(report, path=())
+            self._map_migrated_validation_report(report, path=()), error_types=error_types
         )
+
+    def _run_migrated_model_rules(
+        self,
+        *validate_model_rules: Callable[[Any], tuple[ValidationDiagnostic, ...]],
+        error_types: Mapping[str, type[Exception]] | None = None,
+    ) -> Self:
+        """Translate once, run each scope's model-level rules in order, and present them.
+
+        ``_validate_model`` calls this with one ``validate_model_rules`` per scope
+        whose rules apply to the class, in the order Tidy3D ran them. A scope that
+        reports an error ends the run.
+
+        Pydantic re-runs a nested model's after validators each time a parent that
+        holds it validates. The model is frozen and these rules read only its own
+        fields, so once they pass with no diagnostics, a re-run returns without
+        translating. A model whose rules warned runs them again, so its warnings are
+        logged and captured as before.
+        """
+        if self._migrated_model_rules_passed:
+            return self
+        translation = self._translate_migrated_validation_scope()
+        diagnostics: tuple[ValidationDiagnostic, ...] = ()
+        for rules in validate_model_rules:
+            reported = rules(translation)
+            diagnostics += reported
+            if any(diagnostic.severity == "error" for diagnostic in reported):
+                break
+        self._present_migrated_validation_diagnostics(diagnostics, error_types=error_types)
+        if not diagnostics:
+            self._migrated_model_rules_passed = True
+        return self
 
     def __hash__(self) -> int:
         """Hash method."""
@@ -972,13 +1008,10 @@ class Tidy3dBaseModel(BaseModel):
         return processed
 
     def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
-        """Copy without validation, discarding a migrated scope invalidated by updates."""
+        """Copy without validation; updated fields have not passed the migrated model rules."""
         copied = super().model_copy(update=update, deep=deep)
         if update:
-            # A shallow Pydantic copy shares this private cache with its source.
-            # Isolate the cache before removing the translated scope from the copy.
-            copied._cached_properties = dict(copied._cached_properties)
-            copied._cached_properties.pop("_migrated_validation_scope", None)
+            copied._migrated_model_rules_passed = False
         return copied
 
     def copy(
