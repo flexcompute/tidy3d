@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 CANALI_V_SAT_FLOOR = 5e5
 CANALI_BETA_MIN = 0.1
 CANALI_BETA_MAX = 20.0
+# Reference density [cm^-3] of the quasi-Fermi driving force when none is given.
+CANALI_REFERENCE_DENSITY = 1e10
 
 _SURFACE_DEPENDENCE_DESCRIPTION = (
     "Optional surface mobility degradation near semiconductor/insulator interfaces, "
@@ -52,8 +54,23 @@ class CanaliFieldDependence(Tidy3dBaseModel):
             {\\left[1 + \\left(\\mu_{low} F / v_{sat}\\right)^\\beta\\right]^{1/\\beta}}
 
     where :math:`F` [V/cm] is the magnitude of the local driving force on that
-    carrier: the electrostatic field plus the band-structure and thermal-gradient
-    contributions. The saturation velocity and the Canali exponent follow
+    carrier, selected by ``driving_force``. With ``"electric_field"`` it is the
+    electrostatic field plus the band-structure and thermal-gradient
+    contributions. With ``"quasi_fermi_gradient"`` it is the gradient of the
+    carrier's quasi-Fermi potential [2]_, [3]_, [4]_, evaluated with the
+    carrier density :math:`c` replaced by :math:`c + n_0`, where :math:`n_0` is
+    ``reference_density``. Where :math:`c \\gg n_0` this gradient vanishes at
+    equilibrium, so the built-in fields of junctions and heterointerfaces do not
+    reduce the mobility there. Where :math:`c` is comparable to or below
+    :math:`n_0`, as in depleted regions, the fraction :math:`n_0 / (c + n_0)` of
+    the electric-field driving force remains, so built-in and gate fields can still
+    reduce the mobility of those carriers. With either driving force the mobility
+    drops wherever the carrier velocity approaches :math:`v_{sat}`, for example
+    where minority carriers enter through an ohmic contact. With
+    ``"quasi_fermi_gradient"`` each bias point is solved twice, so the DC solve can
+    take up to about twice as long.
+
+    The saturation velocity and the Canali exponent follow
     power-law temperature dependences
 
     .. math::
@@ -76,6 +93,15 @@ class CanaliFieldDependence(Tidy3dBaseModel):
            drift velocity measurements in silicon and their empirical relation
            to electric field and temperature. IEEE Transactions on Electron
            Devices, 22(11):1045-1047, 1975.
+    .. [2] S. Selberherr. Analysis and Simulation of Semiconductor Devices.
+           Springer, Vienna, 1984.
+    .. [3] S. Selberherr, W. Hänsch, M. Seavey, and J. Slotboom. The evolution of
+           the MINIMOS mobility model. Solid-State Electronics, 33(11):1425-1436,
+           1990.
+    .. [4] T. Simlinger, H. Brech, T. Grave, and S. Selberherr. Simulation of
+           submicron double-heterojunction high electron mobility transistors
+           with MINIMOS-NT. IEEE Transactions on Electron Devices,
+           44(5):700-707, 1997.
 
     Note
     ----
@@ -160,6 +186,51 @@ class CanaliFieldDependence(Tidy3dBaseModel):
         "``beta(T) = beta * (T/300)**exp_beta``.",
     )
 
+    driving_force: Literal["electric_field", "quasi_fermi_gradient"] = Field(
+        default="electric_field",
+        title="Driving force",
+        description="Driving force :math:`F` that saturates the carrier velocity: the "
+        "electric field acting on the carrier, or the gradient of its quasi-Fermi "
+        "potential. Where the carrier density is well above ``reference_density``, the "
+        "quasi-Fermi gradient does not saturate the carrier under the built-in fields of "
+        "junctions and heterointerfaces at equilibrium. With ``'quasi_fermi_gradient'`` "
+        "each bias point is solved twice, so the DC solve can take up to about twice as "
+        "long.",
+    )
+
+    reference_density: PositiveFloat | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        title="Reference density",
+        description="Density :math:`n_0` added to the carrier density in the quasi-Fermi "
+        "potential of the ``'quasi_fermi_gradient'`` driving force, which keeps the driving "
+        "force finite in depleted regions. Where the carrier density is comparable to or "
+        "below it, the driving force approaches the electric field. Valid only with that "
+        "driving force; when ``None``, 1e10 cm^-3 is used.",
+        json_schema_extra={"units": PERCMCUBE},
+    )
+
+    @model_validator(mode="after")
+    def _validate_reference_density_driving_force(self) -> Self:
+        """Ensure 'reference_density' is only set with the quasi-Fermi driving force."""
+        if self.reference_density is not None and self.driving_force != "quasi_fermi_gradient":
+            self._raise_validation_error_at_loc(
+                "'reference_density' applies only to driving_force='quasi_fermi_gradient'. "
+                "Remove 'reference_density', or set driving_force='quasi_fermi_gradient'.",
+                "reference_density",
+            )
+        return self
+
+    @property
+    def reference_density_resolved(self) -> float | None:
+        """'reference_density' with its default for the quasi-Fermi driving force, or
+        ``None`` for the electric field."""
+        if self.driving_force != "quasi_fermi_gradient":
+            return None
+        if self.reference_density is None:
+            return CANALI_REFERENCE_DENSITY
+        return self.reference_density
+
 
 class LombardiSurfaceDependence(Tidy3dBaseModel):
     """Surface mobility degradation with the Lombardi model.
@@ -199,13 +270,17 @@ class LombardiSurfaceDependence(Tidy3dBaseModel):
     a field pushing the carrier toward the interface degrades its mobility.
 
     With :class:`CanaliFieldDependence` on the same mobility model, the degraded
-    mobility is the low-field input of the velocity saturation, and the field that
-    saturates the velocity loses its interface-normal component in proportion to
-    :math:`D`: no current crosses an insulator, so near the interface the current
-    runs along it. Within :math:`6.5\\,l_{crit}` of the interface, that field also
-    comes from a gradient fit that resolves the potential's curvature normal to the
-    interface, so this model changes the velocity saturation there even where
-    :math:`D` is negligible.
+    mobility is the low-field input of the velocity saturation. With the
+    ``"electric_field"`` driving force, the field that saturates the velocity loses
+    its interface-normal component in proportion to :math:`D`: no current crosses
+    an insulator, so near the interface the current runs along it. Within
+    :math:`6.5\\,l_{crit}` of the interface, that field also comes from a gradient
+    fit that resolves the potential's curvature normal to the interface, so this
+    model changes the velocity saturation there even where :math:`D` is negligible.
+    With ``"quasi_fermi_gradient"`` the whole quasi-Fermi gradient saturates the
+    velocity [2]_. Where the carrier density is well above ``reference_density``, as
+    across the inversion layer, the confining field does not enter it, since no
+    current crosses the interface [3]_.
 
     Where the nearest interface switches, as across the bisector of a corner or
     the middle of a film between two insulators, the direction of
@@ -217,6 +292,8 @@ class LombardiSurfaceDependence(Tidy3dBaseModel):
     .. [2] S. Selberherr, W. Hänsch, M. Seavey, and J. Slotboom. The evolution of
            the MINIMOS mobility model. Solid-State Electronics, 33(11):1425-1436,
            1990.
+    .. [3] V. Palankovski. Simulation of Heterojunction Bipolar Transistors.
+           Dissertation, Technische Universität Wien, 2000.
 
     Note
     ----

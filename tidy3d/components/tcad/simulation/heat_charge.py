@@ -3657,16 +3657,21 @@ class HeatChargeSimulation(AbstractSimulation):
         then negative voltages by increasing magnitude, inserting a warm-start
         solve per ``convergence_dv`` interval within each pass. Doping ramp-up
         adds ``tolerance_settings.ramp_up_iters - 1`` solves. With impact
-        ionization every bias point is solved twice, first with the source
-        frozen and then with it active, for every formulation. Charge sims only.
+        ionization, or with a quasi-Fermi-gradient driving force in a Canali
+        field dependence, every bias point is solved twice: first with the
+        ionization source frozen and the quasi-Fermi-driven carriers at their
+        low-field mobility, then with both active. Ramp levels are solved once.
+        Charge sims only.
         """
         voltages = self._dc_voltages
 
         # Doping ramp: the initial solve runs once per ramp level.
         ramp_solves = self.analysis_spec.tolerance_settings.ramp_up_iters - 1
 
-        # Staged ionization re-solves every bias point, but not the ramp levels.
-        solves_per_point = 2 if self._uses_impact_ionization() else 1
+        # Staged ionization or quasi-Fermi saturation re-solves every bias point,
+        # but not the ramp levels.
+        staged = self._uses_impact_ionization() or self._uses_quasi_fermi_driving_force()
+        solves_per_point = 2 if staged else 1
 
         if len(voltages) <= 1:
             # No sweep: one direct solve at the requested bias.
@@ -3868,6 +3873,14 @@ class HeatChargeSimulation(AbstractSimulation):
                 if isinstance(model, SelberherrImpactIonization):
                     return True
         return False
+
+    def _uses_quasi_fermi_driving_force(self) -> bool:
+        """Whether any semiconductor saturates a carrier velocity on a quasi-Fermi gradient."""
+        return any(
+            getattr(mobility.field_dependence, "driving_force", None) == "quasi_fermi_gradient"
+            for _loc, charge in self._iter_semiconductor_charge_media()
+            for mobility in (charge.mobility_n, charge.mobility_p)
+        )
 
     def _uses_grad_quasi_fermi_impact_ionization(self) -> bool:
         """Whether any semiconductor selects the GradQuasiFermi formulation."""
