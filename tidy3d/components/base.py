@@ -404,7 +404,6 @@ class Tidy3dBaseModel(BaseModel):
 
     _cached_properties: dict = PrivateAttr(default_factory=dict)
     _has_tracers: bool | None = PrivateAttr(default=None)
-    _migrated_model_rules_passed: bool = PrivateAttr(default=False)
 
     def model_dump_json(self, *args: Any, **kwargs: Any) -> str:
         """Serialize with stable float exponent formatting across pydantic_core versions."""
@@ -697,15 +696,7 @@ class Tidy3dBaseModel(BaseModel):
         ``_validate_model`` calls this with one ``validate_model_rules`` per scope
         whose rules apply to the class, in the order Tidy3D ran them. A scope that
         reports an error ends the run.
-
-        Pydantic re-runs a nested model's after validators each time a parent that
-        holds it validates. The model is frozen and these rules read only its own
-        fields, so once they pass with no diagnostics, a re-run returns without
-        translating. A model whose rules warned runs them again, so its warnings are
-        logged and captured as before.
         """
-        if self._migrated_model_rules_passed:
-            return self
         translation = self._translate_migrated_validation_scope()
         diagnostics: tuple[ValidationDiagnostic, ...] = ()
         for rules in validate_model_rules:
@@ -713,10 +704,7 @@ class Tidy3dBaseModel(BaseModel):
             diagnostics += reported
             if any(diagnostic.severity == "error" for diagnostic in reported):
                 break
-        self._present_migrated_validation_diagnostics(diagnostics, error_types=error_types)
-        if not diagnostics:
-            self._migrated_model_rules_passed = True
-        return self
+        return self._present_migrated_validation_diagnostics(diagnostics, error_types=error_types)
 
     def __hash__(self) -> int:
         """Hash method."""
@@ -1006,13 +994,6 @@ class Tidy3dBaseModel(BaseModel):
                 processed[field_name] = value
 
         return processed
-
-    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
-        """Copy without validation; updated fields have not passed the migrated model rules."""
-        copied = super().model_copy(update=update, deep=deep)
-        if update:
-            copied._migrated_model_rules_passed = False
-        return copied
 
     def copy(
         self,
