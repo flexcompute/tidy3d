@@ -78,7 +78,9 @@ def plot(
 
     # find shapes that intersect self at plane
     axis, _position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-    shapes_intersect = self.intersections_plane(x=x, y=y, z=z, section_tolerance_2d=True)
+    shapes_intersect = self.to_static().intersections_plane(
+        x=x, y=y, z=z, section_tolerance_2d=True
+    )
 
     plot_params = self.plot_params
     if viz_spec is not None:

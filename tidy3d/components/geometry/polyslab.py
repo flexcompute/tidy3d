@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 import shapely
-from autograd.tracer import getval
 from numpy.polynomial.legendre import leggauss as _leggauss
 from pydantic import Field, field_validator, model_validator
 
@@ -659,10 +658,12 @@ class PolySlab(base.Planar):
         if self.bulges is None:
             return self
         if not np.allclose(self.bulges, 0):
-            if not math.isclose(self.sidewall_angle, 0):
+            # a traced angle is rejected even at 0: its derivative probes unsupported nonzero angles
+            if hasbox(self.sidewall_angle) or not self._has_vertical_sidewall:
                 self._raise_validation_error_at_loc(
                     SetupError(
-                        "Arc segments are present in the polygon. 'sidewall_angle' must be 0. "
+                        "Arc segments are present in the polygon. 'sidewall_angle' must be 0 "
+                        "and cannot be traced by autograd. "
                         "A general treatment for slanted polyslab containing arc segments "
                         "will be available in future releases."
                     ),
@@ -799,8 +800,7 @@ class PolySlab(base.Planar):
         val = self.vertices
 
         # no need to validate anything here
-        # sidewall_angle may be autograd-traced; use static value for this check only
-        if math.isclose(getval(self.sidewall_angle), 0):
+        if self._has_vertical_sidewall:
             return self
 
         # apply dilation
@@ -1145,6 +1145,11 @@ class PolySlab(base.Planar):
         return self._canonical_vertices_and_bulges[1]
 
     @cached_property
+    def _has_vertical_sidewall(self) -> bool:
+        """Whether the sidewall angle is exactly zero, judged on its static value."""
+        return get_static(self.sidewall_angle) == 0
+
+    @cached_property
     def _has_arc_segments(self) -> bool:
         """Whether this PolySlab has any non-zero bulge (arc) segments."""
         return not np.allclose(self._bulges, 0)
@@ -1218,10 +1223,10 @@ class PolySlab(base.Planar):
             ys_slab = y[inside_height]
 
             # vertical sidewall
-            if math.isclose(self.sidewall_angle, 0):
+            if self._has_vertical_sidewall:
                 # Use discretized polygon for arc segments
                 poly_vertices = self._discretized_reference_polygon
-                face_polygon = shapely.Polygon(poly_vertices).buffer(fp_eps)
+                face_polygon = self.make_shapely_polygon(poly_vertices).buffer(fp_eps)
                 shapely.prepare(face_polygon)
                 inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs_slab, y=ys_slab)
                 inside_polygon[inside_height] = inside_polygon_slab
@@ -1299,7 +1304,7 @@ class PolySlab(base.Planar):
                         )
                     inside_polygon[inside_height] = inside_polygon_slab
         else:
-            if math.isclose(self.sidewall_angle, 0):
+            if self._has_vertical_sidewall:
                 poly_vertices = self._discretized_reference_polygon
             else:
                 poly_vertices = self._shift_vertices(self.middle_polygon, dist)[0]
@@ -1316,7 +1321,7 @@ class PolySlab(base.Planar):
         z: NDArray[float],
     ) -> NDArray[bool] | NotImplementedType:
         """Check a transformed PolySlab on a meshgrid, if the specialized path applies."""
-        if np.isclose(self.sidewall_angle, 0):
+        if self._has_vertical_sidewall:
             return NotImplemented
 
         # A general transform destroys the local meshgrid structure that ``PolySlab.inside`` can
@@ -1386,12 +1391,20 @@ class PolySlab(base.Planar):
             )
         return is_inside
 
+    def _raise_if_traced(self, operation: str) -> None:
+        """Raise ``AdjointError`` if this slab carries tracers, which ``operation`` cannot handle."""
+        if self._strip_traced_fields():
+            raise AdjointError(
+                f"'PolySlab' {operation} do not support autograd-traced fields. Call it on "
+                "'polyslab.to_static()' to get the shapes without derivative information."
+            )
+
     @verify_packages_import(["trimesh"])
     def _make_tilted_plane_mesh(self) -> Any:
         """Return a trimesh representation for tilted plane intersections."""
         import trimesh
 
-        if math.isclose(self.sidewall_angle, 0):
+        if self._has_vertical_sidewall:
             base_poly = self._discretized_reference_polygon
             top_poly = base_poly
         else:
@@ -1405,9 +1418,7 @@ class PolySlab(base.Planar):
             )
         base_triangles = triangulation.triangulate(base_poly)
         top_triangles = (
-            base_triangles
-            if math.isclose(self.sidewall_angle, 0)
-            else triangulation.triangulate(top_poly)
+            base_triangles if self._has_vertical_sidewall else triangulation.triangulate(top_poly)
         )
 
         n = len(base_poly)
@@ -1452,6 +1463,7 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        self._raise_if_traced("tilted plane intersections ('intersections_tilted_plane')")
         mesh = self._make_tilted_plane_mesh()
         section = mesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
@@ -1474,7 +1486,7 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        if math.isclose(self.sidewall_angle, 0):
+        if self._has_vertical_sidewall:
             # Use discretized polygon for arc segments
             poly_vertices = self._discretized_reference_polygon
             return [self.make_shapely_polygon(poly_vertices)]
@@ -1519,6 +1531,10 @@ class PolySlab(base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
+        self._raise_if_traced(
+            "intersections with planes parallel to the slab axis ('intersections_plane')"
+        )
+
         # find out all z_i where the plane will intersect the vertex
         z0 = self.center_axis
         z_base = z0 - self.finite_length_axis / 2
@@ -1539,7 +1555,7 @@ class PolySlab(base.Planar):
             z_max = np.inf if np.isposinf(h_top) else z_base + h_top
 
             # for vertical sidewall, no need for complications
-            if math.isclose(self.sidewall_angle, 0):
+            if self._has_vertical_sidewall:
                 ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
                     self._discretized_reference_polygon, position, axis_ordered
                 )
@@ -1564,7 +1580,7 @@ class PolySlab(base.Planar):
                 minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis)
                 maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis)
 
-                if math.isclose(self.sidewall_angle, 0):
+                if self._has_vertical_sidewall:
                     polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
                 else:
                     angle_min = ints_angle[2 * y_index]
@@ -1614,7 +1630,7 @@ class PolySlab(base.Planar):
         np.ndarray
             Height (relative to the base) where the plane will intersect with vertices.
         """
-        if math.isclose(self.sidewall_angle, 0):
+        if self._has_vertical_sidewall:
             return np.array([])
 
         if self._has_arc_segments:
@@ -1869,8 +1885,7 @@ class PolySlab(base.Planar):
 
         # check for the maximum possible contribution from dilation/slant on each side
         max_offset = self.dilation
-        # sidewall_angle may be autograd-traced; unbox for this check
-        if not math.isclose(getval(self.sidewall_angle), 0):
+        if not self._has_vertical_sidewall:
             if self.reference_plane == "bottom":
                 max_offset += max(0, -self._tanq * self.finite_length_axis)
             elif self.reference_plane == "top":
@@ -1909,8 +1924,6 @@ class PolySlab(base.Planar):
 
     def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:
         """Convert extrusion length to offset distance."""
-        if math.isclose(self.sidewall_angle, 0):
-            return 0
         return -extrusion * self._tanq
 
     @staticmethod
@@ -2182,8 +2195,8 @@ class PolySlab(base.Planar):
             Shift along x and y direction.
         """
 
-        # 'dist' may be autograd-traced; unbox for the zero-check only
-        if math.isclose(getval(dist), 0):
+        # a traced zero shift takes the general path, which keeps d(vertices)/d(dist)
+        if not hasbox(dist) and math.isclose(dist, 0):
             return vertices, np.zeros(vertices.shape[0], dtype=float), None
 
         def rot90(v: tuple[NDArray, NDArray]) -> NDArray:
@@ -3671,7 +3684,7 @@ class ComplexPolySlabBase(PolySlab):
         num_division_count = 0
         # initialize sub-polyslab parameters
         sub_polyslab_dict = self.model_dump(exclude={TYPE_TAG_STR}).copy()
-        if math.isclose(self.sidewall_angle, 0):
+        if self._has_vertical_sidewall:
             return [PolySlab.model_validate(sub_polyslab_dict)]
 
         sub_polyslab_dict.update({"dilation": 0})  # dilation accounted in setup

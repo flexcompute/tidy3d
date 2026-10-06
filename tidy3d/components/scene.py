@@ -433,7 +433,7 @@ class Scene(Tidy3dBaseModel):
 
             structures_merged = []
             for structure in structures:
-                intersections = structure.geometry.intersections_plane(**xyz_kwargs)
+                intersections = structure.geometry.to_static().intersections_plane(**xyz_kwargs)
                 if len(intersections) > 0:
                     structures_merged.append(structure)
             return structures_merged
@@ -777,7 +777,9 @@ class Scene(Tidy3dBaseModel):
 
         medium_shapes = []
         for structure in structures:
-            intersections = plane.intersections_with(structure.geometry, section_tolerance_2d=True)
+            intersections = plane.intersections_with(
+                structure.geometry.to_static(), section_tolerance_2d=True
+            )
             for shape in intersections:
                 if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
@@ -843,7 +845,7 @@ class Scene(Tidy3dBaseModel):
             List of shapes and their property value on the plane after merging.
         """
         return merging_geometries_on_plane(
-            [structure.geometry for structure in structures],
+            [structure.geometry.to_static() for structure in structures],
             plane,
             property_list,
             section_tolerance_2d=section_tolerance_2d,
