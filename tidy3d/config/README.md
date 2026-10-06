@@ -17,6 +17,11 @@
 3. Handlers push side effects (logging level, env vars, cache dirs). Calls to `update_section` reload the tree and re-run the relevant handlers.
 4. Entering `with config as scoped_config:` snapshots runtime overrides and restores them on exit, including nested contexts.
 
+`config.validation.check_ports_reach_pml` defaults to `False`. When enabled, full validation
+mode also warns before upload if a nearby mode port's structures do not span the absorbing
+layer. Fast mode skips this optional check; required pre-upload checks still run.
+`Simulation.check_ports_reach_pml()` remains available explicitly in either mode.
+
 ## Component Map
 
 ```mermaid

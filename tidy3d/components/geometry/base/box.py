@@ -425,6 +425,20 @@ class Box(SimplePlaneIntersection, Centered):
         # intersect all shapes with the input self
         bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind)[1] for bounds in self.bounds)
 
+        # A finite, contained section needs no window polygon or clipping operation.
+        other_min, other_max = (
+            self.pop_axis(bounds, axis=normal_ind)[1] for bounds in other.bounds
+        )
+        if (
+            not section_tolerance_2d
+            and all(
+                -inf < bmin <= omin and omax <= bmax < inf
+                for bmin, bmax, omin, omax in zip(bs_min, bs_max, other_min, other_max)
+            )
+            and all(shape.area > 0 for shape in shapes_plane)
+        ):
+            return [Geometry.evaluate_inf_shape(shape) for shape in shapes_plane]
+
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
         return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]

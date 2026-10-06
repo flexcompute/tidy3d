@@ -347,7 +347,8 @@ def fast_validation() -> Generator[None, None, None]:
     serializer are untouched, and every validator that normalises or derives a value still
     runs, so well-formed input produces objects that dump identically to fully validated ones.
     Meant for data that was already validated, such as files accepted by the server;
-    ``validate_pre_upload`` still runs its own checks. The override is context-local
+    ``validate_pre_upload`` still runs its required checks, but skips optional port-to-PML
+    warnings. The override is context-local
     (``contextvars``), so other threads and tasks keep their own mode.
     """
     token = VALIDATE_OVERRIDE.set("fast")

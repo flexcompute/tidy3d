@@ -80,7 +80,7 @@ Optional overrides that tweak solver behavior at runtime.
 Validation (``config.validation``)
 ----------------------------------
 
-Controls how much validation runs when models are built or loaded.
+Controls how much validation runs when models are built or loaded, and enables optional checks.
 
 .. list-table::
    :header-rows: 1
@@ -97,10 +97,29 @@ Controls how much validation runs when models are built or loaded.
        check validators and keeps pydantic's type checking, field constraints, coercion, every
        validator that normalises or derives a value, and serialization, so already validated
        data loads several times faster and dumps identically. Use it only for data that was
-       already validated, such as files accepted by the server; ``validate_pre_upload`` is
-       unaffected. ``from_file(..., validate=...)`` overrides it for one call, context-locally.
+       already validated, such as files accepted by the server. Required checks in
+       ``validate_pre_upload`` still run; the optional port-to-PML warning is skipped in fast
+       mode. ``from_file(..., validate=...)`` overrides the mode for one call, context-locally.
        Never written to disk, not even with a named profile: it applies to the current process
        only.
+   * - ``check_ports_reach_pml``
+     - ``False``
+     - Yes
+     - Enable pre-upload warnings when a mode port near an absorbing boundary crosses a
+       structure that does not span the full absorbing layer. Automatic structure extrusion
+       is accounted for. These warnings run only in full validation mode.
+       ``Simulation.check_ports_reach_pml()`` remains callable explicitly in either mode,
+       regardless of this setting, and also checks ports farther from the boundaries.
+
+To enable the warnings for one validation call:
+
+.. code-block:: python
+
+   with config as scoped_config:
+       scoped_config.validation.check_ports_reach_pml = True
+       scoped_config.validation.mode = "full"
+       sim.validate_pre_upload()
+
 
 Microwave (``config.microwave``)
 --------------------------------

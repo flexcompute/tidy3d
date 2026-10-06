@@ -877,9 +877,22 @@ class ValidationConfig(ConfigSection):
             "validator that normalises or derives a value, and serialization, which makes building "
             "and loading models several times faster; use it for data that was already validated, "
             "such as files accepted by the server. Never written to disk, not even in a named "
-            "profile. 'validate_pre_upload' is unaffected."
+            "profile. Required pre-upload checks are unaffected; the optional port-to-PML "
+            "warning runs only in full mode."
         ),
         json_schema_extra={"persist": False},
+    )
+
+    check_ports_reach_pml: bool = Field(
+        default=False,
+        title="Check mode ports reach PML",
+        description=(
+            "Enable pre-upload warnings for mode ports near an absorbing boundary whose "
+            "connected structures do not span the full absorbing layer. Runs only in full "
+            "validation mode. 'Simulation.check_ports_reach_pml()' can be called explicitly "
+            "in either mode, regardless of this setting."
+        ),
+        json_schema_extra={"persist": True},
     )
 
 
