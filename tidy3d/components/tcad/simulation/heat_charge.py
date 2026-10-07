@@ -599,6 +599,7 @@ class HeatChargeSimulation(AbstractSimulation):
             ("boundary_spec",), self._check_thermal_contact_resistance_placement
         )
         self._call_with_validation_loc(("structures",), self._check_heat_only_features_in_charge)
+        self._call_with_validation_loc(("structures",), self._check_solids_have_charge_medium)
         self._call_with_validation_loc(
             ("analysis_spec",), self._check_semiconductor_electric_bcs_require_charge_analysis
         )
@@ -2806,6 +2807,39 @@ class HeatChargeSimulation(AbstractSimulation):
                     "charge simulation.",
                     "boundary_spec",
                     i,
+                )
+        return self
+
+    def _check_solids_have_charge_medium(self) -> Self:
+        """Require a 'charge' medium on every solid of a non-isothermal charge simulation.
+
+        A solid that conducts heat in the coupled thermal solve also takes part in the
+        electrostatics, so its electrical role and permittivity must be declared. Fluids, and
+        isothermal or prescribed-temperature charge analyses, are unaffected."""
+        if not self._thermal_solver_active:
+            return self
+
+        media_sources = [(("medium",), self.medium, "The background 'medium'")]
+        media_sources.extend(
+            (("structures", i), struct.medium, f"Structure '{struct.name}'")
+            if struct.name
+            else (("structures", i), struct.medium, f"'structures[{i}]'")
+            for i, struct in enumerate(self.structures)
+        )
+        for loc, medium, label in media_sources:
+            heat_spec = (
+                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
+            )
+            if not isinstance(heat_spec, SolidMedium):
+                continue
+            charge = None if medium is heat_spec else medium.charge
+            if charge is None:
+                self._raise_validation_error_at_loc(
+                    f"{label} has a solid heat medium but no 'charge' medium. In a "
+                    "non-isothermal charge simulation every solid also takes part in the "
+                    "electrostatics. For an insulating solid, use a 'MultiPhysicsMedium' with "
+                    "'charge=ChargeInsulatorMedium(permittivity=...)'.",
+                    *loc,
                 )
         return self
 
