@@ -519,7 +519,7 @@ def _abc_boundaries_homogeneous(self: Any) -> Self:
 def _validate_no_structures_pml(self: Any) -> None:
     """Ensure no structures terminate / have bounds inside of PML."""
 
-    pml_thicks = np.array(self.pml_thicknesses).T
+    pml_thicks = self.pml_thicknesses
     sim_bounds = self.bounds
     bound_spec = self.boundary_spec.to_list
 
@@ -527,12 +527,12 @@ def _validate_no_structures_pml(self: Any) -> None:
         for i, structure in enumerate(self.static_structures):
             geo_bounds = structure.geometry.bounds
             warn = False  # will only warn once per structure
-            for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
-                sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
-            ):
-                for sim_pos, geo_pos, pml, bound_edge in zip(
-                    sim_bound, geo_bound, pml_thick, bound_dim
-                ):
+            for axis in range(3):
+                for side, pm_val in ((0, -1), (1, 1)):
+                    sim_pos = sim_bounds[side][axis]
+                    geo_pos = geo_bounds[side][axis]
+                    pml = pml_thicks[axis][side]
+                    bound_edge = bound_spec[axis][side]
                     sim_pos_pml = sim_pos + pm_val * pml
                     in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
                     in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
