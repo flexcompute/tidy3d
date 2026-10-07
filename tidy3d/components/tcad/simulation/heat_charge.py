@@ -4113,7 +4113,9 @@ class HeatChargeSimulation(AbstractSimulation):
             "linear_solver='direct' factorizes the system matrix instead of iterating "
             "on it. This is more robust where the iterative solver converges slowly or "
             "fails, but it uses considerably more memory, particularly on large meshes, "
-            "and can be slower."
+            "and can be slower.",
+            # 'updated_copy' re-validates, so a bias sweep would repeat this per point
+            log_once=True,
         )
 
         if not isinstance(self.analysis_spec, SteadyChargeDCAnalysis):
@@ -4130,7 +4132,8 @@ class HeatChargeSimulation(AbstractSimulation):
             log.warning(
                 f"{', '.join(ignored)} in 'ChargeToleranceSpec' "
                 f"{'configure' if len(ignored) > 1 else 'configures'} the iterative linear "
-                "solver and will be ignored with linear_solver='direct'."
+                "solver and will be ignored with linear_solver='direct'.",
+                log_once=True,
             )
         return self
 
