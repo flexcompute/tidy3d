@@ -12,10 +12,14 @@ from flexcompute.core._migration.em.eme.schema.validation_schema import (
 from flexcompute.core._migration.em.eme.schema.validation_schema import (
     MAX_NUM_MODES as _MAX_NUM_MODES,
 )
+from flexcompute.core._migration.em.eme.schema.validation_schema import (
+    GridDomainInput,
+)
 from flexcompute.core._migration.em.eme.validation import (
+    validate,
     validate_group_index_step,
 )
-from pydantic import Field, PositiveInt, field_validator, model_validator
+from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
@@ -38,6 +42,25 @@ if TYPE_CHECKING:
 MAX_NUM_MODES = _MAX_NUM_MODES
 MAX_NUM_EME_CELLS = _MAX_NUM_EME_CELLS
 MAX_NUM_REPS = 100000
+
+
+def _check_grid_spec_domain(
+    boundaries: ArrayFloat1D,
+    sim_rmin: float,
+    sim_rmax: float,
+    boundary_field: Literal["boundaries", "subgrid_boundaries"],
+) -> None:
+    """Present the first shared domain diagnostic at the legacy factory phase."""
+    spec = GridDomainInput.model_construct(
+        boundary_field=boundary_field,
+        boundaries=tuple(boundaries),
+        sim_rmin=sim_rmin,
+        sim_rmax=sim_rmax,
+        tolerance=fp_eps,
+    )
+    diagnostics = validate(spec).diagnostics
+    if diagnostics:
+        raise ValidationError(diagnostics[0].message)
 
 
 class EMEModeSpec(ModeSpec):
@@ -401,14 +424,7 @@ class EMEExplicitGrid(EMEGridSpec):
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
         if len(self.boundaries) > 0:
-            if sim_rmin - self.boundaries[0] > fp_eps:
-                raise ValidationError(
-                    "The first item in 'boundaries' is outside the simulation domain."
-                )
-            if self.boundaries[-1] - sim_rmax > fp_eps:
-                raise ValidationError(
-                    "The last item in 'boundaries' is outside the simulation domain."
-                )
+            _check_grid_spec_domain(self.boundaries, sim_rmin, sim_rmax, "boundaries")
 
         boundaries = [sim_rmin, *list(self.boundaries), sim_rmax]
         return EMEGrid(
@@ -542,14 +558,10 @@ class EMECompositeGrid(EMEGridSpec):
         bounds = []
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
-        if sim_rmin - self.subgrid_boundaries[0] > fp_eps:
-            raise ValidationError(
-                "The first item in 'subgrid_boundaries' is outside the simulation domain."
-            )
-        if self.subgrid_boundaries[-1] - sim_rmax > fp_eps:
-            raise ValidationError(
-                "The last item in 'subgrid_boundaries' is outside the simulation domain."
-            )
+        if len(self.subgrid_boundaries) == 0:
+            # Retain the composite factory's historical empty-boundary error.
+            _ = self.subgrid_boundaries[0]
+        _check_grid_spec_domain(self.subgrid_boundaries, sim_rmin, sim_rmax, "subgrid_boundaries")
         rmin = sim_rmin
         for rmax in self.subgrid_boundaries:
             bounds.append((rmin, rmax))
@@ -775,54 +787,6 @@ class EMEGrid(Box):
         title="Cell boundaries",
         description="Boundary coordinates of the EME cells.",
     )
-
-    @field_validator("mode_specs")
-    @classmethod
-    def _validate_size(cls, val: list[EMEModeSpec]) -> list[EMEModeSpec]:
-        """Check grid size and num modes."""
-        num_eme_cells = len(val)
-        if num_eme_cells > MAX_NUM_EME_CELLS:
-            raise SetupError(
-                f"Simulation has {num_eme_cells:.2e} EME cells, "
-                f"a maximum of {MAX_NUM_EME_CELLS:.2e} are allowed."
-            )
-
-        num_modes = np.max([mode_spec.num_modes for mode_spec in val])
-        if num_modes > MAX_NUM_MODES:
-            raise SetupError(
-                f"Simulation has {num_modes:.2e} EME modes, "
-                f"a maximum of {MAX_NUM_MODES:.2e} are allowed."
-            )
-        return val
-
-    @model_validator(mode="after")
-    def _validate_boundaries(self) -> Self:
-        """Check that boundaries is increasing, in simulation domain, and contains
-        one more element than 'mode_specs'."""
-        boundaries = self.boundaries
-        mode_specs = self.mode_specs
-        axis = self.axis
-        center = self.center[axis]
-        size = self.size[axis]
-        sim_rmin = center - size / 2
-        sim_rmax = center + size / 2
-        if len(mode_specs) + 1 != len(boundaries):
-            raise ValidationError(
-                "There must be exactly one more item in 'boundaries' than in 'mode_specs', "
-                "so that there is one mode spec per EME cell."
-            )
-        rmin = boundaries[0]
-        if sim_rmin - rmin > fp_eps:
-            raise ValidationError(
-                "The first item in 'boundaries' is outside the simulation domain."
-            )
-        for rmax in boundaries[1:]:
-            if rmax < rmin:
-                raise ValidationError("The 'subgrid_boundaries' must be increasing.")
-            rmin = rmax
-        if rmax - sim_rmax > fp_eps:
-            raise ValidationError("The last item in 'boundaries' is outside the simulation domain.")
-        return self
 
     @property
     def centers(self) -> Coords1D:

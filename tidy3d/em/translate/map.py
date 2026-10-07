@@ -247,6 +247,7 @@ COMPONENT_CONSTRUCTION_TYPES = frozenset(
         "tidy3d.components.eme.grid:EMEUniformGrid",
         "tidy3d.components.eme.grid:EMEExplicitGrid",
         "tidy3d.components.eme.grid:EMECompositeGrid",
+        "tidy3d.components.eme.grid:EMEGrid",
         "tidy3d.components.eme.sweep:EMEPeriodicitySweep",
     }
 )
@@ -254,6 +255,12 @@ COMPONENT_CONSTRUCTION_TYPES = frozenset(
 COMPONENT_ERROR_TYPES = {
     "em.eme.grid_repetitions_exceeded": "tidy3d.exceptions:SetupError",
     "em.eme.periodicity_repetitions_exceeded": "tidy3d.exceptions:SetupError",
+    "em.eme.constructed_grid_cells_exceeded": "tidy3d.exceptions:SetupError",
+    "em.eme.constructed_grid_modes_exceeded": "tidy3d.exceptions:SetupError",
+    "em.eme.constructed_grid_boundary_count": "tidy3d.exceptions:ValidationError",
+    "em.eme.constructed_grid_first_boundary_outside": "tidy3d.exceptions:ValidationError",
+    "em.eme.constructed_grid_boundary_order": "tidy3d.exceptions:ValidationError",
+    "em.eme.constructed_grid_last_boundary_outside": "tidy3d.exceptions:ValidationError",
 }
 
 
