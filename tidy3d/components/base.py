@@ -2066,6 +2066,8 @@ class Tidy3dBaseModel(BaseModel):
             return TracedDict()
 
         field_mapping = {}
+        # leaves that can't hold tracers; not recursing into them saves a call per number
+        untraced_leaf = (str, int, float, type(None))
 
         def handle_value(x: Any, path: tuple[str, ...]) -> None:
             """recursively update ``field_mapping`` with path to the autograd data."""
@@ -2085,12 +2087,14 @@ class Tidy3dBaseModel(BaseModel):
             # for sequences, add (i,) to the path and handle each value individually
             elif isinstance(x, (list, tuple)):
                 for i, val in enumerate(x):
-                    handle_value(val, path=(*path, i))
+                    if not isinstance(val, untraced_leaf):
+                        handle_value(val, path=(*path, i))
 
             # for dictionaries, add the (key,) to the path and handle each value individually
             elif isinstance(x, dict):
                 for key, val in x.items():
-                    handle_value(val, path=(*path, key))
+                    if not isinstance(val, untraced_leaf):
+                        handle_value(val, path=(*path, key))
 
         # recursively parse the dictionary of this object
         self_dict = self.model_dump(round_trip=True)

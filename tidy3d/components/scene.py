@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from functools import cache
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+import shapely
 from pydantic import Field, field_validator
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Literal
 
     from pydantic import NonNegativeInt
@@ -61,7 +64,8 @@ from .data.utils import (
     _as_custom_spatial_data,
     _downsample_custom_spatial_data,
 )
-from .geometry.base import Box
+from .geometry.base import Box, GeometryGroup
+from .geometry.primitives import Cylinder
 from .geometry.utils import merging_geometries_on_plane
 from .grid.grid import Coords
 from .material.multi_physics import MultiPhysicsMedium
@@ -562,19 +566,24 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        medium_shapes = self._get_structures_2dbox(
-            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
         medium_map = self.medium_map
-        for medium, shape in medium_shapes:
-            mat_index = medium_map[medium]
-            ax = self._plot_shape_structure(
-                medium=medium,
-                mat_index=mat_index,
-                shape=shape,
-                ax=ax,
-                fill=fill,
+
+        @cache
+        def get_plot_params(medium: StructureMediumType) -> PlotParams:
+            return self._get_structure_plot_params(
+                medium=medium, mat_index=medium_map[medium], fill=fill
             )
+
+        medium_shapes = self._get_structures_2dbox(
+            structures=self.to_static().sorted_structures,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            is_plain_fill=lambda medium: self._is_plain_fill(get_plot_params(medium)),
+        )
+        ax = self._plot_medium_shapes(medium_shapes, get_plot_params, ax=ax)
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -586,22 +595,31 @@ class Scene(Tidy3dBaseModel):
         )
         return ax
 
-    def _plot_shape_structure(
+    def _plot_medium_shapes(
         self,
-        medium: MultiPhysicsMediumType3D,
-        mat_index: int,
-        shape: Shapely,
+        medium_shapes: list[tuple[StructureMediumType, Shapely]],
+        get_plot_params: Callable[[StructureMediumType], PlotParams],
         ax: Ax,
-        fill: bool = True,
     ) -> Ax:
-        """Plot a structure's cross section shape for a given medium."""
-        plot_params_struct = self._get_structure_plot_params(
-            medium=medium,
-            mat_index=mat_index,
-            fill=fill,
+        """Plot shapes in order, with ``get_plot_params(medium)`` evaluated once per medium."""
+        by_medium, by_id = {}, {}
+        for medium, _ in medium_shapes:
+            if id(medium) not in by_id:
+                if medium not in by_medium:
+                    by_medium[medium] = get_plot_params(medium)
+                by_id[id(medium)] = by_medium[medium]
+        if not medium_shapes:
+            return ax
+        return self.box.plot_shapes(
+            [shape for _, shape in medium_shapes],
+            plot_params=[by_id[id(medium)] for medium, _ in medium_shapes],
+            ax=ax,
         )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
-        return ax
+
+    @staticmethod
+    def _is_plain_fill(plot_params: PlotParams) -> bool:
+        """Whether shapes with these params are drawn as plain fills (no outline or hatch)."""
+        return plot_params.linewidth == 0 and plot_params.hatch is None
 
     def _get_structure_plot_params(
         self,
@@ -731,6 +749,7 @@ class Scene(Tidy3dBaseModel):
         z: float | None = None,
         hlim: tuple[float, float] | None = None,
         vlim: tuple[float, float] | None = None,
+        is_plain_fill: Callable[[StructureMediumType], bool] | None = None,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
@@ -748,6 +767,9 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        is_plain_fill : Callable[[StructureMediumType], bool] = None
+            Whether a medium's shapes are drawn as plain fills, for which shapes already inside the
+            plot window can skip the clipping. If ``None``, every shape is clipped.
 
         Returns
         -------
@@ -775,16 +797,81 @@ class Scene(Tidy3dBaseModel):
         size = Box.unpop_axis(0.0, (h_size, v_size), axis=axis)
         plane = Box(center=center, size=size)
 
-        medium_shapes = []
+        # same as plane.intersections_with() per structure, but slicing all boxes (also inside
+        # geometry groups, which slice their members in order) and clipping all shapes at once
+        geometries, geometry_media = [], []
         for structure in structures:
-            intersections = plane.intersections_with(
-                structure.geometry.to_static(), section_tolerance_2d=True
-            )
-            for shape in intersections:
-                if not shape.is_empty:
-                    shape = Box.evaluate_inf_shape(shape)
-                    medium_shapes.append((structure.medium, shape))
-        return medium_shapes
+            members = [structure.geometry]
+            while any(type(member) is GeometryGroup for member in members):
+                members = [
+                    child
+                    for member in members
+                    for child in (member.geometries if type(member) is GeometryGroup else (member,))
+                ]
+            geometries.extend(members)
+            geometry_media.extend([structure.medium] * len(members))
+        kinds = [type(g) for g in geometries]
+        owners, shapes, scalar_index = [], [], []
+        bulk = np.zeros(len(geometries), dtype=bool)
+        for kind in (Box, Cylinder):
+            members = np.flatnonzero([k is kind for k in kinds])
+            bulk[members] = True
+            try:
+                cut, sections, scalar = kind._bulk_intersections_plane(
+                    [geometries[i] for i in members], axis, center_normal
+                )
+            except (TypeError, ValueError):  # traced parameters
+                scalar_index.extend(members)
+                continue
+            owners.extend(members[cut])
+            shapes.extend(sections)
+            scalar_index.extend(members[scalar])
+        scalar_index.extend(np.flatnonzero(~bulk))
+        num_bulk = len(shapes)
+        for i in scalar_index:
+            geometry = geometries[i].to_static()
+            if geometry.intersects_axis_position(axis, center_normal, section_tolerance_2d=True):
+                section = geometry.intersections_plane(
+                    **{"xyz"[axis]: center_normal}, section_tolerance_2d=True
+                )
+                owners.extend([i] * len(section))
+                shapes.extend(section)
+        order = np.argsort(np.fromiter(owners, dtype=int, count=len(owners)), kind="stable")
+        shapes = [shapes[i] for i in order]
+        media = [geometry_media[owners[i]] for i in order]
+        from_bulk = order < num_bulk
+        (hmin, vmin), (hmax, vmax) = (plane.pop_axis(bound, axis=axis)[1] for bound in plane.bounds)
+        window = Box.evaluate_inf_shape(plane.make_shapely_box(hmin, vmin, hmax, vmax))
+        clipped = np.empty(len(shapes), dtype=object)
+        clipped[:] = Box.evaluate_inf_shape(shapes)
+        # the intersection returns valid polygons inside the window unchanged except for their
+        # vertex order, which only shows in outlines, hatches and lone patches; skip it for the
+        # plain fills of multi-shape plots (degenerate shapes, e.g. of 2D materials, are clipped)
+        bounds, (wxmin, wymin, wxmax, wymax) = shapely.bounds(clipped), window.bounds
+        unchanged = (
+            (bounds[:, 0] >= wxmin)
+            & (bounds[:, 1] >= wymin)
+            & (bounds[:, 2] <= wxmax)
+            & (bounds[:, 3] <= wymax)
+            & (shapely.get_type_id(clipped) == shapely.GeometryType.POLYGON)
+            & (is_plain_fill is not None and len(shapes) > 1)
+        )
+        # rectangles and disks from the bulk slicing are valid whenever they have an area
+        check = unchanged & ~(from_bulk & (shapely.area(clipped) > 0))
+        unchanged[check] = shapely.is_valid(clipped[check])
+        # ask about the medium only for these candidates, once per medium object
+        plain_by_id = {}
+        for i in np.flatnonzero(unchanged):
+            medium = media[i]
+            if id(medium) not in plain_by_id:
+                plain_by_id[id(medium)] = is_plain_fill(medium)
+            unchanged[i] = plain_by_id[id(medium)]
+        clipped[~unchanged] = shapely.intersection(clipped[~unchanged], window)
+        return [
+            (medium, shape)
+            for medium, shape, empty in zip(media, clipped, shapely.is_empty(clipped))
+            if not empty
+        ]
 
     @staticmethod
     def _filter_structures_plane_medium(
@@ -1083,24 +1170,6 @@ class Scene(Tidy3dBaseModel):
         if property in ["N_d", "N_a", "doping"]:
             need_filtered_shaped = alpha < 1
 
-        if need_filtered_shaped:
-            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-            center = Box.unpop_axis(position, (0, 0), axis=axis)
-            size = Box.unpop_axis(0, (inf, inf), axis=axis)
-            plane = Box(center=center, size=size)
-            # for doping background structure could be a non-doping structure
-            # that needs to be rendered
-            if property in ["N_d", "N_a", "doping"]:
-                structures = [self.background_structure, *list(structures)]
-            medium_shapes = self._filter_structures_plane_medium(
-                structures=structures, plane=plane, section_tolerance_2d=True
-            )
-        else:
-            structures = [self.background_structure, *list(structures)]
-            medium_shapes = self._get_structures_2dbox(
-                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-            )
-
         property_min, property_max = limits
 
         if property_min is None or property_max is None:
@@ -1153,67 +1222,109 @@ class Scene(Tidy3dBaseModel):
                 f"The scale '{scale}' is not supported for plotting structures property."
             )
 
+        @cache
+        def get_plot_params(medium: StructureMediumType) -> PlotParams:
+            if property in ["doping", "N_a", "N_d"]:
+                return self._get_structure_heat_charge_property_plot_params(
+                    medium=medium,
+                    property_val_min=property_min,
+                    property_val_max=property_max,
+                    alpha=alpha,
+                    reverse=reverse,
+                    property="doping",
+                )
+            return self._get_structure_eps_plot_params(
+                medium=medium,
+                freq=freq,
+                eps_min=property_min,
+                eps_max=property_max,
+                reverse=reverse,
+                alpha=alpha,
+                eps_component=eps_component,
+                norm=norm,
+            )
+
+        def is_plain_fill(medium: StructureMediumType) -> bool:
+            # pcolormesh-drawn media (custom permittivity, semiconductor doping) need exact clips
+            if property in ["doping", "N_a", "N_d"]:
+                if isinstance(medium.charge, SemiconductorMedium):
+                    return False
+            elif isinstance(medium, AbstractCustomMedium):
+                return False
+            return self._is_plain_fill(get_plot_params(medium))
+
+        if need_filtered_shaped:
+            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+            center = Box.unpop_axis(position, (0, 0), axis=axis)
+            size = Box.unpop_axis(0, (inf, inf), axis=axis)
+            plane = Box(center=center, size=size)
+            # for doping background structure could be a non-doping structure
+            # that needs to be rendered
+            if property in ["N_d", "N_a", "doping"]:
+                structures = [self.background_structure, *list(structures)]
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures, plane=plane, section_tolerance_2d=True
+            )
+        else:
+            structures = [self.background_structure, *list(structures)]
+            medium_shapes = self._get_structures_2dbox(
+                structures=structures,
+                x=x,
+                y=y,
+                z=z,
+                hlim=hlim,
+                vlim=vlim,
+                is_plain_fill=is_plain_fill,
+            )
+
+        # shapes drawn as patches are batched; a pcolormesh shape first flushes the batch, so the
+        # drawing order still follows structure priority
+        batch = []
         for medium, shape in medium_shapes:
             if property in ["doping", "N_a", "N_d"]:
                 if not isinstance(medium.charge, SemiconductorMedium):
-                    ax = self._plot_shape_structure_heat_charge_property(
-                        alpha=alpha,
-                        medium=medium,
-                        property_val_min=property_min,
-                        property_val_max=property_max,
-                        reverse=reverse,
-                        shape=shape,
-                        ax=ax,
-                        property="doping",
-                    )
-                else:
-                    self._pcolormesh_shape_doping_box(
-                        x,
-                        y,
-                        z,
-                        alpha,
-                        medium,
-                        shape,
-                        ax,
-                        property,
-                        norm,
-                    )
-            else:
-                # if the background medium is custom medium, it needs to be rendered separately
-                if medium == self.medium and need_filtered_shaped:
+                    batch.append((medium, shape))
                     continue
-                # no need to add patches for custom medium
-                if not isinstance(medium, AbstractCustomMedium):
-                    ax = self._plot_shape_structure_eps(
-                        freq=freq,
-                        alpha=alpha,
-                        medium=medium,
-                        eps_min=property_min,
-                        eps_max=property_max,
-                        reverse=reverse,
-                        shape=shape,
-                        ax=ax,
-                        eps_component=eps_component,
-                        norm=norm,
-                    )
-                else:
-                    # For custom medium, apply pcolormesh clipped by the shape.
-                    self._pcolormesh_shape_custom_medium_structure_eps(
-                        x,
-                        y,
-                        z,
-                        freq,
-                        alpha,
-                        medium,
-                        property_min,
-                        property_max,
-                        reverse,
-                        shape,
-                        ax,
-                        grid,
-                        eps_component=eps_component,
-                        norm=norm,
-                    )
+            # if the background medium is custom medium, it needs to be rendered separately
+            elif need_filtered_shaped and medium == self.medium:
+                continue
+            # no need to add patches for custom medium
+            elif not isinstance(medium, AbstractCustomMedium):
+                batch.append((medium, shape))
+                continue
+            ax = self._plot_medium_shapes(batch, get_plot_params, ax=ax)
+            batch = []
+            if property in ["doping", "N_a", "N_d"]:
+                self._pcolormesh_shape_doping_box(
+                    x,
+                    y,
+                    z,
+                    alpha,
+                    medium,
+                    shape,
+                    ax,
+                    property,
+                    norm,
+                )
+            else:
+                # For custom medium, apply pcolormesh clipped by the shape.
+                self._pcolormesh_shape_custom_medium_structure_eps(
+                    x,
+                    y,
+                    z,
+                    freq,
+                    alpha,
+                    medium,
+                    property_min,
+                    property_max,
+                    reverse,
+                    shape,
+                    ax,
+                    grid,
+                    eps_component=eps_component,
+                    norm=norm,
+                )
+        ax = self._plot_medium_shapes(batch, get_plot_params, ax=ax)
 
         if cbar:
             if property in ["doping", "N_a", "N_d"]:
@@ -1529,33 +1640,6 @@ class Scene(Tidy3dBaseModel):
 
         return plot_params
 
-    def _plot_shape_structure_eps(
-        self,
-        freq: float,
-        medium: Medium,
-        shape: Shapely,
-        eps_min: float,
-        eps_max: float,
-        ax: Ax,
-        reverse: bool = False,
-        alpha: float | None = None,
-        eps_component: PermittivityComponent | None = None,
-        norm: mpl.colors.Normalize | None = None,
-    ) -> Ax:
-        """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-        plot_params = self._get_structure_eps_plot_params(
-            medium=medium,
-            freq=freq,
-            eps_min=eps_min,
-            eps_max=eps_max,
-            alpha=alpha,
-            reverse=reverse,
-            eps_component=eps_component,
-            norm=norm,
-        )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
-        return ax
-
     """ Plotting Heat """
 
     @equal_aspect
@@ -1683,17 +1767,18 @@ class Scene(Tidy3dBaseModel):
             )
 
         property_val_min, property_val_max = self.heat_charge_property_bounds(property=property)
-        for medium, shape in medium_shapes:
-            ax = self._plot_shape_structure_heat_charge_property(
-                alpha=alpha,
+        ax = self._plot_medium_shapes(
+            medium_shapes,
+            lambda medium: self._get_structure_heat_charge_property_plot_params(
                 medium=medium,
                 property_val_min=property_val_min,
                 property_val_max=property_val_max,
+                alpha=alpha,
                 reverse=reverse,
-                shape=shape,
-                ax=ax,
                 property=property,
-            )
+            ),
+            ax=ax,
+        )
 
         if cbar:
             label = ""
@@ -1794,31 +1879,6 @@ class Scene(Tidy3dBaseModel):
                 plot_params = plot_params.copy(update={"alpha": alpha})
 
         return plot_params
-
-    def _plot_shape_structure_heat_charge_property(
-        self,
-        medium: Medium,
-        shape: Shapely,
-        property_val_min: float,
-        property_val_max: float,
-        property: str,
-        ax: Ax,
-        reverse: bool = False,
-        alpha: float | None = None,
-    ) -> Ax:
-        """Plot a structure's cross section shape for a given medium, grayscale for thermal
-        conductivity.
-        """
-        plot_params = self._get_structure_heat_charge_property_plot_params(
-            medium=medium,
-            property_val_min=property_val_min,
-            property_val_max=property_val_max,
-            alpha=alpha,
-            reverse=reverse,
-            property=property,
-        )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
-        return ax
 
     """ Misc """
 

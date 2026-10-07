@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from itertools import chain
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
+import shapely
 from pydantic import Field
 
 from tidy3d.components.autograd import TracedSize
@@ -310,9 +312,8 @@ class Box(SimplePlaneIntersection, Centered):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        use_2d_tolerance = section_tolerance_2d and np.isclose(
-            self.size[axis], 0.0, rtol=fp_eps, atol=fp_eps
-        )
+        # same as np.isclose(size, 0, rtol=fp_eps, atol=fp_eps), without its per-call overhead
+        use_2d_tolerance = section_tolerance_2d and abs(self.size[axis]) <= fp_eps
         if not self.intersects_axis_position(axis, position, section_tolerance_2d=use_2d_tolerance):
             return []
         z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
@@ -328,8 +329,13 @@ class Box(SimplePlaneIntersection, Centered):
         maxx = x0 + Lx / 2
         maxy = y0 + Ly / 2
 
-        # handle case where the box vertices are identical
-        if np.isclose(minx, maxx) and np.isclose(miny, maxy):
+        # handle case where the box vertices are identical; the inline test is np.isclose's own
+        # formula, so the slow np.isclose call only runs for degenerate or infinite boxes
+        if (
+            abs(minx - maxx) <= 1e-8 + 1e-5 * abs(maxx)
+            and np.isclose(minx, maxx)
+            and np.isclose(miny, maxy)
+        ):
             return [self.make_shapely_point(minx, miny)]
 
         return [self.make_shapely_box(minx, miny, maxx, maxy)]
@@ -441,7 +447,38 @@ class Box(SimplePlaneIntersection, Centered):
 
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
-        return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
+        return list(shapely.intersection(Geometry.evaluate_inf_shape(shapes_plane), shapely_box))
+
+    @staticmethod
+    def _bulk_intersections_plane(
+        boxes: list[Box], axis: Axis, position: float
+    ) -> tuple[NDArray, NDArray, NDArray]:
+        """Vectorized ``intersections_plane(section_tolerance_2d=True)`` for many boxes.
+
+        Returns the indices of the boxes cut by the plane with their rectangular cross sections,
+        and the indices of the boxes left to the scalar method (zero thickness or degenerate).
+        Raises ``TypeError`` or ``ValueError`` for traced box parameters.
+        """
+        values = np.fromiter(
+            chain.from_iterable((*box.center, *box.size) for box in boxes),
+            dtype=float,
+            count=6 * len(boxes),
+        ).reshape(len(boxes), 6)
+        center, size = values[:, :3], values[:, 3:]
+        h, v = (i for i in range(3) if i != axis)
+        minx, maxx = center[:, h] - size[:, h] / 2, center[:, h] + size[:, h] / 2
+        miny, maxy = center[:, v] - size[:, v] / 2, center[:, v] + size[:, v] / 2
+        z0, length = center[:, axis], size[:, axis]
+        scalar = (np.abs(length) <= fp_eps) | (np.abs(minx - maxx) <= 1e-8 + 1e-5 * np.abs(maxx))
+        cut = (
+            ~scalar
+            & (z0 - length / 2 <= position)
+            & (position <= z0 + length / 2)
+            & ~(np.abs(z0 - position) > length / 2 + fp_eps)
+        )
+        index = np.flatnonzero(cut)
+        sections = shapely.box(minx[index], miny[index], maxx[index], maxy[index])
+        return index, sections, np.flatnonzero(scalar)
 
     def slightly_enlarged_copy(self) -> Box:
         """Box size slightly enlarged around machine precision."""

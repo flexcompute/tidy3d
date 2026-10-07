@@ -667,6 +667,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     # Plotting and measures
     plot = _plot_methods.plot
     plot_shape = _plot_methods.plot_shape
+    plot_shapes = _plot_methods.plot_shapes
     _do_not_intersect = staticmethod(_plot_methods._do_not_intersect)
     _get_plot_labels = staticmethod(_plot_methods._get_plot_labels)
     _get_plot_limits = _plot_methods._get_plot_limits

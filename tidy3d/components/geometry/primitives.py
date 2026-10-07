@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import chain
 from math import isclose
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
@@ -18,12 +19,13 @@ from tidy3d.components.geometry import base
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.config import config
-from tidy3d.constants import LARGE_NUMBER, MICROMETER
+from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError, SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 if TYPE_CHECKING:
+    from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
 
     from tidy3d.compat import Self
@@ -1205,6 +1207,41 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=quad_segs)]
+
+    @staticmethod
+    def _bulk_intersections_plane(
+        cylinders: list[Cylinder], axis: Axis, position: float
+    ) -> tuple[NDArray, NDArray, NDArray]:
+        """Vectorized ``intersections_plane(section_tolerance_2d=True)`` for many cylinders.
+
+        Returns the indices of the cylinders cut by the plane with their circular cross sections,
+        and the indices left to the scalar method (cut along their side, sloped sidewalls or zero
+        length). Raises ``TypeError`` or ``ValueError`` for traced cylinder parameters.
+        """
+        values = np.fromiter(
+            chain.from_iterable(
+                (*c.center, c.radius, c.length, c.sidewall_angle, c.axis) for c in cylinders
+            ),
+            dtype=float,
+            count=7 * len(cylinders),
+        ).reshape(len(cylinders), 7)
+        center, radius, length, sidewall_angle, cylinder_axis = (
+            values[:, :3],
+            values[:, 3],
+            values[:, 4],
+            values[:, 5],
+            values[:, 6],
+        )
+        scalar = (cylinder_axis != axis) | (sidewall_angle != 0) | (np.abs(length) <= fp_eps)
+        z0 = center[:, axis]
+        cut = ~scalar & (z0 - length / 2 <= position) & (position <= z0 + length / 2) & (radius > 0)
+        index = np.flatnonzero(cut)
+        h, v = (i for i in range(3) if i != axis)
+        points = shapely.points(center[index, h], center[index, v])
+        sections = shapely.buffer(
+            points, radius[index], quad_segs=_N_SHAPELY_QUAD_SEGS_VISUALIZATION
+        )
+        return index, sections, np.flatnonzero(scalar)
 
     def _intersections_side(self, position: float, axis: int) -> list[BaseGeometry]:
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.

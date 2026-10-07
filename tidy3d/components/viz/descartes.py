@@ -20,10 +20,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from matplotlib.patches import PathPatch
     from matplotlib.path import Path
-    from numpy.typing import NDArray
+    from numpy.typing import ArrayLike
     from shapely.geometry.base import BaseGeometry
 
-from numpy import array, concatenate, ones
+import shapely
+from numpy import cumsum, diff, flatnonzero, full, split
 
 
 class Polygon:
@@ -52,48 +53,48 @@ class Polygon:
         return value
 
 
-def polygon_path(polygon: BaseGeometry) -> Path:
-    """Constructs a compound matplotlib path from a Shapely or GeoJSON-like
-    geometric object"""
+def polygon_path(polygon: BaseGeometry | ArrayLike | dict[str, Any]) -> Path:
+    """Constructs a compound matplotlib path from a Shapely (multi)polygon, an array of them, or a
+    GeoJSON-like (multi)polygon"""
     from matplotlib.path import Path
 
-    def coding(obj: Any) -> NDArray:
-        # The codes will be all "LINETO" commands, except for "MOVETO"s at the
-        # beginning of each subpath
-        crds = getattr(obj, "coords", None)
-        if crds is None:
-            crds = obj
-        n = len(crds)
-        vals = ones(n, dtype=Path.code_type) * Path.LINETO
-        if len(vals) > 0:
-            vals[0] = Path.MOVETO
-        return vals
-
-    ptype = polygon.geom_type
-    if ptype == "Polygon":
-        polygon = [Polygon(polygon)]
-    elif ptype == "MultiPolygon":
-        polygon = [Polygon(p) for p in polygon.geoms]
-
-    vertices = concatenate(
-        [
-            concatenate(
-                [array(t.exterior.coords)[:, :2]] + [array(r.coords)[:, :2] for r in t.interiors]
-            )
-            for t in polygon
-        ]
-    )
-    codes = concatenate(
-        [concatenate([coding(t.exterior)] + [coding(r) for r in t.interiors]) for t in polygon]
-    )
-
+    if isinstance(polygon, dict) or (
+        hasattr(polygon, "__geo_interface__") and not isinstance(polygon, shapely.Geometry)
+    ):
+        polygon = shapely.geometry.shape(polygon)
+    rings = shapely.get_rings(shapely.get_parts(polygon))
+    vertices, ring_index = shapely.get_coordinates(rings, return_index=True)
+    # every ring starts with a MOVETO, all other vertices are LINETOs
+    codes = full(len(vertices), Path.LINETO, dtype=Path.code_type)
+    codes[flatnonzero(diff(ring_index, prepend=-1))] = Path.MOVETO
     return Path(vertices, codes)
 
 
-def polygon_patch(polygon: BaseGeometry, **kwargs: Any) -> PathPatch:
+def polygon_paths(polygons: ArrayLike) -> list[Path]:
+    """Constructs one matplotlib path per (non-empty) Shapely polygon in ``polygons``."""
+    from matplotlib.path import Path
+
+    if not shapely.get_num_interior_rings(polygons).any():
+        # no holes: every path is one ring, which is what a path without codes means; reading the
+        # coordinates straight from the polygons avoids copying rings and per-vertex indices
+        vertices = shapely.get_coordinates(polygons)
+        counts = shapely.get_num_coordinates(polygons)
+        if len(counts) and (counts == counts[0]).all():
+            return [Path(v) for v in vertices.reshape(len(counts), counts[0], 2)]
+        return [Path(v) for v in split(vertices, cumsum(counts)[:-1])]
+    rings, ring_polygon = shapely.get_rings(polygons, return_index=True)
+    vertices, vertex_ring = shapely.get_coordinates(rings, return_index=True)
+    codes = full(len(vertices), Path.LINETO, dtype=Path.code_type)
+    codes[flatnonzero(diff(vertex_ring, prepend=-1))] = Path.MOVETO
+    cuts = flatnonzero(diff(ring_polygon[vertex_ring])) + 1
+    return [Path(v, c) for v, c in zip(split(vertices, cuts), split(codes, cuts))]
+
+
+def polygon_patch(polygon: BaseGeometry | ArrayLike | dict[str, Any], **kwargs: Any) -> PathPatch:
     """Constructs a matplotlib patch from a geometric object
 
-    The ``polygon`` may be a Shapely or GeoJSON-like object with or without holes.
+    The ``polygon`` may be a Shapely (multi)polygon with or without holes, an array of them, or a
+    GeoJSON-like (multi)polygon.
     The ``kwargs`` are those supported by the matplotlib.patches.Polygon class
     constructor. Returns an instance of matplotlib.patches.PathPatch.
 

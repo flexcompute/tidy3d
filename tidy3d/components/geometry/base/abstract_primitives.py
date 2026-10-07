@@ -264,10 +264,9 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>``.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        # same as np.isclose(length, 0, rtol=fp_eps, atol=fp_eps), without its per-call overhead
         use_2d_tolerance = (
-            section_tolerance_2d
-            and axis == self.axis
-            and np.isclose(self.length_axis, 0.0, rtol=fp_eps, atol=fp_eps)
+            section_tolerance_2d and axis == self.axis and abs(self.length_axis) <= fp_eps
         )
         if not self.intersects_axis_position(axis, position, section_tolerance_2d=use_2d_tolerance):
             return []

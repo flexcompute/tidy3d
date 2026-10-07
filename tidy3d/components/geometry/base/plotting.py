@@ -15,6 +15,8 @@ from tidy3d.components.viz import (
     add_ax_if_none,
     equal_aspect,
     polygon_patch,
+    polygon_path,
+    polygon_paths,
     set_default_labels_and_title,
 )
 from tidy3d.constants import LARGE_NUMBER
@@ -129,6 +131,88 @@ def plot_shape(
     else:
         patch = polygon_patch(_shape, **plot_params.to_kwargs())
         ax.add_artist(patch)
+    return ax
+
+
+def plot_shapes(
+    self,  # pyrefly: ignore[implicit-any-parameter]
+    shapes: list[Shapely],
+    plot_params: PlotParams | list[PlotParams],
+    ax: Ax,
+) -> Ax:
+    """Plots ``shapes`` in order, with one ``plot_params`` per shape or one shared by all.
+
+    Runs of unhatched polygons become a single path collection, which draws each polygon
+    exactly like its own patch would, without the per-artist overhead.
+    """
+    from matplotlib.collections import PathCollection
+    from matplotlib.patches import PathPatch
+
+    if not isinstance(plot_params, list):
+        plot_params = [plot_params] * len(shapes)
+    if len(shapes) == 1:
+        return self.plot_shape(shapes[0], plot_params=plot_params[0], ax=ax)
+    # resolve matplotlib's patch styling (fill, default colors, alpha) once per distinct params
+    style_index, styles = {}, []
+    for p in plot_params:
+        if id(p) not in style_index:
+            style_index[id(p)] = len(styles)
+            patch = PathPatch(polygon_path(shapely.box(0, 0, 1, 1)), **p.to_kwargs())
+            styles.append(
+                (
+                    patch.get_facecolor(),
+                    patch.get_edgecolor(),
+                    patch.get_linewidth(),
+                    patch.get_zorder(),
+                    patch.get_hatch() is None,
+                )
+            )
+    facecolor, edgecolor, linewidth, zorder, unhatched = (np.array(c) for c in zip(*styles))
+    # a patch without a visible face or edge renders like one without any (matplotlib then
+    # clips unfilled paths and ignores invisible edges when snapping); collections only do
+    # that when told so, hence the explicit face flag and zero widths for invisible edges
+    # (patches with fill=False report a fully transparent facecolor, so they get no face)
+    has_face = facecolor[:, 3] > 0
+    linewidth = np.where(edgecolor[:, 3] > 0, linewidth, 0.0)
+    shape_style = np.fromiter(
+        (style_index[id(p)] for p in plot_params), dtype=int, count=len(plot_params)
+    )
+    if (shapely.get_type_id(shapes) >= shapely.GeometryType.MULTIPOINT).any():
+        parts, shape_index = shapely.get_parts(shapes, return_index=True)
+    else:  # single-part shapes: get_parts would clone every geometry, so use them as they are
+        parts = np.fromiter(shapes, dtype=object, count=len(shapes))
+        shape_index = np.flatnonzero(~shapely.is_empty(parts))
+        parts = parts[shape_index]
+    style = shape_style[shape_index]
+    # collections skip matplotlib's simplification of paths with >= 128 vertices, which
+    # visibly shifts strokes, so stroked large polygons stay individual patches
+    collectable = (
+        (shapely.get_type_id(parts) == shapely.GeometryType.POLYGON)
+        & ~shapely.is_empty(parts)
+        & unhatched[style]
+        & ~((linewidth[style] > 0) & (shapely.get_num_coordinates(parts) >= 128))
+    )
+    # each run of collectable parts sharing a zorder and face flag is one collection (NaN
+    # never repeats, so other parts are drawn one by one)
+    key = np.where(collectable, zorder[style], np.nan)
+    face = has_face[style]
+    change = (key[1:] != key[:-1]) | (face[1:] != face[:-1])
+    starts = np.flatnonzero(np.concatenate(([True], change)))
+    for start, stop in zip(starts, [*starts[1:], len(parts)]):
+        if not collectable[start]:
+            ax = self.plot_shape(parts[start], plot_params=plot_params[shape_index[start]], ax=ax)
+            continue
+        run = style[start:stop]
+        collection = PathCollection(
+            polygon_paths(evaluate_inf_shape(parts[start:stop])),
+            facecolors=facecolor[run] if has_face[style[start]] else "none",
+            edgecolors=edgecolor[run],
+            linewidths=linewidth[run],
+            joinstyle="miter",
+            capstyle="butt",
+            zorder=zorder[style[start]],
+        )
+        ax.add_artist(collection)
     return ax
 
 
@@ -273,8 +357,8 @@ def _evaluate_inf(array: ArrayLike) -> NDArray[np.floating]:
 
 
 def evaluate_inf_shape(shape: Shapely) -> Shapely:
-    """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
-    if not any(np.isinf(b) for b in shape.bounds):
+    """Returns shape (or array of shapes) with inf vertices replaced by large numbers."""
+    if not np.isinf(shapely.bounds(shape)).any():
         return shape
     return shapely.transform(shape, _evaluate_inf, include_z=None)
 
