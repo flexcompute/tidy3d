@@ -11,6 +11,12 @@ from .drc import (
     DRCRunner,
     run_drc_on_gds,
 )
+from .lvs import (
+    LVSConfig,
+    LVSResults,
+    LVSRunner,
+    run_lvs_on_gds,
+)
 from .util import check_installation
 
 __all__ = [
@@ -18,6 +24,10 @@ __all__ = [
     "DRCConfig",
     "DRCResults",
     "DRCRunner",
+    "LVSConfig",
+    "LVSResults",
+    "LVSRunner",
     "check_installation",
     "run_drc_on_gds",
+    "run_lvs_on_gds",
 ]
