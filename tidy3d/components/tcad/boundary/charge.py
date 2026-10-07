@@ -174,9 +174,16 @@ class SurfaceRecombinationBC(HeatChargeBC):
         between two differently doped regions of the same material, as at a
         regrowth or wafer-bonded interface. There the interface keeps its
         material continuity and the recombination applies on the semiconductor
-        side. Two placements are rejected: an interface with no
-        :class:`SemiconductorMedium` on either side, which has no carriers to
-        recombine, and a heterojunction, which is not yet supported.
+        side. An interface with no :class:`SemiconductorMedium` on either side
+        is rejected, since it has no carriers to recombine.
+
+        Free surfaces, semiconductor/insulator interfaces and same-material
+        junctions take :class:`SurfaceShockleyReedHallRecombination`. A
+        heterojunction (semiconductors differing in ``N_c``, ``N_v``, ``E_g`` or
+        ``electron_affinity``) takes
+        :class:`HeterojunctionSurfaceShockleyReedHallRecombination` instead,
+        placed with a :class:`StructureStructureInterface` or a
+        :class:`MediumMediumInterface` that names its two sides.
 
     Example
     -------
@@ -191,6 +198,7 @@ class SurfaceRecombinationBC(HeatChargeBC):
         ...,
         title="Surface recombination model",
         description="Kinetic recombination model.",
+        discriminator=TYPE_TAG_STR,
     )
 
     Q_f: float = Field(

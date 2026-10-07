@@ -743,7 +743,196 @@ class SurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
         return self
 
 
-SurfaceRecombinationModelType = SurfaceShockleyReedHallRecombination
+class HeterojunctionCaptureSide(Tidy3dBaseModel):
+    """
+    One side of a heterojunction interface trap: the material it captures
+    carriers from, and the capture velocities from that side.
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> side = td.HeterojunctionCaptureSide(name="inp", S_n=1e3, S_p=1e3)
+    """
+
+    name: str = Field(
+        title="Side name",
+        description="Name of the structure on this side of the heterojunction when the "
+        "condition is placed with a :class:`.StructureStructureInterface`, or of its "
+        "medium when placed with a :class:`.MediumMediumInterface`.",
+    )
+    S_n: NonNegativeFloat = Field(
+        title="Electron capture velocity",
+        description="Velocity at which the interface trap captures electrons from this "
+        "side. Zero closes the electron channel to this side.",
+        json_schema_extra={"units": "cm/s"},
+    )
+    S_p: NonNegativeFloat = Field(
+        title="Hole capture velocity",
+        description="Velocity at which the interface trap captures holes from this "
+        "side. Zero closes the hole channel to this side.",
+        json_schema_extra={"units": "cm/s"},
+    )
+
+
+class HeterojunctionSurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
+    """
+    Shockley-Read-Hall (SRH) recombination through a single interface trap level
+    shared by the two sides of a heterojunction.
+
+    Notes
+    -----
+
+        One trap level at energy ``E_t`` exchanges carriers with both sides of
+        the interface [1]_ [2]_. For side :math:`k`, with interface carrier
+        densities :math:`n_k` and :math:`p_k` and trap occupancy :math:`f`,
+        the net electron and hole capture rates per unit area are
+
+        .. math::
+
+           U_{n,k} = S_{n,k} \\left[ n_k (1 - f) - n_{1,k} f \\right],
+           \\qquad
+           U_{p,k} = S_{p,k} \\left[ p_k f - p_{1,k} (1 - f) \\right].
+
+        In steady state the trap captures as many electrons as holes,
+        :math:`\\sum_k U_{n,k} = \\sum_k U_{p,k}`, which fixes :math:`f` and
+        gives the net recombination rate
+
+        .. math::
+
+           R_s = \\frac{A_n A_p - B_n B_p}{A_n + B_n + A_p + B_p}
+
+        with
+
+        .. math::
+
+           A_n = \\sum_k S_{n,k} n_k, \\quad
+           B_n = \\sum_k S_{n,k} n_{1,k}, \\quad
+           A_p = \\sum_k S_{p,k} p_k, \\quad
+           B_p = \\sum_k S_{p,k} p_{1,k}.
+
+        ``E_t`` is measured from the intrinsic Fermi level of the side named by
+        ``E_t_reference``. The trap-level concentrations :math:`n_{1,k}` and
+        :math:`p_{1,k}` of each side follow from that one trap energy through
+        the side's own band edges, so the rate vanishes in equilibrium. Under
+        Fermi-Dirac statistics they carry each side's degeneracy factor.
+
+        Each side captures at its own full velocities; a side with zero
+        velocities drops out, leaving one-sided SRH. With two identical
+        materials and equal velocities on both sides, the rate under Boltzmann
+        statistics is therefore twice that of
+        :class:`SurfaceShockleyReedHallRecombination` at the same velocities on a
+        same-material junction: one measured interface velocity ``S`` corresponds
+        to ``S / 2`` on each side. At a type-II (staggered) interface the trap
+        recombines electrons of one side with holes of the other.
+
+        Place the condition with a :class:`.StructureStructureInterface` or a
+        :class:`.MediumMediumInterface` whose two names are the ``sides``
+        names; their order does not matter. The two sides must be
+        :class:`.SemiconductorMedium` materials that differ in ``N_c``, ``N_v``,
+        ``E_g`` or ``electron_affinity``; doping alone does not make a
+        heterojunction. Free surfaces, semiconductor/insulator interfaces and
+        junctions between regions of the same material take
+        :class:`SurfaceShockleyReedHallRecombination` instead. The model has no
+        field enhancement and cannot share a placement with a :class:`VoltageBC`.
+
+    Note
+    ----
+    This model is supported only by the accelerated charge solver.
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> sr = td.HeterojunctionSurfaceShockleyReedHallRecombination(
+        ...     E_t=0.1,
+        ...     E_t_reference="inp",
+        ...     sides=(
+        ...         td.HeterojunctionCaptureSide(name="inp", S_n=1e3, S_p=1e3),
+        ...         td.HeterojunctionCaptureSide(name="ingaas", S_n=4e2, S_p=1e3),
+        ...     ),
+        ... )
+
+    References
+    ----------
+        .. [1] H. J. Pauwels and G. Vanhoutte, "The influence of interface state
+               and energy barriers on the efficiency of heterojunction solar
+               cells," J. Phys. D: Appl. Phys. 11, 649 (1978).
+               DOI: 10.1088/0022-3727/11/5/009.
+        .. [2] R. Stangl, C. Leendertz, and J. Haschke, "Numerical simulation of
+               solar cells and solar cell characterization methods: the
+               open-source on demand program AFORS-HET," in Solar Energy,
+               R. D. Rugescu (ed.), InTech (2010), Sec. 4.3.3.
+               DOI: 10.5772/8073.
+    """
+
+    E_t: float = Field(
+        default=0.0,
+        title="Trap level relative to intrinsic Fermi",
+        description="Energy of the interface trap level relative to the intrinsic "
+        "Fermi level of the side named by ``E_t_reference``. ``0`` corresponds to "
+        "mid-gap of that side; positive values are above it.",
+        json_schema_extra={"units": "eV"},
+    )
+    E_t_reference: str = Field(
+        title="Trap level reference side",
+        description="Name of the side, one of the ``sides`` names, whose intrinsic "
+        "Fermi level ``E_t`` is measured from.",
+    )
+    sides: tuple[HeterojunctionCaptureSide, HeterojunctionCaptureSide] = Field(
+        title="Capture sides",
+        description="The two sides of the heterojunction, each named and with the "
+        "velocities at which the interface trap captures carriers from it. The order "
+        "does not matter.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_side_names(self) -> Self:
+        """Require two distinct side names, one of them the ``E_t`` reference."""
+        names = [side.name for side in self.sides]
+        if names[0] == names[1]:
+            self._raise_validation_error_at_loc(
+                f"Both 'sides' of 'HeterojunctionSurfaceShockleyReedHallRecombination' are "
+                f"named '{names[0]}'. The two sides name the two different structures, or "
+                "media, that meet at the heterojunction.",
+                "sides",
+            )
+        if self.E_t_reference not in names:
+            self._raise_validation_error_at_loc(
+                f"'E_t_reference' = '{self.E_t_reference}' is not one of the side names "
+                f"{names} of 'HeterojunctionSurfaceShockleyReedHallRecombination'. It names "
+                "the side whose intrinsic Fermi level 'E_t' is measured from.",
+                "E_t_reference",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_trap_level_in_gap(self) -> Self:
+        """Warn if the trap energy is outside any physically reasonable band gap,
+        which usually means a unit mistake (eV vs. Joules) or a sign error."""
+        if abs(self.E_t) > 1.5:
+            log.warning(
+                f"HeterojunctionSurfaceShockleyReedHallRecombination 'E_t' = {self.E_t:.3e} eV "
+                "is outside the typical semiconductor band gap (|E_t| > 1.5 eV). "
+                "'E_t' is referenced to the intrinsic Fermi level of the 'E_t_reference' "
+                "side in eV; double-check units and sign convention."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_at_least_one_velocity_positive(self) -> Self:
+        """Warn if every capture velocity is zero, leaving only the electrostatics
+        of ``Q_f`` on the interface."""
+        if all(side.S_n == 0.0 and side.S_p == 0.0 for side in self.sides):
+            log.warning(
+                "HeterojunctionSurfaceShockleyReedHallRecombination has S_n = S_p = 0 on "
+                "both sides and will not contribute any recombination flux. Use this only "
+                "for a charged 'SurfaceRecombinationBC' with no carrier recombination flux."
+            )
+        return self
+
+
+SurfaceRecombinationModelType = (
+    SurfaceShockleyReedHallRecombination | HeterojunctionSurfaceShockleyReedHallRecombination
+)
 
 
 class SelberherrImpactIonization(Tidy3dBaseModel):

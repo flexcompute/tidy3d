@@ -39,6 +39,7 @@ their excitation from the SPICE source classes documented on the
    VoltageBC
    CurrentBC
    InsulatingBC
+   SurfaceRecombinationBC
 
 .. note::
    Schottky contacts are opt-in on :class:`VoltageBC` via
@@ -79,6 +80,24 @@ their excitation from the SPICE source classes documented on the
    Touching contact faces must prescribe the same electric potential at their
    shared points and have compatible small-signal drives. Separate contact
    boundaries to bias those terminals independently.
+
+Surface Recombination Models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The kinetic model of a :class:`SurfaceRecombinationBC`.
+:class:`SurfaceShockleyReedHallRecombination` applies on free surfaces,
+semiconductor/insulator interfaces and junctions between regions of the same
+material. A heterojunction takes
+:class:`HeterojunctionSurfaceShockleyReedHallRecombination`, whose interface
+trap captures carriers from both sides.
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   SurfaceShockleyReedHallRecombination
+   HeterojunctionSurfaceShockleyReedHallRecombination
+   HeterojunctionCaptureSide
 
 Placement
 ^^^^^^^^^^^^^^^^^

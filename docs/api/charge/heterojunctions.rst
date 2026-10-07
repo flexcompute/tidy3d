@@ -47,6 +47,18 @@ The emission rates derive from the per-material Richardson constants
 default is used that keeps the interface at its local-equilibrium band-offset
 alignment; set them explicitly to model finite thermionic-emission rates.
 
+Interface recombination
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Recombination through traps at the heterointerface is added with a
+:class:`SurfaceRecombinationBC` carrying a
+:class:`HeterojunctionSurfaceShockleyReedHallRecombination`. Place it with a
+:class:`StructureStructureInterface` or a :class:`MediumMediumInterface` whose
+two names are the model's side names. The interface trap captures electrons and
+holes from both sides, each at that side's own capture velocities, so at a
+staggered interface it recombines electrons of one side with holes of the
+other.
+
 .. note::
 
    Heterojunction support requires the accelerated solver (the default,

@@ -49,9 +49,12 @@ from tidy3d.components.spice.types import (
 )
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
+from tidy3d.components.tcad.bandgap import VarshniEnergyBandGap
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
+from tidy3d.components.tcad.effective_DOS import ConstantEffectiveDOS
 from tidy3d.components.tcad.generation_recombination import (
+    HeterojunctionSurfaceShockleyReedHallRecombination,
     PalankovskiQuayApproxCarrierLifetime,
     SelberherrImpactIonization,
     ShockleyReedHallRecombination,
@@ -167,11 +170,30 @@ MIN_CYLINDER_RADIUS_FRACTION = 0.01
 # Flow360DriftDiffusionSolver.cpp; keep in sync.
 SSAC_VOLTAGE_MATCH_TOL_V = 1e-14
 
-# Band parameters that make two touching semiconductors a heterojunction rather
-# than a junction between two differently doped regions of the same material.
-# Doping and bandgap narrowing are excluded: neither opens a band offset at the
-# interface.
-HETEROJUNCTION_BAND_FIELDS = ("N_c", "N_v", "E_g", "electron_affinity")
+# Band parameters further apart than this, relative to the larger (absolute below 1),
+# make two semiconductors a heterojunction.
+HETEROJUNCTION_REL_TOL = 1e-12
+
+
+def _band_signature(medium: SemiconductorMedium) -> tuple[tuple[Any, ...], ...]:
+    """Band parameters that set a band offset, one ``(kind, *values)`` per field.
+
+    Doping and bandgap narrowing are excluded. An effective DOS reduces to its
+    temperature law and ``N(T=1)``, so forms that give the same ``N(T)`` match.
+    """
+    signature: list[tuple[Any, ...]] = []
+    for dos in (medium.N_c, medium.N_v):
+        if isinstance(dos, ConstantEffectiveDOS):
+            signature.append(("constant", dos.N))
+        else:
+            signature.append(("temperature_dependent", float(dos.calc_eff_dos(1.0))))
+    band_gap = medium.E_g
+    if isinstance(band_gap, VarshniEnergyBandGap):
+        signature.append(("varshni", band_gap.eg_0, band_gap.alpha, band_gap.beta))
+    else:
+        signature.append(("constant", band_gap.eg))
+    signature.append(("affinity", medium.electron_affinity or 0.0))
+    return tuple(signature)
 
 
 def _is_material_heterojunction(
@@ -179,7 +201,14 @@ def _is_material_heterojunction(
 ) -> bool:
     """Whether two semiconductors meet in a band offset."""
     return any(
-        getattr(medium_a, name) != getattr(medium_b, name) for name in HETEROJUNCTION_BAND_FIELDS
+        field_a[0] != field_b[0]
+        or any(
+            abs(a - b) > HETEROJUNCTION_REL_TOL * max(1.0, abs(a), abs(b))
+            for a, b in zip(field_a[1:], field_b[1:], strict=True)
+        )
+        for field_a, field_b in zip(
+            _band_signature(medium_a), _band_signature(medium_b), strict=True
+        )
     )
 
 
@@ -1395,6 +1424,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._check_surface_recombination_not_stacked_with_schottky()
         self._check_surface_recombination_qf_on_voltage_overlay()
         self._check_surface_recombination_tat_on_voltage_overlay()
+        self._check_surface_recombination_heterojunction_not_on_contact()
         self._check_surface_recombination_no_duplicate_placement()
         self._check_surface_recombination_interface_materials()
         return self
@@ -1472,11 +1502,16 @@ class HeatChargeSimulation(AbstractSimulation):
 
         Only placements naming both sides are checked; for the rest the opposing
         material follows from the geometry and is resolved when the simulation
-        runs.
+        runs. A heterojunction model must name both sides, so it is always checked.
         """
         for i, bc in enumerate(self.boundary_spec):
             if not isinstance(bc.condition, SurfaceRecombinationBC):
                 continue
+            heterojunction_model = isinstance(
+                bc.condition.model, HeterojunctionSurfaceShockleyReedHallRecombination
+            )
+            if heterojunction_model:
+                self._check_heterojunction_sr_placement(i, bc.condition.model, bc.placement)
             sides = self._placement_side_media(bc.placement)
             if sides is None:
                 continue
@@ -1497,13 +1532,27 @@ class HeatChargeSimulation(AbstractSimulation):
                     i,
                     "placement",
                 )
-            if len(semiconductors) == 2 and _is_material_heterojunction(*semiconductors):
+            at_heterojunction = len(semiconductors) == 2 and _is_material_heterojunction(
+                *semiconductors
+            )
+            if heterojunction_model and not at_heterojunction:
                 self._raise_validation_error_at_loc(
-                    "'SurfaceRecombinationBC' is placed on a heterojunction, which is "
-                    "not yet supported. Place the condition on a "
-                    "semiconductor/insulator interface, on a junction between two "
-                    "regions of the same material, or on an outer semiconductor "
-                    "surface.",
+                    "'HeterojunctionSurfaceShockleyReedHallRecombination' is placed on an "
+                    "interface that is not a heterojunction: the two 'SemiconductorMedium' "
+                    "materials must differ in 'N_c', 'N_v', 'E_g' or 'electron_affinity'. Use "
+                    "'SurfaceShockleyReedHallRecombination' there: it covers free surfaces, "
+                    "semiconductor/insulator interfaces and junctions between regions of "
+                    "the same material.",
+                    "boundary_spec",
+                    i,
+                    "placement",
+                )
+            if not heterojunction_model and at_heterojunction:
+                self._raise_validation_error_at_loc(
+                    "'SurfaceShockleyReedHallRecombination' is placed on a heterojunction, "
+                    "where the interface trap exchanges carriers with both semiconductors. "
+                    "Use 'HeterojunctionSurfaceShockleyReedHallRecombination' on this "
+                    "placement.",
                     "boundary_spec",
                     i,
                     "placement",
@@ -1675,6 +1724,38 @@ class HeatChargeSimulation(AbstractSimulation):
         )
         return self
 
+    def _check_heterojunction_sr_placement(
+        self,
+        index: int,
+        model: HeterojunctionSurfaceShockleyReedHallRecombination,
+        placement: BCPlacementType,
+    ) -> None:
+        """Require a heterojunction SR model on an interface named after its two sides."""
+        if isinstance(placement, StructureStructureInterface):
+            names, kind = placement.structures, "structure"
+        elif isinstance(placement, MediumMediumInterface):
+            names, kind = placement.mediums, "medium"
+        else:
+            self._raise_validation_error_at_loc(
+                "'HeterojunctionSurfaceShockleyReedHallRecombination' is placed with a "
+                f"'{placement.type}'. It needs a 'StructureStructureInterface' or a "
+                "'MediumMediumInterface' that names the two sides of the heterojunction.",
+                "boundary_spec",
+                index,
+                "placement",
+            )
+        side_names = {side.name for side in model.sides}
+        if set(names) != side_names:
+            self._raise_validation_error_at_loc(
+                f"The side names {sorted(side_names)} of "
+                "'HeterojunctionSurfaceShockleyReedHallRecombination' do not match the "
+                f"{kind} names {list(names)} of its '{placement.type}' placement. Name "
+                f"each side after the {kind} on that side of the interface.",
+                "boundary_spec",
+                index,
+                "placement",
+            )
+
     def _check_surface_recombination_requires_accelerated(self) -> Self:
         """Reject ``SurfaceRecombinationBC`` when the accelerated charge solver is off."""
         has_sr = any(isinstance(bc.condition, SurfaceRecombinationBC) for bc in self.boundary_spec)
@@ -1773,6 +1854,29 @@ class HeatChargeSimulation(AbstractSimulation):
                         "metal rather than recombination through a trap, so a "
                         "trap-assisted tunneling enhancement has no meaning "
                         "there. Drop 'field_enhancement' on this face."
+                    )
+        return self
+
+    def _check_surface_recombination_heterojunction_not_on_contact(self) -> Self:
+        """Reject a heterojunction SR model on a placement shared with ``VoltageBC``,
+        where the surface term is contact exchange and not trap SRH."""
+        for i, sr_bc in enumerate(self.boundary_spec):
+            if not isinstance(sr_bc.condition, SurfaceRecombinationBC) or not isinstance(
+                sr_bc.condition.model, HeterojunctionSurfaceShockleyReedHallRecombination
+            ):
+                continue
+            for j, other_bc in enumerate(self.boundary_spec):
+                if i == j or not isinstance(other_bc.condition, VoltageBC):
+                    continue
+                if self._placements_overlap(sr_bc.placement, other_bc.placement):
+                    self._raise_validation_error_at_loc(
+                        "'HeterojunctionSurfaceShockleyReedHallRecombination' cannot share "
+                        "a placement with 'VoltageBC': on a contact the surface term is "
+                        "carrier exchange with the metal, not recombination through an "
+                        "interface trap.",
+                        "boundary_spec",
+                        i,
+                        "placement",
                     )
         return self
 

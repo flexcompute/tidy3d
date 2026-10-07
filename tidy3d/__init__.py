@@ -101,6 +101,8 @@ from tidy3d.components.tcad.data.types import (
 from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, GaussianDoping
 from tidy3d.components.tcad.generation_recombination import (
     FossumCarrierLifetime,
+    HeterojunctionCaptureSide,
+    HeterojunctionSurfaceShockleyReedHallRecombination,
     HurkxTrapAssistedTunneling,
     PalankovskiQuayApproxCarrierLifetime,
     SurfaceShockleyReedHallRecombination,
@@ -825,6 +827,8 @@ __all__ = [
     "HeatSimulation",
     "HeatSimulationData",
     "HeatSource",
+    "HeterojunctionCaptureSide",
+    "HeterojunctionSurfaceShockleyReedHallRecombination",
     "HeuristicPECStaircasing",
     "HuraySurfaceRoughness",
     "HurkxDirectBandToBandTunneling",
