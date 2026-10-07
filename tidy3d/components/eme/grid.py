@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from numbers import Real
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 import numpy as np
+from flexcompute.core._migration.em.eme.validation import (
+    validate_group_index_step,
+)
 from pydantic import Field, PositiveInt, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -156,16 +158,9 @@ class EMEModeSpec(ModeSpec):
     @classmethod
     def _validate_group_index_step(cls, val: Any) -> Any:
         """Reject group-index work that EME cannot consume or return."""
-        if isinstance(val, (Real, np.bool_)) and val == 0:
-            return False
-        raise SetupError(
-            "'EMEModeSpec.group_index_step' is not supported because EME propagation does "
-            "not use group index and EME mode data does not store 'n_group' or dispersion "
-            "quantities. For broadband EME, list target frequencies in 'EMESimulation.freqs' "
-            "and use 'EMEModeSpec.interp_spec' to solve fewer modal frequencies and "
-            "interpolate. If you need group index itself, use a standalone 'ModeSolver' or "
-            "'ModeSolverMonitor'."
-        )
+        if diagnostics := validate_group_index_step(val):
+            raise SetupError(diagnostics[0].message)
+        return False
 
     # this method is not supported because not all ModeSpec features are supported
     # @classmethod
