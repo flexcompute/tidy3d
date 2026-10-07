@@ -967,6 +967,7 @@ class Simulation(AbstractYeeGridSimulation):
     _is_periodic_fixed_angle = _tfsf_methods._is_periodic_fixed_angle
 
     # SimulationSources
+    _source_medium = _sources_methods._source_medium
     _plane_wave_boundaries = _sources_methods._plane_wave_boundaries
     _check_source_freq_available = _sources_methods._check_source_freq_available
     _source_homogeneous_isotropic = _sources_methods._source_homogeneous_isotropic

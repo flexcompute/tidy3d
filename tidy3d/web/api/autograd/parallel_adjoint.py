@@ -261,27 +261,44 @@ def _group_parallel_adjoint_bases_by_port(
         return []
 
     sim_data_stub = td.SimulationData(simulation=simulation, data=())
-    port_groups = td.SimulationData._group_adjoint_sources_by_port(
+    port_groups = sim_data_stub._group_adjoint_sources_by_port(
         adj_srcs=[source for _, source in basis_sources],
         metadata=[basis for basis, _ in basis_sources],
         adjust_fwidth=False,
+        simulation=simulation,
     )
 
     groups_out: list[tuple[list[ParallelAdjointBasis], AdjointSourceInfo]] = []
     for port_group in port_groups:
         group_sources = list(port_group.sources)
+        group_bases = list(port_group.metadata or ())
         if len(group_sources) == 1:
             # Source is already width-adjusted when built from the canonical basis.
             adjoint_source_info = adjoint_source_info_single(group_sources[0], adjust_fwidth=False)
+        elif not sim_data_stub._plane_wave_group_covers_frequencies(
+            group_sources,
+            plane_wave_medium=port_group.plane_wave_medium,
+        ):
+            groups_out.extend(
+                (
+                    [basis],
+                    adjoint_source_info_single(source, adjust_fwidth=False),
+                )
+                for basis, source in zip(group_bases, group_sources, strict=True)
+            )
+            continue
         else:
-            src_broadband = sim_data_stub._make_broadband_source(adj_srcs=group_sources)
+            src_broadband = sim_data_stub._make_broadband_source_with_medium(
+                adj_srcs=group_sources,
+                plane_wave_medium=port_group.plane_wave_medium,
+            )
             post_norm = td.SimulationData._make_post_norm_amps(adj_srcs=group_sources)
             adjoint_source_info = AdjointSourceInfo(
                 sources=(src_broadband,),
                 post_norm=post_norm,
                 normalize_sim=True,
             )
-        groups_out.append((list(port_group.metadata or ()), adjoint_source_info))
+        groups_out.append((group_bases, adjoint_source_info))
 
     return groups_out
 

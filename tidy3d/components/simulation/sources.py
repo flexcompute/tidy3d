@@ -43,6 +43,14 @@ if TYPE_CHECKING:
 from . import constants
 
 
+def _source_medium(self: Any, source: PlaneWave) -> AbstractMedium | None:
+    """Return the single medium intersecting a plane-wave source."""
+    mediums = self.scene.intersecting_media(source, self.structures)
+    if len(mediums) > 1:
+        return None
+    return mediums.pop() if mediums else self.medium
+
+
 def _plane_wave_boundaries(self: Any) -> Self:
     """Error if there are plane wave sources incompatible with boundary conditions."""
     boundaries = self.boundary_spec.to_list

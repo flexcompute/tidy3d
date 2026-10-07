@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.beam import BeamGrid, BeamPose
     from tidy3d.components.data.data_array import ScalarFieldDataArray
+    from tidy3d.components.medium import AbstractMedium
     from tidy3d.components.types import Ax, Coordinate
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
@@ -775,6 +776,29 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         title="Broadband Method",
         description="PlaneWave only supports the Chebyshev broadband method.",
     )
+
+    def _fixed_in_plane_wavevector(self, medium: AbstractMedium) -> tuple[float, float] | None:
+        """Return the local transverse wavevector for a fixed-k plane wave."""
+        if not isinstance(self.angular_spec, FixedInPlaneKSpec):
+            return None
+        freq = self.source_time._freq0
+        wave_number = float(np.real(freq * np.sqrt(medium.eps_model(freq))))
+        transverse_wave_number = wave_number * np.sin(self.angle_theta)
+        return (
+            float(transverse_wave_number * np.cos(self.angle_phi)),
+            float(transverse_wave_number * np.sin(self.angle_phi)),
+        )
+
+    def _retuned_fixed_in_plane_wavevector(self, medium: AbstractMedium, freq: float) -> Self:
+        """Return a copy retuned to ``freq`` while preserving transverse wavevector."""
+        if not isinstance(self.angular_spec, FixedInPlaneKSpec):
+            return self
+        freq0 = self.source_time._freq0
+        wave_number0 = float(np.real(freq0 * np.sqrt(medium.eps_model(freq0))))
+        wave_number = float(np.real(freq * np.sqrt(medium.eps_model(freq))))
+        sin_theta = wave_number0 * np.sin(self.angle_theta) / wave_number
+        angle_theta = float(np.arcsin(np.clip(sin_theta, -1.0, 1.0)))
+        return self.updated_copy(angle_theta=angle_theta)
 
     @cached_property
     def _is_periodic_fixed_angle(self) -> bool:

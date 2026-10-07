@@ -18,7 +18,7 @@ import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import (
     source_normalization as source_normalization_numerics,
 )
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from tidy3d.components.autograd.field_source_pca import FieldSourcePCAProcessor
 from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
@@ -38,6 +38,11 @@ from tidy3d.components.file_util import json_string_from_hdf5
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
+from tidy3d.components.source.field import (
+    CHEB_GRID_WIDTH,
+    CRITICAL_FREQUENCY_FACTOR,
+    PlaneWave,
+)
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import GaussianBeamType, SourceType
 from tidy3d.components.types.base import discriminated_union
@@ -70,6 +75,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
+    from tidy3d.components.medium import AbstractMedium
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
 
@@ -106,9 +112,14 @@ NUM_ADJOINT_FWIDTH_TO_ZERO = 3
 # for broadband adjoint source, the minimum number of FWIDTH to reach the lowest frequency
 # that is covered by the broadband pulse
 NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
+# Relative tolerance for grouping numerically equivalent fixed-k plane-wave ports.
+FIXED_K_GROUP_RTOL = 1e-10
 # If grouped Gaussian-like source center frequencies span more than this fraction of the
 # grouped center frequency, use a small multi-frequency source approximation.
 GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD = 0.2
+PLANE_WAVE_GROUP_NUM_FREQS = 3
+PLANE_WAVE_GROUP_FREQUENCY_MARGIN = 1.25
+PLANE_WAVE_GROUP_MIN_FWIDTH_FRACTION = 0.1
 
 
 class _LazyMonitorDataMap(Mapping[str, MonitorDataType]):
@@ -250,10 +261,11 @@ def _filter_adjoint_source_infos(
 
 @dataclass(frozen=True)
 class AdjointSourceGroup:
-    """Grouped adjoint sources that share a spatial port, with optional metadata."""
+    """Grouped adjoint sources that share a spatial port."""
 
     sources: tuple[SourceType, ...]
     metadata: tuple[Any, ...] | None = None
+    plane_wave_medium: AbstractMedium | None = None
 
 
 class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
@@ -1803,9 +1815,12 @@ class SimulationData(AbstractYeeGridSimulationData):
 
     @staticmethod
     def _adjoint_port_group_hashes(
-        adj_srcs: list[SourceType], *, adjust_fwidth: bool = True
-    ) -> tuple[list[SourceType], list[str]]:
-        """Return processed adjoint sources and their spatial-port grouping hashes."""
+        adj_srcs: list[SourceType],
+        *,
+        adjust_fwidth: bool = True,
+        simulation: Simulation | None = None,
+    ) -> tuple[list[SourceType], list[str], list[AbstractMedium | None]]:
+        """Return processed sources, port hashes, and resolved plane-wave media."""
 
         processed_sources = (
             SimulationData._adjoint_src_width_single(adj_srcs) if adjust_fwidth else list(adj_srcs)
@@ -1820,10 +1835,45 @@ class SimulationData(AbstractYeeGridSimulationData):
         tmp_src_f0 = 0.5 * (min_freq_tmp_src + max_freq_tmp_src)
         tmp_src_fwidth = max_freq_tmp_src - min_freq_tmp_src
         tmp_src_time = GaussianPulse(freq0=tmp_src_f0, fwidth=tmp_src_fwidth)
-        port_hashes = [
-            src.updated_copy(source_time=tmp_src_time)._hash_self() for src in processed_sources
-        ]
-        return processed_sources, port_hashes
+        port_hashes = []
+        plane_wave_media = []
+        medium_by_geometry = {}
+        fixed_k_ports: dict[str, list[tuple[float, float]]] = defaultdict(list)
+        for src in processed_sources:
+            hash_source = src.updated_copy(source_time=tmp_src_time)
+            port_hash = hash_source._hash_self()
+            medium = None
+            if simulation is not None and isinstance(src, PlaneWave):
+                geometry_key = (src.center, src.size)
+                if geometry_key not in medium_by_geometry:
+                    medium_by_geometry[geometry_key] = simulation._source_medium(src)
+                medium = medium_by_geometry[geometry_key]
+                wavevector = None if medium is None else src._fixed_in_plane_wavevector(medium)
+                if wavevector is not None:
+                    hash_source = hash_source.updated_copy(angle_theta=0.0, angle_phi=0.0)
+                    base_hash = hash_source._hash_self()
+                    wavevector_scale = max(np.max(np.abs(wavevector)), 1.0)
+                    matching_port = next(
+                        (
+                            index
+                            for index, reference in enumerate(fixed_k_ports[base_hash])
+                            if np.allclose(
+                                wavevector,
+                                reference,
+                                rtol=FIXED_K_GROUP_RTOL,
+                                atol=FIXED_K_GROUP_RTOL
+                                * max(wavevector_scale, np.max(np.abs(reference))),
+                            )
+                        ),
+                        None,
+                    )
+                    if matching_port is None:
+                        matching_port = len(fixed_k_ports[base_hash])
+                        fixed_k_ports[base_hash].append(wavevector)
+                    port_hash = f"{base_hash}:fixed_k:{matching_port}"
+            port_hashes.append(port_hash)
+            plane_wave_media.append(medium)
+        return processed_sources, port_hashes, plane_wave_media
 
     @staticmethod
     def _group_adjoint_sources_by_port(
@@ -1831,6 +1881,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         metadata: list[Any] | None = None,
         *,
         adjust_fwidth: bool = True,
+        simulation: Simulation | None = None,
     ) -> list[AdjointSourceGroup]:
         """Group sources by spatial port."""
 
@@ -1839,14 +1890,24 @@ class SimulationData(AbstractYeeGridSimulationData):
         if metadata is not None and len(metadata) != len(adj_srcs):
             raise ValueError("'metadata' must have the same length as 'adj_srcs'.")
 
-        processed_sources, port_hashes = SimulationData._adjoint_port_group_hashes(
-            adj_srcs, adjust_fwidth=adjust_fwidth
+        processed_sources, port_hashes, plane_wave_media = (
+            SimulationData._adjoint_port_group_hashes(
+                adj_srcs,
+                adjust_fwidth=adjust_fwidth,
+                simulation=simulation,
+            )
         )
         grouped: dict[str, dict[str, Any]] = {}
-        for index, (src, port_hash) in enumerate(zip(processed_sources, port_hashes)):
+        for index, (src, port_hash, plane_wave_medium) in enumerate(
+            zip(processed_sources, port_hashes, plane_wave_media, strict=True)
+        ):
             group = grouped.setdefault(
                 port_hash,
-                {"sources": [], "metadata": [] if metadata is not None else None},
+                {
+                    "sources": [],
+                    "metadata": [] if metadata is not None else None,
+                    "plane_wave_medium": plane_wave_medium,
+                },
             )
             group["sources"].append(src)
             if metadata is not None:
@@ -1856,6 +1917,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             AdjointSourceGroup(
                 sources=tuple(group["sources"]),
                 metadata=None if group["metadata"] is None else tuple(group["metadata"]),
+                plane_wave_medium=group["plane_wave_medium"],
             )
             for group in grouped.values()
         ]
@@ -1906,6 +1968,60 @@ class SimulationData(AbstractYeeGridSimulationData):
                 "optimize this problem without utilizing symmetry."
             )
 
+    def _plane_wave_group_covers_frequencies(
+        self,
+        adj_srcs: list[SourceType],
+        plane_wave_medium: AbstractMedium | None,
+    ) -> bool:
+        """Whether a grouped plane wave safely covers all requested frequencies."""
+        if len(adj_srcs) <= 1 or not isinstance(adj_srcs[0], PlaneWave):
+            return True
+
+        try:
+            grouped_source = self._make_broadband_source_with_medium(
+                adj_srcs,
+                plane_wave_medium=plane_wave_medium,
+            )
+        except ValidationError:
+            return False
+        if not isinstance(grouped_source, PlaneWave):
+            return True
+
+        target_freqs = np.array([src.source_time._freq0 for src in adj_srcs])
+        source_freqs = grouped_source.frequency_grid
+        target_min, target_max = np.min(target_freqs), np.max(target_freqs)
+        source_min, source_max = np.min(source_freqs), np.max(source_freqs)
+        if source_min > target_min * (1 + FIXED_K_GROUP_RTOL) or source_max < target_max * (
+            1 - FIXED_K_GROUP_RTOL
+        ):
+            return False
+
+        if plane_wave_medium is None:
+            return True
+        reference_k = adj_srcs[0]._fixed_in_plane_wavevector(plane_wave_medium)
+        grouped_k = grouped_source._fixed_in_plane_wavevector(plane_wave_medium)
+        if reference_k is None or grouped_k is None:
+            return True
+
+        wavevector_scale = max(np.max(np.abs(reference_k)), 1.0)
+        if not np.allclose(
+            grouped_k,
+            reference_k,
+            rtol=FIXED_K_GROUP_RTOL,
+            atol=FIXED_K_GROUP_RTOL * wavevector_scale,
+        ):
+            return False
+
+        transverse_wave_number = np.linalg.norm(reference_k)
+        for freq in source_freqs:
+            wave_number = float(np.real(freq * np.sqrt(plane_wave_medium.eps_model(freq))))
+            if (
+                CRITICAL_FREQUENCY_FACTOR * transverse_wave_number
+                > (1 + FIXED_K_GROUP_RTOL) * wave_number
+            ):
+                return False
+        return True
+
     def _process_adjoint_sources_standard(
         self,
         adj_srcs: list[SourceType],
@@ -1916,6 +2032,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         port_groups = self._group_adjoint_sources_by_port(
             adj_srcs,
             adjust_fwidth=adjust_fwidth,
+            simulation=self.simulation,
         )
         adj_srcs_process_fwidth = [src for group in port_groups for src in group.sources]
 
@@ -1933,13 +2050,32 @@ class SimulationData(AbstractYeeGridSimulationData):
                 adjust_fwidth=False,
             )
         else:
+            if not all(
+                self._plane_wave_group_covers_frequencies(
+                    list(group.sources),
+                    plane_wave_medium=group.plane_wave_medium,
+                )
+                for group in port_groups
+            ):
+                log.info(
+                    "Plane-wave port grouping does not safely cover all adjoint frequencies; "
+                    "grouping adjoint sources by frequency."
+                )
+                adjoint_infos = self._process_adjoint_sources_by_frequency(
+                    adj_srcs_process_fwidth,
+                    adjust_fwidth=False,
+                )
+                log.info(f"Created {len(adjoint_infos)} adjoint source groups.")
+                return adjoint_infos
+
             log.info("Grouping adjoint sources by port.")
 
             self._warn_adjoint_source_grouping_with_symmetry(num_ports)
 
             for port_group in port_groups:
                 processed_srcs, post_norm = self._process_adjoint_sources_broadband(
-                    list(port_group.sources)
+                    list(port_group.sources),
+                    plane_wave_medium=port_group.plane_wave_medium,
                 )
                 adjoint_infos.append(
                     AdjointSourceInfo(
@@ -2245,11 +2381,16 @@ class SimulationData(AbstractYeeGridSimulationData):
         return self._process_adjoint_sources_standard(adj_srcs)
 
     def _process_adjoint_sources_broadband(
-        self, adj_srcs: list[SourceType]
+        self,
+        adj_srcs: list[SourceType],
+        plane_wave_medium: AbstractMedium | None,
     ) -> tuple[list[SourceType], xr.DataArray]:
         """Process adjoint sources for the case of several sources at the same freq."""
 
-        src_broadband = self._make_broadband_source(adj_srcs=adj_srcs)
+        src_broadband = self._make_broadband_source_with_medium(
+            adj_srcs=adj_srcs,
+            plane_wave_medium=plane_wave_medium,
+        )
         post_norm_amps = self._make_post_norm_amps(adj_srcs=adj_srcs)
 
         log.info(
@@ -2291,6 +2432,24 @@ class SimulationData(AbstractYeeGridSimulationData):
     def _make_broadband_source(self, adj_srcs: list[SourceType]) -> SourceType:
         """Make a broadband source for a set of adjoint sources."""
 
+        source_base = adj_srcs[0]
+        plane_wave_medium = (
+            self.simulation._source_medium(source_base)
+            if isinstance(source_base, PlaneWave)
+            else None
+        )
+        return self._make_broadband_source_with_medium(
+            adj_srcs,
+            plane_wave_medium=plane_wave_medium,
+        )
+
+    def _make_broadband_source_with_medium(
+        self,
+        adj_srcs: list[SourceType],
+        plane_wave_medium: AbstractMedium | None,
+    ) -> SourceType:
+        """Make a broadband source using an already resolved injection-plane medium."""
+
         adj_src_f0, adj_src_fwidth = self._adjoint_src_width_broadband(adj_srcs)
 
         source_index = self.simulation.normalize_index or 0
@@ -2298,9 +2457,38 @@ class SimulationData(AbstractYeeGridSimulationData):
         src_time_base = self.simulation.sources[source_index].source_time.updated_copy(
             amplitude=1.0, phase=0.0
         )
-        src_broadband = adj_srcs[0].updated_copy(
-            source_time=src_time_base.updated_copy(freq0=adj_src_f0, fwidth=adj_src_fwidth)
-        )
+        source_base = adj_srcs[0]
+
+        focus_plane_wave_band = False
+        if isinstance(source_base, PlaneWave) and len(adj_srcs) > 1:
+            source_freqs = np.array([src.source_time._freq0 for src in adj_srcs])
+            frequency_half_span = 0.5 * float(np.ptp(source_freqs))
+            if frequency_half_span > 0:
+                focus_plane_wave_band = True
+                outer_chebyshev_node = np.cos(np.pi / (2 * PLANE_WAVE_GROUP_NUM_FREQS))
+                adj_src_fwidth = max(
+                    PLANE_WAVE_GROUP_MIN_FWIDTH_FRACTION * adj_src_f0,
+                    PLANE_WAVE_GROUP_FREQUENCY_MARGIN
+                    * frequency_half_span
+                    / (CHEB_GRID_WIDTH * outer_chebyshev_node),
+                )
+
+        if focus_plane_wave_band and isinstance(src_time_base, GaussianPulse):
+            source_time_kwargs = src_time_base.model_dump(exclude={"freq0", "fwidth", "type"})
+            source_time = type(src_time_base).from_frequency_range(
+                fmin=adj_src_f0 - adj_src_fwidth,
+                fmax=adj_src_f0 + adj_src_fwidth,
+                **source_time_kwargs,
+            )
+        else:
+            source_time = src_time_base.updated_copy(freq0=adj_src_f0, fwidth=adj_src_fwidth)
+
+        if isinstance(source_base, PlaneWave) and plane_wave_medium is not None:
+            source_base = source_base._retuned_fixed_in_plane_wavevector(
+                plane_wave_medium, source_time._freq0
+            )
+
+        src_broadband = source_base.updated_copy(source_time=source_time)
 
         # For grouped Gaussian-like sources, use a small multi-frequency approximation only
         # when the grouped source centers span more than the configured fractional threshold
@@ -2313,6 +2501,9 @@ class SimulationData(AbstractYeeGridSimulationData):
                 if freq_span > GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD * adj_src_f0:
                     num_freqs = 3
             src_broadband = src_broadband.updated_copy(num_freqs=num_freqs)
+
+        if isinstance(src_broadband, PlaneWave) and len(adj_srcs) > 1:
+            src_broadband = src_broadband.updated_copy(num_freqs=PLANE_WAVE_GROUP_NUM_FREQS)
 
         return src_broadband
 
