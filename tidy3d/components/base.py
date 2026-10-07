@@ -462,6 +462,8 @@ class Tidy3dBaseModel(BaseModel):
         See also: https://peps.python.org/pep-0487/
         """
         tag = cls.__name__
+        # Class attribute lookup can inherit the parent's annotations after metaclass introspection.
+        cls.__annotations__ = inspect.get_annotations(cls, eval_str=False)
         cls.__annotations__[TYPE_TAG_STR] = Literal[tag]
         setattr(cls, TYPE_TAG_STR, tag)
         TYPE_TO_CLASS_MAP[tag] = cls
