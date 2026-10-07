@@ -6,6 +6,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 import numpy as np
+from flexcompute.core._migration.em.eme.schema.validation_schema import (
+    MAX_NUM_EME_CELLS as _MAX_NUM_EME_CELLS,
+)
+from flexcompute.core._migration.em.eme.schema.validation_schema import (
+    MAX_NUM_MODES as _MAX_NUM_MODES,
+)
 from flexcompute.core._migration.em.eme.validation import (
     validate_group_index_step,
 )
@@ -29,9 +35,8 @@ if TYPE_CHECKING:
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import Coordinate, Size
 
-# grid limits
-MAX_NUM_MODES = 1000
-MAX_NUM_EME_CELLS = 500
+MAX_NUM_MODES = _MAX_NUM_MODES
+MAX_NUM_EME_CELLS = _MAX_NUM_EME_CELLS
 MAX_NUM_REPS = 100000
 
 
@@ -221,17 +226,6 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         description="Name of this 'EMEGridSpec'. Used in 'EMEPeriodicitySweep'.",
     )
 
-    @field_validator("num_reps")
-    @classmethod
-    def _validate_num_reps(cls, val: int) -> int:
-        """Check num_reps is not too large."""
-        if val > MAX_NUM_REPS:
-            raise SetupError(
-                f"'EMEGridSpec' has 'num_reps={val:.2e}'; "
-                f"the largest value allowed is '{MAX_NUM_REPS}'."
-            )
-        return val
-
     @abstractmethod
     def make_grid(self, center: Coordinate, size: Size, axis: Axis) -> EMEGrid:
         """Generate EME grid from the EME grid spec.
@@ -386,29 +380,6 @@ class EMEExplicitGrid(EMEGridSpec):
         for mode_index, mode_spec in enumerate(self.mode_specs):
             yield mode_spec, ("mode_specs", mode_index)
 
-    @model_validator(mode="after")
-    def _validate_boundaries(self) -> Self:
-        """Check that boundaries is increasing and contains one fewer element than mode_specs."""
-        val = self.boundaries
-        mode_specs = self.mode_specs
-        boundaries = val
-        if len(mode_specs) - 1 != len(boundaries):
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "There must be exactly one fewer item in 'boundaries' than in 'mode_specs'."
-                ),
-                "boundaries",
-            )
-        if len(boundaries) > 0:
-            rmin = boundaries[0]
-            for rmax in boundaries[1:]:
-                if rmax < rmin:
-                    self._raise_validation_error_at_loc(
-                        ValidationError("The 'boundaries' must be increasing."), "boundaries"
-                    )
-                rmin = rmax
-        return self
-
     def make_grid(self, center: Coordinate, size: Size, axis: Axis) -> EMEGrid:
         """Generate EME grid from the EME grid spec.
 
@@ -546,30 +517,6 @@ class EMECompositeGrid(EMEGridSpec):
         for subgrid_index, subgrid in enumerate(self.subgrids):
             for mode_spec, loc in subgrid._mode_specs_with_locs():
                 yield mode_spec, ("subgrids", subgrid_index, *loc)
-
-    @model_validator(mode="after")
-    def _validate_subgrid_boundaries(self) -> Self:
-        """Check that subgrid boundaries is increasing and contains one fewer element than subgrids."""
-        val = self.subgrid_boundaries
-        subgrids = self.subgrids
-        subgrid_boundaries = val
-        if len(subgrids) - 1 != len(subgrid_boundaries):
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "There must be exactly one fewer item in 'subgrid_boundaries' than in 'subgrids'."
-                ),
-                "subgrid_boundaries",
-            )
-        if len(subgrid_boundaries) > 0:
-            rmin = subgrid_boundaries[0]
-            for rmax in subgrid_boundaries[1:]:
-                if rmax < rmin:
-                    self._raise_validation_error_at_loc(
-                        ValidationError("The 'subgrid_boundaries' must be increasing."),
-                        "subgrid_boundaries",
-                    )
-                rmin = rmax
-        return self
 
     def subgrid_bounds(
         self, center: Coordinate, size: Size, axis: Axis

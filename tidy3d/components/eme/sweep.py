@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from pydantic import Field, PositiveInt, field_validator
+from pydantic import Field, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayInt1D, ArrayLike
-from tidy3d.exceptions import SetupError
 
-from .grid import MAX_NUM_REPS
+if TYPE_CHECKING:
+    pass
 
 
 class EMESweepSpec(Tidy3dBaseModel, ABC):
@@ -157,19 +158,6 @@ class EMEPeriodicitySweep(EMESweepSpec):
         "At each sweep index, contains a dict mapping the name of a subgrid to the "
         "number of repetitions of that subgrid at that sweep index.",
     )
-
-    @field_validator("num_reps")
-    @classmethod
-    def _validate_num_reps(cls, val: list[dict[str, PositiveInt]]) -> list[dict[str, PositiveInt]]:
-        """Check num_reps is not too large."""
-        for num_reps_dict in val:
-            for value in num_reps_dict.values():
-                if value > MAX_NUM_REPS:
-                    raise SetupError(
-                        f"'EMEGridSpec' has 'num_reps={value:.2e}'; "
-                        f"the largest value allowed is '{MAX_NUM_REPS}'."
-                    )
-        return val
 
     @property
     def num_sweep(self) -> PositiveInt:

@@ -201,6 +201,62 @@ DATA_CONVERTERS: dict[Tidy3DSolverDataMap, tuple[str, str]] = {
 }
 
 
+# Component registration stays here, not on public model classes. Abstract roots
+# mark families whose new subclasses must register their own schema explicitly.
+COMPONENT_SCOPES: dict[str, tuple[str, str] | None] = {
+    "tidy3d.components.eme.grid:EMEGridSpec": None,
+    "tidy3d.components.eme.sweep:EMESweepSpec": None,
+    "tidy3d.components.eme.grid:EMEModeSpec": (
+        "flexcompute.core._migration.em.eme.schema.grid:EMEModeSpec",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.grid:EMEUniformGrid": (
+        "flexcompute.core._migration.em.eme.schema.grid:EMEUniformGrid",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.grid:EMEExplicitGrid": (
+        "flexcompute.core._migration.em.eme.schema.grid:EMEExplicitGrid",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.grid:EMECompositeGrid": (
+        "flexcompute.core._migration.em.eme.schema.grid:EMECompositeGrid",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.grid:EMEGrid": (
+        "flexcompute.core._migration.em.eme.schema.grid:EMEGrid",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.sweep:EMELengthSweep": (
+        "flexcompute.core._migration.em.eme.schema.sweep:EMELengthSweep",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.sweep:EMEModeSweep": (
+        "flexcompute.core._migration.em.eme.schema.sweep:EMEModeSweep",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+    "tidy3d.components.eme.sweep:EMEPeriodicitySweep": (
+        "flexcompute.core._migration.em.eme.schema.sweep:EMEPeriodicitySweep",
+        "flexcompute.core._migration.em.eme.validation:validate",
+    ),
+}
+
+
+# Only migrated construction flows opt in; client policy validators stay public.
+COMPONENT_CONSTRUCTION_TYPES = frozenset(
+    {
+        "tidy3d.components.eme.grid:EMEUniformGrid",
+        "tidy3d.components.eme.grid:EMEExplicitGrid",
+        "tidy3d.components.eme.grid:EMECompositeGrid",
+        "tidy3d.components.eme.sweep:EMEPeriodicitySweep",
+    }
+)
+
+COMPONENT_ERROR_TYPES = {
+    "em.eme.grid_repetitions_exceeded": "tidy3d.exceptions:SetupError",
+    "em.eme.periodicity_repetitions_exceeded": "tidy3d.exceptions:SetupError",
+}
+
+
 def resolve(path: str) -> Any:
     """Resolve a ``module:attribute`` path lazily."""
 

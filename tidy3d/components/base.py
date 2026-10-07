@@ -48,6 +48,11 @@ from tidy3d._runtime import (
     VALIDATION_MODES,
     fast_validation_active,
 )
+from tidy3d.em.translate.components import (
+    from_component,
+    validate_component,
+    validate_on_construction,
+)
 from tidy3d.exceptions import FileError, Tidy3dError, format_chained_exception_message
 from tidy3d.log import log
 
@@ -472,6 +477,7 @@ class Tidy3dBaseModel(BaseModel):
 
             @model_validator(mode="after")
             def __tidy3d_end_capture__(self: T) -> T:
+                validate_on_construction(self)
                 if log._capture:
                     log.end_capture(self)
                 return self
@@ -596,8 +602,8 @@ class Tidy3dBaseModel(BaseModel):
             self._raise_validation_error_at_loc(str(error), *loc, log_error=False)
 
     def _translate_migrated_validation_scope(self) -> object | None:
-        """Return the migrated schema object this model validates, or ``None`` to opt out."""
-        return None
+        """Translate a registered component; unrelated models opt out."""
+        return from_component(self)
 
     def _validate_migrated_validation_scope(
         self,
@@ -605,8 +611,8 @@ class Tidy3dBaseModel(BaseModel):
         *,
         context: Mapping[str, Any],
     ) -> ValidationReport | None:
-        """Validate a translated scope. Participating models override this hook."""
-        return None
+        """Select a registered component facade; custom scopes may override."""
+        return validate_component(self, migrated_scope, context=context)
 
     def _run_migrated_validation_bridge(
         self,
@@ -665,6 +671,20 @@ class Tidy3dBaseModel(BaseModel):
             if diagnostic.severity == "warning":
                 log.warning(diagnostic.message, custom_loc=list(diagnostic.path))
             elif diagnostic.path:
+                error_type = (error_types or {}).get(diagnostic.code)
+                if error_type is not None:
+                    raise PydanticValidationError.from_exception_data(
+                        type(self).__name__,
+                        [
+                            InitErrorDetails(
+                                type="value_error",
+                                loc=diagnostic.path,
+                                input=None,
+                                ctx={"error": error_type(diagnostic.message)},
+                            )
+                        ],
+                        hide_input=True,
+                    )
                 self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
             else:
                 error_type = (error_types or {}).get(diagnostic.code, ValueError)
@@ -679,8 +699,8 @@ class Tidy3dBaseModel(BaseModel):
     ) -> Self:
         """Present a scope's model-level diagnostics at this model's public paths.
 
-        ``_validate_model`` calls this with the diagnostics of its scope's
-        ``validate_model_rules``, which carry migrated-schema paths;
+        :meth:`_run_migrated_model_rules` calls this with the diagnostics of the rule
+        callables it ran, which carry migrated-schema paths;
         :meth:`_map_migrated_validation_report` maps them to this model's fields, so
         the error points at the field the user set.
         """
@@ -696,10 +716,20 @@ class Tidy3dBaseModel(BaseModel):
     ) -> Self:
         """Translate once, run each scope's model-level rules in order, and present them.
 
-        ``_validate_model`` calls this with one ``validate_model_rules`` per scope
-        whose rules apply to the class, in the order Tidy3D ran them. A scope that
-        reports an error ends the run.
+        Registered EME classes reach this through ``validate_on_construction``, which
+        the base ``__tidy3d_end_capture__`` validator calls for types listed in
+        ``tidy3d.em.translate.map.COMPONENT_CONSTRUCTION_TYPES``. It passes no rule
+        callables, so the complete scope facade runs through the translation and
+        validation bridge.
+
+        A class can instead call this from its own ``_validate_model`` with one
+        ``validate_model_rules`` per scope whose rules apply, in the order Tidy3D
+        ran them. A scope that reports an error ends the run.
         """
+        if not validate_model_rules:
+            return self._present_migrated_validation_report(
+                self._run_migrated_validation_bridge(), error_types=error_types
+            )
         translation = self._translate_migrated_validation_scope()
         diagnostics: tuple[ValidationDiagnostic, ...] = ()
         for rules in validate_model_rules:
