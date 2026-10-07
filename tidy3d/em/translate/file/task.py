@@ -29,7 +29,7 @@ def to_tidy3d_file(schema_task: object, path: str | PathLike[str]) -> str | Path
 def from_em_schema_file(path: str | PathLike[str]) -> object:
     """Load a backend schema task file."""
 
-    from flexcompute.core._migration.em.schema.tidy3d import Tidy3dBaseModel
+    from flexcompute.core._migration.em.schema.tidy3d.components.base import Tidy3dBaseModel
 
     return Tidy3dBaseModel.from_file(path)
 
