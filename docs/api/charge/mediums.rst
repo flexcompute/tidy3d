@@ -21,8 +21,9 @@ Mobility
 
 Models contributing to carrier mobility, assigned to
 ``SemiconductorMedium.mobility_n`` and ``mobility_p`` or, for
-``CanaliFieldDependence`` and ``LombardiSurfaceDependence``, attached to those
-models through ``field_dependence`` and ``surface_dependence``.
+``CanaliFieldDependence``, ``TransferredElectronFieldDependence`` and
+``LombardiSurfaceDependence``, attached to those models through
+``field_dependence`` and ``surface_dependence``.
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -32,12 +33,15 @@ models through ``field_dependence`` and ``surface_dependence``.
    CaugheyThomasMobility
    MasettiMobility
    CanaliFieldDependence
+   TransferredElectronFieldDependence
    LombardiSurfaceDependence
 
 .. note::
-   ``MasettiMobility``, ``CanaliFieldDependence`` and
-   ``LombardiSurfaceDependence`` are supported only on the accelerated solver.
-   ``CanaliFieldDependence`` adds high-field velocity saturation to any of the
+   ``MasettiMobility``, ``CanaliFieldDependence``,
+   ``TransferredElectronFieldDependence`` and ``LombardiSurfaceDependence`` are
+   supported only on the accelerated solver. ``CanaliFieldDependence`` (high-field
+   velocity saturation) and ``TransferredElectronFieldDependence`` (the negative
+   differential mobility of direct-gap III-V semiconductors) attach to any of the
    low-field mobility models through ``field_dependence``, and
    ``LombardiSurfaceDependence`` adds surface degradation near
    semiconductor/insulator interfaces to ``CaugheyThomasMobility`` and

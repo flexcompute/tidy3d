@@ -1,26 +1,28 @@
 from __future__ import annotations
 
+from abc import ABC
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import MICROMETER, PERCMCUBE
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
 
 
-# Floor the accelerated charge solver applies to the temperature-scaled Canali
-# saturation velocity 'v_sat * (T/300)**exp_v_sat' [cm/s], and the bounds it
-# clamps the temperature-scaled exponent 'beta * (T/300)**exp_beta' to.
-# Configurations that reach either at a known lattice temperature are rejected at
-# setup time instead of being silently clamped.
-CANALI_V_SAT_FLOOR = 5e5
+# Runtime floor on every field dependence's 'v_sat * (T/300)**exp_v_sat' [cm/s] and
+# clamp on the Canali 'beta * (T/300)**exp_beta'. Reaching either at a known lattice
+# temperature is rejected at setup instead of being silently clamped.
+V_SAT_FLOOR = 5e5
 CANALI_BETA_MIN = 0.1
 CANALI_BETA_MAX = 20.0
+TRANSFERRED_ELECTRON_GAMMA_MIN = 2.0
+TRANSFERRED_ELECTRON_GAMMA_MAX = 20.0
 # Reference density [cm^-3] of the quasi-Fermi driving force when none is given.
-CANALI_REFERENCE_DENSITY = 1e10
+QUASI_FERMI_REFERENCE_DENSITY = 1e10
 
 _SURFACE_DEPENDENCE_DESCRIPTION = (
     "Optional surface mobility degradation near semiconductor/insulator interfaces, "
@@ -31,14 +33,78 @@ _SURFACE_DEPENDENCE_DESCRIPTION = (
 )
 
 _FIELD_DEPENDENCE_DESCRIPTION = (
-    "Optional high-field velocity-saturation model applied on top of the low-field "
+    "Optional high-field mobility model applied on top of the low-field "
     "mobility computed by this model. When ``None``, the mobility does not depend on "
     "the driving force. Supported only by the accelerated charge solver, and must be "
     "set on both the electron and hole mobility models of a medium or on neither."
 )
 
 
-class CanaliFieldDependence(Tidy3dBaseModel):
+class _HighFieldDependenceBase(Tidy3dBaseModel, ABC):
+    """Fields and validation shared by the high-field mobility laws."""
+
+    v_sat: PositiveFloat = Field(
+        allow_inf_nan=False,
+        title="Saturation velocity",
+        description="Carrier drift velocity :math:`v_{sat}` approached at high driving "
+        "force, at the reference temperature (300K).",
+        json_schema_extra={"units": "cm/s"},
+    )
+
+    exp_v_sat: float = Field(
+        default=0.0,
+        allow_inf_nan=False,
+        title="Exponent for temperature dependence of the saturation velocity",
+        description="Exponent for the temperature dependence of the saturation velocity, "
+        "``v_sat(T) = v_sat * (T/300)**exp_v_sat``.",
+    )
+
+    driving_force: Literal["electric_field", "quasi_fermi_gradient"] = Field(
+        default="electric_field",
+        title="Driving force",
+        description="Driving force :math:`F` of the high-field mobility: the electric field "
+        "acting on the carrier, or the gradient of its quasi-Fermi potential. Where the "
+        "carrier density is well above ``reference_density``, the quasi-Fermi gradient "
+        "vanishes under the built-in fields of junctions and heterointerfaces at "
+        "equilibrium, so they do not enter the high-field mobility. With "
+        "``'quasi_fermi_gradient'`` the DC solve can take up to about twice as long.",
+    )
+
+    reference_density: PositiveFloat | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        title="Reference density",
+        description="Density :math:`n_0` added to the carrier density in the quasi-Fermi "
+        "potential of the ``'quasi_fermi_gradient'`` driving force, which keeps the driving "
+        "force finite in depleted regions. Where the carrier density is comparable to or "
+        "below it, the driving force approaches the electric field. Valid only with that "
+        "driving force; when ``None``, 1e10 cm^-3 is used.",
+        json_schema_extra={"units": PERCMCUBE},
+    )
+
+    @model_validator(mode="after")
+    def _validate_reference_density_driving_force(self) -> Self:
+        """Ensure 'reference_density' is only set with the quasi-Fermi driving force."""
+        if self.reference_density is not None and self.driving_force != "quasi_fermi_gradient":
+            self._raise_validation_error_at_loc(
+                "'reference_density' applies only to driving_force='quasi_fermi_gradient'. "
+                "Remove 'reference_density', or set driving_force='quasi_fermi_gradient'.",
+                "reference_density",
+            )
+        return self
+
+    @property
+    def reference_density_resolved(self) -> float | None:
+        """'reference_density' with its default for the quasi-Fermi driving force, or
+        ``None`` for the electric field."""
+        if self.driving_force != "quasi_fermi_gradient":
+            return None
+        if self.reference_density is None:
+            return QUASI_FERMI_REFERENCE_DENSITY
+        return self.reference_density
+
+
+class CanaliFieldDependence(_HighFieldDependenceBase):
     """High-field velocity saturation with the extended Canali model.
 
     Notes
@@ -149,16 +215,8 @@ class CanaliFieldDependence(Tidy3dBaseModel):
     velocity peaks and then *decreases* with increasing field
     (transferred-electron effect), which no parameter choice of a monotone
     model can represent; beyond the peak field it would overestimate the
-    drift velocity.
+    drift velocity. Use :class:`TransferredElectronFieldDependence` for them.
     """
-
-    v_sat: PositiveFloat = Field(
-        allow_inf_nan=False,
-        title="Saturation velocity",
-        description="Carrier saturation velocity :math:`v_{sat}` at the reference "
-        "temperature (300K).",
-        json_schema_extra={"units": "cm/s"},
-    )
 
     beta: float = Field(
         default=1.0,
@@ -170,14 +228,6 @@ class CanaliFieldDependence(Tidy3dBaseModel):
         f"Must lie in [{CANALI_BETA_MIN}, {CANALI_BETA_MAX}].",
     )
 
-    exp_v_sat: float = Field(
-        default=0.0,
-        allow_inf_nan=False,
-        title="Exponent for temperature dependence of the saturation velocity",
-        description="Exponent for the temperature dependence of the saturation velocity, "
-        "``v_sat(T) = v_sat * (T/300)**exp_v_sat``.",
-    )
-
     exp_beta: float = Field(
         default=0.0,
         allow_inf_nan=False,
@@ -186,50 +236,133 @@ class CanaliFieldDependence(Tidy3dBaseModel):
         "``beta(T) = beta * (T/300)**exp_beta``.",
     )
 
-    driving_force: Literal["electric_field", "quasi_fermi_gradient"] = Field(
-        default="electric_field",
-        title="Driving force",
-        description="Driving force :math:`F` that saturates the carrier velocity: the "
-        "electric field acting on the carrier, or the gradient of its quasi-Fermi "
-        "potential. Where the carrier density is well above ``reference_density``, the "
-        "quasi-Fermi gradient does not saturate the carrier under the built-in fields of "
-        "junctions and heterointerfaces at equilibrium. With ``'quasi_fermi_gradient'`` "
-        "each bias point is solved twice, so the DC solve can take up to about twice as "
-        "long.",
-    )
 
-    reference_density: PositiveFloat | None = Field(
-        default=None,
+class TransferredElectronFieldDependence(_HighFieldDependenceBase):
+    """High-field mobility with negative differential mobility (transferred-electron effect).
+
+    Notes
+    -----
+        The transferred-electron model [1]_, [2]_, [3]_ describes electrons in
+        direct-gap III-V semiconductors, whose drift velocity peaks and then
+        *decreases* toward :math:`v_{sat}` as the driving force grows. It degrades
+        the low-field mobility :math:`\\mu_{low}` computed by the mobility model it
+        is attached to:
+
+        .. math::
+
+            \\mu(F) = \\frac{\\mu_{low} + \\left(v_{sat} / F\\right)
+            \\left(F / F_0\\right)^\\gamma}
+            {1 + \\left(F / F_0\\right)^\\gamma}
+
+    so that :math:`\\mu \\to \\mu_{low}` for :math:`F \\ll F_0` and the drift
+    velocity :math:`\\mu F \\to v_{sat}` for :math:`F \\gg F_0`. Here :math:`F`
+    [V/cm] is the magnitude of the local driving force on that carrier, selected
+    by ``driving_force`` as for :class:`CanaliFieldDependence`. With
+    ``"electric_field"`` it is the electrostatic field plus the band-structure and
+    thermal-gradient contributions. With ``"quasi_fermi_gradient"`` it is the
+    gradient of the carrier's quasi-Fermi potential [2]_, [3]_, evaluated with the
+    carrier density :math:`c` replaced by :math:`c + n_0`, where :math:`n_0` is
+    ``reference_density``. Where :math:`c \\gg n_0` this gradient vanishes at
+    equilibrium, so the built-in fields of junctions and heterointerfaces do not
+    move the carriers past the velocity peak there. With ``"quasi_fermi_gradient"``
+    the DC solve can take up to about twice as long.
+
+    Published parameter sets use :math:`\\gamma = 4` for GaAs and the other
+    III-V binaries [2]_, [3]_; [4]_ uses 3 for InP and 2 for GaP.
+
+    The saturation velocity follows a power-law temperature dependence
+
+    .. math::
+
+        v_{sat}(T) = v_{sat} \\left(\\frac{T}{300K}\\right)^{\\alpha_{v}}
+
+    with :math:`\\alpha_v` given by ``exp_v_sat``; :math:`F_0` and :math:`\\gamma`
+    do not depend on temperature. The solver floors :math:`v_{sat}(T)` at
+    :math:`5 \\times 10^5` cm/s. When the lattice temperature is known when the
+    simulation is built — a scalar analysis temperature *or* a prescribed
+    temperature field — configurations that reach the floor are rejected at
+    validation time; when the temperature is solved for (self-heating), the floor
+    is applied at runtime against the live temperature field.
+
+    .. [1] J. J. Barnes, R. J. Lomax, and G. I. Haddad. Finite-element simulation
+           of GaAs MESFET's with lateral doping profiles and submicron gates. IEEE
+           Transactions on Electron Devices, 23(9):1042-1048, 1976.
+    .. [2] S. Selberherr. Analysis and Simulation of Semiconductor Devices.
+           Springer, Vienna, 1984.
+    .. [3] V. Palankovski and R. Quay. Analysis and Simulation of Heterostructure
+           Devices. Springer, Vienna, 2004.
+    .. [4] V. Palankovski. Simulation of Heterojunction Bipolar Transistors.
+           Dissertation, Technische Universität Wien, 2000.
+
+    Note
+    ----
+    Past the velocity peak the differential mobility is negative, so the current
+    is no longer a monotone function of the applied voltage: a current-driven
+    contact can then match several bias points. Sweep the voltage instead. Long,
+    lightly doped regions biased in this range can also be intrinsically unstable
+    (Gunn domains), and a steady-state solution may be hard to reach or not exist.
+
+    With ``"electric_field"``, the law also acts on the built-in field of an
+    isotype junction at equilibrium, where no current flows: a GaAs step from
+    :math:`10^{17}` to :math:`10^{15}` cm⁻³ carries about :math:`1.6 \\times 10^4`
+    V/cm, four times :math:`F_0`. A 1 um, :math:`10^{15}` cm⁻³ region between two
+    such contacts loses about 9 % of its zero-bias conductance, and its DC sweep
+    converges at zero bias but not at the following bias steps (on a finer mesh,
+    not even at zero bias). ``"quasi_fermi_gradient"`` avoids both, but only
+    below the velocity peak: past it, a steeper carrier-density gradient
+    along the current lowers the drift velocity and acts as a negative diffusion,
+    so the DC solve does not converge once the drift velocity :math:`J / (q c)`
+    reaches the peak anywhere in the device, near 0.2 V in the region above.
+    For devices with such junctions, use ``"quasi_fermi_gradient"`` and stay below
+    the velocity peak: past it, neither driving force currently converges. Without
+    such junctions, transport past the peak converges with ``"electric_field"``.
+
+    Example
+    -------
+    GaAs electrons at 300 K:
+
+        >>> import tidy3d as td
+        >>> transferred_electron_GaAs_n = td.TransferredElectronFieldDependence(
+        ...   v_sat=7.7e6,
+        ...   F_0=4.0e3,
+        ...   gamma=4.0,
+        ...   driving_force="quasi_fermi_gradient",
+        ... )
+
+    attached to the low-field model of the electrons, here the undoped GaAs
+    electron mobility (the velocity then peaks at about 2.2e7 cm/s near 3.4 kV/cm):
+
+        >>> mobility_n = td.ConstantMobilityModel(
+        ...   mu=8500.0,
+        ...   field_dependence=transferred_electron_GaAs_n,
+        ... )
+    """
+
+    F_0: PositiveFloat = Field(
         allow_inf_nan=False,
-        title="Reference density",
-        description="Density :math:`n_0` added to the carrier density in the quasi-Fermi "
-        "potential of the ``'quasi_fermi_gradient'`` driving force, which keeps the driving "
-        "force finite in depleted regions. Where the carrier density is comparable to or "
-        "below it, the driving force approaches the electric field. Valid only with that "
-        "driving force; when ``None``, 1e10 cm^-3 is used.",
-        json_schema_extra={"units": PERCMCUBE},
+        title="Reference field",
+        description="Reference field :math:`F_0` at which the high-field term takes over "
+        "from the low-field mobility; the velocity peak lies close to it.",
+        json_schema_extra={"units": "V/cm"},
     )
 
-    @model_validator(mode="after")
-    def _validate_reference_density_driving_force(self) -> Self:
-        """Ensure 'reference_density' is only set with the quasi-Fermi driving force."""
-        if self.reference_density is not None and self.driving_force != "quasi_fermi_gradient":
-            self._raise_validation_error_at_loc(
-                "'reference_density' applies only to driving_force='quasi_fermi_gradient'. "
-                "Remove 'reference_density', or set driving_force='quasi_fermi_gradient'.",
-                "reference_density",
-            )
-        return self
+    gamma: float = Field(
+        default=4.0,
+        ge=TRANSFERRED_ELECTRON_GAMMA_MIN,
+        le=TRANSFERRED_ELECTRON_GAMMA_MAX,
+        title="Transition exponent",
+        description="Exponent :math:`\\gamma` controlling how sharply the mobility "
+        "transitions from the low-field to the high-field branch. Published parameter sets "
+        "use 4 for GaAs, AlAs and InAs, 3 or 4 for InP, and 2 for GaP. "
+        f"Must lie in [{TRANSFERRED_ELECTRON_GAMMA_MIN}, {TRANSFERRED_ELECTRON_GAMMA_MAX}]: "
+        "below :math:`F_0` the mobility exceeds :math:`\\mu_{low}` by up to "
+        ":math:`(v_{sat}/F_0)(F/F_0)^{\\gamma-1}`, which for :math:`\\gamma` close to 1 "
+        "stays large even far below :math:`F_0`. The upper bound is that of the Canali "
+        "exponent.",
+    )
 
-    @property
-    def reference_density_resolved(self) -> float | None:
-        """'reference_density' with its default for the quasi-Fermi driving force, or
-        ``None`` for the electric field."""
-        if self.driving_force != "quasi_fermi_gradient":
-            return None
-        if self.reference_density is None:
-            return CANALI_REFERENCE_DENSITY
-        return self.reference_density
+
+FieldDependenceType = CanaliFieldDependence | TransferredElectronFieldDependence
 
 
 class LombardiSurfaceDependence(Tidy3dBaseModel):
@@ -269,18 +402,17 @@ class LombardiSurfaceDependence(Tidy3dBaseModel):
     contributions, without the degeneracy term of Fermi-Dirac statistics). Only
     a field pushing the carrier toward the interface degrades its mobility.
 
-    With :class:`CanaliFieldDependence` on the same mobility model, the degraded
-    mobility is the low-field input of the velocity saturation. With the
-    ``"electric_field"`` driving force, the field that saturates the velocity loses
-    its interface-normal component in proportion to :math:`D`: no current crosses
-    an insulator, so near the interface the current runs along it. Within
-    :math:`6.5\\,l_{crit}` of the interface, that field also comes from a gradient
-    fit that resolves the potential's curvature normal to the interface, so this
-    model changes the velocity saturation there even where :math:`D` is negligible.
-    With ``"quasi_fermi_gradient"`` the whole quasi-Fermi gradient saturates the
-    velocity [2]_. Where the carrier density is well above ``reference_density``, as
-    across the inversion layer, the confining field does not enter it, since no
-    current crosses the interface [3]_.
+    With a ``field_dependence`` (:class:`CanaliFieldDependence` or
+    :class:`TransferredElectronFieldDependence`) on the same mobility model, the
+    degraded mobility is its low-field input. With the ``"electric_field"`` driving
+    force, the field driving the high-field model loses its interface-normal
+    component in proportion to :math:`D`: no current crosses an insulator, so near
+    the interface the current runs along it. Within :math:`6.5\\,l_{crit}` of the
+    interface, this model also changes the high-field mobility where :math:`D` is
+    negligible. With the ``"quasi_fermi_gradient"`` driving force the whole
+    quasi-Fermi gradient drives the high-field model [2]_. Where the carrier density
+    is well above ``reference_density``, as across the inversion layer, the
+    confining field does not enter it, since no current crosses the interface [3]_.
 
     Where the nearest interface switches, as across the bisector of a corner or
     the middle of a film between two insulators, the direction of
@@ -408,8 +540,9 @@ class ConstantMobilityModel(Tidy3dBaseModel):
         json_schema_extra={"units": "cm²/V-s"},
     )
 
-    field_dependence: CanaliFieldDependence | None = Field(
+    field_dependence: FieldDependenceType | None = Field(
         default=None,
+        discriminator=TYPE_TAG_STR,
         title="High-field mobility dependence",
         description=_FIELD_DEPENDENCE_DESCRIPTION,
     )
@@ -507,8 +640,9 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
 
     Note
     ----
-    High-field velocity saturation can be enabled by supplying a
-    :class:`CanaliFieldDependence` model through ``field_dependence``, and
+    High-field mobility can be enabled by supplying a
+    :class:`CanaliFieldDependence` or :class:`TransferredElectronFieldDependence`
+    model through ``field_dependence``, and
     surface degradation near insulator interfaces by supplying a
     :class:`LombardiSurfaceDependence` model through ``surface_dependence``.
     """
@@ -560,8 +694,9 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
         description="Exponent of thermal dependence of the doping exponent effect.",
     )
 
-    field_dependence: CanaliFieldDependence | None = Field(
+    field_dependence: FieldDependenceType | None = Field(
         default=None,
+        discriminator=TYPE_TAG_STR,
         title="High-field mobility dependence",
         description=_FIELD_DEPENDENCE_DESCRIPTION,
     )
@@ -745,8 +880,9 @@ class MasettiMobility(Tidy3dBaseModel):
         description="Temperature exponent for the mid-doping mobility floor.",
     )
 
-    field_dependence: CanaliFieldDependence | None = Field(
+    field_dependence: FieldDependenceType | None = Field(
         default=None,
+        discriminator=TYPE_TAG_STR,
         title="High-field mobility dependence",
         description=_FIELD_DEPENDENCE_DESCRIPTION,
     )

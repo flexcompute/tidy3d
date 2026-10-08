@@ -69,7 +69,8 @@ from tidy3d.components.tcad.grid import (
 from tidy3d.components.tcad.mobility import (
     CANALI_BETA_MAX,
     CANALI_BETA_MIN,
-    CANALI_V_SAT_FLOOR,
+    V_SAT_FLOOR,
+    CanaliFieldDependence,
     MasettiMobility,
 )
 from tidy3d.components.tcad.monitors.charge import (
@@ -3795,8 +3796,8 @@ class HeatChargeSimulation(AbstractSimulation):
         then negative voltages by increasing magnitude, inserting a warm-start
         solve per ``convergence_dv`` interval within each pass. Doping ramp-up
         adds ``tolerance_settings.ramp_up_iters - 1`` solves. With impact
-        ionization, or with a quasi-Fermi-gradient driving force in a Canali
-        field dependence, every bias point is solved twice: first with the
+        ionization, or with a quasi-Fermi-gradient driving force in a field
+        dependence, every bias point is solved twice: first with the
         ionization source frozen and the quasi-Fermi-driven carriers at their
         low-field mobility, then with both active. Ramp levels are solved once.
         Charge sims only.
@@ -3806,7 +3807,7 @@ class HeatChargeSimulation(AbstractSimulation):
         # Doping ramp: the initial solve runs once per ramp level.
         ramp_solves = self.analysis_spec.tolerance_settings.ramp_up_iters - 1
 
-        # Staged ionization or quasi-Fermi saturation re-solves every bias point,
+        # Staged ionization or a quasi-Fermi driving force re-solves every bias point,
         # but not the ramp levels.
         staged = self._uses_impact_ionization() or self._uses_quasi_fermi_driving_force()
         solves_per_point = 2 if staged else 1
@@ -3878,12 +3879,13 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
         ):
             features.append("MasettiMobility")
-        if any(
-            charge.mobility_n.field_dependence is not None
-            or charge.mobility_p.field_dependence is not None
+        field_dependence_names = {
+            type(mobility.field_dependence).__name__
             for _loc, charge in self._iter_semiconductor_charge_media()
-        ):
-            features.append("CanaliFieldDependence")
+            for mobility in (charge.mobility_n, charge.mobility_p)
+            if mobility.field_dependence is not None
+        }
+        features.extend(sorted(field_dependence_names))
         if any(
             self._surface_dependence(charge.mobility_n) is not None
             or self._surface_dependence(charge.mobility_p) is not None
@@ -4013,7 +4015,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return False
 
     def _uses_quasi_fermi_driving_force(self) -> bool:
-        """Whether any semiconductor saturates a carrier velocity on a quasi-Fermi gradient."""
+        """Whether any semiconductor drives a high-field mobility on a quasi-Fermi gradient."""
         return any(
             getattr(mobility.field_dependence, "driving_force", None) == "quasi_fermi_gradient"
             for _loc, charge in self._iter_semiconductor_charge_media()
@@ -4143,7 +4145,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     def _check_field_dependence_mobility_models(self) -> Self:
-        """Error if velocity saturation is single-carrier, or if v_sat(T)/beta(T) is clamped.
+        """Error if a field dependence is single-carrier, or if v_sat(T)/beta(T) is clamped.
 
         Raises directly at the offending charge medium's loc (``("medium",)``
         or ``("structures", i)``) so the user is pointed at the exact field to
@@ -4165,8 +4167,8 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
                 self._raise_validation_error_at_loc(
                     f"'field_dependence' is set on the {present} mobility model but not on "
-                    f"the {missing} one; velocity saturation must be enabled for both carriers "
-                    "or neither.",
+                    f"the {missing} one; a high-field mobility model must be set for both "
+                    "carriers or neither.",
                     *loc,
                 )
             if temperature_samples is None:
@@ -4180,15 +4182,17 @@ class HeatChargeSimulation(AbstractSimulation):
                 for temperature in temperature_samples:
                     scale = temperature / 300.0
                     v_sat = field_dependence.v_sat * scale**field_dependence.exp_v_sat
-                    if v_sat <= CANALI_V_SAT_FLOOR:
+                    if v_sat <= V_SAT_FLOOR:
                         self._raise_validation_error_at_loc(
-                            f"'CanaliFieldDependence' saturation velocity for the {carrier} "
-                            f"mobility is {v_sat:.3g} cm/s at {temperature:g} K "
+                            f"'{type(field_dependence).__name__}' saturation velocity for the "
+                            f"{carrier} mobility is {v_sat:.3g} cm/s at {temperature:g} K "
                             "('v_sat * (T/300)**exp_v_sat'), at or below the "
-                            f"{CANALI_V_SAT_FLOOR:g} cm/s floor the accelerated charge solver "
+                            f"{V_SAT_FLOOR:g} cm/s floor the accelerated charge solver "
                             "clamps to. Adjust 'v_sat' or 'exp_v_sat'.",
                             *loc,
                         )
+                    if not isinstance(field_dependence, CanaliFieldDependence):
+                        continue
                     beta = field_dependence.beta * scale**field_dependence.exp_beta
                     if not CANALI_BETA_MIN <= beta <= CANALI_BETA_MAX:
                         self._raise_validation_error_at_loc(

@@ -178,6 +178,8 @@ names the offending feature:
 - ``MasettiMobility``
 - ``CanaliFieldDependence`` (high-field velocity saturation, attached to any
   mobility model through ``field_dependence``)
+- ``TransferredElectronFieldDependence`` (high-field negative differential
+  mobility, attached to any mobility model through ``field_dependence``)
 - ``LombardiSurfaceDependence`` (surface mobility degradation, attached to
   ``CaugheyThomasMobility`` and ``MasettiMobility`` through
   ``surface_dependence``)

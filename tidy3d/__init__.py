@@ -118,7 +118,11 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
 )
 from tidy3d.components.tcad.mesher import VolumeMesher
-from tidy3d.components.tcad.mobility import CanaliFieldDependence, LombardiSurfaceDependence
+from tidy3d.components.tcad.mobility import (
+    CanaliFieldDependence,
+    LombardiSurfaceDependence,
+    TransferredElectronFieldDependence,
+)
 from tidy3d.components.tcad.monitors.charge import (
     SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
@@ -1025,6 +1029,7 @@ __all__ = [
     "ThinLensOverlapMonitor",
     "ThinLensProfile",
     "Tidy3dBaseModel",
+    "TransferredElectronFieldDependence",
     "Transformed",
     "TriangleMesh",
     "TriangularGridDataset",
