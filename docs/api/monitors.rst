@@ -17,6 +17,7 @@ The types of monitors in Tidy3D include:
 * `Diffraction`_: Records diffraction coefficient(s) in a periodic simulation
 * `Far-field`_: Various monitors for calculating far-field projection and radiation characteristics
 * `Surface`_: Records EM fields on PEC and lossy metal surfaces in a 3D region at specified time or frequency points
+* `Power loss`_: Records the data needed to compute the electromagnetic power lost in each structure
 * `Permittivity and Permeability`_: Records material permittivity or permeability properties within a given region
 
 .. seealso::
@@ -390,6 +391,55 @@ The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``
 .. note::
 
    Surface current density is computed from ``H``, field intensity from ``E``, and the Poynting vector from both. Narrowing ``fields`` from the default ``['E', 'H']`` makes the quantities that need the omitted component unavailable.
+
+
+~~~~
+
+Power loss
+----------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   FieldStructureMonitor
+   SurfaceFieldStructureMonitor
+
+These monitors record what ``SimulationData.per_structure_loss()`` needs to compute the total electromagnetic power lost in each structure. Dielectrics and conductive media lose power in their volume, and lossy metals lose it at their surface, so each kind of loss has its own monitor:
+
+* The ``FieldStructureMonitor`` records the electric field, the diagonal permittivity and the owning structure at the native Yee-grid points in a 3D region. Its data also provides the displacement field, the absorbed power density and optical carrier generation.
+* The ``SurfaceFieldStructureMonitor`` records the H field, which the surface loss is computed from, and by default the E field, the surface normal and the owning structure at each vertex of the PEC and lossy-metal surfaces in a 3D region.
+
+``per_structure_loss()`` returns a ``StructureLossDataArray`` over frequency ``f`` and ``structure_index``, in watts. Each structure's value comes from the monitor that records how the solver modeled it: the ``SurfaceFieldStructureMonitor`` for PEC and for ``LossyMetalMedium`` under the default surface impedance subpixel method, the ``FieldStructureMonitor`` for all other media, including lossy metals solved as conductors (for example with ``subpixel=False``). Only structures sampled by a supplied monitor appear in the result. A structure that its own monitor does not sample, because that monitor was not supplied or does not reach it, is NaN when the other monitor samples it and absent otherwise: for example, a dielectric does not appear in a surface-only result, because surface vertices belong only to PEC and lossy metals. A ``structure_index`` of ``-1`` is the background medium. Under simulation ``symmetry``, the half the solver does not record is attributed to the structures the geometry places there, so mirror-image structures each get their own loss. A ``FullyAnisotropicMedium`` with off-diagonal conductivity is rejected, since its loss has cross terms the recorded diagonal permittivity does not capture. When both monitors are supplied, place them over the same region and give them the same frequencies.
+
+.. code-block:: python
+
+   # loss in the volume of dielectrics and conductive media
+   volume_loss_monitor = FieldStructureMonitor(
+       center=(0, 0, 0),
+       size=(2, 2, 2),
+       freqs=[250e12, 300e12],
+       name='volume_loss',
+   )
+
+   # loss at the surface of lossy metals
+   surface_loss_monitor = SurfaceFieldStructureMonitor(
+       center=(0, 0, 0),
+       size=(2, 2, 2),
+       freqs=[250e12, 300e12],
+       name='surface_loss',
+   )
+
+   # after the simulation: total loss per structure and frequency
+   loss = sim_data.per_structure_loss(
+       volumetric_monitor_name='volume_loss',
+       surface_monitor_name='surface_loss',
+   )
+   loss.sel(structure_index=0)  # loss in simulation.structures[0]
+
+.. note::
+
+   ``per_structure_loss()`` requires a 3D simulation and monitors with nonzero size along every axis. Each recorded sample is attributed to a single structure, so near an interface between structures the split of the loss is accurate to about one grid cell. Like other surface monitors, the ``SurfaceFieldStructureMonitor`` is in beta stage.
 
 
 ~~~~

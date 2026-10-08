@@ -13,7 +13,12 @@ from .diagnostic import (
 from .dipole import DipoleEmissionData
 from .electromagnetic import ElectromagneticFieldData
 from .point_cloud import PointCloudFieldData, PointCloudPermittivityData
-from .surface import ElectromagneticSurfaceFieldData, SurfaceFieldData, SurfaceFieldTimeData
+from .surface import (
+    ElectromagneticSurfaceFieldData,
+    SurfaceFieldData,
+    SurfaceFieldStructureData,
+    SurfaceFieldTimeData,
+)
 from .time import AuxFieldTimeData, FieldTimeData
 
 __all__ = [
@@ -31,5 +36,6 @@ __all__ = [
     "PointCloudFieldData",
     "PointCloudPermittivityData",
     "SurfaceFieldData",
+    "SurfaceFieldStructureData",
     "SurfaceFieldTimeData",
 ]

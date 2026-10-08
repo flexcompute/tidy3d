@@ -3126,6 +3126,66 @@ class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
         return storage
 
 
+class SurfaceFieldStructureMonitor(SurfaceFieldMonitor):
+    """:class:`Monitor` that records the magnetic field (and by default the electric field), the
+    interface normal, and per-vertex structure-ownership data on a triangulated PEC/lossy-metal
+    surface.
+
+    Notes
+    -----
+
+        A frequency-domain monitor that records, over the same triangulated surface mesh as
+        :class:`.SurfaceFieldMonitor`, one additional primitive: the per-vertex
+        structure-ownership index (``-1`` for the background medium, ``i`` for
+        ``simulation.structures[i]``), recorded unconditionally regardless of which of ``fields``
+        is requested. ``fields`` must include ``"H"``, from which the surface loss is computed;
+        ``"E"`` is optional.
+
+        This primitive serves the derived surface loss density and per-structure total loss (see
+        :class:`.SurfaceFieldStructureData` and :meth:`.SimulationData.per_structure_loss`) from a
+        single monitor, the same way :class:`.FieldStructureMonitor`'s structure-ownership maps
+        serve the volumetric absorbed power density.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging.level
+    >>> td.config.logging.level = "ERROR"
+    >>> monitor = SurfaceFieldStructureMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='surface_field_structure')
+    >>> td.config.logging.level = old_logging_level
+    """
+
+    @field_validator("fields")
+    @classmethod
+    def _require_magnetic_field(cls, val: tuple[EMSurfaceField, ...]) -> tuple[EMSurfaceField, ...]:
+        """Surface loss needs ``H``: reject a field selection without it before the solver runs."""
+        if "H" not in val:
+            raise ValueError(
+                "'SurfaceFieldStructureMonitor' must record 'H', which the surface loss density "
+                "and 'per_structure_loss' are computed from; include 'H' in 'fields'."
+            )
+        return val
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization: the
+        :class:`.SurfaceFieldMonitor` estimate plus one structure-ownership index per surface
+        point."""
+        num_points = num_cells * 4  # same surface-point estimate as the parent
+        return super().storage_size(num_cells, tmesh) + BYTES_REAL * num_points
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded during a solver run: the
+        :class:`.SurfaceFieldMonitor` estimate plus the structure ownership at its peak: while the
+        solver builds the per-vertex owners (up to one per surface edge, 7 edges per cell), the
+        per-cell edge owners they are built from (7 per cell) are still allocated, so two such
+        buffers are counted."""
+        return super()._storage_size_solver(num_cells, tmesh) + BYTES_REAL * num_cells * 7 * 2
+
+
 class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
     """:class:`Monitor` that records electromagnetic fields in the time domain on PEC and lossy metal surfaces.
 

@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
+import xarray as xr
+from flexcompute.core._migration.em.numerical.raw import power_loss as loss_numerics
+from flexcompute.core._migration.em.numerical.raw.grid import yee_primal_dual_widths_1d
 from pydantic import Field
 
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -18,8 +21,6 @@ from tidy3d.components.data.monitor_data.base import AbstractFieldData
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import xarray as xr
 
     from tidy3d.compat import Self
     from tidy3d.components.source.base import Source
@@ -213,11 +214,59 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
         ):
             e_field = getattr(self, e_name)
             eps = getattr(self, eps_name)
-            # 1/2 w eps0 = pi f eps0; eps and E share the same 'f' coordinate. ``|E|**2`` avoids the
-            # full-volume complex temporary that ``E * conj(E)`` would allocate.
-            prefactor = np.pi * EPSILON_0 * e_field.coords["f"]
-            per_axis[axis] = prefactor * eps.imag * np.abs(e_field) ** 2
+            # eps and E share the same 'f' coordinate.
+            per_axis[axis] = loss_numerics.absorbed_power_density(
+                eps_imag=eps.imag, e_field=e_field, freq=e_field.coords["f"], epsilon_0=EPSILON_0
+            )
         return per_axis
+
+    def _cell_volumes(self) -> dict[str, xr.DataArray]:
+        """Per-component Yee control volume [um^3] of each recorded E-field sample.
+
+        A component sits at a cell center along its own axis and on a cell boundary along the other
+        two, so its volume is the primal (boundary-to-boundary) width along its own axis times the
+        dual (center-to-center) widths along the transverse axes. Widths are clipped to the monitor
+        bounds and to the grid extent without the recording padding, so samples whose control
+        volume lies outside the monitor carry zero volume; with ``interval_space`` downsampling
+        each kept sample inside the monitor integrates the span around it and the kept padding
+        samples outside it carry zero volume (see ``yee_primal_dual_widths_1d``). An
+        axis with a single recorded cell (the simulation grid has one cell along it, as in a 2D
+        simulation) gets unit width from that helper; ``per_structure_loss`` rejects that case.
+        Frequency-independent; matches :attr:`per_component_absorbed_power`'s spatial shape for
+        each of ``"x"``/``"y"``/``"z"``.
+        """
+        if not self.grid_expanded:
+            raise DataError(
+                "Monitor data requires 'grid_expanded' to compute Yee cell-volume integration "
+                "weights."
+            )
+        dims = "xyz"
+        full_bounds = self.grid_expanded.boundaries.to_dict
+        unpadded_bounds = self.colocation_boundaries.to_dict
+        mnt_bounds = np.array(self.monitor.bounds)
+
+        primal_widths, dual_widths = {}, {}
+        for axis, dim in enumerate(dims):
+            keep_inds = self.monitor.downsample(np.arange(len(full_bounds[dim]) - 1), axis=axis)
+            primal_widths[dim], dual_widths[dim] = yee_primal_dual_widths_1d(
+                full_bounds[dim],
+                mnt_bounds[0, axis],
+                mnt_bounds[1, axis],
+                valid_bounds=(float(unpadded_bounds[dim][0]), float(unpadded_bounds[dim][-1])),
+                keep_inds=keep_inds,
+                weight_only_inside=True,
+            )
+
+        volumes: dict[str, xr.DataArray] = {}
+        for own_dim, e_name in zip(dims, FIELD_STRUCTURE_E_COMPONENTS):
+            wx, wy, wz = (primal_widths[d] if d == own_dim else dual_widths[d] for d in dims)
+            coords = getattr(self, e_name).coords
+            volumes[own_dim] = xr.DataArray(
+                wx[:, None, None] * wy[None, :, None] * wz[None, None, :],
+                dims=["x", "y", "z"],
+                coords={dim: coords[dim] for dim in dims},
+            )
+        return volumes
 
     def _colocate_axes(self, per_axis: dict[str, xr.DataArray]) -> dict[str, xr.DataArray]:
         """Colocate each per-axis native scalar onto the common colocation grid.

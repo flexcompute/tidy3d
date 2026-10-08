@@ -59,11 +59,13 @@ from .monitor_data import (
     FieldTimeData,
     PointCloudFieldData,
     PointCloudPermittivityData,
+    SurfaceFieldStructureData,
 )
 from .optical_generation import (
     compute_optical_generation,
     compute_per_component_optical_generation,
 )
+from .structure_loss import compute_per_structure_loss
 from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
@@ -79,7 +81,7 @@ if TYPE_CHECKING:
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
 
-    from .data_array import DataArray
+    from .data_array import DataArray, StructureLossDataArray
     from .optical_generation import OpticalGenerationData
 
 
@@ -2618,6 +2620,112 @@ class SimulationData(AbstractYeeGridSimulationData):
                 f"produced '{field_structure.type}'."
             )
         return field_structure
+
+    def _surface_field_structure_data(self, monitor_name: str) -> SurfaceFieldStructureData:
+        """Fetch and type-check a :class:`.SurfaceFieldStructureData` by monitor name."""
+        try:
+            surface_field_structure = self[monitor_name]
+        except KeyError as exc:
+            raise DataError(  # blind-chaining: ignore
+                f"Monitor '{monitor_name}' not found in the simulation data."
+            ) from exc
+        if not isinstance(surface_field_structure, SurfaceFieldStructureData):
+            raise DataError(
+                f"'per_structure_loss' requires a 'SurfaceFieldStructureMonitor'; monitor "
+                f"'{monitor_name}' produced '{surface_field_structure.type}'."
+            )
+        return surface_field_structure
+
+    def per_structure_loss(
+        self,
+        volumetric_monitor_name: str | None = None,
+        surface_monitor_name: str | None = None,
+    ) -> StructureLossDataArray:
+        """Total electromagnetic power loss [W] per structure and frequency.
+
+        A structure the solver models as a surface (a PEC, or a :class:`.LossyMetalMedium` under
+        the default surface impedance subpixel method) loses power at its surface, recorded by a
+        :class:`.SurfaceFieldStructureMonitor`; any other structure (dielectrics, conductive media,
+        and lossy metals solved as conductors, e.g. with ``subpixel=False``) loses it in its
+        volume, recorded by a :class:`.FieldStructureMonitor`. Each structure's total is taken from
+        the monitor that records its kind. Only structures sampled by a supplied monitor appear,
+        and one that its own kind's monitor did not sample (not supplied, or not reaching the
+        structure) is NaN. At least one monitor is required; when both are given they must record
+        the same ``freqs``. Volumetric integration
+        uses :attr:`.FieldStructureData.per_component_absorbed_power` (not
+        :attr:`.FieldStructureData.absorbed_power_density`, which colocates and would blend the
+        staggered Yee grids and misattribute density near structure boundaries) times each
+        sample's Yee control volume (the primal cell width along the component's own axis and the
+        dual, center-to-center widths along the other two, clipped to the monitor); surface
+        integration uses
+        :meth:`.SurfaceFieldStructureData.surface_loss_density` times vertex-lumped area. Each
+        sums its samples per recorded ``structure_index``.
+
+        Parameters
+        ----------
+        volumetric_monitor_name : Optional[str] = None
+            Name of the :class:`.FieldStructureMonitor` whose data to use.
+        surface_monitor_name : Optional[str] = None
+            Name of the :class:`.SurfaceFieldStructureMonitor` whose data to use.
+
+        Returns
+        -------
+        :class:`.StructureLossDataArray`
+            Loss over ``f`` and ``structure_index``, where ``structure_index`` indexes
+            ``self.simulation.structures`` and ``-1`` (if present) is the background medium
+            (``simulation.medium``). Only owners sampled inside a supplied monitor appear; a
+            lossless one has a zero total, and one not sampled by its own kind's monitor is NaN.
+            Surface vertices are owned only by PEC-like structures, so a structure that loses
+            power in its volume may be absent from a surface-only result; a warning is logged when
+            the simulation contains a lossy one.
+
+        Notes
+        -----
+
+            Both monitors should cover the same geometric region; this cannot be checked or
+            warned about here, so a structure only partly inside one monitor's box will
+            under-count silently.
+
+            The volumetric path requires a 3D simulation (more than one grid cell along every
+            axis) and a volumetric monitor (nonzero size along every axis); otherwise a total
+            power in [W] cannot be formed and a :class:`.SetupError` is raised.
+
+            Under simulation ``symmetry``, the samples of the mirrored half, which the solver does
+            not record, are attributed to the structure the geometry places there rather than to
+            the one their values were expanded from, so mirror-image structures each get their own
+            loss. This assumes the setup itself is symmetric.
+
+            A :class:`.SetupError` is also raised for a :class:`.FullyAnisotropicMedium` with
+            off-diagonal conductivity: its loss has cross terms between field components that the
+            recorded diagonal permittivity does not capture.
+
+            Each recorded sample is attributed wholly to the structure that owns its Yee
+            location, so where a sample's control volume straddles an interface between
+            structures or a monitor face, the split between structures is accurate to about one
+            sample layer; a coarser ``interval_space`` widens that layer, and subpixel-averaged
+            permittivity at interface samples contributes the same way. Volumetric samples owned
+            by a structure modeled as a surface are not reported: where a metal surface cuts
+            through cells,
+            such a sample can carry dielectric loss from the part of its Yee edge outside the
+            metal, so a neighbouring dielectric's total can be short by about one sample layer
+            along that surface.
+        """
+        field_structure = (
+            self._field_structure_data(volumetric_monitor_name)
+            if volumetric_monitor_name is not None
+            else None
+        )
+        surface_field_structure = (
+            self._surface_field_structure_data(surface_monitor_name)
+            if surface_monitor_name is not None
+            else None
+        )
+        return compute_per_structure_loss(
+            list(self.simulation.structures),
+            field_structure,
+            surface_field_structure,
+            self.simulation,
+        )
 
     def _get_adjoint_data(self, structure_index: int, monitor_tag: str) -> MonitorDataType:
         """Grab the field or permittivity data for a given structure index."""

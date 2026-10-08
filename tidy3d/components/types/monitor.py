@@ -26,6 +26,7 @@ from tidy3d.components.monitor import (
     PointCloudFieldMonitor,
     PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
+    SurfaceFieldStructureMonitor,
     SurfaceFieldTimeMonitor,
     ThinLensOverlapMonitor,
 )
@@ -57,8 +58,9 @@ MonitorType = (
     | PointCloudFieldMonitor
     | PointCloudPermittivityMonitor
     | SurfaceFieldMonitor
+    | SurfaceFieldStructureMonitor
     | SurfaceFieldTimeMonitor
 )
 
 
-SurfaceMonitorType = SurfaceFieldMonitor | SurfaceFieldTimeMonitor
+SurfaceMonitorType = SurfaceFieldMonitor | SurfaceFieldStructureMonitor | SurfaceFieldTimeMonitor

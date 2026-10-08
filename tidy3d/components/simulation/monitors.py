@@ -21,6 +21,7 @@ from tidy3d.components.diffraction import (
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import (
     AbstractCustomMedium,
+    AnisotropicMedium,
     AnisotropicMediumFromMedium2D,
     Medium2D,
 )
@@ -38,6 +39,7 @@ from tidy3d.components.monitor import (
     PermittivityMonitor,
     PointCloudFieldMonitor,
     PointCloudPermittivityMonitor,
+    SurfaceFieldStructureMonitor,
     SurfaceIntegrationMonitor,
     TimeMonitor,
 )
@@ -251,37 +253,51 @@ def _validate_point_cloud_monitor_points_in_bounds(self: Any) -> Self:
     return self
 
 
-def _validate_field_structure_monitor_overlaps(self: Any) -> Self:
-    """Reject a ``FieldStructureMonitor`` overlapping a structure with no public owner.
+def _forms_metal_surface(medium: AbstractMedium | None) -> bool:
+    """Whether the solver reconstructs a metal surface on a structure of this medium: it does so
+    when any component is a PEC or a non-penetrable lossy metal."""
+    if medium is None:
+        return False
+    if isinstance(medium, Medium2D | AnisotropicMedium):
+        return any(component.is_pec_like for component in medium.elements.values())
+    return medium.is_pec_like
 
-    The monitor records per-Yee structure-ownership indices into ``simulation.structures``
-    (RFC EMSOLVER-0010). Derived structures carry no such index — 2D materials (converted to
-    volumetric analogues), lumped elements, and the automatic PEC frames around mode sources
-    and internal absorbers — so the monitor is not allowed to intersect them.
+
+def _validate_field_structure_monitor_overlaps(self: Any) -> Self:
+    """Reject a ``FieldStructureMonitor``/``SurfaceFieldStructureMonitor`` overlapping a
+    structure that has no index in ``simulation.structures``.
 
     The check runs against both the user-specified geometries and the finalized
     (grid-snapped) geometries the solver sees: conversion snaps a 2D sheet to the nearest
     grid boundary — up to half a cell along its normal — so the user geometry alone would
     miss a monitor that overlaps only the snapped sheet.
+
+    A ``SurfaceFieldStructureMonitor`` records owners only at metal surface vertices, so it may
+    overlap a 2D material that forms no metal surface.
     """
     field_structure_monitors = [
         (ind, monitor)
         for ind, monitor in enumerate(self.monitors)
-        if isinstance(monitor, FieldStructureMonitor)
+        if isinstance(monitor, (FieldStructureMonitor, SurfaceFieldStructureMonitor))
     ]
     if not field_structure_monitors:
         return self
 
     # Unwrap the optical medium so MultiPhysicsMedium(optical=Medium2D(...)) is also caught;
     # its derived volumetric structure likewise has no public ownership index.
+    # Each entry also says whether the structure can carry metal surface vertices.
     derived = [
-        ("a 2D-material structure", structure.geometry)
+        (
+            "a 2D-material structure",
+            structure.geometry,
+            _forms_metal_surface(structure._optical_medium),
+        )
         for structure in self.structures
         if isinstance(structure._optical_medium, Medium2D | AnisotropicMediumFromMedium2D)
     ]
-    derived += [("a lumped element", element.geometry) for element in self.lumped_elements]
+    derived += [("a lumped element", element.geometry, True) for element in self.lumped_elements]
     derived += [
-        ("an automatic PEC frame around a mode source or internal absorber", frame.geometry)
+        ("an automatic PEC frame around a mode source or internal absorber", frame.geometry, True)
         for frame in self._modal_plane_frames
     ]
     if not derived:
@@ -298,6 +314,7 @@ def _validate_field_structure_monitor_overlaps(self: Any) -> Self:
                 (
                     "the grid-snapped volumetric equivalent of a 2D material or lumped element",
                     structure.geometry,
+                    _forms_metal_surface(structure._optical_medium),
                 )
                 for structure in self._finalized_volumetric_structures
                 if id(structure) not in kept
@@ -310,14 +327,17 @@ def _validate_field_structure_monitor_overlaps(self: Any) -> Self:
 
     for monitor_ind, monitor in field_structure_monitors:
         region = monitor.geometry
-        for description, geometry in derived:
+        surface_only = isinstance(monitor, SurfaceFieldStructureMonitor)
+        for description, geometry, forms_metal_surface in derived:
+            if surface_only and not forms_metal_surface:
+                continue
             if region.intersects(geometry):
                 self._raise_validation_error_at_loc(
-                    f"'FieldStructureMonitor' '{monitor.name}' overlaps {description}. This "
-                    "monitor records per-Yee structure-ownership indices into "
-                    "'simulation.structures', which is undefined for structures without a "
-                    "public owner (2D materials, lumped elements, and automatic PEC frames). "
-                    "Move or resize the monitor so it does not intersect these structures.",
+                    f"'{type(monitor).__name__}' '{monitor.name}' overlaps {description}. This "
+                    "monitor records structure-ownership indices into 'simulation.structures', "
+                    "which is undefined for structures that have no index there (2D materials, "
+                    "lumped elements, and automatic PEC frames). Move or resize the monitor so "
+                    "it does not intersect these structures.",
                     "monitors",
                     monitor_ind,
                 )

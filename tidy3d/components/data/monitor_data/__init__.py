@@ -63,6 +63,7 @@ from .field import (
     PointCloudFieldData,
     PointCloudPermittivityData,
     SurfaceFieldData,
+    SurfaceFieldStructureData,
     SurfaceFieldTimeData,
 )
 from .field import _em_algebra as _algebra_methods
@@ -167,6 +168,7 @@ __all__ = [
     "ScalarFieldDataArray",
     "SourceT",
     "SurfaceFieldData",
+    "SurfaceFieldStructureData",
     "SurfaceFieldTimeData",
     "TimeDataArray",
 ]

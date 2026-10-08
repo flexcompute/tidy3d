@@ -264,6 +264,7 @@ from .components.data.data_array import (
     SpatialVoltageDataArray,
     SphericalAngleDataArray,
     SteadyVoltageDataArray,
+    StructureLossDataArray,
 )
 from .components.data.dataset import (
     FieldDataset,
@@ -301,6 +302,7 @@ from .components.data.monitor_data import (
     PointCloudFieldData,
     PointCloudPermittivityData,
     SurfaceFieldData,
+    SurfaceFieldStructureData,
     SurfaceFieldTimeData,
 )
 from .components.data.optical_generation import OpticalGenerationData
@@ -479,6 +481,7 @@ from .components.monitor import (
     PointCloudFieldMonitor,
     PointCloudPermittivityMonitor,
     SurfaceFieldMonitor,
+    SurfaceFieldStructureMonitor,
     SurfaceFieldTimeMonitor,
     ThinLensOverlapMonitor,
 )
@@ -1009,11 +1012,14 @@ __all__ = [
     "SteadyVoltageDataArray",
     "Structure",
     "StructureBoundary",
+    "StructureLossDataArray",
     "StructureSimulationBoundary",
     "StructureStructureInterface",
     "SubpixelSpec",
     "SurfaceFieldData",
     "SurfaceFieldMonitor",
+    "SurfaceFieldStructureData",
+    "SurfaceFieldStructureMonitor",
     "SurfaceFieldTimeData",
     "SurfaceFieldTimeMonitor",
     "SurfaceImpedance",

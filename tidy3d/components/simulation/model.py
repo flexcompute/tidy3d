@@ -33,6 +33,7 @@ from tidy3d.components.monitor import (
     ModeMonitor,
     PointCloudFieldMonitor,
     SurfaceFieldMonitor,
+    SurfaceFieldStructureMonitor,
     SurfaceFieldTimeMonitor,
 )
 from tidy3d.components.run_time_spec import RunTimeSpec
@@ -1283,6 +1284,7 @@ class Simulation(AbstractYeeGridSimulation):
             AbstractMediumPropertyMonitor,
             FieldStructureMonitor,
             SurfaceFieldMonitor,
+            SurfaceFieldStructureMonitor,
             SurfaceFieldTimeMonitor,
         )
         for index, monitor in enumerate(self.monitors):

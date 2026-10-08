@@ -1566,6 +1566,23 @@ class FluxDataArray(DataArray):
     _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
+class StructureLossDataArray(DataArray):
+    """Total electromagnetic power loss per structure in the frequency domain.
+
+    ``structure_index`` indexes ``Simulation.structures``; ``-1`` is the background medium.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(f=f, structure_index=[-1, 0, 1])
+    >>> loss = StructureLossDataArray(np.random.random((2, 3)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "structure_index")
+    _data_attrs = {"units": WATT, "long_name": "power loss"}
+
+
 class FluxTimeDataArray(DataArray):
     """Flux through a surface in the time-domain.
 
@@ -2832,6 +2849,7 @@ DATA_ARRAY_TYPES = [
     ScalarModeFieldDataArray,
     ScalarTerminalFieldDataArray,
     FluxDataArray,
+    StructureLossDataArray,
     FluxTimeDataArray,
     ModeAmpsDataArray,
     ModeAmpsTimeDataArray,
