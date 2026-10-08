@@ -32,7 +32,6 @@ class Tidy3DSolverDataMap(str, Enum):
     HEAT = "HEAT"
     HEAT_CHARGE = "HEAT_CHARGE"
     VOLUME_MESH = "VOLUME_MESH"
-    MODAL_CM = "MODAL_CM"
     ADAM_OPTIMIZER = "ADAM_OPTIMIZER"
 
 
@@ -65,7 +64,7 @@ TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
     Tidy3DSolverTaskMap.MODE: "flexcompute.core._migration.em.schema.tidy3d.components.mode.simulation:ModeSimulation",
     Tidy3DSolverTaskMap.VOLUME_MESH: "flexcompute.core._migration.em.schema.tidy3d.components.tcad.mesher:VolumeMesher",
     Tidy3DSolverTaskMap.MODAL_CM: (
-        "flexcompute.core._migration.em.schema.tidy3d.plugins.smatrix.component_modelers.modal:ModalComponentModeler"
+        "flexcompute.core._migration.solver.component_modeler.schema:ComponentModelerTaskInput"
     ),
     Tidy3DSolverTaskMap.ADAM_OPTIMIZER: (
         "flexcompute.core._migration.em.schema.tidy3d.plugins.invdes.optimizer:AdamOptimizer"
@@ -124,7 +123,6 @@ DATA_PUBLIC_CLASSES: dict[Tidy3DSolverDataMap, str] = {
     Tidy3DSolverDataMap.EME: "tidy3d.components.eme.data.sim_data:EMESimulationData",
     Tidy3DSolverDataMap.MODE: "tidy3d.components.mode.data.sim_data:ModeSimulationData",
     Tidy3DSolverDataMap.VOLUME_MESH: "tidy3d.components.tcad.data.sim_data:VolumeMesherData",
-    Tidy3DSolverDataMap.MODAL_CM: "tidy3d.plugins.smatrix.data.modal:ModalComponentModelerData",
     Tidy3DSolverDataMap.ADAM_OPTIMIZER: "tidy3d.plugins.invdes.result:InverseDesignResult",
 }
 
@@ -150,9 +148,6 @@ DATA_SCHEMA_CLASSES: dict[Tidy3DSolverDataMap, str] = {
     ),
     Tidy3DSolverDataMap.VOLUME_MESH: (
         "flexcompute.core._migration.em.schema.tidy3d.components.tcad.data.sim_data:VolumeMesherData"
-    ),
-    Tidy3DSolverDataMap.MODAL_CM: (
-        "flexcompute.core._migration.em.schema.tidy3d.plugins.smatrix.data.modal:ModalComponentModelerData"
     ),
     Tidy3DSolverDataMap.ADAM_OPTIMIZER: "flexcompute.core._migration.em.schema.tidy3d.plugins.invdes.result:InverseDesignResult",
 }
@@ -189,10 +184,6 @@ DATA_CONVERTERS: dict[Tidy3DSolverDataMap, tuple[str, str]] = {
     Tidy3DSolverDataMap.VOLUME_MESH: (
         "tidy3d.em.translate.volume_mesh.data:from_data",
         "tidy3d.em.translate.volume_mesh.data:to_data",
-    ),
-    Tidy3DSolverDataMap.MODAL_CM: (
-        "tidy3d.em.translate.modal_cm.data:from_data",
-        "tidy3d.em.translate.modal_cm.data:to_data",
     ),
     Tidy3DSolverDataMap.ADAM_OPTIMIZER: (
         "tidy3d.em.translate.adam_optimizer.data:from_data",
