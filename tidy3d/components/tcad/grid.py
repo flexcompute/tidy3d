@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
@@ -56,6 +56,13 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
         default=False,
         title="Remove Fragments",
         description="Whether to remove fragments before meshing. This is useful when overlapping structures generate internal boundaries that can lead to very small cell volumes.",
+    )
+
+    mesher: Literal["default", "experimental"] = Field(
+        default="default",
+        title="Mesher",
+        description="Meshing engine that builds the mesh. ``'experimental'`` selects the "
+        "experimental meshing engine instead of the default one.",
     )
 
     @property
@@ -719,6 +726,7 @@ class AutoUnstructuredGrid(UnstructuredGrid):
             mesh_refinements=tuple(
                 self._resolve_mesh_refinement(refinement) for refinement in self.mesh_refinements
             ),
+            mesher=self.mesher,
             attrs=dict(self.attrs),
         )
 
@@ -743,6 +751,7 @@ class AutoUnstructuredGrid(UnstructuredGrid):
             distance_interface_ratio=grid.distance_interface / grid.dl_interface,
             distance_bulk_ratio=grid.distance_bulk / grid.dl_bulk,
             mesh_refinements=grid.mesh_refinements,
+            mesher=grid.mesher,
             attrs=dict(grid.attrs),
         )
 

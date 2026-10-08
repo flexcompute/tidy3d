@@ -63,6 +63,8 @@ from tidy3d.components.tcad.generation_recombination import (
 from tidy3d.components.tcad.grid import (
     AutoUnstructuredGrid,
     DistanceUnstructuredGrid,
+    GridRefinementLine,
+    GridRefinementRegion,
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
@@ -684,6 +686,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("boundary_spec",), self._heat_bcs_reach_solids)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
+        self._call_with_validation_loc(("grid_spec",), self._check_experimental_mesher_support)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
         self._call_with_validation_loc(("sources",), self._names_exist_sources)
         self._call_with_validation_loc(("structures",), self._check_medium_specs)
@@ -2209,6 +2212,46 @@ class HeatChargeSimulation(AbstractSimulation):
                 f"Current Neumann BCs are {names_neumann_Bcs}"
             )
 
+        return self
+
+    def _check_experimental_mesher_support(self) -> Self:
+        """Reject what the experimental mesher cannot mesh, where the simulation alone decides it.
+
+        The backend refuses these at mesh time too, along with the settings only it can check.
+        """
+        if self.grid_spec.mesher != "experimental":
+            return self
+        if isinstance(self.grid_spec, AutoUnstructuredGrid):
+            raise SetupError(
+                "The experimental mesher does not yet support 'AutoUnstructuredGrid'. "
+                "Set 'grid_spec.mesher' to 'default' to use the default mesher."
+            )
+        if self.zero_dims:
+            raise SetupError(
+                "The experimental mesher does not yet support simulations with a zero-size "
+                "dimension. Set 'grid_spec.mesher' to 'default' to use the default mesher."
+            )
+        if isinstance(self.grid_spec, DistanceUnstructuredGrid):
+            sim_lo, sim_hi = (np.asarray(corner, dtype=float) for corner in self.bounds)
+            for index, refinement in enumerate(self.grid_spec.mesh_refinements):
+                requirement = None
+                if isinstance(refinement, GridRefinementRegion):
+                    # Planarity of the part inside the domain, as the backend judges it.
+                    lo = np.maximum(np.asarray(refinement.bounds[0], dtype=float), sim_lo)
+                    hi = np.minimum(np.asarray(refinement.bounds[1], dtype=float), sim_hi)
+                    planar = np.all(hi >= lo) and np.any(np.isclose(hi - lo, 0.0))
+                    if planar and refinement.transition_thickness == 0:
+                        requirement = (
+                            "a planar refinement region needs a nonzero 'transition_thickness'"
+                        )
+                elif isinstance(refinement, GridRefinementLine) and refinement.distance_bulk == 0:
+                    requirement = "a refinement line needs a nonzero 'distance_bulk'"
+                if requirement is not None:
+                    raise SetupError(
+                        "The experimental mesher cannot apply "
+                        f"'grid_spec.mesh_refinements[{index}]': {requirement}. Set one, or set "
+                        "'grid_spec.mesher' to 'default' to use the default mesher."
+                    )
         return self
 
     def _names_exist_grid_spec(self) -> Self:
