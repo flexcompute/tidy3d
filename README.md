@@ -3,12 +3,10 @@
 Name](https://img.shields.io/badge/pypi-tidy3d-blue?style=for-the-badge)](https://pypi.python.org/pypi/tidy3d)
 [![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d.svg?style=for-the-badge)](https://pypi.python.org/pypi/tidy3d/)
 [![Documentation](https://img.shields.io/badge/docs-flexcompute-00643C?style=for-the-badge)](https://docs.flexcompute.com/projects/tidy3d/en/latest/)
-[![Tests](https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/tidy3d-python-client-tests.yml?branch=develop&style=for-the-badge)](https://github.com/flexcompute/tidy3d/actions/workflows/tidy3d-python-client-tests.yml)
 [![License: LGPL-2.1](https://img.shields.io/badge/license-LGPL--2.1-blue?style=for-the-badge)](LICENSE)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-5A4FCF?style=for-the-badge)](https://github.com/astral-sh/ruff)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/daquinteroflex/4702549574741e87deaadba436218ebd/raw/tidy3d_extension.json)
-
-[![Notebooks](https://img.shields.io/badge/Demo-Live%20notebooks-8A2BE2?style=for-the-badge)](https://github.com/flexcompute/tidy3d-notebooks)
+[![Notebooks](https://img.shields.io/badge/Demo-Live%20notebooks-8A2BE2?style=for-the-badge)](https://www.flexcompute.com/tidy3d/learning-center/example-library/)
 
 ![](https://docs.flexcompute.com/projects/tidy3d/en/latest/_static/img/Tidy3D-logo.svg)
 
@@ -57,7 +55,7 @@ web.configure("XXX")
 To test the authentication, you may try importing the web interface via.
 
 ```
-python -c "import tidy3d; tidy3d.web.test()"
+python -c "import tidy3d.web as web; web.test()"
 ```
 
 It should pass without any errors if the API key is set up correctly.
@@ -84,8 +82,8 @@ To get started, our documentation has a lot of [examples](https://docs.flexcompu
 |--------------------|----------------------------------------------------------------------------------|
 | Installation Guide | https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html              |
 | Documentation      | https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html                |
-| Example Library    | https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/docs/index.html |
-| FAQ                | https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/index.html       |
+| Example Library    | https://www.flexcompute.com/tidy3d/learning-center/example-library/ |
+| FAQ                | https://www.flexcompute.com/tidy3d/learning-center/faq/             |
 
 
 ## FlexAgent MCP
@@ -107,7 +105,7 @@ If Claude Code is already running, reload plugins after installation:
 /reload-plugins
 ```
 
-**Codex**
+**Codex CLI (v0.122.0+)**
 
 Add the Flexcompute marketplace:
 
@@ -116,6 +114,10 @@ codex plugin marketplace add flexcompute/plugin-marketplace
 ```
 
 Then open Codex, run `/plugins`, choose the Flexcompute marketplace, and install Tidy3D.
+
+**ChatGPT desktop app (Work or Codex)**
+
+Clone the [Flexcompute plugin marketplace](https://github.com/flexcompute/plugin-marketplace) and open the folder in the app. In Plugins, choose **Flexcompute Plugins** and install **Tidy3D**.
 
 Configure Tidy3D through `uvx`:
 
@@ -151,13 +153,6 @@ For raw MCP client config, run the same command:
 ```
 
 
-## Related Source Repositories
-
-| Name              | Repository                                      |
-|-------------------|-------------------------------------------------|
-| Source Code       | https://github.com/flexcompute/tidy3d           |
-| Notebooks Source  | https://github.com/flexcompute/tidy3d-notebooks |
-
 ## Issues / Feedback / Bug Reporting
 
 Your feedback helps us immensely!
@@ -167,4 +162,4 @@ For more general discussions, questions, comments, anything else, open a topic i
 
 ## License
 
-[GNU LGPL](https://github.com/flexcompute/tidy3d/blob/main/LICENSE)
+[GNU LGPL](https://github.com/flexcompute/tidy3d/blob/develop/LICENSE)
