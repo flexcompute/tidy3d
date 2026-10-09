@@ -185,6 +185,28 @@ When using `InverseDesign` or `InverseDesignMulti` with simulation symmetry toge
 #### Transformations
 The `TopologyDesignRegion.transformations` are specifications that tell the design region how to transform the supplied optimization parameters into a "material density" that is used to construct the permittivity grid. For example, a `FilterProject` transformation applies a conic filter convolution followed by a hyperbolic tangent function projection. If multiple transformations are added to the design region, they will be evaluated one by one, from beginning to end, on the optimization parameters.
 
+`FilterProject` also accepts `projection="ssp1"` or `projection="ssp2"` for subpixel-smoothed projection. SSP2 uses the Hessian of the filtered density to smooth topology changes such as merging boundaries, including at `beta=np.inf`, where the Hessian remains nonzero. These options require a 2D design with square pixels: both varying axes must have actual cell spacing equal to `pixel_size` and at least two samples for SSP1 or three for SSP2. Singleton axes, such as the thickness of a slab, are preserved. Choose the varying side lengths as integer multiples of `pixel_size` to obtain square cells. Use a filter radius substantially larger than `pixel_size`, and keep a uniform simulation mesh throughout the design region. The default `TopologyDesignRegion` mesh override supplies the simulation mesh; the design region separately validates its design-cell spacing.
+
+For example, enable SSP2 in the existing transformation pipeline:
+
+```py
+filter_project = tdi.FilterProject(radius=0.120, beta=np.inf, projection="ssp2")
+design_region = tdi.TopologyDesignRegion(
+    size=(lx_des, ly_des, td.inf),
+    center=(0, 0, 0),
+    eps_bounds=(1.0, eps_mat),
+    pixel_size=pixel_size,
+    transformations=[filter_project],
+    initialization_spec=tdi.RandomInitializationSpec(),
+)
+```
+
+A spatially constant initial field has zero gradient and Hessian, so start with nonuniform parameters or finite `beta` when optimizing. Strict binarization (`strict_binarize=True`) snaps the result to 0 and 1 and removes the smooth transition used for optimization.
+
+For low-level workflows, use `tidy3d.plugins.autograd.invdes.smoothed_projection(filtered, beta=np.inf, order=2)` after filtering, or `tidy3d.plugins.autograd.invdes.make_filter_and_project(..., projection="ssp2")` to combine both steps. The low-level projection operates on a 2D array; `FilterAndProject` also accepts singleton axes. For periodic fields, pass `periodic=True` to the low-level projection; the combined helper uses periodic differences automatically with `padding="wrap"`. Periodic SSP requires at least three samples along each axis for both orders. The implementation evaluates the SSP2 distance and fill factors from [Romano, Arrieta, and Johnson](https://arxiv.org/abs/2601.10737) using finite differences for spatial derivatives, consistent with the existing SSP1 helper.
+
+When configuring `tidy3d.plugins.autograd.invdes.make_filter_and_project` with `size_px` and omitting `dl`, SSP uses pixel coordinates with unit spacing (`scaling_factor=1.0`). If both `size_px` and `radius` are supplied, `size_px` takes precedence and a warning reports that `radius` is ignored. With `size_px`, `dl` can still specify the SSP grid spacing.
+
 #### Penalties
 The `TopologyDesignRegion.penalties` are specifications that tell the optimizer how to penalize the material density corresponding to this design region. For example, an `ErosionDilation` penalty will look at the material density of the region (state of the parameters after all transformations have completed) and evaluate it based on whether the material density is invariant under erosion and dilation, a good proxy for feature size compatibility. Penalties have a `.weight` that can be used to tune their relative contribution to the objective. The total penalty contribution to the objective function is the weighted sum of penalties added to the design region.
 

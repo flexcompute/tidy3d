@@ -13,6 +13,7 @@ from pydantic import Field, PositiveFloat, field_validator, model_validator
 import tidy3d as td
 from tidy3d.components.types import TYPE_TAG_STR, Coordinate, Size
 from tidy3d.exceptions import ValidationError
+from tidy3d.plugins.autograd.invdes.projections import _validate_smoothed_projection_shape
 
 from .base import InvdesBaseModel
 from .initialization import InitializationSpecType, UniformInitializationSpec
@@ -213,10 +214,35 @@ class TopologyDesignRegion(DesignRegion):
     @model_validator(mode="after")
     def _run_validation_checks(self) -> Self:
         """Run topology-specific validation checks after model initialization."""
+        self._validate_ssp_grid()
         self._validate_eps_values()
         self._validate_penalty_value()
         self._validate_gradients()
         return self
+
+    def _validate_ssp_grid(self) -> None:
+        """Validate SSP stencil dimensions and the actual design-cell spacings."""
+        for index, transformation in enumerate(self.transformations):
+            if transformation.projection == "tanh":
+                continue
+            shape = self.params_shape
+            active_shape = tuple(size for size in shape if size != 1)
+            try:
+                _validate_smoothed_projection_shape(
+                    active_shape, order=1 if transformation.projection == "ssp1" else 2
+                )
+            except ValueError as error:
+                self._raise_validation_error_at_loc(error, "transformations", index, "projection")
+            spacing = [length / size for length, size in zip(self.size, shape) if size != 1]
+            if not np.allclose(spacing, self.pixel_size, rtol=1e-12, atol=0):
+                self._raise_validation_error_at_loc(
+                    "SSP projections require equal design-cell spacing along both varying axes, "
+                    "matching 'pixel_size'. "
+                    "Choose design-region side lengths that are integer multiples of 'pixel_size'.",
+                    "transformations",
+                    index,
+                    "projection",
+                )
 
     def _validate_eps_values(self) -> None:
         """Validate the epsilon values by evaluating the transformations."""
@@ -288,7 +314,16 @@ class TopologyDesignRegion(DesignRegion):
     def params_shape(self) -> tuple[int, int, int]:
         """Shape of the parameters array in (x, y, z), given the ``pixel_size`` and bounds."""
         side_lengths = np.array(self.size)
-        num_pixels = np.ceil(side_lengths / self.pixel_size)
+        pixels_per_side = side_lengths / self.pixel_size
+        if any(transformation.projection != "tanh" for transformation in self.transformations):
+            # Preserve square SSP cells when calculated integer multiples round upward.
+            nearest_integer = np.rint(pixels_per_side)
+            pixels_per_side = np.where(
+                np.isclose(pixels_per_side, nearest_integer, rtol=1e-12, atol=0),
+                nearest_integer,
+                pixels_per_side,
+            )
+        num_pixels = np.ceil(pixels_per_side)
         # TODO: if the structure is infinite but the simulation is finite, need reduced bounds
         num_pixels[np.logical_or(np.isinf(num_pixels), self.uniform)] = 1
         return tuple(int(n) for n in num_pixels)

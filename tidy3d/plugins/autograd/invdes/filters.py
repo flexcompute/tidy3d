@@ -232,9 +232,10 @@ def _get_kernel_size(
         If neither ``size_px`` nor both ``radius`` and ``dl`` are provided.
     """
     if size_px is not None:
-        if radius is not None and dl is not None:
+        if radius is not None:
             td.log.warning(
-                "Both 'size_px' and 'radius' and 'dl' are provided. 'size_px' will take precedence."
+                "Both 'size_px' and 'radius' are provided. 'size_px' takes precedence; "
+                "'radius' is ignored."
             )
         return (size_px,) if np.isscalar(size_px) else tuple(size_px)
     if radius is not None and dl is not None:

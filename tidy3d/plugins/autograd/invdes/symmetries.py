@@ -88,6 +88,7 @@ def expand_mirror_symmetry(
     symmetry : tuple[Literal["low", "high"] | None, ...]
         Per-axis mirror boundary specification. ``"low"`` mirrors the lower boundary of the
         axis, ``"high"`` mirrors the upper boundary, and ``None`` leaves the axis unchanged.
+        Singleton axes are left unchanged because they do not represent spatial variation.
 
     Returns
     -------
@@ -112,6 +113,9 @@ def expand_mirror_symmetry(
             )
 
         axis_size = expanded.shape[axis]
+        if axis_size == 1:
+            crop_slices[axis] = slice(0, 1)
+            continue
         mirrored = _flip_axis(expanded, axis)
 
         if side == "low":

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from autograd import value_and_grad
-from pydantic import Field, NonNegativeFloat
+from pydantic import Field, NonNegativeFloat, model_validator
 from scipy.optimize import minimize
 
 from tidy3d import log
@@ -13,10 +13,10 @@ from tidy3d.components.autograd.functions import _straight_through_clip
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.grid.grid import Coords
 from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
-from tidy3d.plugins.autograd.types import KernelType, PaddingType
+from tidy3d.plugins.autograd.types import KernelType, PaddingType, ProjectionType
 
 from .filters import make_filter
-from .projections import tanh_projection
+from .projections import _validate_smoothed_projection_shape, smoothed_projection, tanh_projection
 from .symmetries import MirrorSymmetry, expand_mirror_symmetry
 
 if TYPE_CHECKING:
@@ -26,18 +26,22 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     import tidy3d as td
+    from tidy3d.compat import Self
 
 
 class FilterAndProject(Tidy3dBaseModel):
-    """A class that combines filtering and projection operations."""
+    """Combine filtering with tanh projection or 2D subpixel-smoothed projection."""
 
-    radius: float | tuple[float, ...] = Field(
+    radius: float | tuple[float, ...] | None = Field(
+        default=None,
         title="Radius",
-        description="The radius of the kernel.",
+        description="The radius of the kernel. May be omitted when using size_px.",
     )
-    dl: float | tuple[float, ...] = Field(
+    dl: float | tuple[float, ...] | None = Field(
+        default=None,
         title="Grid Spacing",
-        description="The grid spacing.",
+        description="The grid spacing. With size_px and no dl, SSP uses pixel coordinates "
+        "with unit spacing (scaling_factor=1.0).",
     )
     size_px: int | tuple[int, ...] | None = Field(
         default=None,
@@ -47,22 +51,31 @@ class FilterAndProject(Tidy3dBaseModel):
     beta: NonNegativeFloat = Field(
         default=BETA_DEFAULT,
         title="Beta",
-        description="The beta parameter for the tanh projection.",
+        description="Steepness of the projection, including infinity for SSP.",
     )
     eta: NonNegativeFloat = Field(
         default=ETA_DEFAULT,
         title="Eta",
-        description="The eta parameter for the tanh projection.",
+        description="The midpoint of the projection.",
     )
     filter_type: KernelType = Field(
         default="conic",
         title="Filter Type",
         description="The type of filter to create.",
     )
+    projection: ProjectionType = Field(
+        default="tanh",
+        title="Projection",
+        description="Projection applied after filtering: 'tanh', first-order 'ssp1', or "
+        "Hessian-regularized 'ssp2'. SSP requires a uniform grid and two non-singleton axes "
+        "with at least two samples for SSP1 or three samples for SSP2. Periodic SSP "
+        "requires at least three samples along each axis.",
+    )
     padding: PaddingType = Field(
         default="reflect",
         title="Padding",
-        description="The padding mode to use.",
+        description="The padding mode to use for filtering. With 'wrap', SSP spatial "
+        "differences are also periodic.",
     )
     symmetry: MirrorSymmetry | None = Field(
         default=None,
@@ -70,6 +83,15 @@ class FilterAndProject(Tidy3dBaseModel):
         description="Optional per-axis mirror symmetry applied by expanding the array across "
         "selected low or high boundaries before filtering and projection.",
     )
+
+    @model_validator(mode="after")
+    def _validate_filter_configuration(self) -> Self:
+        """Require a pixel kernel size or a complete physical filter specification."""
+        if self.size_px is None and (self.radius is None or self.dl is None):
+            self._raise_validation_error_at_loc(
+                "Either 'size_px' or both 'radius' and 'dl' must be provided.", "size_px"
+            )
+        return self
 
     def __call__(
         self, array: NDArray, beta: float | None = None, eta: float | None = None
@@ -81,9 +103,9 @@ class FilterAndProject(Tidy3dBaseModel):
         array : np.ndarray
             The input array to filter and project.
         beta : float = None
-            The beta parameter for the tanh projection. If None, uses the instance's beta.
+            The projection steepness. If None, uses the instance's beta.
         eta : float = None
-            The eta parameter for the tanh projection. If None, uses the instance's eta.
+            The projection midpoint. If None, uses the instance's eta.
 
         Returns
         -------
@@ -95,6 +117,19 @@ class FilterAndProject(Tidy3dBaseModel):
         if self.symmetry is not None:
             working_array, crop_slices = expand_mirror_symmetry(array, symmetry=self.symmetry)
 
+        if self.projection != "tanh":
+            _validate_smoothed_projection_shape(
+                tuple(size for size in working_array.shape if size != 1),
+                order=1 if self.projection == "ssp1" else 2,
+                periodic=self.padding == "wrap",
+            )
+            # Size-only filters use pixel coordinates: one pixel is one spatial unit.
+            spacing = np.atleast_1d(1.0 if self.dl is None else self.dl)
+            if not np.all(np.isfinite(spacing) & (spacing > 0)):
+                raise ValueError("SSP projections require finite, positive grid spacing.")
+            if not np.allclose(spacing, spacing[0], rtol=1e-12, atol=0):
+                raise ValueError("SSP projections require equal grid spacing along all axes.")
+
         filter_instance = make_filter(
             radius=self.radius,
             dl=self.dl,
@@ -105,7 +140,17 @@ class FilterAndProject(Tidy3dBaseModel):
         filtered = filter_instance(working_array)
         beta = beta if beta is not None else self.beta
         eta = eta if eta is not None else self.eta
-        projected = tanh_projection(filtered, beta, eta)
+        if self.projection == "tanh":
+            projected = tanh_projection(filtered, beta, eta)
+        else:
+            projected = smoothed_projection(
+                np.squeeze(filtered),
+                beta,
+                eta,
+                scaling_factor=float(spacing[0]),
+                order=1 if self.projection == "ssp1" else 2,
+                periodic=self.padding == "wrap",
+            ).reshape(filtered.shape)
         clip_projected = _straight_through_clip(projected, a_min=0.0, a_max=1.0)
 
         return clip_projected[crop_slices]
@@ -121,6 +166,7 @@ def make_filter_and_project(
     filter_type: KernelType = "conic",
     padding: PaddingType = "reflect",
     symmetry: MirrorSymmetry | None = None,
+    projection: ProjectionType = "tanh",
 ) -> Callable:
     """Create a function that filters and projects an array.
 
@@ -137,6 +183,7 @@ def make_filter_and_project(
         filter_type=filter_type,
         padding=padding,
         symmetry=symmetry,
+        projection=projection,
     )
 
 
