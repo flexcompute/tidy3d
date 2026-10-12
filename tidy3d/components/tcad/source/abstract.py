@@ -39,8 +39,12 @@ class StructureBasedHeatChargeSource(AbstractHeatChargeSource):
     @classmethod
     def check_non_empty_structures(cls, val: tuple[str, ...]) -> tuple[str, ...]:
         """Error if source doesn't point at any structures."""
-        if len(val) == 0:
-            raise SetupError("List of structures for heat source is empty.")
+        from flexcompute.core._migration.tcad.validation import (
+            validate_heat_charge_source_structures,
+        )
+
+        if diagnostics := validate_heat_charge_source_structures(val):
+            raise SetupError(diagnostics[0].message)
 
         return val
 

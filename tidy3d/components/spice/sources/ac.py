@@ -5,7 +5,6 @@ from pydantic import Field, PositiveFloat, field_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import VOLT
-from tidy3d.constants import inf as td_inf
 
 
 class SSACVoltageSource(Tidy3dBaseModel):
@@ -55,7 +54,8 @@ class SSACVoltageSource(Tidy3dBaseModel):
     @field_validator("voltage")
     @classmethod
     def validate_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
-        for v in val:
-            if v == td_inf:
-                raise ValueError(f"Voltages must be finite. Current voltage={val}.")
+        from flexcompute.core._migration.spice.validation import validate_ac_voltage
+
+        if diagnostics := validate_ac_voltage(val):
+            raise ValueError(diagnostics[0].message)
         return val

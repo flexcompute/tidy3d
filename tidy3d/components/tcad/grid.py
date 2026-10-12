@@ -212,8 +212,10 @@ class _GridRefinementLineBase(Tidy3dBaseModel, ABC):
     @classmethod
     def _not_inf(cls, val: Coordinate) -> Coordinate:
         """Make sure the point is not infinitiy."""
-        if any(np.isinf(v) for v in val):
-            raise ValidationError("Point can not contain 'td.inf' terms.")
+        from flexcompute.core._migration.tcad.validation import validate_line_point_finite
+
+        if diagnostics := validate_line_point_finite(val):
+            raise ValidationError(diagnostics[0].message)
         return val
 
     @model_validator(mode="after")

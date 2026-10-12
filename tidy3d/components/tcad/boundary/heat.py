@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
@@ -315,11 +314,10 @@ class ThermalContactResistance(HeatChargeBC):
     @classmethod
     def _resistance_must_be_finite(cls, val: float) -> float:
         """Reject non-finite resistance values."""
-        if not math.isfinite(val):
-            raise ValueError(
-                "'resistance' must be finite. To thermally decouple the two sides of an "
-                "interface, remove one of them from the heat simulation instead."
-            )
+        from flexcompute.core._migration.tcad.validation import validate_thermal_resistance
+
+        if diagnostics := validate_thermal_resistance(val):
+            raise ValueError(diagnostics[0].message)
         return val
 
     @classmethod

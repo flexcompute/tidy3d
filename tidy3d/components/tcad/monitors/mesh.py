@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from math import isclose
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator
@@ -28,6 +27,10 @@ class VolumeMeshMonitor(HeatChargeMonitor):
     @classmethod
     def _at_least_2d(cls, val: TracedSize) -> TracedSize:
         """Validate that the monitor has at least two non-zero dimensions."""
-        if len([d for d in val if isclose(d, 0)]) > 1:
-            raise ValueError("'VolumeMeshMonitor' must have at least two nonzero dimensions.")
+        from flexcompute.core._migration.tcad.validation import (
+            validate_volume_mesh_monitor_size,
+        )
+
+        if diagnostics := validate_volume_mesh_monitor_size(val):
+            raise ValueError(diagnostics[0].message)
         return val
