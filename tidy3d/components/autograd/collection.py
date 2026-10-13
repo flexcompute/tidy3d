@@ -32,7 +32,7 @@ from .spacing import SamplingScanIndex, adjoint_sampling_resolution
 from .staging import _fully_anisotropic_trigger, _metal_like_trigger, stage_sample_sets
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable, Mapping
+    from collections.abc import Iterable
 
     from tidy3d.components.simulation import Simulation
 
@@ -46,14 +46,11 @@ _MAX_STRUCTURE_LOG_LINES = 20
 def collect_adjoint_sample_sets(
     simulation: Simulation,
     sim_fields_keys: Iterable[PathType],
-    exclude: Mapping[int, Collection[PathType]] | None = None,
 ) -> GeometrySampleSets:
     """Collect the adjoint surface sample sets for all traced shape-derivative paths.
 
     Only shape (geometry) paths produce sample sets; medium, source, and numerical
-    paths are ignored. ``exclude`` removes (structure, path-prefix) combinations
-    owned by other derivative mechanisms (custom vjps), exactly as in
-    :func:`shape_paths_by_structure`.
+    paths are ignored.
 
     The per-structure sampling context mirrors the backward-pass ``DerivativeInfo``
     geometry fields (structure geometry bounds, their intersection with the
@@ -61,7 +58,7 @@ def collect_adjoint_sample_sets(
     resolutions computed at the full adjoint frequency set.
     """
     sim_fields_keys = list(sim_fields_keys)
-    paths_by_structure = shape_paths_by_structure(sim_fields_keys, exclude=exclude)
+    paths_by_structure = shape_paths_by_structure(sim_fields_keys)
 
     scan_index = SamplingScanIndex.from_simulation(simulation) if paths_by_structure else None
     structure_entries = []

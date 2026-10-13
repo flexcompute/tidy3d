@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from pydantic import FieldValidationInfo
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.path_utils import AutogradRoute
-    from tidy3d.components.autograd.types import AutogradFieldMap, TracedFloat
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.autograd.types import PathType, TracedFloat
+    from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.time_modulation import ModulationSpec
     from tidy3d.components.transformation import RotationType
     from tidy3d.components.types import (
@@ -296,27 +296,7 @@ class AnisotropicMedium(AbstractMedium):
 
         return self.updated_copy(**dict(zip(["xx", "yy", "zz"], new_comps)))
 
-    # --- shared autograd helpers ---
-    @staticmethod
-    def _component_derivative_info(
-        derivative_info: DerivativeInfo, component: str
-    ) -> DerivativeInfo | None:
-        """Build ``DerivativeInfo`` filtered to a single anisotropic component."""
-
-        component_paths = [
-            tuple(path[1:]) for path in derivative_info.paths if path and path[0] == component
-        ]
-        if not component_paths:
-            return None
-
-        axis = component[0]  # f.e. xx -> x
-        projected_E = derivative_info.project_der_map_to_axis(axis, "E")
-        projected_D = derivative_info.project_der_map_to_axis(axis, "D")
-        return derivative_info.updated_copy(
-            paths=component_paths, E_der_map=projected_E, D_der_map=projected_D
-        )
-
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced AnisotropicMedium path for adjoint routing."""
         components = self.components
         return resolve_delegated_autograd_route(
@@ -328,22 +308,18 @@ class AnisotropicMedium(AbstractMedium):
             supported_parameters=tuple(f"{component}.<parameter>" for component in components),
         )
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Delegate derivatives for each diagonal component of an anisotropic medium."""
+    def _derivative_terms(self, paths: list[PathType], target: MediumTarget) -> Compiled:
+        """Each component's paths go to that component's medium, reading only that component."""
 
-        vjps: AutogradFieldMap = {}
-        components = self.components
-        for comp_name, component in components.items():
-            comp_info = self._component_derivative_info(
-                derivative_info=derivative_info, component=comp_name
-            )
-            if comp_info is None:
-                continue
-            comp_vjps = component._compute_derivatives(comp_info)
-            for sub_path, value in comp_vjps.items():
-                vjps[(comp_name, *sub_path)] = value
+        from tidy3d.components.autograd.derivative_terms import combine
 
-        return vjps
+        grouped: dict[str, list[PathType]] = {}
+        for path in paths:
+            grouped.setdefault(path[0], []).append(path[1:])
+        return combine(
+            self.components[component]._derivative_terms(child_paths, target.narrowed(component))
+            for component, child_paths in grouped.items()
+        )
 
 
 class AnisotropicMediumFromMedium2D(AnisotropicMedium):

@@ -5,10 +5,9 @@ and uploads it with the forward task, and the solver consumes it during adjoint
 postprocessing. To keep that contract single-source (no drifting public twin), the
 classes are defined once in ``flexcompute.core._migration.em.schema`` and re-exported here rather than
 translated into duplicate public models. This module is the owned translator
-boundary for the sample-set contract (see ``flex/public/flex-em/README.md``): the
-rest of the public package imports these names from here, never from
-``flexcompute.core._migration.em.schema`` directly, and the functions below translate schema exceptions
-into public tidy3d exceptions.
+boundary for the sample-set contract: the rest of the public package imports these
+names from here, never from ``flexcompute.core._migration.em.schema`` directly, and
+the functions below translate schema exceptions into public tidy3d exceptions.
 
 Import-time note: importing this module loads the ``flexcompute.core._migration.em.schema.tidy3d`` model
 tree (~1s). Modules loaded by ``import tidy3d`` must not import it at module
@@ -51,9 +50,6 @@ from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_set
 from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
     typed_sample_set_metadata as _schema_typed_sample_set_metadata,
 )
-from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
-    validate_sample_sets_coverage as _schema_validate_sample_sets_coverage,
-)
 from flexcompute.core._migration.em.schema.tidy3d.components.data.data_array import (
     CellDataArray,
     IndexedDataArray,
@@ -61,7 +57,7 @@ from flexcompute.core._migration.em.schema.tidy3d.components.data.data_array imp
 )
 
 # The schema package has its own exception hierarchy (an M0 copy); contract functions
-# like its validate_sample_sets_coverage raise ITS AdjointError, which client code
+# like its sample_set_integrand raise ITS AdjointError, which client code
 # cannot catch as tidy3d.exceptions.AdjointError. The schema exception stays private
 # to this module: the boundary functions below translate it, so client code only
 # ever sees tidy3d exceptions.
@@ -72,14 +68,12 @@ from flexcompute.core._migration.em.schema.tidy3d.exceptions import (
 from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
-
     import numpy as np
     from flexcompute.core._migration.em.schema.tidy3d.components.autograd.sample_sets import (
         SampleSetMetadataType,
     )
 
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import PathType
 
 MetadataT = TypeVar("MetadataT")
@@ -111,28 +105,20 @@ __all__ = [
     "sample_set_integrand",
     "shape_paths_by_structure",
     "typed_sample_set_metadata",
-    "validate_sample_sets_coverage",
 ]
 
 
 def sample_set_integrand(
-    sample_set: SurfaceSampleSet,
-    derivative_info: DerivativeInfo,
-    interpolators: dict | None,
-    key: PathType,
-    sample_slice: slice | None = None,
+    derivative_info: ShapeDerivativeContext, key: PathType, sample_slice: slice | None = None
 ) -> np.ndarray:
     """Per-point shape-gradient integrand for one sample set at this boundary.
 
-    Delegates to the schema consumption seam (point-cloud integrand lookup or legacy
-    interpolation) and translates the schema package's ``AdjointError`` into
-    ``tidy3d.exceptions.AdjointError``, so public-side consumption raises only tidy3d
-    exceptions.
+    Delegates to the schema consumption seam (the point-integrand lookup) and translates the
+    schema package's ``AdjointError`` into ``tidy3d.exceptions.AdjointError``, so public-side
+    consumption raises only tidy3d exceptions.
     """
     try:
-        return _schema_sample_set_integrand(
-            sample_set, derivative_info, interpolators, key, sample_slice=sample_slice
-        )
+        return _schema_sample_set_integrand(derivative_info, key, sample_slice=sample_slice)
     except _SchemaAdjointError as exc:
         raise AdjointError(str(exc)) from exc
 
@@ -163,20 +149,5 @@ def typed_sample_set_metadata(
     """
     try:
         return _schema_typed_sample_set_metadata(sample_set, expected_type, consumer)
-    except _SchemaAdjointError as exc:
-        raise AdjointError(str(exc)) from exc
-
-
-def validate_sample_sets_coverage(
-    sample_sets: GeometrySampleSets, required: Mapping[int, Collection[tuple]]
-) -> None:
-    """Validate artifact coverage against the backward request at this boundary.
-
-    Delegates to the schema helper and translates the schema package's
-    ``AdjointError`` into ``tidy3d.exceptions.AdjointError``, so public-side
-    callers only ever see tidy3d exceptions.
-    """
-    try:
-        _schema_validate_sample_sets_coverage(sample_sets, required)
     except _SchemaAdjointError as exc:
         raise AdjointError(str(exc)) from exc

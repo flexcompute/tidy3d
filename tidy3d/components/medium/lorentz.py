@@ -17,7 +17,6 @@ from tidy3d.components.autograd.types import (
     TracedNonNegativeFloat,
     TracedPositiveFloat,
 )
-from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.data.utils import (
     CustomSpatialDataType,
     _get_numpy_array,
@@ -30,17 +29,7 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from autograd.numpy.numpy_boxes import ArrayBox
-    from numpy.typing import NDArray
-    from pydantic import PositiveFloat
-
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.types import AutogradFieldMap
-
-    from .base import ArrayComplex, ArrayFloat
 
 
 def _medium_numerics() -> Any:
@@ -83,6 +72,7 @@ class Lorentz(DispersiveMedium):
     """
 
     _traced_indexed_root: ClassVar[str] = "coeffs"
+    _derivative_model: ClassVar[str] = "lorentz"
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: TracedPositiveFloat = Field(
@@ -238,74 +228,3 @@ class Lorentz(DispersiveMedium):
             ],
             **kwargs,
         )
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for Lorentz params via TJP through eps_model()."""
-
-        f, vec = self._tjp_inputs(derivative_info)
-
-        N = len(self.coeffs)
-        if N == 0 and ("eps_inf",) not in derivative_info.paths:
-            return {}
-
-        # pack into flat [eps_inf, de..., f0..., delta...]
-        eps_inf0 = self.eps_inf
-        de0 = np.array([de for (de, _f, _d) in self.coeffs]) if N else np.array([])
-        f0 = np.array([fi for (_de, fi, _d) in self.coeffs]) if N else np.array([])
-        d0 = np.array([dd for (_de, _f, dd) in self.coeffs]) if N else np.array([])
-        theta0 = np.concatenate([np.array([eps_inf0]), de0, f0, d0])
-
-        def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
-            eps_inf = theta[0]
-            de = theta[1 : 1 + N]
-            fi = theta[1 + N : 1 + 2 * N]
-            dd = theta[1 + 2 * N : 1 + 3 * N]
-            coeffs = tuple((de[i], fi[i], dd[i]) for i in range(N))
-            eps = self.updated_copy(eps_inf=eps_inf, coeffs=coeffs, validate=False).eps_model(f)
-            return pack_complex_vec(eps)
-
-        g = self._tjp_grad(theta0, _eps_vec, vec)
-
-        mapping = [(("eps_inf",), 0)]
-        base = 1
-        mapping += [(("coeffs", i, 0), base + i) for i in range(N)]
-        mapping += [(("coeffs", i, 1), base + N + i) for i in range(N)]
-        mapping += [(("coeffs", i, 2), base + 2 * N + i) for i in range(N)]
-        return self._map_grad_real(g, derivative_info.paths, mapping)
-
-    @staticmethod
-    def _den(
-        freq: float | ArrayFloat,
-        f0: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        return (f0**2) - 2j * (freq * delta) - (freq**2)
-
-    # frequency weights for custom Lorentz
-    @staticmethod
-    def _w_de(
-        freq: float | ArrayFloat,
-        f0: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        return (f0**2) / Lorentz._den(freq, f0, delta)
-
-    @staticmethod
-    def _w_f0(
-        freq: float | ArrayFloat,
-        de: float | ArrayFloat,
-        f0: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        den = Lorentz._den(freq, f0, delta)
-        return (2.0 * de * f0 * (den - f0**2)) / (den**2)
-
-    @staticmethod
-    def _w_delta(
-        freq: float | ArrayFloat,
-        de: float | ArrayFloat,
-        f0: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        den = Lorentz._den(freq, f0, delta)
-        return (2j * freq * de * (f0**2)) / (den**2)

@@ -8,7 +8,6 @@ import autograd.numpy as np
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd.types import TracedFloat, TracedPositiveFloat
-from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.data.utils import (
     _get_numpy_array,
     _ones_like,
@@ -23,15 +22,7 @@ from tidy3d.constants import (
 from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from autograd.numpy.numpy_boxes import ArrayBox
-    from numpy.typing import NDArray
-    from pydantic import PositiveFloat
-
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.types import AutogradFieldMap
     from tidy3d.components.time_modulation import ModulationSpec
 
     from .base import ArrayFloat
@@ -87,6 +78,7 @@ class Sellmeier(DispersiveMedium):
     """
 
     _traced_indexed_root: ClassVar[str] = "coeffs"
+    _derivative_model: ClassVar[str] = "sellmeier"
 
     coeffs: tuple[tuple[TracedFloat, TracedPositiveFloat], ...] = Field(
         title="Coefficients",
@@ -204,62 +196,3 @@ class Sellmeier(DispersiveMedium):
         if n < 1:
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
         return cls(coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl), **kwargs)
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for Sellmeier params via TJP through eps_model()."""
-
-        freqs, vec = self._tjp_inputs(derivative_info)
-        N = len(self.coeffs)
-        if N == 0:
-            return {}
-
-        # pack parameters into flat vector [B..., C...]
-        B0 = np.array([b for (b, _c) in self.coeffs])
-        C0 = np.array([c for (_b, c) in self.coeffs])
-        theta0 = np.concatenate([B0, C0])
-
-        def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
-            B = theta[:N]
-            C = theta[N : 2 * N]
-            coeffs = tuple((B[i], C[i]) for i in range(N))
-            eps = self.updated_copy(coeffs=coeffs, validate=False).eps_model(freqs)
-            return pack_complex_vec(eps)
-
-        g = self._tjp_grad(theta0, _eps_vec, vec)
-
-        mapping = []
-        mapping += [(("coeffs", i, 0), i) for i in range(N)]
-        mapping += [(("coeffs", i, 1), N + i) for i in range(N)]
-        return self._map_grad_real(g, derivative_info.paths, mapping)
-
-    @staticmethod
-    def _lam2(
-        freq: float | ArrayFloat,
-    ) -> float | ArrayFloat:
-        return (C_0 / freq) ** 2
-
-    @staticmethod
-    def _sellmeier_den(
-        lam2: float | ArrayFloat,
-        C: float | ArrayFloat,
-    ) -> float | ArrayFloat:
-        return lam2 - C
-
-    # frequency weights for custom Sellmeier
-    @staticmethod
-    def _w_B(
-        freq: float | ArrayFloat,
-        C: float | ArrayFloat,
-    ) -> float | ArrayFloat:
-        lam2 = Sellmeier._lam2(freq)
-        return lam2 / Sellmeier._sellmeier_den(lam2, C)
-
-    @staticmethod
-    def _w_C(
-        freq: float | ArrayFloat,
-        B: float | ArrayFloat,
-        C: float | ArrayFloat,
-    ) -> float | ArrayFloat:
-        lam2 = Sellmeier._lam2(freq)
-        den = Sellmeier._sellmeier_den(lam2, C)
-        return B * lam2 / (den**2)

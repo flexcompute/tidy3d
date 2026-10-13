@@ -24,7 +24,7 @@ from tidy3d.exceptions import (
 from tidy3d.log import log
 
 from .autograd.monitor_names import adjoint_monitor_name
-from .autograd.path_utils import AutogradRoute, format_traced_path
+from .autograd.path_utils import format_traced_path
 from .autograd.utils import contains, get_static
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import PointDataArray, ScalarFieldDataArray
@@ -61,15 +61,16 @@ if TYPE_CHECKING:
     from os import PathLike
 
     import gdstk
+    from flexcompute.core._migration.em.derivatives import PointChunk
     from pydantic import NonNegativeFloat, NonNegativeInt
 
     from tidy3d import VisualizationSpec
     from tidy3d.compat import Self
     from tidy3d.components.grid.grid import Grid
-    from tidy3d.em.translate.sample_sets import StructureSampleSets, SurfaceSampleSet
+    from tidy3d.em.translate.sample_sets import StructureSampleSets
 
     from .autograd.derivative_utils import DerivativeInfo
-    from .autograd.types import AutogradFieldMap, PathType
+    from .autograd.types import AutogradFieldMap
     from .data.data_array import SpatialDataArray
     from .geometry.contour_conversion import ContourPolyslabData
     from .geometry.polyslab import PolySlab
@@ -624,7 +625,9 @@ class Structure(AbstractStructure):
         freqs: list[float],
         index: int,
         structure_sets: StructureSampleSets,
-    ) -> tuple[list[PointCloudFieldMonitor], list[PointCloudPermittivityMonitor]]:
+    ) -> tuple[
+        list[PointCloudFieldMonitor], list[PointCloudPermittivityMonitor], tuple[PointChunk, ...]
+    ]:
         """Point-cloud adjoint monitors staged from this structure's sample sets.
 
         Points are concatenated over the artifact's entry order, which is the
@@ -633,11 +636,14 @@ class Structure(AbstractStructure):
         contribute no points. Each concatenated stream is split into one monitor per
         chunk of the shared per-monitor point cap (``adjoint_point_cloud_chunk_bounds``;
         one chunk keeps today's names and layout), so structures whose surface sampling
-        exceeds the cap stage transparently. Returns ``(field_monitors, eps_monitors)``:
-        E+D monitors for the dielectric path (plus single-component monitors per field
-        component when the sets carry PEC sampling data), and permittivity monitors
-        per side and component over the material query points.
+        exceeds the cap stage transparently. Returns ``(field_monitors, eps_monitors,
+        point_chunks)``: E+D monitors for the dielectric path (plus single-component monitors
+        per field component when the sets carry PEC sampling data), permittivity monitors
+        per side and component over the material query points, and each chunk's
+        ``PointChunk``, which names the monitors the shape kernel reads for it.
         """
+        from flexcompute.core._migration.em.derivatives import PointChunk, SideComponent
+
         from tidy3d.components.autograd import point_consumption
         from tidy3d.exceptions import AdjointError
 
@@ -655,7 +661,7 @@ class Structure(AbstractStructure):
             staged_entries.append(sample_set.staging)
 
         if not staged_entries:
-            return [], []
+            return [], [], ()
 
         num_points = sum(staging.field_query_points.sizes["index"] for staging in staged_entries)
         chunk_bounds = point_consumption.adjoint_point_cloud_chunk_bounds(num_points)
@@ -678,6 +684,23 @@ class Structure(AbstractStructure):
                 ),
             )
 
+        sides = {"in": "inside", "out": "outside"}
+        eps_tags = {
+            (side, component): f"eps_pc_{side}_{component}"
+            for side in ("in", "out")
+            for component in ("xx", "yy", "zz")
+        }
+        # PEC staging is a structure-level trigger, validated uniform across staged
+        # sets by StructureSampleSets; each field component gets its own monitors per
+        # side because its side-snapped query points are component-grid specific
+        pec_tags = {}
+        if structure_sets.pec_staged:
+            pec_tags = {
+                (side, component): f"fld_pc_{component}_{side}"
+                for side in ("out", "in")
+                for component in ("ex", "ey", "ez", "hx", "hy", "hz")
+            }
+
         monitors_fld = [
             PointCloudFieldMonitor(
                 points=chunk_points,
@@ -690,36 +713,27 @@ class Structure(AbstractStructure):
             )
         ]
 
-        # PEC staging is a structure-level trigger, validated uniform across staged
-        # sets by StructureSampleSets; each field component gets its own monitors per
-        # side because its side-snapped query points are component-grid specific
-        if structure_sets.pec_staged:
-            for side, side_attr in (("out", "outside"), ("in", "inside")):
-                for component in ("ex", "ey", "ez", "hx", "hy", "hz"):
-                    component_chunks = _chunked_points(
-                        [
-                            getattr(getattr(ss.pec_sampling, side_attr), component)
-                            for ss in staged_entries
-                        ]
-                    )
-                    monitors_fld.extend(
-                        PointCloudFieldMonitor(
-                            points=chunk_points,
-                            fields=(component.capitalize(),),
-                            freqs=freqs,
-                            name=_chunk_name(f"fld_pc_{component}_{side}", chunk_index),
-                        )
-                        for chunk_index, chunk_points in enumerate(component_chunks)
-                    )
+        for (side, component), tag in pec_tags.items():
+            component_chunks = _chunked_points(
+                [getattr(getattr(ss.pec_sampling, sides[side]), component) for ss in staged_entries]
+            )
+            monitors_fld.extend(
+                PointCloudFieldMonitor(
+                    points=chunk_points,
+                    fields=(component.capitalize(),),
+                    freqs=freqs,
+                    name=_chunk_name(tag, chunk_index),
+                )
+                for chunk_index, chunk_points in enumerate(component_chunks)
+            )
 
         monitors_eps = [
             PointCloudPermittivityMonitor(
                 points=chunk_points,
                 freqs=freqs,
-                name=_chunk_name(f"eps_pc_{side}_{component}", chunk_index),
+                name=_chunk_name(tag, chunk_index),
             )
-            for side in ("in", "out")
-            for component in ("xx", "yy", "zz")
+            for (side, component), tag in eps_tags.items()
             for chunk_index, chunk_points in enumerate(
                 _chunked_points(
                     [
@@ -730,99 +744,47 @@ class Structure(AbstractStructure):
             )
         ]
 
-        return monitors_fld, monitors_eps
+        point_chunks = tuple(
+            PointChunk(
+                fields=_chunk_name("fld_pc", chunk_index),
+                permittivity=tuple(
+                    SideComponent(
+                        side=sides[side], component=component, monitor=_chunk_name(tag, chunk_index)
+                    )
+                    for (side, component), tag in eps_tags.items()
+                ),
+                pec=tuple(
+                    SideComponent(
+                        side=sides[side],
+                        component=component.capitalize(),
+                        monitor=_chunk_name(tag, chunk_index),
+                    )
+                    for (side, component), tag in pec_tags.items()
+                ),
+            )
+            for chunk_index in range(len(chunk_bounds))
+        )
+        return monitors_fld, monitors_eps, point_chunks
 
-    def _compute_derivatives(
+    def _custom_vjp_derivatives(
         self,
         derivative_info: DerivativeInfo,
-        vjp_fns: dict[tuple[str, ...], Callable[..., Any]] | None = None,
-        sample_sets: dict[PathType, SurfaceSampleSet] | None = None,
+        vjp_fns: dict[tuple[str, str], Callable[..., Any]],
     ) -> AutogradFieldMap:
-        """Compute adjoint gradients given the forward and adjoint fields provided in derivative_info.
+        """Each custom VJP's gradients for the paths it owns, matched by (medium or geometry, head)."""
 
-        vjp_fns provide alternate derivative computation paths for the geometry or medium
-        derivatives, matched by (med_or_geo, path head). sample_sets are the pre-collected
-        surface samples consumed by the standard geometry shape paths; they are required
-        whenever such paths are present (see ``collect_adjoint_sample_sets``).
-        """
-
-        # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
-        structure_fields_map = defaultdict(list)
-        for structure_path in derivative_info.paths:
-            med_or_geo, *field_path = structure_path
-            field_path = tuple(field_path)
-            if med_or_geo not in ("geometry", "medium"):
-                raise ValueError(
-                    f"Something went wrong in the structure VJP calculation, "
-                    f"got a 'structure_path: {structure_path}' with first element '{med_or_geo}', "
-                    "which should be 'medium' or 'geometry. "
-                    "If you encounter this error, please raise an issue on the tidy3d GitHub "
-                    "repository so we can investigate."
-                )
-            structure_fields_map[med_or_geo].append(field_path)
-
-        # loop through sub fields, compute VJPs, and store in the derivative map {path -> vjp_value}
+        paths_by_owner = defaultdict(list)
+        for med_or_geo, *field_path in derivative_info.paths:
+            paths_by_owner[med_or_geo, field_path[0]].append((med_or_geo, *field_path))
         derivative_map = {}
-        for med_or_geo, field_paths in structure_fields_map.items():
-            # grab derivative values {field_name -> vjp_value}
-            med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
-
-            # split off custom-vjp-owned paths, matched by path head as before
-            custom_paths_by_key = {}
-            standard_paths = []
-            for path in field_paths:
-                if (vjp_fns is not None) and ((med_or_geo, path[0]) in vjp_fns):
-                    custom_paths_by_key.setdefault(path[0], []).append(path)
-                else:
-                    standard_paths.append(path)
-
-            derivative_values_map = {}
-            for path_key, paths in custom_paths_by_key.items():
-                full_paths = [(med_or_geo, *path) for path in paths]
-                info = derivative_info.updated_copy(paths=full_paths, deep=False)
-
-                vjp = vjp_fns[(med_or_geo, path_key)](med_or_geo_field, derivative_info=info)
-                vjp_strip_med_or_geo = {key[1:]: val for key, val in vjp.items()}
-
-                derivative_values_map.update(vjp_strip_med_or_geo)
-
-            if med_or_geo == "geometry" and standard_paths:
-                if sample_sets is None:
-                    raise AdjointError(
-                        "Geometry shape derivatives require pre-collected adjoint sample sets. "
-                        "Generate them with 'collect_adjoint_sample_sets' (or "
-                        "'Geometry._make_adjoint_sample_sets') and pass them via the "
-                        "'sample_sets' argument."
-                    )
-                # all standard geometry paths in one call: canonical sample sets shared
-                # across derivative paths are consumed exactly once
-                info = derivative_info.updated_copy(paths=standard_paths, deep=False)
-                derivative_values_map.update(
-                    self.geometry._compute_derivatives_from_sample_sets(
-                        sample_sets=sample_sets,
-                        paths=standard_paths,
-                        derivative_info=info,
-                    )
-                )
-            elif standard_paths:
-                # medium paths keep their per-head dispatch unchanged
-                standard_paths_by_key = {}
-                for path in standard_paths:
-                    standard_paths_by_key.setdefault(path[0], []).append(path)
-                for paths in standard_paths_by_key.values():
-                    info = derivative_info.updated_copy(paths=paths, deep=False)
-                    derivative_values_map.update(
-                        med_or_geo_field._compute_derivatives(derivative_info=info)
-                    )
-
-            # construct map of {field path -> derivative value}
-            for field_path, derivative_value in derivative_values_map.items():
-                path = (med_or_geo, *list(field_path))
-                derivative_map[path] = derivative_value
-
+        for (med_or_geo, head), paths in paths_by_owner.items():
+            component = self.medium if med_or_geo == "medium" else self.geometry
+            info = derivative_info.updated_copy(paths=paths, deep=False)
+            vjp = vjp_fns[med_or_geo, head](component, derivative_info=info)
+            derivative_map.update({(med_or_geo, *path[1:]): value for path, value in vjp.items()})
         return derivative_map
 
-    def _resolve_autograd_route(self, structure_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, structure_path: tuple[Any, ...]) -> None:
         """Resolve and validate a traced structure path for adjoint routing."""
         if not structure_path:
             raise AdjointError("Empty traced structure parameter encountered.")
@@ -831,11 +793,11 @@ class Structure(AbstractStructure):
         field_path = structure_path[1:]
         if med_or_geo == "geometry":
             self.geometry._resolve_autograd_route(field_path)
-            return AutogradRoute(local_path=structure_path)
+            return
 
         if med_or_geo == "medium":
             self.medium._resolve_autograd_route(field_path)
-            return AutogradRoute(local_path=structure_path)
+            return
 
         parameter = format_traced_path(structure_path)
         raise AdjointError(

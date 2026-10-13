@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
@@ -14,14 +15,13 @@ from pydantic import (
 )
 
 from tidy3d.components.autograd import TracedFloat, TracedPositiveFloat
-from tidy3d.components.autograd.derivative_utils import (
-    transpose_interp_field_to_dataset,
-)
-from tidy3d.components.autograd.path_utils import AutogradRoute, format_traced_path
-from tidy3d.components.autograd.utils import get_static, negate_vjp_map
+from tidy3d.components.autograd.path_utils import format_traced_path
+from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.bound_ops import bounds_intersection
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.thin_lens import AbstractThinLens
@@ -40,10 +40,6 @@ from tidy3d.exceptions import AdjointError, SetupError
 from tidy3d.log import log
 
 from .adjoint_helpers import (
-    accumulate_center_vjp,
-    assign_center_path_derivatives,
-    parse_source_field_component,
-    split_source_paths,
     validate_no_zero_dim_center_paths,
 )
 from .base import Source
@@ -52,11 +48,11 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd import AutogradFieldMap, PathType
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd import PathType
+    from tidy3d.components.autograd.derivative_terms import Compiled
     from tidy3d.components.beam import BeamGrid, BeamPose
-    from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.medium import AbstractMedium
+    from tidy3d.components.source.derivative_terms import SourceTarget
     from tidy3d.components.types import Ax, Coordinate
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
@@ -65,32 +61,6 @@ CHEB_GRID_WIDTH = 1.5
 # ``CRITICAL_FREQUENCY_FACTOR * f_crit``, where ``f_crit`` is the critical frequency
 # (oblique propagation).
 CRITICAL_FREQUENCY_FACTOR = 1.15
-
-
-def _get_curl_coupled_source_adjoint_and_sign(
-    *,
-    field_name: str,
-    injection_axis: int,
-    e_adj: dict[str, Any],
-    h_adj: dict[str, Any],
-) -> tuple[Any, float]:
-    """Get adjoint field/sign for curl-coupled ``CustomFieldSource`` gradients."""
-    field_type, component_axis = parse_source_field_component(field_name)
-    if component_axis == injection_axis:
-        raise ValueError(
-            f"Field component '{field_name}' is normal to injection axis '{'xyz'[injection_axis]}'."
-        )
-
-    n_vec = np.eye(3, dtype=float)[injection_axis]
-    e_vec = np.eye(3, dtype=float)[component_axis]
-    cross = np.cross(n_vec, e_vec)
-    target_axis = int(np.flatnonzero(cross)[0])
-    component_sign = float(cross[target_axis])
-
-    target_component = f"{'H' if field_type == 'E' else 'E'}{'xyz'[target_axis]}"
-    if field_type == "E":
-        return h_adj[target_component], component_sign
-    return e_adj[target_component], component_sign
 
 
 class FieldSource(Source, ABC):
@@ -124,6 +94,20 @@ class PlanarSource(Source, ABC):
     def _injection_axis(self) -> Axis:
         """Injection axis of the source."""
         return self.size.index(0.0)
+
+    def _derivative_coupling(self, component: str) -> tuple[str | None, float]:
+        """The adjoint field a profile component pulls back: ``n x e``, from E to H and back.
+
+        A component along the injection axis injects nothing and couples to no adjoint field.
+        """
+
+        axis = "xyz".index(component[1])
+        if axis == self.injection_axis:
+            return None, 0.0
+        cross = np.cross(np.eye(3)[self.injection_axis], np.eye(3)[axis])
+        target_axis = int(np.flatnonzero(cross)[0])
+        field = "H" if component.startswith("E") else "E"
+        return f"{field}{'xyz'[target_axis]}", float(cross[target_axis])
 
 
 class VolumeSource(Source, ABC):
@@ -354,114 +338,19 @@ class CustomFieldSource(FieldSource, PlanarSource):
             SetupError("No tangential field found in the suppled 'field_dataset'."), "field_dataset"
         )
 
-    def _compute_dataset_derivatives(
-        self,
-        dataset_paths: list[tuple],
-        *,
-        center: tuple[float, float, float],
-        e_adj: dict[str, Any],
-        h_adj: dict[str, Any],
-    ) -> AutogradFieldMap:
-        """Compute derivatives for traced ``field_dataset`` paths."""
-        derivative_map: AutogradFieldMap = {}
-        for field_path in dataset_paths:
-            field_path = tuple(field_path)
-            field_name = field_path[1]
-            _, component_axis = parse_source_field_component(field_name)
-            field_data = getattr(self.field_dataset, field_name)
+    def _derivative_terms(self, paths: list[PathType], target: SourceTarget) -> Compiled:
+        """One pullback term per traced field component, on that component's own grid."""
 
-            if component_axis == self.injection_axis:
-                derivative_map[field_path] = np.zeros_like(field_data.data)
-                continue
+        from tidy3d.components.source.derivative_terms import dataset_source_terms
 
-            adjoint_field, component_sign = _get_curl_coupled_source_adjoint_and_sign(
-                field_name=field_name,
-                injection_axis=self.injection_axis,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-
-            adjoint_on_dataset = transpose_interp_field_to_dataset(
-                adjoint_field, field_data, center=center
-            )
-
-            # Keep source gradients stable against simulation grid-refinement changes.
-            vjp_field = component_sign * adjoint_on_dataset
-            derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
-
-        return derivative_map
-
-    def _compute_center_derivatives(
-        self,
-        center_paths: list[tuple],
-        *,
-        center: tuple[float, float, float],
-        bounds: Any,
-        e_adj: dict[str, Any],
-        h_adj: dict[str, Any],
-    ) -> AutogradFieldMap:
-        """Compute derivatives for traced ``center`` paths."""
-        derivative_map: AutogradFieldMap = {}
-        if not center_paths:
-            return derivative_map
-
-        center_field_components = {}
-        for field_name, field_data in self.field_dataset.field_components.items():
-            _, component_axis = parse_source_field_component(field_name)
-            if component_axis != self.injection_axis:
-                center_field_components[field_name] = field_data
-
-        def _get_adjoint_and_sign(field_name: str) -> tuple[Any, float]:
-            return _get_curl_coupled_source_adjoint_and_sign(
-                field_name=field_name,
-                injection_axis=self.injection_axis,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-
-        vjp_center = accumulate_center_vjp(
-            field_components=center_field_components,
-            center=center,
-            bounds=bounds,
-            source_size=tuple(self.size),
-            get_adjoint_and_sign=_get_adjoint_and_sign,
+        return dataset_source_terms(
+            self,
+            paths,
+            target,
+            dataset_key="field_dataset",
+            interpolation=("linear", "linear", "linear"),
+            confine_to_bounds=False,
         )
-
-        assign_center_path_derivatives(
-            derivative_map,
-            center_paths,
-            vjp_center=vjp_center,
-        )
-        return derivative_map
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute derivatives with respect to CustomFieldSource parameters."""
-        derivative_map = {}
-        center = tuple(self.center)
-        e_adj = derivative_info.E_adj or {}
-        h_adj = derivative_info.H_adj or {}
-
-        dataset_paths, center_paths = split_source_paths(derivative_info.paths)
-
-        derivative_map.update(
-            self._compute_dataset_derivatives(
-                dataset_paths,
-                center=center,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-        )
-        derivative_map.update(
-            self._compute_center_derivatives(
-                center_paths,
-                center=center,
-                bounds=derivative_info.bounds,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-        )
-
-        return derivative_map
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
@@ -839,180 +728,75 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         return self
 
 
-def _source_remap_background_index(derivative_info: DerivativeInfo, freqs: np.ndarray) -> NDArray:
-    """Background index for Gaussian-like source remap."""
-    if derivative_info.source_background_index is None:
-        raise AdjointError(
-            "Gaussian-like source derivative remap requires 'source_background_index' "
-            "in DerivativeInfo, but it was not provided."
-        )
-    sampled = derivative_info.source_background_index.sel(f=freqs, method="nearest")
-    return np.asarray(sampled.values, dtype=complex).reshape(-1)
-
-
-def _slice_field_map_at_frequency(
-    field_map: dict[str, ScalarFieldDataArray] | None, freq: float
-) -> dict[str, ScalarFieldDataArray]:
-    """Slice a field-component map to a single frequency."""
-    if not field_map:
-        return {}
-    return {name: data_array.sel(f=[freq]) for name, data_array in field_map.items()}
-
-
-def _slice_derivative_info_at_frequency(
-    derivative_info: DerivativeInfo, freq: float
-) -> DerivativeInfo:
-    """Create a per-frequency ``DerivativeInfo`` view for Gaussian-like remap."""
-    source_background_index = derivative_info.source_background_index
-    if source_background_index is None:
-        raise AdjointError(
-            "Gaussian-like source derivative remap requires 'source_background_index' "
-            "in DerivativeInfo, but it was not provided."
-        )
-    return derivative_info.updated_copy(
-        E_adj=_slice_field_map_at_frequency(derivative_info.E_adj, freq),
-        H_adj=_slice_field_map_at_frequency(derivative_info.H_adj, freq),
-        frequencies=np.asarray([freq], dtype=float),
-        source_background_index=source_background_index.sel(f=[freq], method="nearest"),
-    )
-
-
-def _accumulate_derivative_value(
-    derivative_map: AutogradFieldMap,
-    field_path: PathType,
-    value: Any,
-) -> None:
-    """Accumulate one per-frequency derivative contribution into ``derivative_map``."""
-    if field_path not in derivative_map:
-        derivative_map[field_path] = value
-        return
-    prev_value = derivative_map[field_path]
-    if isinstance(prev_value, tuple) or isinstance(value, tuple):
-        summed = np.asarray(prev_value, dtype=float) + np.asarray(value, dtype=float)
-        derivative_map[field_path] = tuple(summed.tolist())
-        return
-    derivative_map[field_path] = prev_value + value
-
-
-def _build_gaussian_like_field_dataset(
-    source: AbstractGaussianBeam, derivative_info: DerivativeInfo
-) -> FieldDataset:
-    """Build analytic beam fields as a ``FieldDataset`` for source VJP chaining."""
-    from tidy3d.components.data.data_array import ScalarFieldDataArray
-
-    source_center = np.asarray(source.center, dtype=float)
-    freqs = np.asarray(derivative_info.frequencies, dtype=float).reshape(-1)
-    if freqs.size != 1:
-        raise ValueError(
-            "Gaussian-like remap dataset construction expects a single frequency slice, got "
-            f"{freqs.size} frequencies."
-        )
-    background_n = _source_remap_background_index(derivative_info, freqs)
-    field_arrays = {}
-    for component in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-        field_map = derivative_info.E_adj if component.startswith("E") else derivative_info.H_adj
-        component_data = field_map[component]
-        # Keep mock dataset coordinates source-relative to match ``CustomFieldSource`` convention.
-        # In source VJP interpolation these coordinates are shifted back to simulation coordinates
-        # via ``+ center`` (see ``transpose_interp_field_to_dataset``), so this is not a double shift.
-        coords = {
-            dim: np.asarray(component_data.coords[dim].data, dtype=float) - source_center[axis]
-            for axis, dim in enumerate("xyz")
-        }
-        coords["f"] = freqs
-        component_field = _compute_component_field_on_coords(
-            source=source,
-            component=component,
-            coords=coords,
-            background_n=background_n,
-            center=(0.0, 0.0, 0.0),
-            normalize=True,
-        )
-        field_arrays[component] = ScalarFieldDataArray(component_field, coords=coords)
-
-    return FieldDataset(**field_arrays)
-
-
-def _compute_dataset_vjp_weights(
-    source: AbstractGaussianBeam, derivative_info: DerivativeInfo, field_dataset: FieldDataset
-) -> dict[tuple[str, str], np.ndarray]:
-    """Compute complex source dataset cotangents by reusing CustomFieldSource VJP."""
-    mock_source = CustomFieldSource(
-        center=tuple(float(val) for val in source.center),
-        size=tuple(float(val) for val in source.size),
-        source_time=source.source_time,
-        field_dataset=field_dataset,
-    )
-    dataset_paths = [("field_dataset", component) for component in field_dataset.field_components]
-    derivative_info_dataset = derivative_info.updated_copy(paths=dataset_paths)
-    dataset_weights = mock_source._compute_derivatives(derivative_info_dataset)
-    if source.direction == "-":
-        # Backward-propagating Gaussian-like beams require an extra global sign
-        # in the dataset cotangent remap to align with source-direction convention.
-        dataset_weights = negate_vjp_map(dataset_weights)
-    return dataset_weights
-
-
-def _autograd_param_vjp(
+def _beam_parameter_vjp(
+    outputs: Any,
+    frequencies: np.ndarray,
+    *,
     source: AbstractGaussianBeam,
-    derivative_info: DerivativeInfo,
     path: PathType,
-    dataset_weights: dict[tuple[str, str], np.ndarray],
-    field_dataset: FieldDataset,
+    coordinates: tuple[np.ndarray, np.ndarray, np.ndarray],
+    program_frequencies: np.ndarray,
+    background_n: np.ndarray,
+    components: tuple[str, ...],
+) -> np.ndarray:
+    """One beam parameter's VJP: each frequency's cotangents weight the analytic beam field.
+
+    ``background_n`` is the background index at each of the program frequencies.
+    """
+
+    total = 0.0
+    for index, frequency in enumerate(frequencies):
+        at = int(np.searchsorted(program_frequencies, frequency))
+        grid = {**dict(zip("xyz", coordinates)), "f": np.asarray((frequency,))}
+        weights = {
+            component: np.transpose(
+                outputs[("cotangent", component)][index : index + 1], (1, 2, 3, 0)
+            )
+            for component in components
+        }
+        if source.direction == "-":
+            # backward-propagating beams take an extra global sign in the cotangent remap
+            weights = {component: -weight for component, weight in weights.items()}
+        total += _beam_parameter_vjp_at(
+            source, path, weights=weights, grid=grid, background_n=background_n[at : at + 1]
+        )
+    return np.asarray(total)
+
+
+def _beam_parameter_vjp_at(
+    source: AbstractGaussianBeam,
+    path: PathType,
+    *,
+    weights: dict[str, np.ndarray],
+    grid: dict[str, np.ndarray],
+    background_n: np.ndarray,
 ) -> float:
-    """Map dataset VJP weights to one source parameter via autograd VJP."""
+    """``d/dp Re sum_c weight_c * field_c(p)`` at one frequency, by autograd through the beam."""
+
     import autograd.numpy as anp
     from autograd import grad
 
-    value0 = source.get_param(path)
-    base_center = tuple(float(val) for val in source.center)
-    weights = {
-        key: anp.asarray(val) for key, val in dataset_weights.items() if key[0] == "field_dataset"
-    }
+    base_center = tuple(float(value) for value in source.center)
+    weights = {component: anp.asarray(weight) for component, weight in weights.items()}
 
-    component_grids = {
-        component: {
-            dim: np.asarray(data_array.coords[dim].data, dtype=float)
-            for dim in ("x", "y", "z", "f")
-        }
-        for component, data_array in field_dataset.field_components.items()
-    }
-    component_background_n = {
-        component: _source_remap_background_index(derivative_info, grid["f"])
-        for component, grid in component_grids.items()
-    }
-
-    def _helper_component_field(
-        params: dict[str, Any], *, normalize: bool, component: str
-    ) -> np.ndarray:
-        grid = component_grids[component]
-        shift_x = params["center"][0] - base_center[0]
-        shift_y = params["center"][1] - base_center[1]
-        shift_z = params["center"][2] - base_center[2]
-        return _compute_component_field_on_coords(
+    def objective(value: Any) -> Any:
+        params = source.get_param_state(path, value)
+        # grid coordinates are relative to the base center; a center shift is an offset in them
+        shift = tuple(params["center"][axis] - base_center[axis] for axis in range(3))
+        fields = _compute_fields_on_coords(
             source=source,
-            component=component,
             coords=grid,
-            background_n=component_background_n[component],
-            # Dataset coordinates are source-relative to the base source center.
-            # Center shifts are represented as offsets in this relative frame.
-            center=(shift_x, shift_y, shift_z),
-            normalize=normalize,
+            background_n=background_n,
+            center=shift,
+            normalize=True,
             params=params,
         )
-
-    def objective(param_value: Any) -> Any:
-        params = source.get_param_state(path, param_value)
         total = 0.0 + 0.0j
-        for component in field_dataset.field_components:
-            weight = weights.get(("field_dataset", component))
-            if weight is None:
-                continue
-            component_field = _helper_component_field(params, normalize=True, component=component)
-            total += anp.sum(weight * component_field)
+        for component, weight in weights.items():
+            total += anp.sum(weight * fields[component])
         return anp.real(total)
 
-    return float(grad(objective)(value0))
+    return float(grad(objective)(source.get_param(path)))
 
 
 def _make_beam_pose(
@@ -1035,17 +819,16 @@ def _make_beam_pose(
     )
 
 
-def _compute_component_field_on_coords(
+def _compute_fields_on_coords(
     source: AbstractGaussianBeam,
     *,
-    component: str,
     coords: dict[str, np.ndarray],
     background_n: np.ndarray,
     center: tuple[float, float, float],
     normalize: bool,
     params: dict[str, Any] | None = None,
-) -> np.ndarray:
-    """Compute one beam field component on explicit coordinate arrays."""
+) -> dict[str, np.ndarray]:
+    """Compute every beam field component on explicit coordinate arrays, at once."""
     from tidy3d.components import beam as beam_module
 
     pose = _make_beam_pose(source, center=center, params=params)
@@ -1062,65 +845,12 @@ def _compute_component_field_on_coords(
         for key in ("waist_radius", "waist_distance", "waist_sizes", "waist_distances")
         if key in params and params[key] is not None
     }
-    fields = source.compute_beam_fields_on_grid(
+    return source.compute_beam_fields_on_grid(
         pose=pose,
         grid=grid,
         normalize=normalize,
         params=beam_param_overrides,
     )
-    return fields[component]
-
-
-def _compute_gaussian_like_derivatives(
-    source: AbstractGaussianBeam, derivative_info: DerivativeInfo
-) -> AutogradFieldMap:
-    """Compute Gaussian-like source derivatives through dataset-remap chain rule.
-
-    Chain rule:
-    1) analytic Gaussian-like source -> mock ``FieldDataset``
-    2) reuse ``CustomFieldSource`` VJP for dataset cotangents
-    3) map dataset cotangents back to source parameters
-    """
-    derivative_map: AutogradFieldMap = {}
-    param_paths, center_paths = split_source_paths(derivative_info.paths)
-
-    freqs = np.asarray(derivative_info.frequencies, dtype=float).reshape(-1)
-    for freq in freqs:
-        derivative_info_freq = _slice_derivative_info_at_frequency(derivative_info, float(freq))
-        field_dataset = _build_gaussian_like_field_dataset(
-            source, derivative_info=derivative_info_freq
-        )
-        dataset_weights = _compute_dataset_vjp_weights(source, derivative_info_freq, field_dataset)
-
-        if center_paths:
-            mock_source = CustomFieldSource(
-                center=tuple(float(val) for val in source.center),
-                size=tuple(float(val) for val in source.size),
-                source_time=source.source_time,
-                field_dataset=field_dataset,
-            )
-            derivative_info_center = derivative_info_freq.updated_copy(
-                paths=center_paths,
-                bounds=derivative_info_freq.bounds,
-                bounds_intersect=derivative_info_freq.bounds_intersect,
-            )
-            center_derivatives = mock_source._compute_derivatives(derivative_info_center)
-            if source.direction == "-":
-                center_derivatives = negate_vjp_map(center_derivatives)
-            for field_path, value in center_derivatives.items():
-                _accumulate_derivative_value(derivative_map, field_path, value)
-
-        for field_path in param_paths:
-            value = _autograd_param_vjp(
-                source,
-                derivative_info_freq,
-                field_path,
-                dataset_weights=dataset_weights,
-                field_dataset=field_dataset,
-            )
-            _accumulate_derivative_value(derivative_map, field_path, value)
-
-    return derivative_map
 
 
 class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC):
@@ -1167,11 +897,139 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
         le=50,
     )
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute derivatives for Gaussian-like beam source parameters."""
-        return _compute_gaussian_like_derivatives(self, derivative_info)
+    def _derivative_terms(self, paths: list[PathType], target: SourceTarget) -> Compiled:
+        """One term over the source monitor's grid, keeping every frequency.
 
-    def _resolve_autograd_route(self, field_path: PathType) -> AutogradRoute:
+        Beam parameters bind on the client: the cotangents weight the analytic beam field, which
+        autograd differentiates at each frequency. A traced center binds the executor's center
+        sensitivity, for which the term carries the analytic profile.
+        """
+
+        from flexcompute.core._migration.em.derivatives import (
+            SourceProfile,
+            SourcePullback,
+            SourcePullbackKernel,
+            SumFrequencies,
+        )
+
+        from tidy3d.components.autograd.derivative_terms import Binding, Compiled
+        from tidy3d.components.source.derivative_terms import (
+            center_vjp,
+            frequency_weights,
+            source_monitor,
+        )
+
+        centers = [path for path in paths if path[0] == "center"]
+        parameters = [path for path in paths if path[0] != "center"]
+        components = tuple(
+            c
+            for c in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
+            if "xyz".index(c[1]) != self.injection_axis
+        )
+        couplings = {component: self._derivative_coupling(component) for component in components}
+        monitor = source_monitor(self, target, (adjoint for adjoint, _ in couplings.values()))
+        center = np.asarray([get_static(value) for value in self.center], dtype=float)
+        boundaries = target.simulation.discretize_monitor(monitor).boundaries.to_list
+        local = tuple(
+            np.asarray(b, dtype=float)[:-1] - center[axis] for axis, b in enumerate(boundaries)
+        )
+        background = self._background_index(target.simulation, target.frequencies)
+        values = ()
+        if centers:
+            values = self._profile_values(local, target.frequencies, background, components)
+        kernel = SourcePullbackKernel(
+            monitor=target.monitor,
+            adjoint_scale=frequency_weights(self, target, float(self.source_time._freq0)),
+            profile=SourceProfile(x=local[0], y=local[1], z=local[2], values=values),
+            pullbacks=tuple(
+                SourcePullback(
+                    source_component=component,
+                    adjoint_component=adjoint,
+                    coupling_sign=sign,
+                    return_cotangent=bool(parameters),
+                    include_in_center=bool(centers),
+                )
+                for component, (adjoint, sign) in couplings.items()
+            ),
+            center=center,
+            size=np.asarray([get_static(value) for value in self.size], dtype=float),
+            compute_center=bool(centers),
+            reductions=(SumFrequencies(outputs=(("center",),)),) if centers else (),
+        )
+        direction = -1.0 if self.direction == "-" else 1.0
+        parameter_vjp = partial(
+            _beam_parameter_vjp,
+            source=self,
+            coordinates=local,
+            program_frequencies=target.frequencies,
+            background_n=background,
+            components=components,
+        )
+        bindings = [
+            Binding.one(
+                (*target.key, *path), target.key, partial(center_vjp, path=path, sign=direction)
+            )
+            for path in centers
+        ] + [
+            Binding.one((*target.key, *path), target.key, partial(parameter_vjp, path=path))
+            for path in parameters
+        ]
+        return Compiled(
+            terms=((target.key, kernel),), monitors=(monitor,), bindings=tuple(bindings)
+        )
+
+    def _profile_values(
+        self,
+        coordinates: tuple[np.ndarray, np.ndarray, np.ndarray],
+        frequencies: np.ndarray,
+        background_n: np.ndarray,
+        components: tuple[str, ...],
+    ) -> tuple[tuple[str, np.ndarray], ...]:
+        """The analytic beam field per component, ``(F, X, Y, Z)`` on source-relative coordinates."""
+
+        fields = _compute_fields_on_coords(
+            source=self,
+            coords={**dict(zip("xyz", coordinates)), "f": frequencies},
+            background_n=background_n,
+            center=(0.0, 0.0, 0.0),
+            normalize=True,
+        )
+        # (X, Y, Z, F) -> (F, X, Y, Z)
+        return tuple(
+            (component, np.moveaxis(np.asarray(fields[component], dtype=complex), -1, 0))
+            for component in components
+        )
+
+    def _background_index(self, simulation: Any, frequencies: np.ndarray) -> np.ndarray:
+        """Refractive index at the center of the source's overlap with the simulation.
+
+        Beam profiles assume a uniform background; a nonuniform one is warned about once.
+        """
+
+        lower, upper = bounds_intersection(simulation.bounds, self.geometry.bounds)
+        center = tuple(0.5 * (lower[axis] + upper[axis]) for axis in range(3))
+        overlap = Box(center=center, size=tuple(upper[axis] - lower[axis] for axis in range(3)))
+        for frequency in frequencies:
+            epsilon = simulation.epsilon(box=overlap, coord_key="centers", freq=float(frequency))
+            values = np.asarray(epsilon.values).reshape(-1)
+            if values.size and not np.allclose(values, values[0]):
+                log.warning(
+                    "Gaussian-like source derivative remap assumes a uniform background index "
+                    "across the source extent, but epsilon is not uniform over the source bounds "
+                    f"intersection at f={float(frequency):.6g} Hz. Using the center-sampled "
+                    "refractive index for gradient computation."
+                )
+                break
+        point = Box(center=center, size=(0.0, 0.0, 0.0))
+        epsilon = [
+            np.asarray(
+                simulation.epsilon(box=point, coord_key="centers", freq=float(frequency)).values
+            ).reshape(-1)[0]
+            for frequency in frequencies
+        ]
+        return np.sqrt(np.asarray(epsilon, dtype=complex))
+
+    def _resolve_autograd_route(self, field_path: PathType) -> None:
         """Resolve and validate one traced Gaussian-like source path."""
         return self.validate_traced_path(field_path)
 
@@ -1246,7 +1104,7 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
             params[root] = value
         return params
 
-    def validate_traced_path(self, field_path: PathType) -> AutogradRoute:
+    def validate_traced_path(self, field_path: PathType) -> None:
         """Validate traced Gaussian-like source paths."""
         if not field_path:
             raise AdjointError(
@@ -1270,13 +1128,13 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
                 source_size=tuple(self.size),
                 source_name=type(self).__name__,
             )
-            return AutogradRoute(local_path=field_path)
+            return
 
         if root in scalar_allowed:
-            return AutogradRoute(local_path=field_path)
+            return
 
         if root in self._beam_tuple_roots:
-            return AutogradRoute(local_path=field_path)
+            return
 
         raise AdjointError(
             f"Unsupported traced source parameter '{parameter}' for '{type(self).__name__}'. "
@@ -1452,10 +1310,6 @@ class ThinLensBeam(AbstractThinLens, AbstractGaussianBeam):
     The source uses the same analytic field injection machinery as Gaussian beams, but the field
     profile is generated from a thin-lens pupil instead of a paraxial Gaussian waist model.
     """
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Autograd derivatives are not implemented for thin-lens source parameters."""
-        raise NotImplementedError("Autograd derivatives are not implemented for ThinLensBeam.")
 
     @property
     def _supported_traced_source_fields(self) -> tuple[str, ...]:

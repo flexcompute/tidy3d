@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.derivatives import BoundaryShapeKernel, write_program
 
 import tidy3d as td
-from tidy3d.components.autograd.collection import collect_adjoint_sample_sets
 from tidy3d.components.autograd.field_map import TracerKeys
 from tidy3d.components.simulation import constants as simulation_constants
 from tidy3d.components.workflow import Workflow
@@ -17,37 +17,41 @@ from tidy3d.web.api import webapi
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.states import ERROR_STATES
 
-from .constants import SAMPLE_SETS_FILE, SIM_FIELDS_KEYS_FILE
-from .io_utils import get_cached_vjp_traced_fields, get_vjp_traced_fields
+from .constants import SIM_DERIVATIVE_PROGRAM_FILE, SIM_FIELDS_KEYS_FILE
+from .io_utils import get_cached_derivative_results, get_derivative_results
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from flexcompute.core._migration.em.derivatives import DerivativeProgram
+
     from tidy3d.components.base import Tidy3dBaseModel
-    from tidy3d.em.translate.sample_sets import GeometrySampleSets
 
 
-# above this estimated payload, the upload size line is logged at info level
-_SAMPLE_SETS_SIZE_INFO_BYTES = 50e6
+# above this payload, the upload size line is logged at info level
+_PROGRAM_SIZE_INFO_BYTES = 50e6
 
 
-def _validate_sample_sets_size(num_bytes: float, sample_sets: GeometrySampleSets) -> None:
-    """Reject an oversized sample-set artifact before upload.
+def _validate_program_size(num_bytes: float, program: DerivativeProgram) -> None:
+    """Reject an oversized derivative program before upload.
 
-    Client preflight of the backend limit (``MAX_ADJOINT_SAMPLE_SETS_SIZE_GB``, enforced
-    authoritatively by the solver before it loads the artifact), with guidance in public
-    vocabulary.
+    Client preflight of the backend limit (``MAX_ADJOINT_SAMPLE_SETS_SIZE_GB``), with guidance
+    in public vocabulary. The program carries every surface sample point, which dominates its
+    size.
     """
     max_bytes = simulation_constants.MAX_ADJOINT_SAMPLE_SETS_SIZE_GB * 1e9
     if num_bytes <= max_bytes:
         return
 
-    top = sorted(sample_sets.entries, key=lambda e: e.sample_sets.num_points, reverse=True)
-    largest = ", ".join(
-        f"structure {e.structure_index} ({e.sample_sets.num_points:,} points at "
-        f"{e.sample_sets.spacing:.3g} um spacing)"
-        for e in top[:3]
+    points = sorted(
+        (
+            (sum(len(s.normals) for s in kernel.sample_sets), key[1])
+            for key, kernel in program.terms
+            if isinstance(kernel, BoundaryShapeKernel)
+        ),
+        reverse=True,
     )
+    largest = ", ".join(f"structure {index} ({count:,} points)" for count, index in points[:3])
     # surface point count scales with 1 / spacing**2
     spacing_factor = float(np.sqrt(num_bytes / max_bytes))
     raise AdjointError(
@@ -68,48 +72,31 @@ def _validate_sample_sets_size(num_bytes: float, sample_sets: GeometrySampleSets
 
 
 def _autograd_forward_sidecar_artifacts(
-    simulation: td.Simulation,
-    sim_fields_keys: list[tuple],
-    sample_sets: GeometrySampleSets | None = None,
+    program: DerivativeProgram,
 ) -> dict[str, Tidy3dBaseModel | Path]:
     """Build sidecar artifacts uploaded alongside an autograd forward task.
 
-    ``sample_sets`` is the artifact instance the strategy prepared the forward with
-    (``prepare_forward``), so the upload ships the exact object monitors were staged
-    from. When absent (direct callers outside the strategies), it is collected here
-    without exclusions: sidecars only ride remote-gradient forward uploads, and
-    custom vjps / numerical structures (the only sources of exclusions) force
-    ``local_gradient=True``.
-
-    The sample-set artifact is serialized here, and that file is both what the size
-    limit is checked against and what is uploaded, so the preflight measures exactly
-    the bytes the backend receives, before any task is created. The caller owns the
-    file and removes it after upload with :func:`_remove_sidecar_files`.
+    The program is serialized here, and that file is both what the size limit is checked
+    against and what is uploaded, so the preflight measures exactly the bytes the backend
+    receives, before any task is created. The caller owns the file and removes it after upload
+    with :func:`_remove_sidecar_files`.
     """
-    if sample_sets is None:
-        sample_sets = collect_adjoint_sample_sets(simulation, sim_fields_keys)
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)
-    sample_sets_file = Path(fname)
+    program_file = Path(fname)
     try:
-        sample_sets.to_file(fname)
-        num_bytes = sample_sets_file.stat().st_size
-        size_message = (
-            f"Uploading adjoint sample-set artifact: {sample_sets.num_points} surface points, "
-            f"{num_bytes / 1e6:.1f} MB."
-        )
-        if num_bytes > _SAMPLE_SETS_SIZE_INFO_BYTES:
+        write_program(program, program_file)
+        num_bytes = program_file.stat().st_size
+        size_message = f"Uploading the derivative program: {num_bytes / 1e6:.1f} MB."
+        if num_bytes > _PROGRAM_SIZE_INFO_BYTES:
             td.log.info(size_message)
         else:
             td.log.debug(size_message)
-        _validate_sample_sets_size(num_bytes, sample_sets)
+        _validate_program_size(num_bytes, program)
     except BaseException:
-        sample_sets_file.unlink(missing_ok=True)
+        program_file.unlink(missing_ok=True)
         raise
-    return {
-        SIM_FIELDS_KEYS_FILE: TracerKeys(keys=sim_fields_keys),
-        SAMPLE_SETS_FILE: sample_sets_file,
-    }
+    return {SIM_FIELDS_KEYS_FILE: TracerKeys(keys=()), SIM_DERIVATIVE_PROGRAM_FILE: program_file}
 
 
 def _remove_sidecar_files(sidecar_artifacts: Mapping[str, Tidy3dBaseModel | Path]) -> None:
@@ -192,11 +179,7 @@ def _run_tidy3d(
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
     if job.simulation_type == "autograd_fwd":
-        sidecar_artifacts = _autograd_forward_sidecar_artifacts(
-            simulation,
-            run_kwargs["sim_fields_keys"],
-            sample_sets=run_kwargs.get("sample_sets"),
-        )
+        sidecar_artifacts = _autograd_forward_sidecar_artifacts(run_kwargs["derivative_program"])
         try:
             job._upload_and_cache(verbose_estimate_cost=False, _sidecar_artifacts=sidecar_artifacts)
         finally:
@@ -247,13 +230,10 @@ def _run_async_tidy3d(
         }
         batch = batch.updated_copy(simulations=sims)
 
-        sample_sets_dict = run_kwargs.get("sample_sets_dict") or {}
         sidecar_artifacts_by_task = {}
         try:
-            for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
-                sidecar_artifacts_by_task[task_name] = _autograd_forward_sidecar_artifacts(
-                    sims[task_name], sim_fields_keys, sample_sets=sample_sets_dict.get(task_name)
-                )
+            for task_name, program in run_kwargs["derivative_programs_dict"].items():
+                sidecar_artifacts_by_task[task_name] = _autograd_forward_sidecar_artifacts(program)
             batch._upload_jobs(_sidecar_artifacts_by_task=sidecar_artifacts_by_task)
         finally:
             for sidecar_artifacts in sidecar_artifacts_by_task.values():
@@ -288,20 +268,20 @@ def _run_async_tidy3d_bwd(
     simulations: dict[str, td.Simulation],
     **run_kwargs: Any,
 ) -> dict[str, dict]:
-    """Run a batch of adjoint simulations using regular web.run()."""
+    """Run a batch of adjoint simulations and return each one's derivative program results."""
 
     verbose = run_kwargs.get("verbose", True)
-    vjp_traced_fields_dict = {}
+    results_dict = {}
     simulations_to_run = {}
     for task_name, simulation in simulations.items():
-        cached = get_cached_vjp_traced_fields(simulation, verbose=verbose)
+        cached = get_cached_derivative_results(simulation, verbose=verbose)
         if cached is None:
             simulations_to_run[task_name] = simulation
         else:
-            vjp_traced_fields_dict[task_name] = cached
+            results_dict[task_name] = cached
 
     if not simulations_to_run:
-        return vjp_traced_fields_dict
+        return results_dict
 
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     _ = run_kwargs.pop("path_dir", None)
@@ -322,12 +302,10 @@ def _run_async_tidy3d_bwd(
     _raise_for_failed_batch_tasks(batch, operation="Adjoint simulation")
 
     for task_name, job in batch.jobs.items():
-        task_id = job.task_id
-        vjp = get_vjp_traced_fields(
-            task_id_adj=task_id,
+        results_dict[task_name] = get_derivative_results(
+            task_id_adj=job.task_id,
             verbose=batch.verbose,
             cache_simulation=job.simulation,
         )
-        vjp_traced_fields_dict[task_name] = vjp
 
-    return vjp_traced_fields_dict
+    return results_dict

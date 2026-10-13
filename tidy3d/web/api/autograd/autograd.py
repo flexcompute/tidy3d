@@ -21,7 +21,7 @@ from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 
-from . import backward, engine, forward, hooks, io_utils, strategy
+from . import backward, engine, forward, hooks, strategy
 from .constants import FLUX_MONITOR_ADJOINT_DOCS
 from .context import (
     AdjointTaskBatch,
@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.path_utils import AutogradRoute
     from tidy3d.components.data.sim_data import SimulationData
     from tidy3d.components.eme.simulation import EMESimulation
     from tidy3d.components.mode.simulation import ModeSimulation
@@ -47,7 +46,6 @@ if TYPE_CHECKING:
     from tidy3d.components.tcad.simulation.heat import HeatSimulation
     from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
     from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
-    from tidy3d.em.translate.sample_sets import GeometrySampleSets
     from tidy3d.plugins.mode import ModeSolver
     from tidy3d.plugins.smatrix import ModalComponentModeler
     from tidy3d.web.api.container import BatchData
@@ -166,24 +164,24 @@ def _custom_vjp_covers_structure_path(
     return tuple(vjp_config.path_key) == tuple(structure_path[:2])
 
 
-def _resolve_traced_autograd_routes(
+def _validate_traced_autograd_paths(
     simulation: td.Simulation,
     traced_fields: AutogradFieldMap,
     *,
     custom_vjp: Sequence[CustomVJPConfig] | None = None,
     skip_structure_indices: tuple[int, ...] = (),
-) -> tuple[AutogradRoute, ...]:
-    """Resolve traced source and structure paths into validated native VJP routes."""
+) -> None:
+    """Reject traced source and structure paths that no derivative supports.
+
+    The one validation pass: derivative compilation trusts the paths it lets through.
+    """
     skip_indices = set(skip_structure_indices)
-    routes = []
     for component_type, component_index, *component_path in traced_fields.keys():
         component_path = tuple(component_path)
         # These paths come from _strip_traced_fields(starting_paths=("structures", "sources")).
         # Trust that root/index shape here and let component validators check VJP support.
         if component_type == "sources":
-            routes.append(
-                simulation.sources[component_index]._resolve_autograd_route(component_path)
-            )
+            simulation.sources[component_index]._resolve_autograd_route(component_path)
             continue
 
         if component_type != "structures" or component_index in skip_indices:
@@ -194,10 +192,7 @@ def _resolve_traced_autograd_routes(
         ):
             continue
 
-        routes.append(
-            simulation.structures[component_index]._resolve_autograd_route(component_path)
-        )
-    return tuple(routes)
+        simulation.structures[component_index]._resolve_autograd_route(component_path)
 
 
 def _strip_validated_autograd_fields(
@@ -205,19 +200,19 @@ def _strip_validated_autograd_fields(
     *,
     custom_vjp: Sequence[CustomVJPConfig] | None = None,
     skip_structure_indices: tuple[int, ...] = (),
-) -> tuple[AutogradFieldMap, tuple[AutogradRoute, ...]]:
+) -> AutogradFieldMap:
     """Strip traced simulation fields and reject unsupported autograd traces."""
     traced_fields = simulation._strip_traced_fields(
         include_untraced_data_arrays=False,
         starting_paths=(("structures",), ("sources",)),
     )
-    autograd_routes = _resolve_traced_autograd_routes(
+    _validate_traced_autograd_paths(
         simulation=simulation,
         traced_fields=traced_fields,
         custom_vjp=custom_vjp,
         skip_structure_indices=skip_structure_indices,
     )
-    return traced_fields, autograd_routes
+    return traced_fields
 
 
 def _untracked_flux_monitor_names(simulation: td.Simulation) -> list[str]:
@@ -602,9 +597,9 @@ def run_custom(
         the simulation structures list. Gradients are routed through synthetic
         ``("numerical", structure_index, param_index)`` paths handled by
         ``compute_derivatives(parameters, derivative_info)`` or
-        ``compute_derivatives(parameters, derivative_info, derivative_helper)``.
-        The optional ``derivative_helper`` supports ``derivative_view=...`` for
-        explicit geometry/medium derivative dispatch views.
+        ``compute_derivatives(parameters, derivative_info, query_results)``.
+        Structure-native derivative data needed by the callback must be declared in
+        ``NumericalStructureConfig.derivative_queries`` before the simulation runs.
     custom_vjp : Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None
         Replacement hook for existing traced structure paths. Each config overrides derivative computation
         for matching structure/path targets in the standard ``("structures", ...)`` path namespace.
@@ -1574,7 +1569,7 @@ def setup_run(
         )
         numerical_structure_map = dict(zip(numerical_structure_indices, numerical_structures))
 
-    sim_fields_map, autograd_routes = _strip_validated_autograd_fields(
+    sim_fields_map = _strip_validated_autograd_fields(
         sim_prepared,
         custom_vjp=custom_vjp,
         skip_structure_indices=numerical_structure_indices,
@@ -1607,7 +1602,6 @@ def setup_run(
         sim_fields=sim_fields_map,
         simulation=sim_prepared,
         numerical_structure_map=numerical_structure_map,
-        autograd_routes=autograd_routes,
     )
 
 
@@ -1685,60 +1679,16 @@ def _run_async_primitive(
     )
 
 
-def setup_fwd(
-    sim_fields: AutogradFieldMap,
-    sim_original: td.Simulation,
-    local_gradient: bool = False,
-    custom_vjp: Sequence[CustomVJPConfig] | None = None,
-) -> td.Simulation:
-    """Return a forward simulation with adjoint monitors attached (delegated)."""
-    return forward.setup_fwd(
-        sim_fields=sim_fields,
-        sim_original=sim_original,
-        local_gradient=local_gradient,
-        custom_vjp=custom_vjp,
-    )
-
-
 def postprocess_fwd(
     sim_data_combined: td.SimulationData,
     sim_original: td.Simulation,
     context: AutogradContext,
-    sim_fields_keys: list[tuple],
-    custom_vjp: Sequence[CustomVJPConfig] | None = None,
 ) -> AutogradFieldMap:
     """Postprocess the combined simulation data into an Autograd field map (delegated)."""
     return forward.postprocess_fwd(
         sim_data_combined=sim_data_combined,
         sim_original=sim_original,
         context=context,
-        sim_fields_keys=sim_fields_keys,
-        custom_vjp=custom_vjp,
-    )
-
-
-def upload_sim_fields_keys(
-    sim_fields_keys: list[tuple], task_id: str, verbose: bool = False
-) -> None:
-    """Upload traced simulation field keys for adjoint runs (delegated)."""
-    return io_utils.upload_sim_fields_keys(
-        sim_fields_keys=sim_fields_keys,
-        task_id=task_id,
-        verbose=verbose,
-    )
-
-
-""" VJP maker for ADJ pass."""
-
-
-def get_vjp_traced_fields(
-    task_id_adj: str,
-    verbose: bool,
-) -> AutogradFieldMap:
-    """Fetch VJP traced fields for a completed adjoint job."""
-    return io_utils.get_vjp_traced_fields(
-        task_id_adj=task_id_adj,
-        verbose=verbose,
     )
 
 
@@ -1797,27 +1747,6 @@ def _run_async_bwd(
     )
     return strategy.make_async_vjp(
         batch_context=batch_context,
-    )
-
-
-def setup_adj(
-    data_fields_vjp: AutogradFieldMap,
-    sim_data_orig: td.SimulationData,
-    sim_fields_keys: list[tuple],
-    max_num_adjoint_per_fwd: int,
-    already_filtered: bool = False,
-    sim_data_fwd: td.SimulationData | None = None,
-    sample_sets: GeometrySampleSets | None = None,
-) -> list[td.Simulation]:
-    """Construct adjoint simulations (delegated)."""
-    return backward.setup_adj(
-        data_fields_vjp=data_fields_vjp,
-        sim_data_orig=sim_data_orig,
-        sim_fields_keys=sim_fields_keys,
-        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
-        already_filtered=already_filtered,
-        sim_data_fwd=sim_data_fwd,
-        sample_sets=sample_sets,
     )
 
 

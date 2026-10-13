@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import Field, field_validator
 
-from tidy3d.components.autograd.path_utils import AutogradRoute, format_traced_path
+from tidy3d.components.autograd.path_utils import format_traced_path
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.geometry.base import Box
@@ -25,8 +25,9 @@ from tidy3d.exceptions import AdjointError
 from .adjoint_helpers import validate_no_zero_dim_center_paths, validate_source_field_component
 
 if TYPE_CHECKING:
-    from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd import PathType
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.source.derivative_terms import SourceTarget
     from tidy3d.components.types import Ax
     from tidy3d.components.viz import PlotParams
 
@@ -102,14 +103,14 @@ class Source(Box, AbstractSource, ABC):
             return f"Supported source parameters are: {supported}."
         return "This source type does not support traced source parameters."
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate a traced source path for adjoint routing."""
         self._validate_traced_source_path(field_path)
-        return AutogradRoute(local_path=field_path)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives for source parameters."""
-        raise NotImplementedError(f"Can't compute derivative for 'Source': '{type(self)}'.")
+    def _derivative_terms(self, paths: list[PathType], target: SourceTarget) -> Compiled:
+        """Derivative-program terms and bindings for traced paths of this source."""
+
+        raise AdjointError(f"Derivatives of '{type(self).__name__}' parameters are not supported.")
 
     def _validate_traced_source_path(
         self,

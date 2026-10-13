@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.types import (
         Axis,
         Bound,
@@ -620,24 +620,18 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @staticmethod
     def _sample_set_integrand(
-        sample_set: SurfaceSampleSet,
-        derivative_info: DerivativeInfo,
-        interpolators: dict | None,
-        key: PathType,
-        sample_slice: slice | None = None,
+        derivative_info: ShapeDerivativeContext, key: PathType, sample_slice: slice | None = None
     ) -> np.ndarray:
-        """Evaluate one set's integrand through the boundary consumption seam."""
+        """One set's per-point integrand, read from the derivative's point integrands."""
         from tidy3d.em.translate.sample_sets import sample_set_integrand
 
-        return sample_set_integrand(
-            sample_set, derivative_info, interpolators, key, sample_slice=sample_slice
-        )
+        return sample_set_integrand(derivative_info, key, sample_slice=sample_slice)
 
     def _compute_derivatives_from_sample_sets(
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
         """Compute adjoint derivatives for ``paths`` by consuming pre-generated sample sets.
 
@@ -696,7 +690,6 @@ class Geometry(Tidy3dBaseModel, ABC):
     to_gds_file = _gds_methods.to_gds_file
 
     # Operators and autograd
-    _compute_derivatives = _operator_methods._compute_derivatives
     _resolve_autograd_route = _operator_methods._resolve_autograd_route
     _as_union = _operator_methods._as_union
     __add__ = _operator_methods.__add__

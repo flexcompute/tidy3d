@@ -11,7 +11,6 @@ from tidy3d.components.autograd.flux_monitor import (
 )
 from tidy3d.components.base import cached_property
 from tidy3d.components.monitor import (
-    FieldMonitor,
     FluxMonitor,
     FreqMonitor,
     PointCloudFieldMonitor,
@@ -21,7 +20,6 @@ from tidy3d.components.monitor import (
 if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.monitor import Monitor
-    from tidy3d.em.translate.sample_sets import GeometrySampleSets, StructureSampleSets
 
 
 @cached_property
@@ -58,147 +56,54 @@ def _monitor_validation_index(self: Any, *, monitor_name: str, fallback_index: i
     return fallback_index
 
 
-def _with_adjoint_monitors(
-    self: Any, sim_fields_keys: list[tuple], sample_sets: GeometrySampleSets | None = None
-) -> Self:
-    """Copy of self with adjoint field and permittivity monitors for every traced structure.
+def _with_adjoint_monitors(self: Any, sim_fields_keys: list[tuple]) -> Self:
+    """Copy of self with the flux-adjoint helpers and the volumetric adjoint monitors of the
+    structures in ``sim_fields_keys`` (the paths a user callback owns).
 
-    ``sample_sets`` is the pre-collected ``GeometrySampleSets`` artifact; shape-derivative
-    monitors are staged as point-cloud monitors over its query points. Structures whose
-    sets carry no staging payload (custom-vjp-owned or numerical paths, excluded from
-    collection) keep volumetric monitors and the frozen legacy ``DerivativeInfo``
-    contract.
+    Monitors already present unchanged are not added again: the deployed WebAPI estimator
+    stages an uploaded forward simulation, already staged by the client, a second time.
     """
 
     _, flux_helper_monitors = build_flux_monitor_adjoint_layout(self.monitors)
-    mnts_fld, mnts_eps = self._make_adjoint_monitors(
-        sim_fields_keys=sim_fields_keys, sample_sets=sample_sets
-    )
-    monitors = list(self.monitors) + list(flux_helper_monitors) + list(mnts_fld) + list(mnts_eps)
+    mnts_fld, mnts_eps = self._make_adjoint_monitors(sim_fields_keys)
+    monitors = list(self.monitors)
+    monitors_by_name = {monitor.name: monitor for monitor in monitors}
+    for monitor in (*flux_helper_monitors, *mnts_fld, *mnts_eps):
+        if monitors_by_name.get(monitor.name) == monitor:
+            continue
+        monitors.append(monitor)
+        monitors_by_name[monitor.name] = monitor
     return self.copy(update={"monitors": monitors})
 
 
-def _structure_sets_staged(structure_sets: StructureSampleSets | None) -> bool:
-    """Whether a structure's sample sets carry the monitor staging payload.
-
-    Payload presence — not local config — decides monitor construction: the
-    artifact is the single authority, so every construction site (client, server
-    forward preparation, adjoint assembly) stages identical monitors. Uniformity
-    of staging across a structure's non-empty sets is a validated invariant of
-    ``StructureSampleSets``. A structure without staged sets (every traced path
-    custom-vjp-owned or numerical, so excluded from collection) keeps volumetric
-    monitors.
-    """
-    if structure_sets is None:
-        return False
-    return structure_sets.staged
-
-
-def _structure_monitor_selection(
-    field_keys: list[tuple], is_numerical: bool, structure_sets: StructureSampleSets | None
-) -> tuple[bool, bool]:
-    """Decide the monitor kinds for one traced structure: (volumetric, point_cloud).
-
-    Shape paths covered by the structure's staged sample sets use point-cloud
-    monitors; a volumetric pair remains whenever anything consumes the legacy
-    volumetric data: medium paths, numerical-structure paths, or shape paths the sets
-    do not cover (custom-vjp-owned paths are excluded from collection and keep the
-    frozen ``DerivativeInfo`` contract).
-    """
-    if not _structure_sets_staged(structure_sets):
-        return True, False
-
-    has_medium = any(fields and fields[0] == "medium" for fields in field_keys)
-    geometry_paths = [
-        tuple(fields[1:]) for fields in field_keys if fields and fields[0] == "geometry"
-    ]
-    covered = {tuple(path) for path in structure_sets.requested_paths}
-    uncovered_geometry = any(path not in covered for path in geometry_paths)
-
-    volumetric = has_medium or is_numerical or uncovered_geometry
-    return volumetric, True
-
-
 def _make_adjoint_monitors(
-    self: Any, sim_fields_keys: list[tuple], sample_sets: GeometrySampleSets | None = None
+    self: Any, sim_fields_keys: list[tuple]
 ) -> tuple[list[Monitor], list[Monitor]]:
-    """Get lists of field and permittivity monitors for this simulation.
+    """Volumetric field and permittivity monitors for each structure of ``sim_fields_keys``.
 
-    Shape-derivative monitors are staged as point-cloud monitors from the
-    ``sample_sets`` artifact's query points; volumetric monitors remain for medium,
-    numerical-structure, and custom-vjp-owned paths
-    (see :func:`_structure_monitor_selection`).
+    Custom-VJP and numerical-structure callbacks build their ``DerivativeInfo`` from these.
     """
 
-    # Separate structures and sources into different dictionaries
     structure_index_to_keys = defaultdict(list)
-    numerical_structure_indices = set()
-    source_index_to_keys = defaultdict(list)
-
     for component_type, index, *fields in sim_fields_keys:
-        if component_type in ("structures", "numerical"):
-            structure_index_to_keys[index].append(fields)
-            if component_type == "numerical":
-                numerical_structure_indices.add(index)
-        elif component_type == "sources":
-            source_index_to_keys[index].append(fields)
-        else:
+        if component_type not in ("structures", "numerical"):
             raise ValueError(
                 f"Unknown component type '{component_type}' encountered while "
-                "constructing adjoint monitors. "
-                "Expected one of: 'structures', 'sources', 'numerical'."
+                "constructing adjoint monitors. Expected 'structures' or 'numerical'."
             )
+        structure_index_to_keys[index].append(fields)
 
     freqs = self._freqs_adjoint
     sim_plane = self if self.size.count(0.0) == 1 else None
 
     adjoint_monitors_fld = []
     adjoint_monitors_eps = []
-
-    # Handle structures first
     for i, field_keys in structure_index_to_keys.items():
-        structure = self.structures[i]
-
-        structure_sets = sample_sets.for_structure(i) if sample_sets is not None else None
-        volumetric, point_cloud = _structure_monitor_selection(
-            field_keys=field_keys,
-            is_numerical=i in numerical_structure_indices,
-            structure_sets=structure_sets,
+        mnt_fld, mnt_eps = self.structures[i]._make_adjoint_monitors(
+            freqs=freqs, index=i, field_keys=field_keys, grid=self.grid, plane=sim_plane
         )
-
-        if point_cloud:
-            mnts_fld_pc, mnts_eps_pc = structure._make_adjoint_point_cloud_monitors(
-                freqs=freqs, index=i, structure_sets=structure_sets
-            )
-            adjoint_monitors_fld.extend(mnts_fld_pc)
-            adjoint_monitors_eps.extend(mnts_eps_pc)
-
-        if volumetric:
-            mnt_fld, mnt_eps = structure._make_adjoint_monitors(
-                freqs=freqs, index=i, field_keys=field_keys, grid=self.grid, plane=sim_plane
-            )
-            adjoint_monitors_fld.append(mnt_fld)
-            adjoint_monitors_eps.append(mnt_eps)
-
-    # Handle sources
-    for i, _field_keys in source_index_to_keys.items():
-        source = self.sources[i]
-
-        # For sources, we only need field monitors (no permittivity monitors)
-        # Create a field monitor that covers the source region
-        source_center = source.center
-        source_size = source.size
-
-        # Create field monitor for the source
-        field_monitor = FieldMonitor(
-            center=source_center,
-            size=source_size,
-            freqs=freqs,
-            name=f"source_adjoint_{i}",
-        )
-
-        # For sources, we only return field monitors (no permittivity monitors)
-        adjoint_monitors_fld.append(field_monitor)
+        adjoint_monitors_fld.append(mnt_fld)
+        adjoint_monitors_eps.append(mnt_eps)
 
     return adjoint_monitors_fld, adjoint_monitors_eps
 

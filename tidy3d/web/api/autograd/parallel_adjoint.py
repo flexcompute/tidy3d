@@ -329,7 +329,6 @@ def prepare_parallel_adjoint(
     task_context: ForwardTaskContext,
 ) -> ParallelAdjointPayload | None:
     simulation = task_context.sim_original
-    sim_fields_keys = task_context.sim_fields_keys
     task_name = task_context.task_name
     max_num_adjoint_per_fwd = task_context.max_num_adjoint_per_fwd
     if not config.adjoint.parallel_run:
@@ -362,12 +361,8 @@ def prepare_parallel_adjoint(
     if not basis_specs:
         td.log.warning("Parallel adjoint disabled because no eligible monitor outputs were found.")
         return None
-    # the strategy threads the collected artifact onto the context before this call,
-    # so parallel adjoint simulations stage the same point-cloud monitors the
-    # forward simulation records
-    adjoint_monitors = make_adjoint_monitors(
-        simulation, sim_fields_keys, sample_sets=task_context.context.sample_sets
-    )
+    # the derivative run compiled for the forward simulation stages the same monitors here
+    adjoint_monitors = make_adjoint_monitors(simulation, task_context.context.derivative_run)
 
     basis_sources: list[tuple[ParallelAdjointBasis, SourceType]] = []
     for basis in basis_specs:

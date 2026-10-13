@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from typing_extensions import Self
 
-    from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import (
         Axis,
@@ -397,15 +395,3 @@ class GeometryArray(Geometry):
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         return self._geometry_group._update_from_bounds(bounds=bounds, axis=axis)
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object.
-
-        Raises
-        ------
-        NotImplementedError
-            Adjoint/autodiff is not currently supported for GeometryArray.
-        """
-        raise NotImplementedError(
-            "Adjoint is not currently supported for 'GeometryArray'.",
-        )

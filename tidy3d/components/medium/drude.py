@@ -15,23 +15,13 @@ from tidy3d.components.autograd.types import (
     TracedFloat,
     TracedPositiveFloat,
 )
-from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.constants import (
     HERTZ,
     PERMITTIVITY,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from autograd.numpy.numpy_boxes import ArrayBox
-    from numpy.typing import NDArray
-    from pydantic import PositiveFloat
-
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.types import AutogradFieldMap
-
-    from .base import ArrayComplex, ArrayFloat
+    pass
 
 
 def _medium_numerics() -> Any:
@@ -77,6 +67,7 @@ class Drude(DispersiveMedium):
     """
 
     _traced_indexed_root: ClassVar[str] = "coeffs"
+    _derivative_model: ClassVar[str] = "drude"
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: TracedPositiveFloat = Field(
@@ -126,59 +117,3 @@ class Drude(DispersiveMedium):
             "frequency_range": self.frequency_range,
             "name": self.name,
         }
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for Drude params via TJP through eps_model()."""
-
-        f, vec = self._tjp_inputs(derivative_info)
-
-        N = len(self.coeffs)
-        if N == 0 and ("eps_inf",) not in derivative_info.paths:
-            return {}
-
-        # pack into flat [eps_inf, fp..., delta...]
-        eps_inf0 = self.eps_inf
-        fp0 = np.array([fp for (fp, _d) in self.coeffs]) if N else np.array([])
-        d0 = np.array([dd for (_fp, dd) in self.coeffs]) if N else np.array([])
-        theta0 = np.concatenate([np.array([eps_inf0]), fp0, d0])
-
-        def _eps_vec(theta: Sequence[PositiveFloat]) -> NDArray | ArrayBox:
-            eps_inf = theta[0]
-            fp = theta[1 : 1 + N]
-            dd = theta[1 + N : 1 + 2 * N]
-            coeffs = tuple((fp[i], dd[i]) for i in range(N))
-            eps = self.updated_copy(eps_inf=eps_inf, coeffs=coeffs, validate=False).eps_model(f)
-            return pack_complex_vec(eps)
-
-        g = self._tjp_grad(theta0, _eps_vec, vec)
-
-        mapping = [(("eps_inf",), 0)]
-        base = 1
-        mapping += [(("coeffs", i, 0), base + i) for i in range(N)]
-        mapping += [(("coeffs", i, 1), base + N + i) for i in range(N)]
-        return self._map_grad_real(g, derivative_info.paths, mapping)
-
-    @staticmethod
-    def _den(
-        freq: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        return (freq**2) + 1j * (freq * delta)
-
-    # frequency weights for custom Drude
-    @staticmethod
-    def _w_fp(
-        freq: float | ArrayFloat,
-        fp: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        return -(2.0 * fp) / Drude._den(freq, delta)
-
-    @staticmethod
-    def _w_delta(
-        freq: float | ArrayFloat,
-        fp: float | ArrayFloat,
-        delta: float | ArrayFloat,
-    ) -> complex | ArrayComplex:
-        den = Drude._den(freq, delta)
-        return (1j * freq * (fp**2)) / (den**2)

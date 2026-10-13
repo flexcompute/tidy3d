@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import Field
 
@@ -13,9 +13,6 @@ from tidy3d.components.material.solver_types import (
 )
 from tidy3d.components.types.base import TYPE_TAG_STR
 from tidy3d.exceptions import AdjointError
-
-if TYPE_CHECKING:
-    from tidy3d.components.autograd.path_utils import AutogradRoute
 
 
 class MultiPhysicsMedium(Tidy3dBaseModel):
@@ -117,7 +114,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Reject native autograd routes through multiphysics media."""
         parameter = format_traced_path(tuple(field_path))
         raise AdjointError(

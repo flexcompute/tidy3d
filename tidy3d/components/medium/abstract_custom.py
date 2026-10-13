@@ -8,26 +8,23 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 from pydantic import Field
 
-from tidy3d.components.autograd.derivative_utils import (
-    bounds_slice,
-    compute_spatial_weights,
-    transpose_interp_axis,
-)
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DATA_ARRAY_MAP
 from tidy3d.components.data.unstructured.base import UnstructuredGridDataset
 from tidy3d.components.data.utils import _get_numpy_array
 from tidy3d.components.geometry.contour_conversion import gdstk_contours_from_custom_medium
 from tidy3d.components.types import TYPE_TAG_STR, InterpMethod
-from tidy3d.constants import EPSILON_0
+from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
-    from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.autograd.types import PathType
     from tidy3d.components.data.utils import CustomSpatialDataType
     from tidy3d.components.grid.grid import Coords
+    from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.types import (
         ArrayComplex3D,
         Axis,
@@ -39,7 +36,7 @@ if TYPE_CHECKING:
     from .base import ArrayFloat, ArrayGeneric, FrequencyArray
     from .perturbation import PerturbationMediumType
 
-from .base import ALLOWED_INTERP_METHODS, AbstractMedium, ensure_freq_in_range
+from .base import AbstractMedium, ensure_freq_in_range
 
 
 class AbstractCustomMedium(AbstractMedium, ABC):
@@ -80,6 +77,11 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     @abstractmethod
     def is_isotropic(self) -> bool:
         """The medium is isotropic or anisotropic."""
+
+    def _derivative_terms(self, paths: list[PathType], target: MediumTarget) -> Compiled:
+        """Custom media project onto their own parameter grids, so each class compiles its own."""
+
+        raise AdjointError(f"Derivatives of '{type(self).__name__}' are not supported.")
 
     def _interp_method(self, comp: Axis) -> InterpMethod:
         """Interpolation method applied to comp."""
@@ -340,113 +342,3 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             eps_components=eps_components,
         )
         return contours, frame_bounds, in_plane_step
-
-    def _derivative_field_cmp_custom(
-        self,
-        E_der_map: dict[str, ScalarFieldDataArray],
-        spatial_data: SpatialDataArray,
-        dim: str,
-        bounds: Bound | None = None,
-        component: str = "real",
-        interp_method: InterpMethod | None = None,
-        sum_over_freqs: bool = True,
-    ) -> NDArray:
-        """Compute the derivative with respect to a material property component."""
-        param_coords = {axis: np.asarray(spatial_data.coords[axis]) for axis in "xyz"}
-        eps_shape = [len(param_coords[axis]) for axis in "xyz"]
-        dtype_out = complex if component == "complex" else float
-
-        E_der_dim = E_der_map[f"E{dim}"]
-        if np.all(E_der_dim.values == 0):
-            zero_shape = eps_shape
-            if not sum_over_freqs:
-                zero_shape = [*eps_shape, len(np.asarray(E_der_dim.coords["f"], float))]
-            return np.zeros(zero_shape, dtype=dtype_out)
-
-        field_values_da = E_der_dim
-
-        if bounds is not None:
-            (xmin, ymin, zmin), (xmax, ymax, zmax) = bounds
-            warning_context = "CustomMedium parameter gradients (adjoint field grid -> medium grid)"
-            sx = bounds_slice(
-                np.asarray(field_values_da.coords["x"]),
-                xmin,
-                xmax,
-                name="x",
-                warning_context=warning_context,
-            )
-            sy = bounds_slice(
-                np.asarray(field_values_da.coords["y"]),
-                ymin,
-                ymax,
-                name="y",
-                warning_context=warning_context,
-            )
-            sz = bounds_slice(
-                np.asarray(field_values_da.coords["z"]),
-                zmin,
-                zmax,
-                name="z",
-                warning_context=warning_context,
-            )
-            field_values_da = field_values_da.isel(x=sx, y=sy, z=sz)
-
-        field_coords = {axis: np.asarray(field_values_da.coords[axis]) for axis in "xyz"}
-        weights = compute_spatial_weights(field_values_da, dims=("x", "y", "z"))
-        weighted_values_da = field_values_da * weights
-        # Copy to avoid modifying underlying data through in-place operations below.
-        values = weighted_values_da.values.copy()
-
-        method = interp_method if interp_method is not None else self.interp_method
-
-        if method not in ALLOWED_INTERP_METHODS:
-            raise ValueError(
-                f"Unsupported interpolation method: {method!r}. "
-                f"Choose one of: {', '.join(ALLOWED_INTERP_METHODS)}."
-            )
-
-        def _interp_axis(
-            arr: NDArray, axis: int, field_axis: NDArray, param_axis: NDArray
-        ) -> NDArray:
-            """Accumulate values from the field grid onto the parameter grid along one axis.
-
-            Moves ``axis`` to the front, applies ``_transpose_interp_axis`` (adjoint of 1D interpolation)
-            to map from ``field_axis`` (n_field) to ``param_axis`` (n_param), then moves the axis back.
-            """
-            moved = np.moveaxis(arr, axis, 0)
-            moved = transpose_interp_axis(
-                moved,
-                field_axis,
-                param_axis,
-                method=method,
-            )
-            return np.moveaxis(moved, 0, axis)
-
-        values = _interp_axis(values, 0, field_coords["x"], param_coords["x"])
-        values = _interp_axis(values, 1, field_coords["y"], param_coords["y"])
-        values = _interp_axis(values, 2, field_coords["z"], param_coords["z"])
-
-        freqs_da = np.asarray(field_values_da.coords["f"])
-        if component == "sigma":
-            values = values.imag * (-1.0 / (2.0 * np.pi * freqs_da * EPSILON_0))
-        elif component == "imag":
-            values = values.imag
-        elif component == "real":
-            values = values.real
-
-        if sum_over_freqs:
-            vjp_array = values.sum(axis=-1).reshape(eps_shape)
-        else:
-            vjp_array = values.reshape([*eps_shape, values.shape[-1]])
-
-        # match derivative dtype to the underlying dataset for real-valued components
-        if component != "complex":
-            target_array = getattr(spatial_data, "values", None)
-            if target_array is None and hasattr(spatial_data, "data"):
-                target_array = spatial_data.data
-            if target_array is not None:
-                target_dtype = np.asarray(target_array).dtype
-                if not np.issubdtype(target_dtype, np.complexfloating):
-                    vjp_array = np.real(vjp_array).astype(target_dtype, copy=False)
-
-        return vjp_array

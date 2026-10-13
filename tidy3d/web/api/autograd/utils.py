@@ -161,19 +161,3 @@ def expand_custom_vjp_configs(
                 custom_vjp_lookup.setdefault(structure_index, {})[path] = vjp_fn
 
     return custom_vjp_lookup
-
-
-def custom_vjp_geometry_exclusions(
-    custom_vjp_lookup: dict[int, dict[tuple[str, str], Callable[..., Any]]],
-) -> dict[int, tuple[tuple[str], ...]]:
-    """Geometry path-head exclusions implied by custom vjps, as 1-tuple prefixes.
-
-    Sample-set collection and coverage validation both take these exclusions, so
-    custom-vjp-owned paths are neither collected for nor demanded of the artifact.
-    """
-    exclusions = {}
-    for structure_index, vjp_fns in custom_vjp_lookup.items():
-        heads = tuple((key[1],) for key in vjp_fns if key[0] == "geometry")
-        if heads:
-            exclusions[structure_index] = heads
-    return exclusions

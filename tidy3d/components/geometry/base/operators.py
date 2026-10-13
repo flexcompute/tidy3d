@@ -10,10 +10,6 @@ from tidy3d.constants import inf
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.path_utils import AutogradRoute
-
     from .clip_operation import ClipOperation
     from .core import Geometry
     from .geometry_group import GeometryGroup
@@ -25,18 +21,10 @@ def _is_geometry(obj: Any) -> bool:
     return isinstance(obj, Geometry)
 
 
-def _compute_derivatives(
-    self,  # pyrefly: ignore[implicit-any-parameter]
-    derivative_info: DerivativeInfo,
-) -> AutogradFieldMap:
-    """Compute the adjoint derivatives for this object."""
-    raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
-
-
 def _resolve_autograd_route(
     self,  # pyrefly: ignore[implicit-any-parameter]
     field_path: tuple[Any, ...],
-) -> AutogradRoute:
+) -> None:
     """Resolve and validate one traced geometry path for adjoint routing."""
     return validate_traced_path(
         parameter_kind="geometry",

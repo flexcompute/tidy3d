@@ -12,9 +12,6 @@ import numpy as npo
 from numpy.typing import NDArray
 from pydantic import Field, field_validator, model_validator
 
-from tidy3d.components.autograd.derivative_utils import (
-    integrate_within_bounds,
-)
 from tidy3d.components.autograd.path_utils import (
     format_traced_path,
     format_traced_paths,
@@ -57,10 +54,8 @@ if TYPE_CHECKING:
     from pydantic import PositiveInt
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.path_utils import AutogradRoute
-    from tidy3d.components.autograd.types import AutogradFieldMap
-    from tidy3d.components.data.dataset import ElectromagneticFieldDataset
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.types import (
         Ax,
         Axis,
@@ -907,7 +902,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             ),
         )
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced medium path for adjoint routing."""
         return validate_traced_path(
             parameter_kind="medium",
@@ -918,48 +913,25 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             supported_parameters=type(self)._traced_autograd_supported_parameters(),
         )
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
-        raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
+    def _derivative_terms(self, paths: list[PathType], target: MediumTarget) -> Compiled:
+        """Derivative-program terms and bindings for traced paths of this medium.
 
-    def _derivative_eps_sigma_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
-    ) -> dict[str, xr.DataArray]:
-        """Get the derivative w.r.t permittivity and conductivity in the volume."""
+        By default, one box-integrated field product reduced by ``_derivative_rule``.
+        """
 
-        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        from tidy3d.components.medium.derivative_terms import uniform_terms
 
-        values = vjp_eps_complex.values
+        return uniform_terms(self, paths, target)
 
-        # compute directly with frequency dimension
-        freqs = vjp_eps_complex.coords["f"].values
-        omegas = 2 * np.pi * freqs
-        eps_vjp = np.real(values)
-        sigma_vjp = -np.imag(values) / omegas / EPSILON_0
+    def _derivative_rule(self, path: PathType) -> Callable[[npo.ndarray, npo.ndarray], Any]:
+        """The chain rule ``rule(sensitivity, frequencies)`` to one traced parameter.
 
-        eps_vjp = np.sum(eps_vjp)
-        sigma_vjp = np.sum(sigma_vjp)
+        ``sensitivity`` is ``(component, frequency)`` over the given frequencies.
+        """
 
-        return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
-
-    def _derivative_eps_complex_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
-    ) -> xr.DataArray:
-        """Get the derivative w.r.t complex-valued permittivity in the volume."""
-        vjp_value = None
-        for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map[field_name]
-            vjp_value_fld = integrate_within_bounds(
-                arr=fld,
-                dims=("x", "y", "z"),
-                bounds=bounds,
-            )
-            if vjp_value is None:
-                vjp_value = vjp_value_fld
-            else:
-                vjp_value += vjp_value_fld
-
-        return vjp_value
+        raise AdjointError(
+            f"Derivatives of '{type(self).__name__}' with respect to {path} are not supported."
+        )
 
     def __repr__(self) -> str:
         """If the medium has a name, use it as the representation. Otherwise, use the default representation."""

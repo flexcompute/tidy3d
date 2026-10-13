@@ -21,12 +21,10 @@ from flexcompute.core._migration.em.numerical.raw import (
 from pydantic import Field, ValidationError
 
 from tidy3d.components.autograd.field_source_pca import FieldSourcePCAProcessor
-from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
 from tidy3d.components.autograd.source_factory import (
     fold_adjoint_current_source_samples_outside_bounds,
 )
-from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import (
     _LAZY_PROXY_UNHANDLED,
     Tidy3dBaseModel,
@@ -1591,100 +1589,6 @@ class SimulationData(AbstractYeeGridSimulationData):
         simulation = self.simulation.copy(deep=False, update={"normalize_index": normalize_index})
 
         return self.copy(deep=False, update={"simulation": simulation, "data": data_normalized})
-
-    def _split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
-        """Split data into original and adjoint sections by monitor names."""
-
-        monitors_all = list(self.simulation.monitors)
-        monitors_orig, monitors_adjoint = split_list(monitors_all, index=num_mnts_original)
-
-        expected_original_names = [monitor.name for monitor in monitors_orig]
-        expected_adjoint_names = [monitor.name for monitor in monitors_adjoint]
-        expected_all_names = expected_original_names + expected_adjoint_names
-        num_mnts_fld = sum(name.startswith("adjoint_fld_") for name in expected_adjoint_names)
-        num_mnts_eps = sum(name.startswith("adjoint_eps_") for name in expected_adjoint_names)
-        num_mnts_source_adj = sum(
-            name.startswith("source_adjoint_") for name in expected_adjoint_names
-        )
-        num_mnts_flux_adj = sum(
-            is_flux_adjoint_helper_name(name) for name in expected_adjoint_names
-        )
-
-        monitor_data_names = [mnt_data.monitor.name for mnt_data in self.data]
-
-        # Use raw monitor_data lookup (not __getitem__) to avoid implicit symmetry expansion.
-        monitor_data = self.monitor_data
-        data_original = [
-            monitor_data[name] for name in expected_original_names if name in monitor_data_names
-        ]
-        data_adjoint = [
-            monitor_data[name] for name in expected_adjoint_names if name in monitor_data_names
-        ]
-
-        missing_original = [
-            name for name in expected_original_names if name not in monitor_data_names
-        ]
-        missing_adjoint = [
-            name for name in expected_adjoint_names if name not in monitor_data_names
-        ]
-        monitor_data_known_order = [
-            name for name in monitor_data_names if name in expected_all_names
-        ]
-        expected_known_order = [name for name in expected_all_names if name in monitor_data_names]
-
-        log.info(
-            f" -> {num_mnts_original} monitors, {num_mnts_flux_adj} flux adjoint field monitors, "
-            f"{num_mnts_fld} adjoint field monitors, "
-            f"{num_mnts_source_adj} source adjoint monitors, {num_mnts_eps} adjoint eps monitors."
-        )
-
-        if missing_original or len(data_original) < len(expected_original_names):
-            log.warning(
-                "Combined SimulationData is missing expected original monitor data. "
-                f"Expected {len(expected_original_names)} entries, got {len(data_original)}. "
-                f"Missing names: {missing_original}."
-            )
-
-        if missing_adjoint or len(data_adjoint) < len(expected_adjoint_names):
-            log.warning(
-                "Combined SimulationData is missing expected adjoint monitor data. "
-                f"Expected {len(expected_adjoint_names)} entries, got {len(data_adjoint)}. "
-                f"Missing names: {missing_adjoint}."
-            )
-
-        if monitor_data_known_order != expected_known_order:
-            log.warning(
-                "Combined SimulationData monitor data order does not match combined simulation "
-                f"monitor order. Expected order: {expected_known_order}, "
-                f"got: {monitor_data_known_order}."
-            )
-
-        return data_original, data_adjoint
-
-    def _split_original_fwd(self, num_mnts_original: int) -> tuple[SimulationData, SimulationData]:
-        """Split this simulation data into original and fwd data from number of original mnts."""
-
-        # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
-        data_original, data_fwd = self._split_adjoint_data(num_mnts_original=num_mnts_original)
-        monitors_orig, monitors_fwd = split_list(self.simulation.monitors, index=num_mnts_original)
-
-        # reconstruct the simulation data for the user, using original sim, and data for original mnts
-        sim_original = self.simulation.updated_copy(monitors=monitors_orig)
-        sim_data_original = self.updated_copy(
-            simulation=sim_original,
-            data=data_original,
-            deep=False,
-        )
-
-        # construct the 'forward' simulation and its data, which is only used for for gradient calc.
-        sim_fwd = self.simulation.updated_copy(monitors=monitors_fwd)
-        sim_data_fwd = self.updated_copy(
-            simulation=sim_fwd,
-            data=data_fwd,
-            deep=False,
-        )
-
-        return sim_data_original, sim_data_fwd
 
     def _make_adjoint_sims(
         self,

@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 import autograd.numpy as np
 import numpy as npo
-from autograd.differential_operators import tensor_jacobian_product
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd.path_utils import (
-    AutogradRoute,
     format_traced_paths,
     traced_paths,
 )
 from tidy3d.components.autograd.types import PathType, TracedPolesAndResidues, TracedPositiveFloat
-from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.utils import (
     _get_numpy_array,
@@ -41,22 +39,18 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
 
-    from autograd.numpy.numpy_boxes import ArrayBox
-    from numpy.typing import NDArray
     from pydantic import PositiveFloat
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.types import AutogradFieldMap, TracedFloat
     from tidy3d.components.types import (
         ArrayFloat1D,
         Complex,
     )
     from tidy3d.components.types.base import PolesAndResidues
 
-    from .base import ArrayComplex, ArrayFloat, ComplexArrayOrScalar
+    from .base import ArrayFloat
 
 
 def _medium_numerics() -> Any:
@@ -204,41 +198,6 @@ class DispersiveMedium(AbstractMedium, ABC):
 
         return (value.real, value.imag)
 
-    # --- shared autograd helpers for dispersive models ---
-    def _tjp_inputs(self, derivative_info: DerivativeInfo) -> tuple[NDArray, ArrayFloat | ArrayBox]:
-        """Prepare shared inputs for TJP: frequencies and packed adjoint vector."""
-        dJ = self._derivative_eps_complex_volume(
-            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
-        )
-        freqs = np.asarray(derivative_info.frequencies, float)
-        dJv = np.asarray(getattr(dJ, "values", dJ))
-        # The TJP of the packed [Re(eps); Im(eps)] model computes
-        # Re(v)·d(Re eps)/dp + Im(v)·d(Im eps)/dp = Re(v·conj(d eps/dp)). The parameter VJP is
-        # Re(dJ · d eps/dp), so the packed adjoint vector is conj(dJ).
-        return freqs, pack_complex_vec(np.conj(dJv))
-
-    @staticmethod
-    def _tjp_grad(
-        theta0: ArrayFloat,
-        eps_vec_fn: Callable[[ArrayFloat], ArrayComplex | ArrayBox],
-        vec: ArrayComplex | ArrayBox,
-    ) -> ArrayFloat:
-        """Run a tensor-Jacobian-product to get J^T @ vec."""
-        return tensor_jacobian_product(eps_vec_fn)(theta0, vec)
-
-    @staticmethod
-    def _map_grad_real(
-        g: TracedFloat,
-        paths: set[tuple],
-        mapping: Sequence[tuple[tuple, int]],
-    ) -> AutogradFieldMap:
-        """Map flat gradient to model paths, taking the real part."""
-        out = {}
-        for k, idx in mapping:
-            if k in paths:
-                out[k] = np.real(g[idx])
-        return out
-
     @classmethod
     def _traced_autograd_supported_parameters(cls) -> tuple[str, ...]:
         """Return user-facing supported parameter names for setup validation."""
@@ -248,18 +207,63 @@ class DispersiveMedium(AbstractMedium, ABC):
             return parameters
         return (*parameters, f"{root}[index][component]")
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced dispersive medium path for adjoint routing."""
         if field_path in self._traced_supported_paths:
-            return AutogradRoute(local_path=field_path)
+            return
 
         root = self._traced_indexed_root
         # Stripped paths are produced from model containers; for indexed material coefficients
         # we only need to check the derivative-map path shape here, not duplicate model bounds.
         if root is not None and len(field_path) == 3 and field_path[0] == root:
-            return AutogradRoute(local_path=field_path)
+            return
 
         self._raise_unsupported_traced_path(field_path)
+
+    _derivative_model: ClassVar[str | None] = None
+    """Name of this model's closed-form ``d(eps)/dp`` in the shared medium numerics."""
+
+    def _derivative_rule(self, path: PathType) -> Callable[[npo.ndarray, npo.ndarray], Any]:
+        """``eps_inf`` or one coefficient, through the model's closed-form ``d(eps)/dp``."""
+
+        root = self._traced_indexed_root
+        supported = path == ("eps_inf",) and hasattr(self, "eps_inf")
+        if not supported and (self._derivative_model is None or len(path) != 3 or path[0] != root):
+            return super()._derivative_rule(path)
+        return partial(_dispersive_vjp, weights=partial(self._derivative_weights, path))
+
+    def _derivative_weights(
+        self, path: PathType, frequencies: npo.ndarray
+    ) -> tuple[npo.ndarray, npo.ndarray | None]:
+        """``d(eps)/dp`` at each frequency, and the conjugate-pair term for a pole-residue pole."""
+
+        if path == ("eps_inf",):
+            return npo.ones(frequencies.shape, dtype=complex), None
+        root, model = self._traced_indexed_root, self._derivative_model
+        numerics = _medium_numerics()
+        term = getattr(self, root)[path[1]]
+        parameter = numerics.DISPERSIVE_TERM_PARAMETERS[model][path[2]]
+        derivative = numerics.dispersive_parameter_derivative
+        weight = npo.asarray(derivative(model, term, parameter, frequencies))
+        conjugate = None
+        if model == "pole_residue":
+            # each pole also enters epsilon as its conjugate pair -conj(c) / (jw + conj(a))
+            conjugate_term = tuple(npo.conj(value) for value in term)
+            conjugate = npo.asarray(derivative(model, conjugate_term, parameter, frequencies))
+        return weight, conjugate
+
+
+def _dispersive_vjp(sensitivity: Any, frequencies: Any, *, weights: Callable) -> Any:
+    """Contract the component-summed sensitivity with one parameter's ``d(eps)/dp``."""
+
+    weight, conjugate = weights(frequencies)
+    return npo.asarray(
+        _medium_numerics().contract_permittivity_parameter_sensitivity(
+            npo.sum(npo.asarray(sensitivity), axis=0),
+            weight,
+            conjugate_parameter_derivative=conjugate,
+        )
+    )
 
 
 class PoleResidue(DispersiveMedium):
@@ -295,6 +299,7 @@ class PoleResidue(DispersiveMedium):
     """
 
     _traced_indexed_root: ClassVar[str] = "poles"
+    _derivative_model: ClassVar[str] = "pole_residue"
     _traced_supported_paths: ClassVar[tuple[PathType, ...]] = traced_paths("eps_inf")
 
     eps_inf: TracedPositiveFloat = Field(
@@ -554,79 +559,6 @@ class PoleResidue(DispersiveMedium):
         # of Sellmeier-type poles.
         ep = ep[~np.isnan(ep)]
         return max(ep.imag)
-
-    @staticmethod
-    def _get_vjps_from_params(
-        dJ_deps_complex: ComplexArrayOrScalar,
-        poles_vals: list[tuple[ComplexArrayOrScalar, ComplexArrayOrScalar]],
-        omega: float,
-        requested_paths: list[tuple],
-    ) -> AutogradFieldMap:
-        """
-        Static helper to compute VJPs from parameters using the analytical chain rule.
-
-        Parameters
-        - dJ_deps_complex: Complex adjoint sensitivity w.r.t. epsilon at a single frequency.
-        - poles_vals: Sequence of (a_i, c_i) pole parameters to differentiate with respect to.
-        - omega: Angular frequency for this VJP evaluation.
-        - requested_paths: Paths requested by the caller; used to filter outputs.
-
-        Each pole enters epsilon twice, as ``-c / (jw + a)`` and as its conjugate pair
-        ``-conj(c) / (jw + conj(a))``, so a complex parameter ``z`` gets the VJP
-        ``dJ * d(eps)/dz + conj(dJ * d(eps)/d(conj z))``. Autograd reads
-        ``dJ/dRe(z) = Re(vjp)`` and ``dJ/dIm(z) = -Im(vjp)`` from it.
-        """
-        jw = 1j * omega
-        vjps = {}
-
-        if ("eps_inf",) in requested_paths:
-            vjps[("eps_inf",)] = np.real(dJ_deps_complex)
-
-        for i, (a_val, c_val) in enumerate(poles_vals):
-            if any(path[1] == i for path in requested_paths if path[0] == "poles"):
-                if ("poles", i, 0) in requested_paths:
-                    deps_da = c_val / (jw + a_val) ** 2
-                    deps_da_conj = np.conj(c_val) / (jw + np.conj(a_val)) ** 2
-                    vjps[("poles", i, 0)] = dJ_deps_complex * deps_da + np.conj(
-                        dJ_deps_complex * deps_da_conj
-                    )
-                if ("poles", i, 1) in requested_paths:
-                    deps_dc = -1 / (jw + a_val)
-                    deps_dc_conj = -1 / (jw + np.conj(a_val))
-                    vjps[("poles", i, 1)] = dJ_deps_complex * deps_dc + np.conj(
-                        dJ_deps_complex * deps_dc_conj
-                    )
-
-        return vjps
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives by preparing scalar data and calling the static helper."""
-
-        dJ_deps_complex = self._derivative_eps_complex_volume(
-            E_der_map=derivative_info.E_der_map,
-            bounds=derivative_info.bounds,
-        )
-
-        poles_vals = [(complex(a), complex(c)) for a, c in self.poles]
-
-        freqs = dJ_deps_complex.coords["f"].values
-        vjps_total = {}
-
-        for freq in freqs:
-            dJ_deps_complex_f = dJ_deps_complex.sel(f=freq)
-            vjps_f = self._get_vjps_from_params(
-                dJ_deps_complex=complex(dJ_deps_complex_f.item()),
-                poles_vals=poles_vals,
-                omega=2 * np.pi * freq,
-                requested_paths=derivative_info.paths,
-            )
-            for path, vjp in vjps_f.items():
-                if path not in vjps_total:
-                    vjps_total[path] = vjp
-                else:
-                    vjps_total[path] += vjp
-
-        return vjps_total
 
     @classmethod
     def _real_partial_fraction_decomposition(

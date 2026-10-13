@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.numerical.raw.spatial import (
+    cell_sizes as _compute_1d_cell_sizes,
+)
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
@@ -31,18 +34,6 @@ MIN_CELL_SIZE_TOLERANCE = 0.05  # 5%
 
 # Maximum number of minimal cell size locations to return
 MAX_MIN_SIZE_LOCATIONS = 10
-
-
-def _compute_1d_cell_sizes(coord: np.ndarray) -> np.ndarray:
-    """Compute 1D cell sizes from coordinate centers."""
-    if coord.size <= 1:
-        return np.array([1.0], dtype=float)
-
-    diff = coord[1:] - coord[:-1]
-    diff_left = np.pad(diff, ((1, 0)), mode="edge")
-    diff_right = np.pad(diff, ((0, 1)), mode="edge")
-
-    return 0.5 * (diff_left + diff_right)
 
 
 class Coords(Tidy3dBaseModel):

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from flexcompute.core._migration.em.derivatives import (
+    flux_adjoint_helper_name,
+    is_flux_adjoint_helper_name,  # noqa: F401 — re-exported for the client and backend
+)
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -11,8 +15,6 @@ from tidy3d.components.monitor import FluxMonitor
 
 if TYPE_CHECKING:
     from tidy3d.components.monitor import FieldMonitor
-
-FLUX_ADJOINT_HELPER_PREFIX = "__tidy3d_flux_adjoint"
 
 
 class FluxMonitorHelperSpec(Tidy3dBaseModel):
@@ -32,11 +34,6 @@ class FluxMonitorAdjointLayout(Tidy3dBaseModel):
     )
 
 
-def is_flux_adjoint_helper_name(name: str) -> bool:
-    """Return ``True`` if ``name`` belongs to an internal flux-adjoint helper monitor."""
-    return name.startswith(FLUX_ADJOINT_HELPER_PREFIX)
-
-
 def build_flux_monitor_adjoint_layout(
     monitors: tuple | list,
 ) -> tuple[FluxMonitorAdjointLayout, tuple[FieldMonitor, ...]]:
@@ -51,7 +48,7 @@ def build_flux_monitor_adjoint_layout(
         helper_names = []
         surface_signs = []
         for surface_index, surface in enumerate(monitor.integration_surfaces):
-            helper_name = f"{FLUX_ADJOINT_HELPER_PREFIX}_{flux_index}_{surface_index}"
+            helper_name = flux_adjoint_helper_name(flux_index, surface_index)
             helper_names.append(helper_name)
             surface_signs.append(1 if surface.normal_dir == "+" else -1)
             helper_monitors.append(

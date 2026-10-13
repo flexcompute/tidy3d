@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import functools
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_validator
 
 from tidy3d.components.autograd.path_utils import (
-    AutogradRoute,
     raise_with_traced_path_context,
 )
 from tidy3d.components.base import cached_property
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import PathType
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
@@ -260,7 +260,7 @@ class GeometryGroup(Geometry):
         )
         return self.updated_copy(geometries=new_geometries)
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced GeometryGroup path for adjoint routing."""
         if len(field_path) < 2 or field_path[0] != "geometries":
             _raise_unsupported_traced_geometry_path(
@@ -280,39 +280,6 @@ class GeometryGroup(Geometry):
                 local_path=sub_path,
                 full_path=field_path,
             )
-        return AutogradRoute(local_path=field_path)
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
-
-        grad_vjps = {}
-
-        # create interpolators once for all geometries to avoid redundant field data conversions
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
-
-        for field_path in derivative_info.paths:
-            _, index, *geo_path = field_path
-
-            geo = self.geometries[index]
-            # pass pre-computed interpolators if available
-            geo_info = derivative_info.updated_copy(
-                paths=[tuple(geo_path)],
-                bounds=geo.bounds,
-                bounds_intersect=self.bounds_intersection(
-                    geo.bounds, derivative_info.simulation_bounds
-                ),
-                deep=False,
-                interpolators=interpolators,
-            )
-
-            vjp_dict_geo = geo._compute_derivatives(geo_info)
-
-            if len(vjp_dict_geo) != 1:
-                raise AssertionError("Got multiple gradients for single geometry field.")
-
-            grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
-
-        return grad_vjps
 
     @staticmethod
     def _sub_paths_by_child(paths: list[PathType]) -> dict[int, list[PathType]]:
@@ -347,16 +314,10 @@ class GeometryGroup(Geometry):
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
         """Route consumption to child geometries, mapping their vjps to full paths."""
         grad_vjps = {}
-
-        # volumetric route only: the point-cloud route reads precomputed integrands
-        # and needs no interpolation setup
-        interpolators = derivative_info.interpolators
-        if interpolators is None and derivative_info.point_integrands is None:
-            interpolators = derivative_info.create_interpolators()
 
         for index, child_paths in self._sub_paths_by_child(paths).items():
             child = self.geometries[index]
@@ -364,26 +325,15 @@ class GeometryGroup(Geometry):
             prefix = ("geometries", index)
             child_sets = {key[2:]: value for key, value in sample_sets.items() if key[:2] == prefix}
 
-            # pass pre-computed interpolators if available
-            child_info = derivative_info.updated_copy(
-                paths=child_paths,
-                bounds=child.bounds,
-                bounds_intersect=self.bounds_intersection(
-                    child.bounds, derivative_info.simulation_bounds
-                ),
-                deep=False,
-                interpolators=interpolators,
+            child_info = replace(
+                derivative_info,
                 # point-cloud integrands are keyed like sample sets: strip the routing
                 # prefix so the child's local canonical keys resolve
-                point_integrands=(
-                    {
-                        key[2:]: value
-                        for key, value in derivative_info.point_integrands.items()
-                        if key[:2] == prefix
-                    }
-                    if derivative_info.point_integrands is not None
-                    else None
-                ),
+                point_integrands={
+                    key[2:]: value
+                    for key, value in derivative_info.point_integrands.items()
+                    if key[:2] == prefix
+                },
             )
 
             child_vjps = child._compute_derivatives_from_sample_sets(

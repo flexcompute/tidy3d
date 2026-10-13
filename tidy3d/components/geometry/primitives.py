@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
@@ -100,17 +100,6 @@ def _base_icosahedron() -> tuple[np.ndarray, np.ndarray]:
 
 
 _ICOSAHEDRON_VERTS, _ICOSAHEDRON_FACES = _base_icosahedron()
-
-
-def discretization_wavelength(derivative_info: DerivativeInfo, geometry_label: str) -> float:
-    """Choose reference wavelength for surface discretization."""
-    if derivative_info.resolved_material_wavelength is not None:
-        return derivative_info.resolved_material_wavelength
-
-    raise AdjointError(
-        f"Geometry VJP sampling for {geometry_label} requires "
-        "`resolved_material_wavelength` in DerivativeInfo."
-    )
 
 
 class _CollapsedAxisCylinder(NamedTuple):
@@ -487,7 +476,7 @@ class Sphere(base.Centered, base.Circular):
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
         """Compute radius/center derivatives from pre-generated surface samples."""
         if not paths:
@@ -518,13 +507,7 @@ class Sphere(base.Centered, base.Circular):
         if sample_set.num_points == 0:
             return dict.fromkeys(paths, 0.0)
 
-        # threaded interpolators (or None): the legacy volumetric branch materializes
-        # its own on demand; the point-cloud path needs none
-        interpolators = derivative_info.interpolators
-
-        g = self._sample_set_integrand(
-            sample_set, derivative_info, interpolators, _SPHERE_SURFACE_KEY
-        )
+        g = self._sample_set_integrand(derivative_info, _SPHERE_SURFACE_KEY)
 
         normals_sel = sample_set.normals.values
         weighted = (sample_set.weights.values * g).real
@@ -617,7 +600,7 @@ class Sphere(base.Centered, base.Circular):
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
         axis_idx: int,
         plane_value: float,
     ) -> AutogradFieldMap:
@@ -626,22 +609,17 @@ class Sphere(base.Centered, base.Circular):
             paths=paths,
             axis_idx=axis_idx,
             plane_value=plane_value,
-            material_wavelength=discretization_wavelength(derivative_info, "sphere"),
+            material_wavelength=derivative_info.resolved_material_wavelength,
             simulation_bounds=derivative_info.simulation_bounds,
         )
         if collapsed_setup is None:
             return dict.fromkeys(paths, 0.0)
 
         cyl_paths_sorted = sorted(collapsed_setup.cyl_paths, key=str)
-        derivative_info_cyl = derivative_info.updated_copy(
-            paths=cyl_paths_sorted,
-            bounds=collapsed_setup.bounds,
-            bounds_intersect=collapsed_setup.bounds_intersect,
-        )
         vjps_cyl = collapsed_setup.cylinder._compute_derivatives_from_sample_sets(
             sample_sets=sample_sets,
             paths=cyl_paths_sorted,
-            derivative_info=derivative_info_cyl,
+            derivative_info=derivative_info,
         )
 
         radius = float(self.radius)
@@ -969,7 +947,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
         """Compute cylinder derivatives by consuming the equivalent polyslab's sets."""
         ps_paths = sorted(self._polyslab_derivative_paths(paths), key=str)

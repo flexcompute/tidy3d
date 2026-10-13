@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
@@ -16,7 +17,10 @@ if TYPE_CHECKING:
     from pydantic import FieldValidationInfo
 
     from tidy3d.compat import Self
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.autograd.types import PathType
     from tidy3d.components.data.utils import CustomSpatialDataType
+    from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.medium.medium_types import (
         IsotropicCustomMediumInternalType,
         IsotropicCustomMediumType,
@@ -153,6 +157,12 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     def is_isotropic(self) -> bool:
         """Whether the medium is isotropic."""
         return False
+
+    def _derivative_terms(self, paths: list[PathType], target: MediumTarget) -> Compiled:
+        """Components compile as in ``AnisotropicMedium``, under this medium's interpolation."""
+
+        target = replace(target, interpolation=self.interp_method)
+        return AnisotropicMedium._derivative_terms(self, paths, target)
 
     def _interp_method(self, comp: Axis) -> InterpMethod:
         """Interpolation method applied to comp."""

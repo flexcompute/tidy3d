@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.types import (
         Ax,
         Bound,
@@ -772,33 +772,6 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
-
-        # get gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = self._derivative_faces(derivative_info=derivative_info)
-
-        # post-process these values to give the gradients w.r.t. center and size
-        vjps_center_size = self._derivatives_center_size(vjps_faces=vjps_faces)
-
-        # store only the gradients asked for in 'field_paths'
-        derivative_map = {}
-        for field_path in derivative_info.paths:
-            field_name, *index = field_path
-
-            if field_name in vjps_center_size:
-                # if the vjp calls for a specific index into the tuple
-                if index and len(index) == 1:
-                    index = int(index[0])
-                    if field_path not in derivative_map:
-                        derivative_map[field_path] = vjps_center_size[field_name][index]
-
-                # otherwise, just grab the whole array
-                else:
-                    derivative_map[field_path] = vjps_center_size[field_name]
-
-        return derivative_map
-
     @staticmethod
     def _derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
         """Derivatives with respect to the ``center`` and ``size`` fields in the ``Box``."""
@@ -813,179 +786,6 @@ class Box(SimplePlaneIntersection, Centered):
             "center": tuple(vjp_center.tolist()),
             "size": tuple(vjp_size.tolist()),
         }
-
-    def _derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
-        """Derivative with respect to normal position of 6 faces of ``Box``."""
-
-        axes_to_compute = (0, 1, 2)
-        if len(derivative_info.paths[0]) > 1:
-            axes_to_compute = tuple(info[1] for info in derivative_info.paths)
-
-        # change in permittivity between inside and outside
-        vjp_faces = np.zeros((2, 3))
-
-        for min_max_index, _ in enumerate((0, -1)):
-            for axis in axes_to_compute:
-                vjp_face = self._derivative_face(
-                    min_max_index=min_max_index,
-                    axis_normal=axis,
-                    derivative_info=derivative_info,
-                )
-
-                # record vjp for this face
-                vjp_faces[min_max_index, axis] = vjp_face
-
-        return vjp_faces
-
-    def _derivative_face(
-        self,
-        min_max_index: int,
-        axis_normal: Axis,
-        derivative_info: DerivativeInfo,
-    ) -> float:
-        """Compute the derivative w.r.t. shifting a face in the normal direction."""
-
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
-        _, axis_perp = self.pop_axis((0, 1, 2), axis=axis_normal)
-
-        # First, check if the face is outside the simulation domain in which case set the
-        # face gradient to 0.
-        bounds_normal, _ = self.pop_axis(np.array(derivative_info.bounds).T, axis=axis_normal)
-        coord_normal_face = bounds_normal[min_max_index]
-
-        if min_max_index == 0:
-            if coord_normal_face < derivative_info.simulation_bounds[0][axis_normal]:
-                return 0.0
-        else:
-            if coord_normal_face > derivative_info.simulation_bounds[1][axis_normal]:
-                return 0.0
-
-        intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
-        extents = intersect_max - intersect_min
-        _, intersect_min_perp = self.pop_axis(np.array(intersect_min), axis=axis_normal)
-        _, intersect_max_perp = self.pop_axis(np.array(intersect_max), axis=axis_normal)
-
-        is_2d_map = []
-        for axis_idx in range(3):
-            if axis_idx == axis_normal:
-                continue
-            is_2d_map.append(np.isclose(extents[axis_idx], 0.0))
-
-        if np.all(is_2d_map):
-            return 0.0
-
-        is_2d = np.any(is_2d_map)
-        pec_flat_perp_dims = (False, False)
-
-        # Build point grid
-        adaptive_spacing = derivative_info.adaptive_vjp_spacing()
-
-        def spacing_to_grid_points(
-            spacing: float, min_coord: float, max_coord: float
-        ) -> NDArray[float]:
-            N = np.maximum(3, 1 + int((max_coord - min_coord) / spacing))
-
-            points = np.linspace(min_coord, max_coord, N)
-            centers = 0.5 * (points[0:-1] + points[1:])
-
-            return centers
-
-        def verify_integration_interval(bound: tuple[float, float]) -> bool:
-            # assume the bounds should not be equal or else this integration interval
-            # would be the flat dimension of a 2D geometry.
-            return bound[1] > bound[0]
-
-        def compute_integration_weight(grid_points: NDArray[float]) -> float:
-            grid_spacing = grid_points[1] - grid_points[0]
-            if grid_spacing == 0.0:
-                integration_weight = 1.0 / len(grid_points)
-            else:
-                integration_weight = grid_points[1] - grid_points[0]
-
-            return integration_weight
-
-        if is_2d:
-            # build 1D grid for sampling points along the face, which is an edge in the 2D case
-            zero_dim = np.where(is_2d_map)[0][0]
-            pec_flat_perp_dims = (zero_dim == 0, zero_dim == 1)
-            # zero dim is one of the perpendicular directions, so the other perpendicular direction
-            # is the nonzero dimension
-            nonzero_dim = 1 - zero_dim
-
-            # clip at simulation bounds for integration dimension
-            integration_bounds_perp = (
-                intersect_min_perp[nonzero_dim],
-                intersect_max_perp[nonzero_dim],
-            )
-
-            if not verify_integration_interval(integration_bounds_perp):
-                return 0.0
-
-            grid_points_linear = spacing_to_grid_points(
-                adaptive_spacing, integration_bounds_perp[0], integration_bounds_perp[1]
-            )
-            integration_weight = compute_integration_weight(grid_points_linear)
-
-            grid_points = np.repeat(np.expand_dims(grid_points_linear.copy(), 1), 3, axis=1)
-
-            # set up grid points to pass into evaluate_gradient_at_points
-            grid_points[:, axis_perp[nonzero_dim]] = grid_points_linear
-            grid_points[:, axis_perp[zero_dim]] = intersect_min_perp[zero_dim]
-            grid_points[:, axis_normal] = coord_normal_face
-        else:
-            # build 3D grid for sampling points along the face
-
-            # clip at simulation bounds for each integration dimension
-            integration_bounds_perp = (
-                (intersect_min_perp[0], intersect_max_perp[0]),
-                (intersect_min_perp[1], intersect_max_perp[1]),
-            )
-
-            if not np.all([verify_integration_interval(b) for b in integration_bounds_perp]):
-                return 0.0
-
-            grid_points_perp_1 = spacing_to_grid_points(
-                adaptive_spacing, integration_bounds_perp[0][0], integration_bounds_perp[0][1]
-            )
-            grid_points_perp_2 = spacing_to_grid_points(
-                adaptive_spacing, integration_bounds_perp[1][0], integration_bounds_perp[1][1]
-            )
-            integration_weight = compute_integration_weight(
-                grid_points_perp_1
-            ) * compute_integration_weight(grid_points_perp_2)
-
-            mesh_perp1, mesh_perp2 = np.meshgrid(grid_points_perp_1, grid_points_perp_2)
-
-            zip_perp_coords = np.array(list(zip(mesh_perp1.flatten(), mesh_perp2.flatten())))
-
-            grid_points = np.pad(zip_perp_coords.copy(), ((0, 0), (1, 0)), mode="constant")
-
-            # set up grid points to pass into evaluate_gradient_at_points
-            grid_points[:, axis_perp[0]] = zip_perp_coords[:, 0]
-            grid_points[:, axis_perp[1]] = zip_perp_coords[:, 1]
-            grid_points[:, axis_normal] = coord_normal_face
-
-        normals = np.zeros_like(grid_points)
-        perps1 = np.zeros_like(grid_points)
-        perps2 = np.zeros_like(grid_points)
-
-        normals[:, axis_normal] = -1 if (min_max_index == 0) else 1
-        perps1[:, axis_perp[0]] = 1
-        perps2[:, axis_perp[1]] = 1
-
-        gradient_kwargs = {
-            "spatial_coords": grid_points,
-            "normals": normals,
-            "perps1": perps1,
-            "perps2": perps2,
-            "interpolators": interpolators,
-        }
-        if any(pec_flat_perp_dims):
-            gradient_kwargs["pec_flat_perp_dims"] = pec_flat_perp_dims
-        gradient_at_points = derivative_info.evaluate_gradient_at_points(**gradient_kwargs)
-
-        vjp_value = np.sum(integration_weight * np.real(gradient_at_points))
-        return vjp_value
 
     @staticmethod
     def _face_axes_for_paths(paths: list[PathType]) -> tuple[int, ...]:
@@ -1028,13 +828,9 @@ class Box(SimplePlaneIntersection, Centered):
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
         """Compute ``center``/``size`` derivatives from pre-generated face sample sets."""
-        # threaded interpolators (or None): the legacy volumetric branch materializes
-        # its own on demand; the point-cloud path needs none
-        interpolators = derivative_info.interpolators
-
         # gradients w.r.t. each of the 6 faces (in normal direction)
         vjps_faces = np.zeros((2, 3))
         for min_max_index in (0, 1):
@@ -1048,9 +844,7 @@ class Box(SimplePlaneIntersection, Centered):
                 sample_set = sample_sets[key]
                 if sample_set.num_points == 0:
                     continue  # explicit zero contribution
-                gradient_at_points = self._sample_set_integrand(
-                    sample_set, derivative_info, interpolators, key
-                )
+                gradient_at_points = self._sample_set_integrand(derivative_info, key)
                 vjps_faces[min_max_index, axis_normal] = np.sum(
                     sample_set.weights.values * np.real(gradient_at_points)
                 )
@@ -1186,7 +980,7 @@ class Box(SimplePlaneIntersection, Centered):
 
             grid_points = np.repeat(np.expand_dims(grid_points_linear.copy(), 1), 3, axis=1)
 
-            # set up grid points to pass into evaluate_gradient_at_points
+            # place the sample points on the face
             grid_points[:, axis_perp[nonzero_dim]] = grid_points_linear
             grid_points[:, axis_perp[zero_dim]] = intersect_min_perp[zero_dim]
             grid_points[:, axis_normal] = coord_normal_face
@@ -1218,7 +1012,7 @@ class Box(SimplePlaneIntersection, Centered):
 
             grid_points = np.pad(zip_perp_coords.copy(), ((0, 0), (1, 0)), mode="constant")
 
-            # set up grid points to pass into evaluate_gradient_at_points
+            # place the sample points on the face
             grid_points[:, axis_perp[0]] = zip_perp_coords[:, 0]
             grid_points[:, axis_perp[1]] = zip_perp_coords[:, 1]
             grid_points[:, axis_normal] = coord_normal_face

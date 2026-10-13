@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from numbers import Integral
 from typing import TYPE_CHECKING, Any
 
@@ -13,14 +12,6 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Mapping
 
 PathInput = str | PathType
-
-
-@dataclass(frozen=True)
-class AutogradRoute:
-    """Validated route metadata for a traced autograd path."""
-
-    local_path: PathType
-    """Path relative to the component that resolved it."""
 
 
 def traced_paths(*paths: PathInput) -> tuple[PathType, ...]:
@@ -91,7 +82,7 @@ def validate_traced_path(
     field_path: tuple[Any, ...],
     supported_paths: Collection[tuple[Any, ...]],
     supported_parameters: tuple[str, ...],
-) -> AutogradRoute:
+) -> None:
     """Validate one traced path against an explicit set of supported paths."""
     if field_path not in supported_paths:
         raise_unsupported_traced_path(
@@ -101,7 +92,6 @@ def validate_traced_path(
             field_path=field_path,
             supported_parameters=supported_parameters,
         )
-    return AutogradRoute(local_path=field_path)
 
 
 def raise_with_traced_path_context(
@@ -132,7 +122,7 @@ def resolve_delegated_autograd_route(
     field_path: tuple[Any, ...],
     delegates: Mapping[Any, Any],
     supported_parameters: tuple[str, ...],
-) -> AutogradRoute:
+) -> None:
     """Resolve a prefixed traced path by delegating to the selected child component."""
     if len(field_path) < 2 or field_path[0] not in delegates:
         raise_unsupported_traced_path(
@@ -153,5 +143,3 @@ def resolve_delegated_autograd_route(
             local_path=sub_path,
             full_path=field_path,
         )
-
-    return AutogradRoute(local_path=field_path)

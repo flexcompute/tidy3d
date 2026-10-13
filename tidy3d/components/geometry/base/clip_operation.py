@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import shapely
 from pydantic import Field
 
-from tidy3d.components.autograd.path_utils import (
-    AutogradRoute,  # noqa: TC
-    resolve_delegated_autograd_route,
-)
+from tidy3d.components.autograd.path_utils import resolve_delegated_autograd_route
 from tidy3d.components.base import cached_property
 from tidy3d.components.types import ClipOperationType
 from tidy3d.components.types.base import discriminated_union
@@ -29,7 +27,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import PathType
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
@@ -349,7 +347,7 @@ class ClipOperation(Geometry):
         new_geom_b = self.geometry_b._update_from_bounds(bounds=bounds, axis=axis)
         return self.updated_copy(geometry_a=new_geom_a, geometry_b=new_geom_b)
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced ClipOperation path for adjoint routing."""
         return resolve_delegated_autograd_route(
             parameter_kind="geometry",
@@ -362,59 +360,6 @@ class ClipOperation(Geometry):
                 "geometry_b.<parameter>",
             ),
         )
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives by accumulating contributions from both operands."""
-        geometry_paths = {"geometry_a": [], "geometry_b": []}
-        for path in derivative_info.paths:
-            geometry_key, *sub_path = path
-            geometry_paths[geometry_key].append(tuple(sub_path))
-
-        if derivative_info.clipped_geometry is None:
-            raise ValidationError(
-                "ClipOperation derivative evaluation requires `clipped_geometry`."
-            )
-
-        geometry_map = {
-            "geometry_a": self.geometry_a,
-            "geometry_b": self.geometry_b,
-        }
-        grad_vjps = {}
-
-        # Reuse interpolation data for both operands to avoid duplicate setup.
-        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
-
-        for geometry_key, geometry in geometry_map.items():
-            paths = geometry_paths[geometry_key]
-            if not paths:
-                continue
-
-            geometry_info = derivative_info.updated_copy(
-                paths=paths,
-                bounds=geometry.bounds,
-                bounds_intersect=self.bounds_intersection(
-                    geometry.bounds, derivative_info.simulation_bounds
-                ),
-                deep=False,
-                interpolators=interpolators,
-            )
-
-            vjp_dict_geometry = geometry._compute_derivatives(geometry_info)
-
-            for geo_path, geo_vjp in vjp_dict_geometry.items():
-                full_path = (geometry_key, *geo_path)
-                if full_path in grad_vjps:
-                    existing = grad_vjps[full_path]
-                    if isinstance(existing, (list, tuple)) and isinstance(geo_vjp, (list, tuple)):
-                        grad_vjps[full_path] = type(existing)(
-                            x + y for x, y in zip(existing, geo_vjp)
-                        )
-                    else:
-                        grad_vjps[full_path] = existing + geo_vjp
-                else:
-                    grad_vjps[full_path] = geo_vjp
-
-        return grad_vjps
 
     @staticmethod
     def _operand_paths(paths: list[PathType]) -> dict[str, list[PathType]]:
@@ -430,8 +375,8 @@ class ClipOperation(Geometry):
     ) -> dict[PathType, SurfaceSampleSet]:
         """Route generation to both operands, prefixing their canonical keys.
 
-        Operands generate their full (unmasked) surfaces; the clip-activity masking
-        stays at evaluation time via ``derivative_info.clipped_geometry``.
+        Operands generate their full (unmasked) surfaces; the shape term masks the points
+        the clip removes.
         """
         geometry_map = {
             "geometry_a": self.geometry_a,
@@ -455,25 +400,14 @@ class ClipOperation(Geometry):
         self,
         sample_sets: dict[PathType, SurfaceSampleSet],
         paths: list[PathType],
-        derivative_info: DerivativeInfo,
+        derivative_info: ShapeDerivativeContext,
     ) -> AutogradFieldMap:
         """Route consumption to both operands, accumulating their contributions."""
-        if derivative_info.clipped_geometry is None:
-            raise ValidationError(
-                "ClipOperation derivative evaluation requires `clipped_geometry`."
-            )
-
         geometry_map = {
             "geometry_a": self.geometry_a,
             "geometry_b": self.geometry_b,
         }
         grad_vjps = {}
-
-        # Reuse interpolation data for both operands to avoid duplicate setup
-        # (volumetric route only: the point-cloud route reads precomputed integrands).
-        interpolators = derivative_info.interpolators
-        if interpolators is None and derivative_info.point_integrands is None:
-            interpolators = derivative_info.create_interpolators()
 
         for geometry_key, operand_paths in self._operand_paths(paths).items():
             if not operand_paths:
@@ -485,25 +419,15 @@ class ClipOperation(Geometry):
                 key[1:]: value for key, value in sample_sets.items() if key[:1] == prefix
             }
 
-            geometry_info = derivative_info.updated_copy(
-                paths=operand_paths,
-                bounds=geometry.bounds,
-                bounds_intersect=self.bounds_intersection(
-                    geometry.bounds, derivative_info.simulation_bounds
-                ),
-                deep=False,
-                interpolators=interpolators,
+            geometry_info = replace(
+                derivative_info,
                 # point-cloud integrands are keyed like sample sets: strip the routing
                 # prefix so the operand's local canonical keys resolve
-                point_integrands=(
-                    {
-                        key[1:]: value
-                        for key, value in derivative_info.point_integrands.items()
-                        if key[:1] == prefix
-                    }
-                    if derivative_info.point_integrands is not None
-                    else None
-                ),
+                point_integrands={
+                    key[1:]: value
+                    for key, value in derivative_info.point_integrands.items()
+                    if key[:1] == prefix
+                },
             )
 
             vjp_dict_geometry = geometry._compute_derivatives_from_sample_sets(

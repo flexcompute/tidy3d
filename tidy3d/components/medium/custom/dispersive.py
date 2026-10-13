@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
@@ -12,7 +13,6 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.data.utils import (
     CustomSpatialDataTypeAnnotated,
-    UnstructuredGridDatasetType,
     _check_same_coordinates,
     _get_numpy_array,
     _ones_like,
@@ -39,19 +39,14 @@ if TYPE_CHECKING:
     from pydantic import PositiveFloat
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.path_utils import AutogradRoute
-    from tidy3d.components.autograd.types import AutogradFieldMap, TracedPositiveFloat
-    from tidy3d.components.data.dataset import PermittivityDataset
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.autograd.types import PathType, TracedPositiveFloat
     from tidy3d.components.data.utils import CustomSpatialDataType
     from tidy3d.components.grid.grid import Coords
     from tidy3d.components.medium.base import (
         AbstractMedium,
-        ArrayComplex,
-        ArrayFloat,
-        FrequencyArray,
-        WeightFunction,
     )
+    from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.types import (
         ArrayComplex3D,
         Bound,
@@ -72,7 +67,64 @@ from .isotropic import CustomMedium
 class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
     """A spatially varying dispersive medium."""
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _derivative_terms(self, paths: list[PathType], target: MediumTarget) -> Compiled:
+        """One term: project onto the parameter grid, sum components, contract with d(eps)/dp."""
+
+        from flexcompute.core._migration.em.derivatives import (
+            ContractMaterialDerivative,
+            DispersiveMaterial,
+            FieldProductKernel,
+            SumComponents,
+        )
+        from flexcompute.core._migration.em.numerical.raw.medium import (
+            DISPERSIVE_TERM_PARAMETERS,
+        )
+
+        from tidy3d.components.autograd.derivative_terms import Binding, Compiled
+        from tidy3d.components.autograd.utils import get_static
+        from tidy3d.components.medium.derivative_terms import projection, restore_output
+
+        names = DISPERSIVE_TERM_PARAMETERS[self._derivative_model]
+        eps_inf = getattr(self, "eps_inf", None)
+        coefficients = getattr(self, self._traced_indexed_root)
+
+        def on_grid(data: Any) -> Any:
+            # a copy: a traced value can be the caller's own parameter array, which the
+            # program's array type would otherwise mark read-only
+            return np.array(get_static(data._spatially_sorted.values))
+
+        material = DispersiveMaterial(
+            model=self._derivative_model,
+            epsilon_infinity=None if eps_inf is None else on_grid(eps_inf),
+            terms=tuple(tuple(on_grid(value) for value in term) for term in coefficients),
+        )
+        selected = [
+            (("epsilon_infinity",), eps_inf)
+            if path == ("eps_inf",)
+            else (("term", path[1], names[path[2]]), coefficients[path[1]][path[2]])
+            for path in paths
+        ]
+        basis = (coefficients[0][0] if eps_inf is None else eps_inf)._spatially_sorted
+        kernel = FieldProductKernel(
+            monitor=target.monitor,
+            components=target.components,
+            reductions=(
+                projection(target, basis, target.interpolation or self.interp_method),
+                SumComponents(),
+                ContractMaterialDerivative(
+                    material=material, parameters=tuple(dict.fromkeys(key for key, _ in selected))
+                ),
+            ),
+        )
+        bindings = tuple(
+            Binding.one(
+                (*target.key, *path), target.key, partial(restore_output, key=key, data=data)
+            )
+            for path, (key, data) in zip(paths, selected, strict=True)
+        )
+        return Compiled(terms=((target.key, kernel),), bindings=bindings)
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced custom dispersive medium path."""
         root = self._traced_indexed_root
         scalar_data = {path[0]: getattr(self, path[0]) for path in self._traced_supported_paths}
@@ -153,91 +205,6 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
             return data
 
         return _warn_if_none
-
-    # --- helpers for custom dispersive adjoints ---
-    def _sum_complex_eps_sensitivity(
-        self,
-        derivative_info: DerivativeInfo,
-        spatial_ref: PermittivityDataset,
-    ) -> ArrayComplex:
-        """Sum complex permittivity sensitivities over xyz on the given spatial grid.
-
-        Parameters
-        ----------
-        derivative_info : DerivativeInfo
-            Info bundle carrying field maps and frequencies.
-        spatial_ref : PermittivityDataset
-            Spatial dataset to define the grid/coords for interpolation and summation.
-
-        Returns
-        -------
-        np.ndarray
-            Complex-valued aggregated dJ array with frequency as the last axis.
-        """
-        dJ = 0.0 + 0.0j
-        for dim in "xyz":
-            dJ += self._derivative_field_cmp_custom(
-                E_der_map=derivative_info.E_der_map,
-                spatial_data=spatial_ref,
-                dim=dim,
-                bounds=derivative_info.bounds_intersect,
-                component="complex",
-                sum_over_freqs=False,
-            )
-        return dJ
-
-    @staticmethod
-    def _accum_real_inner(dJ: ArrayComplex, weight: ArrayComplex) -> ArrayFloat:
-        """Compute Re(dJ * weight) with proper broadcasting."""
-        return np.real(dJ * weight)
-
-    def _sum_real_over_freqs(self, dJ: np.ndarray, freqs: list[float] | np.ndarray) -> np.ndarray:
-        """Sum real parts over the frequency axis using the shared accumulator."""
-        freqs = np.asarray(freqs, float)
-        if freqs.size == 0:
-            raise ValueError("freqs must not be empty")
-        if np.ndim(dJ) == 0 or np.shape(dJ)[-1] != freqs.size:
-            raise ValueError(
-                f"Expected frequency axis on dJ with size {freqs.size}, got shape {np.shape(dJ)}."
-            )
-
-        ones = np.ones_like(dJ[..., 0], dtype=float)
-        return self._sum_over_freqs(freqs=freqs, dJ=dJ, weight_fn=lambda _f, ones=ones: ones)
-
-    def _sum_over_freqs(
-        self, freqs: FrequencyArray, dJ: ArrayComplex, weight_fn: WeightFunction
-    ) -> ArrayFloat:
-        """Accumulate gradient contributions over frequencies using provided weight function.
-
-        Parameters
-        ----------
-        freqs : array-like
-            Frequencies to accumulate over.
-        dJ : np.ndarray
-            Complex dataset sensitivity with spatial shape.
-        weight_fn : Callable[[float], np.ndarray]
-            Function mapping frequency to weight array broadcastable to dJ.
-
-        Returns
-        -------
-        np.ndarray
-            Real-valued gradient array matching dJ's broadcasted shape.
-        """
-        freqs = np.asarray(freqs, float)
-        if freqs.size == 0:
-            raise ValueError("freqs must not be empty")
-
-        weight0 = weight_fn(freqs[0])
-        if dJ.ndim == np.ndim(weight0) + 1 and dJ.shape[-1] == freqs.size:
-            g = self._accum_real_inner(dJ[..., 0], weight0)
-            for idx, f in enumerate(freqs[1:], start=1):
-                g = g + self._accum_real_inner(dJ[..., idx], weight_fn(f))
-            return g
-
-        g = self._accum_real_inner(dJ, weight0)
-        for f in freqs[1:]:
-            g = g + self._accum_real_inner(dJ, weight_fn(f))
-        return g
 
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
@@ -360,29 +327,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                     return False
         return True
 
-    @staticmethod
-    def _sorted_spatial_data(
-        data: CustomSpatialDataTypeAnnotated,
-    ) -> CustomSpatialDataTypeAnnotated:
-        """Return spatial data sorted along its coordinates if applicable."""
-        if isinstance(data, SpatialDataArray):
-            return data._spatially_sorted
-        return data
-
-    @cached_property
-    def _eps_inf_sorted(self) -> CustomSpatialDataTypeAnnotated:
-        """Cached sorted copy of eps_inf when structured data is provided."""
-        return self._sorted_spatial_data(self.eps_inf)
-
-    @cached_property
-    def _poles_sorted(
-        self,
-    ) -> tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...]:
-        """Cached sorted copies of pole coefficients when structured data is provided."""
-        return tuple(
-            (self._sorted_spatial_data(a), self._sorted_spatial_data(c)) for a, c in self.poles
-        )
-
     def eps_dataarray_freq(
         self, frequency: float
     ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -498,49 +442,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             poles_reduced.append((pole.sel_inside(bounds), residue.sel_inside(bounds)))
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=tuple(poles_reduced))
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives by preparing array data and calling the static helper."""
-
-        eps_inf_sorted = self._eps_inf_sorted
-        is_unstructured = isinstance(eps_inf_sorted, UnstructuredGridDatasetType)
-        if is_unstructured:
-            raise NotImplementedError(
-                "Adjoint derivatives for unstructured custom media are not supported."
-            )
-
-        dJ_deps_complex = 0.0 + 0.0j
-        for dim in "xyz":
-            dJ_deps_complex += self._derivative_field_cmp_custom(
-                E_der_map=derivative_info.E_der_map,
-                spatial_data=eps_inf_sorted,
-                dim=dim,
-                bounds=derivative_info.bounds_intersect,
-                component="complex",
-                sum_over_freqs=False,
-            )
-
-        poles_vals = [
-            (np.array(a_sorted.values, dtype=complex), np.array(c_sorted.values, dtype=complex))
-            for a_sorted, c_sorted in self._poles_sorted
-        ]
-
-        freqs = np.asarray(derivative_info.frequencies, float)
-        vjps_total = {}
-        for idx, freq in enumerate(freqs):
-            dJ_deps_complex_f = dJ_deps_complex[..., idx]
-            vjps_f = PoleResidue._get_vjps_from_params(
-                dJ_deps_complex=dJ_deps_complex_f,
-                poles_vals=poles_vals,
-                omega=2 * np.pi * freq,
-                requested_paths=derivative_info.paths,
-            )
-            for path, vjp in vjps_f.items():
-                if path not in vjps_total:
-                    vjps_total[path] = vjp
-                else:
-                    vjps_total[path] += vjp
-        return vjps_total
 
 
 class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
@@ -752,56 +653,6 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         return self.updated_copy(coeffs=tuple(coeffs_reduced))
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for CustomSellmeier via analytic chain rule.
-
-        Uses the complex permittivity derivative aggregated over spatial dims and
-        applies frequency-dependent weights per Sellmeier term.
-        """
-
-        if len(self.coeffs) == 0:
-            return {}
-
-        # accumulate complex-valued sensitivity across xyz using B's grid as reference
-        ref = self.coeffs[0][0]
-        dJ = self._sum_complex_eps_sensitivity(derivative_info, spatial_ref=ref)
-
-        # prepare gradients map
-        grads: AutogradFieldMap = {}
-
-        # iterate coefficients and requested paths
-        for i, (B_da, C_da) in enumerate(self.coeffs):
-            need_B = ("coeffs", i, 0) in derivative_info.paths
-            need_C = ("coeffs", i, 1) in derivative_info.paths
-            if not (need_B or need_C):
-                continue
-
-            Bv = np.array(B_da.values, dtype=float)
-            Cv = np.array(C_da.values, dtype=float)
-
-            gB = 0.0 if not need_B else np.zeros_like(Bv, dtype=float)
-            gC = 0.0 if not need_C else np.zeros_like(Cv, dtype=float)
-
-            if need_B:
-                gB = gB + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, Cv=Cv: Sellmeier._w_B(f, Cv),
-                )
-            if need_C:
-                gC = gC + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, Bv=Bv, Cv=Cv: Sellmeier._w_C(f, Bv, Cv),
-                )
-
-            if need_B:
-                grads[("coeffs", i, 0)] = gB
-            if need_C:
-                grads[("coeffs", i, 1)] = gC
-
-        return grads
-
 
 class CustomLorentz(CustomDispersiveMedium, Lorentz):
     """A spatially varying dispersive medium described by the Lorentz model.
@@ -1008,64 +859,6 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=tuple(coeffs_reduced))
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for CustomLorentz via analytic chain rule."""
-
-        # complex epsilon sensitivity over xyz aligned to eps_inf grid
-        dJ = self._sum_complex_eps_sensitivity(derivative_info, spatial_ref=self.eps_inf)
-
-        grads: AutogradFieldMap = {}
-
-        # eps_inf path
-        if ("eps_inf",) in derivative_info.paths:
-            grads[("eps_inf",)] = self._sum_real_over_freqs(dJ, derivative_info.frequencies)
-
-        # per-coefficient contributions
-        for i, (de_da, f0_da, dl_da) in enumerate(self.coeffs):
-            need_de = ("coeffs", i, 0) in derivative_info.paths
-            need_f0 = ("coeffs", i, 1) in derivative_info.paths
-            need_dl = ("coeffs", i, 2) in derivative_info.paths
-            if not (need_de or need_f0 or need_dl):
-                continue
-
-            de = np.array(de_da.values, dtype=float)
-            f0 = np.array(f0_da.values, dtype=float)
-            dl = np.array(dl_da.values, dtype=float)
-
-            g_de = 0.0 if not need_de else np.zeros_like(de, dtype=float)
-            g_f0 = 0.0 if not need_f0 else np.zeros_like(f0, dtype=float)
-            g_dl = 0.0 if not need_dl else np.zeros_like(dl, dtype=float)
-
-            if need_de:
-                g_de = g_de + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, f0=f0, dl=dl: Lorentz._w_de(f, f0, dl),
-                )
-            if need_f0:
-                # d/d f0 of (de f0^2 / den) = (2 de f0 (den - f0^2)) / den^2
-                g_f0 = g_f0 + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, de=de, f0=f0, dl=dl: Lorentz._w_f0(f, de, f0, dl),
-                )
-            if need_dl:
-                # d/d delta of (de f0^2 / den) = (2 j f de f0^2) / den^2
-                g_dl = g_dl + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, de=de, f0=f0, dl=dl: Lorentz._w_delta(f, de, f0, dl),
-                )
-
-            if need_de:
-                grads[("coeffs", i, 0)] = g_de
-            if need_f0:
-                grads[("coeffs", i, 1)] = g_f0
-            if need_dl:
-                grads[("coeffs", i, 2)] = g_dl
-
-        return grads
-
 
 class CustomDrude(CustomDispersiveMedium, Drude):
     """A spatially varying dispersive medium described by the Drude model.
@@ -1227,47 +1020,6 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=tuple(coeffs_reduced))
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for CustomDrude via analytic chain rule."""
-
-        dJ = self._sum_complex_eps_sensitivity(derivative_info, spatial_ref=self.eps_inf)
-
-        grads: AutogradFieldMap = {}
-        if ("eps_inf",) in derivative_info.paths:
-            grads[("eps_inf",)] = self._sum_real_over_freqs(dJ, derivative_info.frequencies)
-
-        for i, (fp_da, dl_da) in enumerate(self.coeffs):
-            need_fp = ("coeffs", i, 0) in derivative_info.paths
-            need_dl = ("coeffs", i, 1) in derivative_info.paths
-            if not (need_fp or need_dl):
-                continue
-
-            fp = np.array(fp_da.values, dtype=float)
-            dl = np.array(dl_da.values, dtype=float)
-
-            g_fp = 0.0 if not need_fp else np.zeros_like(fp, dtype=float)
-            g_dl = 0.0 if not need_dl else np.zeros_like(dl, dtype=float)
-
-            if need_fp:
-                g_fp = g_fp + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, fp=fp, dl=dl: Drude._w_fp(f, fp, dl),
-                )
-            if need_dl:
-                g_dl = g_dl + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, fp=fp, dl=dl: Drude._w_delta(f, fp, dl),
-                )
-
-            if need_fp:
-                grads[("coeffs", i, 0)] = g_fp
-            if need_dl:
-                grads[("coeffs", i, 1)] = g_dl
-
-        return grads
-
 
 class CustomDebye(CustomDispersiveMedium, Debye):
     """A spatially varying dispersive medium described by the Debye model.
@@ -1364,47 +1116,6 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                     "Coefficients 'tau_i' are restricted to be sufficiently greater than 0."
                 )
         return val
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Adjoint derivatives for CustomDebye via analytic chain rule."""
-
-        dJ = self._sum_complex_eps_sensitivity(derivative_info, spatial_ref=self.eps_inf)
-
-        grads: AutogradFieldMap = {}
-        if ("eps_inf",) in derivative_info.paths:
-            grads[("eps_inf",)] = self._sum_real_over_freqs(dJ, derivative_info.frequencies)
-
-        for i, (de_da, tau_da) in enumerate(self.coeffs):
-            need_de = ("coeffs", i, 0) in derivative_info.paths
-            need_tau = ("coeffs", i, 1) in derivative_info.paths
-            if not (need_de or need_tau):
-                continue
-
-            de = np.array(de_da.values, dtype=float)
-            tau = np.array(tau_da.values, dtype=float)
-
-            g_de = 0.0 if not need_de else np.zeros_like(de, dtype=float)
-            g_tau = 0.0 if not need_tau else np.zeros_like(tau, dtype=float)
-
-            if need_de:
-                g_de = g_de + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, tau=tau: Debye._w_de(f, tau),
-                )
-            if need_tau:
-                g_tau = g_tau + self._sum_over_freqs(
-                    derivative_info.frequencies,
-                    dJ,
-                    weight_fn=lambda f, de=de, tau=tau: Debye._w_tau(f, de, tau),
-                )
-
-            if need_de:
-                grads[("coeffs", i, 0)] = g_de
-            if need_tau:
-                grads[("coeffs", i, 1)] = g_tau
-
-        return grads
 
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""

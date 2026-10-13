@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from math import isclose
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -9,9 +10,6 @@ import autograd.numpy as np
 import xarray as xr
 from pydantic import Field, field_validator, model_validator
 
-from tidy3d.components.autograd.path_utils import (
-    AutogradRoute,
-)
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
@@ -28,6 +26,7 @@ from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import (
     CONDUCTIVITY,
+    EPSILON_0,
     PERMITTIVITY,
 )
 from tidy3d.exceptions import SetupError, ValidationError
@@ -37,9 +36,9 @@ if TYPE_CHECKING:
     from pydantic import FieldValidationInfo
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.types import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_terms import Compiled
     from tidy3d.components.medium.base import ArrayFloat
+    from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.types import (
         ArrayComplex3D,
         Axis,
@@ -260,6 +259,32 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
             permittivity=perm_reduced,
             conductivity=cond_reduced,
         )
+
+
+def _custom_medium_vjp(
+    outputs: Any,
+    frequencies: Any,
+    *,
+    components: tuple[str, ...],
+    data: Any,
+    dataset: bool,
+    resolved: bool = False,
+) -> Any:
+    """A dataset entry's component, or the components' sum, in the public layout of ``data``.
+
+    A resolved sensitivity keeps its frequency axis, moved last.
+    """
+
+    from tidy3d.components.medium.derivative_terms import restore
+
+    first, *rest = (outputs[(component,)] for component in components)
+    values = first.astype(np.result_type(first, *rest), copy=True)
+    if not dataset:
+        for component in rest:
+            values += component
+    if resolved:
+        return restore(np.moveaxis(values, 0, -1), data)
+    return restore(values, data, frequency_axis=dataset)
 
 
 class CustomMedium(AbstractCustomMedium):
@@ -1047,7 +1072,66 @@ class CustomMedium(AbstractCustomMedium):
             eps_dataset=eps_reduced,
         )
 
-    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> AutogradRoute:
+    def _derivative_terms(self, paths: list[PathType], target: MediumTarget) -> Compiled:
+        """One term per path, projected onto that parameter's own grid.
+
+        Conductivity reads the adjoint field weighted by ``1j / (w eps0)``. A dataset is simulated
+        as a permittivity plus a conductivity fixed at its frequency ``f0`` (``_medium``), so its
+        imaginary sensitivity is scaled by ``f0 / f``. A dataset entry of another component than
+        the target reads (an anisotropic parent's mismatch) is zero.
+        """
+
+        from flexcompute.core._migration.em.derivatives import (
+            FieldProductKernel,
+            ScaleImaginary,
+            SumFrequencies,
+        )
+
+        from tidy3d.components.autograd.derivative_terms import Binding, Compiled
+        from tidy3d.components.medium.derivative_terms import projection, zero_binding
+
+        terms, bindings = [], []
+        for path in paths:
+            traced = (*target.key, *path)
+            dataset = path[0] == "eps_dataset"
+            if dataset:
+                data = self.eps_dataset.field_components[path[1]]
+                sorted_data = self._eps_components_sorted[path[1]]
+                components = (path[1].removeprefix("eps_"),)
+            else:
+                data = getattr(self, path[0])
+                sorted_data = getattr(self, f"_{path[0]}_sorted")
+                components = target.components
+            if not set(components) <= set(target.components):
+                bindings.append(zero_binding(traced, data.values))
+                continue
+            scale = None
+            if path == ("conductivity",):
+                scale = 1j / (2 * np.pi * target.frequencies * EPSILON_0)
+            interpolation = target.interpolation or self.interp_method
+            reductions = (projection(target, sorted_data, interpolation),)
+            if dataset:
+                reductions += (ScaleImaginary(reference_hz=float(data.coords["f"].values[0])),)
+            if not target.resolved:
+                reductions += (SumFrequencies(),)
+            kernel = FieldProductKernel(
+                monitor=target.monitor,
+                components=components,
+                adjoint_scale=scale,
+                reductions=reductions,
+            )
+            terms.append((traced, kernel))
+            vjp = partial(
+                _custom_medium_vjp,
+                components=components,
+                data=data,
+                dataset=dataset,
+                resolved=target.resolved,
+            )
+            bindings.append(Binding.one(traced, traced, vjp))
+        return Compiled(terms=tuple(terms), bindings=tuple(bindings))
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced CustomMedium path for adjoint routing."""
         scalar_data = {
             "permittivity": self.permittivity,
@@ -1062,7 +1146,7 @@ class CustomMedium(AbstractCustomMedium):
                 scalar_data=active_scalar_data,
             )
         if field_path in self._traced_supported_paths and field_path[0] in active_scalar_data:
-            return AutogradRoute(local_path=field_path)
+            return
 
         eps_components = (
             tuple(self.eps_dataset.field_components.keys()) if self.eps_dataset is not None else ()
@@ -1072,7 +1156,7 @@ class CustomMedium(AbstractCustomMedium):
             and field_path[0] == "eps_dataset"
             and field_path[1] in eps_components
         ):
-            return AutogradRoute(local_path=field_path)
+            return
 
         supported_scalar = tuple(active_scalar_data)
         supported_eps = tuple(f"eps_dataset.{component}" for component in eps_components)
@@ -1080,60 +1164,3 @@ class CustomMedium(AbstractCustomMedium):
             field_path,
             supported_parameters=(*supported_scalar, *supported_eps),
         )
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
-
-        vjps = {}
-
-        for field_path in derivative_info.paths:
-            if field_path[0] == "permittivity":
-                spatial_data = self._permittivity_sorted
-                if spatial_data is None:
-                    continue
-                vjp_array = 0.0
-                for dim in "xyz":
-                    vjp_array += self._derivative_field_cmp_custom(
-                        E_der_map=derivative_info.E_der_map,
-                        spatial_data=spatial_data,
-                        dim=dim,
-                        bounds=derivative_info.bounds_intersect,
-                        component="real",
-                    )
-                vjps[field_path] = vjp_array
-
-            elif field_path[0] == "conductivity":
-                spatial_data = self._conductivity_sorted
-                if spatial_data is None:
-                    continue
-                vjp_array = 0.0
-                for dim in "xyz":
-                    vjp_array += self._derivative_field_cmp_custom(
-                        E_der_map=derivative_info.E_der_map,
-                        spatial_data=spatial_data,
-                        dim=dim,
-                        bounds=derivative_info.bounds_intersect,
-                        component="sigma",
-                    )
-                vjps[field_path] = vjp_array
-
-            elif field_path[0] == "eps_dataset":
-                key = field_path[1]
-                spatial_data = self._eps_components_sorted.get(key)
-                if spatial_data is None:
-                    continue
-                dim = key[-1]
-                component = (
-                    "complex"
-                    if np.issubdtype(np.asarray(spatial_data.values).dtype, np.complexfloating)
-                    else "real"
-                )
-                vjps[field_path] = self._derivative_field_cmp_custom(
-                    E_der_map=derivative_info.E_der_map,
-                    spatial_data=spatial_data,
-                    dim=dim,
-                    bounds=derivative_info.bounds_intersect,
-                    component=component,
-                )
-
-        return vjps

@@ -9,9 +9,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 import numpy as np
 from pydantic import Field, model_validator
 
-from tidy3d.components.autograd.derivative_utils import (
-    transpose_interp_field_to_dataset,
-)
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -20,33 +17,14 @@ from tidy3d.components.validators import assert_single_freq_in_range, warn_if_da
 from tidy3d.constants import MICROMETER
 from tidy3d.log import log
 
-from .adjoint_helpers import (
-    accumulate_center_vjp,
-    assign_center_path_derivatives,
-    parse_source_field_component,
-    split_source_paths,
-)
 from .base import Source
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
-    from tidy3d.components.autograd import AutogradFieldMap
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.data.data_array import ScalarFieldDataArray
+    from tidy3d.components.autograd import PathType
+    from tidy3d.components.autograd.derivative_terms import Compiled
+    from tidy3d.components.source.derivative_terms import SourceTarget
     from tidy3d.components.types.time import SourceTimeType
-
-
-def _get_direct_source_adjoint_and_sign(
-    field_name: str,
-    *,
-    e_adj: dict[str, Any],
-    h_adj: dict[str, Any],
-) -> tuple[Any, float]:
-    """Get adjoint field/sign for direct ``CustomCurrentSource`` gradients."""
-    field_type, _ = parse_source_field_component(field_name)
-    if field_type == "H":
-        return h_adj[field_name], -1.0
-    return e_adj[field_name], 1.0
 
 
 class CurrentSource(Source, ABC):
@@ -282,23 +260,6 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
     _can_interpolate = validate_can_interpolate("current_dataset")
 
-    def _confine_mask(self, field_data: ScalarFieldDataArray) -> np.ndarray:
-        """Mask selecting dataset points inside source bounds on nonzero-size axes."""
-        mask = np.ones(field_data.shape, dtype=float)
-        for dim in "xyz":
-            if dim not in field_data.coords:
-                continue
-            axis = "xyz".index(dim)
-            half_size = 0.5 * float(self.size[axis])
-            if half_size <= 0.0:
-                continue
-            coords = np.asarray(field_data.coords[dim].data, dtype=float)
-            inside = np.abs(coords) <= (half_size + 1e-12)
-            reshape = [1] * mask.ndim
-            reshape[field_data.dims.index(dim)] = coords.size
-            mask *= inside.reshape(reshape)
-        return mask
-
     def _adjoint_interp_methods(self) -> dict[str, str]:
         """Interpolation mode per axis for source VJP projection."""
         if self.interpolate:
@@ -309,106 +270,21 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             axis_methods[dim] = "nearest" if np.isclose(self.size[axis], 0.0) else "linear"
         return axis_methods
 
-    def _compute_dataset_derivatives(
-        self,
-        dataset_paths: list[tuple],
-        *,
-        center: tuple[float, float, float],
-        interp_methods: dict[str, str],
-        e_adj: dict[str, Any],
-        h_adj: dict[str, Any],
-    ) -> AutogradFieldMap:
-        """Compute derivatives for traced ``current_dataset`` paths."""
-        derivative_map: AutogradFieldMap = {}
-        for field_path in dataset_paths:
-            field_path = tuple(field_path)
-            field_name = field_path[1]
-            field_data = getattr(self.current_dataset, field_name)
+    def _derivative_coupling(self, component: str) -> tuple[str | None, float]:
+        """A current component pulls back the same adjoint component, H with a minus sign."""
 
-            adjoint_field, component_sign = _get_direct_source_adjoint_and_sign(
-                field_name,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
+        return component, -1.0 if component.startswith("H") else 1.0
 
-            adjoint_on_dataset = transpose_interp_field_to_dataset(
-                adjoint_field,
-                field_data,
-                center=center,
-                method=interp_methods,
-            )
-            if self.confine_to_bounds:
-                adjoint_on_dataset = adjoint_on_dataset * self._confine_mask(field_data)
+    def _derivative_terms(self, paths: list[PathType], target: SourceTarget) -> Compiled:
+        """One pullback term per traced current component, on that component's own grid."""
 
-            # Keep source gradients stable against simulation grid-refinement changes.
-            vjp_field = component_sign * adjoint_on_dataset
-            derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
+        from tidy3d.components.source.derivative_terms import dataset_source_terms
 
-        return derivative_map
-
-    def _compute_center_derivatives(
-        self,
-        center_paths: list[tuple],
-        *,
-        center: tuple[float, float, float],
-        bounds: Any,
-        e_adj: dict[str, Any],
-        h_adj: dict[str, Any],
-    ) -> AutogradFieldMap:
-        """Compute derivatives for traced ``center`` paths."""
-        derivative_map: AutogradFieldMap = {}
-        if not center_paths:
-            return derivative_map
-
-        def _get_adjoint_and_sign(field_name: str) -> tuple[Any, float]:
-            return _get_direct_source_adjoint_and_sign(
-                field_name,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-
-        vjp_center = accumulate_center_vjp(
-            field_components=self.current_dataset.field_components,
-            center=center,
-            bounds=bounds,
-            source_size=tuple(self.size),
-            get_adjoint_and_sign=_get_adjoint_and_sign,
+        return dataset_source_terms(
+            self,
+            paths,
+            target,
+            dataset_key="current_dataset",
+            interpolation=tuple(self._adjoint_interp_methods()[axis] for axis in "xyz"),
+            confine_to_bounds=self.confine_to_bounds,
         )
-
-        assign_center_path_derivatives(
-            derivative_map,
-            center_paths,
-            vjp_center=vjp_center,
-        )
-        return derivative_map
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute derivatives with respect to CustomCurrentSource parameters."""
-        derivative_map = {}
-        center = tuple(self.center)
-        interp_methods = self._adjoint_interp_methods()
-        h_adj = derivative_info.H_adj or {}
-        e_adj = derivative_info.E_adj or {}
-
-        dataset_paths, center_paths = split_source_paths(derivative_info.paths)
-
-        derivative_map.update(
-            self._compute_dataset_derivatives(
-                dataset_paths,
-                center=center,
-                interp_methods=interp_methods,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-        )
-        derivative_map.update(
-            self._compute_center_derivatives(
-                center_paths,
-                center=center,
-                bounds=derivative_info.bounds,
-                e_adj=e_adj,
-                h_adj=h_adj,
-            )
-        )
-
-        return derivative_map

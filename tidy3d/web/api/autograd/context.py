@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.parallel_adjoint_bases import ParallelAdjointBasis
     from tidy3d.components.autograd.spacing import SamplingResolution
-    from tidy3d.em.translate.sample_sets import GeometrySampleSets
 
+    from .derivatives import DerivativeRun
     from .types import CustomVJPConfig, NumericalStructureConfig
 
 
@@ -22,17 +22,9 @@ def _require_sim_data(sim_data: td.SimulationData | None, *, field_name: str) ->
 
 
 def sampling_resolutions_for_traced_fields(
-    simulation: td.Simulation,
-    sim_fields_keys: Sequence[tuple],
-    sample_sets: GeometrySampleSets | None = None,
+    simulation: td.Simulation, sim_fields_keys: Sequence[tuple]
 ) -> dict[int, SamplingResolution]:
     """Precompute one geometry sampling resolution per traced structure.
-
-    When a pre-collected ``sample_sets`` artifact is available, the generation-time
-    resolutions it carries are reused for the structures it covers, and only the
-    remainder (numerical structures and custom-vjp-excluded geometry paths, which are
-    deliberately absent from the artifact) pays the simulation-definition scan. This
-    also guarantees generation and consumption agree on the resolution by construction.
 
     Structure and numerical VJP paths may contain several traced fields for the
     same structure. Deduplicating their indices here keeps the simulation-definition
@@ -70,14 +62,10 @@ def sampling_resolutions_for_traced_fields(
             )
         }
     )
-    reused = sample_sets.sampling_resolutions() if sample_sets is not None else {}
-    to_scan = [index for index in structure_indices if index not in reused]
-    scan_index = SamplingScanIndex.from_simulation(simulation) if to_scan else None
+    scan_index = SamplingScanIndex.from_simulation(simulation) if structure_indices else None
     return {
-        structure_index: (
-            reused[structure_index]
-            if structure_index in reused
-            else adjoint_sampling_resolution(simulation, structure_index, scan_index=scan_index)
+        structure_index: adjoint_sampling_resolution(
+            simulation, structure_index, scan_index=scan_index
         )
         for structure_index in structure_indices
     }
@@ -108,7 +96,8 @@ class AutogradContext:
     forward_task_id: str | None = None
     forward_task_from_cache: bool = False
     parallel_adjoint_state: ParallelAdjointState | None = None
-    sample_sets: GeometrySampleSets | None = None
+    derivative_run: DerivativeRun | None = None
+    """The task's compiled derivatives, set when its forward simulation is prepared."""
 
 
 @dataclass(frozen=True)
@@ -219,7 +208,7 @@ class AdjointPostprocessInputs:
     numerical_structure_map: dict[int, NumericalStructureConfig]
     custom_vjp: tuple[CustomVJPConfig, ...] | None
     sampling_resolutions: Mapping[int, SamplingResolution]
-    sample_sets: GeometrySampleSets | None = None
+    derivative_run: DerivativeRun
 
     def __init__(
         self,
@@ -229,16 +218,15 @@ class AdjointPostprocessInputs:
         sim_fields_keys: list[tuple],
         numerical_structure_map: dict[int, NumericalStructureConfig],
         custom_vjp: tuple[CustomVJPConfig, ...] | None,
+        derivative_run: DerivativeRun,
         sampling_resolutions: Mapping[int, SamplingResolution] | None = None,
-        sample_sets: GeometrySampleSets | None = None,
     ) -> None:
         """Create postprocess inputs, deriving sampling metadata when omitted."""
 
         if sampling_resolutions is None:
+            # only the callback-owned paths still need a DerivativeInfo
             sampling_resolutions = sampling_resolutions_for_traced_fields(
-                sim_data_orig.simulation,
-                sim_fields_keys,
-                sample_sets=sample_sets,
+                sim_data_orig.simulation, list(derivative_run.callback_keys)
             )
 
         object.__setattr__(self, "sim_data_orig", sim_data_orig)
@@ -247,7 +235,7 @@ class AdjointPostprocessInputs:
         object.__setattr__(self, "numerical_structure_map", numerical_structure_map)
         object.__setattr__(self, "custom_vjp", custom_vjp)
         object.__setattr__(self, "sampling_resolutions", sampling_resolutions)
-        object.__setattr__(self, "sample_sets", sample_sets)
+        object.__setattr__(self, "derivative_run", derivative_run)
 
     @classmethod
     def from_adjoint_task_context(
@@ -260,7 +248,7 @@ class AdjointPostprocessInputs:
             sim_fields_keys=task_context.sim_fields_keys,
             numerical_structure_map=task_context.numerical_structures,
             custom_vjp=task_context.custom_vjp,
-            sample_sets=task_context.context.sample_sets,
+            derivative_run=task_context.context.derivative_run,
         )
 
     @classmethod
@@ -280,7 +268,7 @@ class AdjointPostprocessInputs:
             sim_fields_keys=task_context.sim_fields_keys,
             numerical_structure_map=task_context.numerical_structures,
             custom_vjp=task_context.custom_vjp,
-            sample_sets=context.sample_sets,
+            derivative_run=context.derivative_run,
         )
 
 

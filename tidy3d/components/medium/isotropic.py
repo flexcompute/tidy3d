@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
@@ -11,9 +12,6 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.components.autograd.derivative_utils import (
-    integrate_within_bounds,
-)
 from tidy3d.components.autograd.types import (
     PathType,
     TracedFloat,
@@ -31,16 +29,10 @@ from tidy3d.constants import (
 from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
-    import xarray as xr
+    from collections.abc import Callable
 
     from tidy3d.compat import Self
-    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.autograd.types import AutogradFieldMap
-    from tidy3d.components.data.dataset import ElectromagneticFieldDataset
     from tidy3d.components.time_modulation import ModulationSpec
-    from tidy3d.components.types import (
-        Bound,
-    )
 
     from .lorentz import Lorentz
 
@@ -345,61 +337,21 @@ class Medium(AbstractMedium):
             )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
+    def _derivative_rule(self, path: PathType) -> Callable[[np.ndarray, np.ndarray], Any]:
+        """Permittivity or conductivity from the component-summed sensitivity."""
 
-        # get vjps w.r.t. permittivity and conductivity of the bulk
-        vjps_volume = self._derivative_eps_sigma_volume(
-            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
-        )
+        if path not in (("permittivity",), ("conductivity",)):
+            return super()._derivative_rule(path)
+        return partial(_medium_vjp, conductivity=path == ("conductivity",))
 
-        # store the fields asked for by ``field_paths``
-        derivative_map = {}
-        for field_path in derivative_info.paths:
-            field_name, *_ = field_path
-            if field_name in vjps_volume:
-                derivative_map[field_path] = vjps_volume[field_name]
 
-        return derivative_map
+def _medium_vjp(sensitivity: Any, frequencies: Any, *, conductivity: bool) -> Any:
+    """``sum_f Re S`` for permittivity or ``sum_f -Im S / (w eps0)`` for conductivity."""
 
-    def _derivative_eps_sigma_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
-    ) -> dict[str, xr.DataArray]:
-        """Get the derivative w.r.t permittivity and conductivity in the volume."""
-
-        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
-
-        values = vjp_eps_complex.values
-
-        # vjp of eps_complex_to_eps_sigma
-        omegas = 2 * np.pi * vjp_eps_complex.coords["f"].values
-        eps_vjp = np.real(values)
-        sigma_vjp = -np.imag(values) / omegas / EPSILON_0
-
-        eps_vjp = np.sum(eps_vjp)
-        sigma_vjp = np.sum(sigma_vjp)
-
-        return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
-
-    def _derivative_eps_complex_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
-    ) -> xr.DataArray:
-        """Get the derivative w.r.t complex-valued permittivity in the volume."""
-
-        vjp_value = None
-        for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map[field_name]
-            vjp_value_fld = integrate_within_bounds(
-                arr=fld,
-                dims=("x", "y", "z"),
-                bounds=bounds,
-            )
-            if vjp_value is None:
-                vjp_value = vjp_value_fld
-            else:
-                vjp_value += vjp_value_fld
-
-        return vjp_value
+    by_frequency = np.sum(np.asarray(sensitivity, dtype=complex), axis=0)
+    if not conductivity:
+        return np.sum(np.real(by_frequency))
+    return np.sum(-np.imag(by_frequency) / (2 * np.pi * frequencies) / EPSILON_0)
 
 
 def medium_from_nk(n: float, k: float, freq: float, **kwargs: Any) -> Medium | Lorentz:

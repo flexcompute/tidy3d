@@ -4,22 +4,23 @@ import os
 import tempfile
 from typing import TYPE_CHECKING
 
+from flexcompute.core._migration.em.derivatives import read_results
+
 import tidy3d as td
-from tidy3d.components.autograd.field_map import FieldMap, TracerKeys
-from tidy3d.components.autograd.flux_monitor import is_flux_adjoint_helper_name
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.cache import resolve_local_cache
-from tidy3d.web.core.s3utils import download_file, upload_file
+from tidy3d.web.core.s3utils import download_file
 
-from .constants import SIM_FIELDS_KEYS_FILE, SIM_FWD_FLUX_DATA_FILE, SIM_VJP_FILE
+from .constants import SIM_DERIVATIVE_RESULTS_FILE, SIM_FWD_FLUX_DATA_FILE
 
 if TYPE_CHECKING:
-    from tidy3d.components.autograd import AutogradFieldMap
+    from flexcompute.core._migration.em.derivatives import Results
+
     from tidy3d.components.types.workflow import WorkflowType
     from tidy3d.web.cache import LocalCache
 
 
-VJP_CACHE_ARTIFACT_TYPE = "autograd_vjp"
+RESULTS_CACHE_ARTIFACT_TYPE = "autograd_derivative_results"
 FLUX_FORWARD_CACHE_ARTIFACT_TYPE = "autograd_flux_forward"
 _CACHE_LOAD_ERRORS = (
     OSError,
@@ -42,14 +43,14 @@ def _artifact_cache_context(
     )
 
 
-def _load_vjp_fields(path: os.PathLike) -> AutogradFieldMap:
-    return FieldMap.from_file(path).to_autograd_field_map
-
-
-def get_cached_vjp_traced_fields(
+def get_cached_derivative_results(
     simulation: WorkflowType | None, verbose: bool = True
-) -> AutogradFieldMap | None:
-    """Load cached adjoint VJP fields without using the normal result cache namespace."""
+) -> Results | None:
+    """Load an adjoint simulation's cached program results, outside the normal result cache.
+
+    The adjoint simulation carries the program digest in its ``attrs``, so its hash keys the
+    results by the program as well.
+    """
     cache_context = _artifact_cache_context(simulation)
     if cache_context is None:
         return None
@@ -59,20 +60,20 @@ def get_cached_vjp_traced_fields(
         simulation_hash=simulation_hash,
         workflow_type=workflow_type,
         verbose=verbose,
-        artifact_type=VJP_CACHE_ARTIFACT_TYPE,
+        artifact_type=RESULTS_CACHE_ARTIFACT_TYPE,
     )
     if entry is None:
         return None
 
     try:
-        return _load_vjp_fields(entry.artifact_path)
+        return read_results(entry.artifact_path)
     except Exception as e:
-        td.log.error(f"Could not load VJP cache entry: {e}")
+        td.log.error(f"Could not load derivative results cache entry: {e}")
         simulation_cache.invalidate(entry.key)
         return None
 
 
-def _store_vjp_cache_entry(
+def _store_results_cache_entry(
     task_id_adj: str, *, artifact_path: str, simulation: WorkflowType | None
 ) -> None:
     cache_context = _artifact_cache_context(simulation)
@@ -85,10 +86,10 @@ def _store_vjp_cache_entry(
             path=artifact_path,
             workflow_type=workflow_type,
             simulation_hash=simulation_hash,
-            artifact_type=VJP_CACHE_ARTIFACT_TYPE,
+            artifact_type=RESULTS_CACHE_ARTIFACT_TYPE,
         )
     except Exception as e:
-        td.log.error(f"Could not store VJP cache entry: {e}")
+        td.log.error(f"Could not store derivative results cache entry: {e}")
 
 
 def get_cached_flux_forward_data(
@@ -140,42 +141,6 @@ def _store_flux_forward_cache_entry(
         td.log.error("Could not store FluxMonitor helper cache entry.")
 
 
-def upload_sim_fields_keys(
-    sim_fields_keys: list[tuple], task_id: str, verbose: bool = False
-) -> None:
-    """Function to upload the traced simulation field keys to the server for adjoint runs."""
-    handle, fname = tempfile.mkstemp(suffix=".hdf5")
-    os.close(handle)
-    try:
-        TracerKeys(keys=sim_fields_keys).to_file(fname)
-        upload_file(
-            task_id,
-            fname,
-            SIM_FIELDS_KEYS_FILE,
-            verbose=verbose,
-        )
-    except Exception as e:
-        td.log.error(f"Error occurred while uploading simulation fields keys: {e}")
-        raise e
-    finally:
-        os.unlink(fname)
-
-
-def flux_monitor_forward_data(sim_data_fwd: td.SimulationData) -> td.SimulationData:
-    """Return hidden forward data needed for FluxMonitor adjoint source construction."""
-    helper_data = tuple(
-        mnt_data
-        for mnt_data in sim_data_fwd.data
-        if is_flux_adjoint_helper_name(mnt_data.monitor.name)
-    )
-    helper_names = {mnt_data.monitor.name for mnt_data in helper_data}
-    helper_monitors = tuple(
-        monitor for monitor in sim_data_fwd.simulation.monitors if monitor.name in helper_names
-    )
-    helper_sim = sim_data_fwd.simulation.updated_copy(monitors=helper_monitors, deep=False)
-    return sim_data_fwd.updated_copy(simulation=helper_sim, data=helper_data, deep=False)
-
-
 def get_autograd_flux_forward_data(
     task_id_fwd: str,
     verbose: bool,
@@ -209,23 +174,25 @@ def get_autograd_flux_forward_data(
         os.unlink(fname)
 
 
-def get_vjp_traced_fields(
+def get_derivative_results(
     task_id_adj: str,
     verbose: bool,
     *,
     cache_simulation: WorkflowType | None = None,
-) -> AutogradFieldMap:
-    """Download and deserialize VJP traced fields for a completed adjoint job."""
+) -> Results:
+    """Download the program results of a completed adjoint job."""
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)
     try:
-        download_file(task_id_adj, SIM_VJP_FILE, to_file=fname, verbose=verbose)
-        field_map = _load_vjp_fields(fname)
+        download_file(task_id_adj, SIM_DERIVATIVE_RESULTS_FILE, to_file=fname, verbose=verbose)
+        results = read_results(fname)
         if cache_simulation is not None:
-            _store_vjp_cache_entry(task_id_adj, artifact_path=fname, simulation=cache_simulation)
+            _store_results_cache_entry(
+                task_id_adj, artifact_path=fname, simulation=cache_simulation
+            )
     except Exception as e:
-        td.log.error(f"Error occurred while getting VJP traced fields: {e}")
+        td.log.error(f"Error occurred while getting derivative results: {e}")
         raise e
     finally:
         os.unlink(fname)
-    return field_map
+    return results
