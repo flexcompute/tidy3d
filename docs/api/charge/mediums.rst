@@ -32,20 +32,21 @@ Models contributing to carrier mobility, assigned to
    ConstantMobilityModel
    CaugheyThomasMobility
    MasettiMobility
+   AlloyMobility
    CanaliFieldDependence
    TransferredElectronFieldDependence
    LombardiSurfaceDependence
 
 .. note::
-   ``MasettiMobility``, ``CanaliFieldDependence``,
+   ``MasettiMobility``, ``AlloyMobility``, ``CanaliFieldDependence``,
    ``TransferredElectronFieldDependence`` and ``LombardiSurfaceDependence`` are
    supported only on the accelerated solver. ``CanaliFieldDependence`` (high-field
    velocity saturation) and ``TransferredElectronFieldDependence`` (the negative
    differential mobility of direct-gap III-V semiconductors) attach to any of the
    low-field mobility models through ``field_dependence``, and
    ``LombardiSurfaceDependence`` adds surface degradation near
-   semiconductor/insulator interfaces to ``CaugheyThomasMobility`` and
-   ``MasettiMobility`` through ``surface_dependence``.
+   semiconductor/insulator interfaces to ``CaugheyThomasMobility``,
+   ``MasettiMobility`` and ``AlloyMobility`` through ``surface_dependence``.
 
 Generation Recombination
 ^^^^^^^^^^^^^^^^^^^^^^^^^

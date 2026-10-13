@@ -72,6 +72,7 @@ from tidy3d.components.tcad.mobility import (
     CANALI_BETA_MAX,
     CANALI_BETA_MIN,
     V_SAT_FLOOR,
+    AlloyMobility,
     CanaliFieldDependence,
     MasettiMobility,
 )
@@ -658,6 +659,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 ("structures",), self._check_charge_simulation_semiconductors
             )
             self._call_with_validation_loc(("structures",), self._check_masetti_mobility_models)
+            self._call_with_validation_loc(("structures",), self._check_alloy_mobility_models)
             self._call_with_validation_loc(
                 ("structures",), self._check_field_dependence_mobility_models
             )
@@ -3945,6 +3947,12 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
         ):
             features.append("MasettiMobility")
+        if any(
+            isinstance(charge.mobility_n, AlloyMobility)
+            or isinstance(charge.mobility_p, AlloyMobility)
+            for _loc, charge in self._iter_semiconductor_charge_media()
+        ):
+            features.append("AlloyMobility")
         field_dependence_names = {
             type(mobility.field_dependence).__name__
             for _loc, charge in self._iter_semiconductor_charge_media()
@@ -4128,6 +4136,38 @@ class HeatChargeSimulation(AbstractSimulation):
         values = np.asarray(getattr(temperature, "values", temperature), dtype=float).reshape(-1)
         return float(values.min()), float(values.max())
 
+    def _mobility_temperature_candidates(self) -> list[float]:
+        """Lattice temperatures [K] a mobility check samples.
+
+        The prescribed extremes when the analysis has any, else 300 K and every
+        heat-boundary temperature, which bound a solved-for temperature.
+        """
+        extremes = self._analysis_temperature_extremes()
+        if extremes is not None:
+            return list(extremes)
+        return [
+            300.0,
+            *(
+                bc.condition.temperature
+                if isinstance(bc.condition, TemperatureBC)
+                else bc.condition.ambient_temperature
+                for bc in self.boundary_spec
+                if isinstance(bc.condition, (TemperatureBC, ConvectionBC, RadiationBC))
+            ),
+        ]
+
+    def _check_mobility_family_for_both_carriers(self, family: type) -> None:
+        """Error if a semiconductor medium uses ``family`` for only one carrier."""
+        for loc, charge in self._iter_semiconductor_charge_media():
+            if isinstance(charge.mobility_n, family) != isinstance(charge.mobility_p, family):
+                self._raise_validation_error_at_loc(
+                    f"{family.__name__} must be used for both electron and hole mobility "
+                    f"models in a semiconductor medium. Mixing {family.__name__} with "
+                    "another mobility family is not supported by the accelerated "
+                    "charge solver.",
+                    *loc,
+                )
+
     def _check_masetti_mobility_models(self) -> Self:
         """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0.
 
@@ -4135,24 +4175,12 @@ class HeatChargeSimulation(AbstractSimulation):
         or ``("structures", i)``) so the user is pointed at the exact field to
         fix; the iteration helper yields the loc alongside each charge spec.
 
-        A prescribed lattice temperature makes ``temperature`` a whole field, so the
-        asymptote is checked at the field's extremes rather than at a single value.
+        The asymptote is checked at every candidate temperature, since the sign of
+        'exp_0' decides which one is worst.
         """
-        # Both extremes, since the sign of 'exp_0' decides which end is worst.
-        candidate_temperatures = self._analysis_temperature_extremes() or ()
+        self._check_mobility_family_for_both_carriers(MasettiMobility)
+        candidate_temperatures = self._mobility_temperature_candidates()
         for loc, charge in self._iter_semiconductor_charge_media():
-            n_is_masetti = isinstance(charge.mobility_n, MasettiMobility)
-            p_is_masetti = isinstance(charge.mobility_p, MasettiMobility)
-            if n_is_masetti != p_is_masetti:
-                self._raise_validation_error_at_loc(
-                    "MasettiMobility must be used for both electron and hole mobility "
-                    "models in a semiconductor medium. Mixing MasettiMobility with "
-                    "another mobility family is not supported by the accelerated "
-                    "charge solver.",
-                    *loc,
-                )
-            if not candidate_temperatures:
-                continue
             for carrier, mobility in (
                 ("electron", charge.mobility_n),
                 ("hole", charge.mobility_p),
@@ -4175,6 +4203,41 @@ class HeatChargeSimulation(AbstractSimulation):
                         "increase 'mu_0', or lower the lattice temperature.",
                         *loc,
                     )
+        return self
+
+    def _check_alloy_mobility_models(self) -> Self:
+        """Error if AlloyMobility is mixed with another family or its mobility is not positive.
+
+        Only a negative 'mu_alloy' can make '1/mu' non-positive. It is checked at doping 0
+        and 1e10-1e23 cm^-3 over the analysis temperature range; when the temperature is
+        solved for, that range spans 300 K and every heat-boundary temperature.
+        """
+        self._check_mobility_family_for_both_carriers(AlloyMobility)
+        candidates = self._mobility_temperature_candidates()
+        temperatures = np.linspace(min(candidates), max(candidates), 9)
+        doping = np.concatenate(([0.0], np.logspace(10, 23, 27)))
+        for loc, charge in self._iter_semiconductor_charge_media():
+            for carrier, mobility in (
+                ("electron", charge.mobility_n),
+                ("hole", charge.mobility_p),
+            ):
+                if not isinstance(mobility, AlloyMobility):
+                    continue
+                if mobility.mu_alloy is None or mobility.mu_alloy > 0.0:
+                    continue
+                for temperature in temperatures:
+                    inv_mu = mobility._inverse_low_field_mobility(doping, temperature)
+                    worst = int(np.argmin(inv_mu))
+                    if inv_mu[worst] <= 0.0:
+                        medium = f" of medium '{charge.name}'" if charge.name else ""
+                        self._raise_validation_error_at_loc(
+                            f"AlloyMobility {carrier} mobility{medium} is not positive at "
+                            f"doping {doping[worst]:.3g} cm^-3 and {temperature:g} K: the "
+                            f"negative 'mu_alloy' ({mobility.mu_alloy:g}) outweighs the "
+                            "end-member terms of '1/mu'. Increase the magnitude of 'mu_alloy' "
+                            "or check the end-member mobilities.",
+                            *loc,
+                        )
         return self
 
     @staticmethod

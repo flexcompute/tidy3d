@@ -139,6 +139,7 @@ from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.tcad.types import (
+    AlloyMobility,
     AugerRecombination,
     CaugheyThomasMobility,
     ConstantEffectiveDOS,
@@ -625,6 +626,7 @@ __all__ = [
     "AbstractFieldProjectionData",
     "AbstractMedium",
     "AdmittanceNetwork",
+    "AlloyMobility",
     "AnisotropicConductivity",
     "AnisotropicMedium",
     "AntennaMetricsData",

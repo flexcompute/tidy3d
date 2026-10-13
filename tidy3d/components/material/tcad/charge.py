@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
 
 from tidy3d._runtime import always_validate
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
 from tidy3d.components.tcad.types import (
+    AlloyMobility,
     BandGapNarrowingModelType,
     ConstantEffectiveDOS,
     ConstantEnergyBandGap,
@@ -459,3 +460,27 @@ class SemiconductorMedium(AbstractChargeMedium):
             )
             return (ConstantDoping(concentration=val),)
         return val
+
+    @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._check_alloy_mole_fractions_match()
+        return self
+
+    def _check_alloy_mole_fractions_match(self) -> Self:
+        """Electrons and holes of one medium see the same alloy composition."""
+        if (
+            isinstance(self.mobility_n, AlloyMobility)
+            and isinstance(self.mobility_p, AlloyMobility)
+            and self.mobility_n.mole_fraction != self.mobility_p.mole_fraction
+        ):
+            # repr, so two unequal floats never print as the same number.
+            self._raise_validation_error_at_loc(
+                f"'mobility_n.mole_fraction' ({self.mobility_n.mole_fraction!r}) and "
+                f"'mobility_p.mole_fraction' ({self.mobility_p.mole_fraction!r}) must be equal: "
+                "both describe the composition of the same alloy.",
+                "mobility_p",
+                "mole_fraction",
+            )
+        return self

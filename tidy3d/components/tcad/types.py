@@ -35,6 +35,7 @@ from tidy3d.components.tcad.generation_recombination import (
     ShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.mobility import (
+    AlloyMobility,
     CaugheyThomasMobility,
     ConstantMobilityModel,
     MasettiMobility,
@@ -58,7 +59,7 @@ EffectiveDOSModelType = (
     ConstantEffectiveDOS | IsotropicEffectiveDOS | MultiValleyEffectiveDOS | DualValleyEffectiveDOS
 )
 EnergyBandGapModelType = ConstantEnergyBandGap | VarshniEnergyBandGap
-MobilityModelType = CaugheyThomasMobility | ConstantMobilityModel | MasettiMobility
+MobilityModelType = CaugheyThomasMobility | ConstantMobilityModel | MasettiMobility | AlloyMobility
 RecombinationModelType = (
     AugerRecombination
     | DistributedGeneration

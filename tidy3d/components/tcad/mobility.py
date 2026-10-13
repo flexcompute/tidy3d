@@ -10,6 +10,8 @@ from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import MICROMETER, PERCMCUBE
 
 if TYPE_CHECKING:
+    import numpy as np
+
     from tidy3d.compat import Self
 
 
@@ -707,6 +709,15 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
         description=_SURFACE_DEPENDENCE_DESCRIPTION,
     )
 
+    def _low_field_mobility(self, doping: np.ndarray, temperature: float) -> np.ndarray:
+        """Low-field mobility [cm^2/V-s] at the given doping [cm^-3] and temperature [K]."""
+        scale = temperature / 300.0
+        mu_min = self.mu_min * scale**self.exp_1
+        mu_max = self.mu * scale**self.exp_2
+        ref_N = self.ref_N * scale**self.exp_3
+        exp_N = self.exp_N * scale**self.exp_4
+        return mu_min + (mu_max - mu_min) / (1.0 + (doping / ref_N) ** exp_N)
+
 
 class MasettiMobility(Tidy3dBaseModel):
     """The Masetti doping-dependent low-field carrier mobility model.
@@ -919,3 +930,176 @@ class MasettiMobility(Tidy3dBaseModel):
     def mu_min2_resolved(self) -> float:
         """'mu_min2', or 'mu_0' when it is not set."""
         return self.mu_0 if self.mu_min2 is None else self.mu_min2
+
+
+class AlloyMobility(Tidy3dBaseModel):
+    """Low-field carrier mobility of a III-V alloy, interpolated between two end members.
+
+    Notes
+    -----
+        The mobility of a ternary or pseudo-binary alloy :math:`A_{1-x}B_x` is the harmonic
+        interpolation of the doping- and temperature-dependent end-member mobilities, plus an
+        alloy-scattering term [1]_:
+
+        .. math::
+
+            \\frac{1}{\\mu(N,T)} = \\frac{1-x}{\\mu_{x0}(N,T)} + \\frac{x}{\\mu_{x1}(N,T)}
+            + \\frac{x(1-x)}{\\mu_{alloy}}
+
+    where :math:`N` is the total doping (acceptors + donors) and :math:`\\mu_{x0}` and
+    :math:`\\mu_{x1}` are the :class:`CaugheyThomasMobility` of the end members :math:`A`
+    (:math:`x = 0`) and :math:`B` (:math:`x = 1`). As in [1]_, the end members are the full
+    low-field mobilities, with lattice and impurity scattering. The alloy-scattering term
+    vanishes at both end members. :math:`\\mu_{alloy}` is sign free: a positive value lowers
+    the mobility (alloy scattering), a negative one raises it.
+
+    The model is single-valley: for electrons it describes one conduction-band valley and
+    holds only where that valley dominates transport, e.g.
+    :math:`\\mathrm{Al}_x\\mathrm{Ga}_{1-x}\\mathrm{As}` electrons in the :math:`\\Gamma`-valley
+    range :math:`x < 0.45`. A negative
+    :math:`\\mu_{alloy}` can drive :math:`1/\\mu` to zero at low temperature. With the
+    :math:`\\mathrm{Al}_x\\mathrm{Ga}_{1-x}\\mathrm{As}` :math:`\\Gamma`-valley electron values
+    of [1]_ (GaAs and AlAs lattice mobilities of 8500 and 250 :math:`\\text{cm}^2/\\text{V-s}`,
+    :math:`\\mu_{alloy} = -250` :math:`\\text{cm}^2/\\text{V-s}`), :math:`1/\\mu` reaches zero
+    below about 220-260 K at low doping for :math:`x < 0.45`. A setup that does so is rejected
+    when its temperatures are known: the prescribed temperature, or 300 K and the
+    heat-boundary temperatures when the temperature is solved for. If a solved lattice
+    temperature still drives :math:`1/\\mu` to zero, the solver stops with an error naming the
+    zone, carrier, temperature and doping. An end member may itself be an alloy described by
+    its own :class:`CaugheyThomasMobility` fit, e.g. InGaAsP lattice-matched to InP as an
+    interpolation between InP and In0.53Ga0.47As.
+
+    This model is supported only by the accelerated charge solver. It must be used for
+    both electron and hole mobility within a semiconductor medium, with the same
+    ``mole_fraction``.
+
+    The following table maps the symbols used in the equations above with the names used in
+    the code:
+
+    .. list-table::
+       :widths: 25 25 75
+       :header-rows: 1
+
+       * - Symbol
+         - Parameter Name
+         - Description
+       * - :math:`\\mu_{x0}`
+         - ``mobility_x0``
+         - Mobility of the :math:`x = 0` end member.
+       * - :math:`\\mu_{x1}`
+         - ``mobility_x1``
+         - Mobility of the :math:`x = 1` end member.
+       * - :math:`x`
+         - ``mole_fraction``
+         - Mole fraction of the :math:`x = 1` end member.
+       * - :math:`\\mu_{alloy}`
+         - ``mu_alloy``
+         - Alloy-scattering (bowing) mobility.
+
+    .. [1] V. Palankovski and R. Quay. Analysis and Simulation of Heterostructure Devices.
+           Springer, Vienna, 2004.
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> mobility_GaAs_n = td.CaugheyThomasMobility(
+        ...   mu_min=800.0,
+        ...   mu=8500.0,
+        ...   ref_N=1e17,
+        ...   exp_N=0.5,
+        ...   exp_1=-0.9,
+        ...   exp_2=-2.2,
+        ...   exp_3=6.2,
+        ...   exp_4=0.0,
+        ... )
+        >>> mobility_InAs_n = td.CaugheyThomasMobility(
+        ...   mu_min=11700.0,
+        ...   mu=32500.0,
+        ...   ref_N=4.4e16,
+        ...   exp_N=0.5,
+        ...   exp_1=-0.33,
+        ...   exp_2=-1.7,
+        ...   exp_3=3.6,
+        ...   exp_4=0.0,
+        ... )
+        >>> mobility_InGaAs_n = td.AlloyMobility(
+        ...   mobility_x0=mobility_GaAs_n,
+        ...   mobility_x1=mobility_InAs_n,
+        ...   mole_fraction=0.53,
+        ... )
+    """
+
+    mobility_x0: CaugheyThomasMobility = Field(
+        title="End-member mobility at mole fraction 0",
+        description="Low-field mobility of the end member at ``mole_fraction = 0``. "
+        "Must not set 'field_dependence' or 'surface_dependence'.",
+    )
+
+    mobility_x1: CaugheyThomasMobility = Field(
+        title="End-member mobility at mole fraction 1",
+        description="Low-field mobility of the end member at ``mole_fraction = 1``. "
+        "Must not set 'field_dependence' or 'surface_dependence'.",
+    )
+
+    mole_fraction: float = Field(
+        ge=0.0,
+        le=1.0,
+        title="Mole fraction",
+        description="Mole fraction of the 'mobility_x1' end member.",
+    )
+
+    mu_alloy: float | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        title="Alloy-scattering mobility",
+        description="Alloy-scattering (bowing) mobility :math:`\\mu_{alloy}`. Positive values "
+        "lower the alloy mobility, negative values raise it. When ``None``, there is no "
+        "bowing term.",
+        json_schema_extra={"units": "cm^2/V-s"},
+    )
+
+    field_dependence: FieldDependenceType | None = Field(
+        default=None,
+        discriminator=TYPE_TAG_STR,
+        title="High-field mobility dependence",
+        description=_FIELD_DEPENDENCE_DESCRIPTION,
+    )
+
+    surface_dependence: LombardiSurfaceDependence | None = Field(
+        default=None,
+        title="Surface mobility dependence",
+        description=_SURFACE_DEPENDENCE_DESCRIPTION,
+    )
+
+    @model_validator(mode="after")
+    def _validate_mu_alloy_nonzero(self) -> Self:
+        """A zero bowing mobility would divide by zero; ``None`` disables the term."""
+        if self.mu_alloy == 0.0:
+            self._raise_validation_error_at_loc(
+                "'mu_alloy' must be nonzero; use 'None' for no alloy-scattering term.", "mu_alloy"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_end_members_low_field_only(self) -> Self:
+        """The high-field and surface models act on the alloy mobility, not on an end member."""
+        for name in ("mobility_x0", "mobility_x1"):
+            end_member = getattr(self, name)
+            for dependence in ("field_dependence", "surface_dependence"):
+                if getattr(end_member, dependence) is not None:
+                    self._raise_validation_error_at_loc(
+                        f"'{name}.{dependence}' must be 'None'; set '{dependence}' on the "
+                        "'AlloyMobility' instead, where it applies to the alloy mobility.",
+                        name,
+                        dependence,
+                    )
+        return self
+
+    def _inverse_low_field_mobility(self, doping: np.ndarray, temperature: float) -> np.ndarray:
+        """Inverse low-field mobility [V-s/cm^2], whose sign tells whether the mobility is valid."""
+        inverse = (1.0 - self.mole_fraction) / self.mobility_x0._low_field_mobility(
+            doping, temperature
+        ) + self.mole_fraction / self.mobility_x1._low_field_mobility(doping, temperature)
+        if self.mu_alloy is not None:
+            inverse = inverse + self.mole_fraction * (1.0 - self.mole_fraction) / self.mu_alloy
+        return inverse
