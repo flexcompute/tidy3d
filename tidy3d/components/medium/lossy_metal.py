@@ -131,7 +131,9 @@ class LossyMetalMedium(Medium):
     @classmethod
     def _validate_frequency_range(cls, val: FreqBound) -> FreqBound:
         """Validate that frequency range is finite and non-zero."""
-        from flexcompute.core._migration.em.medium.validation import validate_frequency_range
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_frequency_range,
+        )
 
         if diagnostics := validate_frequency_range(val):
             raise ValidationError(diagnostics[0].message)

@@ -229,6 +229,15 @@ COMPONENT_SCOPES: dict[str, tuple[str, str] | None] = {
         "flexcompute.core._migration.em.eme.schema.sweep:EMEPeriodicitySweep",
         "flexcompute.core._migration.em.eme.validation:validate",
     ),
+    # medium
+    "tidy3d.components.time_modulation:SpaceModulation": (
+        "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
+        "flexcompute.core._migration.em.material.time_modulation.validation:validate",
+    ),
+    "tidy3d.components.time_modulation:ModulationSpec": (
+        "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:ModulationSpec",
+        "flexcompute.core._migration.em.material.time_modulation.validation:validate",
+    ),
 }
 
 
@@ -240,6 +249,8 @@ COMPONENT_CONSTRUCTION_TYPES = frozenset(
         "tidy3d.components.eme.grid:EMECompositeGrid",
         "tidy3d.components.eme.grid:EMEGrid",
         "tidy3d.components.eme.sweep:EMEPeriodicitySweep",
+        # medium
+        "tidy3d.components.time_modulation:ModulationSpec",
     }
 )
 

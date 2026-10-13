@@ -7,14 +7,13 @@ from math import isclose
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator, model_validator
+from pydantic import Field, PositiveFloat, field_validator
 
 from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import SpatialDataArray
-from .data.validators import validate_no_nans
 from .time import AbstractTimeDependence
 from .types import InterpMethod
 
@@ -157,7 +156,23 @@ class SpaceModulation(AbstractSpaceModulation):
         description="Method of interpolation to use to obtain values at spatial locations on the Yee grids.",
     )
 
-    _no_nans = validate_no_nans("amplitude", "phase")
+    # These two field adapters stay in the client while the other time-modulation rules run
+    # through the shared construction path: the docstring generator builds a default
+    # SpaceModulation() at import, and translating it there would load the mirror modules
+    # at `import tidy3d` (plan P5). The rules themselves live once, in core.
+    @field_validator("amplitude", "phase")
+    @classmethod
+    def _no_nans(
+        cls, val: float | SpatialDataArray, info: FieldValidationInfo
+    ) -> float | SpatialDataArray:
+        """Reject NaN in the amplitude or phase."""
+        from flexcompute.core._migration.em.material.time_modulation.validation import (
+            validate_no_nan_field,
+        )
+
+        if diagnostics := validate_no_nan_field(val, info.field_name):
+            raise ValidationError(diagnostics[0].message)
+        return val
 
     @field_validator("amplitude", "phase")
     @classmethod
@@ -165,8 +180,12 @@ class SpaceModulation(AbstractSpaceModulation):
         cls, val: float | SpatialDataArray, info: FieldValidationInfo
     ) -> float | SpatialDataArray:
         """Assert that the amplitude is real."""
-        if np.iscomplexobj(val):
-            raise ValidationError(f"'{info.field_name}' must be real.")
+        from flexcompute.core._migration.em.material.time_modulation.validation import (
+            validate_real_field,
+        )
+
+        if diagnostics := validate_real_field(val, info.field_name):
+            raise ValidationError(diagnostics[0].message)
         return val
 
     @cached_property
@@ -282,19 +301,6 @@ class ModulationSpec(Tidy3dBaseModel):
         description="Space-time modulation of electric conductivity "
         "applied on top of the base conductivity.",
     )
-
-    @model_validator(mode="after")
-    def _check_same_modulation_frequency(self) -> Self:
-        """Assert same time-modulation applied to permittivity and conductivity."""
-        if self.conductivity is not None and self.permittivity is not None:
-            if self.conductivity.time_modulation != self.permittivity.time_modulation:
-                self._raise_validation_error_at_loc(
-                    ValidationError(
-                        "'permittivity' and 'conductivity' should have the same time modulation."
-                    ),
-                    "conductivity",
-                )
-        return self
 
     @cached_property
     def applied_modulation(self) -> bool:
