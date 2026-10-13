@@ -3375,6 +3375,9 @@ class HeatChargeSimulation(AbstractSimulation):
             # loop through background_shapes (note: all background are non-intersecting or merged)
             # this is similar to _filter_structures_plane but only mediums participating in BCs
             # are tracked
+            # new interfaces lie on this structure's own shape; `shape` grows below when it
+            # merges with background shapes of the same medium, whose interfaces already exist
+            structure_shape = shape
             for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
                 if Box._do_not_intersect(bounds, _bounds, shape, _shape):
                     continue
@@ -3389,7 +3392,12 @@ class HeatChargeSimulation(AbstractSimulation):
                     # create a new boundary segment
                     for bc_spec in med_to_bc_spec[_medium.name]:
                         if medium.name in bc_spec.placement.mediums:
-                            bdry = shape.exterior.intersection(_shape)
+                            bdry = structure_shape.boundary.intersection(_shape)
+                            # drop edges where the structure covers _shape's own boundary,
+                            # since _shape no longer touches them (e.g. a layer whose bottom
+                            # face lies on an earlier substrate that already cut _shape)
+                            covered = _shape.boundary.intersection(structure_shape) - diff_shape
+                            bdry = bdry - covered
                             bdry = bdry.intersection(background_structure_shape)
                             boundaries.append((bc_spec, name, bdry, bdry.bounds))
 
