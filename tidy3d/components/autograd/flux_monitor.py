@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from flexcompute.core._migration.em.derivatives import (
-    flux_adjoint_helper_name,
-    is_flux_adjoint_helper_name,  # noqa: F401 — re-exported for the client and backend
-)
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -15,6 +11,14 @@ from tidy3d.components.monitor import FluxMonitor
 
 if TYPE_CHECKING:
     from tidy3d.components.monitor import FieldMonitor
+
+
+def is_flux_adjoint_helper_name(name: str) -> bool:
+    """Whether ``name`` is a hidden flux-adjoint helper monitor's."""
+    # The derivatives package loads the schema mirror, which `import tidy3d` must not load.
+    from flexcompute.core._migration.em.derivatives import is_flux_adjoint_helper_name as is_helper
+
+    return is_helper(name)
 
 
 class FluxMonitorHelperSpec(Tidy3dBaseModel):
@@ -38,6 +42,8 @@ def build_flux_monitor_adjoint_layout(
     monitors: tuple | list,
 ) -> tuple[FluxMonitorAdjointLayout, tuple[FieldMonitor, ...]]:
     """Build the hidden field monitors needed to differentiate stored flux data."""
+    from flexcompute.core._migration.em.derivatives import flux_adjoint_helper_name
+
     helper_specs = []
     helper_monitors = []
 

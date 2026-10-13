@@ -20,43 +20,65 @@ if TYPE_CHECKING:
     from tidy3d.components.base import Tidy3dBaseModel
 
 
+def _key(cls: type) -> str:
+    return f"{cls.__module__}:{cls.__name__}"
+
+
+def _translating_class(cls: type) -> type | None:
+    """Return the class whose registration translates ``cls``; ``None`` opts out.
+
+    A Tidy3D class translates only through its own registration, so a family member
+    that misses one fails instead of opting out. A subclass defined outside Tidy3D
+    translates through its nearest ancestor with a schema.
+    """
+    if COMPONENT_SCOPES.get(_key(cls)) is not None:
+        return cls
+    family = [base for base in cls.__mro__ if _key(base) in COMPONENT_SCOPES]
+    if not family:
+        return None
+    owner = next((base for base in family if COMPONENT_SCOPES[_key(base)] is not None), None)
+    if owner is not None and cls.__module__.partition(".")[0] != "tidy3d":
+        return owner
+    raise NotImplementedError(
+        f"{cls.__name__} must register its EM schema in tidy3d.em.translate.map."
+    )
+
+
 def from_component(model: BaseModel) -> object | None:
     """Translate registered models; unrelated models opt out, missing family members fail."""
-    cls = type(model)
-    registration = COMPONENT_SCOPES.get(f"{cls.__module__}:{cls.__name__}")
-    if registration is None:
-        if any(f"{base.__module__}:{base.__name__}" in COMPONENT_SCOPES for base in cls.__mro__):
-            raise NotImplementedError(
-                f"{cls.__name__} must register its EM schema in tidy3d.em.translate.map."
-            )
+    owner = _translating_class(type(model))
+    if owner is None:
         return None
     from flexcompute.core._migration.em.schema.tidy3d.log import log as copied_log
 
+    data = model.model_dump()
+    if owner is not type(model):
+        from tidy3d.components.types import TYPE_TAG_STR
+
+        # A subclass validates as its ancestor, without the fields it adds; the schema
+        # fills in the ancestor's type tag.
+        data = {
+            name: data[name] for name in owner.model_fields.keys() - {TYPE_TAG_STR} if name in data
+        }
     # The public model already logged its warnings; copies would repeat them past td.log.
     with copied_log.suppress_output():
-        return resolve(registration[0]).model_validate(model.model_dump())
+        return resolve(COMPONENT_SCOPES[_key(owner)][0]).model_validate(data)
 
 
 def validate_component(
     model: BaseModel, schema: object, *, context: Mapping[str, Any]
 ) -> ValidationReport | None:
     """Run the registered facade; current EME scopes require no external context."""
-    cls = type(model)
-    registration = COMPONENT_SCOPES.get(f"{cls.__module__}:{cls.__name__}")
-    if registration is None:
+    owner = _translating_class(type(model))
+    if owner is None:
         return None
-    return resolve(registration[1])(schema)
+    return resolve(COMPONENT_SCOPES[_key(owner)][1])(schema)
 
 
 def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
     """Run registered shared semantics; leave unrelated/client-specific validation alone."""
-    cls = type(model)
-    key = f"{cls.__module__}:{cls.__name__}"
-    if key not in COMPONENT_CONSTRUCTION_TYPES:
-        if key not in COMPONENT_SCOPES and any(
-            f"{base.__module__}:{base.__name__}" in COMPONENT_SCOPES for base in cls.__mro__
-        ):
-            from_component(model)  # Missing family registrations must fail, not silently opt out.
+    owner = _translating_class(type(model))  # Missing family registrations fail here.
+    if owner is None or _key(owner) not in COMPONENT_CONSTRUCTION_TYPES:
         return model
     return model._run_migrated_model_rules(
         error_types={code: resolve(path) for code, path in COMPONENT_ERROR_TYPES.items()}

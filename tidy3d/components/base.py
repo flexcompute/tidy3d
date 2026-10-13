@@ -478,7 +478,14 @@ class Tidy3dBaseModel(BaseModel):
 
             @model_validator(mode="after")
             def __tidy3d_end_capture__(self: T) -> T:
-                validate_on_construction(self)
+                try:
+                    validate_on_construction(self)
+                except Exception:
+                    # This validator runs outside the wrap validator that aborts a failed
+                    # model's capture frame, so drop the frame here.
+                    if log._capture:
+                        log.abort_capture()
+                    raise
                 if log._capture:
                     log.end_capture(self)
                 return self
@@ -674,13 +681,22 @@ class Tidy3dBaseModel(BaseModel):
             elif diagnostic.path:
                 error_type = (error_types or {}).get(diagnostic.code)
                 if error_type is not None:
+                    # Report the value at the path as the input, as a field validator did.
+                    value: Any = self
+                    try:
+                        for key in diagnostic.path:
+                            value = (
+                                value.__dict__[key] if isinstance(value, BaseModel) else value[key]
+                            )
+                    except (KeyError, IndexError, TypeError):
+                        value = None
                     raise PydanticValidationError.from_exception_data(
                         type(self).__name__,
                         [
                             InitErrorDetails(
                                 type="value_error",
                                 loc=diagnostic.path,
-                                input=None,
+                                input=value,
                                 ctx={"error": error_type(diagnostic.message)},
                             )
                         ],
