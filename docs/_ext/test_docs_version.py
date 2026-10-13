@@ -18,3 +18,7 @@ def test_normalize_docs_version_maps_branch_style_values_to_public_slugs():
     assert normalize_docs_version("refs/heads/develop") == "stable"
     assert normalize_docs_version("origin/main") == "latest"
     assert normalize_docs_version("feature/docs-preview") == "latest"
+
+
+def test_normalize_docs_version_preserves_preview_alias():
+    assert normalize_docs_version("preview") == "preview"

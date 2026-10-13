@@ -34,4 +34,6 @@ def normalize_docs_version(version_value: str) -> str:
         return "stable"
     if version_alias in {"latest", "main", "master"}:
         return "latest"
+    if version_alias == "preview":
+        return "preview"
     return "latest"
