@@ -31,6 +31,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 
 from tidy3d._runtime import WASM_BUILD
 from tidy3d.components.base import TYPE_TO_CLASS_MAP, Tidy3dBaseModel, cached_property
+from tidy3d.components.medium.protected import warn_protected_surrogate
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
@@ -1977,6 +1978,8 @@ class Job(WebContainer):
                     self._raise_if_step_failed(step, status)
                     self._raise_if_step_blocks_downstream(step, status)
 
+                if verbose:
+                    warn_protected_surrogate(step.operation, "Hosted cost estimates")
                 estimate = task_api.estimate_cost_info(
                     task_id,
                     verbose=verbose,
@@ -2001,6 +2004,8 @@ class Job(WebContainer):
 
         if self.load_if_cached:
             return task_api.FlexCreditEstimate(maximum=0.0)
+        if verbose:
+            warn_protected_surrogate(self.simulation, "Hosted cost estimates")
         return task_api.estimate_cost_info(
             self.task_id,
             verbose=verbose,
@@ -4407,6 +4412,8 @@ class Batch(WebContainer):
             the shared next workflow step across the batch. If every workflow
             step is complete, returns ``0.0``.
         """
+        if verbose:
+            warn_protected_surrogate(self, "Hosted batch cost estimates")
         if any(job.is_multi_step for job in self.jobs.values()):
             uniform_multi_step_jobs = self._uniform_multi_step_jobs()
             if uniform_multi_step_jobs is not None and len(uniform_multi_step_jobs) == len(

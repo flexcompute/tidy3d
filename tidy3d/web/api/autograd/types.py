@@ -15,7 +15,7 @@ from tidy3d.exceptions import AdjointError, format_chained_exception_message
 if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.geometry.utils import GeometryType
-    from tidy3d.components.medium import MediumType
+    from tidy3d.components.medium import PublicMediumType
     from tidy3d.components.simulation import Simulation
     from tidy3d.components.structure import Structure
 
@@ -32,7 +32,7 @@ class DerivativeView:
     geometry: GeometryType | None = None
     """Optional geometry override for the query target structure."""
 
-    medium: MediumType | None = None
+    medium: PublicMediumType | None = None
     """Optional medium override for the query target structure."""
 
 
@@ -340,12 +340,14 @@ class CustomVJPConfig:
         )
     """
 
-    structure: int | type[GeometryType] | type[MediumType]
+    structure: int | type[GeometryType] | type[PublicMediumType]
     """Target existing traced structure(s) in ``("structures", ...)`` namespace.
     Can be an index or a geometry/medium type (expanded to matching indices).
     """
 
-    compute_derivatives: Callable[[GeometryType | MediumType, DerivativeInfo], dict[PathType, Any]]
+    compute_derivatives: Callable[
+        [GeometryType | PublicMediumType, DerivativeInfo], dict[PathType, Any]
+    ]
     """Function for computing the targeted vjp value. The function should accept the geometry or medium in the
     structure depending on if this is a geometry or medium path (see path_key) as the first argument. The second
     argument should accept a DerivativeInfo object that contains important for computing the gradient. The function

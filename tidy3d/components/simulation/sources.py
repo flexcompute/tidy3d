@@ -37,7 +37,8 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
-    from tidy3d.components.medium import AbstractMedium, MediumType3D
+    from tidy3d.components.material.types import StructureMediumType
+    from tidy3d.components.medium import AbstractMedium
     from tidy3d.components.types import ArrayFloat1D
 
 from . import constants
@@ -178,14 +179,6 @@ def _source_homogeneous_isotropic(self: Any) -> Self:
                     )
             if isinstance(source, PlaneWave | GaussianBeam | AstigmaticGaussianBeam | ThinLensBeam):
                 mediums = Scene.intersecting_media(source, total_structures)
-                # make sure there is no more than one medium in the returned list
-                if len(mediums) > 1:
-                    self._raise_validation_error_at_loc(
-                        f"{len(mediums)} different mediums detected on plane "
-                        f"intersecting a {source.type} source. Plane must be homogeneous.",
-                        "sources",
-                        source_id,
-                    )
                 # 0 medium, something is wrong
                 if len(mediums) < 1:
                     self._raise_validation_error_at_loc(
@@ -195,8 +188,24 @@ def _source_homogeneous_isotropic(self: Any) -> Self:
                         "sources",
                         source_id,
                     )
-                src_medium = list(mediums)[0]
-                if isinstance(src_medium, AnisotropicMedium | FullyAnisotropicMedium):
+                public_mediums = {
+                    Structure._get_public_optical_medium(medium) for medium in mediums
+                }
+                if len(public_mediums) > 1:
+                    self._raise_validation_error_at_loc(
+                        f"{len(public_mediums)} different public optical mediums detected on plane "
+                        f"intersecting a {source.type} source. Plane must be homogeneous.",
+                        "sources",
+                        source_id,
+                    )
+                src_public_medium = next(iter(public_mediums))
+                if src_public_medium is None:
+                    self._raise_validation_error_at_loc(
+                        f"No optical medium detected on plane intersecting a {source.type} source.",
+                        "sources",
+                        source_id,
+                    )
+                if isinstance(src_public_medium, AnisotropicMedium | FullyAnisotropicMedium):
                     self._raise_validation_error_at_loc(
                         f"An anisotropic medium is detected on plane intersecting a {source.type} "
                         f"source. Injection of {source.type} into anisotropic media currently is "
@@ -206,7 +215,7 @@ def _source_homogeneous_isotropic(self: Any) -> Self:
                     )
 
                 # check if the medium is spatially uniform
-                if not src_medium.is_spatially_uniform:
+                if not src_public_medium.is_spatially_uniform:
                     consolidated_logger.warning(
                         f"Nonuniform custom medium detected on plane intersecting a {source.type}. "
                         "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
@@ -215,7 +224,8 @@ def _source_homogeneous_isotropic(self: Any) -> Self:
 
                 if isinstance(source, PlaneWave) and source._is_periodic_fixed_angle:
                     is_lossless_dieletric = (
-                        isinstance(src_medium, Medium) and src_medium.conductivity == 0
+                        isinstance(src_public_medium, Medium)
+                        and src_public_medium.conductivity == 0
                     )
 
                     if not is_lossless_dieletric:
@@ -246,7 +256,7 @@ def _source_homogeneous_isotropic(self: Any) -> Self:
                     optical_path_length = []
                     freqs = source.frequency_grid
                     for freq in freqs:
-                        n_freq, _ = src_medium.nk_model(frequency=freq)
+                        n_freq, _ = src_public_medium.nk_model(frequency=freq)
                         k0 = 2 * np.pi * n_freq * freq / C_0
                         if isinstance(source, GaussianBeam):
                             rad = radius(source.waist_radius, source.waist_distance, k0)
@@ -415,19 +425,12 @@ def _validate_gaussian_like_beam_background_medium(
     self: Any,
     *,
     beam_obj: ThinLensBeam | AbstractGaussianOverlapMonitor,
-    mediums: set[MediumType3D],
+    mediums: set[StructureMediumType],
     freqs: ArrayFloat1D,
     loc_root: str,
     loc_ind: int,
 ) -> None:
     """Validate background assumptions used by Gaussian-like beam formulas."""
-    if len(mediums) > 1:
-        self._raise_validation_error_at_loc(
-            f"{len(mediums)} different mediums detected on plane intersecting a "
-            f"{beam_obj.type}. Plane must be homogeneous.",
-            loc_root,
-            loc_ind,
-        )
     if len(mediums) < 1:
         self._raise_validation_error_at_loc(
             f"No medium detected on plane intersecting a {beam_obj.type}, "
@@ -437,15 +440,31 @@ def _validate_gaussian_like_beam_background_medium(
             loc_ind,
         )
 
-    medium = next(iter(mediums))
-    if isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium):
+    public_mediums = {Structure._get_public_optical_medium(medium) for medium in mediums}
+    if len(public_mediums) > 1:
+        self._raise_validation_error_at_loc(
+            f"{len(public_mediums)} different public optical mediums detected on plane "
+            f"intersecting a {beam_obj.type}. Plane must be homogeneous.",
+            loc_root,
+            loc_ind,
+        )
+
+    public_medium = next(iter(public_mediums))
+    if public_medium is None:
+        self._raise_validation_error_at_loc(
+            f"No optical medium detected on plane intersecting a {beam_obj.type}.",
+            loc_root,
+            loc_ind,
+        )
+
+    if isinstance(public_medium, AnisotropicMedium | FullyAnisotropicMedium):
         self._raise_validation_error_at_loc(
             f"An anisotropic medium is detected on plane intersecting a {beam_obj.type}. "
             f"{beam_obj.type} currently supports only isotropic background media.",
             loc_root,
             loc_ind,
         )
-    if not medium.is_spatially_uniform:
+    if not public_medium.is_spatially_uniform:
         log.warning(
             f"Nonuniform custom medium detected on plane intersecting a {beam_obj.type}. "
             "Gaussian-like overlap setup assumes a homogeneous background medium.",
@@ -454,12 +473,11 @@ def _validate_gaussian_like_beam_background_medium(
 
     if not isinstance(beam_obj, ThinLensBeam | ThinLensOverlapMonitor):
         return
-    min_background_index = self._thin_lens_min_background_index(medium, freqs)
+    min_background_index = self._thin_lens_min_background_index(public_medium, freqs)
     if beam_obj.numerical_aperture >= min_background_index:
         self._raise_validation_error_at_loc(
             f"{beam_obj.type} 'numerical_aperture' ({beam_obj.numerical_aperture:.4g}) "
-            "must be less than the real background refractive index on its plane "
-            f"({min_background_index:.4g}).",
+            "must be less than the background refractive index on its plane.",
             loc_root,
             loc_ind,
             "numerical_aperture",

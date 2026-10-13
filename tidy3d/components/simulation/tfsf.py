@@ -321,13 +321,24 @@ def _validate_fixed_angle_tfsf_semi_infinite_injection_axis(self: Any) -> Self:
             # genuinely volume-aware test on a setup with up to
             # ~10⁶ structures (e.g., a metalens) is too costly to
             # run at validation time.
-            mediums = Scene.intersecting_media(probe, total_structures)
-            if len(mediums) > 1:
+            public_mediums = {
+                Structure._get_public_optical_medium(medium)
+                for medium in Scene.intersecting_media(probe, total_structures)
+            }
+            if None in public_mediums:
+                self._raise_validation_error_at_loc(
+                    f"Fixed-angle TFSF source at index {src_idx} requires an optical "
+                    f"medium between its '{side_label}' injection-axis box face and "
+                    f"the simulation edge along '{'xyz'[axis]}'.",
+                    "sources",
+                    src_idx,
+                )
+            if len(public_mediums) > 1:
                 self._raise_validation_error_at_loc(
                     f"Fixed-angle TFSF source at index {src_idx} requires the region "
                     f"between its '{side_label}' injection-axis box face and the "
                     f"simulation edge along '{'xyz'[axis]}' to be a single medium "
-                    f"(semi-infinite space); got {len(mediums)} distinct media. Either "
+                    f"(semi-infinite space); got {len(public_mediums)} distinct media. Either "
                     "extend the structures so they fill the full simulation extent "
                     "along the injection axis (e.g. ``size=td.inf``), or move them "
                     "fully inside the TFSF box.",
@@ -629,7 +640,7 @@ def _dipole_emission_tfsf_injection_medium(
     source: TFSF,
     validation_loc: tuple[Any, ...] | None = None,
 ) -> AbstractMedium:
-    """Return the single medium intersecting the TFSF injection face."""
+    """Return the single public optical medium intersecting the TFSF injection face."""
     injection_plane = self._dipole_emission_tfsf_injection_plane(source)
     simulation_background = Structure(
         geometry=Box(size=self.size, center=self.center),
@@ -638,15 +649,22 @@ def _dipole_emission_tfsf_injection_medium(
     plane_media = Scene.intersecting_media(
         injection_plane, [simulation_background, *list(self.structures or [])]
     )
-    if len(plane_media) != 1:
+    public_plane_media = {Structure._get_public_optical_medium(medium) for medium in plane_media}
+    if len(public_plane_media) != 1:
         message = (
             "DipoleEmissionMonitor requires a homogeneous medium on the TFSF injection "
-            f"plane; found {len(plane_media)} media."
+            f"plane; found {len(public_plane_media)} public optical media."
         )
         if validation_loc is not None:
             self._raise_validation_error_at_loc(message, *validation_loc)
         _raise_setup_error(message)
-    return next(iter(plane_media))
+    public_medium = next(iter(public_plane_media))
+    if public_medium is None:
+        message = "DipoleEmissionMonitor requires an optical medium on the TFSF injection plane."
+        if validation_loc is not None:
+            self._raise_validation_error_at_loc(message, *validation_loc)
+        _raise_setup_error(message)
+    return public_medium
 
 
 def _dipole_emission_background_index(
@@ -807,7 +825,7 @@ def _aux_tfsf_source(self: Any, source: TFSF) -> PlaneWave:
     # over ``|offset|``. The medium at the injection plane is
     # queried stacking-aware (a structure overlapping the source
     # plane changes the local ``n``); fall back to ``self.medium``
-    # if multiple media are visible there.
+    # if multiple public optical media are visible there.
     source_time = source.source_time
     injection_plane_size = list(source.size)
     injection_plane_size[source.injection_axis] = 0.0
@@ -819,7 +837,12 @@ def _aux_tfsf_source(self: Any, source: TFSF) -> PlaneWave:
     plane_mediums = Scene.intersecting_media(
         injection_plane_probe, [injection_bg, *list(self.structures or [])]
     )
-    injection_medium = next(iter(plane_mediums)) if len(plane_mediums) == 1 else self.medium
+    public_plane_media = {Structure._get_public_optical_medium(medium) for medium in plane_mediums}
+    injection_medium = (
+        next(iter(public_plane_media))
+        if len(public_plane_media) == 1
+        else Structure._get_public_optical_medium(self.medium)
+    )
     try:
         f0 = float(source_time._freq0)
         n_complex = complex(injection_medium.background_index_from_freqs([f0])[0])

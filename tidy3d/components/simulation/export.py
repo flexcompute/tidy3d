@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from pydantic import NonNegativeFloat, NonNegativeInt, PositiveFloat
 
-    from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
+    from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.medium import AbstractMedium
 
 
@@ -60,9 +60,7 @@ def to_gdstk(
     z: float | None = None,
     permittivity_threshold: NonNegativeFloat = 1,
     frequency: PositiveFloat = 0,
-    gds_layer_dtype_map: Mapping[
-        AbstractMedium | MultiPhysicsMedium, tuple[NonNegativeInt, NonNegativeInt]
-    ]
+    gds_layer_dtype_map: Mapping[StructureMediumType, tuple[NonNegativeInt, NonNegativeInt]]
     | None = None,
     pixel_exact: bool = False,
 ) -> list:
@@ -136,20 +134,20 @@ def to_gdstk(
                 clipped_polygons.append(polygon)
         return clipped_polygons
 
-    optical_medium_export_key_cache: dict[StructureMediumType | None, OpticalMediumExportKey] = {}
+    optical_medium_export_key_cache: dict[AbstractMedium | None, OpticalMediumExportKey] = {}
     background_medium_key = self._optical_medium_export_key(
-        Structure._get_optical_medium(self.medium), optical_medium_export_key_cache
+        Structure._get_public_optical_medium(self.medium), optical_medium_export_key_cache
     )
 
     polygons_by_layer: dict[tuple[int, int], list] = {}
     deferred_background_polygons_by_layer: dict[tuple[int, int], list] = {}
     layer_has_filled_region: dict[tuple[int, int], bool] = {}
     for structure in self.scene.sorted_structures:
-        optical_medium = Structure._get_optical_medium(structure.medium)
+        public_optical_medium = Structure._get_public_optical_medium(structure.medium)
         layer_dtype = gds_layer_dtype_map.get(structure.medium)
         if layer_dtype is None:
-            # Allow wrapped media to use a map keyed by their underlying optical medium.
-            layer_dtype = gds_layer_dtype_map.get(optical_medium, (0, 0))
+            # Allow wrapped/protected media to use a map keyed by their public optical medium.
+            layer_dtype = gds_layer_dtype_map.get(public_optical_medium, (0, 0))
         gds_layer, gds_dtype = layer_dtype
         layer_key = (gds_layer, gds_dtype)
 
@@ -164,7 +162,7 @@ def to_gdstk(
             )
         ]
 
-        if isinstance(optical_medium, AbstractCustomMedium):
+        if isinstance(public_optical_medium, AbstractCustomMedium):
             # Custom media replace lower-priority material throughout their geometry, including
             # regions where their thresholded export has no polygons.
             override_polygons = _clip_to_export_bounds(geometry_polygons, gds_layer, gds_dtype)
@@ -277,12 +275,13 @@ def _structure_exports_as_filled_region(
     structure: Structure,
     *,
     background_medium_key: OpticalMediumExportKey,
-    optical_medium_export_key_cache: dict[StructureMediumType | None, OpticalMediumExportKey],
+    optical_medium_export_key_cache: dict[AbstractMedium | None, OpticalMediumExportKey],
 ) -> bool:
     """Whether a structure should add or clear area on its export layer."""
     return (
         _optical_medium_export_key(
-            Structure._get_optical_medium(structure.medium), optical_medium_export_key_cache
+            Structure._get_public_optical_medium(structure.medium),
+            optical_medium_export_key_cache,
         )
         != background_medium_key
     )
@@ -290,10 +289,10 @@ def _structure_exports_as_filled_region(
 
 @staticmethod
 def _optical_medium_export_key(
-    medium: StructureMediumType | None,
-    cache: dict[StructureMediumType | None, OpticalMediumExportKey],
+    medium: AbstractMedium | None,
+    cache: dict[AbstractMedium | None, OpticalMediumExportKey],
 ) -> OpticalMediumExportKey:
-    """Normalized optical-medium key used for GDS export semantics."""
+    """Normalized public optical-medium key used for GDS export semantics."""
     if medium in cache:
         return cache[medium]
     if medium is None:
@@ -312,9 +311,7 @@ def to_gds(
     z: float | None = None,
     permittivity_threshold: NonNegativeFloat = 1,
     frequency: PositiveFloat = 0,
-    gds_layer_dtype_map: Mapping[
-        AbstractMedium | MultiPhysicsMedium, tuple[NonNegativeInt, NonNegativeInt]
-    ]
+    gds_layer_dtype_map: Mapping[StructureMediumType, tuple[NonNegativeInt, NonNegativeInt]]
     | None = None,
     pixel_exact: bool = False,
 ) -> None:
@@ -384,9 +381,7 @@ def to_gds_file(
     z: float | None = None,
     permittivity_threshold: NonNegativeFloat = 1,
     frequency: PositiveFloat = 0,
-    gds_layer_dtype_map: Mapping[
-        AbstractMedium | MultiPhysicsMedium, tuple[NonNegativeInt, NonNegativeInt]
-    ]
+    gds_layer_dtype_map: Mapping[StructureMediumType, tuple[NonNegativeInt, NonNegativeInt]]
     | None = None,
     gds_cell_name: str = "MAIN",
     pixel_exact: bool = False,

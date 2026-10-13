@@ -29,6 +29,7 @@ from tidy3d.components.medium import (
     LossyMetalMedium,
     Medium,
     Medium2D,
+    public_medium,
 )
 from tidy3d.components.monitor import AuxFieldTimeMonitor
 from tidy3d.components.scene import Scene
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
     from tidy3d.components.types import ArrayLike, InterpMethod
 
 
-def _medium_can_be_lossy(medium: AbstractMedium) -> bool:
+def _medium_can_be_lossy(medium: Any) -> bool:
     """Heuristic: True if ``medium`` may contribute to a lossy waveguide mode
     (complex ``n_eff``). Used by :meth:`Simulation.complex_fields` to decide
     whether to enable analytic-signal FDTD for lossy ``ModeTimeMonitor``
@@ -66,6 +67,8 @@ def _medium_can_be_lossy(medium: AbstractMedium) -> bool:
     fall through to the parent class's branch — the perturbation hasn't been
     applied yet, so we treat the underlying medium as the source of truth):
 
+    - :class:`ProtectedOpticalMediumRef` / ``MultiPhysicsMedium`` → classify
+      the public optical medium used for local client behavior.
     - :class:`LossyMetalMedium` → True.
     - :class:`AnisotropicMedium` (incl. ``CustomAnisotropicMedium``,
       ``AnisotropicMediumFromMedium2D``): recurses on xx/yy/zz; True iff
@@ -83,6 +86,9 @@ def _medium_can_be_lossy(medium: AbstractMedium) -> bool:
       True iff conductivity is nonzero.
     - Dispersive / unknown media: conservative — True.
     """
+    medium = public_medium(medium)
+    if medium is None:
+        return False
     if isinstance(medium, LossyMetalMedium):
         return True
     if isinstance(medium, AnisotropicMedium):

@@ -449,6 +449,45 @@ def _get_mediums_on_abc(
     return mediums
 
 
+def _single_public_optical_medium_on_abc(
+    self: Any, mediums: set[MediumType3D], axis_name: str, side_name: str
+) -> MediumType3D:
+    """Return the unique public optical medium used by ABC automatic medium detection."""
+    public_mediums = {Structure._get_public_optical_medium(medium) for medium in mediums}
+    if not public_mediums:
+        self._raise_validation_error_at_loc(
+            "No medium detected on plane containing 'ABCBoundary', "
+            "indicating an unexpected error. Please create a github issue so "
+            "that the problem can be investigated.",
+            "boundary_spec",
+            axis_name,
+            side_name,
+        )
+
+    if None in public_mediums:
+        self._raise_validation_error_at_loc(
+            "No optical medium detected on plane containing 'ABCBoundary'. "
+            "Boundary automatic medium detection requires an optical medium. "
+            "Alternatively, effective permittivity and conductivity can be directly provided as "
+            "parameters for an 'ABCBoundary', in which case this medium check is skipped.",
+            "boundary_spec",
+            axis_name,
+            side_name,
+        )
+
+    if len(public_mediums) != 1:
+        self._raise_validation_error_at_loc(
+            f"{len(public_mediums)} different mediums detected on an 'ABCBoundary'. Boundary must be homogeneous. "
+            "Alternatively, effective permittivity and conductivity can be directly provided as "
+            "parameters for an 'ABCBoundary', in which case this medium check is skipped.",
+            "boundary_spec",
+            axis_name,
+            side_name,
+        )
+
+    return next(iter(public_mediums))
+
+
 def _abc_boundaries_homogeneous(self: Any) -> Self:
     """Error if abc boundaries intersect multiple mediums or anisotropic mediums."""
     val = self.boundary_spec
@@ -477,34 +516,15 @@ def _abc_boundaries_homogeneous(self: Any) -> Self:
     with log as consolidated_logger:
         for (axis_name, side_name), mediums in zip(boundary_locs, mediums_all_sides):
             if mediums is not None:
-                # make sure there is no more than one medium in the returned list
-                if len(mediums) > 1:
-                    self._raise_validation_error_at_loc(
-                        f"{len(mediums)} different mediums detected on an 'ABCBoundary'. Boundary must be homogeneous."
-                        "Alternatively, effective permeability and conductivity can be directly provided as "
-                        "parameters for an 'ABCBoundary', in which case this medium check is skipped.",
-                        "boundary_spec",
-                        axis_name,
-                        side_name,
-                    )
-                # 0 medium, something is wrong
-                if len(mediums) < 1:
-                    self._raise_validation_error_at_loc(
-                        "No medium detected on plane containing 'ABCBoundary', "
-                        "indicating an unexpected error. Please create a github issue so "
-                        "that the problem can be investigated.",
-                        "boundary_spec",
-                        axis_name,
-                        side_name,
-                    )
                 # 1 medium, check if the medium is spatially uniform
-                if not list(mediums)[0].is_spatially_uniform:
+                medium = _single_public_optical_medium_on_abc(self, mediums, axis_name, side_name)
+                if not medium.is_spatially_uniform:
                     consolidated_logger.warning(
                         "Nonuniform custom medium detected on an 'ABCBoundary'. "
                         "Boundary must be homogeneous. Make sure custom medium is uniform on the boundary.",
                     )
 
-                if isinstance(list(mediums)[0], AnisotropicMedium | FullyAnisotropicMedium):
+                if isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium):
                     self._raise_validation_error_at_loc(
                         "An anisotropic medium is detected on an 'ABCBoundary'. "
                         "Boundary medium must be homogeneous and isotropic.",

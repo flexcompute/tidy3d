@@ -36,6 +36,7 @@ from tidy3d.components.material.tcad.heat import (
 )
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
+from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.analysis.dc import ITERATIVE_ONLY_TOLERANCE_FIELDS
 from tidy3d.components.spice.sources.ac import SSACVoltageSource
@@ -778,6 +779,10 @@ class HeatChargeSimulation(AbstractSimulation):
             )
 
         return self
+
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized heat/charge simulation before web upload."""
+        assert_no_protected_media(self, "charge, heat, or heat-charge simulations")
 
     def _monitors_cross_solids(self) -> Self:
         """Error if monitors does not cross any solid medium."""

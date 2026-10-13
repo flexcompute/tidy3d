@@ -34,6 +34,7 @@ from tidy3d.components.base import (
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.file_util import json_string_from_hdf5
 from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.medium.protected import has_protected_media
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.field import (
@@ -1540,7 +1541,13 @@ class SimulationData(AbstractYeeGridSimulationData):
         return min((last_step + check_interval) * self.simulation.dt, run_time_nominal)
 
     def source_spectrum(self, source_index: int) -> Callable:
-        """Get a spectrum normalization function for a given source index."""
+        """Get a source normalization spectrum; unavailable for protected-medium results."""
+
+        if has_protected_media(self.simulation):
+            raise DataError(
+                "Source spectra are unavailable for protected-medium results because the "
+                "executed time step is not recorded."
+            )
 
         if source_index is None or len(self.simulation.sources) == 0:
             return np.ones_like
@@ -1563,7 +1570,13 @@ class SimulationData(AbstractYeeGridSimulationData):
 
     def renormalize(self, normalize_index: int) -> SimulationData:
         """Return a copy of the :class:`.SimulationData` with a different source used for the
-        normalization."""
+        normalization. Unavailable for protected-medium results."""
+
+        if has_protected_media(self.simulation):
+            raise DataError(
+                "Renormalization is unavailable for protected-medium results because the "
+                "executed time step is not recorded."
+            )
 
         num_sources = len(self.simulation.sources)
         if normalize_index == self.simulation.normalize_index or num_sources == 0:

@@ -23,7 +23,16 @@ from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.lumped_element import LumpedElementType
-from tidy3d.components.medium import AnisotropicMediumFromMedium2D, Medium, Medium2D, MediumType3D
+from tidy3d.components.medium import (
+    AnisotropicMediumFromMedium2D,
+    Medium,
+    Medium2D,
+    ProtectedOpticalMediumPlacementType3D,
+)
+from tidy3d.components.medium.protected import (
+    has_protected_media,
+    protected_fdtd_monitor_policy_error,
+)
 from tidy3d.components.monitor import (
     AbstractFieldProjectionMonitor,
     AbstractMediumPropertyMonitor,
@@ -533,7 +542,7 @@ class Simulation(AbstractYeeGridSimulation):
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
-    medium: MediumType3D = Field(
+    medium: ProtectedOpticalMediumPlacementType3D = Field(
         default_factory=Medium,
         title="Background Medium",
         description="Background medium of simulation, defaults to vacuum if not specified.",
@@ -1267,6 +1276,8 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _preprocess_cache_ineligibility(self) -> tuple[str, tuple[str | int, ...]] | None:
         """Return why preprocess caching is unsupported and the location of the cause."""
+        if has_protected_media(self):
+            return "Preprocess caching is not supported for protected optical media.", ()
         if self.simulation_type != "tidy3d":
             return "Preprocess caching is not supported for autograd simulations.", ()
 
@@ -1477,6 +1488,7 @@ class Simulation(AbstractYeeGridSimulation):
         # run before super(): catches a degenerate (single-cell transverse axis) line element with a
         # clear message, ahead of the finalized-simulation build that would otherwise surface it as a
         # cryptic "zero volume" probe error
+        self._validate_protected_monitor_observation_policy()
         self._validate_lumped_element_grid_size()
         super().validate_pre_upload()
         log.begin_capture()
@@ -1496,3 +1508,13 @@ class Simulation(AbstractYeeGridSimulation):
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
+
+    def _validate_protected_monitor_observation_policy(self) -> None:
+        """Reject monitor outputs that expose protected material properties."""
+        if not has_protected_media(self):
+            return
+
+        for monitor_index, monitor in enumerate(self.monitors):
+            error_message = protected_fdtd_monitor_policy_error(monitor, monitor_index)
+            if error_message:
+                self._raise_validation_error_at_loc(error_message, "monitors", monitor_index)

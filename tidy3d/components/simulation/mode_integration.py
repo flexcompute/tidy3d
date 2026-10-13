@@ -178,13 +178,28 @@ def _finalized_volumetric_structures(self: Any) -> list[Structure]:
 
 
 @cached_property
-def _finalized_optical_medium_map(self: Any) -> dict[MediumType, NonNegativeInt]:
-    """Returns dict mapping medium to index in material in finalized simulation.
+def _finalized_public_optical_medium_map(self: Any) -> dict[MediumType, NonNegativeInt]:
+    """Returns dict mapping public local medium to index in finalized simulation.
 
     Returns
     -------
     Dict[:class:`.AbstractMedium`, int]
-        Mapping between distinct mediums to index in finalized simulation.
+        Mapping between distinct public local mediums to index in finalized simulation.
+    """
+    medium_set = {
+        structure._public_optical_medium for structure in self._finalized_volumetric_structures
+    }
+    medium_set.add(Structure._get_public_optical_medium(self.medium))
+    medium_set.discard(None)
+    return {medium: index for index, medium in enumerate(medium_set)}
+
+
+@cached_property
+def _finalized_optical_medium_map(self: Any) -> dict[MediumType, NonNegativeInt]:
+    """Returns dict mapping unresolved optical medium identities to index in finalized simulation.
+
+    This preserves the legacy identity-sensitive contract. Local client behavior that needs
+    public surrogate values should use :attr:`_finalized_public_optical_medium_map` instead.
     """
     medium_set = {structure._optical_medium for structure in self._finalized_volumetric_structures}
     medium_set.add(Structure._get_optical_medium(self.medium))

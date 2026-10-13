@@ -10,6 +10,7 @@ import autograd.numpy as anp
 import numpy as np
 from pydantic import Field, PositiveFloat, PositiveInt
 
+from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import SetupError
 from tidy3d.plugins.autograd.optimizers import Adam, apply_updates
@@ -75,6 +76,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized optimizer is ok for upload to our servers."""
+        assert_no_protected_media(self, "inverse-design optimization")
         self.design.simulation.validate_pre_upload()
 
     def display_fn(self, result: InverseDesignResult, step_index: int) -> None:
@@ -117,6 +119,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             need to be differentiable. This takes the optimizer ``result`` as a positional argument
             and the ``step_index`` and ``aux_data`` as optional arguments.
         """
+        assert_no_protected_media(self, "inverse-design optimization")
         starting_result = self.initialize_result()
         return self.continue_run(
             result=starting_result,
@@ -149,6 +152,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             need to be differentiable. This takes the optimizer ``result`` as a positional argument
             and the ``step_index`` and ``aux_data`` as optional arguments.
         """
+        assert_no_protected_media(self, "inverse-design optimization")
 
         # get the last state of the optimizer and the last parameters
         opt_state = result.get_last("opt_state")

@@ -19,7 +19,7 @@ from tidy3d.constants import (
     C_0,
     ETA_0,
 )
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import DataError, SetupError
 
 from ._types import ProjFieldType, ProjMonitorType
 
@@ -70,6 +70,13 @@ class AbstractFieldProjectionData(MonitorData):
         title="Background Medium",
         description="Background medium through which to project fields.",
         discriminator=TYPE_TAG_STR,
+    )
+
+    medium_is_surrogate: bool = Field(
+        default=False,
+        title="Surrogate Medium",
+        description="Whether the stored medium is a public surrogate. Calculations requiring "
+        "the actual propagation medium are unavailable when this is set.",
     )
 
     is_2d_simulation: bool = Field(
@@ -177,19 +184,29 @@ class AbstractFieldProjectionData(MonitorData):
         return (2 * np.pi * frequency / C_0) * (index_n + 1j * index_k)
 
     @property
+    def _projection_medium(self) -> MediumType:
+        """Require the actual medium for material-dependent postprocessing."""
+        if self.medium_is_surrogate:
+            raise DataError(
+                "Calculations requiring the propagation medium are unavailable for protected "
+                "projection data. The stored medium is only a public surrogate."
+            )
+        return self.medium
+
+    @property
     def nk(self) -> tuple[float, float]:
         """Returns the real and imaginary parts of the background medium's refractive index."""
-        return self.medium.nk_model(frequency=self.f)
+        return self._projection_medium.nk_model(frequency=self.f)
 
     @property
     def k(self) -> complex:
         """Returns the complex wave number associated with the background medium."""
-        return self.wavenumber(medium=self.medium, frequency=self.f)
+        return self.wavenumber(medium=self._projection_medium, frequency=self.f)
 
     @property
     def eta(self) -> complex:
         """Returns the complex wave impedance associated with the background medium."""
-        eps_complex = self.medium.eps_model(frequency=self.f)
+        eps_complex = self._projection_medium.eps_model(frequency=self.f)
         return ETA_0 / np.sqrt(eps_complex)
 
     @staticmethod

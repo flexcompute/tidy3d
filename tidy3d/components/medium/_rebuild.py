@@ -12,6 +12,7 @@ from .medium_types import (
     IsotropicUniformMediumFor2DType,
     IsotropicUniformMediumType,
     MediumType3D,
+    ProtectedOpticalMediumPlacementType3D,
 )
 from .perturbation import PerturbationMediumType
 from .two_d import Medium2D
@@ -36,6 +37,7 @@ def rebuild_medium_models() -> None:
         "IsotropicUniformMediumFor2DType": IsotropicUniformMediumFor2DType,
         "IsotropicUniformMediumType": IsotropicUniformMediumType,
         "MediumType3D": MediumType3D,
+        "ProtectedOpticalMediumPlacementType3D": ProtectedOpticalMediumPlacementType3D,
         "PerturbationMediumType": PerturbationMediumType,
     }
 

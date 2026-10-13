@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.components.medium.protected import has_protected_media
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
@@ -153,9 +154,14 @@ def _run_local(
     from tidy3d.web.api.autograd import autograd as web_ag
 
     sims = modeler.sim_dict
+    protected_input = has_protected_media(modeler)
 
     if isinstance(numerical_structures, NumericalStructureConfig):
         numerical_structures = (numerical_structures,)
+    if protected_input and (
+        kwargs.get("local_gradient", False) or numerical_structures or custom_vjp
+    ):
+        web_ag._raise_protected_autograd_error("component-modeler autograd workflows")
     if numerical_structures:
         web_ag.validate_numerical_structure_parameters(numerical_structures)
 
@@ -183,6 +189,9 @@ def _run_local(
             custom_vjp,
         )
     should_use_autograd = traced_numerical_structures or any(needs_autograd)
+
+    if protected_input and should_use_autograd:
+        web_ag._raise_protected_autograd_error("component-modeler autograd workflows")
 
     if should_use_autograd:
         if len(modeler.element_mappings) > 0:

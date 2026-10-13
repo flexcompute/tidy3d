@@ -44,7 +44,7 @@ from tidy3d.components.monitor import (
     TimeMonitor,
 )
 from tidy3d.components.scene import Scene
-from tidy3d.components.structure import Structure
+from tidy3d.components.structure import Structure, _require_public_optical_medium
 from tidy3d.components.types.monitor import SurfaceMonitorType
 from tidy3d.components.validators import (
     named_obj_descr,
@@ -152,7 +152,10 @@ def _warn_monitor_mediums_frequency_range(self: Any) -> Self:
             freqs = np.array(monitor.freqs)
             fmin_mon = freqs.min()
             fmax_mon = freqs.max()
-            for medium_index, medium in enumerate(mediums):
+            for medium_index, raw_medium in enumerate(mediums):
+                medium = Structure._get_public_optical_medium(raw_medium)
+                if medium is None:
+                    continue
                 # skip mediums that have no freq range (all freqs valid)
                 if medium.frequency_range is None:
                     continue
@@ -400,18 +403,27 @@ def _projection_monitors_homogeneous(self: Any) -> Self:
                     monitor=monitor,
                     structures=total_structures,
                 )
-                if len(mediums) < 1:
+                public_mediums = {
+                    Structure._get_public_optical_medium(medium) for medium in mediums
+                }
+                if len(public_mediums) < 1:
                     continue
-                # make sure there is no more than one medium in the returned list
-                if len(mediums) > 1:
+                if None in public_mediums:
                     self._raise_validation_error_at_loc(
-                        f"{len(mediums)} different mediums detected on plane "
+                        f"No optical medium detected on plane intersecting a {monitor.type}.",
+                        "monitors",
+                        monitor_ind,
+                    )
+                # make sure there is no more than one medium in the returned list
+                if len(public_mediums) > 1:
+                    self._raise_validation_error_at_loc(
+                        f"{len(public_mediums)} different mediums detected on plane "
                         f"intersecting a {monitor.type}. Plane must be homogeneous.",
                         "monitors",
                         monitor_ind,
                     )
                 # 1 medium, check if the medium is spatially uniform
-                if not list(mediums)[0].is_spatially_uniform:
+                if not list(public_mediums)[0].is_spatially_uniform:
                     consolidated_logger.warning(
                         f"Nonuniform custom medium detected on plane intersecting a {monitor.type}. "
                         "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
@@ -643,11 +655,18 @@ def _diffraction_and_directivity_monitor_medium(self: Any) -> Self:
     """If any :class:`.DiffractionMonitor` or  :class:`.DirectivityMonitor` exists, ensure it does not lie in a lossy medium."""
     monitors = self.monitors
     structures = self.structures
-    medium = self.medium
+    background_medium = self.medium
     for monitor_ind, monitor in enumerate(monitors):
         if isinstance(monitor, DiffractionMonitor | DirectivityMonitor):
             medium_set = Scene.intersecting_media(monitor, structures)
-            medium = medium_set.pop() if medium_set else medium
+            raw_medium = medium_set.pop() if medium_set else background_medium
+            medium = Structure._get_public_optical_medium(raw_medium)
+            if medium is None:
+                self._raise_validation_error_at_loc(
+                    f"No optical medium detected on plane intersecting a {monitor.type}.",
+                    "monitors",
+                    monitor_ind,
+                )
             freqs = np.array(monitor.freqs)
             if isinstance(medium, AbstractCustomMedium) and len(freqs) > 1:
                 freqs = 0.5 * (np.min(freqs) + np.max(freqs))
@@ -923,10 +942,13 @@ def monitor_medium(self: Any, monitor: MonitorType) -> AbstractMedium:
     :class:`.AbstractMedium`
         Medium associated with the given :class:`.Monitor`.
     """
-    medium_set = Scene.intersecting_media(monitor, self.structures)
+    medium_set = {
+        _require_public_optical_medium(medium)
+        for medium in Scene.intersecting_media(monitor, self.structures)
+    }
     if len(medium_set) > 1:
         raise SetupError(  # post-init-tidy3d-error: ignore
             f"Monitor '{monitor.name}' intersects more than one medium."
         )
     medium = medium_set.pop() if medium_set else self.medium
-    return medium
+    return _require_public_optical_medium(medium)

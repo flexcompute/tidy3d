@@ -20,6 +20,7 @@ from tidy3d.components.material.tensor_rotation import (
     rotated_tensors_equal,
 )
 from tidy3d.components.medium import AbstractCustomMedium, AnisotropicMedium, FullyAnisotropicMedium
+from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import (
@@ -1001,6 +1002,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized EME simulation is ok for upload to our servers."""
+        assert_no_protected_media(self, "EME simulations")
         super().validate_pre_upload()
         log.begin_capture()
         self._validate_sweep_spec_size()
@@ -2242,6 +2244,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         warning exactly once for its monitor set, while a later simulation with
         a *different* monitor set still warns independently.
         """
+        assert_no_protected_media(self, "local EME propagation")
         if not self.monitors:
             return
         # Include type and placement alongside the name so two monitor sets

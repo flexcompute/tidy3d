@@ -45,7 +45,9 @@ from .medium import (
     LossyMetalMedium,
     Medium,
     Medium2D,
+    ProtectedOpticalMediumRef,
 )
+from .medium.protected import warn_protected_surrogate
 from .monitor import (
     FieldMonitor,
     PermittivityMonitor,
@@ -84,19 +86,41 @@ except ImportError:
     gdstk_available = False
 
 
+def _get_optical_medium(medium: StructureMediumType) -> StructureMediumType | None:
+    """Return the unresolved optical identity for a structure medium."""
+    return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
+
+
+def _get_public_optical_medium(medium: StructureMediumType) -> AbstractMedium | None:
+    """Return the public optical model used for local client behavior."""
+    optical_medium = _get_optical_medium(medium)
+    if isinstance(optical_medium, ProtectedOpticalMediumRef):
+        return optical_medium.surrogate
+    if isinstance(optical_medium, AbstractMedium):
+        return optical_medium
+    return None
+
+
+def _require_public_optical_medium(medium: StructureMediumType) -> AbstractMedium:
+    """Return the public optical medium or fail for optical-only operations."""
+    public_medium = _get_public_optical_medium(medium)
+    if public_medium is None:
+        raise SetupError("This operation requires a medium with optical properties.")
+    return public_medium
+
+
 def validate_structure_medium(medium: Any, *, name: str) -> Any:
     """Validate that a structure medium is non-custom and defines optical properties."""
-    optical_medium = medium
-    if isinstance(medium, MultiPhysicsMedium):
-        optical_medium = medium.optical
-        if optical_medium is None:
-            raise ValueError(f"'{name}' must define optical properties.")
-    elif not isinstance(medium, AbstractMedium):
+    optical_medium = _get_optical_medium(medium)
+    if optical_medium is None:
+        raise ValueError(f"'{name}' must define optical properties.")
+    if not isinstance(optical_medium, AbstractMedium | ProtectedOpticalMediumRef):
         raise ValueError(
             f"'{name}' must be an optical medium or a multiphysics medium with optical properties."
         )
 
-    if optical_medium.is_custom:
+    public_optical_medium = _get_public_optical_medium(medium)
+    if public_optical_medium is not None and public_optical_medium.is_custom:
         raise ValueError(f"'{name}' must be non-custom.")
     return medium
 
@@ -426,7 +450,7 @@ class Structure(AbstractStructure):
 
         if priority_mode == "conductor":
             # classify the optical medium, or a wrapped conductor sorts as a plain dielectric
-            medium = self._required_optical_medium
+            medium = _require_public_optical_medium(self._required_optical_medium)
             if medium.is_pec:
                 return 100
             if isinstance(medium, LossyMetalMedium):
@@ -435,10 +459,13 @@ class Structure(AbstractStructure):
 
     @property
     def viz_spec(self) -> VisualizationSpec | None:
-        return self.medium.viz_spec
+        medium = self._public_optical_medium
+        return None if medium is None else medium.viz_spec
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
+
+        Protected optical media use their public surrogate values.
 
         Parameters
         ----------
@@ -450,16 +477,22 @@ class Structure(AbstractStructure):
         complex
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
+        warn_protected_surrogate(self.medium, "Structure material query")
         # resolve the optical portion of a 'MultiPhysicsMedium', as the solvers already do
-        medium = self._required_optical_medium
+        medium = _require_public_optical_medium(self._required_optical_medium)
         if isinstance(medium, AbstractCustomMedium):
             return medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
         return medium.eps_diagonal(frequency=frequency)
 
     @staticmethod
-    def _get_optical_medium(medium: MultiPhysicsMedium) -> StructureMediumType | None:
-        """Get optical medium."""
-        return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
+    def _get_optical_medium(medium: StructureMediumType) -> StructureMediumType | None:
+        """Return the unresolved optical identity."""
+        return _get_optical_medium(medium)
+
+    @staticmethod
+    def _get_public_optical_medium(medium: StructureMediumType) -> AbstractMedium | None:
+        """Return the public optical model used for local client behavior."""
+        return _get_public_optical_medium(medium)
 
     @property
     def _optical_medium(self) -> StructureMediumType | None:
@@ -477,6 +510,11 @@ class Structure(AbstractStructure):
                 "optical properties are undefined. Set 'MultiPhysicsMedium.optical'."
             )
         return medium
+
+    @property
+    def _public_optical_medium(self) -> AbstractMedium | None:
+        """Public optical medium used for local client behavior."""
+        return self._get_public_optical_medium(self.medium)
 
     @model_validator(mode="after")
     def _check_2d_geometry(self) -> Self:
@@ -514,10 +552,15 @@ class Structure(AbstractStructure):
 
     def _compatible_with(self, other: Structure) -> bool:
         """Whether these two structures are compatible."""
-        # note: if the first condition fails, the second won't get triggered
-        if not self.medium._compatible_with(other.medium) and self.geometry.intersects(
-            other.geometry
-        ):
+        if not self.geometry.intersects(other.geometry):
+            return True
+
+        self_medium = self._public_optical_medium
+        other_medium = other._public_optical_medium
+        if self_medium is None or other_medium is None:
+            return True
+
+        if not self_medium._compatible_with(other_medium):
             return False
         return True
 
@@ -592,10 +635,16 @@ class Structure(AbstractStructure):
 
         field_components_for_adjoint = [f"E{dim}" for dim in "xyz"]
 
+        structure_medium = self._public_optical_medium
+        background_public_medium = (
+            self._get_public_optical_medium(self.background_medium)
+            if self.background_medium is not None
+            else None
+        )
         background_medium_pec = (
-            self.background_medium is not None
-        ) and self.background_medium.is_pec
-        if self.medium.is_pec or background_medium_pec:
+            background_public_medium is not None and background_public_medium.is_pec
+        )
+        if (structure_medium is not None and structure_medium.is_pec) or background_medium_pec:
             # record H-fields when the structure medium or its background is marked PEC
             field_components_for_adjoint += [f"H{dim}" for dim in "xyz"]
 
@@ -810,6 +859,8 @@ class Structure(AbstractStructure):
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.
 
+        Protected optical media use their public surrogate values.
+
         Parameters
         ----------
         row : int
@@ -824,8 +875,9 @@ class Structure(AbstractStructure):
         complex
            Element of the relative permittivity tensor evaluated at ``frequency``.
         """
+        warn_protected_surrogate(self.medium, "Structure material query")
         # see 'eps_diagonal': 'MultiPhysicsMedium' resolves to its optical portion
-        medium = self._required_optical_medium
+        medium = _require_public_optical_medium(self._required_optical_medium)
         if isinstance(medium, AbstractCustomMedium):
             return medium.eps_comp_on_grid(row=row, col=col, frequency=frequency, coords=coords)
         return medium.eps_comp(row=row, col=col, frequency=frequency)

@@ -16,6 +16,7 @@ from rich.progress import Progress
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.medium import AbstractCustomMedium
+from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.simulation import Simulation
 from tidy3d.config import config
 from tidy3d.exceptions import (
@@ -193,6 +194,8 @@ def run(
         Mode solver data with the calculated results.
     """
     log_deprecated_run_args(pay_type=pay_type)
+    assert_no_protected_media(mode_solver, "direct ModeSolver web execution")
+
     task = _create_and_upload_mode_solver_task(
         mode_solver=mode_solver,
         task_name=task_name,
@@ -424,6 +427,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         :class:`ModeSolverTask`
             :class:`ModeSolverTask` object containing information about the created task.
         """
+        assert_no_protected_media(
+            mode_solver,
+            "direct ModeSolver web execution",
+        )
         folder = Folder.get(folder_name, create=True)
 
         mode_solver.validate_pre_upload()
@@ -530,6 +537,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         progress_callback : Callable[[float], None] = None
             Optional callback function called while uploading the data.
         """
+        assert_no_protected_media(
+            self.mode_solver,
+            "direct ModeSolver web execution",
+        )
         mode_solver = self.mode_solver.copy()
 
         sim = mode_solver.simulation
@@ -573,6 +584,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
+        assert_no_protected_media(self.mode_solver, "direct ModeSolver web execution")
+
         resolved_pay_type = resolve_pay_type(pay_type)
         if execution_flexcredit_limit_enabled() and resolved_pay_type != PayType.VGPU:
             solver_id = self._execution_flexcredit_task_id()
@@ -721,6 +734,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         :class:`.ModeSolverData`
             Mode solver data with the calculated results.
         """
+        assert_no_protected_media(
+            self.mode_solver,
+            "direct ModeSolver web execution",
+        )
 
         file = None
         try:

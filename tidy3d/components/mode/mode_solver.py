@@ -50,6 +50,7 @@ from tidy3d.components.medium import (
     FullyAnisotropicMedium,
     LossyMetalMedium,
 )
+from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.microwave.data.dataset import (
     TransmissionLineDataset,
     TransmissionLineTerminalDataset,
@@ -729,6 +730,7 @@ class ModeSolver(Tidy3dBaseModel):
 <tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
         for details.
         """
+        assert_no_protected_media(self, "local ModeSolver.solve()")
         # only warn if tidy3d-extras local subpixel is not enabled
         if not tidy3d_extras["use_local_subpixel"]:
             log.warning(
@@ -798,6 +800,7 @@ class ModeSolver(Tidy3dBaseModel):
         ModeSolverDataType
             A mode solver data type object containing the effective index and mode fields.
         """
+        assert_no_protected_media(self, "local ModeSolver.data_raw")
 
         if self.mode_spec.angle_rotation and np.abs(self.mode_spec.angle_theta) > 0:
             return self.rotated_mode_solver_data

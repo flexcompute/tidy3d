@@ -15,6 +15,7 @@ from tidy3d.components.medium import (
     FullyAnisotropicMedium,
     IsotropicUniformMediumType,
 )
+from tidy3d.components.structure import Structure
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
@@ -74,6 +75,7 @@ def medium_supports_plane_rotation(
     medium: object, rotation_matrix: TensorReal, freqs: FreqArray
 ) -> bool:
     """Return whether a medium supports angled-plane structure rotation."""
+    medium = Structure._get_public_optical_medium(medium)
     is_uniform_isotropic = isinstance(medium, get_args(IsotropicUniformMediumType))
     is_rotation_invariant_anisotropic = isinstance(
         medium, AnisotropicMedium | FullyAnisotropicMedium

@@ -12,6 +12,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.medium.protected import has_protected_media
 from tidy3d.components.monitor import (
     MediumMonitor,
     ModeMonitor,
@@ -430,6 +431,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
         ModeSimulationData
             :class:`.ModeSimulationData` containing the mode solver results.
         """
+        if has_protected_media(self):
+            raise SetupError(
+                "Protected optical media are only supported for hosted ModeSimulation "
+                "execution. Local ModeSimulation.run_local() cannot expand "
+                "or solve protected assets."
+            )
 
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_sim = tidy3d_extras["mod"].SubpixelModeSimulation.from_mode_simulation(self)
@@ -827,5 +834,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
         return self._mode_solver.plot_pml(ax=ax)
 
     def validate_pre_upload(self) -> None:
+        if has_protected_media(self) and self.monitors:
+            self._raise_validation_error_at_loc(
+                "Protected optical media do not support ModeSimulation.monitors. "
+                "ModeSimulation monitor outputs are material/permittivity observations.",
+                "monitors",
+                0,
+            )
         super().validate_pre_upload()
         self._mode_solver.validate_pre_upload()

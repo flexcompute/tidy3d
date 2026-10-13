@@ -142,6 +142,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     _modal_plane_frames = _mode_integration_methods._modal_plane_frames
     _finalized = _mode_integration_methods._finalized
     _finalized_volumetric_structures = _mode_integration_methods._finalized_volumetric_structures
+    _finalized_public_optical_medium_map = (
+        _mode_integration_methods._finalized_public_optical_medium_map
+    )
     _finalized_optical_medium_map = _mode_integration_methods._finalized_optical_medium_map
     _validate_finalized = _mode_integration_methods._validate_finalized
 

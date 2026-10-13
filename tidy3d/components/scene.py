@@ -76,6 +76,7 @@ from .medium import (
     Medium,
     Medium2D,
 )
+from .medium.protected import warn_protected_surrogate
 from .structure import Structure
 from .types import TYPE_TAG_STR, LengthUnit, PriorityMode
 from .validators import assert_unique_names
@@ -1068,6 +1069,8 @@ class Scene(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+
+        warn_protected_surrogate(self, "Local material/grid-dependent plots")
 
         return self.plot_structures_property(
             x=x,

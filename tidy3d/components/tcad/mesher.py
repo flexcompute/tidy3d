@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation, TCADAnalysisTypes
 
@@ -33,4 +34,4 @@ class VolumeMesher(Tidy3dBaseModel):
         """Validate the VolumeMesher before uploading to the cloud.
         Currently no validation but method is required when calling ``web.upload``.
         """
-        return
+        assert_no_protected_media(self, "charge, heat, or heat-charge meshing")

@@ -58,6 +58,7 @@ from tidy3d.log import log
 
 from .autograd.types import TracedDict
 from .autograd.utils import get_static
+from .data.binary import OPAQUE_BINARY_DATA_TYPE, OpaqueBinaryData
 from .data.data_array import DATA_ARRAY_MAP
 from .docstrings import (
     _DOCSTRING_RAW_ATTR,
@@ -1598,7 +1599,9 @@ class Tidy3dBaseModel(BaseModel):
     @staticmethod
     def _warn_if_contains_data(json_str: str) -> None:
         """Log a warning if the json string contains data, used in '.json' and '.yaml' file."""
-        if any((key in json_str for key, _ in DATA_ARRAY_MAP.items())):
+        if OPAQUE_BINARY_DATA_TYPE in json_str or any(
+            (key in json_str for key, _ in DATA_ARRAY_MAP.items())
+        ):
             log.warning(
                 "Data contents found in the model to be written to file. "
                 "Note that this data will not be included in '.json' or '.yaml' formats. "
@@ -1665,6 +1668,10 @@ class Tidy3dBaseModel(BaseModel):
             """Whether a value is supposed to be a data array based on the contents."""
             return isinstance(value, str) and value in DATA_ARRAY_MAP
 
+        def is_opaque_binary_data(value: Any) -> bool:
+            """Whether a value is an HDF5-backed opaque binary placeholder."""
+            return isinstance(value, dict) and value.get("type") == OPAQUE_BINARY_DATA_TYPE
+
         if not isinstance(fname, h5py.File):
             with h5py.File(Path(fname), "r") as f_handle:
                 cls._load_data_from_file(
@@ -1694,6 +1701,15 @@ class Tidy3dBaseModel(BaseModel):
                         key=key,
                         value=value,
                     )
+
+            value = model_dict[key]
+            if is_opaque_binary_data(value):
+                model_dict[key] = OpaqueBinaryData.from_hdf5(
+                    fname=f_handle,
+                    group_path=subpath,
+                    metadata=value,
+                )
+                continue
 
             if is_data_array(value):
                 data_array_type = DATA_ARRAY_MAP[value]
@@ -1861,6 +1877,9 @@ class Tidy3dBaseModel(BaseModel):
                     if custom_encoders:
                         for custom_encoder in custom_encoders:
                             custom_encoder(fname=f_handle, group_path=subpath, value=value)
+
+                    if isinstance(value, OpaqueBinaryData):
+                        value.to_hdf5(fname=f_handle, group_path=subpath)
 
                     # write the path to the element of the json dict where the data_array should be
                     if isinstance(value, xr.DataArray):

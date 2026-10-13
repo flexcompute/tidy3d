@@ -13,7 +13,8 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.geometry.utils import GeometryType
-from tidy3d.components.medium import MediumType
+from tidy3d.components.medium import PublicMediumType
+from tidy3d.components.medium.protected import has_protected_media
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError, DataError
 from tidy3d.web.api import asynchronous, webapi
@@ -71,6 +72,14 @@ def _get_gradient_strategy(local_gradient: bool) -> GradientStrategy:
     if local_gradient:
         return strategy.LocalGradientStrategy()
     return strategy.RemoteClientSourceStrategy()
+
+
+def _raise_protected_autograd_error(feature: str) -> None:
+    """Reject protected media in autograd/adjoint client paths."""
+    raise AdjointError(
+        f"Protected optical media are not supported for {feature}. "
+        "Run protected simulations as ordinary hosted FDTD or hosted ModeSimulation tasks."
+    )
 
 
 def _to_static_parameters(parameters: Any) -> Any:
@@ -427,7 +436,7 @@ def is_valid_for_autograd_async(
 def expand_custom_vjp(
     custom_vjp: tuple[CustomVJPConfig, ...], simulation: td.Simulation
 ) -> tuple[CustomVJPConfig, ...]:
-    """Expand custom_vjp for entries where the structure member is a GeometryType or MediumType
+    """Expand custom_vjp for entries where the structure member is a GeometryType or public medium type
     into multiple entries tagged by an integer structure.
     """
     expanded_custom_vjp = []
@@ -439,7 +448,7 @@ def expand_custom_vjp(
     ]
 
     allowed_classes_geometry = get_args(GeometryType)
-    allowed_classes_medium = get_args(MediumType)
+    allowed_classes_medium = get_args(PublicMediumType)
 
     for vjp_config in custom_vjp:
         if isinstance(vjp_config.structure, type) and issubclass(
@@ -695,6 +704,10 @@ def run_custom(
             numerical_structures = (numerical_structures,)
         validate_numerical_structure_parameters(numerical_structures=numerical_structures)
 
+    protected_input = has_protected_media(simulation)
+    if protected_input and (numerical_structures or custom_vjp):
+        _raise_protected_autograd_error("autograd custom VJP or numerical-structure hooks")
+
     traced_numerical_structures = has_traced_numerical_structures(numerical_structures or [])
 
     from tidy3d.plugins.smatrix import ModalComponentModeler
@@ -731,7 +744,13 @@ def run_custom(
             traced_numerical_structures or any(needs_autograd) or bool(numerical_structures)
         )
 
-        if should_run_local:
+        if protected_input and local_gradient:
+            _raise_protected_autograd_error("component-modeler local-gradient workflows")
+
+        if protected_input and should_run_local:
+            _raise_protected_autograd_error("component-modeler autograd workflows")
+
+        if protected_input or should_run_local:
             from tidy3d.plugins.smatrix import run as smatrix_run
 
             return smatrix_run._run_local(
@@ -770,6 +789,8 @@ def run_custom(
             raise DataError(
                 "Structural preprocess cache reuse is not supported for autograd FDTD simulations."
             )
+        if protected_input:
+            _raise_protected_autograd_error("autograd or adjoint gradients")
 
         if (custom_vjp is not None) and (not local_gradient):
             raise AdjointError("custom_vjp specified for a remote gradient not supported.")
@@ -1116,6 +1137,12 @@ def run_async_custom(
             "custom_vjp is only supported for 'Simulation' workflows in run_async_custom."
         )
 
+    protected_task_names = tuple(
+        task_name for task_name, sim in sim_dict.items() if has_protected_media(sim)
+    )
+    if protected_task_names and (numerical_structures or custom_vjp):
+        _raise_protected_autograd_error("autograd custom VJP or numerical-structure hooks")
+
     path_dir = Path(path_dir)
 
     traced_numerical_structures = bool(numerical_structures) and any(
@@ -1151,6 +1178,8 @@ def run_async_custom(
             raise DataError(
                 "Structural preprocess cache reuse is not supported for autograd FDTD simulations."
             )
+        if protected_task_names:
+            _raise_protected_autograd_error("autograd or adjoint gradients")
 
         if (custom_vjp is not None) and (not local_gradient):
             raise AdjointError("custom_vjp specified for a remote gradient not supported.")

@@ -26,6 +26,7 @@ from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.grid.grid_spec import UniformGrid, _GeneratedGridSizeError
 from tidy3d.components.lumped_element import RectangularLumpedElement
 from tidy3d.components.medium import AnisotropicMedium, Medium2D
+from tidy3d.components.medium.protected import warn_protected_surrogate
 from tidy3d.components.structure import Structure
 from tidy3d.constants import C_0, fp_eps, inf
 from tidy3d.exceptions import (
@@ -314,6 +315,7 @@ def _yee_num_cells(self: Any) -> int:
 @cached_property
 def grid_info(self: Any) -> dict:
     """Dictionary collecting various properties of the grids in the simulation."""
+    warn_protected_surrogate(self, "Local grid previews")
     return self.grid.info
 
 
@@ -461,6 +463,8 @@ def epsilon_on_grid(
 <tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
     for details.
     """
+
+    warn_protected_surrogate(self, "Local epsilon queries")
 
     grid_cells = np.prod(grid.num_cells)
     num_structures = len(self.structures)
@@ -761,12 +765,12 @@ def _warn_grid_size_too_small(self: Any) -> Self:
                                 f"the medium associated with structures[{medium_index - 1}]"
                             )
 
+                        # This diagnostic can run with protected material; do not print its wavelength.
                         consolidated_logger.warning(
                             f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
                             ", which was detected as being large when compared to the "
                             f"central wavelength of sources[{source_index}] "
-                            f"within {medium_str}, given by "
-                            f"{lambda_min:.4f} (um). To avoid inaccuracies, "
+                            f"within {medium_str}. To avoid inaccuracies, "
                             "it is recommended the grid size is reduced. ",
                             custom_loc=["grid_spec", f"grid_{key}", "dl"],
                         )

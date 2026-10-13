@@ -110,7 +110,11 @@ class DirectivityData(FieldProjectionAngleData):
         """
         fields_dataset = self.fields_spherical + other.fields_spherical
         combined_data = DirectivityData.from_spherical_field_dataset(self.monitor, fields_dataset)
-        return combined_data
+        return combined_data.updated_copy(
+            medium=self.medium,
+            medium_is_surrogate=self.medium_is_surrogate or other.medium_is_surrogate,
+            deep=False,
+        )
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> DirectivityData:
         """

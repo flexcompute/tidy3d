@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, TypeAdapter, field_validator
 
-from tidy3d.components.medium import MediumType
+from tidy3d.components.medium import PublicMediumType
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.types import Queryable
 
@@ -26,7 +26,7 @@ class MaterialLibrary(Queryable):
         title="Material Library Name",
         description="Material Library Name",
     )
-    medium: MediumType | None = Field(
+    medium: PublicMediumType | None = Field(
         default=None,
         title="medium",
         description="medium",

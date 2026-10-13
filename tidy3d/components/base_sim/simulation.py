@@ -11,7 +11,7 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, Periodic
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.medium import Medium, MediumType3D
+from tidy3d.components.medium import Medium, ProtectedOpticalMediumPlacementType3D
 from tidy3d.components.scene import Scene
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, LengthUnit, PriorityMode, Symmetry
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 class AbstractSimulation(Box, ABC):
     """Base class for simulation classes of different solvers."""
 
-    medium: MediumType3D = Field(
+    medium: ProtectedOpticalMediumPlacementType3D = Field(
         default_factory=Medium,
         title="Background Medium",
         description="Background medium of simulation, defaults to vacuum if not specified.",

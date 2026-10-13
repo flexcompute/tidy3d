@@ -14,6 +14,11 @@ from typing import TYPE_CHECKING, Any
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.medium import AbstractCustomMedium
+from tidy3d.components.medium.protected import (
+    has_protected_media,
+    protected_asset_refs,
+    warn_protected_surrogate,
+)
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.simulation import Simulation
@@ -667,6 +672,18 @@ def _upload(
     """Private upload implementation with optional internal sidecar artifacts."""
     _raise_if_upload_container(simulation)
 
+    protected_input = has_protected_media(simulation)
+    if isinstance(simulation, ModeSolver) and protected_input:
+        raise WebError(
+            "Protected optical media are not supported for direct ModeSolver upload. "
+            "Use hosted ModeSimulation through tidy3d.web instead."
+        )
+    if protected_input and not isinstance(simulation, Simulation | ModeSimulation):
+        raise WebError(
+            "Protected optical media are only supported for hosted FDTD Simulation and hosted "
+            "ModeSimulation uploads."
+        )
+
     if not _workflow_step:
         workflow = resolve_workflow(simulation)
         if len(workflow.steps) > 1:
@@ -703,6 +720,19 @@ def _upload(
 
     if isinstance(simulation, ModeSolver | ModeSimulation):
         simulation = get_reduced_simulation(simulation, reduce_simulation)
+
+    if has_protected_media(simulation):
+        if getattr(config, "profile", "default") == "nexus":
+            raise WebError(
+                "Protected optical media are not supported for Nexus execution. "
+                "Use the hosted Tidy3D cloud execution path."
+            )
+        if any(ref.encrypted_payload is None for ref in protected_asset_refs(simulation)):
+            raise WebError(
+                "Protected optical media require encrypted protected-medium payloads for "
+                "hosted upload."
+            )
+        warn_protected_surrogate(simulation, "Hosted upload")
 
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)

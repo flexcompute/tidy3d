@@ -26,7 +26,7 @@ if TYPE_CHECKING:
         Axis,
     )
 
-    from .medium_types import IsotropicUniformMediumFor2DType, MediumType3D
+    from .medium_types import IsotropicUniformMediumFor2DType, ProtectedOpticalMediumPlacementType3D
 
 
 from .anisotropic import AnisotropicMedium, AnisotropicMediumFromMedium2D
@@ -139,7 +139,10 @@ class Medium2D(AbstractMedium):
     def volumetric_equivalent(
         self,
         axis: Axis,
-        adjacent_media: tuple[MediumType3D, MediumType3D],
+        adjacent_media: tuple[
+            ProtectedOpticalMediumPlacementType3D,
+            ProtectedOpticalMediumPlacementType3D,
+        ],
         adjacent_dls: tuple[float, float],
     ) -> AnisotropicMedium:
         """Produces a 3D volumetric equivalent medium. The new medium has thickness equal to
@@ -156,7 +159,7 @@ class Medium2D(AbstractMedium):
         axis : Axis
             Index (0, 1, or 2 for x, y, or z respectively) of the normal direction to the
             2D material.
-        adjacent_media : tuple[MediumType3D, MediumType3D]
+        adjacent_media : tuple[ProtectedOpticalMediumPlacementType3D, ProtectedOpticalMediumPlacementType3D]
             The neighboring media on either side of the 2D material.
             The first element is directly on the - side of the 2D material in the supplied axis,
             and the second element is directly on the + side.
@@ -170,8 +173,15 @@ class Medium2D(AbstractMedium):
             The 3D material corresponding to this 2D material.
         """
 
-        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumFor2DType:
+        def get_component(
+            med: ProtectedOpticalMediumPlacementType3D, comp: Axis
+        ) -> IsotropicUniformMediumFor2DType:
             """Extract the ``comp`` component of ``med``."""
+            from .protected import public_medium
+
+            med = public_medium(med)
+            if med is None:
+                raise ValidationError("Adjacent media must define optical properties.")
             if isinstance(med, AnisotropicMedium):
                 dim = "xyz"[comp]
                 element_name = dim + dim

@@ -24,6 +24,7 @@ from .lorentz import Lorentz
 from .lossy_metal import LossyMetalMedium
 from .perturbation import PerturbationMedium, PerturbationPoleResidue
 from .pole_residue import PoleResidue
+from .protected import ProtectedOpticalMediumRef
 from .sellmeier import Sellmeier
 from .two_d import Medium2D
 
@@ -38,7 +39,7 @@ IsotropicCustomMediumType = (
 IsotropicCustomMediumInternalType = IsotropicCustomMediumType | CustomIsotropicMedium
 IsotropicMediumType = IsotropicCustomMediumType | IsotropicUniformMediumType
 
-MediumType3D = (
+PublicMediumType3D = (
     Medium
     | AnisotropicMedium
     | PECMedium
@@ -60,8 +61,12 @@ MediumType3D = (
     | PerturbationPoleResidue
     | LossyMetalMedium
 )
+MediumType3D = PublicMediumType3D
+ProtectedOpticalMediumPlacementType3D = PublicMediumType3D | ProtectedOpticalMediumRef
 
-MediumType = MediumType3D | Medium2D | AnisotropicMediumFromMedium2D
+PublicMediumType = PublicMediumType3D | Medium2D | AnisotropicMediumFromMedium2D
+MediumType = PublicMediumType
+ProtectedOpticalMediumPlacementType = PublicMediumType | ProtectedOpticalMediumRef
 
 __all__ = [
     "IsotropicCustomMediumInternalType",
@@ -71,4 +76,8 @@ __all__ = [
     "IsotropicUniformMediumType",
     "MediumType",
     "MediumType3D",
+    "ProtectedOpticalMediumPlacementType",
+    "ProtectedOpticalMediumPlacementType3D",
+    "PublicMediumType",
+    "PublicMediumType3D",
 ]
