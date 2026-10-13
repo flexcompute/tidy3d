@@ -165,6 +165,9 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     the steady DC capacitance (provided an array of voltages has been defined
     in the simulation).
 
+    With ``symmetry`` on the simulation, the accelerated solver reports the whole device,
+    while the CPU solver reports the simulated portion.
+
     Example
     -------
 

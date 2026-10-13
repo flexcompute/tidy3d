@@ -104,7 +104,9 @@ class CurrentBC(HeatChargeBC):
     """Drive a contact with a prescribed total current and solve its potential.
 
     Current is positive into the device and, in 2D, is per micron of device
-    depth. All faces of one :class:`.ChargeConductorMedium` form one terminal.
+    depth. With ``symmetry`` on the simulation, the accelerated charge solver
+    takes it as the current of the whole device, not of the simulated portion.
+    All faces of one :class:`.ChargeConductorMedium` form one terminal.
     At most one terminal may be current-driven, and at least one
     :class:`.VoltageBC` must provide the potential reference. ``current=0``
     makes the contact float. A contact reaching only an insulator is a gate and
@@ -128,7 +130,7 @@ class CurrentBC(HeatChargeBC):
 
     source: CurrentSourceType = Field(
         title="Current Source",
-        description="Total current through this terminal, positive into the device and, in 2D, per micron of device depth.",
+        description="Total current through this terminal, positive into the device and, in 2D, per micron of device depth. With ``symmetry`` on the simulation, it is the current of the whole device, not of the simulated portion.",
         json_schema_extra={"units": AMP},
     )
 

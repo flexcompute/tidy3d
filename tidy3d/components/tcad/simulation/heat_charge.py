@@ -488,7 +488,9 @@ class HeatChargeSimulation(AbstractSimulation):
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
         "at the simulation center of each axis, respectively. "
-        "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
+        "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on). "
+        "The accelerated solver reports :class:`.DeviceCharacteristics` for the whole device, "
+        "while the CPU solver reports them for the simulated portion.",
     )
 
     analysis_spec: AnalysisSpecType | None = Field(
@@ -624,6 +626,7 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("structures",), self._validate_scene)
         self._call_with_validation_loc(("monitors",), self._monitors_cross_solids)
         self._call_with_validation_loc(("monitors",), self._check_monitor_dimensionality)
+        self._call_with_validation_loc(("symmetry",), self._check_symmetry_not_normal_to_zero_dim)
         self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
         self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
         self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
@@ -722,6 +725,18 @@ class HeatChargeSimulation(AbstractSimulation):
             ("use_accelerated_solver",), self._check_use_accelerated_solver
         )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
+        return self
+
+    def _check_symmetry_not_normal_to_zero_dim(self) -> Self:
+        """Reject a symmetry plane normal to the zero-size axis of a 2D simulation."""
+        for axis in self.zero_dims:
+            if self.symmetry[axis] != 0:
+                self._raise_validation_error_at_loc(
+                    f"'symmetry' is on along {'xyz'[axis]}, the axis along which the 2D "
+                    "simulation has zero size. Set 'symmetry' to 0 along that axis.",
+                    "symmetry",
+                    axis,
+                )
         return self
 
     def _check_monitor_dimensionality(self) -> Self:
