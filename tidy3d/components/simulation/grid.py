@@ -26,7 +26,11 @@ from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.grid.grid_spec import UniformGrid, _GeneratedGridSizeError
 from tidy3d.components.lumped_element import RectangularLumpedElement
 from tidy3d.components.medium import AnisotropicMedium, Medium2D
-from tidy3d.components.medium.protected import warn_protected_surrogate
+from tidy3d.components.medium.protected import (
+    ProtectedOpticalMediumRef,
+    has_protected_media,
+    warn_protected_surrogate,
+)
 from tidy3d.components.structure import Structure
 from tidy3d.constants import C_0, fp_eps, inf
 from tidy3d.exceptions import (
@@ -479,7 +483,42 @@ def epsilon_on_grid(
         )
 
     if tidy3d_extras["use_local_subpixel"]:
-        subpixel_sim = tidy3d_extras["mod"].SubpixelSimulation.from_simulation(self)
+        preview = self
+        if has_protected_media(self):
+            # Substitute only for this material query, never for local execution.
+            def preview_medium(medium: Any) -> Any:
+                optical = Structure._get_optical_medium(medium)
+                if not isinstance(optical, ProtectedOpticalMediumRef):
+                    return medium
+                if optical is medium:
+                    return optical.surrogate
+                return medium.updated_copy(deep=False, validate=False, optical=optical.surrogate)
+
+            # Surrogates are already validated; share unrelated data and clear changed caches.
+            structures = []
+            for structure in self.structures:
+                medium = preview_medium(structure.medium)
+                background_medium = preview_medium(structure.background_medium)
+                structures.append(
+                    structure
+                    if (
+                        medium is structure.medium
+                        and background_medium is structure.background_medium
+                    )
+                    else structure.updated_copy(
+                        deep=False,
+                        validate=False,
+                        medium=medium,
+                        background_medium=background_medium,
+                    )
+                )
+            preview = self.updated_copy(
+                deep=False,
+                validate=False,
+                medium=preview_medium(self.medium),
+                structures=tuple(structures),
+            )
+        subpixel_sim = tidy3d_extras["mod"].SubpixelSimulation.from_simulation(preview)
         return subpixel_sim.epsilon_on_grid(grid=grid, coord_key=coord_key, freq=freq)
 
     def get_eps(structure: Structure, frequency: float, coords: Coords) -> complex:
