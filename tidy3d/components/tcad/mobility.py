@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import TYPE_TAG_STR
@@ -11,8 +11,6 @@ from tidy3d.constants import MICROMETER, PERCMCUBE
 
 if TYPE_CHECKING:
     import numpy as np
-
-    from tidy3d.compat import Self
 
 
 # Runtime floor on every field dependence's 'v_sat * (T/300)**exp_v_sat' [cm/s] and
@@ -83,17 +81,6 @@ class _HighFieldDependenceBase(Tidy3dBaseModel, ABC):
         "driving force; when ``None``, 1e10 cm^-3 is used.",
         json_schema_extra={"units": PERCMCUBE},
     )
-
-    @model_validator(mode="after")
-    def _validate_reference_density_driving_force(self) -> Self:
-        """Ensure 'reference_density' is only set with the quasi-Fermi driving force."""
-        if self.reference_density is not None and self.driving_force != "quasi_fermi_gradient":
-            self._raise_validation_error_at_loc(
-                "'reference_density' applies only to driving_force='quasi_fermi_gradient'. "
-                "Remove 'reference_density', or set driving_force='quasi_fermi_gradient'.",
-                "reference_density",
-            )
-        return self
 
     @property
     def reference_density_resolved(self) -> float | None:
@@ -904,28 +891,6 @@ class MasettiMobility(Tidy3dBaseModel):
         description=_SURFACE_DEPENDENCE_DESCRIPTION,
     )
 
-    @model_validator(mode="after")
-    def _validate_reference_high_doping_limit(self) -> Self:
-        """Ensure the high-doping asymptote is positive at the reference temperature."""
-        if self.mu_1 >= self.mu_0:
-            raise ValueError(
-                "'mu_1' must be smaller than 'mu_0' so the Masetti high-doping mobility "
-                "asymptote (mu_0 - mu_1) remains positive at the reference temperature "
-                "(300 K). At other isothermal temperatures the asymptote scales as "
-                "mu_0 * (T/300)**exp_0 - mu_1."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_reference_low_doping_limit(self) -> Self:
-        """Ensure the low-doping plateau is positive at the reference temperature."""
-        if self.mu_min2_resolved >= self.mu_max:
-            raise ValueError(
-                "'mu_min2' must be smaller than 'mu_max' so the Masetti low-doping "
-                "mobility plateau remains positive at the reference temperature (300 K)."
-            )
-        return self
-
     @property
     def mu_min2_resolved(self) -> float:
         """'mu_min2', or 'mu_0' when it is not set."""
@@ -1070,30 +1035,6 @@ class AlloyMobility(Tidy3dBaseModel):
         title="Surface mobility dependence",
         description=_SURFACE_DEPENDENCE_DESCRIPTION,
     )
-
-    @model_validator(mode="after")
-    def _validate_mu_alloy_nonzero(self) -> Self:
-        """A zero bowing mobility would divide by zero; ``None`` disables the term."""
-        if self.mu_alloy == 0.0:
-            self._raise_validation_error_at_loc(
-                "'mu_alloy' must be nonzero; use 'None' for no alloy-scattering term.", "mu_alloy"
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_end_members_low_field_only(self) -> Self:
-        """The high-field and surface models act on the alloy mobility, not on an end member."""
-        for name in ("mobility_x0", "mobility_x1"):
-            end_member = getattr(self, name)
-            for dependence in ("field_dependence", "surface_dependence"):
-                if getattr(end_member, dependence) is not None:
-                    self._raise_validation_error_at_loc(
-                        f"'{name}.{dependence}' must be 'None'; set '{dependence}' on the "
-                        "'AlloyMobility' instead, where it applies to the alloy mobility.",
-                        name,
-                        dependence,
-                    )
-        return self
 
     def _inverse_low_field_mobility(self, doping: np.ndarray, temperature: float) -> np.ndarray:
         """Inverse low-field mobility [V-s/cm^2], whose sign tells whether the mobility is valid."""

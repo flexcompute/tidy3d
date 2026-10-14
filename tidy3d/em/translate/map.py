@@ -238,6 +238,32 @@ COMPONENT_SCOPES: dict[str, tuple[str, str] | None] = {
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:ModulationSpec",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
     ),
+    # tcad
+    "tidy3d.components.tcad.mobility:_HighFieldDependenceBase": None,
+    "tidy3d.components.tcad.mobility:CanaliFieldDependence": (
+        "flexcompute.core._migration.tcad.schema.mobility:CanaliFieldDependence",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.mobility:TransferredElectronFieldDependence": (
+        "flexcompute.core._migration.tcad.schema.mobility:TransferredElectronFieldDependence",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.mobility:LombardiSurfaceDependence": (
+        "flexcompute.core._migration.tcad.schema.mobility:LombardiSurfaceDependence",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.mobility:MasettiMobility": (
+        "flexcompute.core._migration.tcad.schema.mobility:MasettiMobility",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.mobility:CaugheyThomasMobility": (
+        "flexcompute.core._migration.tcad.schema.mobility:CaugheyThomasMobility",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.mobility:AlloyMobility": (
+        "flexcompute.core._migration.tcad.schema.mobility:AlloyMobility",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
 }
 
 
@@ -251,6 +277,11 @@ COMPONENT_CONSTRUCTION_TYPES = frozenset(
         "tidy3d.components.eme.sweep:EMEPeriodicitySweep",
         # medium
         "tidy3d.components.time_modulation:ModulationSpec",
+        # tcad
+        "tidy3d.components.tcad.mobility:CanaliFieldDependence",
+        "tidy3d.components.tcad.mobility:TransferredElectronFieldDependence",
+        "tidy3d.components.tcad.mobility:MasettiMobility",
+        "tidy3d.components.tcad.mobility:AlloyMobility",
     }
 )
 
