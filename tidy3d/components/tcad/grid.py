@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -214,8 +215,7 @@ class _GridRefinementLineBase(Tidy3dBaseModel, ABC):
         """Make sure the point is not infinitiy."""
         from flexcompute.core._migration.tcad.validation import validate_line_point_finite
 
-        if diagnostics := validate_line_point_finite(val):
-            raise ValidationError(diagnostics[0].message)
+        raise_first_error(validate_line_point_finite(val), ValidationError)
         return val
 
     @model_validator(mode="after")

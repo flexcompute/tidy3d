@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -316,8 +317,7 @@ class ThermalContactResistance(HeatChargeBC):
         """Reject non-finite resistance values."""
         from flexcompute.core._migration.tcad.validation import validate_thermal_resistance
 
-        if diagnostics := validate_thermal_resistance(val):
-            raise ValueError(diagnostics[0].message)
+        raise_first_error(validate_thermal_resistance(val), ValueError)
         return val
 
     @classmethod

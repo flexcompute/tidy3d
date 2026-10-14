@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import autograd.numpy as np
+from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
     PositiveFloat,
@@ -135,8 +136,7 @@ class LossyMetalMedium(Medium):
             validate_frequency_range,
         )
 
-        if diagnostics := validate_frequency_range(val):
-            raise ValidationError(diagnostics[0].message)
+        raise_first_error(validate_frequency_range(val), ValidationError)
         return val
 
     @cached_property

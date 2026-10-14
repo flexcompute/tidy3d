@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING
 
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
@@ -43,8 +44,7 @@ class StructureBasedHeatChargeSource(AbstractHeatChargeSource):
             validate_heat_charge_source_structures,
         )
 
-        if diagnostics := validate_heat_charge_source_structures(val):
-            raise SetupError(diagnostics[0].message)
+        raise_first_error(validate_heat_charge_source_structures(val), SetupError)
 
         return val
 

@@ -7,6 +7,7 @@ from math import isclose
 from typing import TYPE_CHECKING
 
 import numpy as np
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, PositiveFloat, field_validator
 
 from tidy3d.constants import HERTZ, RADIAN
@@ -170,8 +171,7 @@ class SpaceModulation(AbstractSpaceModulation):
             validate_no_nan_field,
         )
 
-        if diagnostics := validate_no_nan_field(val, info.field_name):
-            raise ValidationError(diagnostics[0].message)
+        raise_first_error(validate_no_nan_field(val, info.field_name), ValidationError)
         return val
 
     @field_validator("amplitude", "phase")
@@ -184,8 +184,7 @@ class SpaceModulation(AbstractSpaceModulation):
             validate_real_field,
         )
 
-        if diagnostics := validate_real_field(val, info.field_name):
-            raise ValidationError(diagnostics[0].message)
+        raise_first_error(validate_real_field(val, info.field_name), ValidationError)
         return val
 
     @cached_property

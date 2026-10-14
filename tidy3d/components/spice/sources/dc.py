@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, FiniteFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -70,8 +71,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     def check_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         from flexcompute.core._migration.spice.validation import validate_dc_voltage
 
-        if diagnostics := validate_dc_voltage(val):
-            raise ValueError(diagnostics[0].message)
+        raise_first_error(validate_dc_voltage(val), ValueError)
         return val
 
     @field_validator("voltage")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, PositiveFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -56,6 +57,5 @@ class SSACVoltageSource(Tidy3dBaseModel):
     def validate_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         from flexcompute.core._migration.spice.validation import validate_ac_voltage
 
-        if diagnostics := validate_ac_voltage(val):
-            raise ValueError(diagnostics[0].message)
+        raise_first_error(validate_ac_voltage(val), ValueError)
         return val

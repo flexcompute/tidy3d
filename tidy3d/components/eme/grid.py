@@ -19,6 +19,7 @@ from flexcompute.core._migration.em.eme.validation import (
     validate,
     validate_group_index_step,
 )
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -58,9 +59,7 @@ def _check_grid_spec_domain(
         sim_rmax=sim_rmax,
         tolerance=fp_eps,
     )
-    diagnostics = validate(spec).diagnostics
-    if diagnostics:
-        raise ValidationError(diagnostics[0].message)
+    raise_first_error(validate(spec).diagnostics, ValidationError)
 
 
 class EMEModeSpec(ModeSpec):
@@ -186,8 +185,7 @@ class EMEModeSpec(ModeSpec):
     @classmethod
     def _validate_group_index_step(cls, val: Any) -> Any:
         """Reject group-index work that EME cannot consume or return."""
-        if diagnostics := validate_group_index_step(val):
-            raise SetupError(diagnostics[0].message)
+        raise_first_error(validate_group_index_step(val), SetupError)
         return False
 
     # this method is not supported because not all ModeSpec features are supported

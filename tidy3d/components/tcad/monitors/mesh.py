@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, field_validator
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
@@ -31,6 +32,5 @@ class VolumeMeshMonitor(HeatChargeMonitor):
             validate_volume_mesh_monitor_size,
         )
 
-        if diagnostics := validate_volume_mesh_monitor_size(val):
-            raise ValueError(diagnostics[0].message)
+        raise_first_error(validate_volume_mesh_monitor_size(val), ValueError)
         return val
