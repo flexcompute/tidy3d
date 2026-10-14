@@ -3,60 +3,20 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING
 
-import autograd.numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, field_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
 from tidy3d.constants import MICROMETER, SECOND, VOLT, WATT
-from tidy3d.exceptions import SetupError, ValidationError
 
 from .base import Tidy3dBaseModel
 from .types.base import discriminated_union
 
-if TYPE_CHECKING:
-    from .medium import AbstractMedium
-
-# cap on number of nonlinear iterations
-NONLINEAR_MAX_NUM_ITERS = 100
 NONLINEAR_DEFAULT_NUM_ITERS = 5
 
 
 class NonlinearModel(ABC, Tidy3dBaseModel):
     """Abstract model for a nonlinear material response.
     Used as part of a :class:`.NonlinearSpec`."""
-
-    def _validate_medium_type(self, medium: AbstractMedium) -> None:
-        """Check that the model is compatible with the medium."""
-        from .medium import (
-            AbstractCustomMedium,
-            CustomDispersiveMedium,
-            CustomMedium,
-            DispersiveMedium,
-            Medium,
-        )
-
-        if medium.is_time_modulated:
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for time-modulated medium class '{type(medium).__name__}'."
-            )
-        if isinstance(medium, AbstractCustomMedium) and not medium.is_isotropic:
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for anisotropic medium class '{type(medium).__name__}'."
-            )
-        if not isinstance(medium, (Medium, DispersiveMedium, CustomMedium, CustomDispersiveMedium)):
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for medium class '{type(medium).__name__}'."
-            )
-
-    def _validate_medium(self, medium: AbstractMedium) -> None:
-        """Any additional validation that depends on the medium"""
-
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[PositiveFloat]) -> None:
-        """Any additional validation that depends on the central frequencies of the sources."""
 
     @property
     def complex_fields(self) -> bool:
@@ -119,19 +79,6 @@ class NonlinearSusceptibility(NonlinearModel):
         "``nonlinear_spec=NonlinearSpec(models=[model], num_iters=num_iters)``. Under the new "
         "usage, this parameter is ignored, and ``NonlinearSpec.num_iters`` is used instead.",
     )
-
-    @field_validator("numiters")
-    @classmethod
-    def _validate_numiters(cls, val: PositiveInt | None) -> PositiveInt | None:
-        """Check that numiters is not too large."""
-        if val is None:
-            return val
-        if val > NONLINEAR_MAX_NUM_ITERS:
-            raise ValidationError(
-                "'NonlinearSusceptibility.numiters' must be less than "
-                f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
-            )
-        return val
 
 
 class TwoPhotonAbsorption(NonlinearModel):
@@ -245,19 +192,6 @@ class TwoPhotonAbsorption(NonlinearModel):
         "from the simulation sources (as long as these are all equal).",
     )
 
-    def _validate_medium(self, medium: AbstractMedium) -> None:
-        """Check that the model is compatible with the medium."""
-        beta = self.beta
-        if not medium.allow_gain and beta < 0:
-            raise ValidationError(
-                "A passive medium must have 'beta >= 0' in "
-                f"'TwoPhotonAbsorption', given 'beta={beta}'. "
-                "To simulate a gain medium, please set "
-                "'allow_gain=True' in the medium class. Caution: "
-                "simulations containing gain medium are unstable, "
-                "and are likely to diverge."
-            )
-
     @property
     def aux_fields(self) -> list[str]:
         """List of available aux fields in this model."""
@@ -362,35 +296,6 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         description="Number of iterations for solving nonlinear constitutive relation.",
     )
 
-    @field_validator("models")
-    @classmethod
-    def _no_duplicate_models(
-        cls, val: tuple[NonlinearModelType, ...] | None
-    ) -> tuple[NonlinearModelType, ...] | None:
-        """Ensure each type of model appears at most once."""
-        if val is None:
-            return val
-        models = [model.__class__ for model in val]
-        models_unique = set(models)
-        if len(models) != len(models_unique):
-            raise ValidationError(
-                "Multiple 'NonlinearModels' of the same type "
-                "were found in a single 'NonlinearSpec'. Please ensure that "
-                "each type of 'NonlinearModel' appears at most once in a single 'NonlinearSpec'."
-            )
-        return val
-
-    @field_validator("num_iters")
-    @classmethod
-    def _validate_num_iters(cls, val: PositiveInt) -> PositiveInt:
-        """Check that num_iters is not too large."""
-        if val > NONLINEAR_MAX_NUM_ITERS:
-            raise ValidationError(
-                "'NonlinearSpec.num_iters' must be less than "
-                f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
-            )
-        return val
-
     @property
     def aux_fields(self) -> list[str]:
         """List of available aux fields in all present models."""
@@ -398,25 +303,6 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         for model in self.models:
             fields += model.aux_fields
         return fields
-
-    @field_validator("models")
-    @classmethod
-    def _consistent_models(
-        cls, val: tuple[NonlinearModelType, ...] | None
-    ) -> tuple[NonlinearModelType, ...] | None:
-        """Ensure that parameters shared between models are consistent."""
-        if val is None:
-            return val
-        n0 = None
-        for model in val:
-            if isinstance(model, (KerrNonlinearity, TwoPhotonAbsorption)):
-                if model.n0 is not None:
-                    if n0 is not None and not np.isclose(model.n0, n0):
-                        raise SetupError(
-                            f"Nonlinear models must have consistent 'n0'. Given {model.n0} and {n0}."
-                        )
-                    n0 = model.n0
-        return val
 
 
 NonlinearSpecType = discriminated_union(NonlinearSpec | NonlinearSusceptibility)

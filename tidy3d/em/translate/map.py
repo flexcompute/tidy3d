@@ -230,6 +230,14 @@ COMPONENT_SCOPES: dict[str, tuple[str, str] | None] = {
         "flexcompute.core._migration.em.eme.validation:validate",
     ),
     # medium
+    "tidy3d.components.nonlinear:NonlinearSpec": (
+        "flexcompute.core._migration.em.material.nonlinear.schema.nonlinear:NonlinearSpec",
+        "flexcompute.core._migration.em.material.nonlinear.validation:validate",
+    ),
+    "tidy3d.components.nonlinear:NonlinearSusceptibility": (
+        "flexcompute.core._migration.em.material.nonlinear.schema.nonlinear:NonlinearSusceptibility",
+        "flexcompute.core._migration.em.material.nonlinear.validation:validate",
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": (
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
@@ -282,6 +290,8 @@ COMPONENT_CONSTRUCTION_TYPES = frozenset(
         "tidy3d.components.tcad.mobility:TransferredElectronFieldDependence",
         "tidy3d.components.tcad.mobility:MasettiMobility",
         "tidy3d.components.tcad.mobility:AlloyMobility",
+        "tidy3d.components.nonlinear:NonlinearSpec",
+        "tidy3d.components.nonlinear:NonlinearSusceptibility",
     }
 )
 
@@ -294,6 +304,11 @@ COMPONENT_ERROR_TYPES = {
     "em.eme.constructed_grid_first_boundary_outside": "tidy3d.exceptions:ValidationError",
     "em.eme.constructed_grid_boundary_order": "tidy3d.exceptions:ValidationError",
     "em.eme.constructed_grid_last_boundary_outside": "tidy3d.exceptions:ValidationError",
+    # medium
+    "em.material.nonlinear.unique_models": "tidy3d.exceptions:ValidationError",
+    "em.material.nonlinear.consistent_n0": "tidy3d.exceptions:SetupError",
+    "em.material.nonlinear.max_num_iters": "tidy3d.exceptions:ValidationError",
+    "em.material.nonlinear.max_numiters": "tidy3d.exceptions:ValidationError",
 }
 
 

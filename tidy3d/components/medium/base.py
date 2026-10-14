@@ -291,9 +291,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "in a future release. The new usage is "
                 r"'nonlinear_spec=NonlinearSpec(models=\[model])'."
             )
+        from flexcompute.core._migration.em.material.nonlinear.validation import (
+            validate_model_medium,
+        )
+        from flexcompute.core.validation import raise_first_error
+
         for model in self._nonlinear_models:
-            model._validate_medium_type(self)
-            model._validate_medium(self)
+            raise_first_error(validate_model_medium(model, self), ValidationError)
             if (
                 isinstance(self.nonlinear_spec, NonlinearSpec)
                 and isinstance(model, NonlinearSusceptibility)

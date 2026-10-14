@@ -277,14 +277,7 @@ def _validate_scene(self: Any) -> Self:
 
 
 def _validate_nonlinear_specs(self: Any) -> None:
-    """Run :class:`.NonlinearSpec` validators that depend on knowing the central
-    frequencies of the sources. Also print some warnings only once per unique medium."""
-    freqs = np.array([source.source_time._freq0 for source in self.sources])
-    for medium in self.scene.mediums:
-        if medium.nonlinear_spec is not None:
-            for model in medium._nonlinear_models:
-                model._validate_medium_freqs(medium, freqs)
-
+    """Warn about auxiliary-field monitors that no nonlinear model in the simulation uses."""
     for i, monitor in enumerate(self.monitors):
         if isinstance(monitor, AuxFieldTimeMonitor):
             for aux_field in monitor.fields:
