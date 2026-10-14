@@ -5,7 +5,10 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 from pydantic import Field
 
-from tidy3d.components.autograd.source_factory import current_component_data_array
+from tidy3d.components.autograd.source_factory import (
+    current_component_data_array,
+    on_symmetry_plane,
+)
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.em_fields import frequency_normalized_field_components
 from tidy3d.components.grid.grid import Coords
@@ -137,18 +140,12 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 # get the VJP values at frequency and apply adjoint phase
                 field_component = field_component.sel(f=freq0)
 
-                # accounts for the effective size of the source when injecting into a
-                # simulation with symmetry
-                symmetry_factor = np.prod(field_component.values.shape) / np.prod(
-                    self.symmetry_expanded.field_components[name].sel(f=freq0).values.shape
-                )
                 source_data = current_component_data_array(
                     component=name,
-                    base_values=field_component.values,
+                    base_values=field_component.values * self._symmetry_source_weight(name),
                     spatial_coords={key: np.array(field_component.coords[key]) for key in "xyz"},
                     source_center=source_geo.center,
                     freq=float(freq0),
-                    symmetry_factor=float(symmetry_factor),
                 )
                 if source_data is not None:
                     src_field_components[name] = source_data
@@ -183,6 +180,24 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 )
 
         return sources
+
+    def _symmetry_source_weight(self, name: str) -> np.ndarray | float:
+        """Per-sample weight turning a stored-domain VJP into the stored part of the adjoint source.
+
+        The VJP through ``symmetry_expanded`` sums every mirror image onto its stored sample,
+        while the solver mirrors the stored source itself. So each symmetry axis halves the
+        sample, except on the symmetry plane, where the sample is its own image.
+        """
+        weight = 1.0
+        coords = self.field_components[name].coords
+        for dim, (sym, center) in enumerate(zip(self.symmetry, self.symmetry_center or ())):
+            if sym == 0:
+                continue
+            on_plane = on_symmetry_plane(np.asarray(coords["xyz"[dim]]), center)
+            shape = [1, 1, 1]
+            shape[dim] = -1
+            weight = weight * np.reshape(np.where(on_plane, 1.0, 0.5), shape)
+        return weight
 
     def _adjoint_source_union_is_safe(
         self,

@@ -156,6 +156,15 @@ def gaussian_source_from_monitor(
     )
 
 
+def on_symmetry_plane(coords: np.ndarray | float, center: float) -> np.ndarray | bool:
+    """Whether coordinates lie on a symmetry plane through ``center``.
+
+    The grid line on a symmetry plane equals the center exactly, so only an absolute
+    tolerance is used; a relative one would grow with the distance from the origin.
+    """
+    return np.isclose(coords, center, rtol=0)
+
+
 def current_component_data_array(
     *,
     component: str,
@@ -303,14 +312,16 @@ def point_current_source_from_simulation(
         (len(coords["x"]), len(coords["y"]), len(coords["z"])),
         dtype=complex,
     )
+    # the solver mirrors the stored source, so an off-plane point carries half of the
+    # symmetrized adjoint source per symmetry axis (same rule as ``FieldData`` sources)
     symmetry_factor = 1.0
     sym_center = simulation.center
     for dim, sym in enumerate(simulation.symmetry):
         if sym == 0:
             continue
-        if np.isclose(monitor.center[dim], sym_center[dim]):
+        if on_symmetry_plane(monitor.center[dim], sym_center[dim]):
             continue
-        symmetry_factor *= 2.0
+        symmetry_factor *= 0.5
 
     source_data = current_component_data_array(
         component=component,
