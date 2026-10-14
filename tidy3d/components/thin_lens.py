@@ -5,6 +5,11 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING
 
+from flexcompute.core._migration.em.thin_lens.validation import (
+    validate_lens_geometry,
+    validate_num_plane_waves,
+)
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, PositiveFloat, PositiveInt, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -87,28 +92,14 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
         cls, val: PositiveInt | tuple[PositiveInt, PositiveInt]
     ) -> PositiveInt | tuple[PositiveInt, PositiveInt]:
         """Ensure the angular grid is large enough to sample a circular pupil."""
-        return validate_thin_lens_num_plane_waves(val)
+        raise_first_error(validate_num_plane_waves(val), ValueError)
+        return val
 
     @model_validator(mode="after")
     def _validate_lens_geometry(self) -> Self:
         """Validate coupled lens-pupil settings."""
-        if self.fill_lens:
-            return self
-        if self.lens_diameter is None:
-            self._raise_validation_error_at_loc(
-                "'lens_diameter' is required when 'fill_lens=False'.",
-                "lens_diameter",
-            )
-        if self.beam_diameter is None:
-            self._raise_validation_error_at_loc(
-                "'beam_diameter' is required when 'fill_lens=False'.",
-                "beam_diameter",
-            )
-        if self.beam_diameter > self.lens_diameter:
-            self._raise_validation_error_at_loc(
-                "'beam_diameter' must not exceed 'lens_diameter'.",
-                "beam_diameter",
-            )
+        for diagnostic in validate_lens_geometry(self):
+            self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
         return self
 
     @property
@@ -132,18 +123,3 @@ def thin_lens_pupil_grid_samples(
     """Return the square angular-spectrum sample count before circular aperture masking."""
     num_x, num_y = thin_lens_num_plane_waves_xy(num_plane_waves)
     return num_x * num_y
-
-
-def validate_thin_lens_num_plane_waves(
-    num_plane_waves: PositiveInt | tuple[PositiveInt, PositiveInt],
-) -> PositiveInt | tuple[PositiveInt, PositiveInt]:
-    """Validate thin-lens angular-spectrum sample counts."""
-    values = thin_lens_num_plane_waves_xy(num_plane_waves)
-    if any(num < 3 for num in values):
-        raise ValueError("'num_plane_waves' must be at least 3 in each direction.")
-    if any(num > MAX_THIN_LENS_NUM_PLANE_WAVES for num in values):
-        raise ValueError(
-            "'num_plane_waves' must not exceed "
-            f"{MAX_THIN_LENS_NUM_PLANE_WAVES} in either direction."
-        )
-    return num_plane_waves
