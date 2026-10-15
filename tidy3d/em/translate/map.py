@@ -298,6 +298,35 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.tcad.generation_recombination:FossumCarrierLifetime": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.generation_recombination:FossumCarrierLifetime",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.generation_recombination:HurkxTrapAssistedTunneling": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.generation_recombination:HurkxTrapAssistedTunneling",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.generation_recombination:SurfaceShockleyReedHallRecombination": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.generation_recombination:SurfaceShockleyReedHallRecombination",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.generation_recombination:HeterojunctionCaptureSide": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.generation_recombination:HeterojunctionCaptureSide",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.generation_recombination:HeterojunctionSurfaceShockleyReedHallRecombination": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.generation_recombination:HeterojunctionSurfaceShockleyReedHallRecombination",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.generation_recombination:DistributedGeneration": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.generation_recombination:DistributedGeneration",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.tcad.grid:GridRefinementLine": ComponentScope(
         "flexcompute.core._migration.tcad.schema.grid:GridRefinementLine",
         "flexcompute.core._migration.tcad.validation:validate",

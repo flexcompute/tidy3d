@@ -1,25 +1,13 @@
 from __future__ import annotations
 
-import math
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import PERCMCUBE, SECOND
-from tidy3d.log import log
-
-if TYPE_CHECKING:
-    from tidy3d.compat import Self
-
-# Advisory floor on a tunneling effective mass in units of the free electron
-# mass. Not a bound: masses below it are accepted. It sits about a decade under
-# the lightest band mass in ordinary use (InSb electrons, ~0.014) and some
-# twenty-seven decades above an electron mass mistakenly given in kilograms, so
-# it separates a unit error from a real material without touching either.
-MIN_PLAUSIBLE_TUNNELING_EFFECTIVE_MASS = 1e-3
 
 
 class FossumCarrierLifetime(Tidy3dBaseModel):
@@ -118,23 +106,6 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
         title="Exponent constant",
         description="Exponent constant",
     )
-
-    @model_validator(mode="after")
-    def _warn_if_A_not_one(self: Self) -> Self:
-        """Warn if ``A`` is set to a value other than 1.
-
-        All published parameterizations of this lifetime form (Fossum,
-        Roulston, Klaassen, Schenk) take ``A = 1``; other values have no
-        physical interpretation in the literature.
-        """
-        if self.A != 1:
-            log.warning(
-                f"'FossumCarrierLifetime.A' is set to {self.A}, but A=1 is "
-                "the only value consistent with the published "
-                "parameterizations of this model. Other values have no "
-                "physical interpretation."
-            )
-        return self
 
 
 class PalankovskiQuayApproxCarrierLifetime(Tidy3dBaseModel):
@@ -432,36 +403,6 @@ class HurkxTrapAssistedTunneling(Tidy3dBaseModel):
         json_schema_extra={"units": "m_0"},
     )
 
-    @model_validator(mode="after")
-    def _validate_tunneling_masses(self) -> Self:
-        """Require finite masses, and flag ones small enough to look like kilograms.
-
-        There is no upper bound: a heavy band mass is a slow-tunneling material,
-        not an error. The unit mistake runs the other way, and the bound this
-        replaced could not catch it -- an electron mass written in kilograms is
-        9.1e-31, which is comfortably inside any positive upper limit. So the
-        small side is where the check belongs, and it warns rather than rejects,
-        because no threshold can distinguish a very light real mass from a
-        mistake with certainty.
-        """
-        for field_name in ("m_t_n", "m_t_p"):
-            value = getattr(self, field_name)
-            if not math.isfinite(value):
-                self._raise_validation_error_at_loc(
-                    f"'HurkxTrapAssistedTunneling.{field_name}' = {value} is not finite. "
-                    "The tunneling effective mass is given in units of the free "
-                    "electron mass 'm_0'.",
-                    field_name,
-                )
-            if value < MIN_PLAUSIBLE_TUNNELING_EFFECTIVE_MASS:
-                log.warning(
-                    f"'HurkxTrapAssistedTunneling.{field_name}' = {value:.3e} is far below "
-                    "any semiconductor band mass. The tunneling effective mass is given in "
-                    "units of the free electron mass 'm_0', so a value this small usually "
-                    "means it was given in kilograms. Accepting it as written."
-                )
-        return self
-
 
 class ShockleyReedHallRecombination(Tidy3dBaseModel):
     """Defines the parameters for the Shockley-Reed-Hall (SRH) recombination model.
@@ -552,19 +493,6 @@ class DistributedGeneration(Tidy3dBaseModel):
         gen_cm3 = np.array(gen_um3.data) * 1e12  # Convert from um^-3 to cm^-3
         new_gen = SpatialDataArray(gen_cm3, coords=gen_um3.coords)
         return cls(rate=new_gen)
-
-    @model_validator(mode="after")
-    def check_spatialdataarray_dimensions(self) -> Self:
-        """Check that the SpatialDataArray is at least 2D:"""
-
-        rate = self.rate
-
-        zero_dims = [d for d in ["x", "y", "z"] if len(rate.coords[d]) <= 1]
-
-        if len(zero_dims) > 1:
-            raise ValueError("SpatialDataArray must be at least 2D.")
-
-        return self
 
 
 class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
@@ -716,38 +644,6 @@ class SurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
         "surface SRH rate. Requires the accelerated charge solver.",
     )
 
-    @model_validator(mode="after")
-    def _validate_trap_level_in_gap(self) -> Self:
-        """Warn if the trap energy is outside any physically reasonable
-        band gap. ``E_t`` is referenced to the intrinsic Fermi level in
-        eV, so values much larger than half a typical bandgap are almost
-        certainly a unit mistake (eV vs. Joules) or a sign convention
-        error, producing unphysical ``n_1``, ``p_1`` values."""
-        if abs(self.E_t) > 1.5:
-            log.warning(
-                f"SurfaceShockleyReedHallRecombination 'E_t' = {self.E_t:.3e} eV "
-                "is outside the typical semiconductor band gap (|E_t| > 1.5 eV). "
-                "'E_t' is referenced to the intrinsic Fermi level in eV; "
-                "double-check units and sign convention."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_at_least_one_velocity_positive(self) -> Self:
-        """Warn if both surface recombination velocities are zero. The
-        BC then contributes no recombination flux and reduces to an
-        electrostatic interface; use this only for a charged
-        ``SurfaceRecombinationBC`` with no carrier recombination flux.
-        Otherwise prefer ``InsulatingBC``."""
-        if self.S_n == 0.0 and self.S_p == 0.0:
-            log.warning(
-                "SurfaceShockleyReedHallRecombination has S_n = S_p = 0 and "
-                "will not contribute any recombination flux. Use this only "
-                "for a charged 'SurfaceRecombinationBC' with no carrier "
-                "recombination flux; otherwise prefer 'InsulatingBC'."
-            )
-        return self
-
 
 class HeterojunctionCaptureSide(Tidy3dBaseModel):
     """
@@ -889,51 +785,6 @@ class HeterojunctionSurfaceShockleyReedHallRecombination(Tidy3dBaseModel):
         "velocities at which the interface trap captures carriers from it. The order "
         "does not matter.",
     )
-
-    @model_validator(mode="after")
-    def _validate_side_names(self) -> Self:
-        """Require two distinct side names, one of them the ``E_t`` reference."""
-        names = [side.name for side in self.sides]
-        if names[0] == names[1]:
-            self._raise_validation_error_at_loc(
-                f"Both 'sides' of 'HeterojunctionSurfaceShockleyReedHallRecombination' are "
-                f"named '{names[0]}'. The two sides name the two different structures, or "
-                "media, that meet at the heterojunction.",
-                "sides",
-            )
-        if self.E_t_reference not in names:
-            self._raise_validation_error_at_loc(
-                f"'E_t_reference' = '{self.E_t_reference}' is not one of the side names "
-                f"{names} of 'HeterojunctionSurfaceShockleyReedHallRecombination'. It names "
-                "the side whose intrinsic Fermi level 'E_t' is measured from.",
-                "E_t_reference",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_trap_level_in_gap(self) -> Self:
-        """Warn if the trap energy is outside any physically reasonable band gap,
-        which usually means a unit mistake (eV vs. Joules) or a sign error."""
-        if abs(self.E_t) > 1.5:
-            log.warning(
-                f"HeterojunctionSurfaceShockleyReedHallRecombination 'E_t' = {self.E_t:.3e} eV "
-                "is outside the typical semiconductor band gap (|E_t| > 1.5 eV). "
-                "'E_t' is referenced to the intrinsic Fermi level of the 'E_t_reference' "
-                "side in eV; double-check units and sign convention."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_at_least_one_velocity_positive(self) -> Self:
-        """Warn if every capture velocity is zero, leaving only the electrostatics
-        of ``Q_f`` on the interface."""
-        if all(side.S_n == 0.0 and side.S_p == 0.0 for side in self.sides):
-            log.warning(
-                "HeterojunctionSurfaceShockleyReedHallRecombination has S_n = S_p = 0 on "
-                "both sides and will not contribute any recombination flux. Use this only "
-                "for a charged 'SurfaceRecombinationBC' with no carrier recombination flux."
-            )
-        return self
 
 
 SurfaceRecombinationModelType = (
