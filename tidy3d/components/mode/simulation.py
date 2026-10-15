@@ -31,6 +31,7 @@ from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.validators import call_wrapped_validator, validate_colocated_integration
 from tidy3d.constants import C_0
+from tidy3d.em.translate import data_to_tidy3d
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
@@ -440,7 +441,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_sim = tidy3d_extras["mod"].SubpixelModeSimulation.from_mode_simulation(self)
-            return subpixel_sim.run_local()
+            return data_to_tidy3d(subpixel_sim.run_local())
 
         for mnt in self.monitors:
             if isinstance(mnt, (PermittivityMonitor, MediumMonitor)):
