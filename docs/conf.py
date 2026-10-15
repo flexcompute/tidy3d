@@ -142,6 +142,7 @@ extensions = [
     "monitor_data_viewcode",  # Restore source links for split monitor-data models
     "simulation_viewcode",  # Restore source links for extracted simulation methods
     "geometry_viewcode",  # Restore source links for extracted geometry methods
+    "data_array_viewcode",  # Restore source links for extracted data-array methods
     "custom-meta",  # In _ext, these need to be at the end of the extensions list
     "custom-sitemap",  # In _ext, these need to be at the end of the extensions list
     "custom-robots",  # In _ext, these need to be at the end of the extensions list

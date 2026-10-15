@@ -8,7 +8,7 @@ The data organization lives in `tidy3d/components/data` directory.
 
 The directory contains three files:
 
-- `data_array.py` defines the most atomic datastructures, which are subclasses of `xarray.DataArray`.
+- `data_array/` defines the most atomic datastructures, which are subclasses of `xarray.DataArray`.
 - `monitor_data/` defines the datastructures associated with each monitor type. They are regular tidy3d components that contain `DataArray` fields, among others.
 - `sim_data.py` holds the `SimulationData`, which basically holds a dictionary of `MonitorData` objects for the monitors in the simulation.
 
