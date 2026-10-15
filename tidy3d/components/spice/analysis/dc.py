@@ -40,8 +40,11 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
 
     rel_tol: PositiveFloat = Field(
         default=1e-10,
-        title="Relative tolerance.",
-        description="Relative tolerance used as stop criteria when converging towards a solution.",
+        title="Convergence tolerance.",
+        description="Convergence tolerance of the charge solve. On the accelerated (default) "
+        "solver it is an absolute bound that each normalized Poisson, electron and hole "
+        "equation must meet, and ``abs_tol`` is not used. The legacy solver applies it as the "
+        "relative tolerance, together with ``abs_tol`` as the absolute one.",
     )
 
     max_iters: PositiveInt = Field(

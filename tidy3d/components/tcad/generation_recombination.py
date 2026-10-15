@@ -579,7 +579,9 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
     The direct band-to-band tunneling recombination rate :math:`R^{\\text{BTBT}}` is primarily defined by the
     material's bandgap energy :math:`E_g` and the electric field :math:`F`.
 
-    Default values are provided for silicon.
+    The default of :math:`A` is the silicon value of [2]_, where :math:`B` and :math:`F_0` of the paper
+    are :math:`A` and :math:`B` here. The default of :math:`B` (1.9e6 V/cm) differs from the silicon
+    value of [2]_ (1.9e7 V/cm).
 
     .. math::
 
@@ -590,9 +592,9 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
     Example
     -------
     >>> import tidy3d as td
-    >>> default_Si = td.HurkxDirectBandToBandTunneling(
-    ...   A=1e19,
-    ...   B=1.9e6,
+    >>> Si = td.HurkxDirectBandToBandTunneling(
+    ...   A=4e14,
+    ...   B=1.9e7,
     ...   E_0=1,
     ...   sigma=2.5
     ... )
@@ -600,6 +602,9 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
     References
     ----------
         .. [1] Palankovski, Vassil, and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
+        .. [2] Hurkx, G. A. M., D. B. M. Klaassen, and M. P. G. Knuvers. "A new
+               recombination model for device simulation including tunneling."
+               IEEE Transactions on Electron Devices 39.2 (1992): 331-338.
     """
 
     A: PositiveFloat = Field(
@@ -611,7 +616,8 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
     B: float = Field(
         default=1.9e6,
         title="Parameter :math:`B`",
-        description="Parameter :math:`B` in the direct BTBT Hurkx model.",
+        description="Parameter :math:`B` in the direct BTBT Hurkx model. The default differs "
+        "from the silicon value 1.9e7 V/cm of Hurkx et al. [2].",
         json_schema_extra={"units": "V/cm"},
     )
     E_0: PositiveFloat = Field(

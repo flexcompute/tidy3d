@@ -629,6 +629,8 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("monitors",), self._monitors_cross_solids)
         self._call_with_validation_loc(("monitors",), self._check_monitor_dimensionality)
         self._call_with_validation_loc(("symmetry",), self._check_symmetry_not_normal_to_zero_dim)
+        self._check_single_ssac()
+        self._check_only_one_voltage_array_provided()
         self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
         self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
         self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
@@ -846,22 +848,18 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    @field_validator("boundary_spec")
-    @classmethod
-    def _check_single_ssac(
-        cls, boundary_spec: HeatChargeBoundarySpec | HeatBoundarySpec
-    ) -> HeatChargeBoundarySpec | HeatBoundarySpec:
-        ssac_present = False
-        for bc in boundary_spec:
-            if isinstance(bc.condition, VoltageBC):
-                if isinstance(bc.condition.source, SSACVoltageSource):
-                    if ssac_present:
-                        raise SetupError(
-                            "Only a single 'SSACVoltageSource' source can be supplied."
-                        )
-                    else:
-                        ssac_present = True
-        return boundary_spec
+    def _check_single_ssac(self) -> Self:
+        """Error if more than one terminal carries an ``SSACVoltageSource``."""
+        terminals = self._voltage_terminals(self._ssac_bc_indices())
+        if len(terminals) > 1:
+            self._raise_validation_error_at_loc(
+                "Only a single 'SSACVoltageSource' source can be supplied. Entries naming one "
+                "metal structure with the same source count as one.",
+                "boundary_spec",
+                terminals[1],
+                "condition",
+            )
+        return self
 
     def _check_natural_convection_bc(self) -> Self:
         """Make sure that natural convection BCs are defined correctly."""
@@ -1040,31 +1038,71 @@ class HeatChargeSimulation(AbstractSimulation):
                         )
         return self
 
-    @field_validator("boundary_spec")
-    @classmethod
-    def _check_only_one_voltage_array_provided(cls, val: Any) -> Any:
-        """Issue error if more than one voltage array is provided.
-        Currently we only allow to sweep over one voltage array.
+    def _check_only_one_voltage_array_provided(self) -> Self:
+        """Error if more than one terminal is swept."""
+        terminals = self._voltage_terminals(self._swept_bc_indices())
+        if len(terminals) > 1:
+            self._raise_validation_error_at_loc(
+                "More than one voltage array has been provided. Currently voltage arrays are "
+                "supported only for one terminal; entries naming one metal structure with the "
+                "same source count as one.",
+                "boundary_spec",
+                terminals[1],
+                "condition",
+            )
+        return self
+
+    def _ssac_bc_indices(self) -> list[int]:
+        """Indices of the ``VoltageBC`` entries with an ``SSACVoltageSource``."""
+        return [
+            i
+            for i, bc in enumerate(self.boundary_spec)
+            if isinstance(bc.condition, VoltageBC)
+            and isinstance(bc.condition.source, SSACVoltageSource)
+        ]
+
+    def _swept_bc_indices(self) -> list[int]:
+        """Indices of the ``VoltageBC`` entries that sweep more than one voltage.
+
+        Both DC and SSAC sources carry a DC sweep array; counting only one type
+        would admit an ambiguous two-sweep setup.
         """
-        array_already_provided = False
+        return [
+            i
+            for i, bc in enumerate(self.boundary_spec)
+            if isinstance(bc.condition, VoltageBC)
+            and isinstance(bc.condition.source, (DCVoltageSource, SSACVoltageSource))
+            and len(bc.condition.source.voltage) > 1
+        ]
 
-        for bc in val:
-            if isinstance(bc.condition, VoltageBC):
-                voltages = []
-                # both DC and SSAC sources carry a DC sweep array; counting only
-                # one type would admit an ambiguous two-sweep setup
-                if isinstance(bc.condition.source, (DCVoltageSource, SSACVoltageSource)):
-                    voltages = bc.condition.source.voltage
+    def _driven_terminal_split_across_entries(self) -> bool:
+        """Whether a swept or SSAC terminal is named by more than one ``boundary_spec`` entry.
 
-                if len(voltages) > 1:
-                    if not array_already_provided:
-                        array_already_provided = True
-                    else:
-                        raise SetupError(
-                            "More than one voltage array has been provided. "
-                            "Currently voltage arrays are supported only for one of the BCs."
-                        )
-        return val
+        The legacy solver drives or measures only one of those entries.
+        """
+        return any(
+            len(self._voltage_terminals(indices)) < len(indices)
+            for indices in (self._swept_bc_indices(), self._ssac_bc_indices())
+        )
+
+    def _voltage_terminals(self, indices: list[int]) -> list[int]:
+        """First ``boundary_spec`` index of each terminal among the given contact entries.
+
+        Entries that name a common ``ChargeConductorMedium`` structure and carry the same
+        drive are one terminal, as in :meth:`_check_one_bias_per_metal`; any other entry
+        is a terminal of its own.
+        """
+        terminals: list[tuple[int, set[str], Any]] = []
+        for i in indices:
+            conductors = self._contact_conductors(i)
+            drive = self._drive_of(self.boundary_spec[i].condition.source)
+            joined = [t for t in terminals if t[2] == drive and t[1] & conductors]
+            for terminal in joined:
+                terminals.remove(terminal)
+                conductors |= terminal[1]
+            first = min([i] + [terminal[0] for terminal in joined])
+            terminals.append((first, conductors, drive))
+        return sorted(terminal[0] for terminal in terminals)
 
     def _check_freqs_requires_ac_source(self) -> Self:
         """Ensure that if freqs is provided, at least one ACVoltageSource is present."""
@@ -1128,27 +1166,45 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _check_charge_simulation_voltage_bcs(self) -> Self:
         """Require two charge contacts and at least one prescribed potential."""
-        voltage_bcs = 0
-        current_bcs = 0
-        for bc in self.boundary_spec:
-            if isinstance(bc.condition, VoltageBC):
-                voltage_bcs = voltage_bcs + 1
-            elif isinstance(bc.condition, CurrentBC):
-                current_bcs = current_bcs + 1
-        if voltage_bcs + current_bcs < 2:
+        voltage_idx = [
+            i for i, bc in enumerate(self.boundary_spec) if isinstance(bc.condition, VoltageBC)
+        ]
+        current_idx = self._current_bc_indices()
+        n_entries = len(voltage_idx) + len(current_idx)
+        if n_entries < 2:
             raise SetupError(
                 "Defining a Charge simulation requires at least two contact boundaries. "
                 "Use 'VoltageBC' (Schottky contacts opt in via model=\"schottky_mott\") "
                 "or 'CurrentBC'. So far "
-                f"{voltage_bcs + current_bcs} contact boundaries have been set."
+                f"{n_entries} contact boundaries have been set."
             )
-        if voltage_bcs < 1:
+        if not voltage_idx:
             raise SetupError(
                 "Defining a Charge simulation requires at least one 'VoltageBC' to fix the "
                 "potential reference. A 'CurrentBC' prescribes a current, not a potential, "
                 "so a device driven only by currents leaves the electric potential "
                 "undetermined."
             )
+        terminals = self._voltage_terminals(voltage_idx) + self._voltage_terminals(current_idx)
+        if len(terminals) >= 2:
+            return self
+        driven = set(self._swept_bc_indices()) | set(self._ssac_bc_indices())
+        if driven & set(voltage_idx):
+            self._raise_validation_error_at_loc(
+                "Defining a Charge simulation requires at least two contact terminals, but "
+                "the 'boundary_spec' entries form a single terminal that is swept or carries "
+                "an 'SSACVoltageSource'. Entries naming one metal structure count as one "
+                "terminal. Add a second terminal.",
+                "boundary_spec",
+                voltage_idx[0],
+                "condition",
+            )
+        log.warning(
+            f"The {n_entries} contact entries in 'boundary_spec' form a single terminal, "
+            "because they name one metal structure with one source. A charge simulation "
+            "needs two terminals to carry current. Future versions of Tidy3D may reject this "
+            "setup."
+        )
         return self
 
     def _check_charge_simulation_monitors(self) -> Self:
@@ -3974,6 +4030,9 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if self._insulator_face_bc_indices():
             features.append("'VoltageBC' on an insulator face")
+
+        if self._driven_terminal_split_across_entries():
+            features.append("Swept or SSAC terminal named by several 'boundary_spec' entries")
 
         if self._uses_gpu_only_lifetime_model():
             features.append("PalankovskiQuayApproxCarrierLifetime")

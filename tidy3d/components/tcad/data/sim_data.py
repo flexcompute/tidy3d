@@ -219,7 +219,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         description="Steady DC computation of the small signal resistance. This is computed "
         "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
         "is given in Ohms. In 2D the resistance is given in :math:`\\Omega \\cdot \\mu\\text{m}`. "
-        "For 2D simulations, multiply by the device depth (in μm) to obtain the resistance in Ω.",
+        "For 2D simulations, divide by the device depth (in μm) to obtain the resistance in Ω.",
         json_schema_extra={"units": "Ω", "units_2d": "Ω*um"},
     )
 
