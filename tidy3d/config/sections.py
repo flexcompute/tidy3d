@@ -676,6 +676,34 @@ class WebConfig(ConfigSection):
         description="AWS S3 region used by the platform.",
     )
 
+    s3_endpoint_url: str | None = Field(
+        default=None,
+        title="S3 endpoint URL",
+        description=(
+            "S3-compatible storage endpoint passed to the storage client only. ``None`` uses "
+            "``env_vars['AWS_ENDPOINT_URL_S3']`` if set, otherwise the boto3 default."
+        ),
+    )
+
+    s3_addressing_style: Literal["auto", "virtual", "path"] | None = Field(
+        default=None,
+        title="S3 addressing style",
+        description=(
+            "S3 bucket addressing style passed to the storage client. ``None`` keeps the "
+            "boto3 default."
+        ),
+    )
+
+    s3_checksum_mode: Literal["when_supported", "when_required"] | None = Field(
+        default=None,
+        title="S3 checksum mode",
+        description=(
+            "Request checksum calculation and response checksum validation passed to the "
+            "storage client. ``None`` keeps the boto3 default. Ignored by botocore releases "
+            "older than 1.36, which do not compute default checksums."
+        ),
+    )
+
     timeout: int = Field(
         default=120,
         title="HTTP timeout",
@@ -745,7 +773,7 @@ class WebConfig(ConfigSection):
 
         return candidate
 
-    @field_validator("api_endpoint", "website_endpoint", mode="before")
+    @field_validator("api_endpoint", "website_endpoint", "s3_endpoint_url", mode="before")
     @classmethod
     def _validate_http_url(cls, value: Any) -> str:
         if value is None:

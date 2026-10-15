@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import boto3
 from boto3.s3.transfer import TransferConfig
+from botocore.config import Config as BotoConfig
 from pydantic import BaseModel, Field
 from rich.progress import (
     BarColumn,
@@ -69,7 +70,8 @@ class _S3STSToken(BaseModel):
     def get_client(self) -> boto3.client:
         """Get the boto client for this token.
 
-        Automatically configures custom S3 endpoint if specified in web.env_vars.
+        Storage settings from ``config.web`` are passed to this client only, never through
+        ``os.environ``, so they do not affect other boto3 clients in the process.
         """
 
         client_kwargs = {
@@ -81,10 +83,22 @@ class _S3STSToken(BaseModel):
             "verify": config.web.ssl_verify,
         }
 
-        # Add custom S3 endpoint if configured (e.g., for Nexus deployments)
-        if config.web.env_vars and "AWS_ENDPOINT_URL_S3" in config.web.env_vars:
-            s3_endpoint = config.web.env_vars["AWS_ENDPOINT_URL_S3"]
+        # Custom S3 endpoint (e.g., CN OSS, or Nexus via env_vars)
+        s3_endpoint = config.web.s3_endpoint_url or config.web.env_vars.get("AWS_ENDPOINT_URL_S3")
+        if s3_endpoint:
             client_kwargs["endpoint_url"] = s3_endpoint
+
+        boto_options = {}
+        if config.web.s3_addressing_style is not None:
+            boto_options["s3"] = {"addressing_style": config.web.s3_addressing_style}
+        if (
+            config.web.s3_checksum_mode is not None
+            and "request_checksum_calculation" in BotoConfig.OPTION_DEFAULTS
+        ):
+            boto_options["request_checksum_calculation"] = config.web.s3_checksum_mode
+            boto_options["response_checksum_validation"] = config.web.s3_checksum_mode
+        if boto_options:
+            client_kwargs["config"] = BotoConfig(**boto_options)
 
         return boto3.client(**client_kwargs)
 

@@ -40,6 +40,16 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
             "s3_region": "us-gov-west-1",
         }
     },
+    "cn": {
+        "web": {
+            "api_endpoint": "https://tidy3d-api.fangzhen.cloud",
+            "website_endpoint": "https://tidy3d.fangzhen.cloud",
+            "s3_region": "cn-beijing",
+            "s3_endpoint_url": "https://s3.oss-cn-beijing.aliyuncs.com",
+            "s3_addressing_style": "virtual",
+            "s3_checksum_mode": "when_required",
+        }
+    },
     "nexus": {
         "web": {
             "api_endpoint": "http://127.0.0.1:5000",

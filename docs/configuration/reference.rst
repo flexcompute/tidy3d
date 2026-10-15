@@ -347,6 +347,18 @@ Settings for the cloud API client and related environment overrides.
      - ``"us-gov-west-1"``
      - No
      - AWS region used by the platform’s S3 storage.
+   * - ``s3_endpoint_url``
+     - ``None``
+     - No
+     - S3-compatible storage endpoint, passed to the Tidy3D storage client only. ``None`` falls back to ``env_vars["AWS_ENDPOINT_URL_S3"]``, then the boto3 default.
+   * - ``s3_addressing_style``
+     - ``None``
+     - No
+     - S3 bucket addressing style (``"auto"``, ``"virtual"`` or ``"path"``). ``None`` keeps the boto3 default.
+   * - ``s3_checksum_mode``
+     - ``None``
+     - No
+     - S3 checksum mode (``"when_supported"`` or ``"when_required"``) for requests and responses. ``None`` keeps the boto3 default.
    * - ``timeout``
      - ``120``
      - No
