@@ -113,7 +113,25 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
 
         Note that :math:`N_{tot}` is the total doping as defined within a :class:`SemiconductorMedium`.
 
+        This is an *apparent* band-gap narrowing: its parameters fit the measured
+        :math:`n_0 p_0 = n_i^2 \\exp(\\Delta E_G / k_B T)` of heavily doped silicon read with
+        Boltzmann statistics, so majority-carrier degeneracy is already part of
+        :math:`\\Delta E_G`. With ``fermi_dirac=True`` the solver uses the larger Fermi-Dirac
+        narrowing :math:`\\Delta E_G^{FD} \\ge \\Delta E_G`, so degeneracy is not counted twice [2]_:
+
+        .. math::
+
+            \\Delta E_G^{FD} = \\Delta E_G - k_B T \\ln \\frac{F_{1/2}(\\eta)}{e^{\\eta}}, \\qquad
+            \\eta = F_{1/2}^{-1} \\left( \\frac{|N_D - N_A|}{N_{maj}} \\right),
+
+        where :math:`F_{1/2}` is the normalized Fermi-Dirac integral and :math:`N_{maj}` is
+        :math:`N_c` where :math:`N_D > N_A` and :math:`N_v` otherwise. :math:`T` is the local lattice
+        temperature, so both statistics give the same :math:`n_0 p_0` in a neutral region at every
+        temperature.
+
         .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON' Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992
+
+        .. [2] D. Yan and A. Cuevas, 'Empirical determination of the energy band gap narrowing in highly doped n+ silicon', Journal of Applied Physics 114, 044508, 2013
 
     Example
     -------

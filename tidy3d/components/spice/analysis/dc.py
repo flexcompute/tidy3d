@@ -202,7 +202,8 @@ class SteadyChargeDCAnalysis(Tidy3dBaseModel):
         description="Determines whether Fermi-Dirac statistics are used. When ``False``, "
         "Boltzmann statistics will be used. This can provide more accurate results in situations "
         "where very high doping may lead the pseudo-Fermi energy level to approach "
-        "either the conduction or valence energy bands.",
+        "either the conduction or valence energy bands. See :class:`SlotboomBandGapNarrowing` for "
+        "how its narrowing is converted under Fermi-Dirac statistics.",
     )
 
     @model_validator(mode="before")
