@@ -29,9 +29,11 @@ Band offsets follow Anderson's rule from the configured electron affinities
 
 The electrostatic potential is continuous across the interface; the band
 offsets appear as steps in the conduction and valence band edges, visible in
-:class:`SteadyEnergyBandMonitor` data. An unset ``electron_affinity`` is
-treated as 0 eV, so physical alignments require setting the affinity on every
-semiconductor material of the device.
+:class:`SteadyEnergyBandMonitor` data. An unset ``electron_affinity`` is read as
+0 eV, so set it on every semiconductor of the device. With the accelerated
+solver, a simulation warns when one semiconductor of a pair with different band
+parameters leaves it unset, or when both leave it unset and their band gaps
+differ. Future versions of Tidy3D may refuse such a simulation.
 
 Interface transport
 ^^^^^^^^^^^^^^^^^^^

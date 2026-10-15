@@ -69,8 +69,10 @@ drift-diffusion source terms.
    SelberherrImpactIonization
 
 .. note::
-   At most one ``ShockleyReedHallRecombination`` model may be specified per
-   medium; if several are provided only the last one is used.
+   Each mechanism (Shockley-Read-Hall, Auger, radiative, band-to-band tunneling
+   and impact ionization) should appear at most once in a medium's ``R``: a
+   mechanism listed twice warns, and only one of its entries is used. Several
+   ``DistributedGeneration`` entries add up.
 
 
 Doping

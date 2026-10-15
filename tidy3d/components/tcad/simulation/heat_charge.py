@@ -75,6 +75,8 @@ from tidy3d.components.tcad.mobility import (
     V_SAT_FLOOR,
     AlloyMobility,
     CanaliFieldDependence,
+    CaugheyThomasMobility,
+    ConstantMobilityModel,
     MasettiMobility,
 )
 from tidy3d.components.tcad.monitors.charge import (
@@ -192,13 +194,25 @@ def _band_signature(medium: SemiconductorMedium) -> tuple[tuple[Any, ...], ...]:
             signature.append(("constant", dos.N))
         else:
             signature.append(("temperature_dependent", float(dos.calc_eff_dos(1.0))))
-    band_gap = medium.E_g
-    if isinstance(band_gap, VarshniEnergyBandGap):
-        signature.append(("varshni", band_gap.eg_0, band_gap.alpha, band_gap.beta))
-    else:
-        signature.append(("constant", band_gap.eg))
+    signature.append(_band_gap_signature(medium))
     signature.append(("affinity", medium.electron_affinity or 0.0))
     return tuple(signature)
+
+
+def _band_gap_signature(medium: SemiconductorMedium) -> tuple[Any, ...]:
+    """The band-gap model as ``(kind, *values)``."""
+    band_gap = medium.E_g
+    if isinstance(band_gap, VarshniEnergyBandGap):
+        return ("varshni", band_gap.eg_0, band_gap.alpha, band_gap.beta)
+    return ("constant", band_gap.eg)
+
+
+def _band_fields_differ(field_a: tuple[Any, ...], field_b: tuple[Any, ...]) -> bool:
+    """Whether two ``(kind, *values)`` band fields differ beyond ``HETEROJUNCTION_REL_TOL``."""
+    return field_a[0] != field_b[0] or any(
+        abs(a - b) > HETEROJUNCTION_REL_TOL * max(1.0, abs(a), abs(b))
+        for a, b in zip(field_a[1:], field_b[1:], strict=True)
+    )
 
 
 def _is_material_heterojunction(
@@ -206,11 +220,7 @@ def _is_material_heterojunction(
 ) -> bool:
     """Whether two semiconductors meet in a band offset."""
     return any(
-        field_a[0] != field_b[0]
-        or any(
-            abs(a - b) > HETEROJUNCTION_REL_TOL * max(1.0, abs(a), abs(b))
-            for a, b in zip(field_a[1:], field_b[1:], strict=True)
-        )
+        _band_fields_differ(field_a, field_b)
         for field_a, field_b in zip(
             _band_signature(medium_a), _band_signature(medium_b), strict=True
         )
@@ -661,6 +671,7 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._check_charge_simulation_semiconductors
             )
+            self._call_with_validation_loc(("structures",), self._check_mobility_model_families)
             self._call_with_validation_loc(("structures",), self._check_masetti_mobility_models)
             self._call_with_validation_loc(("structures",), self._check_alloy_mobility_models)
             self._call_with_validation_loc(
@@ -680,6 +691,9 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._warn_non_accelerated_ignores_electron_affinity
             )
+            self._call_with_validation_loc(
+                ("structures",), self._warn_heterojunction_electron_affinity
+            )
             self._call_with_validation_loc(("boundary_spec",), self._check_current_bcs)
             # After the CurrentBC checks: a current-driven gate is rejected outright,
             # so demanding its work function first would send the user after a value
@@ -689,16 +703,26 @@ class HeatChargeSimulation(AbstractSimulation):
         # Ahead of '_not_all_neumann', whose generic message would hide the real mistake when
         # a 'HeatFromElectricSource' has no heat BCs.
         self._call_with_validation_loc(("sources",), self._check_charge_heat_coupling_unsupported)
+        # Ahead of the heat-BC checks below, whose generic messages would hide that the
+        # input is ignored.
+        self._call_with_validation_loc(
+            ("boundary_spec",), self._warn_heat_inputs_need_thermal_solve
+        )
         self._call_with_validation_loc(("sources",), self._check_coupling_source_can_be_applied)
         self._call_with_validation_loc(("sources",), self._warn_coupling_source_is_no_op)
         self._call_with_validation_loc(("boundary_spec",), self._heat_bcs_reach_solids)
+        self._call_with_validation_loc(("boundary_spec",), self._check_self_heating_has_heat_sink)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("grid_spec",), self._check_experimental_mesher_support)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
         self._call_with_validation_loc(("sources",), self._names_exist_sources)
         self._call_with_validation_loc(("structures",), self._check_medium_specs)
-        if TCADAnalysisTypes.HEAT in simulation_types:
+        # A charge analysis solves its temperature inside the charge run and reports through
+        # its own monitors, so a 'TemperatureMonitor' is optional there.
+        if TCADAnalysisTypes.HEAT in simulation_types and not isinstance(
+            self.analysis_spec, ChargeTypes
+        ):
             self._call_with_validation_loc(("monitors",), self._check_heat_sim)
         if TCADAnalysisTypes.CONDUCTION in simulation_types:
             self._call_with_validation_loc(("monitors",), self._check_conduction_sim_monitors)
@@ -2577,6 +2601,39 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
+    def _warn_heat_inputs_need_thermal_solve(self) -> Self:
+        """Warn about heat BCs and heat sources in a charge analysis that solves no temperature.
+
+        They are accepted and never applied. 'HeatFromElectricSource' has its own
+        message in ``_check_charge_heat_coupling_unsupported``.
+        """
+        if not isinstance(self.analysis_spec, ChargeTypes) or self._thermal_solver_active:
+            return self
+
+        if self._temperature_prescribed:
+            temperature = "a prescribed lattice temperature field"
+        else:
+            temperature = f"a uniform lattice temperature of {self.analysis_spec.temperature} K"
+        consequence = (
+            f"'{type(self.analysis_spec).__name__}' runs on {temperature} and solves no heat "
+            "equation, so it is ignored. Remove it, or use 'SteadyChargeDCAnalysis' or "
+            "'SSACAnalysis' without a 'temperature' to solve the temperature with self-heating. "
+            "Future versions of Tidy3D may reject this setup."
+        )
+        for index, bc in enumerate(self.boundary_spec):
+            if isinstance(bc.condition, HeatBCTypes):
+                log.warning(
+                    f"'boundary_spec[{index}]' ('{type(bc.condition).__name__}') has no effect "
+                    f"here: {consequence}"
+                )
+        for index, source in enumerate(self.sources):
+            if isinstance(source, (UniformHeatSource, HeatSource)):
+                log.warning(
+                    f"'sources[{index}]' ('{type(source).__name__}') has no effect here: "
+                    f"{consequence}"
+                )
+        return self
+
     def _warn_coupling_source_is_no_op(self) -> Self:
         """Warn that 'HeatFromElectricSource' does nothing on a non-isothermal charge sim."""
         if not self._thermal_solver_active:
@@ -2926,43 +2983,97 @@ class HeatChargeSimulation(AbstractSimulation):
 
         Gated on ``_thermal_solver_active``: a prescribed temperature is non-isothermal but
         solves no heat equation, so demanding a thermal conductivity would reject a
-        runnable setup."""
+        runnable setup.
 
-        if self._thermal_solver_active:
-            semiconductor_locs = [loc for loc, _ in self._iter_semiconductor_charge_media()]
-            has_elec = bool(semiconductor_locs)
+        A semiconductor without a solid heat medium only warns; no solid heat medium at all is
+        an error."""
 
-            has_heat = False
-            for medium in [self.medium, *(struct.medium for struct in self.structures)]:
-                heat_spec = (
-                    medium
-                    if isinstance(medium, SolidMedium)
-                    else getattr(medium, "heat_spec", None)
-                )
-                if isinstance(heat_spec, SolidMedium):
-                    has_heat = True
-                    break
+        if not self._thermal_solver_active:
+            return self
 
-            if not has_heat and has_elec:
-                # Anchor to the semiconductor that needs the heat spec. The caller's fallback
-                # loc is ('structures',), which points at nothing actionable -- and at nothing
-                # at all -- when the semiconductor sits on the background medium.
-                self._raise_validation_error_at_loc(
-                    "The current simulation is defined as non-isothermal but no solid "
-                    "materials with heat properties have been defined. ",
-                    *semiconductor_locs[0],
-                )
-            elif not has_elec and has_heat:
-                raise SetupError(
-                    "The current simulation is defined as non-isothermal but no "
-                    "semiconductor materials have been defined. "
-                )
-            elif not has_heat and not has_elec:
-                raise SetupError(
-                    "The current simulation is defined as non-isothermal but no "
-                    "solid or semiconductor materials have been defined. "
-                )
+        semiconductor_locs = {loc for loc, _ in self._iter_semiconductor_charge_media()}
+        has_heat = False
+        locs_without_heat = []
+        for loc, medium in self._iter_media_with_locs():
+            heat_spec = (
+                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
+            )
+            if isinstance(heat_spec, SolidMedium):
+                has_heat = True
+            elif loc in semiconductor_locs:
+                locs_without_heat.append(loc)
+
+        # Anchored to the semiconductor itself: the caller's fallback loc is ('structures',),
+        # which points at nothing when it is the background medium.
+        if semiconductor_locs and not has_heat:
+            self._raise_validation_error_at_loc(
+                "The current simulation is defined as non-isothermal but no solid "
+                "materials with heat properties have been defined. ",
+                *locs_without_heat[0],
+            )
+        for loc in locs_without_heat:
+            log.warning(
+                f"{self._medium_label(loc)} is a semiconductor without a solid heat medium. "
+                "A non-isothermal charge simulation generates its Joule and recombination "
+                "heat in the semiconductors and solves the temperature only in solid media, "
+                "so this semiconductor is held at the ambient temperature and its heat is "
+                "dropped. Use a 'MultiPhysicsMedium' with 'heat=SolidMedium(...)' for it. "
+                "Future versions of Tidy3D may reject this setup."
+            )
+
+        if not semiconductor_locs and has_heat:
+            raise SetupError(
+                "The current simulation is defined as non-isothermal but no "
+                "semiconductor materials have been defined. "
+            )
+        if not semiconductor_locs:
+            raise SetupError(
+                "The current simulation is defined as non-isothermal but no "
+                "solid or semiconductor materials have been defined. "
+            )
+
         return self
+
+    def _check_self_heating_has_heat_sink(self) -> Self:
+        """Warn if a self-heating charge analysis has no boundary that lets the heat leave.
+
+        Surfaces without a thermal BC are adiabatic, so the steady heat equation has no
+        solution unless a 'TemperatureBC' or an exchanging 'ConvectionBC' exists. Raises
+        instead when '_not_all_neumann' refuses the setup anyway, since its generic message
+        would otherwise win.
+        """
+        if not self._thermal_solver_active:
+            return self
+        if any(self._is_heat_sink(bc.condition) for bc in self.boundary_spec):
+            return self
+        message = (
+            "A non-isothermal charge analysis solves a steady heat equation for the "
+            "self-heating, which has no solution unless the heat can leave the device: "
+            "surfaces without a thermal boundary condition are adiabatic, and a 'HeatFluxBC', "
+            "'ThermalContactResistance' or 'ConvectionBC' with a zero 'transfer_coeff' does not "
+            "take heat out. Add a 'TemperatureBC', or a 'ConvectionBC' with a positive "
+            "'transfer_coeff', where the device is heat-sunk."
+        )
+        heat_bcs = [bc for bc in self.boundary_spec if isinstance(bc.condition, HeatBCTypes)]
+        if TCADAnalysisTypes.HEAT in self._check_simulation_types() and all(
+            isinstance(bc.condition, NeumannHeatBCTypes) for bc in heat_bcs
+        ):
+            self._raise_validation_error_at_loc(message, "boundary_spec")
+        log.warning(f"{message} Future versions of Tidy3D may reject this setup.")
+        return self
+
+    @staticmethod
+    def _is_heat_sink(condition: Any) -> bool:
+        """Whether a heat BC can carry heat out of the domain."""
+        if isinstance(condition, (TemperatureBC, RadiationBC)):
+            return True
+        if isinstance(condition, ConvectionBC):
+            return (
+                isinstance(condition.transfer_coeff, VerticalNaturalConvectionCoeffModel)
+                or condition.transfer_coeff > 0
+                or bool(condition.emissivity)
+            )
+        return False
 
     def _check_heat_only_features_in_charge(self) -> Self:
         """Reject heat-only-solver features in non-isothermal charge simulations.
@@ -4068,6 +4179,69 @@ class HeatChargeSimulation(AbstractSimulation):
                 return True
         return False
 
+    def _warn_heterojunction_electron_affinity(self) -> Self:
+        """Warn if an unset electron affinity would decide a band offset.
+
+        The accelerated solver places the bands of two semiconductors by their electron
+        affinities (Anderson's rule) and reads an unset one as 0 eV. With one of the pair
+        unset, that 0 eV meets the other's affinity. With both unset, a band-gap difference
+        lands entirely in the valence band; equal band gaps lose nothing, whatever their
+        densities of states. The non-accelerated solver ignores 'electron_affinity'
+        (``_warn_non_accelerated_ignores_electron_affinity``).
+        """
+        try:
+            if not self._resolve_use_accelerated_solver:
+                return self
+        except SetupError:
+            return self
+
+        # Structures usually share a few media; equal media meet without a band offset.
+        semiconductors: list[tuple[tuple[Any, ...], SemiconductorMedium]] = []
+        for loc, medium in self._iter_semiconductor_charge_media():
+            if not any(medium is other or medium == other for _, other in semiconductors):
+                semiconductors.append((loc, medium))
+        for index, (loc_a, medium_a) in enumerate(semiconductors):
+            for loc_b, medium_b in semiconductors[index + 1 :]:
+                missing = [
+                    loc
+                    for loc, medium in ((loc_a, medium_a), (loc_b, medium_b))
+                    if medium.electron_affinity is None
+                ]
+                pair = f"{self._medium_label(loc_a)} and {self._medium_label(loc_b)}"
+                if len(missing) == 1 and _is_material_heterojunction(medium_a, medium_b):
+                    message = (
+                        f"The band offset between {pair} follows from their electron "
+                        f"affinities, and {self._medium_label(missing[0])} has no "
+                        "'electron_affinity', which is read as 0 eV against the other's. "
+                        "Set it. Future versions of Tidy3D may reject this setup."
+                    )
+                elif len(missing) == 2 and _band_fields_differ(
+                    _band_gap_signature(medium_a), _band_gap_signature(medium_b)
+                ):
+                    message = (
+                        f"{pair} have different band gaps, so their band offset follows from "
+                        "their electron affinities. Neither sets 'electron_affinity': both "
+                        "are read as 0 eV, which puts the whole band-gap difference into "
+                        "the valence band. Set 'electron_affinity' on both. "
+                        "Future versions of Tidy3D may reject this setup."
+                    )
+                else:
+                    continue
+                log.warning(message)
+        return self
+
+    def _medium_label(self, loc: tuple[Any, ...]) -> str:
+        """How messages name the medium at ``loc``: the background or a structure."""
+        if loc == ("medium",):
+            return "The background 'medium'"
+        return f"Structure '{self.structures[loc[1]].name or loc[1]}'"
+
+    def _iter_media_with_locs(self) -> Iterator[tuple[tuple[Any, ...], Any]]:
+        """Yield ``(loc, medium)`` for the background ``medium`` and each structure's medium."""
+        yield ("medium",), self.medium
+        for i, structure in enumerate(self.structures):
+            yield ("structures", i), structure.medium
+
     def _iter_semiconductor_charge_media(
         self,
     ) -> Iterator[tuple[tuple[Any, ...], SemiconductorMedium]]:
@@ -4086,11 +4260,7 @@ class HeatChargeSimulation(AbstractSimulation):
         raw-semiconductor or background-medium configurations, and lets every
         validator that uses this helper get the right loc for free.
         """
-        sources: list[tuple[tuple[Any, ...], Any]] = [(("medium",), self.medium)]
-        sources.extend(
-            (("structures", i), structure.medium) for i, structure in enumerate(self.structures)
-        )
-        for loc, medium in sources:
+        for loc, medium in self._iter_media_with_locs():
             if isinstance(medium, SemiconductorMedium):
                 yield loc, medium
             else:
@@ -4220,20 +4390,33 @@ class HeatChargeSimulation(AbstractSimulation):
             ),
         ]
 
-    def _check_mobility_family_for_both_carriers(self, family: type) -> None:
-        """Error if a semiconductor medium uses ``family`` for only one carrier."""
+    def _check_mobility_model_families(self) -> Self:
+        """Error if a semiconductor's carriers use different low-field mobility families.
+
+        Either charge solver takes one low-field family per medium for both carriers, so the mix
+        would be refused only after upload.
+        """
         for loc, charge in self._iter_semiconductor_charge_media():
-            if isinstance(charge.mobility_n, family) != isinstance(charge.mobility_p, family):
-                self._raise_validation_error_at_loc(
-                    f"{family.__name__} must be used for both electron and hole mobility "
-                    f"models in a semiconductor medium. Mixing {family.__name__} with "
-                    "another mobility family is not supported by the accelerated "
-                    "charge solver.",
-                    *loc,
+            families = {type(charge.mobility_n), type(charge.mobility_p)}
+            if len(families) == 1:
+                continue
+            hint = ""
+            if families == {ConstantMobilityModel, CaugheyThomasMobility}:
+                hint = (
+                    " A constant mobility is the 'CaugheyThomasMobility' with 'mu_min' and 'mu' "
+                    "both set to it and 'exp_1' and 'exp_2' set to 0."
                 )
+            self._raise_validation_error_at_loc(
+                f"The electron mobility model is '{type(charge.mobility_n).__name__}' and the "
+                f"hole mobility model is '{type(charge.mobility_p).__name__}'. The charge solver "
+                "evaluates one low-field mobility family for both carriers of a medium, so "
+                f"they must be of the same type.{hint}",
+                *loc,
+            )
+        return self
 
     def _check_masetti_mobility_models(self) -> Self:
-        """Error if Masetti is mixed with another family or its T-scaled asymptote ≤ 0.
+        """Error if a Masetti model's T-scaled high-doping asymptote is ≤ 0.
 
         Raises directly at the offending charge medium's loc (``("medium",)``
         or ``("structures", i)``) so the user is pointed at the exact field to
@@ -4242,7 +4425,6 @@ class HeatChargeSimulation(AbstractSimulation):
         The asymptote is checked at every candidate temperature, since the sign of
         'exp_0' decides which one is worst.
         """
-        self._check_mobility_family_for_both_carriers(MasettiMobility)
         candidate_temperatures = self._mobility_temperature_candidates()
         for loc, charge in self._iter_semiconductor_charge_media():
             for carrier, mobility in (
@@ -4270,13 +4452,12 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     def _check_alloy_mobility_models(self) -> Self:
-        """Error if AlloyMobility is mixed with another family or its mobility is not positive.
+        """Error if an AlloyMobility model's mobility is not positive.
 
         Only a negative 'mu_alloy' can make '1/mu' non-positive. It is checked at doping 0
         and 1e10-1e23 cm^-3 over the analysis temperature range; when the temperature is
         solved for, that range spans 300 K and every heat-boundary temperature.
         """
-        self._check_mobility_family_for_both_carriers(AlloyMobility)
         candidates = self._mobility_temperature_candidates()
         temperatures = np.linspace(min(candidates), max(candidates), 9)
         doping = np.concatenate(([0.0], np.logspace(10, 23, 27)))

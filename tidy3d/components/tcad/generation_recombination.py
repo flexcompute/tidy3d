@@ -359,8 +359,8 @@ class HurkxTrapAssistedTunneling(Tidy3dBaseModel):
         reliable at sharp junction corners and heterointerfaces, where the
         field varies appreciably over that distance.
 
-        On a surface, the enhancement acts on the steady-state solution only;
-        small-signal results do not include it.
+        On a surface, as in the bulk, the enhancement is included in both the
+        steady-state and the small-signal results.
 
     Note
     ----

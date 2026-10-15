@@ -10,6 +10,7 @@ from tidy3d._runtime import always_validate
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
+from tidy3d.components.tcad.generation_recombination import DistributedGeneration
 from tidy3d.components.tcad.types import (
     AlloyMobility,
     BandGapNarrowingModelType,
@@ -157,16 +158,12 @@ class SemiconductorMedium(AbstractChargeMedium):
         \\end{equation}
 
 
-    where we simplify the effective field defined in [1]_ to
-
-    .. math::
-
-        \\begin{equation}
-            \\mathbf{F_{n,p}} = \\nabla \\psi
-        \\end{equation}
-
-    i.e., we are not considering the effect of band-gap narrowing and degeneracy on the effective
-    electric field :math:`\\mathbf{F_{n,p}}`. This is a good approximation for non-degenerate semiconductors.
+    where the effective fields :math:`\\mathbf{F_{n,p}}` [1]_ are the gradients of the carriers'
+    driving potentials. Besides the electrostatic potential :math:`\\psi`, these include the
+    electron affinity, the band gap and its narrowing :math:`\\Delta E_g`, the effective densities
+    of states and, with Fermi-Dirac statistics, the degeneracy correction. Heterojunction band
+    offsets, doping-dependent band-gap narrowing and, in non-isothermal simulations, lattice
+    temperature gradients therefore all drive current.
 
     Let's explore how material properties are defined as class parameters or other classes.
 
@@ -346,8 +343,9 @@ class SemiconductorMedium(AbstractChargeMedium):
         default=(),
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material. "
-        "At most one Shockley-Read-Hall (:class:`.ShockleyReedHallRecombination`) model "
-        "may be specified per medium; if several are provided only the last one is used.",
+        "Each mechanism such as Shockley-Read-Hall, Auger, radiative, band-to-band tunneling and "
+        "impact ionization should appear at most once per medium: of a mechanism listed twice, "
+        "only one entry is used. Several :class:`.DistributedGeneration` entries add up.",
     )
 
     delta_E_g: BandGapNarrowingModelType | None = Field(
@@ -384,6 +382,25 @@ class SemiconductorMedium(AbstractChargeMedium):
         "or a tuple/list of geometric shapes to define specific doped regions.",
         json_schema_extra={"units": PERCMCUBE},
     )
+
+    @field_validator("R")
+    @classmethod
+    def _warn_one_model_per_mechanism(
+        cls, val: tuple[RecombinationModelType, ...]
+    ) -> tuple[RecombinationModelType, ...]:
+        """Warn about a mechanism listed twice: the solver keeps one model per mechanism."""
+        seen = set()
+        for model in val:
+            if isinstance(model, DistributedGeneration):
+                continue
+            if type(model) in seen:
+                log.warning(
+                    f"'R' lists more than one '{type(model).__name__}'. The solver keeps one "
+                    "model per mechanism, so all but one are ignored. Keep a single "
+                    "entry. Future versions of Tidy3D may reject this setup."
+                )
+            seen.add(type(model))
+        return val
 
     # DEPRECATION VALIDATORS
     @field_validator("N_c")
