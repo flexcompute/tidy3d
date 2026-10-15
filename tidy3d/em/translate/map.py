@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from importlib import import_module
-from typing import Any
+from typing import Any, NamedTuple
 
 
 class Tidy3DSolverTaskMap(str, Enum):
@@ -192,108 +192,111 @@ DATA_CONVERTERS: dict[Tidy3DSolverDataMap, tuple[str, str]] = {
 }
 
 
+class ComponentScope(NamedTuple):
+    """Where a public class translates to, which facade checks it, and when.
+
+    ``on_construction`` runs the full facade after every construction of the public
+    class. Client policy validators stay on the public class.
+    """
+
+    schema: str
+    facade: str
+    on_construction: bool = False
+
+
 # Component registration stays here, not on public model classes. Abstract roots
 # mark families whose new subclasses must register their own schema explicitly.
-COMPONENT_SCOPES: dict[str, tuple[str, str] | None] = {
+COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
     "tidy3d.components.eme.grid:EMEGridSpec": None,
     "tidy3d.components.eme.sweep:EMESweepSpec": None,
-    "tidy3d.components.eme.grid:EMEModeSpec": (
+    "tidy3d.components.eme.grid:EMEModeSpec": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.grid:EMEModeSpec",
         "flexcompute.core._migration.em.eme.validation:validate",
     ),
-    "tidy3d.components.eme.grid:EMEUniformGrid": (
+    "tidy3d.components.eme.grid:EMEUniformGrid": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.grid:EMEUniformGrid",
         "flexcompute.core._migration.em.eme.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.eme.grid:EMEExplicitGrid": (
+    "tidy3d.components.eme.grid:EMEExplicitGrid": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.grid:EMEExplicitGrid",
         "flexcompute.core._migration.em.eme.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.eme.grid:EMECompositeGrid": (
+    "tidy3d.components.eme.grid:EMECompositeGrid": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.grid:EMECompositeGrid",
         "flexcompute.core._migration.em.eme.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.eme.grid:EMEGrid": (
+    "tidy3d.components.eme.grid:EMEGrid": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.grid:EMEGrid",
         "flexcompute.core._migration.em.eme.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.eme.sweep:EMELengthSweep": (
+    "tidy3d.components.eme.sweep:EMELengthSweep": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.sweep:EMELengthSweep",
         "flexcompute.core._migration.em.eme.validation:validate",
     ),
-    "tidy3d.components.eme.sweep:EMEModeSweep": (
+    "tidy3d.components.eme.sweep:EMEModeSweep": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.sweep:EMEModeSweep",
         "flexcompute.core._migration.em.eme.validation:validate",
     ),
-    "tidy3d.components.eme.sweep:EMEPeriodicitySweep": (
+    "tidy3d.components.eme.sweep:EMEPeriodicitySweep": ComponentScope(
         "flexcompute.core._migration.em.eme.schema.sweep:EMEPeriodicitySweep",
         "flexcompute.core._migration.em.eme.validation:validate",
+        on_construction=True,
     ),
     # medium
-    "tidy3d.components.nonlinear:NonlinearSpec": (
+    "tidy3d.components.nonlinear:NonlinearSpec": ComponentScope(
         "flexcompute.core._migration.em.material.nonlinear.schema.nonlinear:NonlinearSpec",
         "flexcompute.core._migration.em.material.nonlinear.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.nonlinear:NonlinearSusceptibility": (
+    "tidy3d.components.nonlinear:NonlinearSusceptibility": ComponentScope(
         "flexcompute.core._migration.em.material.nonlinear.schema.nonlinear:NonlinearSusceptibility",
         "flexcompute.core._migration.em.material.nonlinear.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.time_modulation:SpaceModulation": (
+    "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
     ),
-    "tidy3d.components.time_modulation:ModulationSpec": (
+    "tidy3d.components.time_modulation:ModulationSpec": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:ModulationSpec",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
+        on_construction=True,
     ),
     # tcad
     "tidy3d.components.tcad.mobility:_HighFieldDependenceBase": None,
-    "tidy3d.components.tcad.mobility:CanaliFieldDependence": (
+    "tidy3d.components.tcad.mobility:CanaliFieldDependence": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:CanaliFieldDependence",
         "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.tcad.mobility:TransferredElectronFieldDependence": (
+    "tidy3d.components.tcad.mobility:TransferredElectronFieldDependence": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:TransferredElectronFieldDependence",
         "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.tcad.mobility:LombardiSurfaceDependence": (
+    "tidy3d.components.tcad.mobility:LombardiSurfaceDependence": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:LombardiSurfaceDependence",
         "flexcompute.core._migration.tcad.validation:validate",
     ),
-    "tidy3d.components.tcad.mobility:MasettiMobility": (
+    "tidy3d.components.tcad.mobility:MasettiMobility": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:MasettiMobility",
         "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
     ),
-    "tidy3d.components.tcad.mobility:CaugheyThomasMobility": (
+    "tidy3d.components.tcad.mobility:CaugheyThomasMobility": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:CaugheyThomasMobility",
         "flexcompute.core._migration.tcad.validation:validate",
     ),
-    "tidy3d.components.tcad.mobility:AlloyMobility": (
+    "tidy3d.components.tcad.mobility:AlloyMobility": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:AlloyMobility",
         "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
     ),
 }
-
-
-# Only migrated construction flows opt in; client policy validators stay public.
-COMPONENT_CONSTRUCTION_TYPES = frozenset(
-    {
-        "tidy3d.components.eme.grid:EMEUniformGrid",
-        "tidy3d.components.eme.grid:EMEExplicitGrid",
-        "tidy3d.components.eme.grid:EMECompositeGrid",
-        "tidy3d.components.eme.grid:EMEGrid",
-        "tidy3d.components.eme.sweep:EMEPeriodicitySweep",
-        # medium
-        "tidy3d.components.time_modulation:ModulationSpec",
-        # tcad
-        "tidy3d.components.tcad.mobility:CanaliFieldDependence",
-        "tidy3d.components.tcad.mobility:TransferredElectronFieldDependence",
-        "tidy3d.components.tcad.mobility:MasettiMobility",
-        "tidy3d.components.tcad.mobility:AlloyMobility",
-        "tidy3d.components.nonlinear:NonlinearSpec",
-        "tidy3d.components.nonlinear:NonlinearSusceptibility",
-    }
-)
 
 COMPONENT_ERROR_TYPES = {
     "em.eme.grid_repetitions_exceeded": "tidy3d.exceptions:SetupError",

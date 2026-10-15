@@ -1,21 +1,21 @@
-"""Registered public-component translation and EM facade selection."""
+"""Registered public-component translation, validation and presentation."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from tidy3d.em.translate.map import (
-    COMPONENT_CONSTRUCTION_TYPES,
-    COMPONENT_ERROR_TYPES,
-    COMPONENT_SCOPES,
-    resolve,
-)
+from flexcompute.core.validation import prefix_paths
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
+from pydantic_core import InitErrorDetails
+
+from tidy3d.em.translate.map import COMPONENT_ERROR_TYPES, COMPONENT_SCOPES, resolve
+from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Iterable
 
-    from flexcompute.core.validation import ValidationReport
-    from pydantic import BaseModel
+    from flexcompute.core.validation import ValidationDiagnostic, ValidationPath
 
     from tidy3d.components.base import Tidy3dBaseModel
 
@@ -62,24 +62,98 @@ def from_component(model: BaseModel) -> object | None:
         }
     # The public model already logged its warnings; copies would repeat them past td.log.
     with copied_log.suppress_output():
-        return resolve(COMPONENT_SCOPES[_key(owner)][0]).model_validate(data)
+        return resolve(COMPONENT_SCOPES[_key(owner)].schema).model_validate(data)
 
 
-def validate_component(
-    model: BaseModel, schema: object, *, context: Mapping[str, Any]
-) -> ValidationReport | None:
-    """Run the registered facade; current EME scopes require no external context."""
+def validate(
+    model: BaseModel, *, path: ValidationPath = (), context: object | None = None
+) -> tuple[ValidationDiagnostic, ...]:
+    """Translate ``model``, run its registered facade and nest the diagnostics under ``path``.
+
+    ``context`` is passed to the facade as ``context=`` only when it is given, so facades
+    without a context parameter still work. Unrelated models report nothing. Each call
+    translates afresh and keeps no translation.
+    """
     owner = _translating_class(type(model))
     if owner is None:
+        return ()
+    facade = resolve(COMPONENT_SCOPES[_key(owner)].facade)
+    schema = from_component(model)
+    report = facade(schema) if context is None else facade(schema, context=context)
+    return prefix_paths(path, report.diagnostics)
+
+
+def _value_at(model: BaseModel, path: ValidationPath) -> Any:
+    """Return the value at ``path``, or ``None`` when the path does not resolve."""
+    value: Any = model
+    try:
+        for key in path:
+            value = value.__dict__[key] if isinstance(value, BaseModel) else value[key]
+    except (KeyError, IndexError, TypeError):
         return None
-    return resolve(COMPONENT_SCOPES[_key(owner)][1])(schema)
+    return value
+
+
+def _present(model: Tidy3dBaseModel, diagnostics: Iterable[ValidationDiagnostic]) -> None:
+    """Log warnings in order, then raise the first error as the public model raised it.
+
+    Only the first error's type is resolved from ``COMPONENT_ERROR_TYPES``. An error with a
+    path raises there: a mapped type in Pydantic's ``Value error, `` form with the value at
+    the path as its input, otherwise the bare message through the model's location helper.
+    An error without a path raises its mapped type, ``ValueError`` by default.
+    """
+    for diagnostic in diagnostics:
+        if diagnostic.severity == "warning":
+            log.warning(diagnostic.message, custom_loc=list(diagnostic.path))
+            continue
+        type_path = COMPONENT_ERROR_TYPES.get(diagnostic.code)
+        error_type = resolve(type_path) if type_path else None
+        if not diagnostic.path:
+            raise (error_type or ValueError)(diagnostic.message)
+        if error_type is None:
+            model._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
+        raise PydanticValidationError.from_exception_data(
+            type(model).__name__,
+            [
+                InitErrorDetails(
+                    type="value_error",
+                    loc=diagnostic.path,
+                    input=_value_at(model, diagnostic.path),
+                    ctx={"error": error_type(diagnostic.message)},
+                )
+            ],
+            hide_input=True,
+        )
 
 
 def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
-    """Run registered shared semantics; leave unrelated/client-specific validation alone."""
-    owner = _translating_class(type(model))  # Missing family registrations fail here.
-    if owner is None or _key(owner) not in COMPONENT_CONSTRUCTION_TYPES:
-        return model
-    return model._run_migrated_model_rules(
-        error_types={code: resolve(path) for code, path in COMPONENT_ERROR_TYPES.items()}
-    )
+    """Run the full facade for registrations flagged ``on_construction``.
+
+    Other models are left alone, but a missing family registration fails here.
+    """
+    owner = _translating_class(type(model))
+    if owner is not None and COMPONENT_SCOPES[_key(owner)].on_construction:
+        _present(model, validate(model))
+    return model
+
+
+def run_model_rules(
+    model: Tidy3dBaseModel,
+    *rules: Callable[[Any], tuple[ValidationDiagnostic, ...]],
+) -> Tidy3dBaseModel:
+    """Translate once, run each scope's model-level rules in order, and present them.
+
+    Call it from a public model's after validator with one rule callable per scope, each
+    taking the translated schema. Rules run in the order given. The first scope that
+    reports an error ends the run. Warnings are logged and the first error is raised as
+    ``_present`` raises it.
+    """
+    schema = from_component(model)
+    diagnostics: tuple[ValidationDiagnostic, ...] = ()
+    for scope_rules in rules:
+        reported = scope_rules(schema)
+        diagnostics += reported
+        if any(diagnostic.severity == "error" for diagnostic in reported):
+            break
+    _present(model, diagnostics)
+    return model

@@ -36,7 +36,6 @@ import xarray as xr
 import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
-from flexcompute.core.validation import ValidationReport
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from pydantic import (
     ValidationError as PydanticValidationError,
@@ -48,11 +47,7 @@ from tidy3d._runtime import (
     VALIDATION_MODES,
     fast_validation_active,
 )
-from tidy3d.em.translate.components import (
-    from_component,
-    validate_component,
-    validate_on_construction,
-)
+from tidy3d.em.translate.components import validate_on_construction
 from tidy3d.exceptions import FileError, Tidy3dError, format_chained_exception_message
 from tidy3d.log import log
 
@@ -79,7 +74,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterator
     from typing import NoReturn
 
-    from flexcompute.core.validation import ValidationDiagnostic, ValidationPath
     from pydantic import ValidationInfo
     from pydantic.fields import FieldInfo
     from pydantic.functional_validators import ModelWrapValidatorHandler
@@ -608,153 +602,6 @@ class Tidy3dBaseModel(BaseModel):
             return func(*args, **kwargs)
         except Tidy3dError as error:
             self._raise_validation_error_at_loc(str(error), *loc, log_error=False)
-
-    def _translate_migrated_validation_scope(self) -> object | None:
-        """Translate a registered component; unrelated models opt out."""
-        return from_component(self)
-
-    def _validate_migrated_validation_scope(
-        self,
-        migrated_scope: object,
-        *,
-        context: Mapping[str, Any],
-    ) -> ValidationReport | None:
-        """Select a registered component facade; custom scopes may override."""
-        return validate_component(self, migrated_scope, context=context)
-
-    def _run_migrated_validation_bridge(
-        self,
-        *,
-        context: Mapping[str, Any] | None = None,
-        path: ValidationPath = (),
-    ) -> ValidationReport | None:
-        """Translate this model, validate the translation, then map its paths.
-
-        Parents and explicit pre-upload checks call this and present the result with
-        :meth:`_present_migrated_validation_report`. Each call translates; the
-        instance keeps no translation.
-        """
-        migrated_scope = self._translate_migrated_validation_scope()
-        if migrated_scope is None:
-            return None
-        report = self._validate_migrated_validation_scope(migrated_scope, context=context or {})
-        if report is None:
-            return None
-        return self._map_migrated_validation_report(report, path=path)
-
-    def _map_migrated_validation_report(
-        self,
-        report: ValidationReport,
-        *,
-        path: ValidationPath,
-    ) -> ValidationReport:
-        """Map scope-relative diagnostic paths to this model's public paths.
-
-        By default every path is prefixed with ``path``, so a parent validating a
-        nested scope reports ``("spec", "monitors", 2)`` instead of ``("monitors", 2)``.
-        Override when the migrated schema and the public model do not share field names.
-        """
-        diagnostics = tuple(
-            diagnostic.model_copy(update={"path": path + diagnostic.path})
-            for diagnostic in report.diagnostics
-        )
-        return report.model_copy(update={"diagnostics": diagnostics})
-
-    def _present_migrated_validation_report(
-        self,
-        report: ValidationReport | None,
-        *,
-        error_types: Mapping[str, type[Exception]] | None = None,
-    ) -> Self:
-        """Log warnings in report order, then raise the first error.
-
-        An error with a path raises there through the Pydantic location helper. An
-        error with an empty path raises as the type ``error_types`` gives for its
-        code, ``ValueError`` by default, as a model validator raises an unlocated
-        error. Diagnostics after the first error are not presented.
-        """
-        if report is None:
-            return self
-        for diagnostic in report.diagnostics:
-            if diagnostic.severity == "warning":
-                log.warning(diagnostic.message, custom_loc=list(diagnostic.path))
-            elif diagnostic.path:
-                error_type = (error_types or {}).get(diagnostic.code)
-                if error_type is not None:
-                    # Report the value at the path as the input, as a field validator did.
-                    value: Any = self
-                    try:
-                        for key in diagnostic.path:
-                            value = (
-                                value.__dict__[key] if isinstance(value, BaseModel) else value[key]
-                            )
-                    except (KeyError, IndexError, TypeError):
-                        value = None
-                    raise PydanticValidationError.from_exception_data(
-                        type(self).__name__,
-                        [
-                            InitErrorDetails(
-                                type="value_error",
-                                loc=diagnostic.path,
-                                input=value,
-                                ctx={"error": error_type(diagnostic.message)},
-                            )
-                        ],
-                        hide_input=True,
-                    )
-                self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
-            else:
-                error_type = (error_types or {}).get(diagnostic.code, ValueError)
-                raise error_type(diagnostic.message)
-        return self
-
-    def _present_migrated_validation_diagnostics(
-        self,
-        diagnostics: tuple[ValidationDiagnostic, ...],
-        *,
-        error_types: Mapping[str, type[Exception]] | None = None,
-    ) -> Self:
-        """Present a scope's model-level diagnostics at this model's public paths.
-
-        :meth:`_run_migrated_model_rules` calls this with the diagnostics of the rule
-        callables it ran, which carry migrated-schema paths;
-        :meth:`_map_migrated_validation_report` maps them to this model's fields, so
-        the error points at the field the user set.
-        """
-        report = ValidationReport(diagnostics=diagnostics)
-        return self._present_migrated_validation_report(
-            self._map_migrated_validation_report(report, path=()), error_types=error_types
-        )
-
-    def _run_migrated_model_rules(
-        self,
-        *validate_model_rules: Callable[[Any], tuple[ValidationDiagnostic, ...]],
-        error_types: Mapping[str, type[Exception]] | None = None,
-    ) -> Self:
-        """Translate once, run each scope's model-level rules in order, and present them.
-
-        Registered EME classes reach this through ``validate_on_construction``, which
-        the base ``__tidy3d_end_capture__`` validator calls for types listed in
-        ``tidy3d.em.translate.map.COMPONENT_CONSTRUCTION_TYPES``. It passes no rule
-        callables, so the complete scope facade runs through the translation and
-        validation bridge.
-
-        A class can instead call this from its own ``_validate_model`` with one
-        ``validate_model_rules`` per scope whose rules apply, in the order Tidy3D
-        ran them. A scope that reports an error ends the run.
-        """
-        if not validate_model_rules:
-            return self._present_migrated_validation_report(
-                self._run_migrated_validation_bridge(), error_types=error_types
-            )
-        translation = self._translate_migrated_validation_scope()
-        diagnostics: tuple[ValidationDiagnostic, ...] = ()
-        for rules in validate_model_rules:
-            reported = rules(translation)
-            diagnostics += reported
-            if any(diagnostic.severity == "error" for diagnostic in reported):
-                break
-        return self._present_migrated_validation_diagnostics(diagnostics, error_types=error_types)
 
     def __hash__(self) -> int:
         """Hash method."""
