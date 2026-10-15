@@ -5,9 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
-from flexcompute.core.validation import raise_first_error
-from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.bc_placement import (
@@ -134,19 +132,6 @@ class UniformUnstructuredGrid(UnstructuredGrid):
 class _GridRefinementRegionBase(Box):
     """Shared geometry and validation for mesh-refinement regions."""
 
-    @model_validator(mode="after")
-    def _validate_supported_region_shape(self) -> Self:
-        """Allow only volumetric or planar refinement regions."""
-        if self.size.count(0.0) > 1:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "Refinement region must be volumetric or planar; 'size' cannot have more than one zero-sized dimension."
-                ),
-                "size",
-            )
-
-        return self
-
 
 class GridRefinementRegion(_GridRefinementRegionBase):
     """Refinement region for the unstructured mesh. The cell size is enforced to be constant inside the region.
@@ -209,30 +194,6 @@ class _GridRefinementLineBase(Tidy3dBaseModel, ABC):
         json_schema_extra={"units": MICROMETER},
     )
 
-    @field_validator("r1", "r2")
-    @classmethod
-    def _not_inf(cls, val: Coordinate) -> Coordinate:
-        """Make sure the point is not infinitiy."""
-        from flexcompute.core._migration.tcad.validation import validate_line_point_finite
-
-        raise_first_error(validate_line_point_finite(val), ValidationError)
-        return val
-
-    @model_validator(mode="after")
-    def _validate_line_length(self) -> Self:
-        """Reject refinement lines that collapse at the built-in tolerance."""
-        line_length = float(np.linalg.norm(np.asarray(self.r2) - np.asarray(self.r1)))
-        if line_length <= REFINEMENT_LINE_TOLERANCE:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    f"Refinement line endpoints are too close; the line length must be greater than "
-                    f"{REFINEMENT_LINE_TOLERANCE:.1e} um."
-                ),
-                "r2",
-            )
-
-        return self
-
 
 class GridRefinementLine(_GridRefinementLineBase):
     """Refinement line for the unstructured mesh. The cell size depends on the distance from the line."""
@@ -257,17 +218,6 @@ class GridRefinementLine(_GridRefinementLineBase):
         "transition from ``dl_near`` to ``dl_bulk``.",
         json_schema_extra={"units": MICROMETER},
     )
-
-    @model_validator(mode="after")
-    def _validate_distance_order(self) -> Self:
-        """Ensure that the far transition distance is not inside the near distance."""
-        if self.distance_near > self.distance_bulk:
-            self._raise_validation_error_at_loc(
-                ValidationError("'distance_bulk' cannot be smaller than 'distance_near'."),
-                "distance_bulk",
-            )
-
-        return self
 
 
 class RelativeGridRefinementLine(_GridRefinementLineBase):
@@ -378,33 +328,6 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
             description="List of regions/lines for which the mesh refinement will be applied",
         )
     )
-
-    @model_validator(mode="after")
-    def names_exist_bcs(self) -> Self:
-        """Error if distance_bulk is less than distance_interface"""
-        if self.distance_interface > self.distance_bulk:
-            self._raise_validation_error_at_loc(
-                ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'."),
-                "distance_bulk",
-            )
-
-        # A refinement line at or below the fusion tolerance is collapsed during meshing;
-        # reject it at setup time rather than as a meshing-time failure.
-        for ind, ref in enumerate(self.mesh_refinements):
-            if isinstance(ref, GridRefinementLine):
-                line_length = float(np.linalg.norm(np.asarray(ref.r2) - np.asarray(ref.r1)))
-                if line_length <= self.geometry_tolerance:
-                    self._raise_validation_error_at_loc(
-                        ValidationError(
-                            f"Refinement line length ({line_length:.1e} um) must be greater than "
-                            f"'geometry_tolerance' ({self.geometry_tolerance:.1e} um); shorter lines "
-                            "are collapsed when coincident geometry is fused during meshing."
-                        ),
-                        "mesh_refinements",
-                        ind,
-                    )
-
-        return self
 
     @property
     def min_mesh_size(self) -> float:
@@ -585,75 +508,6 @@ class AutoUnstructuredGrid(UnstructuredGrid):
     def distance_bulk(self) -> float:
         """Far-distance threshold for the supported baseline refinement path."""
         return self.dl_bulk * self.distance_bulk_ratio
-
-    @model_validator(mode="after")
-    def _validate_supported_interface_selectors(self) -> Self:
-        """Restrict targeted interface refinements to supported selector types."""
-        if self.distance_interface > self.distance_bulk:
-            self._raise_validation_error_at_loc(
-                "'distance_bulk' cannot be smaller than 'distance_interface'.",
-                "distance_bulk_ratio",
-            )
-
-        supported_targeted_selectors = (
-            StructureBoundary,
-            StructureStructureInterface,
-            MediumMediumInterface,
-        )
-        for ref_ind, refinement in enumerate(self.interface_refinements):
-            if not isinstance(refinement.selection, supported_targeted_selectors):
-                self._raise_validation_error_at_loc(
-                    "'AutoUnstructuredGrid' only supports targeted interface refinements with "
-                    "selections "
-                    "'StructureBoundary()', 'StructureStructureInterface()', "
-                    "and 'MediumMediumInterface()'.",
-                    "interface_refinements",
-                    ref_ind,
-                    "selection",
-                )
-            if (
-                self.dl_reference
-                * refinement.dl_interface_ratio
-                * refinement.distance_interface_ratio
-                > self.dl_bulk * refinement.distance_bulk_ratio
-            ):
-                self._raise_validation_error_at_loc(
-                    "'distance_bulk' cannot be smaller than 'distance_interface'.",
-                    "interface_refinements",
-                    ref_ind,
-                    "distance_bulk_ratio",
-                )
-
-        for ref_ind, refinement in enumerate(self.mesh_refinements):
-            if isinstance(refinement, (GridRefinementLine, RelativeGridRefinementLine)):
-                line_length = float(
-                    np.linalg.norm(np.asarray(refinement.r2) - np.asarray(refinement.r1))
-                )
-                if line_length <= self.geometry_tolerance:
-                    self._raise_validation_error_at_loc(
-                        ValidationError(
-                            f"Refinement line length ({line_length:.1e} um) must be greater than "
-                            f"'geometry_tolerance' ({self.geometry_tolerance:.1e} um); shorter lines "
-                            "are collapsed when coincident geometry is fused during meshing."
-                        ),
-                        "mesh_refinements",
-                        ref_ind,
-                    )
-
-            if isinstance(refinement, RelativeGridRefinementLine):
-                distance_near = (
-                    self.dl_reference * refinement.dl_ratio * refinement.distance_near_ratio
-                )
-                distance_bulk = self.dl_bulk * refinement.distance_bulk_ratio
-                if distance_near > distance_bulk:
-                    self._raise_validation_error_at_loc(
-                        "'distance_bulk' cannot be smaller than 'distance_near'.",
-                        "mesh_refinements",
-                        ref_ind,
-                        "distance_bulk_ratio",
-                    )
-
-        return self
 
     def _resolve_mesh_refinement(
         self,

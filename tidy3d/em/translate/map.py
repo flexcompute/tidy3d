@@ -267,6 +267,8 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         on_construction=True,
     ),
     # tcad
+    "tidy3d.components.tcad.grid:_GridRefinementLineBase": None,
+    "tidy3d.components.tcad.grid:_GridRefinementRegionBase": None,
     "tidy3d.components.tcad.mobility:_HighFieldDependenceBase": None,
     "tidy3d.components.tcad.mobility:CanaliFieldDependence": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:CanaliFieldDependence",
@@ -296,6 +298,36 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.tcad.grid:GridRefinementLine": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.grid:GridRefinementLine",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.grid:RelativeGridRefinementLine": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.grid:RelativeGridRefinementLine",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.grid:GridRefinementRegion": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.grid:GridRefinementRegion",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.grid:RelativeGridRefinementRegion": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.grid:RelativeGridRefinementRegion",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.grid:DistanceUnstructuredGrid": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.grid:DistanceUnstructuredGrid",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.grid:AutoUnstructuredGrid": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.grid:AutoUnstructuredGrid",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -312,6 +344,8 @@ COMPONENT_ERROR_TYPES = {
     "em.material.nonlinear.consistent_n0": "tidy3d.exceptions:SetupError",
     "em.material.nonlinear.max_num_iters": "tidy3d.exceptions:ValidationError",
     "em.material.nonlinear.max_numiters": "tidy3d.exceptions:ValidationError",
+    # tcad
+    "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
 }
 
 
