@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -81,6 +82,9 @@ class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
     @classmethod
     def _validate_monitors(cls, val: tuple[str, ...]) -> tuple[str, ...]:
         """Validate the monitors list is not empty."""
-        if not val:
-            raise ValueError("The monitors list must not be empty.")
+        from flexcompute.core._migration.em.frequency_extrapolation.validation import (
+            validate_monitors_not_empty,
+        )
+
+        raise_first_error(validate_monitors_not_empty(val), ValueError)
         return val
