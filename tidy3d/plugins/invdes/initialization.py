@@ -6,7 +6,13 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import Field, NonNegativeInt, field_validator, model_validator
+from flexcompute.core._migration.em.invdes.validation import (
+    validate_params_dtype,
+    validate_params_range,
+    validate_params_rank,
+)
+from flexcompute.core.validation import raise_first_error
+from pydantic import Field, NonNegativeInt, field_validator
 
 import tidy3d as td
 from tidy3d._runtime import always_validate
@@ -16,8 +22,6 @@ from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-
-    from tidy3d.compat import Self
 
 
 class AbstractInitializationSpec(Tidy3dBaseModel, ABC):
@@ -55,15 +59,6 @@ class RandomInitializationSpec(AbstractInitializationSpec):
         description="Seed for the random number generator.",
     )
 
-    @model_validator(mode="after")
-    def _validate_max_ge_min(self) -> Self:
-        """Ensure that max_value is greater than or equal to min_value."""
-        if self.min_value > self.max_value:
-            raise ValidationError(
-                f"'max_value' ({self.max_value}) must be greater or equal than 'min_value' ({self.min_value})"
-            )
-        return self
-
     def create_parameters(self, shape: tuple[int, ...]) -> NDArray:
         """Generate the parameter array based on the specification."""
         rng = np.random.default_rng(self.seed)
@@ -95,12 +90,15 @@ class CustomInitializationSpec(AbstractInitializationSpec):
         description="Custom parameters provided by the user.",
     )
 
+    # The three checks stay field validators because of fast mode: the dtype check is
+    # ``@always_validate`` (it casts and warns), so it runs there while range and rank are skipped, and
+    # range has to precede it. Moving range and rank onto the construction path would run them in fast
+    # mode and change which error comes first.
     @field_validator("params")
     @classmethod
     def _validate_params_range(cls, val: NDArray) -> NDArray:
         """Ensure that all parameter values are between 0 and 1."""
-        if np.any((val < 0) | (val > 1)):
-            raise ValidationError("'params' need to be between 0 and 1.")
+        raise_first_error(validate_params_range(val), ValidationError)
         return val
 
     @field_validator("params")
@@ -108,21 +106,19 @@ class CustomInitializationSpec(AbstractInitializationSpec):
     @always_validate
     def _validate_params_dtype(cls, val: NDArray) -> NDArray:
         """Ensure that params is real-valued."""
+        raise_first_error(validate_params_dtype(val.dtype), ValidationError)
         if np.issubdtype(val.dtype, np.bool_):
             td.log.warning(
                 "Got a boolean array for 'params'. This will be treated as a floating point array."
             )
             val = val.astype(float)
-        elif not np.issubdtype(val.dtype, np.floating):
-            raise ValidationError(f"'params' need to be real-valued, but got '{val.dtype}'.")
         return val
 
     @field_validator("params")
     @classmethod
     def _validate_params_3d(cls, val: NDArray) -> NDArray:
         """Ensure that params is a 3D array."""
-        if val.ndim != 3:
-            raise ValidationError(f"'params' must be 3D, but got {val.ndim}D.")
+        raise_first_error(validate_params_rank(val.ndim), ValidationError)
         return val
 
     def create_parameters(self, shape: tuple[int, ...]) -> NDArray:

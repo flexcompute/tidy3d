@@ -357,6 +357,22 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    # invdes: the family translates, but only the random spec validates on construction. The custom
+    # spec keeps client validators (see there) and the uniform spec has none.
+    "tidy3d.plugins.invdes.initialization:AbstractInitializationSpec": None,
+    "tidy3d.plugins.invdes.initialization:RandomInitializationSpec": ComponentScope(
+        "flexcompute.core._migration.em.invdes.schema.initialization:RandomInitializationSpec",
+        "flexcompute.core._migration.em.invdes.validation:validate_initialization",
+        on_construction=True,
+    ),
+    "tidy3d.plugins.invdes.initialization:UniformInitializationSpec": ComponentScope(
+        "flexcompute.core._migration.em.invdes.schema.initialization:UniformInitializationSpec",
+        "flexcompute.core._migration.em.invdes.validation:validate_initialization",
+    ),
+    "tidy3d.plugins.invdes.initialization:CustomInitializationSpec": ComponentScope(
+        "flexcompute.core._migration.em.invdes.schema.initialization:CustomInitializationSpec",
+        "flexcompute.core._migration.em.invdes.validation:validate_initialization",
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -375,6 +391,8 @@ COMPONENT_ERROR_TYPES = {
     "em.material.nonlinear.max_numiters": "tidy3d.exceptions:ValidationError",
     # tcad
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
+    # invdes
+    "em.invdes.initialization_bound_order": "tidy3d.exceptions:ValidationError",
 }
 
 
