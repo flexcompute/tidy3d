@@ -872,6 +872,26 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Set the initial positions of the swarm using a numpy array of appropriate size.",
     )
 
+    bh_strategy: Literal[
+        "nearest", "random", "shrink", "reflective", "intermediate", "periodic"
+    ] = Field(
+        default="periodic",
+        title="Boundary Handling Strategy",
+        description="How a particle that leaves the parameter bounds is handled, passed to pyswarms as ``bh_strategy``. See the `PySwarms docs <https://pyswarms.readthedocs.io/en/latest/api/pyswarms.handlers.html>`_ for details.",
+    )
+
+    velocity_clamp: tuple[float, float] | None = Field(
+        default=None,
+        title="Velocity Clamp",
+        description="Minimum and maximum velocity of the particles per iteration, in parameter units, passed to pyswarms as ``velocity_clamp``. Unbounded by default.",
+    )
+
+    init_velocity: np.ndarray | None = Field(
+        default=None,
+        title="Initial Swarm Velocities",
+        description="Set the initial velocities of the swarm using a numpy array of the same shape as ``init_pos``. By default pyswarms draws them randomly.",
+    )
+
     def _get_run_count(self, parameters: list[ParameterType] | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.n_particles * self.n_iter
@@ -948,8 +968,12 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             ftol=self.ftol,
             ftol_iter=self.ftol_iter,
             init_pos=self.init_pos,
+            bh_strategy=self.bh_strategy,
+            velocity_clamp=self.velocity_clamp,
             # TODO: including oh_strategy would be nice but complicated to specify with pydantic oh_strategy={"w": "exp_decay"},
         )
+        if self.init_velocity is not None:
+            optimizer.swarm.velocity = np.asarray(self.init_velocity, dtype=float)
 
         opt_out = optimizer.optimize(fitness_function, self.n_iter, verbose=True)
 
