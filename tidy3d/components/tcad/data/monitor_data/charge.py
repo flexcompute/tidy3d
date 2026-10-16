@@ -337,15 +337,19 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     Notes
     -----
 
-    The small signal-capacitance of electrons  :math:`C_n`  and holes  :math:`C_p`  is computed from the charge due to electrons :math:`Q_n` and holes :math:`Q_p` at an applied voltage :math:`V` at a voltage difference
-    :math:`\\Delta V` between two simulations.
+    The small-signal capacitance of electrons :math:`C_n` and holes :math:`C_p` is the derivative
+    of the electron charge :math:`Q_n = q \\int n \\, dV` and the hole charge
+    :math:`Q_p = q \\int p \\, dV`, integrated over the monitor region, with respect to the
+    applied voltage. At a bias point :math:`V_i` of the sweep it is the central difference
+    over the neighboring bias points:
 
     .. math::
 
-        C_{n,p} = \\frac{Q_{n,p}(V + \\Delta V) - Q_{n,p}(V)}{\\Delta V}
+        C_{n,p}(V_i) = \\frac{Q_{n,p}(V_{i+1}) - Q_{n,p}(V_{i-1})}{V_{i+1} - V_{i-1}}
 
-
-    This is only computed when a voltage source with more than two sources is included within the simulation and determines the :math:`\\Delta V`.
+    The first and the last bias point use the difference to their single neighbor. The bias
+    points need not be equally spaced. The capacitance is only computed when a voltage source
+    sweeps at least two bias points.
     """
 
     monitor: SteadyCapacitanceMonitor = Field(

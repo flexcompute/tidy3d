@@ -35,7 +35,9 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
         "``True``; :class:`.TemperatureMonitor` and :class:`.SteadyPotentialMonitor` still "
         "take ``False`` in steady Heat, Conduction, and Charge runs, always with the "
         "deprecation warning above and, in Charge, a second warning that only unstructured "
-        "monitors are supported there. Unsteady Heat rejects it outright.",
+        "monitors are supported there. Charge accepts it at upload only for a "
+        ":class:`.SteadyPotentialMonitor` in a 3D simulation at a single bias point. "
+        "Unsteady Heat rejects it outright.",
     )
 
     @field_validator("unstructured")

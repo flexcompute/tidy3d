@@ -187,8 +187,10 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     steady_dc_hole_capacitance: SteadyVoltageDataArray | None = Field(
         default=None,
         title="Steady DC hole capacitance",
-        description="Device steady DC capacitance data based on holes. If the simulation "
-        "has converged, these result should be close to that of electrons. "
+        description="Device steady DC capacitance data based on holes, :math:`dQ_p/dV` with "
+        ":math:`Q_p = q \\int p \\, dV` as in :class:`.SteadyCapacitanceData`. If the total "
+        "semiconductor charge does not change with bias, as in a junction between two ohmic "
+        "contacts, it equals the electron capacitance. "
         "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
         "to obtain the total capacitance.",
         json_schema_extra={"units": "fF", "units_2d": "fF/um"},
@@ -197,8 +199,10 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     steady_dc_electron_capacitance: SteadyVoltageDataArray | None = Field(
         default=None,
         title="Steady DC electron capacitance",
-        description="Device steady DC capacitance data based on electrons. If the simulation "
-        "has converged, these result should be close to that of holes. "
+        description="Device steady DC capacitance data based on electrons, :math:`dQ_n/dV` with "
+        ":math:`Q_n = q \\int n \\, dV` as in :class:`.SteadyCapacitanceData`. If the total "
+        "semiconductor charge does not change with bias, as in a junction between two ohmic "
+        "contacts, it equals the hole capacitance. "
         "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
         "to obtain the total capacitance.",
         json_schema_extra={"units": "fF", "units_2d": "fF/um"},

@@ -809,6 +809,7 @@ class HeatChargeSimulation(AbstractSimulation):
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized heat/charge simulation before web upload."""
         assert_no_protected_media(self, "charge, heat, or heat-charge simulations")
+        self._validate_charge_cartesian_monitors()
 
     def _monitors_cross_solids(self) -> Self:
         """Error if monitors does not cross any solid medium."""
@@ -1249,6 +1250,38 @@ class HeatChargeSimulation(AbstractSimulation):
                         f"monitor '{mnt.name}' to 'unstructured = True'."
                     )
         return self
+
+    def _validate_charge_cartesian_monitors(self) -> None:
+        """Reject a Cartesian monitor that a Charge simulation cannot record.
+
+        Charge simulations record Cartesian data only for a ``SteadyPotentialMonitor`` in a 3D
+        simulation at a single bias point.
+        """
+        if TCADAnalysisTypes.CHARGE not in self._get_simulation_types():
+            return
+
+        for idx, mnt in enumerate(self.monitors):
+            if not isinstance(mnt, (SteadyPotentialMonitor, TemperatureMonitor)):
+                continue
+            if mnt.unstructured:
+                continue
+            if isinstance(mnt, TemperatureMonitor):
+                reason = "Charge simulations record temperature only on the unstructured grid"
+            elif self.zero_dims:
+                reason = "2D Charge simulations record no Cartesian data"
+            elif len(self._dc_voltages) > 1:
+                reason = "Cartesian data covers one bias point and this simulation sweeps the bias"
+            else:
+                continue
+            self._raise_validation_error_at_loc(
+                f"Monitor '{mnt.name}' of type '{type(mnt).__name__}' sets "
+                f"'unstructured=False', which is not supported here: {reason}. Set "
+                "'unstructured=True' and, where a Cartesian grid is needed, resample the recorded "
+                "field with 'to_spatial_data_array()' on the monitor data, passing 'voltage' to "
+                "pick a bias point.",
+                "monitors",
+                idx,
+            )
 
     def _validate_accelerated_only_monitor_requirements(self) -> Self:
         """Validate monitors that exist only on the accelerated charge solver.
