@@ -2526,7 +2526,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         If the projection distance is comparable to the size of the device, we recommend setting
         :attr:`far_field_approx` to ``False``.
 
-        .. image:: ../../notebooks/img/n2f_diagram.png
+        .. image:: ../../notebooks/ZonePlateFieldProjection/assets/n2f_diagram.png
 
         .. TODO Fix that image so remove right irrelevant side
 
@@ -2688,7 +2688,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
         encloses the device, it is advisable to pick the size of the monitor such that the
         recorded near fields decay to negligible values near the edges of the monitor.
 
-        .. image:: ../../notebooks/img/n2f_diagram.png
+        .. image:: ../../notebooks/ZonePlateFieldProjection/assets/n2f_diagram.png
 
         .. TODO unsure if add on params?
 

@@ -744,7 +744,7 @@ class Simulation(AbstractYeeGridSimulation):
     :class:`~tidy3d.PMCBoundary`-like symmetry axis. This would be helpful, especially when dealing with optical
     waveguide modes.
 
-    .. image:: ../../notebooks/img/pec_pmc.png
+    .. image:: ../../notebooks/Symmetry/assets/pec_pmc.png
 
 
     .. TODO maybe resize?

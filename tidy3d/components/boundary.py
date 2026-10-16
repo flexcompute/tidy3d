@@ -934,7 +934,7 @@ class PML(AbsorberSpec):
 
         .. TODO links to absorber boundaries
 
-        .. image:: ../../notebooks/img/diverged-fdtd-simulation.png
+        .. image:: ../../notebooks/DivergedFDTDSimulation/assets/diverged-fdtd-simulation.png
 
         Incorporating a dispersive material into the PML can also cause simulation divergence in certain scenarios [2]_.
         If your simulation lacks any structures inserted into the PML at an angle, but includes dispersive material
@@ -949,7 +949,7 @@ class PML(AbsorberSpec):
         evanescent fields from leaking into PML. In most cases, the evanescent field will naturally die off within
         half a wavelength, but in some instances, a larger distance may be required.
 
-        .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
+        .. image:: ../../notebooks/DivergedFDTDSimulation/assets/diverged-fdtd-simulation1.png
 
         For background on the PML formulation [1]_ and its stability with dispersive materials [2]_,
         see the references below.
