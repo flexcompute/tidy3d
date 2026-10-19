@@ -9,7 +9,6 @@ import numpy as np
 import xarray as xr
 from pydantic import Field, model_validator
 
-from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import xyz
 from tidy3d.constants import (
     AMP,
@@ -23,7 +22,6 @@ from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
 from .data_array import (
-    DataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     GroupIndexDataArray,
@@ -37,8 +35,11 @@ from .data_array import (
     ScalarModeFieldDataArray,
     SpatialDataArray,
     TimeDataArray,
-    TriangleMeshDataArray,
     _TracedDataset,
+)
+from .dataset_base import (
+    Dataset,
+    TriangleMeshDataset,  # noqa: F401
 )
 from .em_fields import em_field_symmetry_eigenvalues, point_cloud_field_symmetry_eigenvalues
 from .point_cloud import POINT_CLOUD_PERMITTIVITY_COMPONENTS
@@ -54,26 +55,14 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.types import Axis, BoundOptional, FreqArray
 
+    from .data_array import DataArray
+
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
 DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 ELECTRIC_FIELD_UNITS = f"{VOLT}/{MICROMETER}"
 MAGNETIC_FIELD_UNITS = f"{AMP}/{MICROMETER}"
-
-
-class Dataset(Tidy3dBaseModel, ABC):
-    """Abstract base class for objects that store collections of `:class:`.DataArray`s."""
-
-    @property
-    def data_arrs(self) -> dict:
-        """Returns a dictionary of all `:class:`.DataArray`s in the dataset."""
-        data_arrs = {}
-        for key in self.__class__.model_fields.keys():
-            data = getattr(self, key)
-            if isinstance(data, DataArray):
-                data_arrs[key] = data
-        return data_arrs
 
 
 class FreqDataset(Dataset, ABC):
@@ -1400,16 +1389,6 @@ class ModeStructureDataset(AbstractMediumPropertyDataset):
         """Structure-ownership indices are categorical, so regridding must snap to the nearest
         owning structure rather than linearly interpolating (blended) index values."""
         return set(FIELD_STRUCTURE_INDEX_COMPONENTS)
-
-
-class TriangleMeshDataset(Dataset):
-    """Dataset for storing triangular surface data."""
-
-    surface_mesh: TriangleMeshDataArray = Field(
-        title="Surface mesh data",
-        description="Dataset containing the surface triangles and corresponding face indices "
-        "for a surface mesh.",
-    )
 
 
 class TimeDataset(Dataset):

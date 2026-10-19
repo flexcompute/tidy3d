@@ -30,15 +30,15 @@ from tidy3d.log import log
 
 from .base import cached_property, keyed_cache
 from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
+from .geometry.float_utils import increment_float
 from .geometry.primitives import Cylinder
-from .geometry.utils import (
+from .grid.snapping import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,
     snap_box_to_grid,
     snap_point_to_grid,
 )
-from .geometry.utils_2d import increment_float
 from .medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
 from .microwave.base import MicrowaveBaseModel
 from .microwave.formulas.circuit_parameters import (

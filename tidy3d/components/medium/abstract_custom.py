@@ -9,10 +9,10 @@ import autograd.numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import DATA_ARRAY_MAP
+from tidy3d.components.contour_conversion import gdstk_contours_from_custom_medium
+from tidy3d.components.data.registry import DATA_ARRAY_MAP
 from tidy3d.components.data.unstructured.base import UnstructuredGridDataset
 from tidy3d.components.data.utils import _get_numpy_array
-from tidy3d.components.geometry.contour_conversion import gdstk_contours_from_custom_medium
 from tidy3d.components.types import TYPE_TAG_STR, InterpMethod
 from tidy3d.exceptions import AdjointError
 

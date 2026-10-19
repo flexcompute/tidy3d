@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
-    from tidy3d.components.autograd.types import PathType
+    from tidy3d.components.autograd.types import GeometryAdjointSettings, PathType
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
@@ -371,7 +371,7 @@ class ClipOperation(Geometry):
         return geometry_paths
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Route generation to both operands, prefixing their canonical keys.
 
@@ -391,7 +391,9 @@ class ClipOperation(Geometry):
                 bounds=geometry.bounds,
                 bounds_intersect=self.bounds_intersection(geometry.bounds, ctx.simulation_bounds),
             )
-            operand_sets = geometry._make_adjoint_sample_sets(paths=operand_paths, ctx=ctx_operand)
+            operand_sets = geometry._make_adjoint_sample_sets(
+                paths=operand_paths, ctx=ctx_operand, settings=settings
+            )
             for key, key_sample_sets in operand_sets.items():
                 sample_sets[(geometry_key, *key)] = key_sample_sets
         return sample_sets

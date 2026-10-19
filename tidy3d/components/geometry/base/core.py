@@ -16,8 +16,8 @@ from tidy3d.components.autograd.path_utils import (
 )
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
-from tidy3d.components.viz import plot_params_geometry
+from tidy3d.components.bound_ops import bounds_intersection, bounds_union
+from tidy3d.components.viz.plot_params import plot_params_geometry
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError, ValidationError, format_chained_exception_message
 from tidy3d.log import log
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.types import (
         Axis,
         Bound,
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
         MatrixReal4x4,
         Shapely,
     )
-    from tidy3d.components.viz import PlotParams
+    from tidy3d.components.viz.plot_params import PlotParams
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
     from .box import Box
@@ -596,7 +597,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate the surface sample sets for the requested shape-derivative paths.
 
@@ -609,10 +610,14 @@ class Geometry(Tidy3dBaseModel, ABC):
         legitimately contributes nothing (outside the simulation domain, degenerate)
         appears as an explicit empty set, never as a missing key.
 
-        Pure and deterministic in ``paths`` and ``ctx`` — pre-simulation collection
-        and late generation must produce identical sets. Each requested path's samples
-        must not depend on which other paths are co-requested (grouped router dispatch
-        relies on this).
+        ``settings`` is the adjoint settings snapshot for the pass (dtype, clip
+        tolerance and quadrature parameters); generation reads them from it and never
+        from the global configuration.
+
+        Pure and deterministic in ``paths``, ``ctx`` and ``settings``: pre-simulation
+        collection and late generation must produce identical sets. Each requested
+        path's samples must not depend on which other paths are co-requested (grouped
+        router dispatch relies on this).
         """
         raise NotImplementedError(
             f"Can't generate adjoint sample sets for 'Geometry': '{type(self)}'."

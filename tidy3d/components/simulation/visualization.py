@@ -29,8 +29,8 @@ from tidy3d.components.viz import (
     plot_params_pec,
     plot_params_pmc,
     plot_params_pml,
-    plot_sim_3d,
 )
+from tidy3d.components.viz.plot_sim_3d import plot_sim_3d
 from tidy3d.log import log
 
 if TYPE_CHECKING:

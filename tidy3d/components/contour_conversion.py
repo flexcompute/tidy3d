@@ -1,4 +1,8 @@
-"""Shared contour-to-polyslab conversion helpers used by structures and invdes."""
+"""Shared contour-to-polyslab conversion helpers used by structures and invdes.
+
+These read permittivity data off a grid and off custom media, so they sit above
+the geometry package and merely construct ``PolySlab`` from it.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ from tidy3d.components.grid.grid import Coords
 from tidy3d.exceptions import Tidy3dImportError
 from tidy3d.log import log
 
-from .polyslab import PolySlab
+from .geometry.polyslab import PolySlab
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -15,13 +15,6 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, PECBoundary, Periodic, PMCBoundary
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.mesh import TriangleMesh
-from tidy3d.components.geometry.utils_2d import (
-    choose_line_normal_axis,
-    get_bounds,
-    snap_coordinate_to_grid,
-    snap_to_dual_cell,
-    subdivide,
-)
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.grid.grid_spec import UniformGrid, _GeneratedGridSizeError
 from tidy3d.components.lumped_element import RectangularLumpedElement
@@ -32,6 +25,13 @@ from tidy3d.components.medium.protected import (
     warn_protected_surrogate,
 )
 from tidy3d.components.structure import Structure
+from tidy3d.components.two_d_materials import (
+    choose_line_normal_axis,
+    get_bounds,
+    snap_coordinate_to_grid,
+    snap_to_dual_cell,
+    subdivide,
+)
 from tidy3d.constants import C_0, fp_eps, inf
 from tidy3d.exceptions import (
     SetupError,

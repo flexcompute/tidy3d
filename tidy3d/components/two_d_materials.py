@@ -1,4 +1,8 @@
-"""Utilities for 2D geometry manipulation."""
+"""Grid-aware helpers for realizing 2D materials and line lumped elements.
+
+These operate on structures, media and a grid, so they sit above the geometry
+package rather than inside it.
+"""
 
 from __future__ import annotations
 

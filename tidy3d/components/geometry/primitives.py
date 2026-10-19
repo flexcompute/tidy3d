@@ -11,6 +11,7 @@ import numpy as np
 import shapely
 from pydantic import Field, model_validator
 
+from tidy3d._optional_imports import verify_packages_import
 from tidy3d.components.autograd import TracedSize1D, get_static
 from tidy3d.components.autograd.path_utils import indexed_traced_paths, traced_paths
 from tidy3d.components.autograd.types import PathType
@@ -18,11 +19,9 @@ from tidy3d.components.base import cached_property, keyed_cache
 from tidy3d.components.geometry import base
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
-from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError, SetupError, ValidationError
 from tidy3d.log import log
-from tidy3d.packaging import verify_packages_import
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -31,6 +30,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
@@ -172,7 +172,7 @@ class Sphere(base.Centered, base.Circular):
             Triangle mesh approximation of the sphere surface.
         """
 
-        triangles, _ = self._triangulated_surface(
+        triangles = self._triangulated_surface(
             max_edge_length=max_edge_length, subdivisions=subdivisions
         )
         return TriangleMesh.from_triangles(triangles)
@@ -364,15 +364,15 @@ class Sphere(base.Centered, base.Circular):
     @staticmethod
     def _collapsed_axis_from_simulation_bounds(
         simulation_bounds: Bound,
+        tol: float,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Indices of collapsed simulation axes and the simulation min bounds."""
-        tol = config.adjoint.edge_clip_tolerance
         sim_min, sim_max = (np.asarray(arr, dtype=float) for arr in simulation_bounds)
         collapsed_indices = np.flatnonzero(np.isclose(sim_max - sim_min, 0.0, atol=tol))
         return collapsed_indices, sim_min
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate surface vertex samples under the canonical ``("surface_vertices",)`` key.
 
@@ -384,7 +384,6 @@ class Sphere(base.Centered, base.Circular):
         """
         from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
-        grid_cfg = config.adjoint
         radius = float(get_static(self.radius))
         if radius == 0.0:
             log.warning(
@@ -400,7 +399,7 @@ class Sphere(base.Centered, base.Circular):
             )
 
         collapsed_indices, sim_min_collapsed = self._collapsed_axis_from_simulation_bounds(
-            ctx.simulation_bounds
+            ctx.simulation_bounds, tol=settings.edge_clip_tolerance
         )
         if collapsed_indices.size:
             if collapsed_indices.size > 1:
@@ -413,6 +412,7 @@ class Sphere(base.Centered, base.Circular):
                 plane_value=plane_value,
                 material_wavelength=ctx.material_wavelength,
                 simulation_bounds=ctx.simulation_bounds,
+                tol=settings.edge_clip_tolerance,
             )
             if collapsed_setup is None:
                 return {_SPHERE_SURFACE_KEY: SurfaceSampleSet.empty()}
@@ -420,22 +420,22 @@ class Sphere(base.Centered, base.Circular):
                 bounds=collapsed_setup.bounds, bounds_intersect=collapsed_setup.bounds_intersect
             )
             return collapsed_setup.cylinder._make_adjoint_sample_sets(
-                paths=sorted(collapsed_setup.cyl_paths, key=str), ctx=ctx_cyl
+                paths=sorted(collapsed_setup.cyl_paths, key=str), ctx=ctx_cyl, settings=settings
             )
 
         wvl_mat = ctx.material_wavelength
-        target_edge = max(wvl_mat / grid_cfg.points_per_wavelength, np.finfo(float).eps)
-        triangles, _ = self._triangulated_surface(max_edge_length=target_edge)
-        triangles = triangles.astype(grid_cfg.gradient_dtype_float, copy=False)
+        target_edge = max(wvl_mat / settings.points_per_wavelength, np.finfo(float).eps)
+        triangles = self._triangulated_surface(max_edge_length=target_edge)
+        triangles = triangles.astype(settings.gradient_dtype_float, copy=False)
 
         sim_min, sim_max = (
-            np.asarray(arr, dtype=grid_cfg.gradient_dtype_float) for arr in ctx.simulation_bounds
+            np.asarray(arr, dtype=settings.gradient_dtype_float) for arr in ctx.simulation_bounds
         )
-        tol = config.adjoint.edge_clip_tolerance
+        tol = settings.edge_clip_tolerance
 
         trimesh_obj = TriangleMesh._triangles_to_trimesh(triangles)
-        vertices = np.asarray(trimesh_obj.vertices, dtype=grid_cfg.gradient_dtype_float)
-        center = np.asarray(self.center, dtype=grid_cfg.gradient_dtype_float)
+        vertices = np.asarray(trimesh_obj.vertices, dtype=settings.gradient_dtype_float)
+        center = np.asarray(self.center, dtype=settings.gradient_dtype_float)
         verts_centered = vertices - center
         norms = np.linalg.norm(verts_centered, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1, norms)
@@ -446,8 +446,8 @@ class Sphere(base.Centered, base.Circular):
 
         # get vertex weights
         faces = np.asarray(trimesh_obj.faces, dtype=int)
-        face_areas = np.asarray(trimesh_obj.area_faces, dtype=grid_cfg.gradient_dtype_float)
-        weights = np.zeros(len(vertices), dtype=grid_cfg.gradient_dtype_float)
+        face_areas = np.asarray(trimesh_obj.area_faces, dtype=settings.gradient_dtype_float)
+        weights = np.zeros(len(vertices), dtype=settings.gradient_dtype_float)
         np.add.at(weights, faces[:, 0], face_areas / 3.0)
         np.add.at(weights, faces[:, 1], face_areas / 3.0)
         np.add.at(weights, faces[:, 2], face_areas / 3.0)
@@ -483,7 +483,7 @@ class Sphere(base.Centered, base.Circular):
             return {}
 
         collapsed_indices, sim_min_collapsed = self._collapsed_axis_from_simulation_bounds(
-            derivative_info.simulation_bounds
+            derivative_info.simulation_bounds, tol=derivative_info.settings.edge_clip_tolerance
         )
         if collapsed_indices.size:
             if collapsed_indices.size > 1:
@@ -531,6 +531,7 @@ class Sphere(base.Centered, base.Circular):
         plane_value: float,
         material_wavelength: float,
         simulation_bounds: Bound,
+        tol: float,
     ) -> _CollapsedAxisCylinder | None:
         """Equivalent-cylinder setup for the collapsed-axis (planar) case.
 
@@ -538,7 +539,6 @@ class Sphere(base.Centered, base.Circular):
         the cylinder, or the cylinder's cross section leaves the simulation domain —
         all of which yield zero gradients.
         """
-        tol = config.adjoint.edge_clip_tolerance
         radius = float(self.radius)
         center = np.asarray(self.center, dtype=float)
         delta = plane_value - center[axis_idx]
@@ -611,6 +611,7 @@ class Sphere(base.Centered, base.Circular):
             plane_value=plane_value,
             material_wavelength=derivative_info.resolved_material_wavelength,
             simulation_bounds=derivative_info.simulation_bounds,
+            tol=derivative_info.settings.edge_clip_tolerance,
         )
         if collapsed_setup is None:
             return dict.fromkeys(paths, 0.0)
@@ -652,8 +653,8 @@ class Sphere(base.Centered, base.Circular):
         *,
         max_edge_length: float | None = None,
         subdivisions: int | None = None,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Return physical and unit triangles for the surface discretization. Pass either max_edge_length or subdivisions."""
+    ) -> np.ndarray:
+        """Return physical triangles for the surface discretization. Pass either max_edge_length or subdivisions."""
         max_edge_length_unit = None
         if subdivisions is None:
             max_edge_length_unit = self._edge_length_on_unit_sphere(max_edge_length)
@@ -666,10 +667,7 @@ class Sphere(base.Centered, base.Circular):
 
         radius = float(get_static(self.radius))
         center = np.asarray(self.center, dtype=float)
-        dtype = config.adjoint.gradient_dtype_float
-
-        physical = radius * unit_tris + center
-        return physical.astype(dtype, copy=False), unit_tris.astype(dtype, copy=False)
+        return radius * unit_tris + center
 
     def _unit_sphere_triangles(
         self,
@@ -874,13 +872,11 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
-    def _num_pts_circumference(self, material_wavelength: float) -> int:
+    def _num_pts_circumference(self, material_wavelength: float, points_per_wavelength: int) -> int:
         """Circumference discretization count for the equivalent polyslab."""
         circumference = 2 * np.pi * self.radius
         wvls_in_circumference = circumference / material_wavelength
-        num_pts_circumference = int(
-            np.ceil(config.adjoint.points_per_wavelength * wvls_in_circumference)
-        )
+        num_pts_circumference = int(np.ceil(points_per_wavelength * wvls_in_circumference))
         num_pts_circumference = max(3, num_pts_circumference)
         # Preserve antipodal and coordinate-axis reflection pairs in the circle quadrature.
         num_pts_circumference += num_pts_circumference % 2
@@ -906,7 +902,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         return ps_paths
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate sample sets through the equivalent polyslab.
 
@@ -921,13 +917,15 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                 "'Cylinder' adjoint sample-set generation requires 'material_wavelength' on "
                 "the sampling context."
             )
-        num_pts_circumference = self._num_pts_circumference(ctx.material_wavelength)
+        num_pts_circumference = self._num_pts_circumference(
+            ctx.material_wavelength, settings.points_per_wavelength
+        )
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
         ps_paths = sorted(self._polyslab_derivative_paths(paths), key=str)
 
         from tidy3d.em.translate.sample_sets import circular_cross_section_metadata
 
-        sample_sets = polyslab._make_adjoint_sample_sets(paths=ps_paths, ctx=ctx)
+        sample_sets = polyslab._make_adjoint_sample_sets(paths=ps_paths, ctx=ctx, settings=settings)
         # every non-empty polyslab set carries typed metadata; empty sets carry none and
         # are skipped by every consumption path, so only non-empty sets are stamped
         return {

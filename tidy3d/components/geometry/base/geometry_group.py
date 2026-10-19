@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
-    from tidy3d.components.autograd.types import PathType
+    from tidy3d.components.autograd.types import GeometryAdjointSettings, PathType
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
@@ -291,7 +291,7 @@ class GeometryGroup(Geometry):
         return grouped
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Route generation to child geometries, prefixing their canonical keys.
 
@@ -305,7 +305,9 @@ class GeometryGroup(Geometry):
                 bounds=child.bounds,
                 bounds_intersect=self.bounds_intersection(child.bounds, ctx.simulation_bounds),
             )
-            child_sets = child._make_adjoint_sample_sets(paths=child_paths, ctx=ctx_child)
+            child_sets = child._make_adjoint_sample_sets(
+                paths=child_paths, ctx=ctx_child, settings=settings
+            )
             for key, key_sample_sets in child_sets.items():
                 sample_sets[("geometries", index, *key)] = key_sample_sets
         return sample_sets

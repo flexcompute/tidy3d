@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tidy3d.plugins.expressions
-from tidy3d.components.geometry.contour_conversion import smooth_polygon_vertices
+from tidy3d.components.contour_conversion import smooth_polygon_vertices
 
 from . import utils
 from .base import InvdesBaseModel

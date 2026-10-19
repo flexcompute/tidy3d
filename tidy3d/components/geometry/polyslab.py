@@ -12,6 +12,7 @@ import shapely
 from numpy.polynomial.legendre import leggauss as _leggauss
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d._optional_imports import check_import, verify_packages_import
 from tidy3d.components.autograd import TracedArrayFloat2D, get_static
 from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType, TracedFloat
@@ -20,11 +21,9 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import IndexedDataArray
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D
-from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
-from tidy3d.packaging import check_import, verify_packages_import
 
 from . import base, triangulation
 from .vertex_utils import remove_adjacent_duplicate_vertices
@@ -33,12 +32,13 @@ if TYPE_CHECKING:
     from types import NotImplementedType
 
     from gdstk import Cell
-    from numpy.typing import NDArray
+    from numpy.typing import DTypeLike, NDArray
     from pydantic import PositiveFloat
 
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.types import (
         ArrayFloat2D,
         ArrayLike,
@@ -79,13 +79,15 @@ _ARC_DISCRETIZATION_ANGULAR_STEP = np.pi / 180
 _MIN_POINTS_PER_ARC = 5
 
 
+def leggauss(n: int, dtype: DTypeLike) -> tuple[NDArray, NDArray]:
+    """Cached Gauss-Legendre nodes and weights, cast to ``dtype``."""
+    return _leggauss_cached(n, np.dtype(dtype))
+
+
 @lru_cache(maxsize=128)
-def leggauss(n: int) -> tuple[NDArray, NDArray]:
-    """Cached version of leggauss with dtype conversions."""
+def _leggauss_cached(n: int, dtype: np.dtype) -> tuple[NDArray, NDArray]:
     g, w = _leggauss(n)
-    return g.astype(config.adjoint.gradient_dtype_float, copy=False), w.astype(
-        config.adjoint.gradient_dtype_float, copy=False
-    )
+    return g.astype(dtype, copy=False), w.astype(dtype, copy=False)
 
 
 class _PolyBulgeUtil:
@@ -2059,12 +2061,7 @@ class PolySlab(base.Planar):
             return True
 
         # sample at a few dilation values
-        dist_list = (
-            dilation
-            * np.linspace(
-                0, 1, 1 + _N_SAMPLE_POLYGON_INTERSECT, dtype=config.adjoint.gradient_dtype_float
-            )[1:]
-        )
+        dist_list = dilation * np.linspace(0, 1, 1 + _N_SAMPLE_POLYGON_INTERSECT, dtype=float)[1:]
         for dist in dist_list:
             # offset: we offset the vertices first, and then use shapely to make it proper
             # in principle, one can offset with shapely.buffer directly, but shapely somehow
@@ -2381,7 +2378,7 @@ class PolySlab(base.Planar):
         return None
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate the sidewall and slab-face sample sets for the requested paths.
 
@@ -2419,7 +2416,7 @@ class PolySlab(base.Planar):
         for key in path_by_key:
             if key == _POLYSLAB_SIDEWALL_KEY:
                 sample_set = self._make_sidewall_sample_set(
-                    sim_min=sim_min, sim_max=sim_max, is_2d=is_2d, dx=ctx.spacing
+                    sim_min=sim_min, sim_max=sim_max, is_2d=is_2d, dx=ctx.spacing, settings=settings
                 )
             elif key == _POLYSLAB_SIDEWALL_ANGLE_KEY:
                 # 2D sim => no dependence on theta (z_local=0)
@@ -2427,7 +2424,7 @@ class PolySlab(base.Planar):
                     sample_set = None
                 else:
                     sample_set = self._make_sidewall_angle_sample_set(
-                        sim_min=sim_min, sim_max=sim_max, dx=ctx.spacing
+                        sim_min=sim_min, sim_max=sim_max, dx=ctx.spacing, settings=settings
                     )
             else:  # slab face
                 idx = key[1]
@@ -2442,7 +2439,9 @@ class PolySlab(base.Planar):
                 ):
                     sample_set = None
                 else:
-                    sample_set = self._make_slab_face_sample_set(min_max_index=idx, ctx=ctx)
+                    sample_set = self._make_slab_face_sample_set(
+                        min_max_index=idx, ctx=ctx, settings=settings
+                    )
 
             sample_sets[key] = sample_set if sample_set is not None else SurfaceSampleSet.empty()
 
@@ -2512,7 +2511,9 @@ class PolySlab(base.Planar):
         patch_vjps = (g * sample_set.weights.values).real
 
         # distribute to vertices using vectorized accumulation
-        vertices, _, _, basis = self._edge_geometry_arrays()
+        vertices, _, _, basis = self._edge_geometry_arrays(
+            dtype=derivative_info.settings.gradient_dtype_float
+        )
         normals_2d = np.delete(basis["norm"], self.axis, axis=1)
         edge_idx = np.asarray(metadata.edge_indices.values).astype(int)
         s = np.asarray(metadata.s_vals.values)
@@ -2538,7 +2539,7 @@ class PolySlab(base.Planar):
 
     # ---- Shared helpers for VJP surface integrations ----
     def _z_slices(
-        self, sim_min: NDArray, sim_max: NDArray, is_2d: bool, dx: float
+        self, sim_min: NDArray, sim_max: NDArray, is_2d: bool, dx: float, dtype: DTypeLike
     ) -> tuple[NDArray, float, float, float]:
         """Compute z-slice centers and spacing within bounds.
 
@@ -2549,19 +2550,17 @@ class PolySlab(base.Planar):
                 np.minimum(self.center_axis, sim_max[self.axis]),
                 sim_min[self.axis],
             )
-            zc = np.array([midpoint_z], dtype=config.adjoint.gradient_dtype_float)
+            zc = np.array([midpoint_z], dtype=dtype)
             return zc, 1.0, self.center_axis, self.center_axis
 
         z0 = max(self.slab_bounds[0], sim_min[self.axis])
         z1 = min(self.slab_bounds[1], sim_max[self.axis])
         if z1 <= z0:
-            return np.array([], dtype=config.adjoint.gradient_dtype_float), 0.0, z0, z1
+            return np.array([], dtype=dtype), 0.0, z0, z1
 
         n_z = max(1, int(np.ceil((z1 - z0) / dx)))
         dz = (z1 - z0) / n_z
-        z_centers = np.linspace(
-            z0 + dz / 2, z1 - dz / 2, n_z, dtype=config.adjoint.gradient_dtype_float
-        )
+        z_centers = np.linspace(z0 + dz / 2, z1 - dz / 2, n_z, dtype=dtype)
         return z_centers, dz, z0, z1
 
     @staticmethod
@@ -2571,8 +2570,8 @@ class PolySlab(base.Planar):
         sim_min: NDArray,
         sim_max: NDArray,
         *,
-        _edge_clip_tol: float | None = None,
-        _dtype: type | None = None,
+        edge_clip_tolerance: float,
+        dtype: DTypeLike,
     ) -> tuple[NDArray, NDArray, NDArray]:
         """
         Compute parametric bounds for multiple segments clipped to simulation bounds.
@@ -2587,6 +2586,10 @@ class PolySlab(base.Planar):
             (3,) array of simulation minimum bounds.
         sim_max : NDArray
             (3,) array of simulation maximum bounds.
+        edge_clip_tolerance : float
+            Padding tolerance applied when clipping against the bounds.
+        dtype : DTypeLike
+            Floating-point dtype of the returned parametric values.
 
         Returns
         -------
@@ -2598,13 +2601,9 @@ class PolySlab(base.Planar):
             (N,) array of parametric end values (0.0 to 1.0).
         """
         n = segment_starts.shape[0]
-        if _edge_clip_tol is None:
-            _edge_clip_tol = config.adjoint.edge_clip_tolerance
-        if _dtype is None:
-            _dtype = config.adjoint.gradient_dtype_float
 
-        t_starts = np.zeros(n, dtype=_dtype)
-        t_ends = np.ones(n, dtype=_dtype)
+        t_starts = np.zeros(n, dtype=dtype)
+        t_ends = np.ones(n, dtype=dtype)
         is_within_bounds = np.ones(n, dtype=bool)
 
         for dim in range(3):
@@ -2618,8 +2617,8 @@ class PolySlab(base.Planar):
 
             # parallel edges: check if outside bounds
             outside = parallel & (
-                (start_coords < (bound_min - _edge_clip_tol))
-                | (start_coords > (bound_max + _edge_clip_tol))
+                (start_coords < (bound_min - edge_clip_tolerance))
+                | (start_coords > (bound_max + edge_clip_tolerance))
             )
             is_within_bounds &= ~outside
 
@@ -2642,7 +2641,7 @@ class PolySlab(base.Planar):
                 # still valid?
                 is_within_bounds &= ~not_parallel | (t_starts < t_ends)
 
-        is_within_bounds &= t_ends > t_starts + _edge_clip_tol
+        is_within_bounds &= t_ends > t_starts + edge_clip_tolerance
 
         return is_within_bounds, t_starts, t_ends
 
@@ -2653,9 +2652,9 @@ class PolySlab(base.Planar):
         t_start: float = 0.0,
         t_end: float = 1.0,
         *,
-        _sample_fraction: float | None = None,
-        _gauss_order: int | None = None,
-        _dtype: type | None = None,
+        quadrature_sample_fraction: float,
+        gauss_quadrature_order: int,
+        dtype: DTypeLike,
     ) -> tuple[NDArray, NDArray]:
         """
         Compute Gauss samples and weights along [t_start, t_end] with adaptive count.
@@ -2670,33 +2669,36 @@ class PolySlab(base.Planar):
             Start parameter, by default 0.0.
         t_end : float, optional
             End parameter, by default 1.0.
+        quadrature_sample_fraction : float
+            Fraction of the uniform sample count used as the Gauss point count.
+        gauss_quadrature_order : int
+            Local order of the composite Gauss rule.
+        dtype : DTypeLike
+            Floating-point dtype of the returned samples and weights.
 
         Returns
         -------
         tuple[NDArray, NDArray]
             Tuple of (samples, weights) for the integration.
         """
-        if _sample_fraction is None:
-            _sample_fraction = config.adjoint.quadrature_sample_fraction
-        if _gauss_order is None:
-            _gauss_order = config.adjoint.gauss_quadrature_order
-        if _dtype is None:
-            _dtype = config.adjoint.gradient_dtype_float
-
         L_eff = L * max(0.0, t_end - t_start)
         n_uniform = max(1, int(np.ceil(L_eff / dx)))
-        n_gauss = max(2, n_uniform) if n_uniform <= 3 else max(2, int(n_uniform * _sample_fraction))
-        if n_gauss <= _gauss_order:
-            g, w = leggauss(n_gauss)
+        n_gauss = (
+            max(2, n_uniform)
+            if n_uniform <= 3
+            else max(2, int(n_uniform * quadrature_sample_fraction))
+        )
+        if n_gauss <= gauss_quadrature_order:
+            g, w = leggauss(n_gauss, dtype)
             half_range = 0.5 * (t_end - t_start)
-            s = (half_range * g + 0.5 * (t_end + t_start)).astype(_dtype, copy=False)
-            wt = (w * half_range).astype(_dtype, copy=False)
+            s = (half_range * g + 0.5 * (t_end + t_start)).astype(dtype, copy=False)
+            wt = (w * half_range).astype(dtype, copy=False)
             return s, wt
 
         # composite Gauss with fixed local order
-        g_loc, w_loc = leggauss(_gauss_order)
-        segs = max(1, int(np.ceil(n_gauss / _gauss_order)))
-        edges_t = np.linspace(t_start, t_end, segs + 1, dtype=_dtype)
+        g_loc, w_loc = leggauss(gauss_quadrature_order, dtype)
+        segs = max(1, int(np.ceil(n_gauss / gauss_quadrature_order)))
+        edges_t = np.linspace(t_start, t_end, segs + 1, dtype=dtype)
 
         # compute all segments at once
         a = edges_t[:-1]  # (segs,)
@@ -2705,8 +2707,8 @@ class PolySlab(base.Planar):
         mid = 0.5 * (b + a)  # (segs,)
 
         # (segs, 1) * (order,) + (segs, 1) -> (segs, order)
-        S = (half_width[:, None] * g_loc + mid[:, None]).astype(_dtype, copy=False)
-        W = (half_width[:, None] * w_loc).astype(_dtype, copy=False)
+        S = (half_width[:, None] * g_loc + mid[:, None]).astype(dtype, copy=False)
+        W = (half_width[:, None] * w_loc).astype(dtype, copy=False)
         return S.ravel(), W.ravel()
 
     def _collect_sidewall_patches(
@@ -2719,6 +2721,7 @@ class PolySlab(base.Planar):
         sim_max: NDArray,
         is_2d: bool,
         dx: float,
+        settings: GeometryAdjointSettings,
     ) -> dict:
         """
         Collect sidewall patch geometry for batched VJP evaluation.
@@ -2741,6 +2744,8 @@ class PolySlab(base.Planar):
             Whether the simulation is 2D.
         dx : float
             Discretization step.
+        settings : GeometryAdjointSettings
+            Adjoint settings for this pass (dtype, clip tolerance, quadrature).
 
         Returns
         -------
@@ -2757,11 +2762,7 @@ class PolySlab(base.Planar):
             - dz: float, slice thickness.
             - edge_indices: (N,) array of original edge indices.
         """
-        # cache config values to avoid repeated lookups (overhead not insignificant here)
-        _dtype = config.adjoint.gradient_dtype_float
-        _edge_clip_tol = config.adjoint.edge_clip_tolerance
-        _sample_fraction = config.adjoint.quadrature_sample_fraction
-        _gauss_order = config.adjoint.gauss_quadrature_order
+        _dtype = settings.gradient_dtype_float
 
         theta = get_static(self.sidewall_angle)
         z_ref = self.reference_axis_pos
@@ -2776,7 +2777,9 @@ class PolySlab(base.Planar):
         axis_vec[self.axis] = 1.0
 
         # densify along axis as |theta| grows, dz scales with cos(theta)
-        z_centers, dz, _z0, _z1 = self._z_slices(sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th)
+        z_centers, dz, _z0, _z1 = self._z_slices(
+            sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th, dtype=_dtype
+        )
 
         # early exit: no slices
         if (not is_2d) and len(z_centers) == 0:
@@ -2905,8 +2908,8 @@ class PolySlab(base.Planar):
                 segment_ends,
                 sim_min_eff,
                 sim_max_eff,
-                _edge_clip_tol=_edge_clip_tol,
-                _dtype=_dtype,
+                edge_clip_tolerance=settings.edge_clip_tolerance,
+                dtype=_dtype,
             )
 
             # process only valid z slices (sampling has variable output sizes)
@@ -2937,9 +2940,9 @@ class PolySlab(base.Planar):
                         denom_edge,
                         t0,
                         t1,
-                        _sample_fraction=_sample_fraction,
-                        _gauss_order=_gauss_order,
-                        _dtype=_dtype,
+                        quadrature_sample_fraction=settings.quadrature_sample_fraction,
+                        gauss_quadrature_order=settings.gauss_quadrature_order,
+                        dtype=_dtype,
                     )
 
                 s_list, w_list = sample_cache[sample_cache_key]
@@ -3015,6 +3018,7 @@ class PolySlab(base.Planar):
         sim_min: NDArray,
         sim_max: NDArray,
         dx: float,
+        settings: GeometryAdjointSettings,
     ) -> SurfaceSampleSet | None:
         """Sidewall sample set weighted for dJ/dtheta where theta = sidewall_angle.
 
@@ -3033,6 +3037,7 @@ class PolySlab(base.Planar):
         # The scalar sidewall-angle VJP should not depend on the user's input winding.
         # Use the canonical reference polygon; vertex VJPs keep the raw ordering.
         vertices, next_v, edges, basis = self._edge_geometry_arrays(
+            dtype=settings.gradient_dtype_float,
             vertices=self.reference_polygon,
             is_ccw=True,
         )
@@ -3047,6 +3052,7 @@ class PolySlab(base.Planar):
             sim_max=sim_max,
             is_2d=False,
             dx=dx,
+            settings=settings,
         )
         if patch["centers"].shape[0] == 0:
             return None
@@ -3074,7 +3080,7 @@ class PolySlab(base.Planar):
         )
 
     def _make_slab_face_sample_set(
-        self, min_max_index: int, ctx: SamplingContext
+        self, min_max_index: int, ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> SurfaceSampleSet | None:
         """Sample set for one of the two horizontal faces of a ``PolySlab``.
 
@@ -3131,6 +3137,7 @@ class PolySlab(base.Planar):
             face_poly,
             min_max_index,
             ctx.spacing,
+            settings.gradient_dtype_float,
         )
 
     def _slab_face_line_samples(
@@ -3144,6 +3151,7 @@ class PolySlab(base.Planar):
         face_poly: shapely.Polygon,
         min_max_index: int,
         dx: float,
+        dtype: DTypeLike,
     ) -> SurfaceSampleSet | None:
         """Handle degenerate line cross-section case"""
         from tidy3d.em.translate.sample_sets import (
@@ -3166,9 +3174,7 @@ class PolySlab(base.Planar):
             return None
 
         n_seg = max(1, int(np.ceil(length / dx)))
-        coords = np.linspace(
-            l_min, l_max, 2 * n_seg + 1, dtype=config.adjoint.gradient_dtype_float
-        )[1::2]
+        coords = np.linspace(l_min, l_max, 2 * n_seg + 1, dtype=dtype)[1::2]
 
         # build XY coordinates and in-plane direction vectors
         if line_dim == 0:
@@ -3190,10 +3196,8 @@ class PolySlab(base.Planar):
         areas = np.full(n_pts, length / n_seg)  # patch length
 
         normals_xyz = self.unpop_axis_vect(
-            np.full(
-                n_pts, -1 if min_max_index == 0 else 1, dtype=config.adjoint.gradient_dtype_float
-            ),
-            np.zeros_like(xy, dtype=config.adjoint.gradient_dtype_float),
+            np.full(n_pts, -1 if min_max_index == 0 else 1, dtype=dtype),
+            np.zeros_like(xy, dtype=dtype),
         )
         perps1_xyz = self.unpop_axis_vect(np.zeros(n_pts), dir_vec_plane)
         perps2_xyz = np.cross(normals_xyz, perps1_xyz)
@@ -3219,6 +3223,7 @@ class PolySlab(base.Planar):
         face_poly: shapely.Polygon,
         min_max_index: int,
         dx: float,
+        dtype: DTypeLike,
     ) -> SurfaceSampleSet | None:
         """2d surface samples on a Gauss quadrature grid"""
         from tidy3d.em.translate.sample_sets import (
@@ -3233,15 +3238,11 @@ class PolySlab(base.Planar):
         n1 = max(2, n1_uniform // 2)
         n2 = max(2, n2_uniform // 2)
 
-        g1, w1 = leggauss(n1)
-        g2, w2 = leggauss(n2)
+        g1, w1 = leggauss(n1, dtype)
+        g2, w2 = leggauss(n2, dtype)
 
-        coords1 = (0.5 * (r1_max - r1_min) * g1 + 0.5 * (r1_max + r1_min)).astype(
-            config.adjoint.gradient_dtype_float, copy=False
-        )
-        coords2 = (0.5 * (r2_max - r2_min) * g2 + 0.5 * (r2_max + r2_min)).astype(
-            config.adjoint.gradient_dtype_float, copy=False
-        )
+        coords1 = (0.5 * (r1_max - r1_min) * g1 + 0.5 * (r1_max + r1_min)).astype(dtype, copy=False)
+        coords2 = (0.5 * (r2_max - r2_min) * g2 + 0.5 * (r2_max + r2_min)).astype(dtype, copy=False)
 
         r1_grid, r2_grid = np.meshgrid(coords1, coords2, indexing="ij")
         r1_flat = r1_grid.flatten()
@@ -3252,34 +3253,32 @@ class PolySlab(base.Planar):
         if not in_face.any():
             return None
 
-        xyz = self.unpop_axis_vect(
-            np.full(in_face.sum(), ax_val, dtype=config.adjoint.gradient_dtype_float), pts[in_face]
-        )
+        xyz = self.unpop_axis_vect(np.full(in_face.sum(), ax_val, dtype=dtype), pts[in_face])
         n_patches = xyz.shape[0]
 
         normals_xyz = self.unpop_axis_vect(
             np.full(
                 n_patches,
                 -1 if min_max_index == 0 else 1,
-                dtype=config.adjoint.gradient_dtype_float,
+                dtype=dtype,
             ),
-            np.zeros((n_patches, 2), dtype=config.adjoint.gradient_dtype_float),
+            np.zeros((n_patches, 2), dtype=dtype),
         )
         perps1_xyz = self.unpop_axis_vect(
-            np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
+            np.zeros(n_patches, dtype=dtype),
             np.column_stack(
                 (
-                    np.ones(n_patches, dtype=config.adjoint.gradient_dtype_float),
-                    np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
+                    np.ones(n_patches, dtype=dtype),
+                    np.zeros(n_patches, dtype=dtype),
                 )
             ),
         )
         perps2_xyz = self.unpop_axis_vect(
-            np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
+            np.zeros(n_patches, dtype=dtype),
             np.column_stack(
                 (
-                    np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
-                    np.ones(n_patches, dtype=config.adjoint.gradient_dtype_float),
+                    np.zeros(n_patches, dtype=dtype),
+                    np.ones(n_patches, dtype=dtype),
                 )
             ),
         )
@@ -3314,6 +3313,7 @@ class PolySlab(base.Planar):
         sim_max: NDArray,
         is_2d: bool,
         dx: float,
+        settings: GeometryAdjointSettings,
     ) -> SurfaceSampleSet | None:
         """Sidewall sample set in the raw vertex winding, serving the ``vertices`` path.
 
@@ -3326,7 +3326,9 @@ class PolySlab(base.Planar):
             SurfaceSampleSet,
         )
 
-        vertices, next_v, edges, basis = self._edge_geometry_arrays()
+        vertices, next_v, edges, basis = self._edge_geometry_arrays(
+            dtype=settings.gradient_dtype_float
+        )
 
         # collect patches once
         patch = self._collect_sidewall_patches(
@@ -3338,6 +3340,7 @@ class PolySlab(base.Planar):
             sim_max=sim_max,
             is_2d=is_2d,
             dx=dx,
+            settings=settings,
         )
 
         # no patches -> no samples (zero gradient)
@@ -3370,7 +3373,8 @@ class PolySlab(base.Planar):
 
     def _edge_geometry_arrays(
         self,
-        dtype: np.dtype = config.adjoint.gradient_dtype_float,
+        *,
+        dtype: DTypeLike,
         vertices: NDArray | None = None,
         is_ccw: bool | None = None,
     ) -> tuple[NDArray, NDArray, NDArray, dict[str, NDArray]]:
@@ -3380,22 +3384,25 @@ class PolySlab(base.Planar):
         vertices = np.asarray(vertices, dtype=dtype)
         next_v = np.roll(vertices, -1, axis=0)
         edges = next_v - vertices
-        basis = self.edge_basis_vectors(edges, is_ccw=is_ccw)
+        basis = self.edge_basis_vectors(edges, is_ccw=is_ccw, dtype=dtype)
         return vertices, next_v, edges, basis
 
     def edge_basis_vectors(
         self,
         edges: NDArray,  # (N, 2)
         is_ccw: bool | None = None,
+        dtype: DTypeLike | None = None,
     ) -> dict[str, NDArray]:  # (N, 3)
         """Normalized basis vectors for ``normal`` direction, ``slab`` tangent direction and ``edge``."""
 
         # ensure edges have consistent dtype
-        edges = edges.astype(config.adjoint.gradient_dtype_float, copy=False)
+        if dtype is None:
+            dtype = np.result_type(edges, float)
+        edges = edges.astype(dtype, copy=False)
 
         num_vertices, _ = edges.shape
-        zeros = np.zeros(num_vertices, dtype=config.adjoint.gradient_dtype_float)
-        ones = np.ones(num_vertices, dtype=config.adjoint.gradient_dtype_float)
+        zeros = np.zeros(num_vertices, dtype=dtype)
+        ones = np.ones(num_vertices, dtype=dtype)
 
         # normalized vectors along edges
         edges_norm_in_plane = self.normalize_vect(edges)
@@ -3407,7 +3414,7 @@ class PolySlab(base.Planar):
         slabs_axis_components = cos_angle * ones
 
         # create axis_norm as array directly to avoid tuple->array conversion in np.cross
-        axis_norm = np.zeros(3, dtype=config.adjoint.gradient_dtype_float)
+        axis_norm = np.zeros(3, dtype=dtype)
         axis_norm[self.axis] = 1.0
         slab_normal_xyz = -sin_angle * np.cross(edges_norm_xyz, axis_norm)
         _, slab_normal_in_plane = self.pop_axis_vect(slab_normal_xyz)

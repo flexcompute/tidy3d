@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import autograd.numpy as np
 import numpy as npo
 
-from tidy3d.components.geometry.contour_conversion import (
+from tidy3d.components.contour_conversion import (
     dataarray_to_polyslab_data,
     ordered_ring_refs_by_area,
     smooth_polygon_vertices,
@@ -22,8 +22,8 @@ from tidy3d.plugins.invdes.self_intersection import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from tidy3d.components.contour_conversion import ContourPolyslabData
     from tidy3d.components.data.data_array import SpatialDataArray
-    from tidy3d.components.geometry.contour_conversion import ContourPolyslabData
     from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.medium import AbstractCustomMedium
     from tidy3d.components.structure import Structure
@@ -100,7 +100,7 @@ class PolySlabSet:
         min_island_area: float = 0.0,
     ) -> PolySlabSet:
         """Create a polyslab set from a custom medium slice."""
-        from tidy3d.components.geometry.contour_conversion import custom_medium_to_polyslab_data
+        from tidy3d.components.contour_conversion import custom_medium_to_polyslab_data
 
         contour_data = custom_medium_to_polyslab_data(
             medium,

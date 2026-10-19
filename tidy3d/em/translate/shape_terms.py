@@ -28,6 +28,7 @@ from tidy3d.config import config
 
 if TYPE_CHECKING:
     from tidy3d.components.autograd.derivative_terms import PathType
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
 
 
 def shape_terms(
@@ -37,6 +38,7 @@ def shape_terms(
     structure_sets: Any,
     frequencies: Any,
     *,
+    settings: GeometryAdjointSettings,
     key: tuple | None = None,
     token: int | str | None = None,
 ) -> Compiled:
@@ -44,6 +46,8 @@ def shape_terms(
 
     The point-cloud monitors are the ones the structure stages for its sample sets. A structure
     whose sample sets hold no points stages none, and every path binds the geometry's zero.
+    ``settings`` are the adjoint settings ``structure_sets`` were generated with; the binding
+    carries them to the chain rule, so compiling and binding read one snapshot.
     ``key`` and the monitor-name ``token`` default to the structure's own; a numerical query
     sets both so that its terms and monitors stay distinct.
     """
@@ -58,6 +62,7 @@ def shape_terms(
         structure_sets=structure_sets,
         key=key,
         paths=tuple(paths),
+        settings=settings,
     )
     traced = tuple((*key, *p) for p in paths)
     fields, permittivity, point_chunks = structure._make_adjoint_point_cloud_monitors(
@@ -128,6 +133,7 @@ def _geometry_vjps(
     structure_sets: Any,
     key: tuple,
     paths: tuple[PathType, ...],
+    settings: GeometryAdjointSettings,
 ) -> dict[PathType, np.ndarray]:
     """Every traced geometry path, through one call of the geometry's chain rule."""
 
@@ -142,6 +148,7 @@ def _geometry_vjps(
         simulation_bounds=simulation.bounds,
         point_integrands=integrands,
         resolved_material_wavelength=structure_sets.material_wavelength,
+        settings=settings,
     )
     vjps = geometry._compute_derivatives_from_sample_sets(
         sample_sets=structure_sets.by_key(), paths=list(paths), derivative_info=info

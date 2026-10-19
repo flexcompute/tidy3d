@@ -27,14 +27,14 @@ from .autograd.monitor_names import adjoint_monitor_name
 from .autograd.path_utils import format_traced_path
 from .autograd.utils import contains, get_static
 from .base import Tidy3dBaseModel, cached_property
-from .data.data_array import PointDataArray, ScalarFieldDataArray
-from .geometry.base import Box, Geometry
-from .geometry.contour_conversion import (
+from .contour_conversion import (
     _custom_medium_to_polyslab_data_and_permittivity_bounds,
     _dataarray_to_polyslab_data_and_permittivity_bounds,
     ordered_ring_refs_by_area,
     smooth_polyslabs,
 )
+from .data.data_array import PointDataArray, ScalarFieldDataArray
+from .geometry.base import Box, Geometry
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .material.multi_physics import MultiPhysicsMedium
 from .material.types import StructureMediumType
@@ -73,8 +73,8 @@ if TYPE_CHECKING:
 
     from .autograd.derivative_utils import DerivativeInfo
     from .autograd.types import AutogradFieldMap
+    from .contour_conversion import ContourPolyslabData
     from .data.data_array import SpatialDataArray
-    from .geometry.contour_conversion import ContourPolyslabData
     from .geometry.polyslab import PolySlab
     from .grid.grid import Coords
     from .types import Ax, Axis, PriorityMode

@@ -8,7 +8,7 @@ from .axes_utils import (
     set_default_labels_and_title,
 )
 from .descartes import Polygon, polygon_patch, polygon_path, polygon_paths
-from .flex_style import apply_tidy3d_params, restore_matplotlib_rcparams
+from .flex_style import restore_matplotlib_rcparams
 from .plot_params import (
     AbstractPlotParams,
     PathPlotParams,
@@ -47,19 +47,6 @@ from .styles import (
     arrow_style,
 )
 from .visualization_spec import MATPLOTLIB_IMPORTED, VisualizationSpec
-
-# Note: apply_tidy3d_params() is no longer called at import time to reduce import overhead.
-# It will be called automatically when matplotlib is first used for plotting.
-_tidy3d_style_applied = False
-
-
-def _ensure_tidy3d_style() -> None:
-    """Apply tidy3d matplotlib style if not already applied."""
-    global _tidy3d_style_applied
-    if not _tidy3d_style_applied:
-        apply_tidy3d_params()
-        _tidy3d_style_applied = True
-
 
 __all__ = [
     "ARROW_ALPHA",

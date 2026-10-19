@@ -19,6 +19,8 @@ from tidy3d.exceptions import AdjointError
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from .types import GeometryAdjointSettings
+
 PathType = tuple[str | int, ...]
 
 
@@ -67,6 +69,11 @@ class ShapeDerivativeContext:
     """Each sample set's per-point sensitivity, ``(N, 1)``, under the set's canonical key."""
     resolved_material_wavelength: float
     """The material wavelength the sample sets were generated with."""
+    settings: GeometryAdjointSettings
+    """The adjoint settings the sample sets were generated with.
+
+    Compiling the derivative program takes one snapshot and its bindings carry it here,
+    so generation and the chain rule read the same values."""
 
 
 def combine(parts: Iterable[Compiled]) -> Compiled:

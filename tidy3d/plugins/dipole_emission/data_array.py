@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from tidy3d.components.data.data_array import (
-    DATA_ARRAY_MAP,
     DIPOLE_EMISSION_INTENSITY_UNITS,
     DataArray,
 )
+from tidy3d.components.data.registry import DATA_ARRAY_MAP
 
 
 class DipoleEmissionStudyDataArray(DataArray):

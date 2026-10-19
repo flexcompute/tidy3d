@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.geometry.utils import _shift_value_signed
+from tidy3d.components.grid.snapping import (
+    _shift_value_signed,
+)
 from tidy3d.components.monitor import WARN_NUM_FREQS
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import TYPE_TAG_STR, Complex, FreqArray

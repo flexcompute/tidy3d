@@ -44,3 +44,16 @@ def restore_matplotlib_rcparams() -> None:
         log.error("Matplotlib is not installed on your system. Failed to reset to default styles.")
     except Exception as e:
         log.error(f"Failed to reset previous Matplotlib style. Error: {e}")
+
+
+# Applying the matplotlib style is deferred to the first plot rather than done at
+# import time, to keep importing this package cheap.
+_tidy3d_style_applied = False
+
+
+def _ensure_tidy3d_style() -> None:
+    """Apply tidy3d matplotlib style if not already applied."""
+    global _tidy3d_style_applied
+    if not _tidy3d_style_applied:
+        apply_tidy3d_params()
+        _tidy3d_style_applied = True

@@ -17,7 +17,6 @@ from xarray import concat as xr_concat
 from tidy3d._runtime import always_validate
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import (
-    DATA_ARRAY_MAP,
     MAX_SPATIAL_SAMPLES,
     CellDataArray,
     IndexedDataArray,
@@ -28,6 +27,7 @@ from tidy3d.components.data.data_array import (
     _grid_from_bounds,
     _grid_steps,
 )
+from tidy3d.components.data.registry import DATA_ARRAY_MAP
 from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import DataError, Tidy3dNotImplementedError, ValidationError
 from tidy3d.log import log

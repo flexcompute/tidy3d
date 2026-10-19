@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from flexcompute.core._migration.em.numerical.raw import microwave as microwave_numerics
 
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.geometry.utils import (
+from tidy3d.components.grid.snapping import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,

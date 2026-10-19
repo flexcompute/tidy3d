@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from flexcompute.core._migration.em.derivatives import DerivativeProgram
 
+from tidy3d.components.autograd.adjoint_settings import adjoint_settings_from_config
 from tidy3d.components.autograd.collection import collect_adjoint_sample_sets
 from tidy3d.components.autograd.derivative_terms import combine
 from tidy3d.components.autograd.utils import get_static
-from tidy3d.components.geometry.bound_ops import bounds_contains, bounds_intersection
+from tidy3d.components.bound_ops import bounds_contains, bounds_intersection
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.medium.custom.isotropic import CustomMedium
 from tidy3d.components.medium.derivative_terms import MediumTarget
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from flexcompute.core._migration.em.derivatives import Results
 
     from tidy3d.components.autograd.derivative_terms import Binding, Compiled, PathType
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
 
 _COMPONENTS = ("xx", "yy", "zz")
 
@@ -45,12 +47,14 @@ def compile_derivatives(
     """The derivative program and its client side for every traced path of one simulation.
 
     The paths must already be validated (``_resolve_autograd_route``), as run setup does.
-    Geometry paths, regular or queried, sample their surfaces here.
+    Geometry paths, regular or queried, sample their surfaces here under one snapshot of
+    the adjoint settings, which their bindings carry to the chain rule.
     ``numerical_queries`` holds each inserted numerical structure's declared queries by index;
     their results bind under ``("numerical", index, query_key, *structure_local_path)``.
     """
 
     frequencies = np.asarray(simulation._freqs_adjoint, dtype=float)
+    settings = adjoint_settings_from_config()
     owners: dict[tuple, list[PathType]] = defaultdict(list)
     for path in map(tuple, paths):
         owner = path[:2] if path[:1] == ("sources",) else path[:3]
@@ -61,9 +65,9 @@ def compile_derivatives(
             raise AdjointError(f"No derivative compiler handles the traced path {path}.")
         owners[owner].append(path[len(owner) :])
     compiled = combine(
-        [_owner(simulation, owner, local, frequencies) for owner, local in owners.items()]
+        [_owner(simulation, owner, local, frequencies, settings) for owner, local in owners.items()]
         + [
-            _query(simulation, index, position, key, query, frequencies)
+            _query(simulation, index, position, key, query, frequencies, settings)
             for index, queries in (numerical_queries or {}).items()
             for position, (key, query) in enumerate(queries.items())
         ]
@@ -90,7 +94,11 @@ def bind(
 
 
 def _owner(
-    simulation: Any, owner: tuple, local: list[PathType], frequencies: np.ndarray
+    simulation: Any,
+    owner: tuple,
+    local: list[PathType],
+    frequencies: np.ndarray,
+    settings: GeometryAdjointSettings,
 ) -> Compiled:
     """The compiled terms of one owner: a source, a structure's medium, or its geometry."""
 
@@ -98,15 +106,17 @@ def _owner(
         return _source(simulation, owner[1], local, frequencies)
     if owner[2] == "medium":
         return _medium(simulation, owner[1], local, frequencies)
-    structure_sets = _structure_sets(simulation, owner[1], local)
-    return shape_terms(simulation, owner[1], local, structure_sets, frequencies)
+    structure_sets = _structure_sets(simulation, owner[1], local, settings)
+    return shape_terms(simulation, owner[1], local, structure_sets, frequencies, settings=settings)
 
 
-def _structure_sets(simulation: Any, index: int, paths: list[PathType]) -> Any:
+def _structure_sets(
+    simulation: Any, index: int, paths: list[PathType], settings: GeometryAdjointSettings
+) -> Any:
     """The staged surface sample sets for one structure's traced geometry paths."""
 
     traced = [("structures", index, "geometry", *path) for path in paths]
-    return collect_adjoint_sample_sets(simulation, traced).for_structure(index)
+    return collect_adjoint_sample_sets(simulation, traced, settings).for_structure(index)
 
 
 def _query(
@@ -116,6 +126,7 @@ def _query(
     query_key: str,
     query: Any,
     frequencies: np.ndarray,
+    settings: GeometryAdjointSettings,
 ) -> Compiled:
     """One declared numerical query, compiled by the same owners on its target structure.
 
@@ -138,7 +149,7 @@ def _query(
             )
         )
     if "geometry" in paths:
-        structure_sets = _structure_sets(target_simulation, index, paths["geometry"])
+        structure_sets = _structure_sets(target_simulation, index, paths["geometry"], settings)
         parts.append(
             shape_terms(
                 target_simulation,
@@ -146,6 +157,7 @@ def _query(
                 paths["geometry"],
                 structure_sets,
                 frequencies,
+                settings=settings,
                 key=(*prefix, "geometry"),
                 token=token,
             )

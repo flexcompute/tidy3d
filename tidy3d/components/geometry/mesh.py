@@ -9,25 +9,23 @@ import numpy as np
 from autograd import numpy as anp
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d._optional_imports import verify_packages_import
 from tidy3d._runtime import always_validate
 from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
-    DATA_ARRAY_MAP,
     IndexedDataArray,
     PointDataArray,
     TriangleMeshDataArray,
 )
-from tidy3d.components.data.dataset import TriangleMeshDataset
-from tidy3d.components.data.validators import validate_no_nans
-from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.config import config
+from tidy3d.components.data.dataset_base import TriangleMeshDataset
+from tidy3d.components.data.registry import DATA_ARRAY_MAP
+from tidy3d.components.viz.axes_utils import add_ax_if_none, equal_aspect
 from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import AdjointError, DataError, ValidationError
 from tidy3d.log import log
-from tidy3d.packaging import verify_packages_import
 
 from . import base
 
@@ -36,11 +34,12 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Literal
 
-    from numpy.typing import NDArray
+    from numpy.typing import DTypeLike, NDArray
     from trimesh import Trimesh
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
 
@@ -91,8 +90,6 @@ class TriangleMesh(base.Geometry, ABC):
         title="Surface mesh data",
         description="Surface mesh data.",
     )
-
-    _no_nans_mesh = validate_no_nans("mesh_dataset")
 
     @verify_packages_import(["trimesh"])
     @model_validator(mode="before")
@@ -806,7 +803,7 @@ class TriangleMesh(base.Geometry, ABC):
         return base.Geometry.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate surface samples under the canonical ``("surface_samples",)`` key.
 
@@ -834,7 +831,7 @@ class TriangleMesh(base.Geometry, ABC):
                 "orientation, or repair the mesh topology."
             )
 
-        triangles = np.asarray(self.triangles, dtype=config.adjoint.gradient_dtype_float)
+        triangles = np.asarray(self.triangles, dtype=settings.gradient_dtype_float)
 
         # no samples if geometry is completely outside simulation bounds
         sim_min, sim_max = map(np.asarray, ctx.simulation_bounds)
@@ -852,6 +849,8 @@ class TriangleMesh(base.Geometry, ABC):
             spacing=ctx.spacing,
             sim_min=sim_min,
             sim_max=sim_max,
+            dtype=settings.gradient_dtype_float,
+            edge_clip_tolerance=settings.edge_clip_tolerance,
         )
 
         if samples["points"].shape[0] == 0:
@@ -906,7 +905,8 @@ class TriangleMesh(base.Geometry, ABC):
                 f"key; got keys {tuple(sample_sets)}."
             )
 
-        triangles = np.asarray(self.triangles, dtype=config.adjoint.gradient_dtype_float)
+        dtype = derivative_info.settings.gradient_dtype_float
+        triangles = np.asarray(self.triangles, dtype=dtype)
 
         sample_set = sample_sets[_MESH_SURFACE_KEY]
         if sample_set.num_points == 0:
@@ -922,7 +922,7 @@ class TriangleMesh(base.Geometry, ABC):
             sample_set, TriangleMeshSurfaceMetadata, "TriangleMesh"
         )
 
-        triangle_grads = np.zeros_like(triangles, dtype=config.adjoint.gradient_dtype_float)
+        triangle_grads = np.zeros_like(triangles, dtype=dtype)
         num_samples = sample_set.num_points
         batch_size = _SURFACE_GRADIENT_BATCH_SIZE
 
@@ -957,11 +957,13 @@ class TriangleMesh(base.Geometry, ABC):
         spacing: float,
         sim_min: NDArray,
         sim_max: NDArray,
+        *,
+        dtype: DTypeLike,
+        edge_clip_tolerance: float,
     ) -> dict[str, np.ndarray]:
         """Deterministic per-triangle sampling used historically."""
 
-        dtype = config.adjoint.gradient_dtype_float
-        tol = config.adjoint.edge_clip_tolerance
+        tol = edge_clip_tolerance
 
         sim_min = np.asarray(sim_min, dtype=dtype)
         sim_max = np.asarray(sim_max, dtype=dtype)

@@ -44,6 +44,8 @@ from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.utils import (
     filter_intersecting_geometries,
+)
+from tidy3d.components.grid.snapping import (
     find_snap_location,
 )
 from tidy3d.components.medium import (

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import xarray as xr
 
-from tidy3d.components.autograd.utils import get_static
+from tidy3d.components.data.plot_safe import static_dataarray_for_plot  # noqa: F401
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
@@ -30,31 +30,6 @@ CustomSpatialDataTypeAnnotated = discriminated_union(UnstructuredGridDatasetType
 OUTER_DOT_BLOCK_TARGET_BYTES = 64 * 1024**2
 OUTER_DOT_BLOCK_MIN_SIZE = 8
 OUTER_DOT_BLOCK_MAX_SIZE = 64
-
-
-def static_dataarray_for_plot(field_data: xr.DataArray) -> xr.DataArray:
-    """Return a plotting-safe DataArray with traced data and coordinates stripped.
-
-    Plotting traced xarray objects can fail when xarray materializes traced
-    coordinates as ``dtype=object``. Rebuild the array using static payload and
-    coordinates while preserving the original array type when possible.
-    """
-
-    static_coords = {}
-    for name, coord in field_data.coords.items():
-        static_coords[name] = (
-            coord.dims,
-            get_static(coord.data),
-            dict(coord.attrs),
-        )
-
-    return type(field_data)(
-        get_static(field_data.data),
-        coords=static_coords,
-        dims=field_data.dims,
-        name=field_data.name,
-        attrs=dict(field_data.attrs),
-    )
 
 
 def _instantaneous_power_flow_numpy(

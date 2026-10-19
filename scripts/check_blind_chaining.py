@@ -26,6 +26,9 @@ ALLOWLIST_DIRS = (
 )
 ALLOWLIST_PATHS = (
     TARGET_ROOT / "packaging.py",
+    # The optional-package guards raise install-instruction errors, where the
+    # original ImportError adds nothing a user can act on.
+    TARGET_ROOT / "_optional_imports.py",
     TARGET_ROOT / "updater.py",
 )
 

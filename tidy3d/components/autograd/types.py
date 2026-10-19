@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any, Literal, get_origin
 
 import autograd.numpy as anp
@@ -24,6 +25,7 @@ from tidy3d.components.types.utils import _add_schema, _typed_tuple
 from .utils import get_static, hasbox
 
 if TYPE_CHECKING:
+    from numpy.typing import DTypeLike
     from pydantic import SerializationInfo
 
     from tidy3d.compat import TypeAlias
@@ -171,8 +173,37 @@ AutogradFieldMap = TracedDict[PathType, Box]
 
 InterpolationType = Literal["nearest", "linear"]
 
+
+@dataclass(frozen=True)
+class GeometryAdjointSettings:
+    """Adjoint settings a geometry reads while generating and consuming its sample sets.
+
+    A snapshot of the ``config.adjoint`` values, taken where an adjoint pass is set up,
+    so geometry code reads them from the object carrying the pass rather than from the
+    global configuration. ``ShapeDerivativeContext`` carries one as ``settings``; sample-set
+    generation receives one next to its ``SamplingContext``.
+    """
+
+    gradient_dtype_float: DTypeLike
+    """Floating-point dtype of gradient arrays and sample coordinates."""
+
+    edge_clip_tolerance: float
+    """Padding tolerance when clipping edges and detecting collapsed axes against the
+    simulation bounds."""
+
+    quadrature_sample_fraction: float
+    """Fraction of the uniform sample count reused as Gauss quadrature nodes along an edge."""
+
+    gauss_quadrature_order: int
+    """Maximum Gauss-Legendre order of the composite quadrature rules along an edge."""
+
+    points_per_wavelength: int
+    """Surface discretization density, in sample points per material wavelength."""
+
+
 __all__ = [
     "AutogradFieldMap",
+    "GeometryAdjointSettings",
     "InterpolationType",
     "PathType",
     "TracedArrayFloat2D",

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 
-from tidy3d.components.geometry.bound_ops import bounds_contains
+from tidy3d.components.bound_ops import bounds_contains
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
@@ -17,11 +17,30 @@ from ._spatial_sampling import _clamp_steps_to_budget, _grid_from_bounds, _grid_
 from .base import DataArray
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from xarray.core.types import InterpOptions, Self
 
-    from tidy3d.components.grid.grid import Coords
-    from tidy3d.components.types import ArrayLike, Axis, Bound, BoundOptional
+    from tidy3d.components.types import ArrayLike, Axis, Bound, BoundOptional, InterpMethod
     from tidy3d.components.types.base import Coordinate
+
+    from .spatial import ScalarFieldDataArray, SpatialDataArray
+
+
+class SpatialInterpolator(Protocol):
+    """Interpolates spatial data onto its own coordinates.
+
+    ``tidy3d.components.grid.grid.Coords`` satisfies this structurally. Naming
+    the protocol keeps the data layer, which the grid is built on top of, from
+    depending on the grid in turn.
+    """
+
+    def spatial_interp(
+        self,
+        array: SpatialDataArray | ScalarFieldDataArray,
+        interp_method: InterpMethod,
+        fill_value: Literal["extrapolate"] | float = "extrapolate",
+    ) -> SpatialDataArray | ScalarFieldDataArray: ...
 
 
 class AbstractSpatialDataArray(DataArray, ABC):
@@ -76,7 +95,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
     def interpolate_to_grid(
         self,
-        grid: Coords,
+        grid: SpatialInterpolator,
         *,
         offset: Coordinate | None = None,
         method: InterpOptions = "linear",

@@ -1,4 +1,4 @@
-"""Geometry operations for bounding box type with minimal imports."""
+"""Operations on ``Bound`` bounding-box tuples, with minimal imports."""
 
 from __future__ import annotations
 

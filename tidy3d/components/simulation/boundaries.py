@@ -24,7 +24,9 @@ from tidy3d.components.boundary import (
     StablePML,
 )
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.geometry.utils import _shift_object
+from tidy3d.components.grid.snapping import (
+    _shift_object,
+)
 from tidy3d.components.medium import AnisotropicMedium, FullyAnisotropicMedium
 from tidy3d.components.monitor import DiffractionMonitor
 from tidy3d.components.scene import Scene

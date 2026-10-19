@@ -12,8 +12,9 @@ from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
+from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.dataset import PermittivityDataset
+from tidy3d.components.data.registry import DATA_ARRAY_MAP
 from tidy3d.components.data.utils import (
     CustomSpatialDataType,
     CustomSpatialDataTypeAnnotated,

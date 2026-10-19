@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.geometry.utils import (
+from tidy3d.components.grid.snapping import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,

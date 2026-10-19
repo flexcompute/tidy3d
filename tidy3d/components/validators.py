@@ -14,7 +14,7 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .autograd.utils import get_static, hasbox
-from .base import DATA_ARRAY_MAP
+from .data.registry import DATA_ARRAY_MAP
 from .geometry.base import Box
 
 if TYPE_CHECKING:

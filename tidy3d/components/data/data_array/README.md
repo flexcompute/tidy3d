@@ -26,8 +26,8 @@ product produces or consumes.
   parameter perturbations.
 - `microwave.py`: voltage, current, and impedance arrays and the integral result
   helpers.
-- `registry.py`: `DATA_ARRAY_TYPES` and the `DATA_ARRAY_MAP` used to resolve
-  serialized arrays by class name.
+- `registry.py`: `DATA_ARRAY_TYPES`, added to the `DATA_ARRAY_MAP` in
+  `components/data/registry.py` that resolves serialized arrays by class name.
 - `_constants.py`, `_plot.py`, `_traced.py`: shared constants, plot accessors,
   and the traced dataset wrapper.
 

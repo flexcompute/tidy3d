@@ -4,6 +4,7 @@ from .boxes import TidyArrayBox
 from .functions import interpn
 from .types import (
     AutogradFieldMap,
+    GeometryAdjointSettings,
     InterpolationType,
     PathType,
     TracedArrayFloat2D,
@@ -22,6 +23,7 @@ from .utils import get_static, hasbox, is_tidy_box, split_list
 
 __all__ = [
     "AutogradFieldMap",
+    "GeometryAdjointSettings",
     "InterpolationType",
     "PathType",
     "TidyArrayBox",

@@ -8,8 +8,8 @@ import numpy as np
 from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
+from tidy3d.components.bound_ops import bounds_union
 from tidy3d.components.geometry.base import Box, Geometry
-from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.specs.base import (
     AbstractAxesRH,

@@ -18,10 +18,10 @@ from tidy3d.components.autograd import TracedFloat, TracedPositiveFloat
 from tidy3d.components.autograd.path_utils import format_traced_path
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.bound_ops import bounds_intersection
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.geometry.bound_ops import bounds_intersection
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.thin_lens import AbstractThinLens

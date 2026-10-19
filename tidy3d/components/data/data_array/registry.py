@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tidy3d.components.data.registry import DATA_ARRAY_MAP
+
 from .eme import (
     EMECoefficientDataArray,
     EMEFluxDataArray,
@@ -187,4 +189,4 @@ DATA_ARRAY_TYPES = [
 ]
 
 
-DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
+DATA_ARRAY_MAP.update({data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES})

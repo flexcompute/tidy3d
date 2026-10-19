@@ -10,15 +10,13 @@ import shapely
 
 from tidy3d.components.autograd import get_static
 from tidy3d.components.transformation import RotationAroundAxis
-from tidy3d.components.viz import (
-    PLOT_BUFFER,
+from tidy3d.components.viz.axes_utils import (
     add_ax_if_none,
     equal_aspect,
-    polygon_patch,
-    polygon_path,
-    polygon_paths,
     set_default_labels_and_title,
 )
+from tidy3d.components.viz.descartes import polygon_patch, polygon_path, polygon_paths
+from tidy3d.components.viz.styles import PLOT_BUFFER
 from tidy3d.constants import LARGE_NUMBER
 from tidy3d.exceptions import SetupError
 
@@ -36,7 +34,8 @@ if TYPE_CHECKING:
         LengthUnit,
         Shapely,
     )
-    from tidy3d.components.viz import PlotParams, VisualizationSpec
+    from tidy3d.components.viz.plot_params import PlotParams
+    from tidy3d.components.viz.visualization_spec import VisualizationSpec
 
 
 @equal_aspect

@@ -9,6 +9,7 @@ import autograd.numpy as np
 import shapely
 from pydantic import Field
 
+from tidy3d._optional_imports import verify_packages_import
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.autograd.path_utils import (
     indexed_traced_paths,
@@ -18,16 +19,13 @@ from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.types import Axis, Coordinate, MatrixReal4x4  # noqa: TC
-from tidy3d.components.viz import (
-    ARROW_LENGTH,
-)
+from tidy3d.components.viz.styles import ARROW_LENGTH
 from tidy3d.constants import MICROMETER, fp_eps, inf
 from tidy3d.exceptions import (
     AdjointError,
     SetupError,
     ValidationError,
 )
-from tidy3d.packaging import verify_packages_import
 
 from .abstract_primitives import Centered, SimplePlaneIntersection
 from .core import _BOX_FACES, Geometry
@@ -43,6 +41,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.types import (
         Ax,
         Bound,
@@ -800,7 +799,7 @@ class Box(SimplePlaneIntersection, Centered):
         return (0, 1, 2)
 
     def _make_adjoint_sample_sets(
-        self, paths: list[PathType], ctx: SamplingContext
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate face sample sets under canonical ``("faces", min_max_index, axis)`` keys.
 

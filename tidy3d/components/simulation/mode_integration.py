@@ -9,8 +9,10 @@ import autograd.numpy as np
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, ModeABCBoundary
 from tidy3d.components.geometry.base import Box, GeometryGroup
-from tidy3d.components.geometry.utils import find_snap_location
 from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.grid.snapping import (
+    find_snap_location,
+)
 from tidy3d.components.medium import PECMedium
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.mode.geometry import (

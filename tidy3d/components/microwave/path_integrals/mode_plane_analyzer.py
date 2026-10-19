@@ -14,14 +14,16 @@ from shapely.geometry import LineString, Polygon
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils import (
+    flatten_shapely_geometries,
+    merging_geometries_on_plane,
+)
+from tidy3d.components.grid.corner_finder import N_SHAPELY_QUAD_SEGS, SHAPELY_CLEANUP
+from tidy3d.components.grid.snapping import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,
-    flatten_shapely_geometries,
-    merging_geometries_on_plane,
     snap_box_to_grid,
 )
-from tidy3d.components.grid.corner_finder import N_SHAPELY_QUAD_SEGS, SHAPELY_CLEANUP
 from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.validators import assert_plane
 from tidy3d.constants import fp_eps

@@ -9,14 +9,15 @@ implementation that can drift.
 
 Everything here is definition-derived: sampling resolutions come from the simulation
 definition (``adjoint_sampling_resolution``), never from monitor data, so collection
-is a pure, deterministic function of the simulation and the traced keys.
+is a deterministic function of the simulation, the traced keys and the adjoint
+settings it is given.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tidy3d.components.geometry.bound_ops import bounds_intersection
+from tidy3d.components.bound_ops import bounds_intersection
 from tidy3d.em.translate.sample_sets import (
     GeometrySampleSets,
     SampleSetEntry,
@@ -28,6 +29,7 @@ from tidy3d.em.translate.sample_sets import (
 )
 from tidy3d.log import log
 
+from .adjoint_settings import adjoint_settings_from_config
 from .spacing import SamplingScanIndex, adjoint_sampling_resolution
 from .staging import _fully_anisotropic_trigger, _metal_like_trigger, stage_sample_sets
 
@@ -36,7 +38,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.simulation import Simulation
 
-    from .types import PathType
+    from .types import GeometryAdjointSettings, PathType
 
 # maximum number of per-structure debug log lines emitted by one collection; large
 # simulations (e.g. thousands of traced structures) are summarized past this cap
@@ -46,11 +48,14 @@ _MAX_STRUCTURE_LOG_LINES = 20
 def collect_adjoint_sample_sets(
     simulation: Simulation,
     sim_fields_keys: Iterable[PathType],
+    settings: GeometryAdjointSettings | None = None,
 ) -> GeometrySampleSets:
     """Collect the adjoint surface sample sets for all traced shape-derivative paths.
 
     Only shape (geometry) paths produce sample sets; medium, source, and numerical
-    paths are ignored.
+    paths are ignored. ``settings`` are the adjoint settings generation reads, by
+    default a snapshot of ``config.adjoint`` taken now. The compile step passes the
+    same object here and to the bindings, so one snapshot serves the whole pass.
 
     The per-structure sampling context mirrors the backward-pass ``DerivativeInfo``
     geometry fields (structure geometry bounds, their intersection with the
@@ -61,6 +66,8 @@ def collect_adjoint_sample_sets(
     paths_by_structure = shape_paths_by_structure(sim_fields_keys)
 
     scan_index = SamplingScanIndex.from_simulation(simulation) if paths_by_structure else None
+    if settings is None:
+        settings = adjoint_settings_from_config()
     structure_entries = []
     for structure_index, geometry_paths in paths_by_structure.items():
         structure = simulation.structures[structure_index]
@@ -76,7 +83,9 @@ def collect_adjoint_sample_sets(
             material_wavelength=resolution.material_wavelength,
         )
 
-        sample_sets = geometry._make_adjoint_sample_sets(paths=list(geometry_paths), ctx=ctx)
+        sample_sets = geometry._make_adjoint_sample_sets(
+            paths=list(geometry_paths), ctx=ctx, settings=settings
+        )
         # structure-level staging: geometries are medium-agnostic, so the monitor
         # query points (and PEC payload, when triggered) are attached here where the
         # medium, grid, and full simulation are in scope. Downstream monitor

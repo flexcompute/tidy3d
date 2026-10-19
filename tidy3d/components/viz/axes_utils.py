@@ -4,10 +4,10 @@ import inspect
 from functools import wraps
 from typing import TYPE_CHECKING
 
+from tidy3d._optional_imports import pyvista
 from tidy3d.components.types import LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
-from tidy3d.packaging import pyvista
 
 if TYPE_CHECKING:
     import asyncio
@@ -114,7 +114,7 @@ def _create_unit_aware_locator() -> ticker.Locator:
 
 def make_ax() -> Ax:
     """makes an empty ``ax``."""
-    from tidy3d.components.viz import _ensure_tidy3d_style
+    from tidy3d.components.viz.flex_style import _ensure_tidy3d_style
 
     _ensure_tidy3d_style()
 
@@ -133,7 +133,7 @@ def add_ax_if_none(plot: T) -> T:
     @wraps(plot)
     def _plot(*args: P.args, **kwargs: P.kwargs) -> Axes:
         """New plot function using a generated ax if None."""
-        from tidy3d.components.viz import _ensure_tidy3d_style
+        from tidy3d.components.viz.flex_style import _ensure_tidy3d_style
 
         _ensure_tidy3d_style()
 

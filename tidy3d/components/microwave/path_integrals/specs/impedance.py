@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import Field, model_validator
 
-from tidy3d.components.geometry.bound_ops import bounds_contains
+from tidy3d.components.bound_ops import bounds_contains
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.specs.current import AxisAlignedCurrentIntegralSpec
 from tidy3d.components.microwave.path_integrals.types import (

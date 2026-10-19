@@ -6,6 +6,7 @@ from typing import Any
 
 import xarray as xr
 
+from tidy3d.components.data.plot_safe import static_dataarray_for_plot
 from tidy3d.exceptions import DataError
 
 
@@ -19,10 +20,6 @@ class _SanitizedPlotProxy:
 
     def _accessor(self) -> xr.plot.accessor.DataArrayPlotAccessor:
         """Construct xarray's plot accessor on a static plotting-safe copy."""
-        # Local import avoids a circular dependency because ``data.utils`` also
-        # imports tidy3d DataArray subclasses for spatial data typing.
-        from tidy3d.components.data.utils import static_dataarray_for_plot
-
         return xr.DataArray.plot(static_dataarray_for_plot(self._data_array))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:

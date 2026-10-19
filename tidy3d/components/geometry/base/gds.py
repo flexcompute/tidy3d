@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import shapely
 
+from tidy3d._optional_imports import verify_packages_import
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -16,7 +17,6 @@ from tidy3d.exceptions import (
     format_chained_exception_message,
 )
 from tidy3d.log import log
-from tidy3d.packaging import verify_packages_import
 
 from .constants import POLY_GRID_SIZE
 
@@ -194,12 +194,12 @@ def from_gds(
                 for import_shape in iter_import_shapes(shape)
             )
 
-        from tidy3d.components.geometry import base as geometry_base
+        from tidy3d.components.geometry import utils as geometry_utils
 
         for import_shape in import_shapes:
             try:
                 geometries.append(
-                    geometry_base.from_shapely(
+                    geometry_utils.from_shapely(
                         import_shape,
                         axis,
                         slab_bounds,
@@ -261,9 +261,9 @@ def from_shapely(
     :class:`~tidy3d.Geometry`
         Geometry extruded from the 2D data.
     """
-    from tidy3d.components.geometry import base as geometry_base
+    from tidy3d.components.geometry import utils as geometry_utils
 
-    return geometry_base.from_shapely(
+    return geometry_utils.from_shapely(
         shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane
     )
 
@@ -302,9 +302,9 @@ def to_gdstk(
     shapes = self.intersections_plane(x=x, y=y, z=z)
     polygons = []
     for shape in shapes:
-        from tidy3d.components.geometry import base as geometry_base
+        from tidy3d.components.geometry import utils as geometry_utils
 
-        for vertices in geometry_base.vertices_from_shapely(shape):
+        for vertices in geometry_utils.vertices_from_shapely(shape):
             if len(vertices) == 1:
                 polygons.append(gdstk.Polygon(vertices[0], gds_layer, gds_dtype))
             else:

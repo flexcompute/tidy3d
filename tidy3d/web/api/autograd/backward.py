@@ -18,7 +18,7 @@ from tidy3d.components.autograd.derivative_utils import (
 )
 from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
-from tidy3d.components.geometry.bound_ops import bounds_intersection
+from tidy3d.components.bound_ops import bounds_intersection
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel

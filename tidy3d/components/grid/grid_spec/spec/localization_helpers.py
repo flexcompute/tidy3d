@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tidy3d.components.bound_ops import bounds_intersection
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.geometry.bound_ops import bounds_intersection
 from tidy3d.components.geometry.utils import filter_intersecting_geometries
 from tidy3d.components.structure import MeshOverrideStructure
 

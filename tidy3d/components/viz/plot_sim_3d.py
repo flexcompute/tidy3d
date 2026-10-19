@@ -8,7 +8,8 @@ from tidy3d.exceptions import SetupError, format_chained_exception_message
 if TYPE_CHECKING:
     from IPython.core.display_functions import DisplayHandle
 
-    from tidy3d import Scene, Simulation
+    from tidy3d.components.scene import Scene
+    from tidy3d.components.simulation import Simulation
     from tidy3d.components.types import Coordinate, Size
 
 

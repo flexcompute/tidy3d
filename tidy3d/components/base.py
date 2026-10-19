@@ -54,7 +54,7 @@ from tidy3d.log import log
 from .autograd.types import TracedDict
 from .autograd.utils import get_static
 from .data.binary import OPAQUE_BINARY_DATA_TYPE, OpaqueBinaryData
-from .data.data_array import DATA_ARRAY_MAP
+from .data.registry import DATA_ARRAY_MAP
 from .docstrings import (
     _DOCSTRING_RAW_ATTR,
     _clean_default_repr,
