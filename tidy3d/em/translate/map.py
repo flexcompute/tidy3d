@@ -378,6 +378,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.invdes.schema.region:TopologyDesignRegion",
         "flexcompute.core._migration.em.invdes.validation:validate_region",
     ),
+    # monitor
+    "tidy3d.components.apodization:ApodizationSpec": ComponentScope(
+        "flexcompute.core._migration.em.apodization.schema:ApodizationSpec",
+        "flexcompute.core._migration.em.apodization.validation:validate",
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {

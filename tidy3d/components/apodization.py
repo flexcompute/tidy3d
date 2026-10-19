@@ -53,20 +53,28 @@ class ApodizationSpec(Tidy3dBaseModel):
         json_schema_extra={"units": SECOND},
     )
 
+    # Both checks call the core value rules instead of using the construction path.
+    # ``ApodizationSpec`` is built during ``import tidy3d``: the docstring generator constructs
+    # the default of ``FreqMonitor.apodization``. Translating it would import the migrated
+    # schema at that point, so the rules are called directly.
     @model_validator(mode="after")
     def end_greater_than_start(self) -> Self:
         """Ensure end is greater than or equal to start."""
-        if self.end is not None and self.start is not None and self.end < self.start:
-            self._raise_validation_error_at_loc(
-                "End apodization begins before start apodization ends.", "end"
-            )
+        from flexcompute.core._migration.em.apodization.validation import validate_end_order
+
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_end_order(self.start, self.end))
         return self
 
     @model_validator(mode="after")
     def width_provided(self) -> Self:
         """Check that width is provided if either start or end apodization is requested."""
-        if (self.start is not None or self.end is not None) and self.width is None:
-            self._raise_validation_error_at_loc("Apodization width must be set.", "width")
+        from flexcompute.core._migration.em.apodization.validation import validate_width
+
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_width(self.start, self.end, self.width))
         return self
 
     @add_ax_if_none
