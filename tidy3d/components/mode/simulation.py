@@ -441,7 +441,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_sim = tidy3d_extras["mod"].SubpixelModeSimulation.from_mode_simulation(self)
-            return data_to_tidy3d(subpixel_sim.run_local())
+            return data_to_tidy3d(subpixel_sim.run_local(), submitted={"simulation": self})
 
         for mnt in self.monitors:
             if isinstance(mnt, (PermittivityMonitor, MediumMonitor)):

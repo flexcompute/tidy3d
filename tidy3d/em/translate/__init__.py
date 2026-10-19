@@ -15,6 +15,8 @@ from tidy3d.em.translate.map import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from tidy3d.em.translate.map import Tidy3DSolverDataMap, Tidy3DSolverTaskMap
 
 __all__ = [
@@ -73,11 +75,18 @@ def data_from_tidy3d(public_data: Any) -> Any:
     return resolve(DATA_CONVERTERS[data_type][0])(public_data)
 
 
-def data_to_tidy3d(schema_data: Any) -> Any:
-    """Convert supported schema result data into the public Tidy3D model."""
+def data_to_tidy3d(schema_data: Any, *, submitted: Mapping[str, Any] | None = None) -> Any:
+    """Convert supported schema result data into the public Tidy3D model.
+
+    ``submitted`` maps result fields to the submitted task's own values, which replace the
+    translated ones, so the result carries the task exactly as it was submitted.
+    """
 
     data_type = to_tidy3d_data_type(schema_data)
-    return resolve(DATA_CONVERTERS[data_type][1])(schema_data)
+    public_data = resolve(DATA_CONVERTERS[data_type][1])(schema_data)
+    if submitted:
+        public_data = public_data.updated_copy(**submitted, deep=False)
+    return public_data
 
 
 def to_em_schema_type(public_obj: Any) -> Tidy3DSolverTaskMap:

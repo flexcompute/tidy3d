@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from tidy3d.em.translate import data_from_tidy3d, data_to_tidy3d
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from os import PathLike
 
 
@@ -18,20 +19,31 @@ def from_tidy3d_file(path: str | PathLike[str]) -> object:
     return data_from_tidy3d(Tidy3dBaseModel.from_file(path))
 
 
-def to_tidy3d_file(schema_data: object, path: str | PathLike[str]) -> str | PathLike[str]:
-    """Convert schema result data and write a public Tidy3D result-data file."""
+def to_tidy3d_file(
+    schema_data: object,
+    path: str | PathLike[str],
+    *,
+    submitted: Mapping[str, object] | None = None,
+) -> str | PathLike[str]:
+    """Convert schema result data and write a public Tidy3D result-data file.
 
-    data_to_tidy3d(schema_data).to_file(path)
+    ``submitted`` is passed to :func:`data_to_tidy3d`.
+    """
+
+    data_to_tidy3d(schema_data, submitted=submitted).to_file(path)
     return path
 
 
 def to_tidy3d_file_from_em_schema_file(
-    schema_path: str | PathLike[str], path: str | PathLike[str]
+    schema_path: str | PathLike[str],
+    path: str | PathLike[str],
+    *,
+    submitted: Mapping[str, object] | None = None,
 ) -> str | PathLike[str]:
     """Convert a schema result-data file and write a public Tidy3D result-data file."""
 
     schema_data = from_em_schema_file(schema_path)
-    return to_tidy3d_file(schema_data, path)
+    return to_tidy3d_file(schema_data, path, submitted=submitted)
 
 
 def from_em_schema_file(path: str | PathLike[str]) -> object:
