@@ -29,7 +29,8 @@ def _translating_class(cls: type) -> type | None:
 
     A Tidy3D class translates only through its own registration, so a family member
     that misses one fails instead of opting out. A subclass defined outside Tidy3D
-    translates through its nearest ancestor with a schema.
+    translates through its nearest ancestor with a schema, and opts out when only
+    abstract roots without a schema are registered above it.
     """
     if COMPONENT_SCOPES.get(_key(cls)) is not None:
         return cls
@@ -37,7 +38,7 @@ def _translating_class(cls: type) -> type | None:
     if not family:
         return None
     owner = next((base for base in family if COMPONENT_SCOPES[_key(base)] is not None), None)
-    if owner is not None and cls.__module__.partition(".")[0] != "tidy3d":
+    if cls.__module__.partition(".")[0] != "tidy3d":
         return owner
     raise NotImplementedError(
         f"{cls.__name__} must register its EM schema in tidy3d.em.translate.map."
