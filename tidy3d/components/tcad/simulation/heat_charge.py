@@ -697,6 +697,9 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._warn_heterojunction_electron_affinity
             )
+            self._call_with_validation_loc(
+                ("structures",), self._warn_same_bands_different_narrowing
+            )
             self._call_with_validation_loc(("boundary_spec",), self._check_current_bcs)
             # After the CurrentBC checks: a current-driven gate is rejected outright,
             # so demanding its work function first would send the user after a value
@@ -4259,11 +4262,7 @@ class HeatChargeSimulation(AbstractSimulation):
         except SetupError:
             return self
 
-        # Structures usually share a few media; equal media meet without a band offset.
-        semiconductors: list[tuple[tuple[Any, ...], SemiconductorMedium]] = []
-        for loc, medium in self._iter_semiconductor_charge_media():
-            if not any(medium is other or medium == other for _, other in semiconductors):
-                semiconductors.append((loc, medium))
+        semiconductors = self._distinct_semiconductor_charge_media()
         for index, (loc_a, medium_a) in enumerate(semiconductors):
             for loc_b, medium_b in semiconductors[index + 1 :]:
                 missing = [
@@ -4293,6 +4292,70 @@ class HeatChargeSimulation(AbstractSimulation):
                     continue
                 log.warning(message)
         return self
+
+    def _warn_same_bands_different_narrowing(self) -> Self:
+        """Warn if two semiconductors without a band offset differ in band-gap narrowing.
+
+        Where two such media meet, the accelerated solver keeps the carrier densities
+        continuous, which holds only when both sides narrow the band gap alike. Only media
+        that may meet are warned about.
+        """
+        try:
+            if not self._resolve_use_accelerated_solver:
+                return self
+        except SetupError:
+            return self
+
+        semiconductors = self._distinct_semiconductor_charge_media()
+        for index, (loc_a, medium_a) in enumerate(semiconductors):
+            for loc_b, medium_b in semiconductors[index + 1 :]:
+                if (
+                    medium_a.delta_E_g == medium_b.delta_E_g
+                    or _is_material_heterojunction(medium_a, medium_b)
+                    or not self._semiconductor_charge_media_may_meet(medium_a, medium_b)
+                ):
+                    continue
+                log.warning(
+                    f"{self._medium_label(loc_a)} and {self._medium_label(loc_b)} have the "
+                    "same 'N_c', 'N_v', 'E_g' and 'electron_affinity' but different 'delta_E_g'. "
+                    "Where they meet, the accelerated charge solver keeps the carrier densities "
+                    "continuous, so the difference in band-gap narrowing acts as a voltage source "
+                    "there. Use the same 'delta_E_g' on both. "
+                    "Future versions of Tidy3D may reject this setup."
+                )
+        return self
+
+    def _distinct_semiconductor_charge_media(
+        self,
+    ) -> list[tuple[tuple[Any, ...], SemiconductorMedium]]:
+        """``(loc, charge)`` of each distinct ``SemiconductorMedium``, first occurrence kept."""
+        semiconductors: list[tuple[tuple[Any, ...], SemiconductorMedium]] = []
+        for loc, medium in self._iter_semiconductor_charge_media():
+            if not any(medium is other or medium == other for _, other in semiconductors):
+                semiconductors.append((loc, medium))
+        return semiconductors
+
+    def _semiconductor_charge_media_may_meet(
+        self, medium_a: SemiconductorMedium, medium_b: SemiconductorMedium
+    ) -> bool:
+        """Whether a structure carrying ``medium_a`` and one carrying ``medium_b`` may touch.
+
+        The background meets every structure. Bounding boxes decide, so non-box shapes may
+        over-report, but a real contact is never missed.
+        """
+        locs_a, locs_b = [], []
+        for loc, medium in self._iter_semiconductor_charge_media():
+            if medium is medium_a or medium == medium_a:
+                locs_a.append(loc)
+            if medium is medium_b or medium == medium_b:
+                locs_b.append(loc)
+        if ("medium",) in locs_a or ("medium",) in locs_b:
+            return True
+        return any(
+            self.structures[i].geometry.intersects(self.structures[j].geometry)
+            for _, i in locs_a
+            for _, j in locs_b
+        )
 
     def _medium_label(self, loc: tuple[Any, ...]) -> str:
         """How messages name the medium at ``loc``: the background or a structure."""
