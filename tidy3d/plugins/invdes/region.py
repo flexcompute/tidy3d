@@ -8,12 +8,17 @@ from typing import TYPE_CHECKING, Any, Literal
 import autograd.numpy as anp
 import numpy as np
 from autograd import elementwise_grad, grad
+from flexcompute.core._migration.em.invdes.validation import (
+    validate_eps_bound_order,
+    validate_eps_bounds_not_below_one,
+    validate_ssp_grid,
+)
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 import tidy3d as td
 from tidy3d.components.types import TYPE_TAG_STR, Coordinate, Size
 from tidy3d.exceptions import ValidationError
-from tidy3d.plugins.autograd.invdes.projections import _validate_smoothed_projection_shape
 
 from .base import InvdesBaseModel
 from .initialization import InitializationSpecType, UniformInitializationSpec
@@ -73,17 +78,14 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     @field_validator("eps_bounds")
     @classmethod
     def _validate_ge_one(cls, v: tuple[float, float]) -> tuple[float, float]:
-        if any(vi < 1 for vi in v):
-            raise ValueError("Each value in 'eps_bounds' must be '>=1.0'.")
+        raise_first_error(validate_eps_bounds_not_below_one(v), ValueError)
         return v
 
+    # A model validator, not a construction-time check: it has to run before the validators that
+    # evaluate the transformations, which would otherwise report a reversed bound first.
     @model_validator(mode="after")
     def _validate_eps_bounds(self) -> Self:
-        if self.eps_bounds[1] < self.eps_bounds[0]:
-            raise ValidationError(
-                f"Maximum relative permittivity ({self.eps_bounds[1]}) must be "
-                f"greater than minimum relative permittivity ({self.eps_bounds[0]})."
-            )
+        raise_first_error(validate_eps_bound_order(self.eps_bounds), ValidationError)
         return self
 
     @property
@@ -221,28 +223,18 @@ class TopologyDesignRegion(DesignRegion):
         return self
 
     def _validate_ssp_grid(self) -> None:
-        """Validate SSP stencil dimensions and the actual design-cell spacings."""
-        for index, transformation in enumerate(self.transformations):
-            if transformation.projection == "tanh":
-                continue
-            shape = self.params_shape
-            active_shape = tuple(size for size in shape if size != 1)
-            try:
-                _validate_smoothed_projection_shape(
-                    active_shape, order=1 if transformation.projection == "ssp1" else 2
-                )
-            except ValueError as error:
-                self._raise_validation_error_at_loc(error, "transformations", index, "projection")
-            spacing = [length / size for length, size in zip(self.size, shape) if size != 1]
-            if not np.allclose(spacing, self.pixel_size, rtol=1e-12, atol=0):
-                self._raise_validation_error_at_loc(
-                    "SSP projections require equal design-cell spacing along both varying axes, "
-                    "matching 'pixel_size'. "
-                    "Choose design-region side lengths that are integer multiples of 'pixel_size'.",
-                    "transformations",
-                    index,
-                    "projection",
-                )
+        """Validate SSP stencil dimensions and the actual design-cell spacings.
+
+        Runs first in ``_run_validation_checks``, before the checks that evaluate the transformations
+        on the same grid, so a bad grid reports first.
+        """
+        if diagnostics := validate_ssp_grid(
+            [transformation.projection for transformation in self.transformations],
+            self.params_shape,
+            self.size,
+            self.pixel_size,
+        ):
+            self._raise_validation_error_at_loc(diagnostics[0].message, *diagnostics[0].path)
 
     def _validate_eps_values(self) -> None:
         """Validate the epsilon values by evaluating the transformations."""

@@ -373,6 +373,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.invdes.schema.initialization:CustomInitializationSpec",
         "flexcompute.core._migration.em.invdes.validation:validate_initialization",
     ),
+    "tidy3d.plugins.invdes.region:DesignRegion": None,
+    "tidy3d.plugins.invdes.region:TopologyDesignRegion": ComponentScope(
+        "flexcompute.core._migration.em.invdes.schema.region:TopologyDesignRegion",
+        "flexcompute.core._migration.em.invdes.validation:validate_region",
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {

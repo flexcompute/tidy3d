@@ -10,6 +10,7 @@ from flexcompute.core._migration.em.invdes.validation import (
     validate_params_dtype,
     validate_params_range,
     validate_params_rank,
+    validate_params_shape,
 )
 from flexcompute.core.validation import raise_first_error
 from pydantic import Field, NonNegativeInt, field_validator
@@ -124,11 +125,7 @@ class CustomInitializationSpec(AbstractInitializationSpec):
     def create_parameters(self, shape: tuple[int, ...]) -> NDArray:
         """Return the custom parameters provided by the user."""
         params = np.asarray(self.params)
-        if params.shape != shape:
-            raise ValueError(
-                f"Provided 'params.shape' ('{params.shape}') does not match "
-                f"the shape of the custom parameters ('{shape}')."
-            )
+        raise_first_error(validate_params_shape(params.shape, shape), ValueError)
         return params
 
 
