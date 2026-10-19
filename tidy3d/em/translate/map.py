@@ -383,6 +383,21 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.apodization.schema:ApodizationSpec",
         "flexcompute.core._migration.em.apodization.validation:validate",
     ),
+    "tidy3d.components.monitor:FieldTimeMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FieldTimeMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:AuxFieldTimeMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:AuxFieldTimeMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:ModeTimeMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:ModeTimeMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -403,6 +418,8 @@ COMPONENT_ERROR_TYPES = {
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes
     "em.invdes.initialization_bound_order": "tidy3d.exceptions:ValidationError",
+    # monitor
+    "em.monitor.stop_before_start": "tidy3d.exceptions:SetupError",
 }
 
 

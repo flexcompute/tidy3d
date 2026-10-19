@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
+from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -19,6 +20,7 @@ from pydantic import (
 from tidy3d._runtime import always_validate
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
+from tidy3d.em.translate.components import _present
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
@@ -376,16 +378,11 @@ class TimeMonitor(Monitor, ABC):
             and value != type(self).model_fields[name].default
             and name in self.model_fields_set
         ]
-        if len(set_fields) > 1:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Only one of 'interval', 'sampling_dt', or 'num_samples' may be set to define "
-                    f"the time sampling (these are mutually exclusive); got {set_fields}. To "
-                    "switch the cadence of an existing monitor, clear the previous field in the "
-                    "same update, e.g. 'monitor.updated_copy(interval=None, sampling_dt=...)'."
-                ),
-                set_fields[-1],
-            )
+        # Which fields count as set reads their presence, which a loaded schema no longer has:
+        # the core facade passes the fields that are not None to the same rule.
+        from flexcompute.core._migration.em.monitor.validation import validate_sampling_spec_fields
+
+        _present(self, validate_sampling_spec_fields(set_fields))
         return self
 
     def _reject_sampling_spec(self, fixed_interval: bool = False) -> Self:
@@ -394,17 +391,18 @@ class TimeMonitor(Monitor, ABC):
         With ``fixed_interval``, the monitor records at every step and cannot be downsampled at
         all, so pointing at ``interval`` would only produce a second failure.
         """
-        remedy = (
-            "it records at every time step and its sampling cannot be changed"
-            if fixed_interval
-            else "use the integer 'interval' to set the time sampling"
+        # The subclasses override the presence-sensitive base check by name and call this, so
+        # the actionable message also wins on copies; the condition itself lives in core.
+        from flexcompute.core._migration.em.monitor.validation import (
+            validate_sampling_not_supported,
         )
-        for name, value in (("sampling_dt", self.sampling_dt), ("num_samples", self.num_samples)):
-            if value is not None:
-                self._raise_validation_error_at_loc(
-                    SetupError(f"'{self.type}' does not support '{name}'; {remedy}."),
-                    name,
-                )
+
+        _present(
+            self,
+            validate_sampling_not_supported(
+                self.type, self.sampling_dt, self.num_samples, fixed_interval=fixed_interval
+            ),
+        )
         return self
 
     @model_validator(mode="after")
@@ -442,10 +440,13 @@ class TimeMonitor(Monitor, ABC):
     @model_validator(mode="after")
     def stop_greater_than_start(self) -> Self:
         """Ensure sure stop is greater than or equal to start."""
-        stop = self.stop
-        start = self.start
-        if stop and stop < start:
-            raise SetupError("Monitor start time is greater than stop time.")
+        # A thin check on the abstract base: ``FluxTimeMonitor`` and ``SurfaceFieldTimeMonitor``
+        # are not validated on construction yet (they move with the surface monitors), and they
+        # need it. The classes that are validated on construction report it from the core
+        # facade before this runs.
+        from flexcompute.core._migration.em.monitor.validation import validate_stop_after_start
+
+        raise_first_error(validate_stop_after_start(self.start, self.stop), SetupError)
         return self
 
     def time_inds(self, tmesh: ArrayFloat1D) -> tuple[int, int]:
@@ -2212,18 +2213,6 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
 
         ``interval`` is pinned to 1 here, so the message must not send the user to it."""
         return self._reject_sampling_spec(fixed_interval=True)
-
-    @model_validator(mode="after")
-    def _validate_no_rotated_plane(self) -> Self:
-        """ModeTimeMonitor doesn't support rotated mode planes yet."""
-        if abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
-            self._raise_validation_error_at_loc(
-                "'ModeTimeMonitor' does not yet support rotated mode planes "
-                f"('angle_rotation=True' with 'angle_theta={self.mode_spec.angle_theta}'). "
-                "Use 'angle_theta=0' or set 'angle_rotation=False'.",
-                "mode_spec",
-            )
-        return self
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of the final ``modeAmps`` payload returned to the user."""
