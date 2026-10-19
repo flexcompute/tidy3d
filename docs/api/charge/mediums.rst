@@ -16,6 +16,17 @@ drift-diffusion solver uses.
    ChargeInsulatorMedium
    SemiconductorMedium
 
+   AnisotropicPermittivity
+
+.. note::
+   ``permittivity`` takes a scalar or an ``AnisotropicPermittivity`` tensor,
+   given by principal values and an optional rotation. The tensor is supported
+   only in charge simulations on the accelerated solver, and reflection
+   ``symmetry`` is allowed only along an axis the tensor does not couple to the
+   others. For a permittivity that is strongly anisotropic within the simulated
+   cross-section, ``linear_solver="direct"`` is recommended, since the
+   iterative solver may not converge.
+
 Mobility
 ^^^^^^^^^^^^^^
 

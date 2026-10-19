@@ -9,6 +9,7 @@ from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import (
+    AnisotropicPermittivity,
     ChargeConductorMedium,
     ChargeInsulatorMedium,
     SemiconductorMedium,
@@ -631,6 +632,7 @@ __all__ = [
     "AlloyMobility",
     "AnisotropicConductivity",
     "AnisotropicMedium",
+    "AnisotropicPermittivity",
     "AntennaMetricsData",
     "ApodizationSpec",
     "AstigmaticGaussianBeam",

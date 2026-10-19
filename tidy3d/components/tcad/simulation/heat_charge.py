@@ -23,6 +23,8 @@ from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.material.tcad.charge import (
+    AbstractChargeMedium,
+    AnisotropicPermittivity,
     ChargeConductorMedium,
     ChargeInsulatorMedium,
     SemiconductorMedium,
@@ -664,6 +666,7 @@ class HeatChargeSimulation(AbstractSimulation):
             ("monitors",), self._validate_self_heating_monitor_requirements
         )
         if TCADAnalysisTypes.CHARGE in simulation_types:
+            self._check_symmetry_permittivity()
             self._call_with_validation_loc(
                 ("boundary_spec",), self._check_charge_simulation_voltage_bcs
             )
@@ -733,6 +736,7 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("boundary_spec",), self._check_current_bc_not_on_conduction
             )
+            self._check_conduction_sim_permittivity()
         self._call_with_validation_loc(("grid_spec",), self._estimate_charge_mesh_size)
         if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
             self._call_with_validation_loc(("monitors",), self._check_transient_heat_monitors)
@@ -2825,6 +2829,30 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
+    def _check_conduction_sim_permittivity(self) -> Self:
+        """Reject an anisotropic permittivity in conduction simulations, which take only a
+        scalar permittivity."""
+        for loc in self._anisotropic_permittivity_locs():
+            self._raise_validation_error_at_loc(
+                "An anisotropic permittivity ('AnisotropicPermittivity') is supported only in "
+                "charge simulations. Provide a scalar 'permittivity' for conduction simulations.",
+                *loc,
+            )
+        return self
+
+    def _check_symmetry_permittivity(self) -> Self:
+        """Reject reflection symmetry across a plane that an anisotropic permittivity is not
+        mirror-symmetric across."""
+        for loc, axis in self._symmetry_breaking_permittivity():
+            name = "xyz"[axis]
+            self._raise_validation_error_at_loc(
+                f"'symmetry' is on along {name}, but this 'AnisotropicPermittivity' couples {name} "
+                "to the other axes, so the medium is not mirror-symmetric across that plane. Set "
+                f"'symmetry' to 0 along {name}, or align a principal axis with {name}.",
+                *loc,
+            )
+        return self
+
     def _estimate_charge_mesh_size(self) -> Self:
         """Make an estimate of the mesh size and raise a warning if too big.
         NOTE: this is a very rough estimate. The back-end will actually stop
@@ -4178,6 +4206,9 @@ class HeatChargeSimulation(AbstractSimulation):
         if self._driven_terminal_split_across_entries():
             features.append("Swept or SSAC terminal named by several 'boundary_spec' entries")
 
+        if self._anisotropic_permittivity_locs():
+            features.append("AnisotropicPermittivity")
+
         if self._uses_gpu_only_lifetime_model():
             features.append("PalankovskiQuayApproxCarrierLifetime")
 
@@ -4275,31 +4306,69 @@ class HeatChargeSimulation(AbstractSimulation):
         for i, structure in enumerate(self.structures):
             yield ("structures", i), structure.medium
 
-    def _iter_semiconductor_charge_media(
-        self,
-    ) -> Iterator[tuple[tuple[Any, ...], SemiconductorMedium]]:
-        """Yield ``(loc, charge)`` for every ``SemiconductorMedium`` in the simulation.
+    def _iter_charge_media(self) -> Iterator[tuple[tuple[Any, ...], AbstractChargeMedium]]:
+        """Yield ``(loc, charge)`` for every charge medium in the simulation.
 
         Walks both the background ``self.medium`` and each ``Structure.medium``,
         which the mesher composes together into ``simulation_structure``. Each
-        slot may be a raw :class:`SemiconductorMedium` or a
-        :class:`MultiPhysicsMedium` that carries one as ``.charge``; slots with
-        neither (insulators, conductors, fluids) are skipped. ``loc`` is the
+        slot may be a raw charge medium or a :class:`MultiPhysicsMedium` that
+        carries one as ``.charge``; slots with neither are skipped. ``loc`` is the
         Pydantic field path of the source — ``("medium",)`` for the background,
         ``("structures", i)`` for a structure — so validators can raise
         loc-aware errors that point at the right field. Centralising both the
         traversal and the loc avoids the bugs where iterating only over
         ``.medium.charge`` (or only over ``structures``) silently misses
-        raw-semiconductor or background-medium configurations, and lets every
-        validator that uses this helper get the right loc for free.
+        raw-medium or background-medium configurations.
         """
         for loc, medium in self._iter_media_with_locs():
-            if isinstance(medium, SemiconductorMedium):
-                yield loc, medium
-            else:
-                charge = getattr(medium, "charge", None)
-                if isinstance(charge, SemiconductorMedium):
-                    yield loc, charge
+            charge = self._charge_spec(medium)
+            if isinstance(charge, AbstractChargeMedium):
+                yield loc, charge
+
+    def _iter_semiconductor_charge_media(
+        self,
+    ) -> Iterator[tuple[tuple[Any, ...], SemiconductorMedium]]:
+        """Yield ``(loc, charge)`` for every ``SemiconductorMedium`` in the simulation; see
+        :meth:`_iter_charge_media`."""
+        for loc, charge in self._iter_charge_media():
+            if isinstance(charge, SemiconductorMedium):
+                yield loc, charge
+
+    def _anisotropic_permittivity_locs(self) -> list[tuple[Any, ...]]:
+        """Field paths of the media whose charge medium has an ``AnisotropicPermittivity``."""
+        return [
+            loc
+            for loc, charge in self._iter_charge_media()
+            if isinstance(charge.permittivity, AnisotropicPermittivity)
+        ]
+
+    def _symmetry_breaking_permittivity(self) -> list[tuple[tuple[Any, ...], int]]:
+        """``(loc, axis)`` for each charge medium whose ``AnisotropicPermittivity`` is not
+        mirror-symmetric across the symmetry plane normal to ``axis``.
+
+        Reflecting ``axis`` flips the sign of the off-diagonal components that couple it to the
+        other axes, so with those nonzero the symmetry plane acts as an extra insulating wall.
+        A component that couples to the zero-size axis of a 2D simulation does not enter the
+        solve and is ignored.
+        """
+        zero_dims = set(self.zero_dims)
+        # A symmetry plane normal to the zero-size axis is rejected on its own.
+        sym_axes = [
+            axis for axis, sym in enumerate(self.symmetry) if sym != 0 and axis not in zero_dims
+        ]
+        if not sym_axes:
+            return []
+        found = []
+        for loc, charge in self._iter_charge_media():
+            if not isinstance(charge.permittivity, AnisotropicPermittivity):
+                continue
+            matrix = charge.permittivity.matrix
+            tol = 1e-9 * np.max(np.diag(matrix))
+            for axis in sym_axes:
+                coupled = (other for other in range(3) if other != axis and other not in zero_dims)
+                if any(abs(matrix[axis, other]) > tol for other in coupled):
+                    found.append((loc, axis))
+        return found
 
     def _ssac_uses_bias_point_selection(self) -> bool:
         """Whether SSAC selects specific bias points via ``at_voltages``.

@@ -11,7 +11,7 @@ from numpy.polynomial import polynomial
 from pydantic import Field, FiniteFloat, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.transformation import RotationAroundAxis, RotationType
+from tidy3d.components.material.tensor import AbstractPrincipalAxesTensor
 from tidy3d.components.types import Coordinate
 from tidy3d.constants import (
     DENSITY,
@@ -170,7 +170,7 @@ class FluidSpec(FluidMedium):
     """Fluid medium class for backwards compatibility"""
 
 
-class AnisotropicConductivity(Tidy3dBaseModel):
+class AnisotropicConductivity(AbstractPrincipalAxesTensor):
     """Anisotropic (tensor) thermal conductivity of a solid medium.
 
     Notes
@@ -211,27 +211,6 @@ class AnisotropicConductivity(Tidy3dBaseModel):
         f"{THERMAL_CONDUCTIVITY}.",
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
-    rotation: RotationType | None = Field(
-        default=None,
-        title="Rotation",
-        description="Optional rotation orienting the principal axes ``(xx, yy, zz)`` in the "
-        "global frame. When ``None`` the principal axes coincide with the global axes "
-        "(diagonal tensor).",
-    )
-
-    def to_tensor(self) -> tuple[float, float, float, float, float, float]:
-        """Resolve to the six packed symmetric tensor components ``[kxx, kyy, kzz, kxy, kxz,
-        kyz]`` in the global frame."""
-        diag = np.diag([self.xx, self.yy, self.zz])
-        k = self.rotation.rotate_tensor(diag) if self.rotation is not None else diag
-        return (
-            float(k[0, 0]),
-            float(k[1, 1]),
-            float(k[2, 2]),
-            float(k[0, 1]),
-            float(k[0, 2]),
-            float(k[1, 2]),
-        )
 
     @classmethod
     def from_components(
@@ -250,6 +229,8 @@ class AnisotropicConductivity(Tidy3dBaseModel):
         principal conductivities (its eigenvalues) plus a ``rotation`` orienting the
         principal axes, i.e. the equivalent principal-axes-plus-rotation form. This adds no
         new physics: only symmetric positive-definite tensors are supported.
+        The principal values come out sorted ascending, so ``xx`` is the smallest eigenvalue
+        rather than ``kxx``.
 
         Parameters
         ----------
@@ -270,30 +251,14 @@ class AnisotropicConductivity(Tidy3dBaseModel):
         -------
         >>> aniso = AnisotropicConductivity.from_components(kxx=2.0, kyy=3.0, kzz=4.0, kxy=0.5)
         """
-        # scipy is banned at module scope; import lazily for the rotation-matrix decomposition.
-        from scipy.spatial.transform import Rotation
-
-        matrix = np.array([[kxx, kxy, kxz], [kxy, kyy, kyz], [kxz, kyz, kzz]], dtype=float)
+        eigvals, rotation = cls._diagonalize(kxx, kyy, kzz, kxy, kxz, kyz)
         # Symmetric by construction; require positive-definite (all eigenvalues > 0).
-        eigvals, eigvecs = np.linalg.eigh(matrix)
         if not np.all(eigvals > 0):
             raise ValidationError(
                 "'AnisotropicConductivity.from_components' requires a positive-definite "
                 f"conductivity tensor, but the provided components give eigenvalues {eigvals}. "
                 "Only symmetric positive-definite conductivities are supported."
             )
-        # 'eigh' columns are the principal axes but may form a reflection; flip one to obtain a
-        # proper rotation (det +1) that maps onto a 'RotationAroundAxis'.
-        if np.linalg.det(eigvecs) < 0:
-            eigvecs = eigvecs.copy()
-            eigvecs[:, 0] = -eigvecs[:, 0]
-        rotvec = Rotation.from_matrix(eigvecs).as_rotvec()
-        angle = float(np.linalg.norm(rotvec))
-        rotation = (
-            None
-            if np.isclose(angle, 0.0)
-            else RotationAroundAxis(axis=tuple(float(c) for c in rotvec / angle), angle=angle)
-        )
         return cls(
             xx=float(eigvals[0]),
             yy=float(eigvals[1]),

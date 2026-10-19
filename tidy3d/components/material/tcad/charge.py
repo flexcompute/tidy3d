@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
+import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
 
 from tidy3d._runtime import always_validate
 from tidy3d.components.data.data_array import SpatialDataArray
+from tidy3d.components.material.tensor import AbstractPrincipalAxesTensor
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
 from tidy3d.components.tcad.generation_recombination import DistributedGeneration
@@ -23,22 +25,125 @@ from tidy3d.components.tcad.types import (
 )
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY
+from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY, fp_eps
+from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
 
 
-class AbstractChargeMedium(AbstractMedium):
-    """Abstract class for Charge specifications
-    Currently, permittivity is treated as a constant."""
+class AnisotropicPermittivity(AbstractPrincipalAxesTensor):
+    """Anisotropic (tensor) relative permittivity of a charge medium.
 
-    permittivity: float = Field(
-        default=1.0,
+    Notes
+    -----
+    Specified by the principal permittivities ``xx``, ``yy``, ``zz`` along local axes, plus an
+    optional ``rotation`` that orients those axes in the global frame. The resulting tensor is
+    symmetric with every eigenvalue at least 1, and the electric displacement is
+    :math:`\\mathbf{D} = \\varepsilon_0 \\varepsilon \\mathbf{E}`.
+
+    The global tensor is :math:`R \\, \\mathrm{diag}(xx, yy, zz) \\, R^T`, with :math:`R` the
+    active (counter-clockwise) rotation of ``rotation``, so local axis :math:`i` points along
+    :math:`R e_i`. For example, ``RotationAroundAxis(axis=2, angle=theta)`` turns the local x-axis
+    by ``theta`` from +x towards +y, which gives a positive ``xy`` component when ``xx > yy``.
+
+    Use :meth:`from_components` to build an instance from the six symmetric components in the
+    global frame. Only the accelerated charge solver supports an anisotropic permittivity.
+
+    Example
+    -------
+    >>> from tidy3d import RotationAroundAxis
+    >>> eps = AnisotropicPermittivity(xx=20.0, yy=20.0, zz=10.0)
+    >>> tilted = AnisotropicPermittivity(
+    ...     xx=20.0, yy=5.0, zz=10.0, rotation=RotationAroundAxis(axis=2, angle=0.5)
+    ... )
+    >>> eps = AnisotropicPermittivity.from_components(exx=20.0, eyy=15.0, ezz=10.0, exy=2.0)
+    """
+
+    xx: float = Field(
         ge=1.0,
+        title="Principal permittivity xx",
+        description="Principal relative permittivity along the local x-axis.",
+        json_schema_extra={"units": PERMITTIVITY},
+    )
+    yy: float = Field(
+        ge=1.0,
+        title="Principal permittivity yy",
+        description="Principal relative permittivity along the local y-axis.",
+        json_schema_extra={"units": PERMITTIVITY},
+    )
+    zz: float = Field(
+        ge=1.0,
+        title="Principal permittivity zz",
+        description="Principal relative permittivity along the local z-axis.",
+        json_schema_extra={"units": PERMITTIVITY},
+    )
+
+    @classmethod
+    def from_components(
+        cls,
+        exx: float,
+        eyy: float,
+        ezz: float,
+        exy: float = 0.0,
+        exz: float = 0.0,
+        eyz: float = 0.0,
+    ) -> AnisotropicPermittivity:
+        """Build from the six symmetric tensor components in the global frame.
+
+        The components define the symmetric matrix ``[[exx, exy, exz], [exy, eyy, eyz],
+        [exz, eyz, ezz]]``, whose eigenvalues must all be at least 1. It is diagonalized into
+        principal permittivities (its eigenvalues) plus a ``rotation`` orienting the principal
+        axes. The principal values come out sorted ascending, so ``xx`` is the smallest
+        eigenvalue rather than ``exx``.
+
+        Parameters
+        ----------
+        exx : float
+            ``xx`` component of the permittivity tensor.
+        eyy : float
+            ``yy`` component of the permittivity tensor.
+        ezz : float
+            ``zz`` component of the permittivity tensor.
+        exy : float = 0.0
+            Off-diagonal ``xy`` (= ``yx``) component.
+        exz : float = 0.0
+            Off-diagonal ``xz`` (= ``zx``) component.
+        eyz : float = 0.0
+            Off-diagonal ``yz`` (= ``zy``) component.
+
+        Example
+        -------
+        >>> eps = AnisotropicPermittivity.from_components(exx=20.0, eyy=15.0, ezz=10.0, exy=2.0)
+        >>> eps.xx
+        10.0
+        """
+        eigvals, rotation = cls._diagonalize(exx, eyy, ezz, exy, exz, eyz)
+        # Same tolerance as 'FullyAnisotropicMedium'.
+        if np.any(eigvals < 1.0 - fp_eps):
+            raise ValidationError(
+                "'AnisotropicPermittivity.from_components' requires a permittivity tensor whose "
+                f"eigenvalues are all at least 1, but the provided components give {eigvals}."
+            )
+        # The principal-value fields require at least 1.
+        eigvals = np.maximum(eigvals, 1.0)
+        return cls(
+            xx=float(eigvals[0]),
+            yy=float(eigvals[1]),
+            zz=float(eigvals[2]),
+            rotation=rotation,
+        )
+
+
+class AbstractChargeMedium(AbstractMedium):
+    """Abstract charge medium with a frequency-independent permittivity, scalar or tensor."""
+
+    permittivity: Annotated[float, Field(ge=1.0)] | AnisotropicPermittivity = Field(
+        default=1.0,
         title="Permittivity",
-        description="Relative permittivity.",
+        description="Relative permittivity. Either an isotropic scalar or an "
+        "``AnisotropicPermittivity``.",
         json_schema_extra={"units": PERMITTIVITY},
     )
 
@@ -51,7 +156,11 @@ class AbstractChargeMedium(AbstractMedium):
         return self
 
     def eps_model(self, frequency: float) -> complex:
-        return self.permittivity
+        """Relative permittivity; the mean of the principal values for an anisotropic one."""
+        eps = self.permittivity
+        if isinstance(eps, AnisotropicPermittivity):
+            return (eps.xx + eps.yy + eps.zz) / 3
+        return eps
 
     def n_cfl(self) -> None:
         return None
