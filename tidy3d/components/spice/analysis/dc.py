@@ -17,7 +17,7 @@ from tidy3d.log import log
 # 'ChargeToleranceSpec' fields that only configure the iterative linear solver, and so mean
 # nothing once the Jacobian is factorized. The nonlinear controls ('rel_tol', the CFL and
 # pseudo-step settings) still apply on both paths and are deliberately absent.
-ITERATIVE_ONLY_TOLERANCE_FIELDS = ("max_iters", "preconditioner_iterations")
+ITERATIVE_ONLY_TOLERANCE_FIELDS = ("max_iters", "preconditioner_iterations", "linear_rel_tol")
 
 
 class ChargeToleranceSpec(Tidy3dBaseModel):
@@ -96,6 +96,18 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         title="Preconditioner iterations.",
         description="Maximum number of preconditioner iterations in "
         "the linear solver of the drift-diffusion solver. "
+        "This setting configures the iterative linear solver and is ignored when "
+        "``HeatChargeSimulation.linear_solver='direct'``.",
+    )
+
+    linear_rel_tol: float = Field(
+        default=1e-2,
+        gt=0,
+        lt=1,
+        title="Linear solver relative tolerance.",
+        description="Factor by which the iterative linear solver reduces the residual of "
+        "the linear system at each nonlinear iteration. A smaller value makes each "
+        "nonlinear iteration more accurate and more expensive. "
         "This setting configures the iterative linear solver and is ignored when "
         "``HeatChargeSimulation.linear_solver='direct'``.",
     )

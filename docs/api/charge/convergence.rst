@@ -56,9 +56,6 @@ Parameters you can adjust:
   The tight default is sufficient for most problems. Loosening it is **not** a
   way to fix non-convergence (see Troubleshooting below): it only stops the solve
   at a higher residual, i.e. a less accurate solution.
-- ``max_iters`` (``ChargeToleranceSpec``, default ``120``): maximum number of
-  nonlinear (Newton) iterations per bias step. If the convergence history shows
-  the residual still decreasing when a bias reaches this cap, raise it.
 - ``convergence_dv`` (``SteadyChargeDCAnalysis``, default ``1.0`` V): the
   maximum bias step within a voltage sweep. On the accelerated solver it
   applies only to multi-voltage sweeps: where the gap between consecutive
@@ -72,6 +69,15 @@ Parameters you can adjust:
   iterations over which quantities such as doping are ramped up to their full
   values during start-up. Increasing it introduces doping more gradually, which
   can stabilize start-up on heavily doped devices.
+- ``linear_rel_tol`` (``ChargeToleranceSpec``, default ``1e-2``): the factor by
+  which the iterative linear solver reduces the residual of the linear system
+  at each nonlinear iteration. A smaller value makes each iteration more
+  accurate and more expensive; see Troubleshooting for when to lower it. It has
+  no effect with ``linear_solver='direct'``.
+- ``max_iters`` (``ChargeToleranceSpec``, default ``120``): the iteration
+  budget of the iterative linear solver at each nonlinear iteration. It does
+  not limit the nonlinear iterations, which ``max_pseudo_steps`` caps. It has
+  no effect with ``linear_solver='direct'``.
 
 Advanced controls (leave at their defaults):
 
@@ -81,6 +87,8 @@ runtimes or non-convergence:
 - ``cfl_number`` (default ``1e9``) -- the upper bound of the adaptive CFL
   controller.
 - ``cfl_min`` (default ``None``, meaning ``1``) -- its lower bound.
+- ``max_pseudo_steps`` (default ``60``) -- the maximum number of nonlinear
+  iterations per bias; see Troubleshooting step 2.
 - ``preconditioner_iterations`` (default ``50``)
 
 Troubleshooting convergence (accelerated solver)
@@ -113,10 +121,10 @@ solver does not converge, work through these in order:
      reasons, so this says where the controller ended, not why.
    * **CFL at its upper bound** (``cfl_number``, default ``1e9``): the
      pseudo-time term was at its smallest allowed value. If the residual was
-     still decreasing, go to step 2; if it had stagnated, look at the setup --
-     mesh, doping, operating point -- rather than at the solver controls.
+     still decreasing, go to step 2; if it had stagnated, go to step 3, and if
+     that does not help, look at the setup -- mesh, doping, operating point.
    * **CFL still moving between the two bounds**: the controller was still
-     adapting. Read ``residual_history`` and follow steps 2 and 3 as usual.
+     adapting. Read ``residual_history`` and follow steps 2 to 4 as usual.
 
    With ``cfl_min == cfl_number`` the CFL is held constant and the trace says
    nothing about the bounds.
@@ -131,11 +139,18 @@ solver does not converge, work through these in order:
 
    When the trace for a non-converged bias conclusively ends on one bound, the
    non-convergence warning issued when the simulation finishes names it.
-#. **Residual still decreasing -- give it more iterations.** Raise
-   ``max_iters`` first. If the residual is still dropping when ``n_iters``
-   reaches the cap, also raise ``max_pseudo_steps``. A non-default
-   ``max_pseudo_steps`` emits a warning about long runtimes and convergence;
-   that warning is conservative and is expected in this case.
+#. **Residual still decreasing -- give it more iterations.** If the residual is
+   still dropping when ``n_iters`` reaches ``max_pseudo_steps``, raise
+   ``max_pseudo_steps``. A non-default ``max_pseudo_steps`` emits a warning
+   about long runtimes and convergence; that warning is conservative and is
+   expected in this case.
+#. **The residual oscillates or stagnates on the iterative linear solver.**
+   Lower ``linear_rel_tol`` to ``1e-4`` or ``1e-5`` so that each nonlinear
+   iteration is solved more accurately. This helps most where one
+   ``component`` of ``residual_history`` stays orders of magnitude below the
+   others, as in undoped or lightly doped regions, heterojunctions and
+   degenerately doped junctions with band-to-band tunneling.
+   ``linear_solver='direct'`` is the alternative when memory allows.
 #. **A high-bias point in a sweep fails or oscillates.** Lower
    ``convergence_dv`` so the solver approaches it through smaller intermediate
    bias steps. For a single requested voltage ``convergence_dv`` has no
@@ -163,10 +178,10 @@ defaults) is enough.
 - **Drop** the inflated ``abs_tol``. It is ignored on the accelerated solver, so
   leaving it at the field default is fine.
 
-The ``cfl_number``, ``cfl_min``, ``max_pseudo_steps`` and
-``preconditioner_iterations`` controls apply only to the accelerated solver and
-have no legacy counterpart, so there is nothing to migrate there; leave them at
-their defaults.
+The ``cfl_number``, ``cfl_min``, ``max_pseudo_steps``,
+``preconditioner_iterations`` and ``linear_rel_tol`` controls apply only to the
+accelerated solver and have no legacy counterpart, so there is nothing to
+migrate there; start from their defaults.
 
 Accelerated-only features
 ^^^^^^^^^^^^^^^^^^^^^^^^^

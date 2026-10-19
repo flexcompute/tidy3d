@@ -537,8 +537,8 @@ class HeatChargeSimulation(AbstractSimulation):
         "solves for the lattice temperature uses the same back-end for the coupled heat "
         "solve, and the two factorizations are sized together before either is allocated. "
         "On a charge analysis the iterative-solver settings in ``ChargeToleranceSpec`` "
-        "(``max_iters``, ``preconditioner_iterations``) are ignored when ``'direct'`` is "
-        "selected. A charge analysis requires the accelerated solver.",
+        "(``max_iters``, ``preconditioner_iterations``, ``linear_rel_tol``) are ignored when "
+        "``'direct'`` is selected. A charge analysis requires the accelerated solver.",
     )
 
     @field_validator("structures")
