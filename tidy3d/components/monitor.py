@@ -3138,17 +3138,6 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
     >>> td.config.logging.level = old_logging_level
     """
 
-    @model_validator(mode="after")
-    @always_validate
-    def _validate_single_sampling_spec(self) -> Self:
-        """Time sampling for this monitor is specified via ``interval`` only.
-
-        Overrides the base mutual-exclusivity check by name so the actionable per-field
-        rejection fires on every path -- construction and ``copy()``/``updated_copy()``
-        re-validation alike -- and is never shadowed by the generic error when the payload
-        carries the materialized ``interval`` alongside a physical-sampling field."""
-        return self._reject_sampling_spec()
-
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization.
         In general, this is severely overestimated for surface monitors.
