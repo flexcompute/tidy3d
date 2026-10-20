@@ -26,6 +26,7 @@ from tidy3d.components.run_time_spec import RunTimeSpec
 from tidy3d.components.source.field import TFSF, AbstractModeSource, FixedAngleSpec, PlaneWave
 from tidy3d.config import config
 from tidy3d.constants import C_0
+from tidy3d.em.translate.components import _present, validate
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -125,22 +126,19 @@ def _validate_relax_courant_compatibility(self: Any) -> Self:
 
 def _validate_low_freq_smoothing(self: Any) -> Self:
     """Validate the low frequency smoothing parameters."""
-    # check that all monitors are present and they are mode monitors
-    val = self.low_freq_smoothing
-    if val is None:
+    from flexcompute.core._migration.em.frequency_extrapolation.schema import (
+        LowFrequencySmoothingContext,
+    )
+
+    spec = self.low_freq_smoothing
+    if spec is None:
         return self
-    monitors = self.monitors
-    present_mode_monitor_names = [
-        monitor.name for monitor in monitors if isinstance(monitor, ModeMonitor)
-    ]
-    for monitor_ind, monitor in enumerate(val.monitors):
-        if monitor not in present_mode_monitor_names:
-            self._raise_validation_error_at_loc(
-                f"Low frequency smoothing specification refers to monitor '{monitor}' which either does not exist or is not a mode monitor.",
-                "low_freq_smoothing",
-                "monitors",
-                monitor_ind,
-            )
+    context = LowFrequencySmoothingContext(
+        available_mode_monitor_names=frozenset(
+            monitor.name for monitor in self.monitors if isinstance(monitor, ModeMonitor)
+        )
+    )
+    _present(self, validate(spec, path=("low_freq_smoothing",), context=context))
     return self
 
 

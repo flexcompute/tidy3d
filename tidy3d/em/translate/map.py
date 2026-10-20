@@ -584,6 +584,17 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.lumped_element.validation:validate",
         on_construction=True,
     ),
+    # frequency-extrapolation; FlexRF's subclass translates through the abstract class
+    "tidy3d.components.frequency_extrapolation:AbstractLowFrequencySmoothingSpec": ComponentScope(
+        "flexcompute.core._migration.em.frequency_extrapolation.schema:AbstractLowFrequencySmoothingSpec",
+        "flexcompute.core._migration.em.frequency_extrapolation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.frequency_extrapolation:LowFrequencySmoothingSpec": ComponentScope(
+        "flexcompute.core._migration.em.frequency_extrapolation.schema:LowFrequencySmoothingSpec",
+        "flexcompute.core._migration.em.frequency_extrapolation.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -613,6 +624,8 @@ COMPONENT_ERROR_TYPES = {
     "tcad.nonfinite_thermal_resistance": "builtins:ValueError",
     "tcad.volume_mesh_monitor_at_least_2d": "builtins:ValueError",
     "tcad.heat_charge_source_requires_structure": "tidy3d.exceptions:SetupError",
+    # frequency-extrapolation
+    "em.frequency_extrapolation.empty_monitors": "builtins:ValueError",
 }
 
 

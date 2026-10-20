@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from flexcompute.core.validation import raise_first_error
-from pydantic import Field, NonNegativeFloat, field_validator, model_validator
+from pydantic import Field, NonNegativeFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
-
-if TYPE_CHECKING:
-    from tidy3d.compat import Self
 
 
 class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
@@ -45,16 +39,6 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
         ge=0,
     )
 
-    @model_validator(mode="after")
-    def _validate_sampling_times(self) -> Self:
-        min_sampling_time = self.min_sampling_time
-        max_sampling_time = self.max_sampling_time
-        if min_sampling_time >= max_sampling_time:
-            raise ValueError(
-                "The minimum sampling time must be less than the maximum sampling time."
-            )
-        return self
-
 
 class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
     """Specifies the low frequency smoothing parameters for the simulation.
@@ -77,14 +61,3 @@ class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
         title="Monitors",
         description="The names of monitors to which low frequency smoothing will be applied.",
     )
-
-    @field_validator("monitors")
-    @classmethod
-    def _validate_monitors(cls, val: tuple[str, ...]) -> tuple[str, ...]:
-        """Validate the monitors list is not empty."""
-        from flexcompute.core._migration.em.frequency_extrapolation.validation import (
-            validate_monitors_not_empty,
-        )
-
-        raise_first_error(validate_monitors_not_empty(val), ValueError)
-        return val
