@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import xarray as xr
+from flexcompute.core._migration.em.numerical.raw import doping as doping_numerics
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.autograd import TracedSize
@@ -156,23 +157,24 @@ class GaussianDoping(AbstractDopingBox):
 
     Notes
     -----
-    The Gaussian doping concentration :math:`N` is defined in the following manner:
-
-    - :math:`N=N_{\\text{max}}` at locations more than :math:`\\text{width}` um away from the sides of the box.
-    - :math:`N=N_{\\text{ref}}` at location on the box sides.
-    - a Gaussian variation between :math:`N_{\\text{max}}` and  :math:`N_{\\text{ref}}`  at locations less than :math:`\\text{width}`
-      um away from the sides.
-
-    By definition, all sides of the box will have concentration :math:`N_{\\text{ref}}` (except the side specified
-    as source) and the center of the box (:math:`\\text{width}` away from the box sides) will have a concentration
-    :math:`N_{\\text{max}}`.
+    The concentration is a product of one factor per axis,
+    :math:`N = N_{\\text{max}} f_x f_y f_z`. Along an axis the factor is 1 more than
+    :math:`\\text{width}` away from both faces of the box, and within :math:`\\text{width}` of a
+    face other than the ``source`` face it is
 
     .. math::
 
-        N = \\{N_{\\text{max}}\\} \\exp \\left[
-        - \\ln \\left( \\frac{\\{N_{\\text{max}}\\}}{\\{N_{\\text{ref}}\\}} \\right)
-        \\left( \\frac{(x|y|z) - \\{(x|y|z)_{\\text{box}}\\}}{\\text{width}} \\right)^2
-        \\right]
+        f = \\exp \\left[
+        - \\ln \\left( \\frac{N_{\\text{max}}}{N_{\\text{ref}}} \\right)
+        \\left( \\frac{\\text{width} - d}{\\text{width}} \\right)^2
+        \\right],
+
+    where :math:`d` is the distance to that face. On the ``source`` face the factor stays 1. A face
+    therefore has concentration :math:`N_{\\text{ref}}`, an edge where two such faces meet
+    :math:`N_{\\text{ref}}^2 / N_{\\text{max}}`, and a corner of three
+    :math:`N_{\\text{ref}}^3 / N_{\\text{max}}^2`. Along an axis where the box is thinner than
+    :math:`2\\,\\text{width}`, the lower face (``xmin``, ``ymin`` or ``zmin``) sets the factor where
+    the two transitions overlap.
 
     Example
     -------
@@ -201,8 +203,9 @@ class GaussianDoping(AbstractDopingBox):
 
     ref_con: PositiveFloat = Field(
         title="Reference concentration.",
-        description="Reference concentration. This is the minimum concentration in the box "
-        "and it is attained at the edges/faces of the box.",
+        description="Concentration on a face of the box other than the ``source`` face. Where two "
+        "or three such faces meet, at an edge or a corner, the concentration falls to "
+        "``ref_con**2 / concentration`` or ``ref_con**3 / concentration**2``.",
         json_schema_extra={"units": PERCMCUBE},
     )
 
@@ -215,7 +218,7 @@ class GaussianDoping(AbstractDopingBox):
     width: PositiveFloat = Field(
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
-        "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
+        "``concentration`` at the center of the box to ``ref_con`` at a face "
         "of the box in a distance equal to ``width``. ",
         json_schema_extra={"units": MICROMETER},
     )
@@ -250,93 +253,25 @@ class GaussianDoping(AbstractDopingBox):
     @cached_property
     def sigma(self) -> float:
         """The sigma parameter of the pseudo-gaussian"""
-        return np.sqrt(-self.width * self.width / 2 / np.log(self.ref_con / self.concentration))
+        return doping_numerics.gaussian_doping_sigma(
+            width=self.width, ref_con=self.ref_con, concentration=self.concentration
+        )
 
     def _get_contrib(self, coords: dict[str, ArrayLike], meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         _, indices_in_box, X, Y, Z = self._get_inside_and_coords(coords=coords, meshgrid=meshgrid)
-
-        x_contrib = np.zeros(X.shape)
-        x_contrib[indices_in_box] = 1.0
-        if self.source != "xmin":
-            x0 = self.bounds[0][0]
-            indices = np.logical_and(x0 <= X, x0 + self.width >= X)
-            indices = np.logical_and(indices, indices_in_box)
-            x_contrib[indices] = np.exp(
-                -(X[indices] - x0 - self.width)
-                * (X[indices] - x0 - self.width)
-                / 2
-                / self.sigma
-                / self.sigma
-            )
-        # higher x face
-        if self.source != "xmax":
-            x1 = self.bounds[1][0]
-            indices = np.logical_and(x1 - self.width <= X, x1 >= X)
-            indices = np.logical_and(indices, indices_in_box)
-            x_contrib[indices] = np.exp(
-                -(X[indices] - x1 + self.width)
-                * (X[indices] - x1 + self.width)
-                / 2
-                / self.sigma
-                / self.sigma
-            )
-
-        y_contrib = np.zeros(X.shape)
-        y_contrib[indices_in_box] = 1.0
-        if self.source != "ymin":
-            y0 = self.bounds[0][1]
-            indices = np.logical_and(y0 <= Y, y0 + self.width >= Y)
-            indices = np.logical_and(indices, indices_in_box)
-            y_contrib[indices] = np.exp(
-                -(Y[indices] - y0 - self.width)
-                * (Y[indices] - y0 - self.width)
-                / 2
-                / self.sigma
-                / self.sigma
-            )
-        # higher y face
-        if self.source != "ymax":
-            y1 = self.bounds[1][1]
-            indices = np.logical_and(y1 - self.width <= Y, y1 >= Y)
-            indices = np.logical_and(indices, indices_in_box)
-            y_contrib[indices] = np.exp(
-                -(Y[indices] - y1 + self.width)
-                * (Y[indices] - y1 + self.width)
-                / 2
-                / self.sigma
-                / self.sigma
-            )
-
-        z_contrib = np.zeros(X.shape)
-        z_contrib[indices_in_box] = 1.0
-        if self.source != "zmin":
-            z0 = self.bounds[0][2]
-            indices = np.logical_and(z0 <= Z, z0 + self.width >= Z)
-            indices = np.logical_and(indices, indices_in_box)
-            z_contrib[indices] = np.exp(
-                -(Z[indices] - z0 - self.width)
-                * (Z[indices] - z0 - self.width)
-                / 2
-                / self.sigma
-                / self.sigma
-            )
-        # higher z face
-        if self.source != "zmax":
-            z1 = self.bounds[1][2]
-            indices = np.logical_and(z1 - self.width <= Z, z1 >= Z)
-            indices = np.logical_and(indices, indices_in_box)
-            z_contrib[indices] = np.exp(
-                -(Z[indices] - z1 + self.width)
-                * (Z[indices] - z1 + self.width)
-                / 2
-                / self.sigma
-                / self.sigma
-            )
-
-        total_contrib = x_contrib * y_contrib * z_contrib * self.concentration
-
+        total_contrib = doping_numerics.gaussian_doping_concentration(
+            X,
+            Y,
+            Z,
+            inside=indices_in_box,
+            bounds=self.bounds,
+            width=self.width,
+            ref_con=self.ref_con,
+            concentration=self.concentration,
+            source=self.source,
+        )
         return total_contrib.squeeze()
 
 

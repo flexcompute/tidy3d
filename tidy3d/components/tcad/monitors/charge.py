@@ -13,6 +13,12 @@ class SteadyPotentialMonitor(HeatChargeMonitor):
     """
     Electric potential (:math:`\\psi`) monitor.
 
+    Notes
+    -----
+    The potential is defined up to a constant. On the accelerated charge solver it is measured
+    against the electron affinity of the reference semiconductor described in
+    :class:`.VoltageBC`; the non-accelerated charge solver ignores electron affinity.
+
     Example
     -------
     >>> import tidy3d as td

@@ -8,7 +8,12 @@ overlapping tidy3d structures resolve) so abutting boxes do not double-count sha
 faces. It covers ConstantDoping, GaussianDoping, CustomDoping, and any future
 ``AbstractDopingBox`` — each box contributes its own per-node profile. It is shared by
 simulation setup and doping plots so rendered and solved fields match; any
-reimplementation must reproduce its result byte-for-byte.
+reimplementation must reproduce its result byte-for-byte, except on the accelerated charge
+solver at the boundary of a semiconductor (a face it shares with another medium or with the
+simulation boundary, or a face carrying a boundary condition). There a box face within the
+mesher's geometry tolerance of a node is taken to lie on that boundary, only the nearer one
+where both faces of a box are that close, and the node takes the boxes on the semiconductor's
+side of it, or on both sides where the semiconductor lies on both, as at a concave edge.
 """
 
 from __future__ import annotations

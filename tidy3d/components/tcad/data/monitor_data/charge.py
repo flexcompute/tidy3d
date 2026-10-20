@@ -56,7 +56,11 @@ VoltageFieldDataset = UnstructuredFieldType | SpatialVoltageDataArray
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
-    """Stores electric potential :math:`\\psi` from a charge simulation."""
+    """Stores electric potential :math:`\\psi` from a charge simulation.
+
+    On the accelerated charge solver, the reference of the potential is described in
+    :class:`.SteadyPotentialMonitor`.
+    """
 
     monitor: SteadyPotentialMonitor = Field(
         title="Electric potential monitor",

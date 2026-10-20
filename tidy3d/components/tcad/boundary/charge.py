@@ -56,8 +56,9 @@ class VoltageBC(HeatChargeBC):
         :math:`V - (W - \\chi_\\mathrm{ref})` on the gate face. The reference
         semiconductor is the background ``medium`` when it is a
         :class:`.SemiconductorMedium`, and otherwise the first semiconductor
-        structure in priority order (for the default priority mode, the first
-        one listed in ``structures``); with one semiconductor material it is
+        structure in priority order, which is the lowest-priority one (with no
+        ``priority`` set, the first one listed in ``structures``); with one
+        semiconductor material it is
         simply that material's :math:`\\chi`. Any ``VoltageBC`` with a face on
         an insulator -- a gate, or an ohmic or Schottky contact whose metal is
         clad by an insulator -- is supported only by the accelerated charge
@@ -109,7 +110,9 @@ class CurrentBC(HeatChargeBC):
     All faces of one :class:`.ChargeConductorMedium` form one terminal.
     At most one terminal may be current-driven, and at least one
     :class:`.VoltageBC` must provide the potential reference. ``current=0``
-    makes the contact float. A contact reaching only an insulator is a gate and
+    makes the contact float. A nonzero current needs a semiconductor path to
+    another contact that crosses no :class:`.InsulatingBC`, since no steady
+    state can carry it otherwise. A contact reaching only an insulator is a gate and
     is rejected, including at ``current=0``; drive a gate with
     :class:`.VoltageBC`. Supported only by the accelerated charge solver; not
     supported for a conduction simulation, where :class:`.VoltageBC` should
@@ -144,6 +147,10 @@ class InsulatingBC(HeatChargeBC):
         Ensures the electric potential to the normal :math:`\\nabla \\psi \\cdot \\mathbf{n}  = 0` as well as the
         surface recombination current density :math:`J_s = \\mathbf{J} \\cdot \\mathbf{n} = 0` are set to zero where
         the current density is :math:`\\mathbf{J}` and the normal vector is :math:`\\mathbf{n}`
+
+        On a face that also carries a :class:`.VoltageBC` or :class:`.CurrentBC`, the contact
+        wins whatever the order in ``boundary_spec``, unless the placement of this condition
+        names the contact's metal structure or medium; then the later entry wins.
 
     Example
     -------
