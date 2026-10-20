@@ -378,6 +378,16 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.invdes.schema.region:TopologyDesignRegion",
         "flexcompute.core._migration.em.invdes.validation:validate_region",
     ),
+    "tidy3d.plugins.invdes.design:AbstractInverseDesign": None,
+    "tidy3d.plugins.invdes.design:InverseDesign": ComponentScope(
+        "flexcompute.core._migration.em.invdes.schema.design:InverseDesign",
+        "flexcompute.core._migration.em.invdes.validation:validate_design",
+    ),
+    "tidy3d.plugins.invdes.design:InverseDesignMulti": ComponentScope(
+        "flexcompute.core._migration.em.invdes.schema.design:InverseDesignMulti",
+        "flexcompute.core._migration.em.invdes.validation:validate_design",
+        on_construction=True,
+    ),
     # monitor
     "tidy3d.components.apodization:ApodizationSpec": ComponentScope(
         "flexcompute.core._migration.em.apodization.schema:ApodizationSpec",
@@ -418,6 +428,7 @@ COMPONENT_ERROR_TYPES = {
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes
     "em.invdes.initialization_bound_order": "tidy3d.exceptions:ValidationError",
+    "em.invdes.multi_mirror_symmetry": "tidy3d.exceptions:ValidationError",
     # monitor
     "em.monitor.stop_before_start": "tidy3d.exceptions:SetupError",
 }

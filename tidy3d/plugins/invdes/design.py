@@ -7,6 +7,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.invdes.validation import validate_multi_mirror_symmetry
+from flexcompute.core._migration.em.numerical.raw.symmetry import resolve_mirror_symmetry
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, field_validator, model_validator
 
 import tidy3d as td
@@ -26,37 +29,6 @@ if TYPE_CHECKING:
     from tidy3d.plugins.autograd.invdes.symmetries import MirrorSymmetry
 
 PostProcessFnType = Callable[[td.SimulationData], float]
-
-
-def _resolve_mirror_symmetry(
-    *,
-    array_shape: tuple[int, ...],
-    design_region: DesignRegionType,
-    simulation: td.Simulation,
-) -> MirrorSymmetry | None:
-    """Mirror boundaries relevant to a design-region array inside a simulation."""
-    rmin, rmax = design_region.geometry.bounds
-    mirror_symmetry = []
-    for size_axis, sim_sym, low, high, sim_center in zip(
-        array_shape, simulation.symmetry, rmin, rmax, simulation.center
-    ):
-        if sim_sym == 0 or size_axis <= 1:
-            mirror_symmetry.append(None)
-            continue
-
-        touches_low = np.isclose(low, sim_center, rtol=0.0, atol=1e-12)
-        touches_high = np.isclose(high, sim_center, rtol=0.0, atol=1e-12)
-
-        if touches_low and not touches_high:
-            mirror_symmetry.append("low")
-        elif touches_high and not touches_low:
-            mirror_symmetry.append("high")
-        else:
-            mirror_symmetry.append(None)
-
-    if any(side is not None for side in mirror_symmetry):
-        return tuple(mirror_symmetry)
-    return None
 
 
 class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
@@ -265,10 +237,11 @@ class InverseDesign(AbstractInverseDesign):
 
     def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> MirrorSymmetry | None:
         """Mirror boundaries relevant to a design-region array in this simulation."""
-        return _resolve_mirror_symmetry(
-            array_shape=array_shape,
-            design_region=self.design_region,
-            simulation=self.simulation,
+        return resolve_mirror_symmetry(
+            array_shape,
+            self.design_region.geometry.bounds,
+            self.simulation.symmetry,
+            self.simulation.center,
         )
 
     def to_simulation(
@@ -339,24 +312,6 @@ class InverseDesignMulti(AbstractInverseDesign):
 
     _check_sim_pixel_size = check_pixel_size("simulations")
 
-    @model_validator(mode="after")
-    def _check_lengths(self) -> Self:
-        """Check the lengths of all of the multi fields."""
-
-        keys = ("simulations", "output_monitor_names")
-        multi_dict = {key: getattr(self, key) for key in keys}
-        sizes = {key: len(val) for key, val in multi_dict.items() if val is not None}
-
-        if len(set(sizes.values())) != 1:
-            raise ValueError(
-                f"'MultiInverseDesign' requires that the fields {keys} must either "
-                "have the same length or be left ``None``, if optional. Given fields with "
-                "corresponding sizes of '{sizes}'."
-            )
-
-        self._resolve_mirror_symmetry(self.design_region.params_shape)
-        return self
-
     @property
     def task_names(self) -> list[str]:
         """Task names associated with each of the simulations."""
@@ -383,25 +338,13 @@ class InverseDesignMulti(AbstractInverseDesign):
 
     def _resolve_mirror_symmetry(self, array_shape: tuple[int, ...]) -> MirrorSymmetry | None:
         """Mirror boundaries relevant to a shared design-region array across all simulations."""
+        bounds = self.design_region.geometry.bounds
         mirror_symmetries = [
-            _resolve_mirror_symmetry(
-                array_shape=array_shape,
-                design_region=self.design_region,
-                simulation=simulation,
-            )
+            resolve_mirror_symmetry(array_shape, bounds, simulation.symmetry, simulation.center)
             for simulation in self.simulations
         ]
-
-        if not mirror_symmetries:
-            return None
-
-        mirror_symmetry = mirror_symmetries[0]
-        if any(sym != mirror_symmetry for sym in mirror_symmetries[1:]):
-            raise ValidationError(
-                "All simulations in 'InverseDesignMulti' must resolve to the same mirror "
-                "symmetry for the shared design region."
-            )
-        return mirror_symmetry
+        raise_first_error(validate_multi_mirror_symmetry(mirror_symmetries), ValidationError)
+        return mirror_symmetries[0] if mirror_symmetries else None
 
     def to_simulation(
         self, params: anp.ndarray, symmetry: MirrorSymmetry | None = None
