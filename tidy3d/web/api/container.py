@@ -211,18 +211,9 @@ class WebContainer(Tidy3dBaseModel, ABC):
         """Make sure local output directory exists and create it if not."""
 
     @staticmethod
-    def _check_folder(
-        folder_name: str,
-        projects_endpoint: str = "tidy3d/projects",
-        project_endpoint: str = "tidy3d/project",
-    ) -> None:
-        """Make sure ``folder_name`` exists on the web UI and create it if not."""
-        Folder.get(
-            folder_name,
-            create=True,
-            projects_endpoint=projects_endpoint,
-            project_endpoint=project_endpoint,
-        )
+    def _check_folder(folder_name: str) -> None:
+        """Ensure the folder exists in the configured workspace."""
+        Folder.get(folder_name, create=True)
 
 
 class _JobStateLock:
@@ -672,7 +663,7 @@ class Job(WebContainer):
 
     def _refresh_uploaded_step_status(self, step: Step, task_id: TaskId) -> str:
         """Refresh persisted state for an uploaded step and return its server status."""
-        status = task_api.get_info(task_id=task_id, verbose=False).status
+        status = task_api._get_task_info(task_id=task_id, verbose=False).status
         with self._state_lock:
             if status in COMPLETED_STATES:
                 self._runtime_state.step_statuses[step.name] = self._completed_step_status(
@@ -983,7 +974,7 @@ class Job(WebContainer):
     def _cached_parent_task_is_available(task_id: TaskId) -> bool:
         """Whether a cached parent task id can still feed downstream submissions."""
         try:
-            status = task_api.get_info(task_id=task_id, verbose=False).status
+            status = task_api._get_task_info(task_id=task_id, verbose=False).status
         except (Tidy3dWebError, CoreWebError):
             return False
         except ValueError as err:
@@ -1221,7 +1212,7 @@ class Job(WebContainer):
         if worker_group is not None:
             monitor_kwargs["worker_group"] = worker_group
         task_api.monitor(**monitor_kwargs)
-        status = task_api.get_info(task_id=task_id, verbose=False).status
+        status = task_api._get_task_info(task_id=task_id, verbose=False).status
         with self._state_lock:
             if status in COMPLETED_STATES:
                 self._runtime_state.step_statuses[step.name] = self._completed_step_status(
@@ -1659,6 +1650,10 @@ class Job(WebContainer):
         """Upload this ``Job`` if not already got cached results."""
         self._upload_and_cache(progress_callback=progress_callback)
 
+    def _get_task_info(self) -> TaskInfo | BatchDetail:
+        """Read this single-step job's details without enriching project metadata."""
+        return task_api._get_task_info(task_id=self.task_id, verbose=self.verbose)
+
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
 
@@ -1700,7 +1695,7 @@ class Job(WebContainer):
             if task_id is None:
                 return self._runtime_state.step_statuses.get(step.name, "pending")
 
-            status = task_api.get_info(task_id=task_id, verbose=False).status
+            status = task_api._get_task_info(task_id=task_id, verbose=False).status
             if status in COMPLETED_STATES:
                 with self._state_lock:
                     self._runtime_state.step_statuses[step.name] = self._completed_step_status(
@@ -1721,7 +1716,7 @@ class Job(WebContainer):
             return "success"
         if self.steps[0].name in self._cache_only_restore_miss_steps:
             return self._runtime_state.step_statuses.get(self.steps[0].name, "pending")
-        return self.get_info().status
+        return self._get_task_info().status
 
     def start(
         self,
@@ -3524,7 +3519,7 @@ class Batch(WebContainer):
                 _remember_terminal_status(task_name, job, cached_status)
                 return cached_status
 
-            status = job.get_info().status
+            status = job._get_task_info().status
             status_by_task[task_name] = status
             _remember_terminal_status(task_name, job, status)
             return status
@@ -3633,7 +3628,7 @@ class Batch(WebContainer):
                             completed = COMPLETED_PERCENT
                             _remember_terminal_status(task_name, job, status)
                         else:
-                            info = job.get_info()
+                            info = job._get_task_info()
                             status = info.status
                             status_by_task[task_name] = status
                             _remember_terminal_status(task_name, job, status)
@@ -3664,7 +3659,7 @@ class Batch(WebContainer):
                         if cached_status in END_STATES:
                             schedule_download(task_name, job, status=cached_status)
                             continue
-                        info = job.get_info()
+                        info = job._get_task_info()
                         status = info.status
                         status_by_task[task_name] = status
                         _remember_terminal_status(task_name, job, status)
@@ -3713,7 +3708,7 @@ class Batch(WebContainer):
                             display_status = "success"
                             pct = COMPLETED_PERCENT
                         else:
-                            info = job.get_info()
+                            info = job._get_task_info()
                             status = info.status
                             if isinstance(info, BatchDetail):
                                 display_status, _, pct = task_api._batch_detail_progress(info)

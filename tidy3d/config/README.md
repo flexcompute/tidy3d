@@ -22,6 +22,11 @@ mode also warns before upload if a nearby mode port's structures do not span the
 layer. Fast mode skips this optional check; required pre-upload checks still run.
 `Simulation.check_ports_reach_pml()` remains available explicitly in either mode.
 
+`config.workspace.default` selects `"private"` (default) or `"shared"` for folder lookup
+and new cloud tasks. It is persisted and can also be set through
+`TIDY3D_WORKSPACE__DEFAULT`. Folder resolution applies this setting centrally
+across submission entry points.
+
 ## Component Map
 
 ```mermaid
@@ -55,7 +60,7 @@ flowchart LR
 
 ## Module Reference
 
-- `sections.py` - Pydantic models for built-in sections (logging, simulation, microwave, adjoint, web, local cache, in-memory batch data cache, plugin container) registered via `register_section`. The bundled models inherit from the internal `ConfigSection` helper, but external code can use plain `BaseModel` subclasses. Optional handlers perform side effects. Fields mark persistence with `json_schema_extra={"persist": True}`.
+- `sections.py` - Pydantic models for built-in sections (logging, simulation, microwave, adjoint, workspace, web, local cache, in-memory batch data cache, plugin container) registered via `register_section`. The bundled models inherit from the internal `ConfigSection` helper, but external code can use plain `BaseModel` subclasses. Optional handlers perform side effects. Fields mark persistence with `json_schema_extra={"persist": True}`.
 - `registry.py` - Stores section and handler registries and notifies the attached manager so new entries appear immediately.
 - `manager.py` - `ConfigManager` caches validated models, tracks runtime overrides per profile, filters persisted fields, exposes helpers such as `plugins`, `profiles`, and `format`. `SectionAccessor` routes attribute access to `update_section`.
 - `loader.py` - Resolves Tidy3D-specific config directories, parses Tidy3D environment overrides, exposes section payload validation helpers, and delegates generic TOML persistence and migration mechanics to `flexcompute.core.config`.

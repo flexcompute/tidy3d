@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 from rich.progress import (
     BarColumn,
@@ -340,9 +341,26 @@ def download_file(
         User-supplied callback function with ``bytes_in_chunk`` as argument.
     """
 
+    cache_key = f"{resource_id}:{Path(remote_filename).as_posix()}"
+    cached_token = _s3_sts_tokens.get(cache_key)
     token = get_s3_sts_token(resource_id, remote_filename)
     client = token.get_client()
-    meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
+    try:
+        meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
+    except ClientError as exc:
+        if token is not cached_token or exc.response.get("Error", {}).get("Code") not in {
+            "403",
+            "404",
+            "AccessDenied",
+            "NoSuchKey",
+            "NotFound",
+        }:
+            raise
+        # Workspace moves preserve task IDs but can relocate their files.
+        _s3_sts_tokens.pop(cache_key, None)
+        token = get_s3_sts_token(resource_id, remote_filename)
+        client = token.get_client()
+        meta_data = client.head_object(Bucket=token.get_bucket(), Key=token.get_s3_key())
 
     # Get only last part of the remote file name
     remote_basename = Path(remote_filename).name

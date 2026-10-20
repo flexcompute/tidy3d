@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from botocore.exceptions import ClientError
 from packaging.version import InvalidVersion, Version
-from pydantic import Field, TypeAdapter
+from pydantic import AliasChoices, Field, TypeAdapter
 
 import tidy3d as td
 from tidy3d.config import config
@@ -19,7 +19,7 @@ from tidy3d.exceptions import ValidationError, format_chained_exception_message
 from tidy3d.web.api.run_options import validate_vgpu_allocation
 from tidy3d.web.api.states import SUCCESS_STATES
 
-from .cache import FOLDER_CACHE
+from .cache import FOLDER_CACHE, scope_folder_cache
 from .client_identity import resolve_protocol_version
 from .constants import (
     MODE_FILE_HDF5_GZ,
@@ -46,6 +46,7 @@ from .types import (
     TaskType,
     Tidy3DResource,
 )
+from .workspace import Workspace, require_workspace, resolve_workspace
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -97,102 +98,83 @@ def remote_spec_file(task_type: str | None) -> str:
 
 
 class Folder(Tidy3DResource, Queryable, extra="allow"):
-    """Tidy3D Folder."""
+    """A folder in a private or company shared workspace."""
 
-    folder_id: str = Field(
-        title="Folder id",
-        description="folder id",
-        alias="projectId",
-    )
+    folder_id: str = Field(alias="projectId", validation_alias=AliasChoices("projectId", "id"))
     folder_name: str = Field(
-        title="Folder name",
-        description="folder name",
-        alias="projectName",
+        alias="projectName", validation_alias=AliasChoices("projectName", "name")
     )
+    workspace: Workspace = "private"
 
     @classmethod
-    def list(cls, projects_endpoint: str = "tidy3d/projects") -> []:
-        """List all folders.
-
-        Returns
-        -------
-        folders : [Folder]
-            List of folders
-        """
-        resp = http.get(projects_endpoint)
-        return TypeAdapter(list[Folder]).validate_python(resp) if resp else None
+    def list(cls, workspace: Workspace | None = None) -> list[Folder]:
+        """List folders in ``workspace`` (defaults to ``td.config.workspace.default``)."""
+        workspace = resolve_workspace(workspace)
+        require_workspace(workspace)
+        resp = http.get("tidy3d/folders/v2", params={"sharedWorkspace": workspace == "shared"})
+        folders = TypeAdapter(list[Folder]).validate_python(resp or [])
+        return [folder.model_copy(update={"workspace": workspace}) for folder in folders]
 
     @classmethod
     def get(
-        cls,
-        folder_name: str,
-        create: bool = False,
-        projects_endpoint: str = "tidy3d/projects",
-        project_endpoint: str = "tidy3d/project",
-    ) -> Folder:
-        """Get folder by name.
+        cls, folder_name: str, create: bool = False, *, workspace: Workspace | None = None
+    ) -> Folder | None:
+        """Look up a name within one workspace, optionally creating it.
 
-        Parameters
-        ----------
-        folder_name : str
-            Name of the folder.
-        create : str
-            If the folder doesn't exist, create it.
-
-        Returns
-        -------
-        folder : Folder
+        ``workspace=None`` uses ``td.config.workspace.default``. Shared workspace
+        requests fail if company sharing is unavailable; they never use private folders.
         """
-        folder = FOLDER_CACHE.get(folder_name)
-        if not folder:
-            resp = http.get(project_endpoint, params={"projectName": folder_name})
+        workspace = resolve_workspace(workspace)
+        scope_folder_cache()
+        key = (workspace, folder_name)
+        folder = FOLDER_CACHE.get(key)
+        if folder is None:
+            require_workspace(workspace)
+            resp = http.get(
+                "tidy3d/folders/v2/search",
+                params={"name": folder_name, "sharedWorkspace": workspace == "shared"},
+            )
+            if not resp and create:
+                resp = http.post(
+                    "tidy3d/folders/v2",
+                    {"name": folder_name, "sharedWorkspace": workspace == "shared"},
+                )
             if resp:
-                folder = Folder(**resp)
-        if create and not folder:
-            resp = http.post(projects_endpoint, {"projectName": folder_name})
-            if resp:
-                folder = Folder(**resp)
-        FOLDER_CACHE[folder_name] = folder
+                folder = cls.model_validate(resp).model_copy(update={"workspace": workspace})
+                FOLDER_CACHE[key] = folder
         return folder
 
     @classmethod
-    def create(cls, folder_name: str) -> Folder:
-        """Create a folder, return existing folder if there is one has the same name.
+    def create(cls, folder_name: str, *, workspace: Workspace | None = None) -> Folder:
+        """Return the named folder in a workspace, creating it when absent."""
+        folder = cls.get(folder_name, create=True, workspace=workspace)
+        if folder is None:
+            raise WebError(f"Could not create folder '{folder_name}'.")
+        return folder
 
-        Parameters
-        ----------
-        folder_name : str
-            Name of the folder.
+    def detail(self) -> Folder:
+        """Refresh this folder's metadata from the service."""
+        resp = http.get(f"tidy3d/folders/v2/{self.folder_id}/detail")
+        return Folder.model_validate(resp).model_copy(update={"workspace": self.workspace})
 
-        Returns
-        -------
-        folder : Folder
-        """
-        return Folder.get(folder_name, True)
-
-    def delete(self, projects_endpoint: str = "tidy3d/projects") -> None:
-        """Remove this folder."""
-
-        http.delete(f"{projects_endpoint}/{self.folder_id}")
+    def delete(self) -> None:
+        """Remove this folder and invalidate its cached name."""
+        failures = http.delete(
+            "tidy3d/folders/v2/delete", {"items": [{"id": self.folder_id, "type": "folder"}]}
+        )
+        if failures:
+            raise WebError(f"Folder '{self.folder_name}' could not be deleted: {failures}")
+        FOLDER_CACHE.pop((self.workspace, self.folder_name), None)
 
     def delete_old(self, days_old: int) -> int:
         """Remove folder contents older than ``days_old``."""
+        return http.delete(f"tidy3d/tasks/{self.folder_id}/tasks", params={"daysOld": days_old})
 
-        return http.delete(
-            f"tidy3d/tasks/{self.folder_id}/tasks",
-            params={"daysOld": days_old},
-        )
-
-    def list_tasks(self, projects_endpoint: str = "tidy3d/projects") -> list[Tidy3DResource]:
-        """List all tasks in this folder.
-
-        Returns
-        -------
-        tasks : list[:class:`.SimulationTask`]
-            List of tasks in this folder
-        """
-        resp = http.get(f"{projects_endpoint}/{self.folder_id}/tasks")
-        return TypeAdapter(list[SimulationTask]).validate_python(resp) if resp else None
+    def list_tasks(self) -> list[SimulationTask]:
+        """List accessible tasks in this folder, including other company members' tasks."""
+        resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
+        tasks = TypeAdapter(list[SimulationTask]).validate_python(resp or [])
+        return [task.model_copy(update={"workspace": self.workspace}) for task in tasks]
 
 
 class WebTask(ResourceLifecycle, Submittable, extra="allow"):
@@ -284,7 +266,13 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             if preprocess_cache_mode != "off":
                 payload["preprocessCacheMode"] = preprocess_cache_mode
             resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
-        task = SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
+        task = SimulationTask.model_validate(resp).model_copy(
+            update={
+                "task_type": task_type,
+                "folder_name": folder_name,
+                "workspace": folder.workspace,
+            }
+        )
         if task_type not in MODELER_TASK_TYPES:
             # never a batch task; recording that spares TaskFactory.get its rf/task probe
             TaskFactory.register(task.task_id, SimulationTask)
@@ -442,12 +430,12 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
 
         task_details = self.detail().model_dump()
 
-        if task_details and "groupId" in task_details:
+        if task_details and task_details.get("groupId"):
             group_id = task_details["groupId"]
             if versions:
                 http.delete("tidy3d/group", json={"groupIds": [group_id]})
                 return
-            elif "version" in task_details:
+            elif task_details.get("version"):
                 version = task_details["version"]
                 http.delete(f"tidy3d/group/{group_id}/versions", json={"versions": [version]})
                 return
@@ -464,6 +452,12 @@ class SimulationTask(WebTask):
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
         alias="folderId",
+    )
+    workspace: Workspace | None = Field(default=None, description="Workspace containing the task.")
+    creator: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("creator", "createdBy"),
+        description="Identifier of the member who created the task.",
     )
     status: str | None = Field(default=None, title="status", description="Simulation task status.")
 

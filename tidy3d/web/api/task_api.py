@@ -48,10 +48,12 @@ from tidy3d.web.core.constants import (
     SIM_FILE_HDF5,
     SIMULATION_DATA_HDF5_GZ,
 )
+from tidy3d.web.core.exceptions import WebError as CoreWebError
 from tidy3d.web.core.s3utils import upload_file
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import MODELER_GROUP_TASK_TYPE, MODELER_TASK_TYPES, PayType, TaskType
+from tidy3d.web.core.workspace import resolve_task_context
 from tidy3d.web.execution_cost_limit import (
     execution_flexcredit_cost_reserved,
     execution_flexcredit_limit_enabled,
@@ -796,11 +798,29 @@ def _upload(
 
 
 @wait_for_connection
-def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
+def _get_task_detail(task: WebTask) -> TaskInfo | BatchDetail:
+    """Retry a detail read without restarting the enclosing workflow or enriching metadata."""
+    return task.detail()
+
+
+@wait_for_connection
+def _get_task_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
+    """Read task information for polling without resolving project metadata."""
     task = TaskFactory.get(task_id, verbose=verbose)
     if not task:
         raise ValueError("Task not found.")
-    return task.detail()
+    return _get_task_detail(task)
+
+
+@wait_for_connection
+def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
+    info = _get_task_info(task_id, verbose=verbose)
+    if isinstance(info, TaskInfo):
+        try:
+            info, _ = resolve_task_context(info, include_operation=True)
+        except CoreWebError as exc:
+            log.warning(f"{exc} Returning task details only.")
+    return info
 
 
 @wait_for_connection
@@ -884,13 +904,16 @@ def _get_batch_detail_handle_error_status(batch: BatchTask) -> BatchDetail:
     return detail
 
 
+@wait_for_connection
 def get_status(task_id: TaskId) -> str:
     """Get the status of a task. Raises an error if status is ``error``."""
     task = TaskFactory.get(task_id)
     if isinstance(task, BatchTask):
         return _get_batch_detail_handle_error_status(task).status
 
-    task_info = get_info(task_id)
+    if not task:
+        raise ValueError("Task not found.")
+    task_info = _get_task_detail(task)
     status = task_info.status
     if status == "visualize":
         return "success"
@@ -1051,17 +1074,19 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: str | None = No
     """Print the real time task progress until completion."""
     del worker_group
 
-    task_kind = TaskFactory.get_kind(task_id)
-    if task_kind is BatchTask:
+    task = TaskFactory.get(task_id)
+    if isinstance(task, BatchTask):
         return _monitor_modeler_batch(task_id, verbose=verbose)
+    if not task:
+        raise ValueError("Task not found.")
 
     console = get_logging_console() if verbose else None
-    task_info = get_info(task_id)
+    task_info = _get_task_detail(task)
     task_name = task_info.taskName
     task_type = task_info.taskType
 
     def get_estimated_cost() -> float:
-        task_info_local = get_info(task_id)
+        task_info_local = _get_task_detail(task)
         block_info = task_info_local.taskBlockInfo
         if block_info and block_info.chargeType == ChargeType.FREE:
             est_flex_unit = 0
@@ -1289,7 +1314,7 @@ def load(
         if cache_simulation is not None:
             workflow_type = task_type_name_of(cache_simulation)
         else:
-            info = get_info(task_id, verbose=False)
+            info = _get_task_info(task_id, verbose=False)
             if (getattr(info, "protocolVersion", None) or "").startswith(RF_PROTOCOL_PREFIX):
                 return stub_data
             workflow_type = getattr(info, "taskType", None)
@@ -1521,12 +1546,12 @@ def estimate_cost_info(
         return estimate
 
     task.estimate_cost(solver_version=solver_version)
-    task_info = get_info(task_id)
+    task_info = _get_task_detail(task)
     status = task_info.metadataStatus
 
     while status not in ALL_POST_VALIDATE_STATES:
         time.sleep(REFRESH_TIME)
-        task_info = get_info(task_id)
+        task_info = _get_task_detail(task)
         status = task_info.metadataStatus
 
     if status in ERROR_STATES:
@@ -1592,7 +1617,7 @@ def real_cost(task_id: TaskId, verbose: bool = True) -> float | None:
         )
 
     console = get_logging_console() if verbose else None
-    task_info = get_info(task_id)
+    task_info = _get_task_info(task_id, verbose=verbose)
     flex_unit = task_info.realFlexUnit
     ori_flex_unit = getattr(task_info, "oriRealFlexUnit", flex_unit)
     if not flex_unit:

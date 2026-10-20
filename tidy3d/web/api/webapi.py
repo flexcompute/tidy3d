@@ -13,6 +13,7 @@ from tidy3d.web.api.container import Job
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.http_util import config_toml_path
 
+from . import workspace
 from .connect_util import wait_for_connection
 from .run_options import log_deprecated_run_args
 
@@ -64,6 +65,10 @@ download_log = task_api.download_log
 delete = task_api.delete
 download_simulation = task_api.download_simulation
 get_tasks = task_api.get_tasks
+move = workspace.move
+duplicate = workspace.duplicate
+list_users = workspace.list_users
+get_activity = workspace.get_activity
 estimate_cost = task_api.estimate_cost
 real_cost = task_api.real_cost
 _upload = task_api._upload

@@ -131,7 +131,7 @@ def _start_and_monitor_mode_solver_task(
     from tidy3d.web.api.webapi import monitor
 
     monitor(solver_id, verbose=verbose)
-    status = task_api.get_info(solver_id, verbose=False).status
+    status = task_api._get_task_info(solver_id, verbose=False).status
 
     if status in ERROR_STATES:
         raise WebError("Error running mode solver.")

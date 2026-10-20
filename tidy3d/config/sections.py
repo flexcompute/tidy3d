@@ -550,6 +550,18 @@ def apply_adjoint(config: AdjointConfig) -> None:
     )
 
 
+@register_section("workspace")
+class WorkspaceConfig(ConfigSection):
+    """Default workspace for cloud tasks and folder lookup."""
+
+    default: Literal["private", "shared"] = Field(
+        default="private",
+        title="Workspace",
+        description="Workspace used for folder lookup and new cloud tasks.",
+        json_schema_extra={"persist": True},
+    )
+
+
 @register_section("run")
 class RunConfig(ConfigSection):
     """Default run configuration for web submissions."""
@@ -957,4 +969,5 @@ __all__ = [
     "SimulationConfig",
     "ValidationConfig",
     "WebConfig",
+    "WorkspaceConfig",
 ]

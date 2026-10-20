@@ -109,8 +109,8 @@ class WorkflowStepJobAdapter:
 
         self.job._workflow_set_step_status(self.step.name, "running")
 
-    def get_info(self) -> TaskInfo:
-        return task_api.get_info(task_id=self.task_id, verbose=self.job.verbose)
+    def _get_task_info(self) -> TaskInfo:
+        return task_api._get_task_info(task_id=self.task_id, verbose=self.job.verbose)
 
     def _estimate_cost_info(self, verbose: bool = True) -> task_api.FlexCreditEstimate:
         """Estimate FlexCredit charge details for this workflow step task."""
@@ -333,7 +333,7 @@ class UniformMultiStepBatchRunner:
             task_name = adapter.task_name
             job = adapter.job
             step = adapter.step
-            status = task_api.get_info(task_id=adapter.task_id, verbose=False).status
+            status = task_api._get_task_info(task_id=adapter.task_id, verbose=False).status
 
             job._workflow_sync_step_status(step, status)
 
@@ -608,7 +608,7 @@ class UniformMultiStepBatchRunner:
         def poll_active_work(progress: Progress | None) -> bool:
             completed_adapters: list[WorkflowStepJobAdapter] = []
             for task_name, adapter in list(active_jobs.items()):
-                status = adapter.get_info().status
+                status = adapter._get_task_info().status
                 update_progress(progress, task_name, adapter.step.name, status)
                 if status in END_STATES:
                     completed_adapters.append(adapter)

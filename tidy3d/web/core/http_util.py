@@ -171,6 +171,7 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
     def wrapper(*args: Any, **kwargs: Any) -> JSONType:
         """The wrapper function."""
         suppress_404 = kwargs.pop("suppress_404", False)
+        log_error = kwargs.pop("log_error", True)
 
         # Extend some capabilities of func
         resp = func(*args, **kwargs)
@@ -179,7 +180,9 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
             if resp.status_code == ResponseCodes.NOT_FOUND.value:
                 if suppress_404:
                     return None
-                raise WebNotFoundError(_build_not_found_message())
+                raise WebNotFoundError(
+                    _build_not_found_message(), status_code=resp.status_code, log_error=log_error
+                )
             try:
                 json_resp = resp.json()
             except Exception:
@@ -213,6 +216,11 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
                             parts.append(f"error={val!s}")
                         continue
                     parts.append(str(val))
+                holder = json_resp.get("lockHolder")
+                if isinstance(holder, dict):
+                    name = holder.get("name") or holder.get("userId")
+                    if name:
+                        parts.append(f"Edit lock held by {name}")
                 if parts:
                     err_msg = "; ".join(parts)
             if not err_msg:
@@ -227,7 +235,7 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
             except Exception:
                 pass
 
-            raise WebError(err_msg)
+            raise WebError(err_msg, status_code=resp.status_code, log_error=log_error)
 
         if not resp.text:
             return None

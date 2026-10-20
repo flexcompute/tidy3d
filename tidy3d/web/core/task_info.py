@@ -7,7 +7,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+
+from .workspace import Workspace
 
 
 class TaskBase(BaseModel, ABC):
@@ -57,6 +59,23 @@ class TaskInfo(TaskBase):
     taskName: str | None = None
     """Name of the task."""
 
+    workspace: Workspace | None = None
+    """Workspace containing the task, when supplied by the service."""
+
+    workspaceId: str | None = None
+    """Service workspace identifier."""
+
+    creator: str | None = Field(default=None, validation_alias=AliasChoices("creator", "createdBy"))
+    """Creator reported by the service; ``None`` when unavailable."""
+
+    folderId: str | None = Field(
+        default=None, validation_alias=AliasChoices("folderId", "projectId")
+    )
+    """Identifier of the containing folder."""
+
+    groupId: str | None = None
+    """Identifier of the containing project, shared by its saved revisions."""
+
     nodeSize: int | None = None
     """Size of the node allocated for the task."""
 
@@ -65,6 +84,9 @@ class TaskInfo(TaskBase):
 
     status: str | None = None
     """Current status of the task."""
+
+    operationStatus: str | None = None
+    """Project move/copy status when reported, separate from the solver status."""
 
     realCost: float | None = None
     """Actual cost incurred by the task."""
@@ -139,7 +161,7 @@ class TaskInfo(TaskBase):
     """Blocking information for the task."""
 
     version: str | None = None
-    """Version of the task."""
+    """Saved project revision associated with this task, separate from the solver version."""
 
 
 class RunInfo(TaskBase):

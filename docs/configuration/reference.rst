@@ -310,6 +310,27 @@ grouping.
      - Maximum number of adjoint simulations dispatched per forward solve (must be positive).
 
 
+Workspace (``config.workspace``)
+--------------------------------
+
+Selects the default workspace for cloud tasks and folder lookup. The
+``workspace`` argument to ``web.move`` or ``web.duplicate`` overrides this setting.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 18 10 48
+
+   * - Option
+     - Default
+     - Persisted
+     - Description
+   * - ``default``
+     - ``"private"``
+     - Yes
+     - Workspace used for folder lookup and new cloud tasks: ``"private"`` or ``"shared"``.
+       Shared requests require company membership and an enabled shared workspace.
+
+
 Web (``config.web``)
 --------------------
 

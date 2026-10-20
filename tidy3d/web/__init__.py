@@ -37,16 +37,21 @@ from .api.webapi import (
     # run, # NOTE: use autograd one now (see below)
     upload,
 )
+from .api.workspace import duplicate, get_activity, list_users, move
 from .cli import tidy3d_cli
 from .cli.config import configure_fn as configure
+from .core.workspace import ActivityEntry, UserInfo, WorkspaceInfo, list_workspaces
 from .diagnostics import diagnose_connection, diagnose_environment, diagnose_report
 from .execution_cost_limit import execution_flexcredit_status
 from .license import refresh_licenses
 
 __all__ = [
+    "ActivityEntry",
     "Batch",
     "BatchData",
     "Job",
+    "UserInfo",
+    "WorkspaceInfo",
     "abort",
     "account",
     "configure",
@@ -58,14 +63,19 @@ __all__ = [
     "download",
     "download_json",
     "download_log",
+    "duplicate",
     "estimate_cost",
     "execution_flexcredit_status",
+    "get_activity",
     "get_info",
     "get_run_info",
     "get_tasks",
+    "list_users",
+    "list_workspaces",
     "load",
     "load_simulation",
     "monitor",
+    "move",
     "real_cost",
     "refresh_licenses",
     "run",
