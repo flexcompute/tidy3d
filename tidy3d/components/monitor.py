@@ -1293,14 +1293,20 @@ class PointCloudFieldMonitor(FreqMonitor):
             preserve_index=True,
         )
 
+    # Point-cloud monitors call the core value rules instead of using the construction path:
+    # translating one dumps and reparses the point array, which about doubles the construction
+    # time of a million-point cloud.
     @field_validator("fields")
     @classmethod
     def _validate_unique_fields(
         cls, val: tuple[PointCloudFieldComponent, ...]
     ) -> tuple[PointCloudFieldComponent, ...]:
         """Reject duplicate point-cloud field components before sparse reconstruction."""
-        if len(set(val)) != len(val):
-            raise ValueError("Point-cloud field monitor components must be unique.")
+        from flexcompute.core._migration.em.monitor.validation import (
+            validate_point_cloud_fields_unique,
+        )
+
+        raise_first_error(validate_point_cloud_fields_unique(val), ValueError)
         return val
 
     @staticmethod
@@ -1425,34 +1431,21 @@ class DipoleEmissionMonitor(PointCloudFieldMonitor):
     @model_validator(mode="after")
     def _validate_dipole_emission_metadata(self) -> Self:
         """Validate reduction metadata dimensions."""
-        position_weights = np.asarray(self.position_weights, dtype=float)
-        if position_weights.shape not in ((self.num_points,), np.asarray(self.points.values).shape):
-            self._raise_validation_error_at_loc(
-                "'position_weights' must have one value per point or match the shape of 'points'.",
-                "position_weights",
-            )
-        if not np.all(np.isfinite(position_weights)) or np.any(position_weights < 0):
-            self._raise_validation_error_at_loc(
-                "'position_weights' must contain finite nonnegative values.",
-                "position_weights",
-            )
-        if not np.any(position_weights > 0):
-            self._raise_validation_error_at_loc(
-                "'position_weights' must not be all zero (no emitters).",
-                "position_weights",
-            )
+        # Same reason as ``PointCloudFieldMonitor._validate_unique_fields`` above: the point
+        # array makes translating this class on construction expensive.
+        from flexcompute.core._migration.em.monitor.validation import (
+            validate_dipole_emission_metadata,
+        )
 
-        if len(set(self.store_position_indexes)) != len(self.store_position_indexes):
-            self._raise_validation_error_at_loc(
-                "'store_position_indexes' must not contain duplicates.",
-                "store_position_indexes",
-            )
-        if self.store_position_indexes and max(self.store_position_indexes) >= self.num_points:
-            self._raise_validation_error_at_loc(
-                "'store_position_indexes' entries must be valid point indexes.",
-                "store_position_indexes",
-            )
-
+        _present(
+            self,
+            validate_dipole_emission_metadata(
+                self.position_weights,
+                self.num_points,
+                np.asarray(self.points.values).shape,
+                self.store_position_indexes,
+            ),
+        )
         return self
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
