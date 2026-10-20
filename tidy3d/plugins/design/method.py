@@ -8,7 +8,7 @@ from inspect import signature
 from typing import TYPE_CHECKING, Annotated, Any, Literal, overload
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import inf
@@ -872,6 +872,33 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Set the initial positions of the swarm using a numpy array of appropriate size.",
     )
 
+    bh_strategy: Literal[
+        "nearest", "random", "shrink", "reflective", "intermediate", "periodic"
+    ] = Field(
+        default="periodic",
+        title="Boundary Handling Strategy",
+        description="How a particle that leaves the parameter bounds is handled, passed to pyswarms as ``bh_strategy``. See the `PySwarms docs <https://pyswarms.readthedocs.io/en/latest/api/pyswarms.handlers.html>`_ for details.",
+    )
+
+    velocity_clamp: tuple[float, float] | None = Field(
+        default=None,
+        title="Velocity Clamp",
+        description="Minimum and maximum velocity of the particles per iteration, in parameter units, passed to pyswarms as ``velocity_clamp``. Unbounded by default.",
+    )
+
+    init_velocity: np.ndarray | None = Field(
+        default=None,
+        title="Initial Swarm Velocities",
+        description="Set the initial velocities of the swarm using a numpy array of the same shape as ``init_pos``. By default pyswarms draws them randomly.",
+    )
+
+    @field_validator("velocity_clamp")
+    @classmethod
+    def _velocity_clamp_valid(cls, val: tuple[float, float] | None) -> tuple[float, float] | None:
+        if val is not None and not (np.all(np.isfinite(val)) and val[0] <= val[1]):
+            raise ValueError(f"'velocity_clamp' must be finite with min <= max. Got {val}.")
+        return val
+
     def _get_run_count(self, parameters: list[ParameterType] | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.n_particles * self.n_iter
@@ -918,7 +945,12 @@ class MethodParticleSwarm(MethodOptimize, ABC):
                 min_bound.append(param.span[0])
                 max_bound.append(param.span[1])
 
-        bounds: tuple[list[float], list[float]] = (min_bound, max_bound)
+        bounds = (np.array(min_bound, dtype=float), np.array(max_bound, dtype=float))
+        if np.any(bounds[0] == bounds[1]):
+            fixed = [p.name for p, lo, hi in zip(parameters, *bounds) if lo == hi]
+            raise ValueError(
+                f"'MethodParticleSwarm' does not support parameters with zero-width bounds: {fixed}."
+            )
 
         def fitness_function(solution: NDArray[np.floating]) -> NDArray[np.floating]:
             """Fitness function for PSO. Input format cannot be changed"""
@@ -939,6 +971,17 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             # Set as negative as PSO uses a minimising cost function
             return -np.array(sol_out)
 
+        init_velocity = None
+        if self.init_velocity is not None:
+            init_velocity = np.asarray(self.init_velocity, dtype=float)
+            expected_shape = (self.n_particles, len(parameters))
+            if init_velocity.shape != expected_shape:
+                raise ValueError(
+                    f"'init_velocity' must have shape {expected_shape}, i.e. "
+                    "(n_particles, number of parameters), to match the swarm positions. "
+                    f"Got shape {init_velocity.shape}."
+                )
+
         options = {"c1": self.cognitive_coeff, "c2": self.social_coeff, "w": self.weight}
         optimizer = GlobalBestPSO(
             n_particles=self.n_particles,
@@ -948,8 +991,12 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             ftol=self.ftol,
             ftol_iter=self.ftol_iter,
             init_pos=self.init_pos,
+            bh_strategy=self.bh_strategy,
+            velocity_clamp=self.velocity_clamp,
             # TODO: including oh_strategy would be nice but complicated to specify with pydantic oh_strategy={"w": "exp_decay"},
         )
+        if init_velocity is not None:
+            optimizer.swarm.velocity = init_velocity
 
         opt_out = optimizer.optimize(fitness_function, self.n_iter, verbose=True)
 
