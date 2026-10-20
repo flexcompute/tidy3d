@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-from flexcompute.core.validation import raise_first_error
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
-
-if TYPE_CHECKING:
-    from tidy3d.components.autograd import TracedSize
 
 
 class VolumeMeshMonitor(HeatChargeMonitor):
@@ -23,14 +19,3 @@ class VolumeMeshMonitor(HeatChargeMonitor):
         title="Unstructured Grid",
         description="Return the original unstructured grid.",
     )
-
-    @field_validator("size")
-    @classmethod
-    def _at_least_2d(cls, val: TracedSize) -> TracedSize:
-        """Validate that the monitor has at least two non-zero dimensions."""
-        from flexcompute.core._migration.tcad.validation import (
-            validate_volume_mesh_monitor_size,
-        )
-
-        raise_first_error(validate_volume_mesh_monitor_size(val), ValueError)
-        return val

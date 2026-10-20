@@ -5,13 +5,11 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING
 
-from flexcompute.core.validation import raise_first_error
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.tcad.viz import plot_params_heat_source
-from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
     from tidy3d.components.viz import PlotParams
@@ -35,18 +33,6 @@ class StructureBasedHeatChargeSource(AbstractHeatChargeSource):
         title="Target Structures",
         description="Names of structures where to apply heat source.",
     )
-
-    @field_validator("structures")
-    @classmethod
-    def check_non_empty_structures(cls, val: tuple[str, ...]) -> tuple[str, ...]:
-        """Error if source doesn't point at any structures."""
-        from flexcompute.core._migration.tcad.validation import (
-            validate_heat_charge_source_structures,
-        )
-
-        raise_first_error(validate_heat_charge_source_structures(val), SetupError)
-
-        return val
 
 
 class GlobalHeatChargeSource(AbstractHeatChargeSource):

@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from flexcompute.core.validation import raise_first_error
-from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.tcad.heat import FluidMedium
@@ -310,15 +309,6 @@ class ThermalContactResistance(HeatChargeBC):
         description=f"Interfacial thermal resistance in units of {THERMAL_RESISTANCE}.",
         json_schema_extra={"units": THERMAL_RESISTANCE},
     )
-
-    @field_validator("resistance")
-    @classmethod
-    def _resistance_must_be_finite(cls, val: float) -> float:
-        """Reject non-finite resistance values."""
-        from flexcompute.core._migration.tcad.validation import validate_thermal_resistance
-
-        raise_first_error(validate_thermal_resistance(val), ValueError)
-        return val
 
     @classmethod
     def from_si_units(cls, resistance: PositiveFloat) -> Self:

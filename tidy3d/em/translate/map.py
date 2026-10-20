@@ -327,6 +327,27 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.tcad.boundary.heat:ThermalContactResistance": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.boundary:ThermalContactResistance",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.monitors.mesh:VolumeMeshMonitor": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.monitor:VolumeMeshMonitor",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.source.abstract:StructureBasedHeatChargeSource": None,
+    "tidy3d.components.tcad.source.heat:HeatSource": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.source:HeatSource",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.source.heat:UniformHeatSource": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.source:UniformHeatSource",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.tcad.grid:GridRefinementLine": ComponentScope(
         "flexcompute.core._migration.tcad.schema.grid:GridRefinementLine",
         "flexcompute.core._migration.tcad.validation:validate",
@@ -552,6 +573,9 @@ COMPONENT_ERROR_TYPES = {
     "em.monitor.exclude_surfaces_on_surface": "tidy3d.exceptions:SetupError",
     "em.monitor.stop_before_start": "tidy3d.exceptions:SetupError",
     "tcad.doping_box_requires_3d": "tidy3d.exceptions:SetupError",
+    "tcad.nonfinite_thermal_resistance": "builtins:ValueError",
+    "tcad.volume_mesh_monitor_at_least_2d": "builtins:ValueError",
+    "tcad.heat_charge_source_requires_structure": "tidy3d.exceptions:SetupError",
 }
 
 
