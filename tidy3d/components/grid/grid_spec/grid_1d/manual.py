@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.grid.validation import (
+    validate_boundary_coords,
+    validate_uniform_grid_spacing,
+)
+from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
     PositiveFloat,
@@ -19,8 +24,6 @@ if TYPE_CHECKING:
     from tidy3d.components.structure import Structure, StructureType
     from tidy3d.components.types import Axis
 
-
-from tidy3d.components.grid.grid_spec.constants import MIN_GRID_SPACING, UNITS_HELP_URL
 
 from .base import GridSpec1d
 
@@ -58,12 +61,9 @@ class UniformGrid(GridSpec1d):
         """
         Ensure 'dl' is not too small.
         """
-        if val < MIN_GRID_SPACING:
-            raise SetupError(
-                f"Uniform grid spacing 'dl' is {val} µm. "
-                "Please check your units! For more info on Tidy3D units, see: "
-                f"{UNITS_HELP_URL}"
-            )
+        # Stays a field check: the 1D grids keep their schema in the mirror, so there is no
+        # moved schema for the construction path to run this rule on.
+        raise_first_error(validate_uniform_grid_spacing(val), SetupError)
         return val
 
     def _make_coords_initial(
@@ -193,16 +193,9 @@ class CustomGridBoundaries(GridSpec1d):
         """
         Ensure 'coords' is sorted and has at least 2 entries.
         """
-        if len(val) < 2:
-            raise SetupError("You must supply at least 2 entries for 'coords'.")
-        # Ensure coords is sorted
-        positive_diff = np.diff(val) > 0
-        if not np.all(positive_diff):
-            violations = np.where(np.diff(val) <= 0)[0] + 1
-            raise SetupError(
-                "'coords' must be strictly increasing (sorted in ascending order). "
-                f"The entries at the following indices violated this requirement: {violations}."
-            )
+        # Stays a field check: the 1D grids keep their schema in the mirror, so there is no
+        # moved schema for the construction path to run this rule on.
+        raise_first_error(validate_boundary_coords(val), SetupError)
         return val
 
 

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Literal as _Literal
 
+from flexcompute.core._migration.em.grid.schema.validation_schema import (
+    MIN_GRID_SPACING,
+    UNITS_HELP_URL,
+)
 from pydantic import NonNegativeFloat as _NonNegativeFloat
 from pydantic import NonNegativeInt as _NonNegativeInt
 from pydantic import PositiveFloat as _PositiveFloat
@@ -34,9 +38,7 @@ from .constants import (
     GAP_MESHING_TOL,
     GAP_REFINEMENT_WARNING_THRESH,
     INPLANE_OVERRIDE_UNION_MAX_ITERS,
-    MIN_GRID_SPACING,
     MIN_STEP_BOUND_SCALE,
-    UNITS_HELP_URL,
     CornersAndConvexity,
     _GeneratedGridSizeError,
 )

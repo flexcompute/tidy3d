@@ -9,14 +9,6 @@ from tidy3d.exceptions import SetupError
 # estimated minimal grid size
 MIN_STEP_BOUND_SCALE = 0.5
 
-# Minimum physically meaningful grid spacing in micrometers. Smaller values usually indicate
-# that input quantities were specified with the wrong unit scale.
-MIN_GRID_SPACING = 1e-6
-UNITS_HELP_URL = (
-    "https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/faq/"
-    "What-are-the-units-used-in-the-simulation.html"
-)
-
 # Default refinement factor in GridRefinement when both dl and refinement_factor are not defined
 DEFAULT_REFINEMENT_FACTOR = 2
 

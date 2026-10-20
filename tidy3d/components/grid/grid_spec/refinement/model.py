@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
 from pydantic import (
     Field,
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
-    model_validator,
 )
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -20,10 +18,8 @@ from tidy3d.components.grid.grid_spec.constants import DEFAULT_REFINEMENT_FACTOR
 from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import Axis
 from tidy3d.constants import MICROMETER, inf
-from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.types import Coordinate, CoordinateOptional
 
 
@@ -266,17 +262,6 @@ class LayerRefinementSpec(Box):
         "This can speed up the performance "
         "of corner finder when there are many structures crossing the plane.",
     )
-
-    @model_validator(mode="after")
-    def _finite_size_along_axis(self) -> Self:
-        if self.size is None:
-            return self
-        """size must be finite along axis."""
-        if np.isinf(self.size[self.axis]):
-            self._raise_validation_error_at_loc(
-                SetupError("'size' must take finite values along 'axis' dimension."), "size"
-            )
-        return self
 
 
 from .construction import from_bounds, from_layer_bounds, from_structures  # noqa: E402

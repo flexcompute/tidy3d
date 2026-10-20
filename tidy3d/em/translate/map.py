@@ -520,6 +520,12 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.monitor.validation:validate",
         on_construction=True,
     ),
+    # grid: layer refinement
+    "tidy3d.components.grid.grid_spec.refinement.model:LayerRefinementSpec": ComponentScope(
+        "flexcompute.core._migration.em.grid.schema.grid_spec.refinement.model:LayerRefinementSpec",
+        "flexcompute.core._migration.em.grid.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {

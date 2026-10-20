@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.grid.schema.validation_schema import (
+    MIN_GRID_SPACING,
+    UNITS_HELP_URL,
+)
 
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords, Grid
@@ -26,8 +30,6 @@ if TYPE_CHECKING:
 from tidy3d.components.grid.grid_spec.constants import (
     DL_MIN_FROM_GAPS_FRACTION,
     GAP_REFINEMENT_WARNING_THRESH,
-    MIN_GRID_SPACING,
-    UNITS_HELP_URL,
     _GeneratedGridSizeError,
 )
 from tidy3d.components.grid.grid_spec.grid_1d import (
