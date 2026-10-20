@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from .model import LayerRefinementSpec
 
 
-from .model import GridRefinement
+from .grid_refinement import GridRefinement
 
 
 def length_axis(self: LayerRefinementSpec) -> float:
