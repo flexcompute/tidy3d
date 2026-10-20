@@ -393,6 +393,21 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.apodization.schema:ApodizationSpec",
         "flexcompute.core._migration.em.apodization.validation:validate",
     ),
+    "tidy3d.components.monitor:SurfaceIntegrationMonitor": None,
+    "tidy3d.components.monitor:AbstractFluxMonitor": None,
+    "tidy3d.components.monitor:AbstractFieldProjectionMonitor": None,
+    "tidy3d.components.monitor:AbstractSurfaceMonitor": None,
+    "tidy3d.components.monitor:TimeMonitor": None,
+    "tidy3d.components.monitor:FluxMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FluxMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:FluxTimeMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FluxTimeMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.monitor:FieldTimeMonitor": ComponentScope(
         "flexcompute.core._migration.em.monitor.schema:FieldTimeMonitor",
         "flexcompute.core._migration.em.monitor.validation:validate",
@@ -460,6 +475,51 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.monitor:FieldProjectionAngleMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FieldProjectionAngleMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:FieldProjectionCartesianMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FieldProjectionCartesianMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:FieldProjectionKSpaceMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FieldProjectionKSpaceMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:DirectivityMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:DirectivityMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:DiffractionMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:DiffractionMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:FieldProjectionSurface": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FieldProjectionSurface",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:SurfaceFieldMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:SurfaceFieldMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:SurfaceFieldStructureMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:SurfaceFieldStructureMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.monitor:SurfaceFieldTimeMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:SurfaceFieldTimeMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -482,6 +542,8 @@ COMPONENT_ERROR_TYPES = {
     "em.invdes.initialization_bound_order": "tidy3d.exceptions:ValidationError",
     "em.invdes.multi_mirror_symmetry": "tidy3d.exceptions:ValidationError",
     # monitor
+    "em.monitor.window_size_for_surface": "tidy3d.exceptions:ValidationError",
+    "em.monitor.exclude_surfaces_on_surface": "tidy3d.exceptions:SetupError",
     "em.monitor.stop_before_start": "tidy3d.exceptions:SetupError",
     "tcad.doping_box_requires_3d": "tidy3d.exceptions:SetupError",
 }

@@ -19,7 +19,7 @@ from pydantic import (
 
 from tidy3d._runtime import always_validate
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
+from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND
 from tidy3d.em.translate.components import _present
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -451,18 +451,6 @@ class TimeMonitor(Monitor, ABC):
 
             object.__setattr__(self, "interval", 1)
 
-        return self
-
-    @model_validator(mode="after")
-    def stop_greater_than_start(self) -> Self:
-        """Ensure sure stop is greater than or equal to start."""
-        # A thin check on the abstract base: ``FluxTimeMonitor`` and ``SurfaceFieldTimeMonitor``
-        # are not validated on construction yet (they move with the surface monitors), and they
-        # need it. The classes that are validated on construction report it from the core
-        # facade before this runs.
-        from flexcompute.core._migration.em.monitor.validation import validate_stop_after_start
-
-        raise_first_error(validate_stop_after_start(self.start, self.stop), SetupError)
         return self
 
     def time_inds(self, tmesh: ArrayFloat1D) -> tuple[int, int]:
@@ -1815,21 +1803,6 @@ class SurfaceIntegrationMonitor(AbstractRecordInPMLMonitor, ABC):
                 object.__setattr__(self, "normal_dir", "+")
         return self
 
-    @model_validator(mode="after")
-    def check_excluded_surfaces(self) -> Self:
-        """Error if ``exclude_surfaces`` is provided for a surface monitor."""
-        exclude_surfaces = self.exclude_surfaces
-        if exclude_surfaces is None:
-            return self
-        name = self.name
-        size = self.size
-        if size.count(0.0) > 0:
-            raise SetupError(
-                f"Can't specify ``exclude_surfaces`` for surface monitor {name}; "
-                "valid for box monitors only."
-            )
-        return self
-
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         # Need to store all fields on the integration surface. Frequency-domain monitors store at
@@ -1923,20 +1896,6 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
             use_colocated_integration=self.use_colocated_integration,
             record_in_pml=self.record_in_pml,
         )
-
-    @model_validator(mode="after")
-    def _validate_adjoint_surfaces_exist(self) -> Self:
-        """Adjoint tracking requires at least one surface for hidden field storage."""
-        if self.enable_adjoint and not self.integration_surfaces:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    f"FluxMonitor '{self.name}' has 'enable_adjoint=True' but no "
-                    "integration surfaces. Remove at least one entry from 'exclude_surfaces' "
-                    "or set 'enable_adjoint=False' for this monitor."
-                ),
-                "exclude_surfaces",
-            )
-        return self
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -2292,9 +2251,13 @@ class FieldProjectionSurface(Tidy3dBaseModel):
     @classmethod
     def is_plane(cls, val: FieldMonitor) -> FieldMonitor:
         """Ensures that the monitor is a plane, i.e., its ``size`` attribute has exactly 1 zero"""
-        size = val.size
-        if size.count(0.0) != 1:
-            raise ValidationError(f"Monitor '{val.name}' must be planar, given size={size}")
+        from flexcompute.core._migration.em.monitor.validation import (
+            validate_projection_surface_planar,
+        )
+
+        # Thin check kept for ``field order``: it reports next to the other field errors, which the
+        # construction path cannot reproduce. The facade repeats it after construction.
+        raise_first_error(validate_projection_surface_planar(val.name, val.size), ValidationError)
         return val
 
 
@@ -2362,34 +2325,15 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "non-default ``medium``.",
     )
 
-    @model_validator(mode="after")
-    def window_size_for_surface(self) -> Self:
-        """Ensures that windowing is applied for surface monitors only."""
-        val = self.window_size
-        size = self.size
-        name = self.name
-
-        if size.count(0.0) != 1:
-            if val != (0, 0):
-                raise ValidationError(
-                    f"A non-zero 'window_size' cannot be used for projection monitor '{name}'. "
-                    "Windowing can be applied only for surface projection monitors."
-                )
-        return self
-
     @field_validator("window_size")
     @classmethod
-    def window_size_leq_one(
-        cls: type[AbstractFieldProjectionMonitor],
-        val: tuple[float, float],
-        info: FieldValidationInfo,
-    ) -> tuple[float, float]:
+    def window_size_leq_one(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Ensures that each component of the window size is less than or equal to 1."""
-        if val[0] > 1 or val[1] > 1:
-            raise ValidationError(
-                f"Each component of 'window_size' for monitor '{info.field_name}' "
-                "must be less than or equal to 1."
-            )
+        from flexcompute.core._migration.em.monitor.validation import validate_window_size_leq_one
+
+        # Thin check kept for ``field order``: it reports next to the other field errors, which the
+        # construction path cannot reproduce. The facade repeats it after construction.
+        raise_first_error(validate_window_size_leq_one(val), ValidationError)
         return val
 
     @property
@@ -2902,24 +2846,6 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
         "associated with the background medium. Must be in the range [-1, 1].",
     )
 
-    @model_validator(mode="after")
-    def reciprocal_vector_range(self) -> Self:
-        """Ensure that ux, uy are in [-1, 1]."""
-        maxabs_ux = max(list(self.ux), key=abs)
-        maxabs_uy = max(list(self.uy), key=abs)
-        name = self.name
-        if maxabs_ux > 1:
-            self._raise_validation_error_at_loc(
-                SetupError(f"Entries of 'ux' must lie in the range [-1, 1] for monitor {name}."),
-                "ux",
-            )
-        if maxabs_uy > 1:
-            self._raise_validation_error_at_loc(
-                SetupError(f"Entries of 'uy' must lie in the range [-1, 1] for monitor {name}."),
-                "uy",
-            )
-        return self
-
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 1 complex number per pair of grid points, per frequency,
@@ -2952,6 +2878,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
     Example
     -------
+    >>> from tidy3d.constants import inf
     >>> monitor = DiffractionMonitor(
     ...     center=(1,2,3),
     ...     size=(inf,inf,0),
@@ -2987,11 +2914,11 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     @classmethod
     def diffraction_monitor_size(cls: type[DiffractionMonitor], val: Size) -> Size:
         """Ensure that the monitor is infinite in the transverse direction."""
-        if val.count(inf) != 2:
-            raise SetupError(
-                "A 'DiffractionMonitor' must have a size of 'td.inf' along both "
-                f"transverse directions, given size={val}."
-            )
+        from flexcompute.core._migration.em.monitor.validation import validate_diffraction_size
+
+        # Thin check kept for ``field order``: it reports next to the other field errors, which the
+        # construction path cannot reproduce. The facade repeats it after construction.
+        raise_first_error(validate_diffraction_size(val), SetupError)
         return val
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -3039,19 +2966,6 @@ class AbstractSurfaceMonitor(Monitor, ABC):
     )
 
     _check_volumetic = assert_volumetric()
-
-    @model_validator(mode="after")
-    def _check_fields_not_empty(self) -> Self:
-        """A surface monitor with no field components records nothing."""
-        if not self.fields:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Surface monitors require at least one field component; 'fields' cannot be "
-                    "empty. Specify 'E', 'H', or both."
-                ),
-                "fields",
-            )
-        return self
 
     @model_validator(mode="after")
     def _warn_beta_stage(self) -> Self:
@@ -3170,11 +3084,13 @@ class SurfaceFieldStructureMonitor(SurfaceFieldMonitor):
     @classmethod
     def _require_magnetic_field(cls, val: tuple[EMSurfaceField, ...]) -> tuple[EMSurfaceField, ...]:
         """Surface loss needs ``H``: reject a field selection without it before the solver runs."""
-        if "H" not in val:
-            raise ValueError(
-                "'SurfaceFieldStructureMonitor' must record 'H', which the surface loss density "
-                "and 'per_structure_loss' are computed from; include 'H' in 'fields'."
-            )
+        from flexcompute.core._migration.em.monitor.validation import (
+            validate_surface_structure_fields,
+        )
+
+        # Thin check kept for ``field order``: it reports next to the other field errors, which the
+        # construction path cannot reproduce. The facade repeats it after construction.
+        raise_first_error(validate_surface_structure_fields(val), ValueError)
         return val
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
