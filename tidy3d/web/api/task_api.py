@@ -1286,7 +1286,7 @@ def load(
     simulation_cache = resolve_local_cache()
     should_store_in_cache = store_in_cache and simulation_cache is not None and not from_cache
     if should_store_in_cache and (not reuse_existing_path or cache_simulation is not None):
-        if reuse_existing_path:
+        if cache_simulation is not None:
             workflow_type = task_type_name_of(cache_simulation)
         else:
             info = get_info(task_id, verbose=False)

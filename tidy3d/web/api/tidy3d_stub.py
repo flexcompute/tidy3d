@@ -230,6 +230,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                     ModalComponentModelerData,
                 ),
             )
+            and stub_data.log is not None
             and "WARNING" in stub_data.log
             and not warned_about_warnings
         ):

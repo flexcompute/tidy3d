@@ -284,7 +284,11 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             if preprocess_cache_mode != "off":
                 payload["preprocessCacheMode"] = preprocess_cache_mode
             resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
-        return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
+        task = SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
+        if task_type not in MODELER_TASK_TYPES:
+            # never a batch task; recording that spares TaskFactory.get its rf/task probe
+            TaskFactory.register(task.task_id, SimulationTask)
+        return task
 
     def get_url(self) -> str:
         base = str(config.web.website_endpoint or "")

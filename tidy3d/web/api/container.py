@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import concurrent
+import contextvars
 import hashlib
 import os
 import shutil
@@ -114,6 +115,20 @@ def _validate_batch_mapping_key(key: object) -> None:
             "Batch simulation mapping keys must be strings. "
             f"Got key {key!r} of type {type(key).__name__!r}."
         )
+
+
+class _ContextThreadPoolExecutor(ThreadPoolExecutor):
+    """Thread pool running each submitted call in a copy of the submitter's context.
+
+    Worker threads start with an empty context, so request-local state such as the
+    active client identity (which selects the product protocol of every request)
+    would otherwise not reach the jobs a batch uploads, starts, and downloads.
+    """
+
+    def submit(
+        self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any
+    ) -> concurrent.futures.Future[Any]:
+        return super().submit(contextvars.copy_context().run, fn, *args, **kwargs)
 
 
 def _is_flat_batch_simulation_mapping(simulations: object) -> bool:
@@ -2795,7 +2810,7 @@ class Batch(WebContainer):
                 except Exception as exc:  # pragma: no cover - exercised via callers
                     return task_name, job, temp_job_path, exc
 
-            with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            with _ContextThreadPoolExecutor(max_workers=self.num_workers) as executor:
                 futures = {
                     executor.submit(_run_job, task_name, job): task_name
                     for task_name, job in multi_step_jobs.items()
@@ -3229,7 +3244,7 @@ class Batch(WebContainer):
                 log_cached_jobs=True,
             )
 
-        with ThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
+        with _ContextThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
             upload_futures: dict[concurrent.futures.Future[Any], Job | WorkflowStepJobAdapter] = {}
             for job in jobs_to_upload:
                 _sidecar_artifacts = (
@@ -3378,7 +3393,7 @@ class Batch(WebContainer):
                     if resolve_pay_type(job.pay_type) != PayType.VGPU
                 }
             )
-        with ThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
+        with _ContextThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
             start_futures: dict[concurrent.futures.Future[Any], Job | WorkflowStepJobAdapter] = {}
             for job in jobs_to_start:
                 fut = executor.submit(
@@ -3482,7 +3497,7 @@ class Batch(WebContainer):
 
         if download_on_success:
             self._check_path_dir(path=path_dir)
-            download_executor = ThreadPoolExecutor(max_workers=self.num_workers)
+            download_executor = _ContextThreadPoolExecutor(max_workers=self.num_workers)
 
         def _remember_terminal_status(task_name: TaskName, job: Job, status: str) -> None:
             if status not in END_STATES:
@@ -4022,7 +4037,7 @@ class Batch(WebContainer):
         if not fns:
             return
 
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+        with _ContextThreadPoolExecutor(max_workers=self.num_workers) as executor:
             futures = [executor.submit(fn) for fn in fns]
 
             if self.verbose:
