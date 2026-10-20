@@ -408,6 +408,58 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.monitor.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.material.tcad.heat:AbstractThermalPropertyModel": None,
+    "tidy3d.components.material.tcad.heat:PowerLawConductivity": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:PowerLawConductivity",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.material.tcad.heat:PolynomialConductivity": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:PolynomialConductivity",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.material.tcad.heat:InversePolynomialConductivity": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:InversePolynomialConductivity",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.material.tcad.heat:PowerLawHeatCapacity": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:PowerLawHeatCapacity",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.material.tcad.heat:PolynomialHeatCapacity": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:PolynomialHeatCapacity",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.material.tcad.heat:SolidMedium": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:SolidMedium",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.material.tcad.heat:SolidSpec": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.heat_medium:SolidSpec",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.doping:AbstractDopingBox": None,
+    "tidy3d.components.tcad.doping:ConstantDoping": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.doping:ConstantDoping",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.doping:GaussianDoping": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.doping:GaussianDoping",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.doping:CustomDoping": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.doping:CustomDoping",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -431,6 +483,7 @@ COMPONENT_ERROR_TYPES = {
     "em.invdes.multi_mirror_symmetry": "tidy3d.exceptions:ValidationError",
     # monitor
     "em.monitor.stop_before_start": "tidy3d.exceptions:SetupError",
+    "tcad.doping_box_requires_3d": "tidy3d.exceptions:SetupError",
 }
 
 

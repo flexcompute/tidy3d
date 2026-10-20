@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from math import isfinite
 from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.polynomial import polynomial
-from pydantic import Field, FiniteFloat, NonNegativeFloat, PositiveFloat, model_validator
+from pydantic import Field, FiniteFloat, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.tensor import AbstractPrincipalAxesTensor
@@ -292,28 +291,6 @@ class AbstractThermalPropertyModel(ABC, Tidy3dBaseModel):
         json_schema_extra={"units": KELVIN},
     )
 
-    @model_validator(mode="after")
-    def _check_temperature_range_and_positivity(self) -> Self:
-        """The range must be ordered, finite and contain the reference temperature, and the
-        factor positive over it, since it multiplies a positive reference property."""
-        t_min, t_max = self.temperature_range
-        if not (isfinite(t_max) and t_min < t_max):
-            self._raise_validation_error_at_loc(
-                f"'temperature_range' must satisfy T_min < T_max < inf, got {self.temperature_range}.",
-                "temperature_range",
-            )
-        if not t_min <= self.reference_temperature <= t_max:
-            self._raise_validation_error_at_loc(
-                f"'reference_temperature' = {self.reference_temperature} K must lie within "
-                f"'temperature_range' {self.temperature_range}.",
-                "reference_temperature",
-            )
-        self._check_positive()
-        return self
-
-    def _check_positive(self) -> None:
-        """Raise if the factor is not positive and finite over ``temperature_range``."""
-
     @abstractmethod
     def _factor(self, temperature: np.ndarray) -> np.ndarray:
         """Factor at temperatures already clamped into ``temperature_range``."""
@@ -331,14 +308,6 @@ class AbstractPowerLawModel(AbstractThermalPropertyModel):
         title="Exponent",
         description="Power-law exponent.",
     )
-
-    def _check_positive(self) -> None:
-        if self.temperature_range[0] <= 0:
-            self._raise_validation_error_at_loc(
-                "A power law needs a positive lower temperature bound, got "
-                f"'temperature_range' = {self.temperature_range}.",
-                "temperature_range",
-            )
 
     def _factor(self, temperature: np.ndarray) -> np.ndarray:
         return (temperature / self.reference_temperature) ** self.exponent
@@ -369,27 +338,6 @@ class AbstractPolynomialModel(AbstractThermalPropertyModel):
             polynomial.Polynomial([-self.reference_temperature, 1.0])
         )
         return tuple(float(c) for c in shifted.coef)
-
-    def _check_positive(self) -> None:
-        # The minimum over the range sits at an end or at a stationary point inside it.
-        offsets = [t - self.reference_temperature for t in self.temperature_range]
-        coefficients = self._coefficients_in_dT
-        stationary = polynomial.polyroots(polynomial.polyder(coefficients))
-        candidates = offsets + [
-            root.real
-            for root in np.atleast_1d(stationary)
-            if abs(root.imag) <= 1e-12 * max(1.0, abs(root.real))
-            and offsets[0] < root.real < offsets[1]
-        ]
-        lowest = min(candidates, key=lambda dt: polynomial.polyval(dt, coefficients))
-        value = polynomial.polyval(lowest, coefficients)
-        if not value > 0:
-            self._raise_validation_error_at_loc(
-                "The polynomial must be positive over 'temperature_range' "
-                f"{self.temperature_range}, but it reaches {value:.6g} at "
-                f"T = {lowest + self.reference_temperature:.6g} K.",
-                "coefficients",
-            )
 
     def _polynomial(self, temperature: np.ndarray) -> np.ndarray:
         return polynomial.polyval(
@@ -679,29 +627,6 @@ class SolidMedium(AbstractHeatMedium):
         "it, so setting a nonzero ``velocity`` there raises a setup error.",
         json_schema_extra={"units": VELOCITY},
     )
-
-    @model_validator(mode="after")
-    def _check_velocity_requires_capacity_and_density(self) -> Self:
-        """Velocity components must be finite, since the solver consumes them as a
-        real advection speed. A nonzero ``velocity`` also enables convective transport,
-        whose coefficient is ``capacity * density``; require both so the
-        solver receives a positive coefficient instead of an unset-property sentinel."""
-        if self.velocity is not None:
-            if any(not isfinite(v) for v in self.velocity):
-                self._raise_validation_error_at_loc(
-                    "'velocity' components must be finite numbers.",
-                    "velocity",
-                )
-            if any(v != 0.0 for v in self.velocity) and (
-                self.capacity is None or self.density is None
-            ):
-                self._raise_validation_error_at_loc(
-                    "A nonzero 'velocity' enables convective heat transport, which requires "
-                    "both 'capacity' and 'density' to be set (the convection coefficient is "
-                    "'capacity * density'). Please provide both.",
-                    "velocity",
-                )
-        return self
 
     @property
     def _reference_conductivity(self) -> float | AnisotropicConductivity:

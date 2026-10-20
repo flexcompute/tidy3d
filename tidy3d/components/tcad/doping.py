@@ -13,7 +13,6 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.constants import MICROMETER, PERCMCUBE, inf
-from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -115,15 +114,6 @@ class AbstractDopingBox(Box):
             indices_in_box = self.inside(x_inside, y_inside, z_inside)
 
         return coords_full, indices_in_box, X, Y, Z
-
-    @model_validator(mode="after")
-    def _post_init_validators(self) -> Self:
-        # check the doping box is 3D
-        if len(self.zero_dims) > 0:
-            raise SetupError(
-                "The doping box must be 3D. If you want a 2D doping box, please set one of the dimensions to a large or infinite size."
-            )
-        return self
 
 
 class ConstantDoping(AbstractDopingBox):
@@ -239,18 +229,9 @@ class GaussianDoping(AbstractDopingBox):
         "are [``xmin``, ``xmax``, ``ymin``, ``ymax``, ``zmin``, ``zmax``]",
     )
 
-    @model_validator(mode="after")
-    def _validate_ref_con_less_than_concentration(self: Self) -> Self:
-        """Ensure ref_con < concentration to avoid negative sqrt in sigma calculation."""
-        val = self.concentration
-        if self.ref_con >= val:
-            raise ValueError(
-                f"'ref_con' ({self.ref_con}) must be less than 'concentration' ({val}) "
-                "for GaussianDoping. The reference concentration at the edges must be lower "
-                "than the peak concentration at the center."
-            )
-        return self
-
+    # Stays a client check because it is a warning, which the construction path does not
+    # re-emit. The construction path runs before this validator, so a box that fails a core
+    # rule raises without logging this warning.
     @model_validator(mode="after")
     def _validate_width_vs_size(self: Self) -> Self:
         """Warn if box size may be too small for the specified transition width."""
