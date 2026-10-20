@@ -964,6 +964,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         self._validate_bent_custom_media_frames()
         self._validate_anisotropic_bend_repetitions()
         self._validate_monitor_setup()
+        self._validate_record_in_pml_unsupported()
         self._validate_interp_specs()
         return self
 

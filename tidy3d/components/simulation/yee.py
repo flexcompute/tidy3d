@@ -169,6 +169,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     # YeeMonitors
     _monitor_num_cells = _monitors_methods._monitor_num_cells
+    _validate_record_in_pml_unsupported = _monitors_methods._validate_record_in_pml_unsupported
 
     # YeeGrid
     _grid_spec_for_auto_grid_size_validation = (

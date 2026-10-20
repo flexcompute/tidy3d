@@ -279,6 +279,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         self._plane_in_sim_bounds()
         self._validate_mode_sort_spec_bounding_box()
         self._validate_mode_structure_monitors()
+        self._validate_record_in_pml_unsupported()
         self._validate_mode_solver()
         self._validate_grid()
         return self

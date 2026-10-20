@@ -100,6 +100,20 @@ def _monitor_num_cells(self: Any, monitor: Monitor) -> int:
     return num_cells_in_monitor(monitor)
 
 
+def _validate_record_in_pml_unsupported(self: Any) -> None:
+    """Error on ``record_in_pml=False`` in simulation types whose monitor data does not come
+    from the FDTD solver, for which the truncation is not implemented."""
+    for index, monitor in enumerate(self.monitors):
+        if not getattr(monitor, "record_in_pml", True):
+            self._raise_validation_error_at_loc(
+                f"'record_in_pml=False' is not supported in '{type(self).__name__}' "
+                f"(monitor '{monitor.name}').",
+                "monitors",
+                index,
+                "record_in_pml",
+            )
+
+
 def _validate_mode_time_monitor_freq_range(self: Any) -> Self:
     """Validate the solve frequency for ``ModeTimeMonitor``\\ s with ``freq_spec=None``.
 

@@ -238,6 +238,22 @@ class Monitor(AbstractMonitor):
         return []
 
 
+class AbstractRecordInPMLMonitor(Monitor, ABC):
+    """:class:`~tidy3d.Monitor` whose recorded region can be truncated to exclude the absorbing
+    boundary layers."""
+
+    record_in_pml: bool = Field(
+        default=True,
+        title="Record in PML",
+        description="Whether to record data inside the :class:`.PML`, :class:`.StablePML`, and "
+        ":class:`.Absorber` layers at the simulation boundaries, where the fields are not "
+        "physical. If ``False``, the recorded region is truncated to the simulation domain "
+        "(``Simulation.bounds``), keeping only the cells needed to interpolate the data up to "
+        "the domain edge. Surface-integration monitors (flux, field projection) then also only "
+        "integrate over the simulation domain.",
+    )
+
+
 class FreqMonitor(Monitor, ABC):
     """:class:`~tidy3d.Monitor` that records data in the frequency-domain."""
 
@@ -551,7 +567,7 @@ class TimeMonitor(Monitor, ABC):
         return np.interp(self._time_inds_array(tmesh), np.arange(tmesh.size), tmesh)
 
 
-class AbstractFieldMonitor(Monitor, ABC):
+class AbstractFieldMonitor(AbstractRecordInPMLMonitor, ABC):
     """:class:`~tidy3d.Monitor` that records electromagnetic field data as a function of x,y,z."""
 
     fields: tuple[EMField, ...] = Field(
@@ -1578,7 +1594,7 @@ class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
     )
 
 
-class MediumMonitor(AbstractMediumPropertyMonitor):
+class MediumMonitor(AbstractMediumPropertyMonitor, AbstractRecordInPMLMonitor):
     """:class:`~tidy3d.Monitor` that records the diagonal components of the complex-valued relative
     permittivity and permeability tensor in the frequency domain. The recorded data has the same shape as a
     :class:`.FieldMonitor` of the same geometry: the permittivity and permeability values are saved at the
@@ -1607,7 +1623,7 @@ class MediumMonitor(AbstractMediumPropertyMonitor):
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
 
 
-class PermittivityMonitor(AbstractMediumPropertyMonitor):
+class PermittivityMonitor(AbstractMediumPropertyMonitor, AbstractRecordInPMLMonitor):
     """:class:`~tidy3d.Monitor` that records the diagonal components of the complex-valued relative
     permittivity tensor in the frequency domain. The recorded data has the same shape as a
     :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
@@ -1736,7 +1752,7 @@ class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
         )
 
 
-class SurfaceIntegrationMonitor(Monitor, ABC):
+class SurfaceIntegrationMonitor(AbstractRecordInPMLMonitor, ABC):
     """Abstract class for monitors that perform surface integrals during the solver run, as in
     flux and near to far transformations."""
 
@@ -1905,6 +1921,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
             name=name,
             colocate=self.use_colocated_integration,
             use_colocated_integration=self.use_colocated_integration,
+            record_in_pml=self.record_in_pml,
         )
 
     @model_validator(mode="after")
@@ -2389,6 +2406,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
                     colocate=self.use_colocated_integration,
                     use_colocated_integration=self.use_colocated_integration,
                     interval_space=self.interval_space,
+                    record_in_pml=self.record_in_pml,
                 ),
                 normal_dir=surface.normal_dir,
             )

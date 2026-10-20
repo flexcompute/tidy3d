@@ -423,7 +423,8 @@ class FieldProjector(
                     )
                 continue
 
-            if not np.isfinite(size):
+            if not np.isfinite(size) or not monitor.record_in_pml:
+                # Data recorded with 'record_in_pml=False' may stop at the simulation domain.
                 continue
 
             start = center - size / 2
@@ -455,7 +456,7 @@ class FieldProjector(
                 maxs.append(center)
                 continue
 
-            if np.isfinite(size):
+            if np.isfinite(size) and monitor.record_in_pml:
                 mins.append(center - size / 2)
                 maxs.append(center + size / 2)
                 continue
@@ -463,6 +464,10 @@ class FieldProjector(
             coord_min, coord_max = FieldProjector._coordinate_span(
                 near_field_data, coord_name, field_names
             )
+            if np.isfinite(size):
+                # Data recorded with 'record_in_pml=False' may stop short of the monitor.
+                coord_min = max(coord_min, center - size / 2)
+                coord_max = min(coord_max, center + size / 2)
             mins.append(coord_min)
             maxs.append(coord_max)
 
@@ -754,11 +759,18 @@ class FieldProjector(
             Colocated surface current densities for the given surface.
         """
 
-        simulation_grid_boundaries = (
-            sim_data.simulation.grid.boundaries.to_list
-            if isinstance(sim_data, SimulationData)
-            else None
-        )
+        simulation_grid_boundaries = None
+        if isinstance(sim_data, SimulationData):
+            sim = sim_data.simulation
+            simulation_grid_boundaries = sim.grid.boundaries.to_list
+            if not surface.monitor.record_in_pml:
+                # The recorded data stops at the simulation domain, so resample within it.
+                simulation_grid_boundaries = [
+                    bounds[num_minus : len(bounds) - num_plus]
+                    for bounds, (num_minus, num_plus) in zip(
+                        simulation_grid_boundaries, sim.num_pml_layers
+                    )
+                ]
         field_data = FieldProjector._grid_corrected_source_data(sim_data, surface)
         currents = FieldProjector._fields_to_currents(field_data, surface)
         return FieldProjector._resample_surface_currents(
@@ -911,7 +923,8 @@ class FieldProjector(
         if simulation_grid_boundaries is not None:
             coord_list = simulation_grid_boundaries
         elif field_data.grid_expanded is not None:
-            coord_list = field_data.grid_expanded.boundaries.to_list
+            # Drop the interpolation padding cells, as the simulation-backed path does.
+            coord_list = field_data.colocation_boundaries.to_list
         else:
             coord_list = [np.asarray(template_field.coords[name].values) for name in "xyz"]
 
@@ -1185,14 +1198,22 @@ class FieldProjector(
     ) -> list[tuple[FieldProjectionSurface, xr.Dataset | dict[str, xr.DataArray]]]:
         """Collect projection surfaces together with their windowed currents, shifted to the
         local origin. All physical-space preparation (areas, window) happens on the recorded
-        (global) coordinates -- the window anchored on the simulation bounds when projecting
-        from simulation data -- and the shift into the origin-relative frame the projection
+        (global) coordinates -- the window anchored on the simulation bounds, with or without
+        PML per the surface's ``record_in_pml``, when projecting from simulation data -- and the shift into the origin-relative frame the projection
         kernels expect is the last step."""
-        custom_bounds = (
-            self.sim_data.simulation.simulation_bounds if self.sim_data is not None else None
-        )
         surface_currents = []
         for surface in self.surfaces:
+            custom_bounds = None
+            if self.sim_data is not None:
+                # Anchor on the extent of the recorded near-field data.
+                sim = self.sim_data.simulation
+                custom_bounds = (
+                    sim.simulation_bounds if surface.monitor.record_in_pml else sim.bounds
+                )
+            elif (field_data := self._field_data_for_surface(surface)).grid_expanded is not None:
+                # Anchor on the recorded data without its interpolation padding cells.
+                coords = field_data.symmetry_expanded.colocation_boundaries.to_list
+                custom_bounds = ([c[0] for c in coords], [c[-1] for c in coords])
             windowed = self.apply_window_to_currents(
                 proj_monitor, self._surface_currents(surface, proj_monitor), custom_bounds
             )

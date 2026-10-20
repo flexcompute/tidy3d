@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 import xarray as xr
+from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
 from pydantic import (
     ValidationError as PydanticValidationError,
 )
@@ -380,6 +381,11 @@ def _discretize_inds_monitor(
     box_expanded = Box(center=monitor.center, size=expand_size)
     # Discretize without extension for now
     span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
+
+    if not getattr(monitor, "record_in_pml", True):
+        span_inds = grid_numerics.truncate_span_inds_to_domain(
+            span_inds, self.num_pml_layers, self.grid.num_cells
+        )
 
     if any(ind[0] >= ind[1] for ind in span_inds):
         # At least one dimension has no indexes inside the grid, e.g. monitor is entirely
