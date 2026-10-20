@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 import numpy as np
+from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -157,16 +158,6 @@ class LumpedCircuitComponent(MicrowaveBaseModel):
             element_type = data.get("element_type", "C")
             data = {**data, "name": f"{element_type}_{uuid.uuid4().hex[:12]}"}
         return data
-
-    @model_validator(mode="after")
-    def _validate_nodes_distinct(self) -> Self:
-        """Reject self-loops: node_plus and node_minus must differ."""
-        if self.node_plus == self.node_minus:
-            raise ValueError(
-                "node_plus and node_minus must be distinct; "
-                f"got the same node {self.node_plus!r} for both (self-loop is not allowed)."
-            )
-        return self
 
 
 class LumpedElement(MicrowaveBaseModel, ABC):
@@ -450,19 +441,6 @@ class RectangularLumpedElement(LumpedElement, Box):
     def monitor_name(self) -> str:
         return f"{self.name}_monitor"
 
-    @model_validator(mode="after")
-    def _voltage_axis_has_extent(self) -> Self:
-        """Ensure the voltage drop axis has nonzero extent: it must lie in the plane of a sheet
-        element, and be the single nonzero (line) axis of a one-dimensional element."""
-        if self.size[self.voltage_axis] == 0:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    f"'voltage_axis' must be a nonzero-size dimension of lumped element '{self.name}'."
-                ),
-                "voltage_axis",
-            )
-        return self
-
 
 class LumpedResistor(RectangularLumpedElement):
     """Class representing a rectangular lumped resistor. Lumped resistors are appended to the list
@@ -576,23 +554,15 @@ class CoaxialLumpedResistor(LumpedElement):
     @classmethod
     def _center_not_inf(cls, val: Coordinate) -> Coordinate:
         """Make sure center is not infinitiy."""
-        if any(np.isinf(v) for v in val):
-            raise ValidationError("'center' can not contain 'td.inf' terms.")
-        return val
+        # A thin check for field order: as a field error, Pydantic reports it together with the
+        # model's other field errors. The construction path runs after the model is built and
+        # raises one error.
+        from flexcompute.core._migration.em.lumped_element.validation import (
+            validate_center_finite,
+        )
 
-    @model_validator(mode="after")
-    def _ensure_inner_diameter_is_smaller(self) -> Self:
-        """Ensures that the inner diameter is smaller than the outer diameter, so that the final shape is an annulus."""
-        val = self.inner_diameter
-        outer_diameter = self.outer_diameter
-        if val >= outer_diameter:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    f"The 'inner_diameter' {val} of a coaxial lumped element must be less than its 'outer_diameter' {outer_diameter}."
-                ),
-                "inner_diameter",
-            )
-        return self
+        raise_first_error(validate_center_finite(val), ValidationError)
+        return val
 
     @cached_property
     def _sheet_conductance(self) -> float:
@@ -975,17 +945,6 @@ class RLCNetwork(MicrowaveBaseModel):
             result_medium = combine_equivalent_medium_in_parallel(med, result_medium)
         return result_medium
 
-    @model_validator(mode="after")
-    def _validate_single_element(self) -> Self:
-        """At least one element should be defined."""
-        val = self.inductance
-        resistance = self.resistance
-        capacitance = self.capacitance
-        all_items_are_none = all(item is None for item in [resistance, capacitance, val])
-        if all_items_are_none:
-            raise ValueError("At least one element must be defined in the 'RLCNetwork'.")
-        return self
-
 
 class AdmittanceNetwork(MicrowaveBaseModel):
     """Class for representing a network consisting of an arbitrary number of resistors,
@@ -1144,19 +1103,15 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
     @classmethod
     def _validate_freq_range(cls, v: FreqBound | None) -> FreqBound | None:
         """Require freq_range to have 0 < f_min < f_max when set (fitting requires ω > 0)."""
-        if v is None:
-            return v
-        f_min, f_max = v[0], v[1]
-        if f_min <= 0:
-            raise ValueError(
-                "freq_range must have a positive minimum frequency (fitting requires ω > 0). "
-                f"Got freq_range={v}."
-            )
-        if f_min >= f_max:
-            raise ValueError(
-                f"freq_range must have strictly increasing (f_min, f_max). Got freq_range={v}."
-            )
-        return (f_min, f_max)
+        # A thin check for field order: as a field error, Pydantic reports it together with the
+        # model's other field errors. The construction path runs after the model is built and
+        # raises one error.
+        from flexcompute.core._migration.em.lumped_element.validation import (
+            validate_fit_freq_range,
+        )
+
+        raise_first_error(validate_fit_freq_range(v), ValueError)
+        return v
 
     @abstractmethod
     def _get_effective_admittance(
@@ -1441,12 +1396,6 @@ class CircuitImpedanceModel(_AdmittanceFitter):
     # augmented-MNA backend could support DC-safe inductor branches and ideal/controlled
     # sources by adding auxiliary branch-current equations; see class docstring Notes.
 
-    @model_validator(mode="after")
-    def _validate_circuit_connected(self) -> Self:
-        """Reject invalid circuits: disconnected graph, or port nodes not distinct or not in graph."""
-        self._assert_circuit_connected()
-        return self
-
     @staticmethod
     def _parse_spice_value(s: str) -> float:
         """Parse a SPICE value string including scale suffixes.
@@ -1728,59 +1677,6 @@ class CircuitImpedanceModel(_AdmittanceFitter):
             return self._create_branch_admittance_matrix(frequency)
 
         return A, node_mapper, branch_admittance_at
-
-    def _assert_circuit_connected(self) -> None:
-        """Raise ValueError if this circuit's component graph is disconnected or port nodes are invalid.
-
-        Validates: (1) at least one component, (2) graph is connected, (3) port_node_plus
-        and port_node_minus are distinct and each is a node in the component graph.
-        """
-        component_list = list(self.components)
-        if not component_list:
-            raise ValueError("Circuit must have at least one component and form a connected graph.")
-        # Build set of nodes and adjacency (by node name)
-        nodes: set[str] = set()
-        adj: dict[str, list[str]] = {}
-        for comp in component_list:
-            a, b = comp.node_plus, comp.node_minus
-            nodes.add(a)
-            nodes.add(b)
-            adj.setdefault(a, []).append(b)
-            adj.setdefault(b, []).append(a)
-
-        # Validate port nodes at construction so errors surface early
-        if self.port_node_plus == self.port_node_minus:
-            raise ValueError(
-                "Port nodes must be distinct: port_node_plus and port_node_minus cannot be the same."
-            )
-        if self.port_node_plus not in nodes:
-            raise ValueError(
-                f"port_node_plus={self.port_node_plus!r} is not a node in the circuit; "
-                "it must be an endpoint of at least one R, L, or C component."
-            )
-        if self.port_node_minus not in nodes:
-            raise ValueError(
-                f"port_node_minus={self.port_node_minus!r} is not a node in the circuit; "
-                "it must be an endpoint of at least one R, L, or C component."
-            )
-
-        # BFS from first node
-        start = next(iter(nodes))
-        reachable: set[str] = set()
-        queue: list[str] = [start]
-        while queue:
-            n = queue.pop()
-            if n in reachable:
-                continue
-            reachable.add(n)
-            for neighbor in adj.get(n, []):
-                if neighbor not in reachable:
-                    queue.append(neighbor)
-        if reachable != nodes:
-            raise ValueError(
-                "Circuit is disconnected: not all nodes are reachable from the same component. "
-                "Ensure every component shares at least one node with the rest (single connected graph)."
-            )
 
     def _get_effective_admittance(
         self,

@@ -547,6 +547,43 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.grid.validation:validate",
         on_construction=True,
     ),
+    # rf: lumped elements
+    "tidy3d.components.lumped_element:LumpedElement": None,
+    "tidy3d.components.lumped_element:_AdmittanceFitter": None,
+    "tidy3d.components.lumped_element:LumpedResistor": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:LumpedResistor",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.lumped_element:CoaxialLumpedResistor": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:CoaxialLumpedResistor",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.lumped_element:LinearLumpedElement": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:LinearLumpedElement",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.lumped_element:RLCNetwork": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:RLCNetwork",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.lumped_element:AdmittanceNetwork": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:AdmittanceNetwork",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+    ),
+    "tidy3d.components.lumped_element:CircuitImpedanceModel": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:CircuitImpedanceModel",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.lumped_element:LumpedCircuitComponent": ComponentScope(
+        "flexcompute.core._migration.em.lumped_element.schema:LumpedCircuitComponent",
+        "flexcompute.core._migration.em.lumped_element.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
