@@ -52,6 +52,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
         allow_inf_nan=False,
     )
 
+    # Stays a field adapter, so a voltage error reports together with other field errors.
     @field_validator("voltage")
     @classmethod
     def validate_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:

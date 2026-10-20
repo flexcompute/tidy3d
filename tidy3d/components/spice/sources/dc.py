@@ -66,6 +66,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     # standalone field. Keeping for compatibility, remove in 3.0.
     units: Literal[VOLT] = VOLT
 
+    # Stays a field adapter, so a voltage error reports together with other field errors.
     @field_validator("voltage")
     @classmethod
     def check_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
