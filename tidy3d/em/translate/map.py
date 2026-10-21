@@ -595,6 +595,17 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.frequency_extrapolation.validation:validate",
         on_construction=True,
     ),
+    # scene: transformation
+    "tidy3d.components.transformation:AbstractRotation": None,
+    "tidy3d.components.transformation:AbstractReflection": None,
+    "tidy3d.components.transformation:RotationAroundAxis": ComponentScope(
+        "flexcompute.core._migration.em.transformation.schema:RotationAroundAxis",
+        "flexcompute.core._migration.em.transformation.validation:validate",
+    ),
+    "tidy3d.components.transformation:ReflectionFromPlane": ComponentScope(
+        "flexcompute.core._migration.em.transformation.schema:ReflectionFromPlane",
+        "flexcompute.core._migration.em.transformation.validation:validate",
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {

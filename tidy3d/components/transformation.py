@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.transformation.validation import validate_nonzero_norm
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, field_validator
 
 from tidy3d._runtime import always_validate
@@ -123,11 +125,10 @@ class RotationAroundAxis(AbstractRotation):
     @field_validator("axis")
     @classmethod
     def _validate_axis_nonzero_norm(cls, val: Coordinate) -> Coordinate:
-        norm = np.linalg.norm(val)
-        if np.isclose(norm, 0):
-            raise ValidationError(
-                "The norm of vector 'axis' cannot be zero. Please provide a proper rotation axis."
-            )
+        # A thin check for field order and performance: as a field error, Pydantic reports it
+        # together with the model's other field errors, and the construction path would make
+        # every rotation and reflection the geometry helpers build several times slower.
+        raise_first_error(validate_nonzero_norm(val, "axis"), ValidationError)
         return val
 
     @cached_property
@@ -201,11 +202,8 @@ class ReflectionFromPlane(AbstractReflection):
     @field_validator("normal")
     @classmethod
     def _validate_normal_nonzero_norm(cls, val: Coordinate) -> Coordinate:
-        norm = np.linalg.norm(val)
-        if np.isclose(norm, 0):
-            raise ValidationError(
-                "The norm of vector 'normal' cannot be zero. Please provide a proper normal vector."
-            )
+        # A thin check for field order and performance, as ``RotationAroundAxis.axis`` has.
+        raise_first_error(validate_nonzero_norm(val, "normal"), ValidationError)
         return val
 
     @cached_property
