@@ -9,6 +9,12 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.data.validation import (
+    validate_cell_vertex_range,
+    validate_points_index,
+    validate_values_index,
+)
+from flexcompute.core.validation import raise_first_error
 from pandas import RangeIndex
 from pydantic import Field, field_validator, model_validator
 from xarray import DataArray as XrDataArray
@@ -354,14 +360,10 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     @classmethod
     def points_right_indexing(cls, val: PointDataArray) -> PointDataArray:
         """Check that points are indexed corrrectly."""
-        indices_expected = np.arange(len(val.data))
-        indices_given = val.index.data
-        if np.any(indices_expected != indices_given):
-            raise ValidationError(
-                "Coordinate 'index' of array 'points' is expected to have values (0, 1, 2, ...). "
-                "This can be easily achieved, for example, by using "
-                "PointDataArray(data, dims=['index', 'axis'])."
-            )
+        # Thin check on the core rule. The unstructured datasets have no moved schema, and
+        # translating one costs about as much as building it, which every arithmetic, selection
+        # and copy would repeat, so they stay off the construction path.
+        raise_first_error(validate_points_index(val.index.data), ValidationError)
         return val
 
     @field_validator("values")
@@ -377,14 +379,8 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     def values_right_indexing(cls, val: IndexedDataArrayTypes) -> IndexedDataArrayTypes:
         """Check that data values are indexed correctly."""
         # currently support only simple ordered indexing of points, that is, 0, 1, 2, ...
-        indices_expected = np.arange(len(val.index.data))
-        indices_given = val.index.data
-        if np.any(indices_expected != indices_given):
-            raise ValidationError(
-                "Coordinate 'index' of array 'values' is expected to have values (0, 1, 2, ...). "
-                "This can be easily achieved, for example, by using "
-                "IndexedDataArray(data, dims=['index'])."
-            )
+        # Thin check on the core rule, for the reason given in ``points_right_indexing``.
+        raise_first_error(validate_values_index(val.index.data), ValidationError)
         return val
 
     @model_validator(mode="after")
@@ -428,23 +424,12 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     @model_validator(mode="after")
     def check_cell_vertex_range(self) -> Self:
         """Check that cell connections use only defined points."""
-        val = getattr(self, "cells", None)
-        if val is None:
-            return self
-        all_point_indices_used = val.data.ravel()
-        # skip validation if zero size data
-        if len(all_point_indices_used) > 0:
-            min_index_used = np.min(all_point_indices_used)
-            max_index_used = np.max(all_point_indices_used)
-
-            num_points = len(self.points)
-
-            if max_index_used > num_points - 1 or min_index_used < 0:
-                raise ValidationError(
-                    "Cell connections array uses undefined point indices in the range "
-                    f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
-                    f"[0, {num_points - 1}]."
-                )
+        # Thin check on the core rule, for the reason given in ``points_right_indexing``.
+        cells = getattr(self, "cells", None)
+        if cells is not None:
+            raise_first_error(
+                validate_cell_vertex_range(cells.data, len(self.points)), ValidationError
+            )
         return self
 
     @field_validator("cells")
