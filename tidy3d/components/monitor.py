@@ -2063,15 +2063,18 @@ class ModeSolverMonitor(AbstractModeMonitor):
     @always_validate
     def set_store_fields(self) -> Self:
         """Ensure 'store_fields_direction' is compatible with 'direction'."""
-        store_fields_direction = self.store_fields_direction
-        direction = self.direction
-        if store_fields_direction is None:
-            object.__setattr__(self, "store_fields_direction", direction)
-        elif store_fields_direction != direction:
-            self._raise_validation_error_at_loc(
-                f"The values of 'direction' ({direction}) and 'store_fields_direction' "
-                f"({store_fields_direction}) must be equal.",
-                "store_fields_direction",
+        # Not on the construction path: ``MicrowaveModeSolverMonitor`` subclasses this class
+        # and is not migrated yet, so the check stays here, next to the derivation.
+        from flexcompute.core._migration.em.monitor.validation import (
+            validate_store_fields_direction,
+        )
+
+        if self.store_fields_direction is None:
+            object.__setattr__(self, "store_fields_direction", self.direction)
+        else:
+            _present(
+                self,
+                validate_store_fields_direction(self.direction, self.store_fields_direction),
             )
         return self
 
