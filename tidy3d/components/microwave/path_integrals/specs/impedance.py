@@ -6,7 +6,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.bound_ops import bounds_contains
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -21,7 +21,6 @@ from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.microwave.types import ImpedanceDef
     from tidy3d.components.types.base import Direction
@@ -94,24 +93,6 @@ class CustomImpedanceSpec(AbstractImpedanceSpec):
         title="Current Integration Path",
         description="Path specification for computing the current associated with a mode profile.",
     )
-
-    @model_validator(mode="after")
-    def check_path_spec_combinations(self) -> Self:
-        """Validate that at least one of voltage_spec or current_spec is provided.
-
-        In order to define voltage/current/impedance, either a voltage or current path specification
-        must be provided. Both cannot be ``None`` simultaneously.
-        """
-        val = self.current_spec
-        voltage_spec = self.voltage_spec
-        if val is None and voltage_spec is None:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Not a valid 'CustomImpedanceSpec', the 'voltage_spec' and 'current_spec' cannot both be 'None'."
-                ),
-                "voltage_spec",
-            )
-        return self
 
     @property
     def impedance_definition(self) -> ImpedanceDef:

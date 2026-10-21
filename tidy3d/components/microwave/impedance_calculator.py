@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.data.data_array import (
     _make_current_data_array,
@@ -26,10 +26,8 @@ from tidy3d.components.microwave.path_integrals.integrals.voltage import (
 )
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.data.data_array import (
         CurrentIntegralResultType,
         ImpedanceResultType,
@@ -183,14 +181,3 @@ class ImpedanceCalculator(MicrowaveBaseModel):
                 current = _make_current_data_array(voltage / impedance)
             return (impedance, voltage, current)
         return impedance
-
-    @model_validator(mode="after")
-    def check_voltage_or_current(self) -> Self:
-        """Raise validation error if both ``voltage_integral`` and ``current_integral``
-        are not provided."""
-        val = self.current_integral
-        if not self.voltage_integral and not val:
-            raise ValidationError(
-                "At least one of 'voltage_integral' or 'current_integral' must be provided."
-            )
-        return self

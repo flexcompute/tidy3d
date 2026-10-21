@@ -606,6 +606,83 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.transformation.schema:ReflectionFromPlane",
         "flexcompute.core._migration.em.transformation.validation:validate",
     ),
+    # rf: path integrals and impedance
+    "tidy3d.components.microwave.path_integrals.specs.base:AbstractAxesRH": None,
+    "tidy3d.components.microwave.path_integrals.specs.impedance:AbstractImpedanceSpec": None,
+    "tidy3d.components.microwave.path_integrals.mode_plane_analyzer:ModePlaneAnalyzer": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.mode_plane_analyzer:ModePlaneAnalyzer",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.base:AxisAlignedPathIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.base:AxisAlignedPathIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.base:Custom2DPathIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.base:Custom2DPathIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.voltage:AxisAlignedVoltageIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.voltage:AxisAlignedVoltageIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.voltage:Custom2DVoltageIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.voltage:Custom2DVoltageIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.current:AxisAlignedCurrentIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.current:AxisAlignedCurrentIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.current:Custom2DCurrentIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.current:Custom2DCurrentIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.current:CompositeCurrentIntegralSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.current:CompositeCurrentIntegralSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.impedance:AutoImpedanceSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.impedance:AutoImpedanceSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.specs.impedance:CustomImpedanceSpec": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.specs.impedance:CustomImpedanceSpec",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.base:AxisAlignedPathIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.base:AxisAlignedPathIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.base:Custom2DPathIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.base:Custom2DPathIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.voltage:AxisAlignedVoltageIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.voltage:AxisAlignedVoltageIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.voltage:Custom2DVoltageIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.voltage:Custom2DVoltageIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.current:AxisAlignedCurrentIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.current:AxisAlignedCurrentIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.current:Custom2DCurrentIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.current:Custom2DCurrentIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.path_integrals.integrals.current:CompositeCurrentIntegral": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.path_integrals.integrals.current:CompositeCurrentIntegral",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+    ),
+    "tidy3d.components.microwave.impedance_calculator:ImpedanceCalculator": ComponentScope(
+        "flexcompute.core._migration.em.microwave.schema.impedance_calculator:ImpedanceCalculator",
+        "flexcompute.core._migration.em.microwave.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -637,6 +714,8 @@ COMPONENT_ERROR_TYPES = {
     "tcad.heat_charge_source_requires_structure": "tidy3d.exceptions:SetupError",
     # frequency-extrapolation
     "em.frequency_extrapolation.empty_monitors": "builtins:ValueError",
+    # rf: path integrals and impedance
+    "em.microwave.missing_integrals": "tidy3d.exceptions:ValidationError",
 }
 
 
