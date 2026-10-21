@@ -397,9 +397,10 @@ class PoleResidue(DispersiveMedium):
         :class:`.Medium`
             The non-dispersive equivalent with constant permittivity and conductivity.
         """
+        zero_frequency_tolerance = _medium_numerics().ZERO_FREQUENCY_POLE_TOLERANCE
         res = 0
         for a, c in self.poles:
-            if abs(a) > fp_eps:
+            if abs(a) > zero_frequency_tolerance:
                 raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
             res = res + (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0

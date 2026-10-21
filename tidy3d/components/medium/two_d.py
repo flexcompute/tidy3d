@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from pydantic import (
@@ -41,6 +41,13 @@ from .lorentz import Lorentz
 from .lossy_metal import LossyMetalMedium
 from .pole_residue import DispersiveMedium, PoleResidue
 from .sellmeier import Sellmeier
+
+
+def _medium_numerics() -> Any:
+    """Import shared medium kernels after Pydantic model rebuilds finish."""
+    from flexcompute.core._migration.em.numerical.raw import medium as medium_numerics
+
+    return medium_numerics
 
 
 class Medium2D(AbstractMedium):
@@ -136,6 +143,22 @@ class Medium2D(AbstractMedium):
             poles += [(a, weight * c) for (a, c) in pole_res.poles if c != 0.0]
         return PoleResidue(eps_inf=np.real(eps_inf), poles=poles)
 
+    @staticmethod
+    def _fold_zero_frequency_poles(
+        medium: PoleResidue | PECMedium,
+    ) -> PoleResidue | PECMedium | Medium:
+        """``medium`` as a :class:`.Medium` when every pole is at zero frequency.
+
+        A pole at zero frequency is a constant conductivity, so such a medium needs no pole
+        update in the solver.
+        """
+        numerics = _medium_numerics()
+        if isinstance(medium, PoleResidue) and numerics.pole_residue_is_constant_conductivity(
+            medium.eps_inf, medium.poles
+        ):
+            return medium.to_medium()
+        return medium
+
     def volumetric_equivalent(
         self,
         axis: Axis,
@@ -151,7 +174,8 @@ class Medium2D(AbstractMedium):
         zz components of the 3D material, excluding the ``axis`` component. The conductivity
         and residues (in the case of a dispersive 2D material) are rescaled by ``1/dl``.
         The neighboring media ``neighbors`` enter in as a background for the resulting
-        volumetric equivalent.
+        volumetric equivalent. An in-plane component whose poles are all at zero frequency
+        (a constant conductivity) is returned as a :class:`.Medium`.
 
 
         Parameters
@@ -211,7 +235,7 @@ class Medium2D(AbstractMedium):
         media_fg_plane = list(self.elements.values())
         _, media_bg_plane = Geometry.pop_axis(media_bg, axis=axis)
         media_fg_weighted = [
-            self._weighted_avg([media_bg, media_fg], [1, 1 / dl])
+            self._fold_zero_frequency_poles(self._weighted_avg([media_bg, media_fg], [1, 1 / dl]))
             for media_bg, media_fg in zip(media_bg_plane, media_fg_plane)
         ]
 
