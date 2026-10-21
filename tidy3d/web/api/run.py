@@ -14,6 +14,7 @@ from tidy3d.web.api.container_utils import flatten_container, validate_mapping_k
 from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import task_type_name_of
 from tidy3d.web.api.webapi import default_data_filename
+from tidy3d.web.api.workflow_model import is_workflow_operation
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -38,7 +39,7 @@ RunOutput: typing.TypeAlias = (
 def _validate_run_mapping_key(key: object) -> None:
     """Reject unhashable keys and simulation objects in run containers."""
     validate_mapping_key(key)
-    if isinstance(key, WorkflowOperationType):
+    if is_workflow_operation(key):
         raise ValueError("Dict keys must not be simulations.")
 
 
@@ -52,7 +53,7 @@ def _collect_by_hash(
         dict[str, WorkflowOperationType],
         flatten_container(
             node,
-            is_leaf=lambda value: isinstance(value, WorkflowOperationType),
+            is_leaf=is_workflow_operation,
             validate_dict_key=_validate_run_mapping_key,
             leaf_id=lambda _path, simulation: simulation._hash_self(),
         ),
@@ -69,7 +70,7 @@ def _reconstruct_by_hash(node: RunInput, h2data: dict[str, WorkflowDataType]) ->
     seen = set()
 
     def _recur(item: RunInput) -> RunOutput:
-        if isinstance(item, WorkflowOperationType):
+        if is_workflow_operation(item):
             hash_value = item._hash_self()
             data = h2data[hash_value]
             if hash_value in seen:
@@ -263,7 +264,7 @@ def run(
         and len(
             flatten_container(
                 simulation,
-                is_leaf=lambda value: isinstance(value, WorkflowOperationType),
+                is_leaf=is_workflow_operation,
                 validate_dict_key=_validate_run_mapping_key,
             )
         )

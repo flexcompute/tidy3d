@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from tidy3d import log
 from tidy3d.components.base import Tidy3dBaseModel
@@ -19,17 +19,24 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowOperationType
+from tidy3d.components.types.workflow import WorkflowDataType
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
+from tidy3d.web.api.workflow_model import (
+    WorkflowOperationInput,
+    most_specific_entry,
+    product_model_class_of_file,
+    product_task_type_of,
+)
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from os import PathLike
+
+    from tidy3d.components.types.workflow import WorkflowOperationType
 
 TYPE_MAP: dict[type, TaskType] = {
     Simulation: TaskType.FDTD,
@@ -44,14 +51,18 @@ TYPE_MAP: dict[type, TaskType] = {
 
 
 def task_type_name_of(simulation: WorkflowOperationType) -> str:
-    for cls, ttype in TYPE_MAP.items():
-        if isinstance(simulation, cls):
-            return ttype.name
+    """Return the task type of ``simulation``: the active product's table first, then ``TYPE_MAP``."""
+    product_task_type = product_task_type_of(type(simulation))
+    if product_task_type is not None:
+        return product_task_type
+    task_type = most_specific_entry(TYPE_MAP, type(simulation))
+    if task_type is not None:
+        return task_type.name
     raise TypeError(f"Could not find task type for: {type(simulation).__name__}")
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: WorkflowOperationType = Field(discriminator=TYPE_TAG_STR)
+    simulation: WorkflowOperationInput
 
     @classmethod
     def from_file(cls, file_path: PathLike) -> WorkflowOperationType:
@@ -68,7 +79,8 @@ class Tidy3dStub(BaseModel, TaskStub):
         WorkflowOperationType
             An instance of the component class calling ``load``.
         """
-        return Tidy3dBaseModel.from_file(file_path)
+        loader = product_model_class_of_file(file_path) or Tidy3dBaseModel
+        return loader.from_file(file_path)
 
     def to_file(
         self,
@@ -181,6 +193,10 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         """Load .yaml, .json, or .hdf5 file to
         ``WorkflowDataType`` instance.
 
+        A product client reads the file with its own class when the file's type tag is one it
+        names on its identity. Such a load is eager: a lazy proxy resolves its class through
+        Tidy3D's registry, which names the Tidy3D class for that tag.
+
         Parameters
         ----------
         file_path : PathLike
@@ -194,10 +210,12 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         ``WorkflowDataType`` instance
             An instance of the component class calling ``load``.
         """
-        workflow_data = Tidy3dBaseModel.from_file(
-            file_path, lazy=lazy, on_load=cls._check_convergence_and_warnings
+        product_cls = product_model_class_of_file(file_path)
+        return (product_cls or Tidy3dBaseModel).from_file(
+            file_path,
+            lazy=lazy and product_cls is None,
+            on_load=cls._check_convergence_and_warnings,
         )
-        return workflow_data
 
     @staticmethod
     def _check_convergence_and_warnings(stub_data: WorkflowDataType) -> None:

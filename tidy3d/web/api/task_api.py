@@ -23,7 +23,6 @@ from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation, TCADAnalysisTypes
-from tidy3d.components.workflow import resolve_workflow
 from tidy3d.config import config
 from tidy3d.exceptions import DataError, WebError, format_chained_exception_message
 from tidy3d.log import get_logging_console, log
@@ -40,6 +39,7 @@ from tidy3d.web.api.states import (
     SUCCESS_STATES,
     status_to_stage,
 )
+from tidy3d.web.api.workflow_model import is_foreign_model, resolve_product_workflow
 from tidy3d.web.cache import resolve_local_cache
 from tidy3d.web.core.client_identity import get_client_identity
 from tidy3d.web.core.constants import (
@@ -99,6 +99,10 @@ SOLVER_NAME = {
     "VOLUME_MESH": "VolumeMesher",
 }
 
+_PRODUCT_MODEL_OUTSIDE_PRODUCT_WEB_MESSAGE = (
+    "Product workflow models are submitted through their product's web module, for example "
+    "'flexcompute.rf.web' for FlexRF models, not through 'tidy3d.web' directly."
+)
 _UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE = (
     "FlexRF protocol tasks do not support autograd-enabled FDTD submissions."
 )
@@ -686,8 +690,11 @@ def _upload(
             "ModeSimulation uploads."
         )
 
+    if _active_product_protocol() is None and is_foreign_model(simulation):
+        raise DataError(_PRODUCT_MODEL_OUTSIDE_PRODUCT_WEB_MESSAGE)
+
     if not _workflow_step:
-        workflow = resolve_workflow(simulation)
+        workflow = resolve_product_workflow(simulation)
         if len(workflow.steps) > 1:
             raise DataError(
                 "'web.upload()' does not support multi-step simulations. "

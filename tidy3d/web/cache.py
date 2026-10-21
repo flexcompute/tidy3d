@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit, urlunsplit
 
 from filelock import FileLock
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
@@ -41,7 +42,10 @@ TMP_BATCH_PREFIX = "tmp_batch"
 
 
 def _cache_version() -> str | dict[str, str | None]:
-    """Return a cache namespace isolated by active product and solver identity."""
+    """Return a cache namespace isolated by active product, solver identity and server.
+
+    Without a product identity the namespace is the Tidy3D protocol version alone.
+    """
 
     protocol_version = resolve_protocol_version()
     if protocol_version is None:
@@ -54,7 +58,17 @@ def _cache_version() -> str | dict[str, str | None]:
             if identity is not None and identity.solver_version is not None
             else config.run.solver_version
         ),
+        # A product can reach several servers (cloud, Nexus) from one cache directory.
+        "api_endpoint": _normalized_endpoint(config.web.api_endpoint),
     }
+
+
+def _normalized_endpoint(endpoint: object) -> str:
+    """Return ``endpoint`` with a lowercase scheme and host and no trailing slash."""
+    parts = urlsplit(str(endpoint).strip())
+    return urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query, "")
+    )
 
 
 _CACHE: LocalCache | None = None

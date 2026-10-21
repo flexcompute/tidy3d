@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Mapping
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,14 @@ class ClientIdentity:
 
     protocol_version: str
     solver_version: str | None = None
+    model_classes: Mapping[str, type] = field(default_factory=dict)
+    """Classes the product reads for the type tags it shares with Tidy3D, by tag."""
+    task_types: Mapping[type, str] = field(default_factory=dict)
+    """Server task type of each product model class, e.g. ``"FDTD"`` or ``"TERMINAL_CM"``.
+
+    A class listed here, or a subclass of one, is a product model the client submits.
+    Classes not listed resolve through Tidy3D's own table.
+    """
 
 
 _CURRENT_CLIENT_IDENTITY: ContextVar[ClientIdentity | None] = ContextVar(

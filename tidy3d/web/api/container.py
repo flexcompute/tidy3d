@@ -31,13 +31,11 @@ from pydantic import (
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d._runtime import WASM_BUILD
-from tidy3d.components.base import TYPE_TO_CLASS_MAP, Tidy3dBaseModel, cached_property
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.medium.protected import warn_protected_surrogate
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.workflow import WorkflowOperationType
-from tidy3d.components.workflow import Workflow, resolve_workflow
+from tidy3d.components.workflow import Workflow
 from tidy3d.config import config
 from tidy3d.exceptions import DataError, ValidationError
 from tidy3d.exceptions import WebError as Tidy3dWebError
@@ -68,6 +66,13 @@ from tidy3d.web.api.workflow_dependencies import (
     is_supported_parent_task_input,
     supports_implicit_parent_task_reuse,
     unsupported_parent_task_dependency_message,
+)
+from tidy3d.web.api.workflow_model import (
+    WorkflowOperationInput,
+    is_workflow_model_class,
+    is_workflow_operation,
+    resolve_product_workflow,
+    serialized_model_class,
 )
 from tidy3d.web.cache import _store_mode_solver_in_cache
 from tidy3d.web.core.constants import TaskId, TaskName
@@ -134,7 +139,7 @@ class _ContextThreadPoolExecutor(ThreadPoolExecutor):
 def _is_flat_batch_simulation_mapping(simulations: object) -> bool:
     """Return ``True`` for the historical flat ``dict[str, WorkflowOperationType]`` batch shape."""
     return isinstance(simulations, Mapping) and all(
-        isinstance(task_name, str) and isinstance(simulation, WorkflowOperationType)
+        isinstance(task_name, str) and is_workflow_operation(simulation)
         for task_name, simulation in simulations.items()
     )
 
@@ -142,7 +147,7 @@ def _is_flat_batch_simulation_mapping(simulations: object) -> bool:
 def _is_flat_batch_simulation_sequence(simulations: object) -> bool:
     """Return ``True`` for the historical top-level sequence-of-workflows batch shape."""
     return isinstance(simulations, tuple) and all(
-        isinstance(simulation, WorkflowOperationType) for simulation in simulations
+        is_workflow_operation(simulation) for simulation in simulations
     )
 
 
@@ -171,16 +176,11 @@ def _legacy_sequence_task_mapping(
 
 def _is_serialized_workflow_leaf(value: object) -> bool:
     """Return ``True`` only for serialized workflow-model leaves."""
-    if not isinstance(value, Mapping):
+    workflow_cls = serialized_model_class(value)
+    if workflow_cls is None:
         return False
-
-    type_name = value.get("type")
-    if not isinstance(type_name, str):
-        return False
-
-    workflow_cls = TYPE_TO_CLASS_MAP.get(type_name)
-    return isinstance(workflow_cls, type) and any(
-        issubclass(workflow_cls, candidate) for candidate in _workflow_leaf_classes()
+    return issubclass(workflow_cls, _workflow_leaf_classes()) or is_workflow_model_class(
+        workflow_cls
     )
 
 
@@ -197,7 +197,7 @@ def _workflow_leaf_classes() -> tuple[type, ...]:
     return _flatten(WorkflowOperationType)
 
 
-_WORKFLOW_ADAPTER = TypeAdapter(discriminated_union(WorkflowOperationType))
+_WORKFLOW_ADAPTER = TypeAdapter(WorkflowOperationInput)
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -332,10 +332,9 @@ class Job(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulation: WorkflowOperationType = Field(
+    simulation: WorkflowOperationInput = Field(
         title="simulation",
         description="Simulation to run as a 'task'.",
-        discriminator=TYPE_TAG_STR,
     )
 
     workflow: Workflow | None = Field(
@@ -457,7 +456,7 @@ class Job(WebContainer):
 
     def model_post_init(self, __context: Any) -> None:
         """Resolve workflow and initialize runtime state."""
-        self._resolved_workflow = resolve_workflow(self.simulation, self.workflow)
+        self._resolved_workflow = resolve_product_workflow(self.simulation, self.workflow)
         self._validate_supported_workflow_dependencies()
         self._validate_preprocess_cache_request()
         self._state = self._initialize_state()
@@ -896,10 +895,13 @@ class Job(WebContainer):
         if workflow is not None and type(workflow) is not Workflow:
             workflow = Workflow(steps=workflow.steps)
         with self._state_lock:
+            # The values are already validated; validating them again would rebuild product
+            # models as the Tidy3D classes that share their type tags.
             return self.updated_copy(
                 workflow=workflow,
                 task_id_cached=self._serializable_task_id(),
                 state_cached=self._runtime_state.model_copy(deep=True),
+                validate=False,
             )
 
     def to_file(self, fname: PathLike) -> None:
@@ -2518,7 +2520,7 @@ class Batch(WebContainer):
         """Validate container structure while normalizing sequences to tuples."""
 
         def _recur(value: object) -> object:
-            if isinstance(value, WorkflowOperationType):
+            if is_workflow_operation(value):
                 return value
             if _is_serialized_workflow_leaf(value):
                 return _WORKFLOW_ADAPTER.validate_python(value)
@@ -2547,7 +2549,7 @@ class Batch(WebContainer):
             return flat_simulations, tuple(flat_simulations)
         return flatten_task_container(
             self.simulations,
-            is_leaf=lambda value: isinstance(value, WorkflowOperationType),
+            is_leaf=is_workflow_operation,
             validate_dict_key=_validate_batch_mapping_key,
         )
 
@@ -2931,9 +2933,10 @@ class Batch(WebContainer):
             jobs = {}
             for key, job in jobs_cached.items():
                 jobs[key] = job._copy_for_serialization()
-            self = self.updated_copy(jobs_cached=jobs)
+            self = self.updated_copy(jobs_cached=jobs, validate=False)
         self = self.updated_copy(
-            task_tree=self._simulation_task_tree if self._has_nested_simulation_container else None
+            task_tree=self._simulation_task_tree if self._has_nested_simulation_container else None,
+            validate=False,
         )
         super(Batch, self).to_file(fname=fname)  # noqa: UP008  # pyrefly: ignore[invalid-argument]
 
@@ -3787,7 +3790,7 @@ class Batch(WebContainer):
                 return operation, getattr(step, "cacheable", True)
 
         simulation = getattr(job, "simulation", None)
-        if isinstance(simulation, WorkflowOperationType):
+        if is_workflow_operation(simulation):
             return simulation, True
         return None, True
 
