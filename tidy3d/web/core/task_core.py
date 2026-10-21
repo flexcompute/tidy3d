@@ -130,15 +130,17 @@ class Folder(Tidy3DResource, Queryable, extra="allow"):
         folder = FOLDER_CACHE.get(key)
         if folder is None:
             require_workspace(workspace)
-            resp = http.get(
-                "tidy3d/folders/v2/search",
-                params={"name": folder_name, "sharedWorkspace": workspace == "shared"},
-            )
+            # Keep private submissions compatible with services predating workspace APIs.
+            if workspace == "private":
+                create_endpoint = "tidy3d/projects"
+                params = {"projectName": folder_name}
+                resp = http.get("tidy3d/project", params=params)
+            else:
+                create_endpoint = "tidy3d/folders/v2"
+                params = {"name": folder_name, "sharedWorkspace": True}
+                resp = http.get(f"{create_endpoint}/search", params=params)
             if not resp and create:
-                resp = http.post(
-                    "tidy3d/folders/v2",
-                    {"name": folder_name, "sharedWorkspace": workspace == "shared"},
-                )
+                resp = http.post(create_endpoint, params)
             if resp:
                 folder = cls.model_validate(resp).model_copy(update={"workspace": workspace})
                 FOLDER_CACHE[key] = folder
