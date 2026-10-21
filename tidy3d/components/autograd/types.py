@@ -18,7 +18,7 @@ from pydantic import (
     TypeAdapter,
 )
 
-from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
+from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, MatrixReal4x4, Size1D
 from tidy3d.components.types.base import _auto_serializer, _from_complex_dict
 from tidy3d.components.types.utils import _add_schema, _typed_tuple
 
@@ -164,6 +164,7 @@ TracedSize1D = traced_alias(Size1D)
 # derived traced types (these mirror the types in `components.types`)
 TracedSize = _typed_tuple(tuple[TracedSize1D, TracedSize1D, TracedSize1D])
 TracedCoordinate = _typed_tuple(tuple[TracedFloat, TracedFloat, TracedFloat])
+TracedMatrixReal4x4 = traced_alias(MatrixReal4x4)
 TracedPoleAndResidue = _typed_tuple(tuple[TracedComplex, TracedComplex])
 TracedPolesAndResidues = _typed_tuple(tuple[TracedPoleAndResidue, ...])
 
@@ -212,6 +213,7 @@ __all__ = [
     "TracedCoordinate",
     "TracedDict",
     "TracedFloat",
+    "TracedMatrixReal4x4",
     "TracedNonNegativeFloat",
     "TracedPoleAndResidue",
     "TracedPolesAndResidues",

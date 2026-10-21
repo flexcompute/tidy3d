@@ -2,48 +2,256 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d._runtime import always_validate
+from tidy3d.components.autograd import TracedMatrixReal4x4, get_static
+from tidy3d.components.autograd.path_utils import resolve_delegated_autograd_route
 from tidy3d.components.base import cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import (
-    MatrixReal4x4,
-)
 from tidy3d.components.types.base import discriminated_union
+from tidy3d.constants import fp_eps
 from tidy3d.exceptions import (
+    AdjointError,
     Tidy3dError,
     ValidationError,
 )
 from tidy3d.log import log
 
-from .core import Geometry, assert_geometry_finite, check_transform_invertible
+from .core import (
+    _TRANSLATION_PATH,
+    Geometry,
+    assert_geometry_finite,
+    check_transform_affine,
+    check_transform_invertible,
+)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings, PathType
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import (
         ArrayFloat2D,
         Axis,
         Bound,
         Coordinate,
+        MatrixReal4x4,
         Shapely,
+    )
+    from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
+
+
+def _transform_points(points: np.ndarray, transform: np.ndarray) -> np.ndarray:
+    """Apply a homogeneous transform to an ``(N, 3)`` point array."""
+    homogeneous = np.concatenate((points, np.ones((len(points), 1))), axis=1)
+    return np.dot(homogeneous, np.asarray(transform).T)[:, :3]
+
+
+def _transformed_simulation_bounds(
+    transform: np.ndarray, simulation_bounds: tuple[tuple[float, ...], tuple[float, ...]]
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Return an axis-aligned local bound containing the inverse-transformed domain."""
+    corners = Transformed._vertices_from_bounds(simulation_bounds)
+    local_corners = np.dot(np.linalg.inv(transform), corners)[:3].T
+    return tuple(local_corners.min(axis=0)), tuple(local_corners.max(axis=0))
+
+
+def _check_flat_box_transform(geometry: Geometry, linear: np.ndarray) -> None:
+    """Require flat boxes' transformed zero-thickness directions to stay normal to their planes."""
+    from tidy3d.components.geometry.utils import flatten_groups
+
+    from .box import Box
+
+    for child in flatten_groups(geometry, flatten_nonunion_type=True):
+        if isinstance(child, Transformed):
+            _check_flat_box_transform(child.geometry, linear @ np.asarray(child.transform)[:3, :3])
+        elif isinstance(child, Box) and child.size.count(0.0) == 1:
+            flat_axis = child.size.index(0.0)
+            in_plane = [index for index in range(3) if index != flat_axis]
+            directions = linear / np.linalg.norm(linear, axis=0, keepdims=True)
+            if not np.allclose(
+                np.dot(directions[:, flat_axis], directions[:, in_plane]), 0.0, atol=1e-12
+            ):
+                raise AdjointError(
+                    "Geometry gradients for flat boxes in 3D require the transformed flat "
+                    "direction to stay perpendicular to the transformed plane. Shears coupling "
+                    "that direction to the plane are not supported; use rotations, reflections, "
+                    "scaling, or in-plane shear."
+                )
+
+
+def _local_sampling_context(
+    geometry: Geometry, transform: np.ndarray, ctx: SamplingContext
+) -> SamplingContext:
+    """Express a transformed geometry's sampling context in its local coordinates."""
+    from tidy3d.components.bound_ops import bounds_intersection
+
+    check_transform_affine(get_static(transform))
+    sim_min, sim_max = map(np.asarray, ctx.simulation_bounds)
+    collapsed = np.flatnonzero(np.isclose(sim_max - sim_min, 0.0))
+    linear = np.asarray(transform)[:3, :3]
+    sampling_linear = linear
+    if len(collapsed) == 1:
+        axis = collapsed[0]
+        in_plane = [index for index in range(3) if index != axis]
+        if not (
+            np.allclose(linear[axis, in_plane], 0.0, atol=1e-12)
+            and np.allclose(linear[in_plane, axis], 0.0, atol=1e-12)
+        ):
+            axis_name = "xyz"[axis]
+            plane = "-".join("xyz"[index] for index in in_plane)
+            entries = ", ".join(
+                f"transform[{i}][{j}]={linear[i, j]:.3g}"
+                for i, j in [(axis, p) for p in in_plane] + [(p, axis) for p in in_plane]
+                if not np.isclose(linear[i, j], 0.0, atol=1e-12)
+            )
+            raise AdjointError(
+                f"Geometry gradients in a 2D simulation (zero size along '{axis_name}') require "
+                f"'transform' to keep the '{axis_name}' axis separate from the {plane} plane, "
+                f"but these entries are nonzero: {entries}. Supported: rotations about "
+                f"'{axis_name}'; scaling, shear, or reflection within the {plane} plane; "
+                f"scaling along '{axis_name}'; and translations. For other transforms, "
+                "use a 3D simulation."
+            )
+        sampling_linear = linear[np.ix_(in_plane, in_plane)]
+    elif len(collapsed) == 0:
+        # Validate the geometry, not the requested sample sets: a flat box's
+        # normal-axis paths may request only area faces, with no edge samples.
+        _check_flat_box_transform(geometry, linear)
+    # A scalar local resolution must account for the largest possible stretch,
+    # including shear. Perpendicular scaling does not refine a 2D cross-section.
+    stretch = np.linalg.norm(sampling_linear, ord=2)
+    local_simulation_bounds = _transformed_simulation_bounds(transform, ctx.simulation_bounds)
+    return ctx.updated_copy(
+        bounds=geometry.bounds,
+        bounds_intersect=bounds_intersection(geometry.bounds, local_simulation_bounds),
+        simulation_bounds=local_simulation_bounds,
+        spacing=ctx.spacing / stretch,
+        material_wavelength=(
+            ctx.material_wavelength / stretch if ctx.material_wavelength is not None else None
+        ),
+    )
+
+
+def _transform_sample_set(
+    sample_set: SurfaceSampleSet, transform: np.ndarray, simulation_bounds: Bound
+) -> SurfaceSampleSet:
+    """Map a local surface sample set into world coordinates for field sampling."""
+    from tidy3d.em.translate.sample_sets import IndexedDataArray, PointDataArray, SurfaceSampleSet
+
+    if sample_set.num_points == 0:
+        return sample_set
+
+    linear = np.asarray(transform)[:3, :3]
+    points = np.asarray(sample_set.points.values)
+    normals = np.asarray(sample_set.normals.values)
+    perps1 = np.asarray(sample_set.perps1.values)
+    det = np.linalg.det(linear)
+
+    normal_raw = np.dot(normals, np.linalg.inv(linear))
+    normal_norm = np.linalg.norm(normal_raw, axis=1, keepdims=True)
+    world_normals = normal_raw / normal_norm
+    world_perps1 = np.dot(perps1, linear.T)
+    world_perps1 /= np.linalg.norm(world_perps1, axis=1, keepdims=True)
+    world_perps2 = np.cross(world_normals, world_perps1)
+
+    area_scale = np.abs(det) * normal_norm[:, 0]
+    sim_min, sim_max = map(np.asarray, simulation_bounds)
+    collapsed = np.flatnonzero(np.isclose(sim_max - sim_min, 0.0))
+    if len(collapsed) == 1:
+        # 2D weights are per unit length of the collapsed axis, not surface areas.
+        # The inverse-normal pullback then carries only the in-plane Jacobian.
+        area_scale /= np.abs(linear[collapsed[0], collapsed[0]])
+    elif len(collapsed) == 0 and any(sample_set.pec_flat_perp_dims):
+        # Flat PEC boxes also supply line samples in otherwise 3D simulations.
+        tangent = sample_set.perps2 if sample_set.pec_flat_perp_dims[0] else sample_set.perps1
+        area_scale = np.linalg.norm(np.dot(tangent.values, linear.T), axis=1)
+    world_points = _transform_points(points, transform)
+    inside_by_axis = (world_points >= sim_min - fp_eps) & (world_points <= sim_max + fp_eps)
+    # Some native 2D samplers use a narrow strip around the collapsed plane;
+    # staging projects its queries onto the plane. Clip only the simulated axes.
+    inside_by_axis[:, collapsed] = True
+    inside = np.all(inside_by_axis, axis=1)
+    if not np.any(inside):
+        return SurfaceSampleSet.empty()
+    metadata = sample_set.metadata
+    if metadata is not None and not np.all(inside):
+        metadata = metadata.updated_copy(
+            **{
+                name: value.isel(index=inside).assign_coords(
+                    index=np.arange(np.count_nonzero(inside))
+                )
+                for name, value in metadata
+                if isinstance(value, (IndexedDataArray, PointDataArray))
+            }
+        )
+    return SurfaceSampleSet.from_arrays(
+        points=world_points[inside],
+        normals=world_normals[inside],
+        perps1=world_perps1[inside],
+        perps2=world_perps2[inside],
+        weights=(np.asarray(sample_set.weights.values) * area_scale)[inside],
+        pec_flat_perp_dims=sample_set.pec_flat_perp_dims,
+        metadata=metadata,
+    )
+
+
+def _localize_sample_set(sample_set: SurfaceSampleSet, transform: np.ndarray) -> SurfaceSampleSet:
+    """Map a world sample set back to local coordinates for geometry VJP scatter."""
+    from tidy3d.em.translate.sample_sets import SurfaceSampleSet
+
+    if sample_set.num_points == 0:
+        return sample_set
+
+    linear = np.asarray(transform)[:3, :3]
+    inverse = np.linalg.inv(linear)
+    world_normals = np.asarray(sample_set.normals.values)
+    # Normals are stored as row vectors.  Pulling a world normal back through
+    # ``y = A @ x`` therefore applies ``A.T`` to the corresponding column, or
+    # ``@ A`` in row-vector form.
+    local_normal_raw = np.dot(world_normals, linear)
+    local_normal_norm = np.linalg.norm(local_normal_raw, axis=1, keepdims=True)
+    local_normals = local_normal_raw / local_normal_norm
+    local_perps1 = np.dot(np.asarray(sample_set.perps1.values), inverse.T)
+    local_perps1 /= np.linalg.norm(local_perps1, axis=1, keepdims=True)
+    local_perps2 = np.cross(local_normals, local_perps1)
+    # A local displacement is mapped through the linear transform before the
+    # world-coordinate boundary integral is reduced.  The effective local weight
+    # therefore includes the transform's area-volume Jacobian.
+    local_weights = np.asarray(sample_set.weights.values) * local_normal_norm[:, 0]
+
+    inverse_transform = np.linalg.inv(np.asarray(transform))
+    return SurfaceSampleSet.from_arrays(
+        points=_transform_points(np.asarray(sample_set.points.values), inverse_transform),
+        normals=local_normals,
+        perps1=local_perps1,
+        perps2=local_perps2,
+        weights=local_weights,
+        pec_flat_perp_dims=sample_set.pec_flat_perp_dims,
+        metadata=sample_set.metadata,
     )
 
 
 class Transformed(Geometry):
-    """Class representing a transformed geometry."""
+    """Class representing a transformed geometry.
+
+    Parameters of ``geometry`` support automatic differentiation through a fixed,
+    invertible affine transform. In 2D simulations the transform must preserve the
+    simulation plane.
+    """
 
     geometry: discriminated_union(GeometryType) = Field(
         title="Geometry",
         description="Base geometry to be transformed.",
     )
 
-    transform: MatrixReal4x4 = Field(
+    transform: TracedMatrixReal4x4 = Field(
         default_factory=lambda: np.eye(4).tolist(),
         title="Transform",
         description="Transform matrix applied to the base geometry.",
@@ -55,7 +263,8 @@ class Transformed(Geometry):
     @classmethod
     def _transform_is_invertible(cls, val: MatrixReal4x4) -> MatrixReal4x4:
         """Raise validation error if transform is not invertible."""
-        check_transform_invertible(val)
+        transform_static = get_static(val)
+        check_transform_invertible(transform_static)
         return val
 
     @model_validator(mode="after")
@@ -332,6 +541,97 @@ class Transformed(Geometry):
         i = (axis + 1) % 3
         j = (axis + 2) % 3
         return np.isclose(transform[i, axis], 0) and np.isclose(transform[j, axis], 0)
+
+    # Autograd delegation for parameters of the wrapped geometry.
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
+        """Validate a traced path owned by the wrapped geometry."""
+        check_transform_affine(get_static(self.transform))
+        if field_path == _TRANSLATION_PATH:
+            return self.geometry._resolve_autograd_route(field_path)
+        resolve_delegated_autograd_route(
+            parameter_kind="geometry",
+            owner_kind="geometry type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            delegates={"geometry": self.geometry},
+            supported_parameters=("geometry.<parameter>",),
+        )
+
+    @staticmethod
+    def _geometry_paths(paths: list[PathType]) -> list[PathType]:
+        """Strip this wrapper's prefix from paths delegated to the geometry."""
+        child_paths = []
+        for path in paths:
+            if path == _TRANSLATION_PATH:
+                child_paths.append(path)
+            elif len(path) >= 2 and path[0] == "geometry":
+                child_paths.append(path[1:])
+            else:
+                raise AdjointError("Transformed geometry paths must start with 'geometry'.")
+        return list(dict.fromkeys(child_paths))
+
+    def _make_adjoint_sample_sets(
+        self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Generate world-coordinate samples by delegating to the local geometry."""
+        child_paths = self._geometry_paths(paths)
+
+        local_ctx = _local_sampling_context(self.geometry, self.transform, ctx)
+        local_sets = self.geometry._make_adjoint_sample_sets(
+            paths=child_paths, ctx=local_ctx, settings=settings
+        )
+        return {
+            ("geometry", *key): _transform_sample_set(
+                sample_set, self.transform, ctx.simulation_bounds
+            )
+            for key, sample_set in local_sets.items()
+        }
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        paths: list[PathType],
+        derivative_info: ShapeDerivativeContext,
+    ) -> dict[PathType, Any]:
+        """Consume world-coordinate samples using the wrapped geometry's VJP."""
+        child_paths = self._geometry_paths(paths)
+
+        local_sample_sets = {
+            key[1:]: _localize_sample_set(sample_set, self.transform)
+            for key, sample_set in sample_sets.items()
+            if key[:1] == ("geometry",)
+        }
+        local_point_integrands = {
+            key[1:]: value
+            for key, value in derivative_info.point_integrands.items()
+            if key[:1] == ("geometry",)
+        }
+        local_info = replace(
+            derivative_info,
+            simulation_bounds=_transformed_simulation_bounds(
+                self.transform, derivative_info.simulation_bounds
+            ),
+            point_integrands=local_point_integrands,
+        )
+        child_vjps = self.geometry._compute_derivatives_from_sample_sets(
+            sample_sets=local_sample_sets,
+            paths=child_paths,
+            derivative_info=local_info,
+        )
+        result = {}
+        linear = np.asarray(self.transform)[:3, :3]
+        inverse_transpose = np.linalg.inv(linear).T
+        for path in paths:
+            child_path = path if path == _TRANSLATION_PATH else path[1:]
+            value = child_vjps[child_path]
+            if child_path[-len(_TRANSLATION_PATH) :] == _TRANSLATION_PATH:
+                # The wrapped geometry reports dJ/du in local coordinates, while
+                # this wrapper's translation is a world-space displacement t with
+                # u = A^-1 t. Apply the fixed-transform chain rule dJ/dt=A^-T dJ/du.
+                value = tuple(np.dot(inverse_transpose, np.asarray(value)).tolist())
+            result[path] = value
+        return result
 
     @cached_property
     def _normal_2dmaterial(self) -> Axis:

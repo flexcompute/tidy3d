@@ -6,6 +6,7 @@ import functools
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from pydantic import Field, field_validator
 
 from tidy3d.components.autograd.path_utils import (
@@ -15,7 +16,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import AdjointError, ValidationError
 
-from .core import Geometry, _raise_unsupported_traced_geometry_path
+from .core import _TRANSLATION_PATH, Geometry, _raise_unsupported_traced_geometry_path
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -262,6 +263,10 @@ class GeometryGroup(Geometry):
 
     def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced GeometryGroup path for adjoint routing."""
+        if field_path == _TRANSLATION_PATH:
+            for geometry in self.geometries:
+                geometry._resolve_autograd_route(field_path)
+            return
         if len(field_path) < 2 or field_path[0] != "geometries":
             _raise_unsupported_traced_geometry_path(
                 type(self).__name__,
@@ -281,11 +286,14 @@ class GeometryGroup(Geometry):
                 full_path=field_path,
             )
 
-    @staticmethod
-    def _sub_paths_by_child(paths: list[PathType]) -> dict[int, list[PathType]]:
+    def _sub_paths_by_child(self, paths: list[PathType]) -> dict[int, list[PathType]]:
         """Group child-relative sub-paths by child geometry index."""
         grouped: dict[int, list[PathType]] = {}
         for field_path in paths:
+            if field_path == _TRANSLATION_PATH:
+                for index in range(len(self.geometries)):
+                    grouped.setdefault(index, []).append(field_path)
+                continue
             _, index, *geo_path = field_path
             grouped.setdefault(index, []).append(tuple(geo_path))
         return grouped
@@ -320,29 +328,38 @@ class GeometryGroup(Geometry):
     ) -> AutogradFieldMap:
         """Route consumption to child geometries, mapping their vjps to full paths."""
         grad_vjps = {}
+        translation = np.zeros(3)
+        requested_paths = set(paths)
+        translation_requested = _TRANSLATION_PATH in requested_paths
+        paths_by_child = self._sub_paths_by_child(paths)
+        sets_by_child = {index: {} for index in paths_by_child}
+        integrands_by_child = {index: {} for index in paths_by_child}
+        for payload, partitions in (
+            (sample_sets, sets_by_child),
+            (derivative_info.point_integrands, integrands_by_child),
+        ):
+            for key, value in payload.items():
+                if key[:1] == ("geometries",) and key[1] in partitions:
+                    partitions[key[1]][key[2:]] = value
 
-        for index, child_paths in self._sub_paths_by_child(paths).items():
+        for index, child_paths in paths_by_child.items():
             child = self.geometries[index]
-
-            prefix = ("geometries", index)
-            child_sets = {key[2:]: value for key, value in sample_sets.items() if key[:2] == prefix}
-
             child_info = replace(
                 derivative_info,
-                # point-cloud integrands are keyed like sample sets: strip the routing
-                # prefix so the child's local canonical keys resolve
-                point_integrands={
-                    key[2:]: value
-                    for key, value in derivative_info.point_integrands.items()
-                    if key[:2] == prefix
-                },
+                point_integrands=integrands_by_child[index],
             )
-
             child_vjps = child._compute_derivatives_from_sample_sets(
-                sample_sets=child_sets, paths=child_paths, derivative_info=child_info
+                sample_sets=sets_by_child[index], paths=child_paths, derivative_info=child_info
             )
 
             for geo_path, geo_vjp in child_vjps.items():
-                grad_vjps[("geometries", index, *geo_path)] = geo_vjp
+                path = ("geometries", index, *geo_path)
+                if geo_path == _TRANSLATION_PATH and translation_requested:
+                    translation += geo_vjp
+                    if path not in requested_paths:
+                        continue
+                grad_vjps[path] = geo_vjp
 
+        if translation_requested:
+            grad_vjps[_TRANSLATION_PATH] = tuple(translation.tolist())
         return grad_vjps

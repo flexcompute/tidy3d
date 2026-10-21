@@ -19,13 +19,19 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.viz.plot_params import plot_params_geometry
 from tidy3d.constants import fp_eps
-from tidy3d.exceptions import SetupError, ValidationError, format_chained_exception_message
+from tidy3d.exceptions import (
+    AdjointError,
+    SetupError,
+    ValidationError,
+    format_chained_exception_message,
+)
 from tidy3d.log import log
 
 from . import gds as _gds_methods
 from . import operators as _operator_methods
 from . import plotting as _plot_methods
 from . import transforms as _transform_methods
+from .constants import LINEAR_TRANSFORM_TOL
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,6 +56,12 @@ if TYPE_CHECKING:
 
 
 _BOX_FACES = "faces"
+_TRANSLATION_PATH = ("__translation__",)
+"""Rigid-translation VJP: return one real three-vector under this exact key.
+
+The vector uses the sample sets' coordinate system. Composites sum their children's
+contributions; explicitly requested child translation paths keep their prefixes.
+"""
 
 
 def _raise_unsupported_traced_geometry_path(
@@ -91,7 +103,7 @@ def assert_geometry_finite(field_name: str = "geometry") -> Callable[[type, Geom
     @classmethod
     def geometry_has_finite_bounds(cls: type, val: Geometry) -> Geometry:
         """Raise validation error if geometry has non-finite bounds."""
-        if not np.isfinite(val.bounds).all():
+        if not np.isfinite(get_static(val.bounds)).all():
             raise ValidationError(
                 f"'{cls.__name__}' requires a geometry with finite dimensions. "
                 "Try using a large value instead of 'inf' when creating geometries."
@@ -128,6 +140,18 @@ def check_transform_invertible(transform: MatrixReal4x4, index: int | None = Non
         raise ValidationError(
             format_chained_exception_message("Transform matrix is not invertible", err)
         ) from err
+
+
+def check_transform_affine(transform: MatrixReal4x4, index: int | None = None) -> None:
+    """Check that a transform supports affine geometry gradients."""
+    bottom_row = np.asarray(transform)[3, :]
+    expected_bottom = np.array([0, 0, 0, 1])
+    if not np.allclose(bottom_row, expected_bottom, rtol=0, atol=LINEAR_TRANSFORM_TOL):
+        index_msg = f" at index {index}" if index is not None else ""
+        raise AdjointError(
+            f"Geometry gradients require an affine transform{index_msg} with bottom row "
+            f"[0, 0, 0, 1]; received {bottom_row.tolist()}."
+        )
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -646,6 +670,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         legitimate zero contribution, a missing key means data was lost and raises.
         Each requested path's vjp must not depend on which other paths are
         co-requested (grouped router dispatch relies on this).
+        Return each VJP under its requested path, including one total three-vector
+        under ``_TRANSLATION_PATH`` for rigid translation of a composite geometry.
         """
         raise NotImplementedError(
             f"Can't compute derivative from sample sets for 'Geometry': '{type(self)}'."

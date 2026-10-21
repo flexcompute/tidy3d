@@ -28,6 +28,7 @@ from tidy3d.exceptions import AdjointError, DataError, ValidationError
 from tidy3d.log import log
 
 from . import base
+from .base.core import _TRANSLATION_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -820,7 +821,7 @@ class TriangleMesh(base.Geometry, ABC):
         if not self.mesh_dataset:
             raise DataError("Can't compute derivatives without mesh data.")
 
-        if _MESH_DERIVATIVE_PATH not in paths:
+        if _MESH_DERIVATIVE_PATH not in paths and _TRANSLATION_PATH not in paths:
             return {}
 
         if not self.trimesh.is_volume:
@@ -888,6 +889,22 @@ class TriangleMesh(base.Geometry, ABC):
         if not self.mesh_dataset:
             raise DataError("Can't compute derivatives without mesh data.")
 
+        if _TRANSLATION_PATH in paths:
+            if _MESH_SURFACE_KEY not in sample_sets:
+                raise AdjointError(
+                    f"'TriangleMesh' sample sets are missing the canonical {_MESH_SURFACE_KEY} "
+                    f"key; got keys {tuple(sample_sets)}."
+                )
+            sample_set = sample_sets[_MESH_SURFACE_KEY]
+            if sample_set.num_points == 0:
+                vjps[_TRANSLATION_PATH] = (0.0, 0.0, 0.0)
+            else:
+                g = self._sample_set_integrand(derivative_info, _MESH_SURFACE_KEY)
+                gradient = np.sum(
+                    (sample_set.weights.values * np.real(g))[:, None] * sample_set.normals.values,
+                    axis=0,
+                )
+                vjps[_TRANSLATION_PATH] = tuple(gradient.tolist())
         if _MESH_DERIVATIVE_PATH not in paths:
             return vjps
 

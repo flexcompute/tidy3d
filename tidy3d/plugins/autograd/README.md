@@ -214,8 +214,30 @@ Tidy3D's AD framework supports a wide range of design scenarios.
 | `Cylinder`      | `.center`, `.radius`, `.length`, `.sidewall_angle`         | Shape Optimization                |
 | `PolySlab`      | `.vertices`, `.slab_bounds`, `.sidewall_angle`             | Shape Optimization & taper tuning |
 | `GeometryGroup` | `.geometries`                                              | Grouping for performance          |
+| `Transformed`   | `.geometry.<attribute>`                                    | Fixed transform of a geometry     |
 | `ClipOperation` | traced parameters in underlying geometries                 | Boolean shape optimization        |
 | `TriangleMesh`  | `.mesh_dataset.surface_mesh`                               | 3D Shape Optimization             |
+
+Parameters of `Transformed.geometry` are traceable; its transform remains fixed.
+Geometry gradients require an invertible affine transform with bottom row
+`[0, 0, 0, 1]`. This restriction is checked during derivative preparation;
+ordinary construction and loading retain their existing invertibility validation.
+In 2D simulations, the axis along which the simulation has zero size must stay
+separate from the simulation plane. Rotations about that axis, in-plane reflections,
+scales and shears, independent scaling perpendicular to the plane, and translations
+are supported. Other axis-mixing transforms require a 3D simulation.
+The wrapped geometry must support adjoint differentiation; curved PolySlabs with
+nonzero bulges remain unsupported, including inside groups and boolean operations.
+
+Surface sampling accounts for affine stretch and shear when choosing its resolution
+and clips samples to the simulation domain. In 2D, transform scaling uses the
+cross-section measure rather than the 3D surface area. Center gradients include
+rigid displacement, including a sphere's cross-section moving through a fixed 2D plane.
+Flat PEC boxes in 3D retain line-length weights for their edges and surface-area
+weights for their faces, including under scaling perpendicular to the flat box.
+Their transformed zero-thickness direction must remain perpendicular to their
+transformed plane: rotations, reflections, scaling, and in-plane shear are supported,
+but shear coupling that direction to the plane is not.
 
 #### Base Materials
 

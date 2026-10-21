@@ -26,6 +26,7 @@ from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, Valid
 from tidy3d.log import log
 
 from . import base, triangulation
+from .base.core import _TRANSLATION_PATH
 from .vertex_utils import remove_adjacent_duplicate_vertices
 
 if TYPE_CHECKING:
@@ -2398,6 +2399,10 @@ class PolySlab(base.Planar):
         is_2d = np.isclose(extents[self.axis], 0.0)
 
         path_by_key = {}
+        if _TRANSLATION_PATH in paths:
+            path_by_key[_POLYSLAB_SIDEWALL_KEY] = _TRANSLATION_PATH
+            path_by_key[(_POLYSLAB_SLAB_FACE, 0)] = _TRANSLATION_PATH
+            path_by_key[(_POLYSLAB_SLAB_FACE, 1)] = _TRANSLATION_PATH
         for path in paths:
             key = self._canonical_key_for_path(path)
             if key is not None:
@@ -2413,7 +2418,9 @@ class PolySlab(base.Planar):
             return {key: SurfaceSampleSet.empty() for key in path_by_key}
 
         sample_sets = {}
-        for key in path_by_key:
+        # Canonical order keeps equivalent geometry parameterizations' sampling
+        # clouds identical, independent of derivative-path order.
+        for key in sorted(path_by_key, key=str):
             if key == _POLYSLAB_SIDEWALL_KEY:
                 sample_set = self._make_sidewall_sample_set(
                     sim_min=sim_min, sim_max=sim_max, is_2d=is_2d, dx=ctx.spacing, settings=settings
@@ -2455,6 +2462,33 @@ class PolySlab(base.Planar):
     ) -> AutogradFieldMap:
         """Compute vertices/sidewall-angle/slab-bounds derivatives from sample sets."""
         vjps: AutogradFieldMap = {}
+        if _TRANSLATION_PATH in paths:
+            required_keys = {
+                _POLYSLAB_SIDEWALL_KEY,
+                (_POLYSLAB_SLAB_FACE, 0),
+                (_POLYSLAB_SLAB_FACE, 1),
+            }
+            missing = required_keys.difference(sample_sets)
+            if missing:
+                raise AdjointError(
+                    "'PolySlab' sample sets are missing translation keys "
+                    f"{tuple(sorted(missing, key=str))}; got keys {tuple(sample_sets)}."
+                )
+
+            translation = np.zeros(3)
+            # Rigid translation uses the full outward normal, including the
+            # extrusion-axis component of slanted sidewalls.
+            for key in required_keys:
+                sample_set = sample_sets[key]
+                if sample_set.num_points:
+                    integrand = self._sample_set_integrand(derivative_info, key)
+                    translation += np.sum(
+                        (sample_set.weights.values * np.real(integrand))[:, None]
+                        * sample_set.normals.values,
+                        axis=0,
+                    )
+            vjps[_TRANSLATION_PATH] = tuple(translation.tolist())
+
         for path in paths:
             key = self._canonical_key_for_path(path)
             if key is None:

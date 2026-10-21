@@ -17,6 +17,7 @@ from tidy3d.components.autograd.path_utils import indexed_traced_paths, traced_p
 from tidy3d.components.autograd.types import PathType
 from tidy3d.components.base import cached_property, keyed_cache
 from tidy3d.components.geometry import base
+from tidy3d.components.geometry.base.core import _TRANSLATION_PATH
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
@@ -47,6 +48,11 @@ _N_SHAPELY_QUAD_SEGS_VISUALIZATION = 200
 _N_PTS_CYLINDER_POLYSLAB = 51
 _MAX_ICOSPHERE_SUBDIVISIONS = 7  # this would have 164K vertices and 328K faces
 _DEFAULT_EDGE_FRACTION = 0.25
+
+
+def _zero_vjps(paths: list[PathType]) -> AutogradFieldMap:
+    """Return scalar parameter zeros and a three-component rigid-translation zero."""
+    return {path: (0.0, 0.0, 0.0) if path == _TRANSLATION_PATH else 0.0 for path in paths}
 
 
 def _base_icosahedron() -> tuple[np.ndarray, np.ndarray]:
@@ -114,9 +120,6 @@ class _CollapsedAxisCylinder(NamedTuple):
 
     cyl_paths: set[tuple]
     """Cylinder derivative paths implied by the requested sphere paths."""
-
-    need_radius: bool
-    """Whether any requested sphere path consumes the cylinder radius gradient."""
 
     delta: float
     """Signed offset of the plane from the sphere center along the collapsed axis."""
@@ -487,7 +490,7 @@ class Sphere(base.Centered, base.Circular):
         )
         if collapsed_indices.size:
             if collapsed_indices.size > 1:
-                return dict.fromkeys(paths, 0.0)
+                return _zero_vjps(paths)
             axis_idx = int(collapsed_indices[0])
             plane_value = float(sim_min_collapsed[axis_idx])
             return self._collapsed_axis_vjps_from_sample_sets(
@@ -505,7 +508,7 @@ class Sphere(base.Centered, base.Circular):
             )
         sample_set = sample_sets[_SPHERE_SURFACE_KEY]
         if sample_set.num_points == 0:
-            return dict.fromkeys(paths, 0.0)
+            return _zero_vjps(paths)
 
         g = self._sample_set_integrand(derivative_info, _SPHERE_SURFACE_KEY)
 
@@ -515,7 +518,12 @@ class Sphere(base.Centered, base.Circular):
         grad_radius = np.sum(weighted)
 
         vjps: AutogradFieldMap = {}
+        if _TRANSLATION_PATH in paths:
+            vjps[_TRANSLATION_PATH] = tuple(grad_center.tolist())
+
         for path in paths:
+            if path == _TRANSLATION_PATH:
+                continue
             if path == ("radius",):
                 vjps[path] = float(grad_radius)
             else:
@@ -551,13 +559,11 @@ class Sphere(base.Centered, base.Circular):
             return None
 
         cyl_paths: set[tuple[str, int | None]] = set()
-        need_radius = False
         for path in paths:
-            if path == ("radius",) or path == ("center", axis_idx):
+            if path == ("radius",):
                 cyl_paths.add(("radius",))
-                need_radius = True
-            elif path[0] == "center" and path[1] != axis_idx:
-                cyl_paths.add(("center", path[1]))
+            elif path == _TRANSLATION_PATH or path[0] == "center":
+                cyl_paths.update({_TRANSLATION_PATH, ("radius",)})
 
         if not cyl_paths:
             return None
@@ -589,7 +595,6 @@ class Sphere(base.Centered, base.Circular):
         return _CollapsedAxisCylinder(
             cylinder=cylinder,
             cyl_paths=cyl_paths,
-            need_radius=need_radius,
             delta=delta,
             radius_plane=radius_plane,
             bounds=bounds,
@@ -614,7 +619,7 @@ class Sphere(base.Centered, base.Circular):
             tol=derivative_info.settings.edge_clip_tolerance,
         )
         if collapsed_setup is None:
-            return dict.fromkeys(paths, 0.0)
+            return _zero_vjps(paths)
 
         cyl_paths_sorted = sorted(collapsed_setup.cyl_paths, key=str)
         vjps_cyl = collapsed_setup.cylinder._compute_derivatives_from_sample_sets(
@@ -625,16 +630,19 @@ class Sphere(base.Centered, base.Circular):
 
         radius = float(self.radius)
         radius_plane = collapsed_setup.radius_plane
-        result = dict.fromkeys(paths, 0.0)
-        vjp_radius = float(vjps_cyl.get(("radius",), 0.0)) if collapsed_setup.need_radius else 0.0
+        result = _zero_vjps(paths)
+        vjp_radius = float(vjps_cyl.get(("radius",), 0.0))
+
+        grad_center = np.asarray(vjps_cyl.get(_TRANSLATION_PATH, np.zeros(3))).copy()
+        grad_center[axis_idx] = vjp_radius * (collapsed_setup.delta / radius_plane)
 
         for path in paths:
             if path == ("radius",):
                 result[path] = vjp_radius * (radius / radius_plane)
-            elif path == ("center", axis_idx):
-                result[path] = vjp_radius * (collapsed_setup.delta / radius_plane)
-            elif path[0] == "center" and path[1] != axis_idx:
-                result[path] = float(vjps_cyl.get(("center", path[1]), 0.0))
+            elif path == _TRANSLATION_PATH:
+                result[path] = tuple(grad_center.tolist())
+            elif path[0] == "center":
+                result[path] = float(grad_center[path[1]])
 
         return result
 
@@ -886,17 +894,12 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         """Map requested Cylinder derivative paths to equivalent PolySlab paths."""
         ps_paths = set()
         for path in paths:
-            if path == ("length",):
+            if path == _TRANSLATION_PATH or path[0] == "center":
+                ps_paths.add(_TRANSLATION_PATH)
+            elif path == ("length",):
                 ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
             elif path == ("radius",):
                 ps_paths.add(("vertices",))
-            elif "center" in path:
-                _, center_index = path
-                _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
-                if center_index in (index_x, index_y):
-                    ps_paths.add(("vertices",))
-                else:
-                    ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
             elif path == ("sidewall_angle",):
                 ps_paths.add(("sidewall_angle",))
         return ps_paths
@@ -954,7 +957,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # explicit statement that nothing contributes, so no polyslab needs rebuilding
         first_set = next((ss for ss in sample_sets.values() if ss.num_points > 0), None)
         if first_set is None:
-            return dict.fromkeys(paths, 0.0)
+            return _zero_vjps(paths)
         from tidy3d.em.translate.sample_sets import (
             CircularCrossSectionMetadataBase,
             typed_sample_set_metadata,
@@ -971,6 +974,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         )
 
         vjps = {}
+        if _TRANSLATION_PATH in paths:
+            vjps[_TRANSLATION_PATH] = vjps_polyslab[_TRANSLATION_PATH]
+
         for path in paths:
             if path == ("length",):
                 vjp_bottom = vjps_polyslab.get(("slab_bounds", 0), 0.0)
@@ -988,25 +994,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                     vjp_ys = np.sum(ys_ * vjps_vertices_ys)
                     vjps[path] = vjp_xs + vjp_ys
 
-            elif "center" in path:
-                _, center_index = path
-                _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
-                if center_index == index_x:
-                    if ("vertices",) not in vjps_polyslab:
-                        vjps[path] = 0.0
-                    else:
-                        vjps_vertices_xs = vjps_polyslab[("vertices",)][:, 0]
-                        vjps[path] = np.sum(vjps_vertices_xs)
-                elif center_index == index_y:
-                    if ("vertices",) not in vjps_polyslab:
-                        vjps[path] = 0.0
-                    else:
-                        vjps_vertices_ys = vjps_polyslab[("vertices",)][:, 1]
-                        vjps[path] = np.sum(vjps_vertices_ys)
-                else:
-                    vjp_bottom = vjps_polyslab.get(("slab_bounds", 0), 0.0)
-                    vjp_top = vjps_polyslab.get(("slab_bounds", 1), 0.0)
-                    vjps[path] = vjp_bottom + vjp_top
+            elif path[0] == "center":
+                vjps[path] = vjps_polyslab[_TRANSLATION_PATH][path[1]]
 
             elif path == ("sidewall_angle",):
                 # direct mapping: cylinder angle equals polyslab angle

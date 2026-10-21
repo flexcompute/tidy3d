@@ -28,7 +28,7 @@ from tidy3d.exceptions import (
 )
 
 from .abstract_primitives import Centered, SimplePlaneIntersection
-from .core import _BOX_FACES, Geometry
+from .core import _BOX_FACES, _TRANSLATION_PATH, Geometry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -854,6 +854,9 @@ class Box(SimplePlaneIntersection, Centered):
         # store only the gradients asked for in 'field_paths'
         derivative_map = {}
         for field_path in paths:
+            if field_path == _TRANSLATION_PATH:
+                derivative_map[field_path] = vjps_center_size["center"]
+                continue
             field_name, *index = field_path
 
             if field_name in vjps_center_size:
@@ -868,21 +871,6 @@ class Box(SimplePlaneIntersection, Centered):
                     derivative_map[field_path] = vjps_center_size[field_name]
 
         return derivative_map
-
-    @staticmethod
-    def _derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
-        """Derivatives with respect to the ``center`` and ``size`` fields in the ``Box``."""
-
-        vjps_faces_min, vjps_faces_max = np.array(vjps_faces)
-
-        # post-process min and max face gradients into center and size
-        vjp_center = vjps_faces_max - vjps_faces_min
-        vjp_size = (vjps_faces_min + vjps_faces_max) / 2.0
-
-        return {
-            "center": tuple(vjp_center.tolist()),
-            "size": tuple(vjp_size.tolist()),
-        }
 
     def _make_face_sample_set(
         self,

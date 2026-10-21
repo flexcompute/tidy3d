@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.autograd.path_utils import validate_traced_path
 from tidy3d.constants import inf
+from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -26,6 +27,14 @@ def _resolve_autograd_route(
     field_path: tuple[Any, ...],
 ) -> None:
     """Resolve and validate one traced geometry path for adjoint routing."""
+    from .core import _TRANSLATION_PATH
+
+    if field_path == _TRANSLATION_PATH:
+        if not self._traced_supported_paths:
+            raise AdjointError(
+                f"Geometry translation gradients are not supported for '{type(self).__name__}'."
+            )
+        return
     return validate_traced_path(
         parameter_kind="geometry",
         owner_kind="geometry type",

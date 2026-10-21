@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import shapely
 from pydantic import Field
 
@@ -15,6 +16,7 @@ from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import ValidationError
 
 from .core import (
+    _TRANSLATION_PATH,
     Geometry,
     _bit_operations,
     _shapely_operations,
@@ -349,6 +351,10 @@ class ClipOperation(Geometry):
 
     def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Resolve and validate one traced ClipOperation path for adjoint routing."""
+        if field_path == _TRANSLATION_PATH:
+            self.geometry_a._resolve_autograd_route(field_path)
+            self.geometry_b._resolve_autograd_route(field_path)
+            return
         return resolve_delegated_autograd_route(
             parameter_kind="geometry",
             owner_kind="geometry type",
@@ -366,6 +372,10 @@ class ClipOperation(Geometry):
         """Group operand-relative sub-paths by operand key."""
         geometry_paths = {"geometry_a": [], "geometry_b": []}
         for path in paths:
+            if path == _TRANSLATION_PATH:
+                geometry_paths["geometry_a"].append(path)
+                geometry_paths["geometry_b"].append(path)
+                continue
             geometry_key, *sub_path = path
             geometry_paths[geometry_key].append(tuple(sub_path))
         return geometry_paths
@@ -410,6 +420,9 @@ class ClipOperation(Geometry):
             "geometry_b": self.geometry_b,
         }
         grad_vjps = {}
+        translation = np.zeros(3)
+        requested_paths = set(paths)
+        translation_requested = _TRANSLATION_PATH in requested_paths
 
         for geometry_key, operand_paths in self._operand_paths(paths).items():
             if not operand_paths:
@@ -439,16 +452,13 @@ class ClipOperation(Geometry):
             )
 
             for geo_path, geo_vjp in vjp_dict_geometry.items():
-                full_path = (geometry_key, *geo_path)
-                if full_path in grad_vjps:
-                    existing = grad_vjps[full_path]
-                    if isinstance(existing, (list, tuple)) and isinstance(geo_vjp, (list, tuple)):
-                        grad_vjps[full_path] = type(existing)(
-                            x + y for x, y in zip(existing, geo_vjp)
-                        )
-                    else:
-                        grad_vjps[full_path] = existing + geo_vjp
-                else:
-                    grad_vjps[full_path] = geo_vjp
+                path = (geometry_key, *geo_path)
+                if geo_path == _TRANSLATION_PATH and translation_requested:
+                    translation += geo_vjp
+                    if path not in requested_paths:
+                        continue
+                grad_vjps[path] = geo_vjp
 
+        if translation_requested:
+            grad_vjps[_TRANSLATION_PATH] = tuple(translation.tolist())
         return grad_vjps
