@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.geometry.utils import GeometryType
+    from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
 FieldDataDict = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
@@ -28,6 +29,37 @@ EpsType = ScalarFieldDataArray
 ArrayFloat = NDArray[np.floating]
 AUTOGRAD_COORDINATE_TOLERANCE = 1e-12
 CLIP_INSIDE_PROBE_FRACTION = 1e-3
+
+
+def boundary_field_frame(
+    sample_set: SurfaceSampleSet, simulation_bounds: Bound
+) -> tuple[ArrayFloat, ArrayFloat, ArrayFloat]:
+    """Evaluate fields on the 2D interface, preserving geometry normals for its pullback."""
+    normals, perps1, perps2 = (
+        np.asarray(getattr(sample_set, name).values, dtype=float)
+        for name in ("normals", "perps1", "perps2")
+    )
+    sim_min, sim_max = map(np.asarray, simulation_bounds)
+    collapsed = np.flatnonzero(np.isclose(sim_max - sim_min, 0.0))
+    if len(collapsed) != 1:
+        return normals, perps1, perps2
+    axis = np.eye(3)[collapsed[0]]
+    projected = normals.copy()
+    projected[:, collapsed[0]] = 0.0
+    lengths = np.linalg.norm(projected, axis=1)
+    transverse = lengths > np.finfo(float).eps
+    projected[transverse] /= lengths[transverse, None]
+    # Coplanar walls retain their existing finite-strip convention.
+    projected[~transverse] = normals[~transverse]
+    perps1, perps2 = perps1.copy(), perps2.copy()
+    # Preserve which tangent the PEC line-integration flags select.
+    if sample_set.pec_flat_perp_dims[0]:
+        perps1[transverse] = axis
+        perps2[transverse] = np.cross(projected[transverse], axis)
+    else:
+        perps1[transverse] = np.cross(axis, projected[transverse])
+        perps2[transverse] = axis
+    return projected, perps1, perps2
 
 
 @dataclass

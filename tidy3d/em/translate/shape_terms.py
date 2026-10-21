@@ -21,6 +21,7 @@ from flexcompute.core._migration.em.derivatives import (
 
 from tidy3d.components.autograd.derivative_terms import Binding, Compiled, ShapeDerivativeContext
 from tidy3d.components.autograd.derivative_utils import (
+    boundary_field_frame,
     clip_active_from_inside_check,
     contains_clip_operation,
 )
@@ -29,6 +30,7 @@ from tidy3d.config import config
 if TYPE_CHECKING:
     from tidy3d.components.autograd.derivative_terms import PathType
     from tidy3d.components.autograd.types import GeometryAdjointSettings
+    from tidy3d.components.types import Bound
 
 
 def shape_terms(
@@ -73,7 +75,7 @@ def shape_terms(
     clip = contains_clip_operation(structure.geometry)
     kernel = BoundaryShapeKernel(
         sample_sets=tuple(
-            _shape_sample_set(entry, structure, structure_sets, clip)
+            _shape_sample_set(entry, structure, structure_sets, clip, simulation.bounds)
             for entry in structure_sets.entries
         ),
         point_chunks=point_chunks,
@@ -89,12 +91,12 @@ def shape_terms(
 
 
 def _shape_sample_set(
-    entry: Any, structure: Any, structure_sets: Any, clip: bool
+    entry: Any, structure: Any, structure_sets: Any, clip: bool, simulation_bounds: Bound
 ) -> ShapeSampleSet:
     """What the kernel reads from one staged sample set: normals, the clip mask, PEC sampling."""
 
     sample_set = entry.sample_set
-    normals = np.asarray(sample_set.normals.values, dtype=float).reshape(-1, 3)
+    normals, perps1, perps2 = boundary_field_frame(sample_set, simulation_bounds)
     active = None
     if clip and sample_set.num_points:
         active = clip_active_from_inside_check(
@@ -115,8 +117,8 @@ def _shape_sample_set(
             )
 
         pec = PECSides(
-            perps1=sample_set.perps1.values,
-            perps2=sample_set.perps2.values,
+            perps1=perps1,
+            perps2=perps2,
             flat_perp_dims=tuple(sampling.flat_perp_dims),
             inside=side(sampling.inside),
             outside=side(sampling.outside),

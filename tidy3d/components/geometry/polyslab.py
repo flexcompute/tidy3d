@@ -65,6 +65,7 @@ _COMPLEX_POLYSLAB_DIVISIONS_WARN = 100
 # winding) and 'sidewall_angle' (canonical CCW reference winding) are collected
 # separately because the two paths deliberately use different polygon conventions
 _POLYSLAB_SIDEWALL_KEY = ("sidewall_patches",)
+_POLYSLAB_COPLANAR_SIDEWALL_KEY = ("coplanar_sidewall_patches",)
 _POLYSLAB_SIDEWALL_ANGLE_KEY = ("sidewall_angle_patches",)
 _POLYSLAB_SLAB_FACE = "slab_face"  # keys are ('slab_face', 0) and ('slab_face', 1)
 
@@ -2422,9 +2423,16 @@ class PolySlab(base.Planar):
         # clouds identical, independent of derivative-path order.
         for key in sorted(path_by_key, key=str):
             if key == _POLYSLAB_SIDEWALL_KEY:
-                sample_set = self._make_sidewall_sample_set(
-                    sim_min=sim_min, sim_max=sim_max, is_2d=is_2d, dx=ctx.spacing, settings=settings
+                sample_sets.update(
+                    self._make_sidewall_sample_sets(
+                        sim_min=sim_min,
+                        sim_max=sim_max,
+                        is_2d=is_2d,
+                        dx=ctx.spacing,
+                        settings=settings,
+                    )
                 )
+                continue
             elif key == _POLYSLAB_SIDEWALL_ANGLE_KEY:
                 # 2D sim => no dependence on theta (z_local=0)
                 if is_2d:
@@ -2478,9 +2486,9 @@ class PolySlab(base.Planar):
             translation = np.zeros(3)
             # Rigid translation uses the full outward normal, including the
             # extrusion-axis component of slanted sidewalls.
-            for key in required_keys:
-                sample_set = sample_sets[key]
-                if sample_set.num_points:
+            for key in required_keys | {_POLYSLAB_COPLANAR_SIDEWALL_KEY}:
+                sample_set = sample_sets.get(key)
+                if sample_set is not None and sample_set.num_points:
                     integrand = self._sample_set_integrand(derivative_info, key)
                     translation += np.sum(
                         (sample_set.weights.values * np.real(integrand))[:, None]
@@ -2501,10 +2509,13 @@ class PolySlab(base.Planar):
             sample_set = sample_sets[key]
 
             if path == ("vertices",):
-                if sample_set.num_points == 0:
-                    vjps[path] = np.zeros_like(self.vertices)
-                    continue
-                vjps[path] = self._vertices_vjp_from_sample_set(sample_set, derivative_info, key)
+                vjps[path] = np.zeros_like(self.vertices, dtype=float)
+                for sidewall_key in (_POLYSLAB_SIDEWALL_KEY, _POLYSLAB_COPLANAR_SIDEWALL_KEY):
+                    sidewall = sample_sets.get(sidewall_key)
+                    if sidewall is not None and sidewall.num_points:
+                        vjps[path] += self._vertices_vjp_from_sample_set(
+                            sidewall, derivative_info, sidewall_key
+                        )
             elif path == ("sidewall_angle",):
                 if sample_set.num_points == 0:
                     vjps[path] = 0.0
@@ -2756,6 +2767,7 @@ class PolySlab(base.Planar):
         is_2d: bool,
         dx: float,
         settings: GeometryAdjointSettings,
+        slice_axis: int | None = None,
     ) -> dict:
         """
         Collect sidewall patch geometry for batched VJP evaluation.
@@ -2780,6 +2792,8 @@ class PolySlab(base.Planar):
             Discretization step.
         settings : GeometryAdjointSettings
             Adjoint settings for this pass (dtype, clip tolerance, quadrature).
+        slice_axis : int | None
+            Collapsed tangential axis for intersection-local sidewall quadrature.
 
         Returns
         -------
@@ -2815,46 +2829,33 @@ class PolySlab(base.Planar):
             sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th, dtype=_dtype
         )
 
-        # early exit: no slices
-        if (not is_2d) and len(z_centers) == 0:
-            return {
-                "centers": np.empty((0, 3), dtype=_dtype),
-                "normals": np.empty((0, 3), dtype=_dtype),
-                "perps1": np.empty((0, 3), dtype=_dtype),
-                "perps2": np.empty((0, 3), dtype=_dtype),
-                "Ls": np.empty((0,), dtype=_dtype),
-                "s_vals": np.empty((0,), dtype=_dtype),
-                "s_weights": np.empty((0,), dtype=_dtype),
-                "zc_vals": np.empty((0,), dtype=_dtype),
-                "dz": dz,
-                "edge_indices": np.empty((0,), dtype=int),
-            }
+        patches = {key: [] for key in ("centers", "Ls", "s_vals", "s_weights", "edge_indices")}
+        frames = np.empty((3, len(vertices), 3), dtype=_dtype)
+        line_edges = np.zeros(len(vertices), dtype=bool)
 
-        # estimate patches for pre-allocation
+        def finish() -> dict:
+            result = {}
+            for key, batches in patches.items():
+                dtype = int if key == "edge_indices" else _dtype
+                result[key] = (
+                    np.concatenate(batches).astype(dtype, copy=False)
+                    if batches
+                    else np.empty((0, 3) if key == "centers" else (0,), dtype=dtype)
+                )
+            result.update(
+                {
+                    key: np.take(frames[i], result["edge_indices"], axis=0)
+                    for i, key in enumerate(("normals", "perps1", "perps2"))
+                }
+            )
+            result["zc_vals"] = result["centers"][:, self.axis]
+            result["is_line"] = line_edges[result["edge_indices"]]
+            return {**result, "dz": dz}
+
+        if not is_2d and len(z_centers) == 0:
+            return finish()
         n_edges = len(vertices)
-        estimated_patches = 0
         denom_edge = max(dx * cos_th, 1e-12)
-        for ei in range(n_edges):
-            v0, v1 = vertices[ei], next_v[ei]
-            L = np.linalg.norm(v1 - v0)
-            if not np.isclose(L, 0.0):
-                # prealloc guided by actual step; ds_phys scales with cos(theta)
-                n_samples = max(1, int(np.ceil(L / denom_edge) * 0.6))
-                estimated_patches += n_samples * max(1, len(z_centers))
-        estimated_patches = int(max(1, estimated_patches) * 1.2)
-
-        # pre-allocate arrays
-        centers = np.empty((estimated_patches, 3), dtype=_dtype)
-        normals = np.empty((estimated_patches, 3), dtype=_dtype)
-        perps1 = np.empty((estimated_patches, 3), dtype=_dtype)
-        perps2 = np.empty((estimated_patches, 3), dtype=_dtype)
-        Ls = np.empty((estimated_patches,), dtype=_dtype)
-        s_vals = np.empty((estimated_patches,), dtype=_dtype)
-        s_weights = np.empty((estimated_patches,), dtype=_dtype)
-        zc_vals = np.empty((estimated_patches,), dtype=_dtype)
-        edge_indices = np.empty((estimated_patches,), dtype=int)
-
-        patch_idx = 0
 
         # if the simulation is effectively 2D (one tangential dimension collapsed),
         # slightly expand degenerate bounds to enable finite-length clipping of edges.
@@ -2880,6 +2881,30 @@ class PolySlab(base.Planar):
             dtype=_dtype,
         )
         slice_next_vertices = np.roll(slice_vertices, -1, axis=1)
+
+        plane_axes = [i for i in range(3) if i != self.axis]
+        if slice_axis is not None:
+            end_offsets = -(np.asarray((_z0, _z1)) - z_ref) * tan_th
+            # Shallow taper amplifies coordinate rounding into intersection-position error.
+            end_vertices = np.asarray(
+                [self._shift_vertices(vertices, offset_sign * dist)[0] for dist in end_offsets],
+                dtype=float,
+            )
+
+        def append_samples(
+            xyz: NDArray,
+            s_list: NDArray,
+            w_list: NDArray,
+            L_slice: float,
+            edge_index: int,
+        ) -> None:
+            """Store line and surface samples using the same field layout."""
+            count = len(s_list)
+            patches["centers"].append(xyz)
+            patches["Ls"].append(np.full(count, L_slice, dtype=_dtype))
+            patches["s_vals"].append(s_list)
+            patches["s_weights"].append(np.asarray(w_list, dtype=_dtype))
+            patches["edge_indices"].append(np.full(count, edge_index, dtype=int))
 
         # slanted local basis (constant across z for non-slanted case)
         # for slanted: rz = axis_vec + dprime * n2d, but dprime is constant
@@ -2920,6 +2945,34 @@ class PolySlab(base.Planar):
             if not np.isclose(T2_norm, 0.0):
                 T2_vec = T2_vec / T2_norm
 
+            frames[:, ei] = (N_vec, T1_vec, T2_vec)
+
+            if slice_axis is not None:
+                projection = np.linalg.norm(np.delete(N_vec, slice_axis))
+                # Treat roundoff-sized tilts as parallel, but retain shallow intersections.
+                if projection > np.finfo(float).eps:
+                    wall = np.empty((4, 3), dtype=float)
+                    wall[:, self.axis] = (_z0, _z0, _z1, _z1)
+                    next_ei = (ei + 1) % n_edges
+                    wall[:, plane_axes] = (
+                        end_vertices[0, ei],
+                        end_vertices[0, next_ei],
+                        end_vertices[1, next_ei],
+                        end_vertices[1, ei],
+                    )
+                    slice_samples = self._sample_sidewall_slice(
+                        wall, slice_axis, sim_min, sim_max, dx, settings
+                    )
+                    if slice_samples is None:
+                        continue
+                    xyz, s, weights, length = slice_samples
+                    line_edges[ei] = True
+                    # Cancel the surface-thickness factor used by the shared area
+                    # calculation; the projected normal supplies the line pullback.
+                    append_samples(xyz, s, weights * cos_th / (dz * projection), length, ei)
+                    continue
+                # Coplanar walls keep the existing finite-area strip sampling.
+
             # batch compute true offset-polygon segment starts and ends for all z slices
             # rather than translating the reference edge, which over-samples near vertices
             # when the cross-section shrinks.
@@ -2930,7 +2983,6 @@ class PolySlab(base.Planar):
 
             segment_starts = np.empty((n_z, 3), dtype=_dtype)
             segment_ends = np.empty((n_z, 3), dtype=_dtype)
-            plane_axes = [i for i in range(3) if i != self.axis]
             segment_starts[:, self.axis] = z_centers_arr
             segment_starts[:, plane_axes] = segment_vertices
             segment_ends[:, self.axis] = z_centers_arr
@@ -2995,57 +3047,81 @@ class PolySlab(base.Planar):
                 xyz[:, self.axis] = zc
                 xyz[:, plane_axes] = pts2d
 
-                n_patches = n_pts
-                new_size_needed = patch_idx + n_patches
-                if new_size_needed > centers.shape[0]:
-                    # grow arrays by 1.5x to avoid frequent reallocations
-                    new_size = int(new_size_needed * 1.5)
-                    centers.resize((new_size, 3), refcheck=False)
-                    normals.resize((new_size, 3), refcheck=False)
-                    perps1.resize((new_size, 3), refcheck=False)
-                    perps2.resize((new_size, 3), refcheck=False)
-                    Ls.resize((new_size,), refcheck=False)
-                    s_vals.resize((new_size,), refcheck=False)
-                    s_weights.resize((new_size,), refcheck=False)
-                    zc_vals.resize((new_size,), refcheck=False)
-                    edge_indices.resize((new_size,), refcheck=False)
+                append_samples(xyz, s_list, w_list, L_slice, ei)
 
-                sl = slice(patch_idx, patch_idx + n_patches)
-                centers[sl] = xyz
-                normals[sl] = N_vec
-                perps1[sl] = T1_vec
-                perps2[sl] = T2_vec
-                Ls[sl] = L_slice
-                s_vals[sl] = s_list
-                s_weights[sl] = w_list
-                zc_vals[sl] = zc
-                edge_indices[sl] = ei
+        return finish()
 
-                patch_idx += n_patches
+    def _sample_sidewall_slice(
+        self,
+        wall: NDArray,
+        slice_axis: int,
+        sim_min: NDArray,
+        sim_max: NDArray,
+        dx: float,
+        settings: GeometryAdjointSettings,
+    ) -> tuple[NDArray, NDArray, NDArray, float] | None:
+        """Sample a ruled wall's actual plane intersection, preserving vertex scatter positions."""
+        tol = settings.edge_clip_tolerance
+        next_wall = np.roll(wall, -1, axis=0)
+        distances = wall[:, slice_axis] - sim_min[slice_axis]
+        next_distances = np.roll(distances, -1)
+        # Half-open crossings take the positive-side limit at shared vertices.
+        # At tangent tips the derivative is one-sided, and both walls can contribute.
+        # Do not snap signs using the clipping tolerance: shallow walls still intersect.
+        crosses = (distances > 0) != (next_distances > 0)
+        if np.count_nonzero(crosses) < 2:
+            return None
+        fractions = distances[crosses] / (distances[crosses] - next_distances[crosses])
+        points = wall[crosses] + fractions[:, None] * (next_wall[crosses] - wall[crosses])
+        # Snap the intersection before clipping against the zero-width bound;
+        # otherwise roundoff can make the collapsed dimension reject the line.
+        points[:, slice_axis] = sim_min[slice_axis]
+        distances = np.sum((points[:, None] - points[None, :]) ** 2, axis=-1)
+        i, j = np.unravel_index(np.argmax(distances), distances.shape)
+        start, end = points[i], points[j]
+        length = np.linalg.norm(end - start)
+        if length <= tol:
+            return None
+        valid, t0, t1 = self._clip_edges_to_bounds_batch(
+            start[None, :],
+            end[None, :],
+            sim_min,
+            sim_max,
+            edge_clip_tolerance=tol,
+            dtype=settings.gradient_dtype_float,
+        )
+        if not valid[0]:
+            return None
+        positions, weights = self._adaptive_edge_samples(
+            length,
+            dx,
+            t0[0],
+            t1[0],
+            quadrature_sample_fraction=settings.quadrature_sample_fraction,
+            gauss_quadrature_order=settings.gauss_quadrature_order,
+            dtype=settings.gradient_dtype_float,
+        )
+        xyz = start + positions[:, None] * (end - start)
+        xyz[:, slice_axis] = sim_min[slice_axis]
 
-        # trim arrays to final size
-        centers = centers[:patch_idx]
-        normals = normals[:patch_idx]
-        perps1 = perps1[:patch_idx]
-        perps2 = perps2[:patch_idx]
-        Ls = Ls[:patch_idx]
-        s_vals = s_vals[:patch_idx]
-        s_weights = s_weights[:patch_idx]
-        zc_vals = zc_vals[:patch_idx]
-        edge_indices = edge_indices[:patch_idx]
-
-        return {
-            "centers": centers,
-            "normals": normals,
-            "perps1": perps1,
-            "perps2": perps2,
-            "Ls": Ls,
-            "s_vals": s_vals,
-            "s_weights": s_weights,
-            "zc_vals": zc_vals,
-            "dz": dz,
-            "edge_indices": edge_indices,
-        }
+        # At each sample's extrusion coordinate, locate it on the offset profile edge.
+        plane_axes = [dim for dim in range(3) if dim != self.axis]
+        z_fraction = (xyz[:, self.axis] - wall[0, self.axis]) / (
+            wall[3, self.axis] - wall[0, self.axis]
+        )
+        v0 = wall[0, plane_axes] + z_fraction[:, None] * (wall[3, plane_axes] - wall[0, plane_axes])
+        v1 = wall[1, plane_axes] + z_fraction[:, None] * (wall[2, plane_axes] - wall[1, plane_axes])
+        edge = v1 - v0
+        s = np.sum((xyz[:, plane_axes] - v0) * edge, axis=1) / np.maximum(
+            np.sum(edge**2, axis=1), 1e-20
+        )
+        dtype = settings.gradient_dtype_float
+        return (
+            xyz.astype(dtype, copy=False),
+            np.clip(s, 0.0, 1.0).astype(dtype, copy=False),
+            weights,
+            length,
+        )
 
     def _make_sidewall_angle_sample_set(
         self,
@@ -3341,15 +3417,15 @@ class PolySlab(base.Planar):
             metadata=PolySlabSlabFaceMetadata(min_max_index=min_max_index),
         )
 
-    def _make_sidewall_sample_set(
+    def _make_sidewall_sample_sets(
         self,
         sim_min: NDArray,
         sim_max: NDArray,
         is_2d: bool,
         dx: float,
         settings: GeometryAdjointSettings,
-    ) -> SurfaceSampleSet | None:
-        """Sidewall sample set in the raw vertex winding, serving the ``vertices`` path.
+    ) -> dict[PathType, SurfaceSampleSet]:
+        """Sidewall sample sets in the raw vertex winding, serving the ``vertices`` path.
 
         Weights are the patch areas; the per-vertex scatter data (edge indices and
         parametric edge positions) travels in the metadata for consumption by
@@ -3360,8 +3436,15 @@ class PolySlab(base.Planar):
             SurfaceSampleSet,
         )
 
+        sim_extents = np.asarray(sim_max) - np.asarray(sim_min)
+        collapsed_axes = np.flatnonzero(np.isclose(sim_extents, 0.0))
+        slice_axis = (
+            int(collapsed_axes[0])
+            if len(collapsed_axes) == 1 and collapsed_axes[0] != self.axis and not is_2d
+            else None
+        )
         vertices, next_v, edges, basis = self._edge_geometry_arrays(
-            dtype=settings.gradient_dtype_float
+            dtype=float if slice_axis is not None else settings.gradient_dtype_float
         )
 
         # collect patches once
@@ -3375,35 +3458,55 @@ class PolySlab(base.Planar):
             is_2d=is_2d,
             dx=dx,
             settings=settings,
+            slice_axis=slice_axis,
         )
 
         # no patches -> no samples (zero gradient)
         if patch["centers"].shape[0] == 0:
-            return None
+            return {_POLYSLAB_SIDEWALL_KEY: SurfaceSampleSet.empty()}
 
         dz = patch["dz"]
         dz_surf = 1.0 if is_2d else dz / np.cos(self.sidewall_angle)
 
-        # area-based quadrature weights
+        # Line patches already compensate the surface-thickness factor in their weights.
         areas = patch["Ls"] * patch["s_weights"] * dz_surf
+        if len(collapsed_axes) == 1 and collapsed_axes[0] == self.axis:
+            # Compensate the normal's projection into the extrusion cross-section.
+            areas = areas / np.cos(self.sidewall_angle)
 
-        num_points = patch["centers"].shape[0]
-        point_index = np.arange(num_points)
-        metadata = PolySlabSidewallMetadata(
-            edge_indices=IndexedDataArray(
-                np.asarray(patch["edge_indices"]), coords={"index": point_index}
-            ),
-            s_vals=IndexedDataArray(np.asarray(patch["s_vals"]), coords={"index": point_index}),
-        )
-        return SurfaceSampleSet.from_arrays(
-            points=patch["centers"],
-            normals=patch["normals"],
-            perps1=patch["perps1"],
-            perps2=patch["perps2"],
-            weights=areas,
-            metadata=metadata,
-            pec_flat_perp_dims=(False, True) if is_2d else (False, False),
-        )
+        masks: dict[PathType, slice | NDArray] = {_POLYSLAB_SIDEWALL_KEY: slice(None)}
+        if slice_axis is not None:
+            # PEC policy is per set: physical lines and finite-area coplanar
+            # fallback patches must remain separate, while sharing the same scatter.
+            line = patch["is_line"]
+            masks = {_POLYSLAB_SIDEWALL_KEY: line, _POLYSLAB_COPLANAR_SIDEWALL_KEY: ~line}
+        sample_sets = {}
+        for key, mask in masks.items():
+            num_points = areas[mask].size
+            if num_points == 0:
+                if key == _POLYSLAB_SIDEWALL_KEY:
+                    sample_sets[key] = SurfaceSampleSet.empty()
+                continue
+            point_index = np.arange(num_points)
+            metadata = PolySlabSidewallMetadata(
+                edge_indices=IndexedDataArray(
+                    patch["edge_indices"][mask], coords={"index": point_index}
+                ),
+                s_vals=IndexedDataArray(patch["s_vals"][mask], coords={"index": point_index}),
+            )
+            sample_sets[key] = SurfaceSampleSet.from_arrays(
+                points=patch["centers"][mask],
+                normals=patch["normals"][mask],
+                perps1=patch["perps1"][mask],
+                perps2=patch["perps2"][mask],
+                weights=areas[mask],
+                metadata=metadata,
+                pec_flat_perp_dims=(
+                    False,
+                    key == _POLYSLAB_SIDEWALL_KEY and (is_2d or slice_axis is not None),
+                ),
+            )
+        return sample_sets
 
     def _edge_geometry_arrays(
         self,

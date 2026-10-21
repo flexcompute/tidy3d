@@ -44,6 +44,7 @@ from tidy3d.em.translate.sample_sets import (
     PointDataArray,
 )
 
+from .derivative_utils import boundary_field_frame
 from .snapping import (
     edge_distance_after_snapping,
     nearest_grid_coords,
@@ -329,7 +330,7 @@ def _pec_sampling_data(
     structure or seams PEC-to-PEC.
     """
     points = np.asarray(sample_set.points.values, dtype=float)
-    normals = np.asarray(sample_set.normals.values, dtype=float)
+    normals, _, _ = boundary_field_frame(sample_set, simulation.bounds)
 
     side_kwargs = {
         "points": points,
@@ -376,7 +377,7 @@ def stage_sample_sets(
             continue
 
         points = np.asarray(sample_set.points.values, dtype=float)
-        normals = np.asarray(sample_set.normals.values, dtype=float)
+        normals, _, _ = boundary_field_frame(sample_set, simulation.bounds)
         material_query_points = _material_query_points(
             points=points,
             normals=normals,
