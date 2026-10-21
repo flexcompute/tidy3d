@@ -153,7 +153,8 @@ def array(
       instance of the base geometry.
     - If both are provided, they must have the same length and transforms are applied
       before the translation given by offsets.
-    - Adjoint/autodiff is not currently supported for ``GeometryArray``.
+    - Adjoint/autodiff with respect to the shared base geometry and per-instance
+      offsets is supported for ``GeometryArray``. Linear transforms are fixed placement.
 
     Example
     -------

@@ -214,9 +214,15 @@ Tidy3D's AD framework supports a wide range of design scenarios.
 | `Cylinder`      | `.center`, `.radius`, `.length`, `.sidewall_angle`         | Shape Optimization                |
 | `PolySlab`      | `.vertices`, `.slab_bounds`, `.sidewall_angle`             | Shape Optimization & taper tuning |
 | `GeometryGroup` | `.geometries`                                              | Grouping for performance          |
+| `GeometryArray` | `.geometry.<attribute>`, `.offsets[index]`                 | Repeated geometry with movable instances |
 | `Transformed`   | `.geometry.<attribute>`                                    | Fixed transform of a geometry     |
 | `ClipOperation` | traced parameters in underlying geometries                 | Boolean shape optimization        |
 | `TriangleMesh`  | `.mesh_dataset.surface_mesh`                               | 3D Shape Optimization             |
+
+`GeometryArray` differentiates the shared base geometry once and accumulates the
+contribution from every placed instance. Its per-instance `offsets` are also
+differentiable; an offset gradient is the world-space translation VJP for that
+instance. Its linear `transforms` remain fixed placement parameters.
 
 Parameters of `Transformed.geometry` are traceable; its transform remains fixed.
 Geometry gradients require an invertible affine transform with bottom row
@@ -238,6 +244,21 @@ weights for their faces, including under scaling perpendicular to the flat box.
 Their transformed zero-thickness direction must remain perpendicular to their
 transformed plane: rotations, reflections, scaling, and in-plane shear are supported,
 but shear coupling that direction to the plane is not.
+
+For example, this traces the shared `size_y` parameter and accumulates the
+gradient from both copies:
+
+```python
+def make_array(size_y):
+    base = td.Box(size=(1.0, size_y, 0.5))
+    return td.GeometryArray(
+        geometry=base,
+        offsets=((0.0, -0.8, 0.0), (0.0, 0.8, 0.0)),
+    )
+```
+
+An individual offset can be traced with a path such as `offsets[1][1]`; the
+corresponding gradient moves only the second instance in the world-space y direction.
 
 #### Base Materials
 

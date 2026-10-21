@@ -2,24 +2,31 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from numbers import Integral
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d.components.autograd import TracedCoordinate
+from tidy3d.components.autograd.path_utils import resolve_delegated_autograd_route
+from tidy3d.components.autograd.utils import accumulate_field_map
 from tidy3d.components.base import cached_property
-from tidy3d.components.types import (
-    Coordinate,
-    MatrixReal4x4,
-)
+from tidy3d.components.types import MatrixReal4x4
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import (
+    AdjointError,
     ValidationError,
 )
 from tidy3d.log import log
 
 from .constants import LINEAR_TRANSFORM_TOL
-from .core import Geometry, assert_geometry_finite, check_transform_invertible
+from .core import (
+    _TRANSLATION_PATH,
+    Geometry,
+    assert_geometry_finite,
+    check_transform_invertible,
+)
 from .geometry_group import GeometryGroup
 from .transformed import Transformed
 
@@ -27,10 +34,13 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from typing_extensions import Self
 
+    from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
+    from tidy3d.components.autograd.types import GeometryAdjointSettings
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.types import (
         Axis,
         Bound,
+        Coordinate,
         Shapely,
     )
 
@@ -54,7 +64,8 @@ class GeometryArray(Geometry):
     - If both ``offsets`` and ``transforms`` are ``None``, the array contains a single
       instance of the base geometry at the origin.
     - If both are provided, they must have the same length.
-    - Adjoint/autodiff is not currently supported for ``GeometryArray``.
+    - Autodiff with respect to the shared base geometry and per-instance offsets is
+      supported. Transforms are treated as fixed instance placement.
 
     Example
     -------
@@ -80,7 +91,7 @@ class GeometryArray(Geometry):
         description="Base geometry to be repeated in the array.",
     )
 
-    offsets: tuple[Coordinate, ...] | None = Field(
+    offsets: tuple[TracedCoordinate, ...] | None = Field(
         default=None,
         title="Offsets",
         description="A tuple of 3D coordinate offsets. Each offset translates the base "
@@ -197,11 +208,14 @@ class GeometryArray(Geometry):
         else:
             transforms = np.broadcast_to(Transformed.identity(), shape)
 
-        # Build translation matrices for all offsets
-        # translation matrix: [[1,0,0,x], [0,1,0,y], [0,0,1,z], [0,0,0,1]]
-        translations = np.broadcast_to(Transformed.identity(), shape).copy()
+        # Build translation matrices for all offsets without assigning traced values
+        # into a preallocated array.
+        translations = np.broadcast_to(np.eye(4), shape)
         if self.offsets is not None:
-            translations[:, :3, 3] = self.offsets
+            offset_column = np.concatenate((np.array(self.offsets), np.ones((n, 1))), axis=1)[
+                :, :, None
+            ]
+            translations = np.concatenate((translations[:, :, :3], offset_column), axis=2)
 
         # Apply transform, then translation: result = translation @ transform
         return np.matmul(translations, transforms)
@@ -222,6 +236,125 @@ class GeometryArray(Geometry):
     def _geometry_group(self) -> GeometryGroup:
         """Return a GeometryGroup containing all transformed geometries in the array."""
         return GeometryGroup(geometries=tuple(self._transformed_geometries))
+
+    def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
+        """Validate a traced path into the shared base geometry."""
+        if field_path == _TRANSLATION_PATH:
+            return self.geometry._resolve_autograd_route(field_path)
+        if field_path and field_path[0] == "offsets":
+            if self.offsets is None or len(field_path) not in (2, 3):
+                raise AdjointError(
+                    "Automatic differentiation with respect to GeometryArray offsets "
+                    "requires paths of the form 'offsets[index]' or "
+                    "'offsets[index].<axis>'."
+                )
+            index = field_path[1]
+            if not isinstance(index, Integral) or not 0 <= index < self.num_geometries:
+                raise AdjointError(
+                    f"GeometryArray offset index {index!r} is out of range for "
+                    f"{self.num_geometries} instances."
+                )
+            if len(field_path) == 3:
+                axis = field_path[2]
+                if not isinstance(axis, Integral) or not 0 <= axis < 3:
+                    raise AdjointError(
+                        f"GeometryArray offset axis {axis!r} must be one of 0, 1, or 2."
+                    )
+            self.geometry._resolve_autograd_route(_TRANSLATION_PATH)
+            return
+
+        resolve_delegated_autograd_route(
+            parameter_kind="geometry",
+            owner_kind="geometry type",
+            owner_name=type(self).__name__,
+            field_path=field_path,
+            delegates={"geometry": self.geometry, "base_geometry": self.geometry},
+            supported_parameters=(
+                "geometry.<parameter>",
+                "base_geometry.<parameter>",
+                "offsets[index]",
+                "offsets[index].<axis>",
+            ),
+        )
+
+    def _group_paths(self, paths: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+        """Map shared-base paths to the internal transformed GeometryGroup paths."""
+        return [
+            ("geometries", index, "geometry", *self._group_path_suffix(path))
+            for path in paths
+            for index in range(self.num_geometries)
+        ]
+
+    def _group_path_suffix(self, path: tuple[Any, ...]) -> tuple[Any, ...]:
+        """Return the base-geometry portion of a public GeometryArray path."""
+        # Internal Transformed instances flatten the public base's wrapper.
+        path_prefix_length = 2 if isinstance(self.geometry, Transformed) else 1
+        return _TRANSLATION_PATH if path == _TRANSLATION_PATH else path[path_prefix_length:]
+
+    def _make_adjoint_sample_sets(
+        self, paths: list[tuple[Any, ...]], ctx: Any, settings: GeometryAdjointSettings
+    ) -> dict[tuple[Any, ...], Any]:
+        """Generate one routed sample-set family for every array instance."""
+        geometry_paths = [
+            path for path in paths if path and path[0] != "offsets" and path != _TRANSLATION_PATH
+        ]
+        group_paths = self._group_paths(geometry_paths)
+        translation_indices = (
+            range(self.num_geometries)
+            if _TRANSLATION_PATH in paths
+            else sorted({path[1] for path in paths if path and path[0] == "offsets"})
+        )
+        group_paths.extend(
+            ("geometries", index, "geometry", *_TRANSLATION_PATH) for index in translation_indices
+        )
+        return self._geometry_group._make_adjoint_sample_sets(
+            paths=group_paths, ctx=ctx, settings=settings
+        )
+
+    def _compute_derivatives_from_sample_sets(
+        self,
+        sample_sets: dict[tuple[Any, ...], Any],
+        paths: list[tuple[Any, ...]],
+        derivative_info: ShapeDerivativeContext,
+    ) -> dict[tuple[Any, ...], Any]:
+        """Sum per-instance VJPs back onto the shared base-geometry paths."""
+        result = {}
+        offset_paths = [path for path in paths if path and path[0] == "offsets"]
+        geometry_paths = [
+            path for path in paths if path and path[0] != "offsets" and path != _TRANSLATION_PATH
+        ]
+        translation_indices = (
+            range(self.num_geometries)
+            if _TRANSLATION_PATH in paths
+            else sorted({path[1] for path in offset_paths})
+        )
+        group_paths = self._group_paths(geometry_paths) + [
+            ("geometries", index, "geometry", *_TRANSLATION_PATH) for index in translation_indices
+        ]
+        public_paths_by_suffix = {}
+        for path in geometry_paths:
+            public_paths_by_suffix.setdefault(self._group_path_suffix(path), []).append(path)
+
+        # GeometryGroup partitions once and consumes each instance once, including
+        # co-traced shape parameters. Reuse its translation vector across axes.
+        translations = {index: np.zeros(3) for index in translation_indices}
+        group_vjps = self._geometry_group._compute_derivatives_from_sample_sets(
+            sample_sets=sample_sets,
+            paths=list(dict.fromkeys(group_paths)),
+            derivative_info=derivative_info,
+        )
+        for group_path, value in group_vjps.items():
+            if group_path[-1:] == _TRANSLATION_PATH:
+                translations[group_path[1]] += np.asarray(value)
+            else:
+                for public_path in public_paths_by_suffix[group_path[3:]]:
+                    accumulate_field_map(result, {public_path: value})
+        if _TRANSLATION_PATH in paths:
+            result[_TRANSLATION_PATH] = tuple(np.sum(list(translations.values()), axis=0).tolist())
+        for path in offset_paths:
+            gradient = translations[path[1]]
+            result[path] = tuple(gradient.tolist()) if len(path) == 2 else gradient[path[2]]
+        return result
 
     @cached_property
     def bounds(self) -> Bound:
