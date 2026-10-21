@@ -50,7 +50,7 @@ def from_component(model: BaseModel) -> object | None:
     owner = _translating_class(type(model))
     if owner is None:
         return None
-    from flexcompute.core._migration.em.schema.tidy3d.log import log as copied_log
+    from flexcompute.core.log import log as copied_log
 
     data = model.model_dump()
     if owner is not type(model):

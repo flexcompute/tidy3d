@@ -50,7 +50,7 @@ def _drop_closed_file_log_handlers() -> bool:
     """Remove stale public or copied-schema file handlers left by pipeline logging."""
 
     removed = False
-    for module_name in ("tidy3d.log", "flexcompute.core._migration.em.schema.tidy3d.log"):
+    for module_name in ("tidy3d.log", "flexcompute.core.log"):
         try:
             log = import_module(module_name).log
         except (ImportError, AttributeError):
