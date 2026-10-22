@@ -18,7 +18,6 @@ from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import (
     CONDUCTIVITY,
     PERMITTIVITY,
-    fp_eps,
 )
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
@@ -47,7 +46,6 @@ from .base import (
     ensure_freq_in_range,
 )
 from .isotropic import Medium, PECMedium, PMCMedium
-from .lossy_metal import LossyMetalMedium
 
 
 class AnisotropicMedium(AbstractMedium):
@@ -107,12 +105,22 @@ class AnisotropicMedium(AbstractMedium):
     @classmethod
     def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
         """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls.__name__}. "
-                "Please add modulation to each component."
-            )
+        # Thin field adapter that calls the core rule. No moved schema:
+        # ``CustomAnisotropicMedium`` subclasses ``AnisotropicMedium`` and has none yet, so it
+        # would translate through ``AnisotropicMedium`` on the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_unsupported_modulation_spec,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        raise_first_error(
+            validate_unsupported_modulation_spec(
+                cls.__name__,
+                None if val is None else str(type(val)),
+                " Please add modulation to each component.",
+            ),
+            ValidationError,
+        )
         return val
 
     @field_validator("xx", "yy", "zz")
@@ -121,12 +129,18 @@ class AnisotropicMedium(AbstractMedium):
         cls, val: IsotropicUniformMediumType, info: FieldValidationInfo
     ) -> IsotropicUniformMediumType:
         """A non-penetrable lossy metal has no anisotropic-component formulation."""
-        if isinstance(val, LossyMetalMedium) and not val.penetrable:
-            raise ValidationError(
-                f"The '{info.field_name}' component is a non-penetrable 'LossyMetalMedium', "
-                "which is not supported as a component of an 'AnisotropicMedium'. Set "
-                "'penetrable=True' to use it as a regular conductive medium."
-            )
+        # Thin check that calls the core rule. No moved schema: ``CustomAnisotropicMedium``
+        # subclasses ``AnisotropicMedium`` and has none yet, so it would translate through
+        # ``AnisotropicMedium`` on the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_anisotropic_components,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        raise_first_error(
+            validate_anisotropic_components([(info.field_name, getattr(val, "penetrable", None))]),
+            ValidationError,
+        )
         return val
 
     @model_validator(mode="after")
@@ -404,11 +418,19 @@ class FullyAnisotropicMedium(AbstractMedium):
     @classmethod
     def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
         """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls.__name__}."
-            )
+        # Thin field adapter that calls the core rule (field order: the construction path runs
+        # after every field is parsed, so it would drop this error when another field fails).
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_unsupported_modulation_spec,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        raise_first_error(
+            validate_unsupported_modulation_spec(
+                cls.__name__, None if val is None else str(type(val))
+            ),
+            ValidationError,
+        )
         return val
 
     @field_validator("permittivity")
@@ -417,61 +439,15 @@ class FullyAnisotropicMedium(AbstractMedium):
         """Check that provided permittivity tensor is symmetric positive definite
         with eigenvalues >= 1.
         """
+        # Thin field adapter that calls the core rule (field order: the construction path runs
+        # after every field is parsed, so it would drop this error when another field fails).
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_anisotropic_permittivity,
+        )
+        from flexcompute.core.validation import raise_first_error
 
-        if not np.allclose(val, np.transpose(val), atol=fp_eps):
-            raise ValidationError("Provided permittivity tensor is not symmetric.")
-
-        if np.any(np.linalg.eigvals(val) < 1 - fp_eps):
-            raise ValidationError("Main diagonal of provided permittivity tensor is not >= 1.")
-
+        raise_first_error(validate_anisotropic_permittivity(val), ValidationError)
         return val
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._conductivity_commutes()
-        self._passivity_validation()
-        return self
-
-    def _conductivity_commutes(self) -> Self:
-        """Check that the symmetric part of conductivity tensor commutes with permittivity tensor
-        (that is, simultaneously diagonalizable).
-        """
-
-        val = self.conductivity
-        perm = self.permittivity
-        cond_sym = 0.5 * (val + val.T)
-        comm_diff = np.abs(np.matmul(perm, cond_sym) - np.matmul(cond_sym, perm))
-
-        if not np.allclose(comm_diff, 0, atol=fp_eps):
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "Main directions of conductivity and permittivity tensor do not coincide."
-                ),
-                "conductivity",
-            )
-
-        return self
-
-    def _passivity_validation(self) -> Self:
-        """Assert passive medium if ``allow_gain`` is False."""
-        val = self.conductivity
-        if self.allow_gain:
-            return self
-
-        cond_sym = 0.5 * (val + val.T)
-        if np.any(np.linalg.eigvals(cond_sym) < -fp_eps):
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "For passive medium, main diagonal of provided conductivity tensor "
-                    "must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, and are likely to diverge."
-                ),
-                "conductivity",
-            )
-        return self
 
     @classmethod
     def from_diagonal(cls, xx: Medium, yy: Medium, zz: Medium, rotation: RotationType) -> Self:

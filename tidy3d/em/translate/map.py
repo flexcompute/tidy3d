@@ -286,6 +286,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.roughness:SurfaceImpedanceFitterParam",
         "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
+    "tidy3d.components.medium.anisotropic:FullyAnisotropicMedium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.anisotropic:FullyAnisotropicMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
@@ -737,6 +742,9 @@ COMPONENT_ERROR_TYPES = {
     "em.material.nonlinear.medium_anisotropic": "tidy3d.exceptions:ValidationError",
     "em.material.nonlinear.medium_class": "tidy3d.exceptions:ValidationError",
     "em.material.nonlinear.two_photon_absorption_passive": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.anisotropic_permittivity_symmetric": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.anisotropic_permittivity_ge_one": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.modulation_spec_unsupported": "tidy3d.exceptions:ValidationError",
     # tcad
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes
