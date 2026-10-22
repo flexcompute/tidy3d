@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from tidy3d.components.geometry.base.geometry_group import GeometryGroup
 from tidy3d.config import config
 from tidy3d.constants import fp_eps
 from tidy3d.em.translate.sample_sets import (
@@ -52,16 +53,24 @@ from .snapping import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.grid.grid import Grid
     from tidy3d.components.simulation import Simulation
     from tidy3d.components.structure import Structure
     from tidy3d.em.translate.sample_sets import SurfaceSampleSet
 
+    from .snapping import GridCentersType
     from .spacing import SamplingScanIndex
     from .types import PathType
 
 # permittivity diagonal components live on the corresponding E-component Yee locations
 _EPS_COMPONENT_GRID_KEYS = {"xx": "Ex", "yy": "Ey", "zz": "Ez"}
+# fraction of the snapping step used to probe which side of the structure a sample faces;
+# half a cell clears faceted samples that sit slightly inside a curved surface (e.g. a
+# Cylinder's polygon sidewall, ~1e-3 um inside), while composite-interior faces stay inside
+_BOUNDARY_PROBE_FRACTION = 0.5
 _E_COMPONENT_KEYS = ("Ex", "Ey", "Ez")
 _H_COMPONENT_KEYS = ("Hx", "Hy", "Hz")
 
@@ -224,28 +233,178 @@ def effective_is_pec_at_points(
     return mask
 
 
+class _SurfaceVote:
+    """Cheap containment for points near a surface, decided by the surface's own samples.
+
+    Every sample ``q`` within reach of a point votes with the sign of ``(point - q) . n_q``,
+    the side of q's tangent plane the point is on. Near a smooth surface those planes agree
+    with the true surface; near an edge or corner they disagree, and such points are left to
+    the exact test. Only valid when the samples cover the whole surface near the points, as a
+    TriangleMesh's single surface sample set does.
+    """
+
+    def __init__(self, points: np.ndarray, normals: np.ndarray) -> None:
+        from scipy.spatial import cKDTree
+
+        self.points = points
+        self.normals = normals
+        self.tree = cKDTree(points)
+        nearest = self.tree.query(points, k=2)[0][:, 1] if len(points) > 1 else np.zeros(1)
+        self.spacing = float(np.median(nearest))
+
+    def inside(
+        self, containment: _Containment, points: np.ndarray, origins: np.ndarray
+    ) -> np.ndarray:
+        """Containment of ``points``, each offset from the surface sample at ``origins``."""
+        reach = np.linalg.norm(points - origins, axis=1) + 2 * self.spacing
+        neighbors = self.tree.query_ball_point(points, reach)
+        counts = np.fromiter(map(len, neighbors), dtype=int, count=len(points))
+        voters = np.concatenate([np.asarray(n, dtype=int) for n in neighbors])
+        owner = np.repeat(np.arange(len(points)), counts)
+        signed = np.einsum("pj,pj->p", points[owner] - self.points[voters], self.normals[voters])
+        votes_inside = np.bincount(owner, weights=signed < 0, minlength=len(points))
+        votes_outside = np.bincount(owner, weights=signed > 0, minlength=len(points))
+        inside = (votes_inside == counts) & (counts > 0)
+        undecided = ~(inside | ((votes_outside == counts) & (counts > 0)))
+        if undecided.any():
+            inside[undecided] = containment.inside(points[undecided])
+        return inside
+
+
+class _Containment:
+    """``geometry.inside`` for one staged structure, testing only group members near the points.
+
+    One staged sample set covers one small surface patch, while ``GeometryGroup.inside`` tests
+    every member. Nested groups are flattened once and their member bounds stacked; each query
+    selects the members whose bounds overlap the points with one vectorized scan, so only nearby
+    members run the exact test.
+    """
+
+    def __init__(self, geometry: GeometryType) -> None:
+        self.geometry = geometry
+        self.members = list(self._flatten(geometry)) if isinstance(geometry, GeometryGroup) else []
+        if self.members:
+            bounds = np.asarray([member.bounds for member in self.members], dtype=float)
+            self.members_min, self.members_max = bounds[:, 0], bounds[:, 1]
+
+    @classmethod
+    def _flatten(cls, geometry: GeometryType) -> Iterator[GeometryType]:
+        if not isinstance(geometry, GeometryGroup):
+            yield geometry
+            return
+        for member in geometry.geometries:
+            yield from cls._flatten(member)
+
+    def inside(self, points: np.ndarray) -> np.ndarray:
+        """Whether each of the ``(N, 3)`` points is inside the structure's geometry."""
+        if not self.members:
+            return np.asarray(self.geometry.inside(*points.T))
+        # each query scans all member bounds, ~0.4 s of 13 s staging at 1225 members;
+        # a KD-tree on member centers would help if groups reach ~10k members
+        near = np.flatnonzero(
+            np.all(self.members_min <= points.max(axis=0), axis=1)
+            & np.all(self.members_max >= points.min(axis=0), axis=1)
+        )
+        inside = np.zeros(len(points), dtype=bool)
+        for index in near:
+            inside |= np.asarray(self.members[index].inside(*points.T))
+        return inside
+
+
+def _inside_near_surface(
+    containment: _Containment,
+    points: np.ndarray,
+    origins: np.ndarray,
+    vote: _SurfaceVote | None,
+) -> np.ndarray:
+    """Containment of points offset from surface samples, by vote where one is available."""
+    if vote is None:
+        return containment.inside(points)
+    return vote.inside(containment, points, origins)
+
+
+def _structure_boundary_mask(
+    points: np.ndarray,
+    normals: np.ndarray,
+    grid_centers: GridCentersType,
+    containment: _Containment,
+    vote: _SurfaceVote | None = None,
+) -> np.ndarray:
+    """Samples on a boundary of ``geometry``: inside just behind them, outside just ahead.
+
+    Excludes surfaces interior to the structure (e.g. a union operand's face inside the
+    other operand), whose matching inside/outside permittivity must stay matching.
+    """
+    behind, ahead = (
+        snap_coords_to_boundary(points, normals, grid_centers, is_outside, _BOUNDARY_PROBE_FRACTION)
+        for is_outside in (False, True)
+    )
+    return _inside_near_surface(containment, behind, points, vote) & ~_inside_near_surface(
+        containment, ahead, points, vote
+    )
+
+
+def _keep_queries_on_side(
+    points: np.ndarray,
+    queries: np.ndarray,
+    grid_centers: GridCentersType,
+    boundary: np.ndarray,
+    containment: _Containment,
+    is_outside: bool,
+    vote: _SurfaceVote | None = None,
+) -> np.ndarray:
+    """Give boundary samples whose sampled node is on the wrong side the nearest valid query.
+
+    Permittivity is recorded at the grid node nearest each query. Snapping follows each
+    sample's own face normal, so next to an acute or curved edge that node can lie across
+    the adjacent face, on the other side of the structure.
+    """
+    nodes = nearest_grid_coords(grid_centers, queries)
+    wrong = boundary & (_inside_near_surface(containment, nodes, points, vote) == is_outside)
+    valid = np.flatnonzero(boundary & ~wrong)
+    if not wrong.any() or valid.size == 0:
+        return queries
+    from scipy.spatial import cKDTree
+
+    _, nearest = cKDTree(points[valid]).query(points[wrong])
+    queries = queries.copy()
+    queries[wrong] = queries[valid[nearest]]
+    return queries
+
+
 def _material_query_points(
     points: np.ndarray,
     normals: np.ndarray,
     grid: Grid,
     snapping_fraction: float,
     simulation: Simulation,
+    containment: _Containment,
 ) -> MaterialQueryPoints:
     """Per-component inside/outside permittivity query points for one sample set."""
+    from tidy3d.components.geometry.mesh import TriangleMesh
+
+    # a mesh's single sample set covers its whole surface, so its samples can vote on sides
+    vote = _SurfaceVote(points, normals) if isinstance(containment.geometry, TriangleMesh) else None
     query_points = {}
+    boundary = None
     for component, grid_key in _EPS_COMPONENT_GRID_KEYS.items():
         grid_centers = _component_grid_centers(grid, grid_key)
+        if boundary is None:
+            boundary = _structure_boundary_mask(points, normals, grid_centers, containment, vote)
         for side, is_outside in (("in", False), ("out", True)):
+            queries = _clamp_to_bounds(
+                snap_coords_to_boundary(
+                    spatial_coords=points,
+                    normals=normals,
+                    grid_centers=grid_centers,
+                    is_outside=is_outside,
+                    snapping_fraction=snapping_fraction,
+                ),
+                simulation,
+            )
             query_points[f"{side}_{component}"] = _point_data_array(
-                _clamp_to_bounds(
-                    snap_coords_to_boundary(
-                        spatial_coords=points,
-                        normals=normals,
-                        grid_centers=grid_centers,
-                        is_outside=is_outside,
-                        snapping_fraction=snapping_fraction,
-                    ),
-                    simulation,
+                _keep_queries_on_side(
+                    points, queries, grid_centers, boundary, containment, is_outside, vote
                 )
             )
     return MaterialQueryPoints(**query_points)
@@ -369,6 +528,7 @@ def stage_sample_sets(
     snapping_fraction = config.adjoint.boundary_snapping_fraction
     pec_unconditional = _pec_trigger_is_unconditional(structure, simulation)
     pec_triggered = pec_unconditional or _pec_trigger_from_neighbors(structure, scan_index)
+    containment = _Containment(structure.geometry)
 
     staged = {}
     for key, sample_set in sample_sets.items():
@@ -384,6 +544,7 @@ def stage_sample_sets(
             grid=grid,
             snapping_fraction=snapping_fraction,
             simulation=simulation,
+            containment=containment,
         )
         pec_sampling = None
         if pec_triggered:
