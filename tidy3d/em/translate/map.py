@@ -629,7 +629,7 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.frequency_extrapolation.validation:validate",
         on_construction=True,
     ),
-    # scene: transformation
+    # scene: transformation and structure
     "tidy3d.components.transformation:AbstractRotation": None,
     "tidy3d.components.transformation:AbstractReflection": None,
     "tidy3d.components.transformation:RotationAroundAxis": ComponentScope(
@@ -717,6 +717,18 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.microwave.validation:validate",
         on_construction=True,
     ),
+    # Translation is too slow for the construction path: a simulation rebuilds every
+    # structure, and grid generation builds many internal overrides. ``Structure`` keeps its
+    # checks in the schema; ``MeshOverrideStructure`` keeps thin checks.
+    "tidy3d.components.structure:AbstractStructure": None,
+    "tidy3d.components.structure:Structure": ComponentScope(
+        "flexcompute.core._migration.em.structure.schema:Structure",
+        "flexcompute.core._migration.em.structure.validation:validate",
+    ),
+    "tidy3d.components.structure:MeshOverrideStructure": ComponentScope(
+        "flexcompute.core._migration.em.structure.schema:MeshOverrideStructure",
+        "flexcompute.core._migration.em.structure.validation:validate",
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -762,6 +774,8 @@ COMPONENT_ERROR_TYPES = {
     "em.frequency_extrapolation.empty_monitors": "builtins:ValueError",
     # rf: path integrals and impedance
     "em.microwave.missing_integrals": "tidy3d.exceptions:ValidationError",
+    # scene: structure
+    "em.structure.non_finite_min_steps_per_size": "builtins:ValueError",
 }
 
 

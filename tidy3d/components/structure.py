@@ -10,6 +10,12 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as anp
 import numpy as np
 from autograd.extend import Box as AutogradBox
+from flexcompute.core._migration.em.structure.validation import (
+    validate_grid_override,
+    validate_min_steps_per_size_finite,
+    validate_unshadowed_not_enforced,
+)
+from flexcompute.core.validation import raise_first_error
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d._runtime import always_validate
@@ -1431,26 +1437,24 @@ class MeshOverrideStructure(AbstractStructure):
                 return val.bounding_box
         return val
 
+    # The checks below are thin checks that call the core rules. Grid generation builds many
+    # internal overrides, and translating each one is too slow, so ``MeshOverrideStructure``
+    # stays off the construction path.
+
     @field_validator("min_steps_per_size")
     @classmethod
     def _min_steps_per_size_finite(cls, val: tuple) -> tuple:
         """Reject non-finite ``min_steps_per_size``: ``inf`` would imply a zero grid size
         (``bounding_box_size / inf``) and silently drive the mesher into a zero-step path."""
-        if any(v is not None and not np.isfinite(v) for v in val):
-            raise ValueError(
-                "'min_steps_per_size' entries must be finite; use 'None' to apply no override "
-                "along a dimension."
-            )
+        raise_first_error(validate_min_steps_per_size_finite(val), ValueError)
         return val
 
     @model_validator(mode="after")
     def _unshadowed_cannot_be_enforced(self) -> Self:
         """Unshadowed structure cannot be enforced."""
-        if not self.shadow and self.enforce:
-            self._raise_validation_error_at_loc(
-                SetupError("A structure cannot be simultaneously enforced and unshadowed."),
-                "enforce",
-            )
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_unshadowed_not_enforced(self.shadow, self.enforce))
         return self
 
     @model_validator(mode="after")
@@ -1461,21 +1465,9 @@ class MeshOverrideStructure(AbstractStructure):
         case where ``min_steps_per_size`` only falls on dimensions with a zero or infinite bounding
         box size (and thus contributes no grid size).
         """
-        if all(val is None for val in self._dl):
-            name_str = f" '{self.name}'" if self.name else ""
-            # anchor the warning to whichever field was actually set so the fix stays actionable
-            loc = (
-                "min_steps_per_size"
-                if any(val is not None for val in self.min_steps_per_size)
-                else "dl"
-            )
-            log.warning(
-                f"'MeshOverrideStructure'{name_str} sets no grid size along any dimension: "
-                "neither 'dl' nor an applicable 'min_steps_per_size' is provided "
-                "('min_steps_per_size' is ignored where the bounding box size is zero or "
-                "infinite). This override has no effect on the mesh and will be dropped.",
-                custom_loc=[loc],
-            )
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_grid_override(self._dl, self.min_steps_per_size, self.name))
         return self
 
 
