@@ -108,6 +108,16 @@ class Medium2D(AbstractMedium):
         self._validate_inplane_pec()
         return self
 
+    def _component_support_facts(self) -> dict[str, tuple[bool, ...]]:
+        """Which components are nonlinear or time modulated, for the support rules."""
+        if type(self) is not Medium2D:
+            return {}
+        components = (self.ss, self.tt)
+        return {
+            "two_d_components_nonlinear": tuple(c.nonlinear_spec is not None for c in components),
+            "two_d_components_modulated": tuple(c.modulation_spec is not None for c in components),
+        }
+
     def _validate_inplane_pec(self) -> Self:
         """ss/tt components must be both PEC or non-PEC."""
         val = self.tt

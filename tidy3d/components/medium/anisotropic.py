@@ -144,6 +144,17 @@ class AnisotropicMedium(AbstractMedium):
             )
         return self
 
+    def _component_support_facts(self) -> dict[str, tuple[bool, ...]]:
+        """Which components are nonlinear; Tidy3D checks this class only, not subclasses."""
+        if type(self) is not AnisotropicMedium:
+            return {}
+        components = (self.xx, self.yy, self.zz)
+        return {
+            "anisotropic_components_nonlinear": tuple(
+                c.nonlinear_spec is not None for c in components
+            )
+        }
+
     @cached_property
     def components(self) -> dict[str, Medium]:
         """Dictionary of diagonal medium components."""

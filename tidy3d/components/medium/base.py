@@ -9,6 +9,12 @@ from typing import TYPE_CHECKING, Any, ClassVar, get_args
 
 import autograd.numpy as np
 import numpy as npo
+from flexcompute.core._migration.em.material.medium.validation import validate_spec_support
+from flexcompute.core._migration.em.material.medium.validation_schema import (
+    NonlinearModelInput,
+    SpecSupportInput,
+)
+from flexcompute.core.validation import raise_first_error
 from numpy.typing import NDArray
 from pydantic import Field, field_validator, model_validator
 
@@ -30,6 +36,7 @@ from tidy3d.components.nonlinear import (
     NonlinearSpec,
     NonlinearSpecType,
     NonlinearSusceptibility,
+    TwoPhotonAbsorption,
 )
 from tidy3d.components.time_modulation import ModulationSpec
 from tidy3d.components.types import TYPE_TAG_STR, FreqBound, InterpMethod
@@ -250,8 +257,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
         self._validate_nonlinear_spec()
-        self._check_either_modulation_or_nonlinear_spec()
-        self._validate_modulation_spec_after()
         return self
 
     @field_validator("nonlinear_spec", mode="before")
@@ -267,23 +272,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return {TYPE_TAG_STR: spec_type, **val}
 
     def _validate_nonlinear_spec(self) -> Self:
-        """Check compatibility with nonlinear_spec."""
-        if self.__class__.__name__ == "AnisotropicMedium" and any(
-            comp.nonlinear_spec is not None for comp in [self.xx, self.yy, self.zz]
-        ):
-            raise ValidationError(
-                "Nonlinearities are not currently supported for the components "
-                "of an anisotropic medium."
-            )
-        if self.__class__.__name__ == "Medium2D" and any(
-            comp.nonlinear_spec is not None for comp in [self.ss, self.tt]
-        ):
-            raise ValidationError(
-                "Nonlinearities are not currently supported for the components of a 2D medium."
-            )
-
-        if self.nonlinear_spec is None:
-            return self
+        """Check the nonlinear and modulation specs against this medium."""
+        # Thin check that runs the core rule on plain facts of this medium. It stays on the
+        # root because ``import tidy3d`` builds several media (built at import), and the tcad
+        # charge media have no moved schema. The deprecation warning is a client message, so
+        # it stays here.
         if isinstance(self.nonlinear_spec, NonlinearModel):
             log.warning(
                 "The API for 'nonlinear_spec' has changed. "
@@ -291,47 +284,50 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "in a future release. The new usage is "
                 r"'nonlinear_spec=NonlinearSpec(models=\[model])'."
             )
-        from flexcompute.core._migration.em.material.nonlinear.validation import (
-            validate_model_medium,
-        )
-        from flexcompute.core.validation import raise_first_error
-
-        for model in self._nonlinear_models:
-            raise_first_error(validate_model_medium(model, self), ValidationError)
-            if (
-                isinstance(self.nonlinear_spec, NonlinearSpec)
-                and isinstance(model, NonlinearSusceptibility)
-                and model.numiters is not None
-            ):
-                raise ValidationError(
-                    "'NonlinearSusceptibility.numiters' is deprecated. "
-                    "Please use 'NonlinearSpec.num_iters' instead."
-                )
+        raise_first_error(validate_spec_support(self._spec_support_input()), ValidationError)
         return self
 
-    def _check_either_modulation_or_nonlinear_spec(self) -> Self:
-        """Check compatibility with modulation_spec."""
-        val = self.modulation_spec
-        nonlinear_spec = self.nonlinear_spec
-        if val is not None and nonlinear_spec is not None:
-            raise ValidationError(
-                f"For medium class {self.type}, 'modulation_spec' of class {type(val).__name__} and "
-                f"'nonlinear_spec' of class {type(nonlinear_spec).__name__} are "
-                "not simultaneously supported."
+    def _spec_support_input(self) -> SpecSupportInput:
+        """The facts of this medium that the core support rules read."""
+        in_spec = isinstance(self.nonlinear_spec, NonlinearSpec)
+        models = tuple(
+            NonlinearModelInput(
+                name=type(model).__name__,
+                two_photon_beta=model.beta if isinstance(model, TwoPhotonAbsorption) else None,
+                deprecated_numiters=(
+                    model.numiters
+                    if in_spec and isinstance(model, NonlinearSusceptibility)
+                    else None
+                ),
             )
-        return self
+            for model in self._nonlinear_models
+        )
+        facts = self._component_support_facts()
+        if models:
+            class_names = tuple(cls.__name__ for cls in type(self).__mro__)
+            facts |= {
+                "medium_classes": class_names,
+                "time_modulated": self.is_time_modulated,
+                "isotropic": "AbstractCustomMedium" not in class_names or self.is_isotropic,
+            }
+        return SpecSupportInput(
+            medium_name=type(self).__name__,
+            allow_gain=self.allow_gain,
+            nonlinear_models=models,
+            nonlinear_spec_name=None
+            if self.nonlinear_spec is None
+            else type(self.nonlinear_spec).__name__,
+            modulation_spec_name=None
+            if self.modulation_spec is None
+            else type(self.modulation_spec).__name__,
+            **facts,
+        )
+
+    def _component_support_facts(self) -> dict[str, tuple[bool, ...]]:
+        """Per-component facts for the support rules; media with components override it."""
+        return {}
 
     _name_validator = validate_name_str()
-
-    def _validate_modulation_spec_after(self) -> Self:
-        """Check compatibility with nonlinear_spec."""
-        if self.__class__.__name__ == "Medium2D" and any(
-            comp.modulation_spec is not None for comp in [self.ss, self.tt]
-        ):
-            raise ValidationError(
-                "Time modulation is not currently supported for the components of a 2D medium."
-            )
-        return self
 
     @property
     def charge(self) -> None:

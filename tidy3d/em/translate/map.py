@@ -699,6 +699,15 @@ COMPONENT_ERROR_TYPES = {
     "em.material.nonlinear.consistent_n0": "tidy3d.exceptions:SetupError",
     "em.material.nonlinear.max_num_iters": "tidy3d.exceptions:ValidationError",
     "em.material.nonlinear.max_numiters": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.anisotropic_component_nonlinear": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.two_d_component_nonlinear": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.nonlinear_numiters_deprecated": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.modulation_and_nonlinear": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.two_d_component_modulation": "tidy3d.exceptions:ValidationError",
+    "em.material.nonlinear.medium_time_modulated": "tidy3d.exceptions:ValidationError",
+    "em.material.nonlinear.medium_anisotropic": "tidy3d.exceptions:ValidationError",
+    "em.material.nonlinear.medium_class": "tidy3d.exceptions:ValidationError",
+    "em.material.nonlinear.two_photon_absorption_passive": "tidy3d.exceptions:ValidationError",
     # tcad
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes
