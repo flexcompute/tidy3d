@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.numerical.raw.thin_lens import thin_lens_pupil_grid
 from pydantic import Field, PositiveFloat
 
+from tidy3d.components.autograd.utils import hasbox
 from tidy3d.constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
 
 from .base import cached_property
@@ -358,8 +360,7 @@ def _gaussian_scalar_field(
     psi_g = np.arctan((z_p + z_0) / z_r) - np.arctan(z_0 / z_r)
     r2 = x_p**2 + y_p**2
     scalar = (waist_radius / w_z) * np.exp(-r2 / w_z**2)
-    scalar *= np.exp(1j * (z_p * k0 + r2 * k0 / 2.0 * inv_r_z - psi_g))
-    return scalar
+    return scalar * np.exp(1j * (z_p * k0 + r2 * k0 / 2.0 * inv_r_z - psi_g))
 
 
 def _astigmatic_gaussian_scalar_field(
@@ -880,14 +881,9 @@ class ThinLensProfile(AbstractThinLens, BeamProfile):
         num_x, num_y = self._num_plane_waves_xy
         d_sigma_x = 2 * rho_max / num_x
         d_sigma_y = 2 * rho_max / num_y
-        sigma_x = (np.arange(num_x) - num_x / 2 + 0.5) * d_sigma_x
-        sigma_y = (np.arange(num_y) - num_y / 2 + 0.5) * d_sigma_y
-        sigma_x_grid, sigma_y_grid = np.meshgrid(sigma_x, sigma_y, indexing="ij")
-        sigma_sq = sigma_x_grid**2 + sigma_y_grid**2
-        pupil_mask = sigma_sq <= rho_max**2
-
-        sigma_x_flat = sigma_x_grid[pupil_mask]
-        sigma_y_flat = sigma_y_grid[pupil_mask]
+        pupil_x, pupil_y = thin_lens_pupil_grid(num_x, num_y)
+        sigma_x_flat = pupil_x * rho_max
+        sigma_y_flat = pupil_y * rho_max
         sigma_z_flat = np.sqrt(1 - sigma_x_flat**2 - sigma_y_flat**2)
         return sigma_x_flat, sigma_y_flat, sigma_z_flat, d_sigma_x, d_sigma_y, rho_max
 
@@ -898,7 +894,7 @@ class ThinLensProfile(AbstractThinLens, BeamProfile):
             return np.ones_like(sigma_x, dtype=complex)
 
         sigma_beam = rho_max * self.beam_diameter / self.lens_diameter / 2
-        return np.exp(-sigma_sq / (2 * sigma_beam**2)).astype(complex)
+        return np.exp(-sigma_sq / (2 * sigma_beam**2))
 
     def _background_n_per_frequency(self, background_n: NDArray) -> NDArray:
         """Return background index as one value per beam frequency."""
@@ -977,7 +973,7 @@ class ThinLensProfile(AbstractThinLens, BeamProfile):
                 ),
                 axis=0,
             )
-            h_spectrum = h_spectrum.astype(complex) * background_n / ETA_0
+            h_spectrum = h_spectrum * background_n / ETA_0
 
         k_medium = 2 * np.pi * freq / C_0 * background_n
         pupil = self._pupil_amplitude(sigma_x, sigma_y, rho_max)
@@ -1003,10 +999,23 @@ class ThinLensProfile(AbstractThinLens, BeamProfile):
     ) -> tuple[NDArray | None, NDArray | None]:
         """Evaluate focused E and H fields on a tensor grid in component coordinates."""
         background_n = self._background_n_per_frequency(background_n)
-
+        traced = hasbox(
+            (
+                self.angle_theta,
+                self.angle_phi,
+                self.pol_angle,
+                self.waist_distance,
+                self.numerical_aperture,
+                self.lens_diameter,
+                self.beam_diameter,
+                self.lens_offset,
+                background_n,
+            )
+        )
+        field_values = {kind: [] for kind in field_kinds} if traced else None
         shape = (3, len(x_points), len(y_points), len(z_points), len(self.freqs))
-        e_vals = np.zeros(shape, dtype=complex) if "E" in field_kinds else None
-        h_vals = np.zeros(shape, dtype=complex) if "H" in field_kinds else None
+        e_vals = np.zeros(shape, dtype=complex) if not traced and "E" in field_kinds else None
+        h_vals = np.zeros(shape, dtype=complex) if not traced and "H" in field_kinds else None
         propagation_basis = self._rotate_points_z(np.eye(3), background_n)
 
         for freq_ind, (freq, n_medium) in enumerate(zip(self.freqs, background_n)):
@@ -1040,18 +1049,40 @@ class ThinLensProfile(AbstractThinLens, BeamProfile):
             # phase already uses q_z through phase_z.
             waist_phase = np.exp(1j * k_medium * self.waist_distance * k_hat_z)
 
-            for z_ind, z_phase in enumerate(phase_z):
-                axial_phase = waist_phase * z_phase
-                if e_vals is not None:
-                    for comp_ind in range(3):
-                        weighted_phase_x = phase_x * (e_spectrum[comp_ind] * axial_phase)
-                        e_vals[comp_ind, :, :, z_ind, freq_ind] = weighted_phase_x @ phase_y_t
-                if h_vals is not None:
-                    for comp_ind in range(3):
-                        weighted_phase_x = phase_x * (h_spectrum[comp_ind] * axial_phase)
-                        h_vals[comp_ind, :, :, z_ind, freq_ind] = weighted_phase_x @ phase_y_t
+            # Stack evaluated planes instead of assigning traced values into NumPy buffers.
+            # Keep the separable products: no points-by-plane-waves volume is materialized.
+            for kind, spectrum in (("E", e_spectrum), ("H", h_spectrum)):
+                if spectrum is None:
+                    continue
+                if traced:
+                    field_values[kind].append(
+                        np.stack(
+                            [
+                                np.stack(
+                                    [
+                                        (phase_x * (component * waist_phase * z_phase)) @ phase_y_t
+                                        for z_phase in phase_z
+                                    ],
+                                    axis=-1,
+                                )
+                                for component in spectrum
+                            ]
+                        )
+                    )
+                    continue
+                target = e_vals if kind == "E" else h_vals
+                for comp_ind, component in enumerate(spectrum):
+                    for z_ind, z_phase in enumerate(phase_z):
+                        target[comp_ind, :, :, z_ind, freq_ind] = (
+                            phase_x * (component * waist_phase * z_phase)
+                        ) @ phase_y_t
 
-        return e_vals, h_vals
+        if not traced:
+            return e_vals, h_vals
+        return tuple(
+            np.stack(field_values[kind], axis=-1) if kind in field_values else None
+            for kind in ("E", "H")
+        )
 
     def _thin_lens_fields_propagation_frame(
         self,

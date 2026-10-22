@@ -303,6 +303,17 @@ corresponding gradient moves only the second instance in the world-space y direc
 | `CustomFieldSource` | `.center`, `.field_dataset` |
 | `GaussianBeam` | `.center`, `.angle_theta`, `.angle_phi`, `.pol_angle`, `.waist_radius`, `.waist_distance` |
 | `AstigmaticGaussianBeam` | `.center`, `.angle_theta`, `.angle_phi`, `.pol_angle`, `.waist_sizes`, `.waist_distances` |
+| `ThinLensBeam` | Tangential `.center`, `.angle_theta`, `.angle_phi`, `.pol_angle`, `.waist_distance`, `.numerical_aperture`, `.lens_offset`, and, with `fill_lens=False`, `.lens_diameter` and `.beam_diameter` |
+
+Thin-lens source-parameter adjoints require a fixed, homogeneous, isotropic, linear, time-independent,
+lossless medium with positive refractive index on the source injection plane. Thin-lens overlap-amplitude
+adjoints require the same contract on the monitor plane. Unsupported overlap monitors warn during setup
+and raise an error only if their amplitudes contribute to the adjoint objective.
+Source traces require `use_colocated_integration=True`; overlap amplitudes require that setting plus `colocate=True` and `conjugated_dot_product=True`. Thin-lens
+monitor definitions remain fixed during differentiation. A fixed thin-lens source used while optimizing
+a separate structure only requires an untraced effective injection-plane medium; it may use lossy or
+native-grid injection. Geometry and medium traces of structures owning either component plane are
+unsupported; fully occluded structures and structures away from the plane remain traceable.
 
 ### Differentiable Results (Simulation Outputs)
 
@@ -310,6 +321,7 @@ corresponding gradient moves only the second instance in the world-space y direc
 | :--- | :--- | :--- |
 | `ModeMonitor` → `ModeData` | `.amps` | Differentiate modal amplitudes and powers directly. |
 | `GaussianOverlapMonitor` / `AstigmaticGaussianOverlapMonitor` → `FieldOverlapData` | `.amps` | Differentiate overlap amplitudes used by Gaussian ports. |
+| `ThinLensOverlapMonitor` → `FieldOverlapData` | `.amps` | Supports real scalar objectives of amplitudes measured by a fixed monitor, subject to the plane-medium requirements above. |
 | `DiffractionMonitor` → `DiffractionData` | `.amps` | Capture gradients of diffraction efficiencies / orders. |
 | `FieldMonitor` / `PermittivityMonitor` → `FieldData`, `PermittivityData` | field components, permittivity components, `FieldData.flux` | Use these to build custom objectives (power, overlap, material penalties). |
 | `FluxMonitor` → `FluxData` | `.flux` when `enable_adjoint=True` | Opt in only for flux monitors used by the objective; this stores hidden surface field data for all requested frequencies during autograd forward runs. Keep the frequency list minimal because these frequencies also enter the forward adjoint-monitor frequency set, so structure-adjoint field and permittivity monitors may track them too. |

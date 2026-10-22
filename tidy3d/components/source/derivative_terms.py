@@ -19,12 +19,15 @@ from flexcompute.core._migration.em.derivatives import (
     SourcePullbackKernel,
     SumFrequencies,
 )
+from flexcompute.core._migration.em.numerical.raw.source_normalization import (
+    normalized_source_spectrum,
+)
 
 from tidy3d.components.autograd.derivative_terms import Binding, Compiled
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.medium.derivative_terms import unsort, zero_binding
 from tidy3d.components.monitor import FieldMonitor
-from tidy3d.constants import C_0
+from tidy3d.constants import EPSILON_0
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -48,19 +51,22 @@ class SourceTarget:
     """The run: its time mesh weights the spectrum, its grid and background set beam profiles."""
 
 
-def frequency_weights(source: Any, target: SourceTarget, source_frequency: float) -> np.ndarray:
-    """Per-frequency weight of the adjoint field, from the source spectrum at its own frequency."""
+def frequency_weights(source: Any, target: SourceTarget) -> np.ndarray:
+    """Undo adjoint-current scaling and the forward run's spectral normalization."""
 
     simulation, frequencies = target.simulation, target.frequencies
-    spectrum = source.source_time.spectrum(
-        simulation.tmesh, np.full_like(frequencies, source_frequency), simulation.dt
-    )
-    # - 2.0: real-objective / one-sided-frequency adjoint convention.
-    # - 2*pi (f -> omega): convert Hz-based quantities to angular-frequency form.
-    # - 2*pi (domega = 2*pi*df): Fourier measure conversion for the current convention.
-    # - c0: wavelength/frequency conversion (omega * lambda = 2*pi*c0).
-    prefactor = 2.0 * (2.0 * np.pi) * (2.0 * np.pi) * C_0
-    return prefactor * np.asarray(spectrum, dtype=complex) * (source_frequency / frequencies)
+    spectrum = source.source_time.spectrum(simulation.tmesh, frequencies, simulation.dt)
+    normalizer = 1.0
+    if simulation.normalize_index is not None:
+        pulse = simulation.sources[simulation.normalize_index].source_time
+        normalizer = normalized_source_spectrum(
+            pulse.spectrum(simulation.tmesh, frequencies, simulation.dt),
+            amplitude=pulse.amplitude,
+            phase=pulse.phase,
+        )
+    # Adjoint field cotangents become currents with -i*omega*eps0. Forward fields
+    # are divided by the selected source's unit-amplitude, zero-phase spectrum.
+    return 1j / (2 * np.pi * frequencies * EPSILON_0) * spectrum / normalizer
 
 
 def source_monitor(source: Any, target: SourceTarget, fields: Iterable[str]) -> FieldMonitor:
@@ -107,8 +113,7 @@ def dataset_source_terms(
     requested = {path[1] for path in paths if path[0] == dataset_key}
     coupled = {c for c in dataset.field_components if source._derivative_coupling(c)[0]}
     components = [c for c in _FIELD_COMPONENTS if c in requested | (coupled if centers else set())]
-    first = next(iter(dataset.field_components.values()))
-    weights = frequency_weights(source, target, float(np.asarray(first.coords["f"]).ravel()[0]))
+    weights = frequency_weights(source, target)
     center = np.asarray([get_static(value) for value in source.center], dtype=float)
     size = np.asarray([get_static(value) for value in source.size], dtype=float)
     terms, bindings, read = [], [], set()

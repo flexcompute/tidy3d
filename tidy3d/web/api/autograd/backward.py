@@ -19,6 +19,7 @@ from tidy3d.components.autograd.derivative_utils import (
 from tidy3d.components.autograd.monitor_names import adjoint_monitor_name
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.bound_ops import bounds_intersection
+from tidy3d.components.thin_lens import validate_thin_lens_adjoint_background
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel
@@ -104,6 +105,18 @@ def setup_adj(
     if not data_fields_vjp:
         result = AdjointSetupResult([])
         return result if return_result else result.simulations
+
+    # Unused overlap monitors need not satisfy the adjoint profile contract.
+    for index in {path[1] for path in data_fields_vjp}:
+        monitor = sim_data_orig.data[index].monitor
+        if isinstance(monitor, td.ThinLensOverlapMonitor):
+            traced_fields = [path for binding in derivative_run.bindings for path in binding.paths]
+            validate_thin_lens_adjoint_background(
+                sim_data_orig.simulation,
+                monitor,
+                np.asarray(monitor.freqs),
+                traced_fields=[*traced_fields, *derivative_run.callback_keys],
+            )
 
     data_fields_vjp, sim_data_for_adj = expand_flux_monitor_vjps(
         data_fields_vjp=data_fields_vjp,

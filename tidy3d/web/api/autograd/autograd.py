@@ -15,6 +15,7 @@ from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.geometry.utils import GeometryType
 from tidy3d.components.medium import PublicMediumType
 from tidy3d.components.medium.protected import has_protected_media
+from tidy3d.components.thin_lens import validate_thin_lens_adjoint_setup
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError, DataError
 from tidy3d.web.api import asynchronous, webapi
@@ -252,15 +253,6 @@ def _dipole_emission_monitor_names(simulation: td.Simulation) -> list[str]:
     ]
 
 
-def _thin_lens_overlap_monitor_names(simulation: td.Simulation) -> list[str]:
-    """Exact thin-lens overlap monitor names present in the simulation."""
-    return [
-        monitor.name
-        for monitor in simulation.monitors
-        if isinstance(monitor, td.ThinLensOverlapMonitor)
-    ]
-
-
 def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
     """Validate that an autograd run has differentiable frequency-domain monitor data."""
 
@@ -270,14 +262,6 @@ def _validate_autograd_frequency_monitors(simulation: td.Simulation) -> None:
             "Point-cloud frequency-domain monitor data is present, but adjoint objectives "
             "depending on PointCloudFieldData or PointCloudPermittivityData are currently "
             f"unsupported. Point-cloud monitor(s): {', '.join(point_cloud_monitor_names)}."
-        )
-
-    thin_lens_overlap_monitor_names = _thin_lens_overlap_monitor_names(simulation)
-    if thin_lens_overlap_monitor_names:
-        raise AdjointError(
-            "ThinLensOverlapMonitor data is present, but adjoint objectives depending on "
-            "thin-lens overlap amplitudes are not implemented yet. ThinLensOverlapMonitor(s): "
-            f"{', '.join(thin_lens_overlap_monitor_names)}."
         )
 
     # if no frequency-domain data (e.g. only field time monitors), raise an error
@@ -1624,6 +1608,9 @@ def setup_run(
 
         sim_fields_map = builtins.dict(sim_fields_dict)
 
+    if sim_fields_map and has_protected_media(sim_prepared):
+        _raise_protected_autograd_error("autograd or adjoint gradients")
+    validate_thin_lens_adjoint_setup(sim_prepared, list(sim_fields_map))
     if sim_fields_map:
         _validate_autograd_run_constraints(sim_prepared, sim_fields_map)
 

@@ -842,7 +842,7 @@ def _compute_fields_on_coords(
     params = {} if params is None else params
     beam_param_overrides = {
         key: params[key]
-        for key in ("waist_radius", "waist_distance", "waist_sizes", "waist_distances")
+        for key in source._beam_scalar_roots | source._beam_tuple_roots
         if key in params and params[key] is not None
     }
     return source.compute_beam_fields_on_grid(
@@ -939,7 +939,7 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
             values = self._profile_values(local, target.frequencies, background, components)
         kernel = SourcePullbackKernel(
             monitor=target.monitor,
-            adjoint_scale=frequency_weights(self, target, float(self.source_time._freq0)),
+            adjoint_scale=frequency_weights(self, target),
             profile=SourceProfile(x=local[0], y=local[1], z=local[2], values=values),
             pullbacks=tuple(
                 SourcePullback(
@@ -1113,7 +1113,6 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
 
         root = field_path[0]
         parameter = format_traced_path(field_path)
-        scalar_allowed = self._common_scalar_roots | self._beam_scalar_roots
         supported_roots = self._supported_traced_source_fields
 
         if root not in supported_roots:
@@ -1122,24 +1121,23 @@ class AbstractGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource, ABC
                 f"This parameter is not supported. {self._traced_source_support_message()}"
             )
 
+        tuple_root = root == "center" or root in self._beam_tuple_roots
+        if len(field_path) != (2 if tuple_root else 1) or (
+            tuple_root
+            and (
+                type(field_path[1]) is not int or not 0 <= field_path[1] < len(getattr(self, root))
+            )
+        ):
+            raise AdjointError(
+                f"Unsupported traced source parameter path '{parameter}' for '{type(self).__name__}'."
+            )
+
         if root == "center":
             validate_no_zero_dim_center_paths(
                 [field_path],
                 source_size=tuple(self.size),
                 source_name=type(self).__name__,
             )
-            return
-
-        if root in scalar_allowed:
-            return
-
-        if root in self._beam_tuple_roots:
-            return
-
-        raise AdjointError(
-            f"Unsupported traced source parameter '{parameter}' for '{type(self).__name__}'. "
-            f"This parameter is not supported. {self._traced_source_support_message()}"
-        )
 
 
 class GaussianBeam(AbstractGaussianBeam):
@@ -1311,28 +1309,76 @@ class ThinLensBeam(AbstractThinLens, AbstractGaussianBeam):
     profile is generated from a thin-lens pupil instead of a paraxial Gaussian waist model.
     """
 
-    @property
-    def _supported_traced_source_fields(self) -> tuple[str, ...]:
-        """Thin-lens source parameter VJPs are deferred until adjoint support is wired."""
-        return ()
+    numerical_aperture: TracedPositiveFloat = Field(
+        title="Numerical Aperture",
+        description="Numerical aperture of the focused beam in the background medium. "
+        "This must be less than the real refractive index on the component plane.",
+    )
+
+    waist_distance: TracedFloat = Field(
+        default=0.0,
+        title="Waist Distance",
+        description="Signed axial distance from the thin-lens focal plane to the component "
+        "plane, measured along the rotated beam propagation direction. A positive value "
+        "places the focal plane behind the component plane.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
+    lens_diameter: TracedPositiveFloat | None = Field(
+        default=None,
+        title="Lens Diameter",
+        description="Physical lens diameter used for Gaussian under-filled pupils. Required "
+        "when ``fill_lens=False`` and ignored when ``fill_lens=True``.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
+    beam_diameter: TracedPositiveFloat | None = Field(
+        default=None,
+        title="Beam Diameter",
+        description="Incident Gaussian beam diameter used for Gaussian under-filled pupils. "
+        "Required when ``fill_lens=False`` and ignored when ``fill_lens=True``.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
+    lens_offset: tuple[TracedFloat, TracedFloat] = Field(
+        default=(0.0, 0.0),
+        title="Lens Offset",
+        description="Tangential offset of the focused field relative to the beam axis, "
+        "implemented as a pupil phase ramp. The two entries follow the component's "
+        "tangential-axis order after removing the normal axis from ``(x, y, z)``. For "
+        "example, a y-normal component uses ``(x, z)``. This shifts the ideal focal field "
+        "but does not model a decentered finite aperture with clipping or changed pupil "
+        "amplitude. If not provided, the focal field is centered on the optical axis.",
+        json_schema_extra={"units": MICROMETER},
+    )
 
     def _traced_source_support_message(self) -> str:
-        """Describe deferred thin-lens source-parameter support."""
+        """Describe the continuous thin-lens parameter contract."""
         return (
-            "ThinLensBeam source-parameter derivatives are not implemented yet; "
-            "thin-lens adjoint support is deferred."
+            "ThinLensBeam supports tangential center, angle_theta, angle_phi, pol_angle, "
+            "numerical_aperture, waist_distance, and lens_offset derivatives. "
+            "Pupil diameter derivatives require fill_lens=False."
         )
+
+    def validate_traced_path(self, field_path: PathType) -> None:
+        super().validate_traced_path(field_path)
+        root = field_path[0]
+        if self.fill_lens and root in {"lens_diameter", "beam_diameter"}:
+            raise AdjointError(
+                f"ThinLensBeam parameter '{root}' is inactive when fill_lens=True. "
+                "Pupil diameter derivatives require fill_lens=False."
+            )
 
     @property
     def _beam_scalar_roots(self) -> set[str]:
-        return set()
+        return {"numerical_aperture", "waist_distance", "lens_diameter", "beam_diameter"}
 
     @property
     def _beam_tuple_roots(self) -> set[str]:
-        return set()
+        return {"lens_offset"}
 
     def _beam_param_state(self) -> dict[str, Any]:
-        return {}
+        return {key: getattr(self, key) for key in self._beam_scalar_roots | self._beam_tuple_roots}
 
     def compute_beam_fields_on_grid(
         self,
@@ -1345,7 +1391,10 @@ class ThinLensBeam(AbstractThinLens, AbstractGaussianBeam):
         """Compute thin-lens beam fields from compact pose/grid context."""
         from tidy3d.components import beam as beam_module
 
-        profile = beam_module.ThinLensProfile(
+        # The source and grid were validated already. Parameter VJPs pass ArrayBoxes here;
+        # validating a public profile would coerce or reject those traced values.
+        params = {} if params is None else params
+        profile = beam_module.ThinLensProfile.model_construct(
             center=pose.center,
             size=self.size,
             freqs=grid.freqs,
@@ -1353,13 +1402,9 @@ class ThinLensBeam(AbstractThinLens, AbstractGaussianBeam):
             angle_phi=pose.angle_phi,
             pol_angle=pose.pol_angle,
             direction=pose.direction,
-            numerical_aperture=self.numerical_aperture,
-            waist_distance=self.waist_distance,
             fill_lens=self.fill_lens,
-            lens_diameter=self.lens_diameter,
-            beam_diameter=self.beam_diameter,
             num_plane_waves=self.num_plane_waves,
-            lens_offset=self.lens_offset,
+            **{key: params.get(key, value) for key, value in self._beam_param_state().items()},
         )
         return profile._beam_fields_on_component_grid(
             x=grid.x,

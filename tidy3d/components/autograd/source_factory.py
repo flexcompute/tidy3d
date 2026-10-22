@@ -24,8 +24,10 @@ from tidy3d.components.source.field import (
     GaussianBeam,
     ModeSource,
     PlaneWave,
+    ThinLensBeam,
 )
 from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.thin_lens import validate_thin_lens_reciprocal_profile
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, fp_eps
 from tidy3d.exceptions import AdjointError
 
@@ -107,52 +109,57 @@ def gaussian_source_from_monitor(
         ThinLensOverlapMonitor,
     )
 
+    if not isinstance(
+        monitor, (GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor, ThinLensOverlapMonitor)
+    ):
+        raise TypeError(
+            "Expected GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor, "
+            f"or ThinLensOverlapMonitor, got '{type(monitor).__name__}'."
+        )
+
     k0 = 2 * np.pi * freq / C_0
     grad_const = k0 / 4 / ETA_0
     src_amp = 1j * grad_const * coefficient
 
-    source_time = _adjoint_source_time(freq=freq, src_amp=src_amp, fwidth=fwidth)
-    direction_flipped = flip_direction(direction)
+    common = {
+        "center": monitor.center,
+        "size": monitor.size,
+        "source_time": _adjoint_source_time(freq=freq, src_amp=src_amp, fwidth=fwidth),
+        "direction": flip_direction(direction),
+        "angle_theta": monitor.angle_theta,
+        "angle_phi": monitor.angle_phi,
+        "pol_angle": monitor.pol_angle,
+        "num_freqs": 1,
+    }
 
     if isinstance(monitor, GaussianOverlapMonitor):
         return GaussianBeam(
-            center=monitor.center,
-            size=monitor.size,
-            source_time=source_time,
-            direction=direction_flipped,
-            angle_theta=monitor.angle_theta,
-            angle_phi=monitor.angle_phi,
-            pol_angle=monitor.pol_angle,
+            **common,
             waist_radius=monitor.waist_radius,
             waist_distance=monitor.waist_distance,
-            num_freqs=1,
         )
 
     if isinstance(monitor, AstigmaticGaussianOverlapMonitor):
         return AstigmaticGaussianBeam(
-            center=monitor.center,
-            size=monitor.size,
-            source_time=source_time,
-            direction=direction_flipped,
-            angle_theta=monitor.angle_theta,
-            angle_phi=monitor.angle_phi,
-            pol_angle=monitor.pol_angle,
+            **common,
             waist_sizes=monitor.waist_sizes,
             waist_distances=monitor.waist_distances,
-            num_freqs=1,
         )
 
-    if isinstance(monitor, ThinLensOverlapMonitor):
-        raise NotImplementedError(
-            "Adjoint source construction for 'ThinLensOverlapMonitor' is not implemented yet. "
-            "Use a supported overlap monitor for adjoint workflows, or defer thin-lens overlap "
-            "objectives until thin-lens adjoint wiring is added."
-        )
-
-    raise TypeError(
-        "Expected GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor, "
-        "or ThinLensOverlapMonitor, "
-        f"got '{type(monitor).__name__}'."
+    validate_thin_lens_reciprocal_profile(monitor)
+    # In a lossless isotropic medium, reversing direction maps each pupil sample
+    # (sx, sy, sz) to (-sx, -sy, -sz). Thus E_rev = E* and H_rev = -H*,
+    # including the signed focus phase and the component-frame offset phase.
+    return ThinLensBeam(
+        **common,
+        numerical_aperture=monitor.numerical_aperture,
+        waist_distance=monitor.waist_distance,
+        fill_lens=monitor.fill_lens,
+        lens_diameter=monitor.lens_diameter,
+        beam_diameter=monitor.beam_diameter,
+        lens_offset=monitor.lens_offset,
+        num_plane_waves=monitor.num_plane_waves,
+        use_colocated_integration=monitor.use_colocated_integration,
     )
 
 
