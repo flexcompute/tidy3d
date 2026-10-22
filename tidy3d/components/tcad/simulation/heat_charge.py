@@ -649,8 +649,11 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("boundary_spec",), self._check_thermal_contact_resistance_placement
         )
-        self._call_with_validation_loc(("structures",), self._check_heat_only_features_in_charge)
+        self._call_with_validation_loc(
+            ("structures",), self._check_heat_feature_placement_in_charge
+        )
         self._call_with_validation_loc(("structures",), self._check_solids_have_charge_medium)
+        self._call_with_validation_loc(("structures",), self._warn_conductor_heat_medium_unused)
         self._call_with_validation_loc(
             ("analysis_spec",), self._check_semiconductor_electric_bcs_require_charge_analysis
         )
@@ -3050,13 +3053,15 @@ class HeatChargeSimulation(AbstractSimulation):
         runnable setup.
 
         A semiconductor without a solid heat medium only warns; no solid heat medium at all is
-        an error."""
+        an error. Conductors take no part in the heat solve, so when they alone carry a heat
+        medium nothing is solved and the run is isothermal: that also only warns, once."""
 
         if not self._thermal_solver_active:
             return self
 
         semiconductor_locs = {loc for loc, _ in self._iter_semiconductor_charge_media()}
         has_heat = False
+        heat_outside_conductors = False
         locs_without_heat = []
         for loc, medium in self._iter_media_with_locs():
             heat_spec = (
@@ -3064,6 +3069,8 @@ class HeatChargeSimulation(AbstractSimulation):
             )
             if isinstance(heat_spec, SolidMedium):
                 has_heat = True
+                if not isinstance(self._charge_spec(medium), ChargeConductorMedium):
+                    heat_outside_conductors = True
             elif loc in semiconductor_locs:
                 locs_without_heat.append(loc)
 
@@ -3075,6 +3082,15 @@ class HeatChargeSimulation(AbstractSimulation):
                 "materials with heat properties have been defined. ",
                 *locs_without_heat[0],
             )
+        if semiconductor_locs and not heat_outside_conductors:
+            log.warning(
+                "Only conductors carry a solid heat medium, and conductors take no part in the "
+                "heat solve of a non-isothermal charge simulation, so it solves no temperature: "
+                "the semiconductors are held at the ambient temperature and their heat is "
+                "dropped. Use a 'MultiPhysicsMedium' with 'heat=SolidMedium(...)' for the "
+                "semiconductors. Future versions of Tidy3D may reject this setup."
+            )
+            return self
         for loc in locs_without_heat:
             log.warning(
                 f"{self._medium_label(loc)} is a semiconductor without a solid heat medium. "
@@ -3102,21 +3118,29 @@ class HeatChargeSimulation(AbstractSimulation):
         """Warn if a self-heating charge analysis has no boundary that lets the heat leave.
 
         Surfaces without a thermal BC are adiabatic, so the steady heat equation has no
-        solution unless a 'TemperatureBC' or an exchanging 'ConvectionBC' exists. Raises
-        instead when '_not_all_neumann' refuses the setup anyway, since its generic message
-        would otherwise win.
+        solution unless a 'TemperatureBC', a 'RadiationBC' or a 'ConvectionBC' that exchanges
+        heat (by convection or by its 'emissivity') exists. The suggested sinks leave out
+        radiation when 'use_accelerated_solver=False', which refuses it. Raises instead when
+        '_not_all_neumann' refuses the setup anyway, since its generic message would otherwise
+        win.
         """
         if not self._thermal_solver_active:
             return self
         if any(self._is_heat_sink(bc.condition) for bc in self.boundary_spec):
             return self
+        if self.use_accelerated_solver:
+            sinks = (
+                "a 'TemperatureBC', a 'ConvectionBC' with a positive 'transfer_coeff' or "
+                "'emissivity', or a 'RadiationBC'"
+            )
+        else:
+            sinks = "a 'TemperatureBC' or a 'ConvectionBC' with a positive 'transfer_coeff'"
         message = (
             "A non-isothermal charge analysis solves a steady heat equation for the "
             "self-heating, which has no solution unless the heat can leave the device: "
             "surfaces without a thermal boundary condition are adiabatic, and a 'HeatFluxBC', "
-            "'ThermalContactResistance' or 'ConvectionBC' with a zero 'transfer_coeff' does not "
-            "take heat out. Add a 'TemperatureBC', or a 'ConvectionBC' with a positive "
-            "'transfer_coeff', where the device is heat-sunk."
+            "'ThermalContactResistance' or 'ConvectionBC' with a zero 'transfer_coeff' and no "
+            f"'emissivity' does not take heat out. Add {sinks} where the device is heat-sunk."
         )
         heat_bcs = [bc for bc in self.boundary_spec if isinstance(bc.condition, HeatBCTypes)]
         if TCADAnalysisTypes.HEAT in self._check_simulation_types() and all(
@@ -3139,76 +3163,92 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return False
 
-    def _check_heat_only_features_in_charge(self) -> Self:
-        """Reject heat-only-solver features in non-isothermal charge simulations.
+    def _check_heat_feature_placement_in_charge(self) -> Self:
+        """Reject heat features placed where the electric side of a self-heating run cannot follow.
 
-        Solid-medium advection ('SolidMedium.velocity'), anisotropic thermal conductivity
-        ('AnisotropicConductivity'), resistive interfaces ('ThermalContactResistance'), and
-        gray-body surface radiation ('RadiationBC', 'ConvectionBC.emissivity') are honored by
-        the heat solver, including when it is coupled with electrical conduction. The coupled
-        thermal solve that runs alongside a non-isothermal charge analysis does not support any
-        of them, so a setup that requests them would silently produce a result that ignores
-        them. Flag them here instead. Heat, conduction+heat, and isothermal charge analyses
-        (the latter runs no thermal solve) are unaffected."""
+        The heat solve of a non-isothermal charge simulation applies advection and resistive
+        interfaces, but the carriers of a moving semiconductor are not advected, a resistive
+        interface between two semiconductors would break the carrier coupling across it, and
+        conductors take no part in the heat solve. The solver choice is checked by
+        '_accelerated_only_features'. Heat, conduction+heat, and isothermal or
+        prescribed-temperature charge analyses are unaffected."""
         if not self._thermal_solver_active:
             return self
 
-        # Advection velocity and anisotropic conductivity, on the background medium or any
-        # structure's solid heat spec.
-        media_sources = [(("medium",), self.medium)]
-        media_sources.extend(
-            (("structures", i), struct.medium) for i, struct in enumerate(self.structures)
-        )
-        for loc, medium in media_sources:
+        for loc, medium in self._iter_media_with_locs():
             heat_spec = (
                 medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
             )
             velocity = getattr(heat_spec, "velocity", None)
-            if velocity is not None and any(v != 0.0 for v in velocity):
+            moving = velocity is not None and any(v != 0.0 for v in velocity)
+            if moving and isinstance(self._charge_spec(medium), SemiconductorMedium):
                 self._raise_validation_error_at_loc(
-                    "Solid-medium advection ('SolidMedium.velocity') is not supported in "
-                    "non-isothermal charge (coupled charge+heat) simulations: the coupled "
-                    "thermal solve does not apply convective transport, so this velocity "
-                    "would be silently ignored. "
-                    "Remove 'velocity' (or set it to 'None') to run this charge simulation.",
-                    *loc,
-                )
-            if not isinstance(heat_spec, SolidMedium):
-                continue
-            if isinstance(heat_spec._reference_conductivity, AnisotropicConductivity):
-                self._raise_validation_error_at_loc(
-                    "Anisotropic thermal conductivity ('AnisotropicConductivity') is not "
-                    "supported in non-isothermal charge (coupled charge+heat) simulations: the "
-                    "coupled thermal solve only handles a scalar (isotropic) conductivity, so a "
-                    "tensor conductivity would be silently ignored. Provide a scalar "
-                    "'conductivity' to run this charge simulation.",
+                    f"{self._medium_label(loc)} is a semiconductor with an advection "
+                    "velocity ('SolidMedium.velocity'). A non-isothermal charge simulation "
+                    "advects the heat of a moving solid but not its carriers, so the two "
+                    "would move apart. Remove 'velocity' from this medium.",
                     *loc,
                 )
 
-        # Resistive interfaces and surface radiation.
         for i, bc in enumerate(self.boundary_spec):
-            if isinstance(bc.condition, ThermalContactResistance):
+            if not isinstance(bc.condition, ThermalContactResistance):
+                continue
+            sides = self._placement_side_media(bc.placement) or []
+            charges = [self._charge_spec(side) for side in sides]
+            if any(isinstance(charge, ChargeConductorMedium) for charge in charges):
                 self._raise_validation_error_at_loc(
-                    "Resistive interfaces ('ThermalContactResistance') are not supported in "
-                    "non-isothermal charge (coupled charge+heat) simulations: the coupled "
-                    "thermal solve does not apply the interfacial thermal resistance, so this "
-                    "boundary condition would be silently ignored. Remove it to run this "
-                    "charge simulation.",
+                    "'ThermalContactResistance' cannot be placed on a conductor "
+                    "('ChargeConductorMedium') in a charge simulation: conductors take no part "
+                    "in its heat solve, so this face bounds it. To model a resistive contact to "
+                    "a metal at a known temperature, place a 'ConvectionBC' here with "
+                    "'transfer_coeff' equal to 1/'resistance' and that temperature as "
+                    "'ambient_temperature'.",
                     "boundary_spec",
                     i,
+                    "placement",
                 )
-            if isinstance(bc.condition, RadiationBC) or (
-                isinstance(bc.condition, ConvectionBC) and bc.condition.emissivity
+            if len(charges) == 2 and all(
+                isinstance(charge, SemiconductorMedium) for charge in charges
             ):
                 self._raise_validation_error_at_loc(
-                    "Gray-body surface radiation ('RadiationBC', or 'ConvectionBC' with a "
-                    "positive 'emissivity') is not yet supported in non-isothermal charge "
-                    "(coupled charge+heat) simulations; it is available in heat and "
-                    "conduction+heat simulations. Remove the radiative term to run this "
-                    "charge simulation.",
+                    "'ThermalContactResistance' between two semiconductors is not supported "
+                    "in non-isothermal charge simulations. Where both have the same band "
+                    "parameters, the charge solver ties their carrier densities across the "
+                    "interface, which a temperature jump would make inconsistent. A resistive "
+                    "heterojunction is not supported either. Place it where at least one side "
+                    "is an insulator.",
                     "boundary_spec",
                     i,
+                    "placement",
                 )
+        return self
+
+    def _warn_conductor_heat_medium_unused(self) -> Self:
+        """Warn that the solid heat medium of a conductor is not used in a self-heating run.
+
+        Conductors take no part in the heat solve of a charge simulation, so the heat medium the
+        user gave them has no effect. One warning names every such conductor."""
+        if not self._thermal_solver_active:
+            return self
+        labels = [
+            self._medium_label(loc)
+            for loc, medium in self._iter_media_with_locs()
+            if isinstance(self._charge_spec(medium), ChargeConductorMedium)
+            and isinstance(getattr(medium, "heat_spec", None), SolidMedium)
+        ]
+        if not labels:
+            return self
+        subject = (
+            f"{labels[0]} is a conductor"
+            if len(labels) == 1
+            else f"{', '.join(labels)} are conductors"
+        )
+        log.warning(
+            f"{subject} whose heat medium is not used: conductors take no part in the heat "
+            "solve of a self-heating charge simulation, so the faces they share with other "
+            "solids are adiabatic. To let heat leave through a conductor, place a "
+            "'TemperatureBC' or 'ConvectionBC' on those faces."
+        )
         return self
 
     def _check_solids_have_charge_medium(self) -> Self:
@@ -4230,6 +4270,44 @@ class HeatChargeSimulation(AbstractSimulation):
         if self._thermal_solver_active and self._uses_temperature_dependent_thermal_properties():
             features.append("Temperature-dependent thermal properties in a non-isothermal run")
 
+        if self._thermal_solver_active:
+            features.extend(self._accelerated_only_heat_features())
+
+        return features
+
+    def _accelerated_only_heat_features(self) -> list[str]:
+        """Heat features that only the accelerated solver carries into the thermal solve of a
+        non-isothermal charge simulation."""
+        heat_specs = [
+            medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
+            for _loc, medium in self._iter_media_with_locs()
+        ]
+        conditions = [bc.condition for bc in self.boundary_spec]
+        features = []
+        if any(
+            getattr(spec, "velocity", None) is not None and any(v != 0.0 for v in spec.velocity)
+            for spec in heat_specs
+        ):
+            features.append(
+                "Solid-medium advection ('SolidMedium.velocity') in a non-isothermal run"
+            )
+        if any(
+            isinstance(spec, SolidMedium)
+            and isinstance(spec._reference_conductivity, AnisotropicConductivity)
+            for spec in heat_specs
+        ):
+            features.append("'AnisotropicConductivity' in a non-isothermal run")
+        if any(isinstance(condition, ThermalContactResistance) for condition in conditions):
+            features.append("'ThermalContactResistance' in a non-isothermal run")
+        if any(
+            isinstance(condition, RadiationBC)
+            or (isinstance(condition, ConvectionBC) and condition.emissivity)
+            for condition in conditions
+        ):
+            features.append(
+                "Surface radiation ('RadiationBC', or 'ConvectionBC' with a positive "
+                "'emissivity') in a non-isothermal run"
+            )
         return features
 
     def _uses_temperature_dependent_thermal_properties(self) -> bool:

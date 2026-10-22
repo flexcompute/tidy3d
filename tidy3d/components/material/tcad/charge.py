@@ -194,6 +194,9 @@ class ChargeConductorMedium(AbstractChargeMedium):
     Note
     ----
         A relative permittivity will be assumed 1 if no value is specified.
+
+        In a charge simulation a conductor is an ideal equipotential electrode and takes no
+        part in the heat solve, so a heat medium given to it is not used.
     """
 
     conductivity: PositiveFloat = Field(

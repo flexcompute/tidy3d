@@ -245,9 +245,9 @@ class RadiationBC(HeatChargeBC):
         q = \\varepsilon \\sigma \\left( T^4 - T_{amb}^4 \\right),
 
     where :math:`\\varepsilon` is the surface emissivity and :math:`\\sigma` the
-    Stefan-Boltzmann constant. This boundary condition is applied by the heat solver
-    (heat and conduction+heat simulations). It is not yet supported in non-isothermal
-    charge (coupled charge+heat) simulations, which reject it at validation.
+    Stefan-Boltzmann constant. This boundary condition is applied by the heat solver,
+    including in non-isothermal charge simulations run by the accelerated charge solver.
+    It is not supported with ``use_accelerated_solver=False``.
 
     Example
     -------
@@ -293,9 +293,9 @@ class ThermalContactResistance(HeatChargeBC):
     solids (:class:`StructureStructureInterface` or :class:`MediumMediumInterface`).
 
     This boundary condition is applied by the heat solver, including when heat is coupled
-    with electrical conduction. It is not supported in non-isothermal charge (coupled
-    charge+heat) simulations, where the coupled thermal solve does not apply the
-    interfacial thermal resistance, so including it there raises a setup error.
+    with electrical conduction and in non-isothermal charge simulations run by the
+    accelerated charge solver. There it cannot be placed between two semiconductors or on a
+    conductor, and it is not supported with ``use_accelerated_solver=False``.
 
     Example
     -------

@@ -596,10 +596,8 @@ class SolidMedium(AbstractHeatMedium):
         "``PolynomialConductivity``, ``InversePolynomialConductivity``) whose reference value "
         "is either of those. The tensor and temperature-dependent forms are applied by the "
         "heat solver, including when heat is coupled with electrical conduction. In "
-        "non-isothermal charge (coupled charge+heat) simulations a temperature-dependent model "
-        "requires ``use_accelerated_solver=True`` (the default), and the tensor form is not "
-        "supported: the coupled thermal solve only handles a scalar conductivity, so it raises "
-        "a setup error there.",
+        "non-isothermal charge (coupled charge+heat) simulations both require "
+        "``use_accelerated_solver=True`` (the default).",
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
 
@@ -622,9 +620,10 @@ class SolidMedium(AbstractHeatMedium):
         "interface between two solids is not allowed. This is not validated, and a simulation "
         "that has one gives physically inconsistent results. Velocities tangential to such an "
         "interface are fine. This term is applied by the heat solver, including when heat is coupled "
-        "with electrical conduction. It is not supported in non-isothermal charge "
-        "(coupled charge+heat) simulations, where the coupled thermal solve does not apply "
-        "it, so setting a nonzero ``velocity`` there raises a setup error.",
+        "with electrical conduction and in non-isothermal charge simulations run by the "
+        "accelerated charge solver. There a semiconductor cannot have a nonzero ``velocity``, "
+        "since its carriers are not advected, and it is not supported with "
+        "``use_accelerated_solver=False``.",
         json_schema_extra={"units": VELOCITY},
     )
 
