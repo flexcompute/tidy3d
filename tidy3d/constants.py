@@ -15,6 +15,7 @@ from __future__ import annotations
 from types import MappingProxyType
 
 import numpy as np
+from flexcompute.core._migration.em.material.medium import limits as _limits
 
 # fundamental constants (https://physics.nist.gov)
 C_0 = 2.99792458e14
@@ -313,7 +314,7 @@ LARGE_NUMBER = 1e10
 Large number used for comparing infinity.
 """
 
-LARGEST_FP_NUMBER = 1e38
+LARGEST_FP_NUMBER = _limits.LARGEST_FP_NUMBER
 """
 Largest number used for single precision floating point number.
 """

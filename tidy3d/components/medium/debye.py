@@ -23,7 +23,6 @@ from tidy3d.constants import (
     PERMITTIVITY,
     SECOND,
 )
-from tidy3d.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from pydantic import PositiveFloat
@@ -101,20 +100,17 @@ class Debye(DispersiveMedium):
 
     def _passivity_validation(self) -> Self:
         """Assert passive medium if `allow_gain` is False."""
-        val = self.coeffs
-        if self.allow_gain:
-            return self
-        for del_ep, _ in val:
-            if del_ep < 0:
-                self._raise_validation_error_at_loc(
-                    ValidationError(
-                        "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                        "To simulate a gain medium, please set 'allow_gain=True'. "
-                        "Caution: simulations with a gain medium are unstable, "
-                        "and are likely to diverge."
-                    ),
-                    "coeffs",
-                )
+        # Thin check that calls the core rule. No moved schema: ``CustomDebye`` subclasses
+        # ``Debye`` and has none yet, so it would translate through ``Debye`` on the
+        # construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_delta_epsilon_passivity,
+        )
+
+        from tidy3d.em.translate.components import _present
+
+        deltas = [delta for delta, _ in self.coeffs]
+        _present(self, validate_delta_epsilon_passivity(deltas, self.allow_gain))
         return self
 
     def _validate_coeffs_shape(self) -> Self:

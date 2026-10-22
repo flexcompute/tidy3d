@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 import numpy as npo
@@ -25,12 +25,8 @@ from tidy3d.components.dispersion_fitter import (
     LOSS_CHECK_NUM,
     imag_resp_extrema_locs,
 )
-from tidy3d.components.validators import (
-    call_wrapped_validator,
-)
 from tidy3d.constants import (
     EPSILON_0,
-    LARGEST_FP_NUMBER,
     PERMITTIVITY,
     RADPERSEC,
     fp_eps,
@@ -62,8 +58,6 @@ def _medium_numerics() -> Any:
 
 from .base import AbstractMedium, ensure_freq_in_range  # noqa: E402
 from .isotropic import Medium  # noqa: E402
-
-T = TypeVar("T")
 
 
 class DispersiveMedium(AbstractMedium, ABC):
@@ -107,58 +101,32 @@ class DispersiveMedium(AbstractMedium, ABC):
 
     _traced_indexed_root: ClassVar[str | None] = None
 
-    @staticmethod
-    def _permittivity_modulation_validation() -> Callable[[T], T]:
-        """Assert modulated permittivity cannot be <= 0 at any time."""
-
-        @model_validator(mode="after")
-        def _validate_permittivity_modulation(self: T) -> T:
-            """Assert modulated permittivity cannot be <= 0."""
-            val = self.eps_inf
-            modulation = self.modulation_spec
-            if modulation is None or modulation.permittivity is None:
-                return self
-
-            min_eps_inf = np.min(_get_numpy_array(val))
-            if min_eps_inf - modulation.permittivity.max_modulation <= 0:
-                raise ValidationError(
-                    "The minimum permittivity value with modulation applied was found to be negative."
-                )
-            return self
-
-        return _validate_permittivity_modulation
-
-    @staticmethod
-    def _conductivity_modulation_validation() -> Callable[[T], T]:
-        """Assert passive medium at any time if not ``allow_gain``."""
-
-        @model_validator(mode="after")
-        def _validate_conductivity_modulation(self: T) -> T:
-            """With conductivity modulation, the medium can exhibit gain during the cycle.
-            So `allow_gain` must be True when the conductivity is modulated.
-            """
-            val = self.modulation_spec
-            if val is None or val.conductivity is None:
-                return self
-
-            if not self.allow_gain:
-                raise ValidationError(
-                    "For passive medium, 'conductivity' must be non-negative at any time. "
-                    "With conductivity modulation, this medium can sometimes be active. "
-                    "Please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, and are likely to diverge."
-                )
-            return self
-
-        return _validate_conductivity_modulation
-
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
         super()._run_after_validators()
-        if "eps_inf" in type(self).model_fields:
-            call_wrapped_validator(DispersiveMedium._permittivity_modulation_validation, self)
-        call_wrapped_validator(DispersiveMedium._conductivity_modulation_validation, self)
+        return self._modulation_validation()
+
+    def _modulation_validation(self) -> Self:
+        """Assert ``eps_inf`` stays positive and the medium allows gain under modulation."""
+        # Thin check that calls the core rule. ``import tidy3d`` builds ``PoleResidue`` and
+        # ``Sellmeier`` (built at import), and ``Drude``, ``Debye`` and ``Lorentz`` have
+        # custom subclasses without a moved schema, so none of them is on the construction
+        # path. It raises ``ValidationError`` at the model, as the old validators did:
+        # ``_present`` would raise ``ValueError`` for these unmapped codes.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            max_modulations,
+            validate_dispersive_modulation,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        eps_inf = _get_numpy_array(self.eps_inf) if "eps_inf" in type(self).model_fields else None
+        raise_first_error(
+            validate_dispersive_modulation(
+                eps_inf, *max_modulations(self.modulation_spec), self.allow_gain
+            ),
+            ValidationError,
+        )
         return self
 
     @abstractmethod
@@ -318,24 +286,19 @@ class PoleResidue(DispersiveMedium):
 
     @field_validator("poles")
     @classmethod
-    def _causality_validation(cls, val: TracedPolesAndResidues) -> TracedPolesAndResidues:
-        """Assert causal medium."""
-        for a, _ in val:
-            if np.any(np.real(_get_numpy_array(a)) > 0):
-                raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
-        return val
+    def _poles_validation(cls, val: TracedPolesAndResidues) -> TracedPolesAndResidues:
+        """Assert causal poles, then pole parameters that are not too large."""
+        # Thin field check that calls the core rules. ``import tidy3d`` builds ``PoleResidue``
+        # (built at import), so it stays off the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_pole_causality,
+            validate_pole_magnitudes,
+        )
+        from flexcompute.core.validation import raise_first_error
 
-    @field_validator("poles")
-    @classmethod
-    def _poles_largest_value(cls, val: TracedPolesAndResidues) -> TracedPolesAndResidues:
-        """Assert pole parameters are not too large."""
-        for a, c in val:
-            if np.any(abs(_get_numpy_array(a)) > LARGEST_FP_NUMBER):
-                raise ValidationError(
-                    "The value of some 'a_i' is too large. They are unlikely to contribute to material dispersion."
-                )
-            if np.any(abs(_get_numpy_array(c)) > LARGEST_FP_NUMBER):
-                raise ValidationError("The value of some 'c_i' is too large.")
+        poles = [(_get_numpy_array(a), _get_numpy_array(c)) for a, c in val]
+        raise_first_error(validate_pole_causality(poles), SetupError)
+        raise_first_error(validate_pole_magnitudes(poles), ValidationError)
         return val
 
     @staticmethod

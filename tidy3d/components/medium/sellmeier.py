@@ -12,9 +12,6 @@ from tidy3d.components.data.utils import (
     _get_numpy_array,
     _ones_like,
 )
-from tidy3d.components.validators import (
-    call_wrapped_validator,
-)
 from tidy3d.constants import (
     C_0,
     MICROMETER,
@@ -91,40 +88,34 @@ class Sellmeier(DispersiveMedium):
         """Run post-init validations in an explicit, dependency-aware order."""
         AbstractMedium._run_after_validators(self)
         self._passivity_validation()
-        call_wrapped_validator(DispersiveMedium._conductivity_modulation_validation, self)
-        return self
+        return self._modulation_validation()
 
     def _passivity_validation(self) -> Self:
         """Assert passive medium if `allow_gain` is False."""
-        val = self.coeffs
-        if self.allow_gain:
-            return self
-        for B, _ in val:
-            if B < 0:
-                self._raise_validation_error_at_loc(
-                    ValidationError(
-                        "For passive medium, 'B_i' must be non-negative. "
-                        "To simulate a gain medium, please set 'allow_gain=True'. "
-                        "Caution: simulations with a gain medium are unstable, "
-                        "and are likely to diverge."
-                    ),
-                    "coeffs",
-                )
+        # Thin check that calls the core rule. ``import tidy3d`` builds ``Sellmeier`` (built at
+        # import), so it stays off the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_sellmeier_passivity,
+        )
+
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_sellmeier_passivity([b for b, _ in self.coeffs], self.allow_gain))
         return self
 
     @field_validator("modulation_spec")
     @classmethod
     def _validate_permittivity_modulation(cls, val: ModulationSpec | None) -> ModulationSpec | None:
         """Assert modulated permittivity cannot be <= 0."""
+        # Thin field adapter that calls the core rule (built at import: ``import tidy3d``
+        # builds ``Sellmeier``).
+        from flexcompute.core._migration.em.material.medium.validation import (
+            max_modulations,
+            validate_sellmeier_modulation,
+        )
+        from flexcompute.core.validation import raise_first_error
 
-        if val is None or val.permittivity is None:
-            return val
-
-        min_eps_inf = 1.0
-        if min_eps_inf - val.permittivity.max_modulation <= 0:
-            raise ValidationError(
-                "The minimum permittivity value with modulation applied was found to be negative."
-            )
+        raise_first_error(validate_sellmeier_modulation(max_modulations(val)[0]), ValidationError)
         return val
 
     def _n_model(self, frequency: float) -> complex:
