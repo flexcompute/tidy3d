@@ -214,17 +214,32 @@ Tidy3D's AD framework supports a wide range of design scenarios.
 | `Cylinder`      | `.center`, `.radius`, `.length`, `.sidewall_angle`         | Shape Optimization                |
 | `PolySlab`      | `.vertices`, `.slab_bounds`, `.sidewall_angle`             | Shape Optimization & taper tuning |
 | `GeometryGroup` | `.geometries`                                              | Grouping for performance          |
-| `GeometryArray` | `.geometry.<attribute>`, `.offsets[index]`                 | Repeated geometry with movable instances |
-| `Transformed`   | `.geometry.<attribute>`                                    | Fixed transform of a geometry     |
+| `GeometryArray` | `.geometry.<attribute>`, `.offsets[index]`, `.transforms[index]` | Repeated geometry with differentiable placement |
+| `Transformed`   | `.geometry.<attribute>`, `.transform`                      | Differentiable affine transform of a geometry |
 | `ClipOperation` | traced parameters in underlying geometries                 | Boolean shape optimization        |
 | `TriangleMesh`  | `.mesh_dataset.surface_mesh`                               | 3D Shape Optimization             |
 
 `GeometryArray` differentiates the shared base geometry once and accumulates the
 contribution from every placed instance. Its per-instance `offsets` are also
 differentiable; an offset gradient is the world-space translation VJP for that
-instance. Its linear `transforms` remain fixed placement parameters.
+instance. Its linear `transforms` are differentiable as whole matrices at
+`transforms[index]`; translation entries and the homogeneous bottom row remain
+fixed by the `GeometryArray` linear-transform contract. A `Transformed` geometry
+also accepts a traced `.transform` matrix.
 
-Parameters of `Transformed.geometry` are traceable; its transform remains fixed.
+| Transformation | Traceable route | Notes |
+|:---------------|:----------------|:------|
+| Translation | `GeometryArray.offsets[index]` | An array's translation is intentionally kept separate from its linear transform. |
+| Scaling | `GeometryArray.transforms[index]`, `Transformed.transform` | Trace the matrix returned by `Transformed.scaling(...)`. |
+| Rotation | `GeometryArray.transforms[index]`, `Transformed.transform` | Trace the matrix returned by `Transformed.rotation(...)`. |
+| Reflection | `GeometryArray.transforms[index]`, `Transformed.transform` | Trace the matrix returned by `Transformed.reflection(normal)` with a differentiable, nonzero normal. |
+| Shear | `GeometryArray.transforms[index]`, `Transformed.transform` | Supply an invertible homogeneous linear matrix. |
+
+`GeometryArray.transforms` deliberately excludes a translation column: combine
+one of these linear transforms with `offsets` when an instance needs both a
+linear transform and a translation. `Transformed.transform` accepts the full
+invertible affine matrix, including translation.
+
 Geometry gradients require an invertible affine transform with bottom row
 `[0, 0, 0, 1]`. This restriction is checked during derivative preparation;
 ordinary construction and loading retain their existing invertibility validation.

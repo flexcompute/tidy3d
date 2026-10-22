@@ -238,12 +238,47 @@ def _localize_sample_set(sample_set: SurfaceSampleSet, transform: np.ndarray) ->
     )
 
 
+def _affine_transform_vjp(
+    geometry: Geometry,
+    sample_sets: dict[PathType, SurfaceSampleSet],
+    derivative_info: ShapeDerivativeContext,
+    transform: np.ndarray,
+) -> np.ndarray:
+    """Return the VJP with respect to a local-to-world affine transform.
+
+    Each column is a translation VJP weighted by the local homogeneous point.
+    Reuse the geometry consumer's slice-motion and composite chain rules instead
+    of assuming that its sample normals contain every displacement sensitivity.
+    Samples and integrands are local; boolean masks are already in the integrands.
+    The consumer selects its translation partition, ignoring other parameter sets.
+    """
+    gradient = np.zeros((4, 4))
+    for column in range(4):
+        weighted_info = replace(
+            derivative_info,
+            point_integrands={
+                key: (
+                    Geometry._sample_set_integrand(derivative_info, key)
+                    * (sample_set.points.values[:, column] if column < 3 else 1.0)
+                )[:, None]
+                for key, sample_set in sample_sets.items()
+                if sample_set.num_points
+            },
+        )
+        translations = geometry._compute_derivatives_from_sample_sets(
+            sample_sets=sample_sets, paths=[_TRANSLATION_PATH], derivative_info=weighted_info
+        )
+        gradient[:3, column] = translations[_TRANSLATION_PATH]
+
+    gradient[:3] = np.dot(np.linalg.inv(np.asarray(transform)[:3, :3]).T, gradient[:3])
+    return gradient
+
+
 class Transformed(Geometry):
     """Class representing a transformed geometry.
 
-    Parameters of ``geometry`` support automatic differentiation through a fixed,
-    invertible affine transform. In 2D simulations the transform must preserve the
-    simulation plane.
+    Parameters of ``geometry`` and the invertible affine ``transform`` support automatic
+    differentiation. In 2D simulations the transform must preserve the simulation plane.
     """
 
     geometry: discriminated_union(GeometryType) = Field(
@@ -499,9 +534,8 @@ class Transformed(Geometry):
         numpy.ndarray
             Transform matrix with shape (4, 4).
         """
-        transform = np.eye(4)
-        transform[:3, :3] = RotationAroundAxis(angle=angle, axis=axis).matrix
-        return transform
+        rotation = RotationAroundAxis(angle=angle, axis=axis).matrix
+        return np.pad(rotation, ((0, 1), (0, 1)), mode="constant") + np.diag((0.0, 0.0, 0.0, 1.0))
 
     @staticmethod
     def reflection(normal: Coordinate) -> MatrixReal4x4:
@@ -518,9 +552,8 @@ class Transformed(Geometry):
             Transform matrix with shape (4, 4).
         """
 
-        transform = np.eye(4)
-        transform[:3, :3] = ReflectionFromPlane(normal=normal).matrix
-        return transform
+        reflection = ReflectionFromPlane(normal=normal).matrix
+        return np.pad(reflection, ((0, 1), (0, 1)), mode="constant") + np.diag((0.0, 0.0, 0.0, 1.0))
 
     @staticmethod
     def preserves_axis(transform: MatrixReal4x4, axis: Axis) -> bool:
@@ -547,15 +580,15 @@ class Transformed(Geometry):
     def _resolve_autograd_route(self, field_path: tuple[Any, ...]) -> None:
         """Validate a traced path owned by the wrapped geometry."""
         check_transform_affine(get_static(self.transform))
-        if field_path == _TRANSLATION_PATH:
-            return self.geometry._resolve_autograd_route(field_path)
+        if field_path in (_TRANSLATION_PATH, ("transform",)):
+            return self.geometry._resolve_autograd_route(_TRANSLATION_PATH)
         resolve_delegated_autograd_route(
             parameter_kind="geometry",
             owner_kind="geometry type",
             owner_name=type(self).__name__,
             field_path=field_path,
             delegates={"geometry": self.geometry},
-            supported_parameters=("geometry.<parameter>",),
+            supported_parameters=("transform", "geometry.<parameter>"),
         )
 
     @staticmethod
@@ -575,7 +608,9 @@ class Transformed(Geometry):
         self, paths: list[PathType], ctx: SamplingContext, settings: GeometryAdjointSettings
     ) -> dict[PathType, SurfaceSampleSet]:
         """Generate world-coordinate samples by delegating to the local geometry."""
-        child_paths = self._geometry_paths(paths)
+        child_paths = self._geometry_paths(
+            [_TRANSLATION_PATH if path == ("transform",) else path for path in paths]
+        )
 
         local_ctx = _local_sampling_context(self.geometry, self.transform, ctx)
         local_sets = self.geometry._make_adjoint_sample_sets(
@@ -595,7 +630,8 @@ class Transformed(Geometry):
         derivative_info: ShapeDerivativeContext,
     ) -> dict[PathType, Any]:
         """Consume world-coordinate samples using the wrapped geometry's VJP."""
-        child_paths = self._geometry_paths(paths)
+        geometry_paths = [path for path in paths if path != ("transform",)]
+        child_paths = self._geometry_paths(geometry_paths)
 
         local_sample_sets = {
             key[1:]: _localize_sample_set(sample_set, self.transform)
@@ -614,23 +650,31 @@ class Transformed(Geometry):
             ),
             point_integrands=local_point_integrands,
         )
-        child_vjps = self.geometry._compute_derivatives_from_sample_sets(
-            sample_sets=local_sample_sets,
-            paths=child_paths,
-            derivative_info=local_info,
-        )
         result = {}
-        linear = np.asarray(self.transform)[:3, :3]
-        inverse_transpose = np.linalg.inv(linear).T
-        for path in paths:
-            child_path = path if path == _TRANSLATION_PATH else path[1:]
-            value = child_vjps[child_path]
-            if child_path[-len(_TRANSLATION_PATH) :] == _TRANSLATION_PATH:
-                # The wrapped geometry reports dJ/du in local coordinates, while
-                # this wrapper's translation is a world-space displacement t with
-                # u = A^-1 t. Apply the fixed-transform chain rule dJ/dt=A^-T dJ/du.
-                value = tuple(np.dot(inverse_transpose, np.asarray(value)).tolist())
-            result[path] = value
+        if ("transform",) in paths:
+            result[("transform",)] = _affine_transform_vjp(
+                geometry=self.geometry,
+                sample_sets=local_sample_sets,
+                derivative_info=local_info,
+                transform=self.transform,
+            )
+        if child_paths:
+            child_vjps = self.geometry._compute_derivatives_from_sample_sets(
+                sample_sets=local_sample_sets,
+                paths=child_paths,
+                derivative_info=local_info,
+            )
+            linear = np.asarray(self.transform)[:3, :3]
+            inverse_transpose = np.linalg.inv(linear).T
+            for path in geometry_paths:
+                child_path = path if path == _TRANSLATION_PATH else path[1:]
+                value = child_vjps[child_path]
+                if child_path[-len(_TRANSLATION_PATH) :] == _TRANSLATION_PATH:
+                    # The wrapped geometry reports dJ/du in local coordinates, while
+                    # this wrapper's translation is a world-space displacement t with
+                    # u = A^-1 t. Apply the fixed-transform chain rule dJ/dt=A^-T dJ/du.
+                    value = tuple(np.dot(inverse_transpose, np.asarray(value)).tolist())
+                result[path] = value
         return result
 
     @cached_property

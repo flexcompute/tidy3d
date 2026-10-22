@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from autograd.tracer import isbox
 from flexcompute.core._migration.em.transformation.validation import validate_nonzero_norm
 from flexcompute.core.validation import raise_first_error
 from pydantic import Field, field_validator
@@ -14,7 +15,7 @@ from tidy3d._runtime import always_validate
 from tidy3d.constants import RADIAN
 from tidy3d.exceptions import ValidationError
 
-from .autograd import TracedFloat
+from .autograd import TracedCoordinate, TracedFloat, get_static
 from .base import Tidy3dBaseModel, cached_property
 from .types import Axis, Coordinate
 
@@ -67,7 +68,7 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
             Rotated vector.
         """
 
-        if self.isidentity:
+        if self.isidentity and not isbox(self.angle):
             return vector
 
         if len(vector.shape) == 1:
@@ -89,7 +90,7 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
             Rotated tensor.
         """
 
-        if self.isidentity:
+        if self.isidentity and not isbox(self.angle):
             return tensor
 
         return np.matmul(self.matrix, np.matmul(tensor, self.matrix.T))
@@ -141,7 +142,7 @@ class RotationAroundAxis(AbstractRotation):
     def matrix(self) -> TensorReal:
         """Rotation matrix."""
 
-        if self.isidentity:
+        if self.isidentity and not isbox(self.angle):
             return np.eye(3)
         return rotation_matrix_around_axis(axis=self.axis, angle=self.angle)
 
@@ -193,7 +194,7 @@ class AbstractReflection(ABC, Tidy3dBaseModel):
 class ReflectionFromPlane(AbstractReflection):
     """Reflection of vectors and tensors around a given vector."""
 
-    normal: Coordinate = Field(
+    normal: TracedCoordinate = Field(
         default=(1, 0, 0),
         title="Normal of the reflecting plane",
         description="A vector that specifies the normal of the plane of reflection",
@@ -201,17 +202,18 @@ class ReflectionFromPlane(AbstractReflection):
 
     @field_validator("normal")
     @classmethod
-    def _validate_normal_nonzero_norm(cls, val: Coordinate) -> Coordinate:
+    def _validate_normal_nonzero_norm(cls, val: TracedCoordinate) -> TracedCoordinate:
         # A thin check for field order and performance, as ``RotationAroundAxis.axis`` has.
-        raise_first_error(validate_nonzero_norm(val, "normal"), ValidationError)
+        raise_first_error(validate_nonzero_norm(get_static(val), "normal"), ValidationError)
         return val
 
     @cached_property
     def matrix(self) -> TensorReal:
         """Reflection matrix."""
 
-        norm = np.linalg.norm(self.normal)
-        n = self.normal / norm
+        normal = np.array(self.normal)
+        norm = np.linalg.norm(normal)
+        n = normal / norm
         R = np.eye(3) - 2 * np.outer(n, n)
 
         return R
