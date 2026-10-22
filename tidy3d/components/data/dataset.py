@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, get_args
 
 import numpy as np
 import xarray as xr
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.types import xyz
 from tidy3d.constants import (
@@ -642,29 +642,6 @@ class PointCloudFieldDataset(AbstractFieldDataset):
         """Maps field components to their (positive) symmetry eigenvalues."""
         return point_cloud_field_symmetry_eigenvalues()
 
-    @model_validator(mode="after")
-    def _validate_field_indices(self) -> Self:
-        """Ensure point-indexed field data is aligned with the point cloud."""
-
-        num_points = self.points.sizes["index"]
-        point_index = np.asarray(self.points.coords["index"])
-        for field_name, field_data in self.field_components.items():
-            if field_data.sizes["index"] != num_points:
-                self._raise_validation_error_at_loc(
-                    f"Field component '{field_name}' has {field_data.sizes['index']} points, "
-                    f"but 'points' contains {num_points} points.",
-                    field_name,
-                )
-
-            if not np.array_equal(np.asarray(field_data.coords["index"]), point_index):
-                self._raise_validation_error_at_loc(
-                    f"Field component '{field_name}' has index coordinates that do not match "
-                    "the point-cloud index coordinates.",
-                    field_name,
-                )
-
-        return self
-
     def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
         """Point-cloud field data is already sampled at requested points and cannot be colocated."""
         raise DataError("PointCloudFieldDataset data cannot be colocated on a structured grid.")
@@ -720,30 +697,6 @@ class PointCloudPermittivityDataset(AbstractFieldDataset):
     def symmetry_eigenvalues(self) -> dict[str, None]:
         """Maps permittivity components to their scalar symmetry eigenvalues."""
         return {"eps_xx": None, "eps_yy": None, "eps_zz": None}
-
-    @model_validator(mode="after")
-    def _validate_component_indices(self) -> Self:
-        """Ensure point-indexed permittivity data is aligned with the point cloud."""
-
-        num_points = self.points.sizes["index"]
-        point_index = np.asarray(self.points.coords["index"])
-        for component_name, component_data in self.field_components.items():
-            if component_data.sizes["index"] != num_points:
-                self._raise_validation_error_at_loc(
-                    f"Permittivity component '{component_name}' has "
-                    f"{component_data.sizes['index']} points, but 'points' contains "
-                    f"{num_points} points.",
-                    component_name,
-                )
-
-            if not np.array_equal(np.asarray(component_data.coords["index"]), point_index):
-                self._raise_validation_error_at_loc(
-                    f"Permittivity component '{component_name}' has index coordinates that do "
-                    "not match the point-cloud index coordinates.",
-                    component_name,
-                )
-
-        return self
 
     def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
         """Point-cloud permittivity data cannot be colocated on a structured grid."""
