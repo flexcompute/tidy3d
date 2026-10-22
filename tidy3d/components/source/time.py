@@ -76,49 +76,6 @@ class SourceTime(AbstractTimeDependence):
             times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
         )
 
-    @staticmethod
-    def _frequency_range_from_fft(dt: float, values: ArrayFloat1D, num_fwidth: float) -> FreqBound:
-        """Compute frequency range from FFT of a time-domain signal.
-
-        Returns ``(fmin, fmax)`` bounding all FFT bins whose amplitude exceeds
-        ``exp(-num_fwidth**2 / 2)`` of the peak value.  The lower bound is
-        nonzero when the signal has no DC content (e.g. a modulated carrier).
-
-        Parameters
-        ----------
-        dt : float
-            Uniform time step between samples.
-        values : np.ndarray
-            Real-valued signal samples.
-        num_fwidth : float
-            Number of equivalent bandwidths for the cutoff threshold.
-            Bins are kept where ``amplitude >= exp(-num_fwidth**2 / 2) * peak``.
-
-        Returns
-        -------
-        Tuple[float, float]
-            ``(fmin, fmax)`` frequency range.
-        """
-        if len(values) < 2:
-            raise SetupError("'values' must be an array with more than one element.")
-        if np.allclose(values, 0):
-            raise SetupError("'values' signal is all zeros; frequency range is undefined.")
-        spectrum = np.abs(np.fft.rfft(np.real(values)))
-        freqs = np.fft.rfftfreq(len(values), d=dt)
-        df = freqs[1] - freqs[0]
-
-        peak = np.max(spectrum)
-
-        cutoff = np.exp(-(num_fwidth**2) / 2)
-        above_cutoff = spectrum >= cutoff * peak
-
-        indices = np.where(above_cutoff)[0]
-        fmin = float(freqs[indices[0]])
-        fmax = float(freqs[indices[-1]])
-        # Ensure at least one frequency bin of bandwidth
-        fmax = max(fmax, fmin + df)
-        return (fmin, fmax)
-
     @abstractmethod
     def frequency_range(self, num_fwidth: float = DEFAULT_SIGMA) -> FreqBound:
         """Frequency range within plus/minus ``num_fwidth * fwidth`` of the central frequency."""
