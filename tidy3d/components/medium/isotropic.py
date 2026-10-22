@@ -230,56 +230,51 @@ class Medium(AbstractMedium):
         self._passivity_modulation_validation()
         return self
 
+    # Thin checks that call the core rules: ``import tidy3d`` builds ``Medium``, so it
+    # stays off the construction path. Subclasses on the path also run them here.
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
-        val = self.conductivity
-        if not self.allow_gain and val < 0:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "For passive medium, 'conductivity' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, and are likely to diverge."
-                ),
-                "conductivity",
-            )
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_conductivity_passivity,
+        )
+
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_conductivity_passivity(self.conductivity, self.allow_gain))
         return self
 
     def _permittivity_modulation_validation(self) -> Self:
         """Assert modulated permittivity cannot be <= 0."""
-        val = self.permittivity
-        modulation = self.modulation_spec
-        if modulation is None or modulation.permittivity is None:
-            return self
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_modulated_permittivity,
+        )
 
-        min_eps_inf = np.min(_get_numpy_array(val))
-        if min_eps_inf - modulation.permittivity.max_modulation <= 0:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "The minimum permittivity value with modulation applied was found to be negative."
-                ),
-                "permittivity",
+        from tidy3d.em.translate.components import _present
+
+        modulation = self.modulation_spec
+        if modulation is not None and modulation.permittivity is not None:
+            values = _get_numpy_array(self.permittivity)
+            _present(
+                self,
+                validate_modulated_permittivity(values, modulation.permittivity.max_modulation),
             )
         return self
 
     def _passivity_modulation_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
-        val = self.conductivity
-        modulation = self.modulation_spec
-        if modulation is None or modulation.conductivity is None:
-            return self
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_modulated_conductivity,
+        )
 
-        min_sigma = np.min(_get_numpy_array(val))
-        if not self.allow_gain and min_sigma - modulation.conductivity.max_modulation < 0:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "For passive medium, 'conductivity' must be non-negative at any time. "
-                    "With conductivity modulation, this medium can sometimes be active. "
-                    "Please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
-                    "and are likely to diverge."
-                ),
-                "conductivity",
+        from tidy3d.em.translate.components import _present
+
+        modulation = self.modulation_spec
+        if modulation is not None and modulation.conductivity is not None:
+            values = _get_numpy_array(self.conductivity)
+            diagnostics = validate_modulated_conductivity(
+                values, modulation.conductivity.max_modulation, self.allow_gain
             )
+            _present(self, diagnostics)
         return self
 
     @cached_property

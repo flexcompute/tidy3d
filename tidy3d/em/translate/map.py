@@ -257,6 +257,15 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.nonlinear.validation:validate",
         on_construction=True,
     ),
+    # ``import tidy3d`` builds these, so they stay off the construction path.
+    "tidy3d.components.medium.isotropic:PECMedium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.isotropic:PECMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    "tidy3d.components.medium.isotropic:PMCMedium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.isotropic:PMCMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
