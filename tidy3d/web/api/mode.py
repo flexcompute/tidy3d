@@ -113,8 +113,11 @@ def _start_and_monitor_mode_solver_task(
     verbose: bool,
     progress_callback_download: Callable[[float], None] | None,
     pay_type: PayType | str | None = None,
+    *,
+    verbose_cache: bool | None = None,
 ) -> ModeSolverData:
     """Start, monitor, and download an already-uploaded legacy mode task."""
+    verbose_cache = verbose if verbose_cache is None else verbose_cache
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
@@ -124,6 +127,8 @@ def _start_and_monitor_mode_solver_task(
         raise WebError("Mode solver task did not return a solver id.")
 
     task.submit(pay_type=pay_type)
+    if verbose_cache:
+        task_api._log_remote_cache_hit(solver_id)
 
     # The legacy endpoint returns the companion FDTD task as ``refId``/``task_id`` and
     # the actual MODE_SOLVER task as ``id``/``solver_id``. Generic task detail and
@@ -304,25 +309,24 @@ def run_batch(
         while retries <= max_retries:
             try:
                 if prepared_task is None:
-                    result = run(
+                    task = _create_and_upload_mode_solver_task(
                         mode_solver=mode_solvers[index],
                         task_name=f"{task_name}_{index}",
                         mode_solver_name=f"mode_solver_batch_{index}",
                         folder_name=folder_name,
-                        results_file=results_files[index],
                         verbose=False,
                         progress_callback_upload=progress_callback_upload,
-                        progress_callback_download=progress_callback_download,
                     )
                 else:
                     task = prepared_task
                     prepared_task = None
-                    result = _start_and_monitor_mode_solver_task(
-                        task=task,
-                        results_file=results_files[index],
-                        verbose=False,
-                        progress_callback_download=progress_callback_download,
-                    )
+                result = _start_and_monitor_mode_solver_task(
+                    task=task,
+                    results_file=results_files[index],
+                    verbose=False,
+                    progress_callback_download=progress_callback_download,
+                    verbose_cache=verbose,
+                )
                 if verbose:
                     progress.update(pbar, advance=1)
                 return result

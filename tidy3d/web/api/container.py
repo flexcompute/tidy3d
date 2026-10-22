@@ -1149,7 +1149,7 @@ class Job(WebContainer):
         step: Step,
         *,
         progress_callback_upload: Callable[[float], None] | None = None,
-        verbose_estimate_cost: bool | None = None,
+        verbose: bool | None = None,
         worker_group: str | None = None,
         priority: int | None = None,
         vgpu_allocation: int | None = None,
@@ -1157,6 +1157,7 @@ class Job(WebContainer):
         checkpoint_callback: Callable[[], None] | None = None,
     ) -> None:
         """Run one workflow step to completion without downloading or loading its results."""
+        verbose = self.verbose if verbose is None else verbose
         if self._step_is_complete(step.name):
             return
         self._raise_if_step_blocks_downstream(
@@ -1176,9 +1177,7 @@ class Job(WebContainer):
             step,
             parent_task_ids=parent_task_ids,
             progress_callback=progress_callback_upload,
-            verbose_estimate_cost=(
-                self.verbose if verbose_estimate_cost is None else verbose_estimate_cost
-            ),
+            verbose_estimate_cost=verbose,
         )
         if checkpoint_callback is not None:
             checkpoint_callback()
@@ -1208,6 +1207,8 @@ class Job(WebContainer):
             if worker_group is not None:
                 start_kwargs["worker_group"] = worker_group
             task_api.start(**start_kwargs)
+            if verbose:
+                task_api._log_remote_cache_hit(task_id)
             with self._state_lock:
                 self._runtime_state.step_statuses[step.name] = "running"
         monitor_kwargs = {"task_id": task_id, "verbose": self.verbose}
@@ -1287,7 +1288,7 @@ class Job(WebContainer):
         *,
         progress_callback_upload: Callable[[float], None] | None = None,
         progress_callback_download: Callable[[float], None] | None = None,
-        verbose_estimate_cost: bool | None = None,
+        verbose: bool | None = None,
         worker_group: str | None = None,
         priority: int | None = None,
         vgpu_allocation: int | None = None,
@@ -1332,7 +1333,7 @@ class Job(WebContainer):
             self._complete_step(
                 step,
                 progress_callback_upload=progress_callback_upload,
-                verbose_estimate_cost=verbose_estimate_cost,
+                verbose=verbose,
                 worker_group=worker_group,
                 priority=priority,
                 vgpu_allocation=vgpu_allocation,
@@ -1764,6 +1765,8 @@ class Job(WebContainer):
             if worker_group is not None:
                 start_kwargs["worker_group"] = worker_group
             task_api.start(**start_kwargs)
+            if self.verbose:
+                task_api._log_remote_cache_hit(self.task_id)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -2797,7 +2800,7 @@ class Batch(WebContainer):
                 try:
                     job._run_to_file(
                         path=temp_job_path,
-                        verbose_estimate_cost=self.verbose,
+                        verbose=self.verbose,
                         priority=priority,
                         vgpu_allocation=vgpu_allocation,
                         ignore_memory_limit=ignore_memory_limit,
@@ -3392,14 +3395,20 @@ class Batch(WebContainer):
                 }
             )
         with _ContextThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
-            start_futures: dict[concurrent.futures.Future[Any], Job | WorkflowStepJobAdapter] = {}
-            for job in jobs_to_start:
-                fut = executor.submit(
-                    job.start,
+
+            def start_job(job: Job | WorkflowStepJobAdapter) -> None:
+                job.start(
                     priority=priority,
                     vgpu_allocation=vgpu_allocation,
                     ignore_memory_limit=ignore_memory_limit,
                 )
+                # Batch jobs are normally quiet; verbose Jobs already logged their hit.
+                if self.verbose and not getattr(job, "verbose", False):
+                    task_api._log_remote_cache_hit(job.task_id)
+
+            start_futures: dict[concurrent.futures.Future[Any], Job | WorkflowStepJobAdapter] = {}
+            for job in jobs_to_start:
+                fut = executor.submit(start_job, job)
                 start_futures[fut] = job
 
             for fut in concurrent.futures.as_completed(start_futures):
@@ -4354,7 +4363,12 @@ class Batch(WebContainer):
 
         if verbose:
             console = get_logging_console()
-            if batch_cost is not None and batch_cost > 0:
+            if batch_cost == 0 and all(job.load_if_cached for job in jobs.values()):
+                console.log(
+                    f"No Flexcredit cost for {cost_subject} as all simulations were restored "
+                    "from local cache."
+                )
+            elif batch_cost is not None:
                 if batch_typical_cost is not None:
                     console.log(
                         f"Estimated typical FlexCredit cost: {batch_typical_cost:1.3f} "
@@ -4371,11 +4385,6 @@ class Batch(WebContainer):
                         )
                 else:
                     console.log(f"Maximum FlexCredit cost: {batch_cost:1.3f} for {cost_subject}.")
-            elif batch_cost == 0 and all(job.load_if_cached for job in jobs.values()):
-                console.log(
-                    f"No Flexcredit cost for {cost_subject} as all simulations were restored "
-                    "from local cache."
-                )
             else:
                 console.log("Could not get estimated batch cost!")
 

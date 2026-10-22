@@ -88,6 +88,9 @@ class TaskInfo(TaskBase):
     operationStatus: str | None = None
     """Project move/copy status when reported, separate from the solver status."""
 
+    useCaching: bool | None = None
+    """Whether results were reused from the remote cache in a private or shared workspace."""
+
     realCost: float | None = None
     """Actual cost incurred by the task."""
 

@@ -19,6 +19,19 @@ The local cache separate from two other caching layers:
 - `td.config.web.enable_caching`: server-side reuse on the Tidy3D service. This can avoid recomputation on the backend, but it still requires network upload/download.
 - `td.config.batch_data_cache`: an in-memory cache for already loaded `BatchData` objects. It is not persisted to disk and is independent of the local simulation cache.
 
+### Server-side caching
+
+After submission, the client logs remote result reuse when `verbose=True`.
+The message identifies shared workspace caching or reuse from your own earlier runs
+when the task's workspace is known. As with local cache messages, `verbose=False`
+suppresses this output. Older servers without cache feedback produce no cache-hit message.
+A failed check does not fail or resubmit the task.
+
+`td.config.web.enable_caching` controls remote caching for either workspace scope.
+The client keeps the submitted task ID. Remote cache hits have zero estimated and billed cost.
+A local cache hit skips submission, so it produces only the local cache message.
+Remote results can subsequently be stored in the local cache as usual.
+
 ## Configuration
 
 The cache is configured through `td.config.local_cache`.

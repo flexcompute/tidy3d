@@ -49,6 +49,7 @@ from tidy3d.web.core.constants import (
     SIMULATION_DATA_HDF5_GZ,
 )
 from tidy3d.web.core.exceptions import WebError as CoreWebError
+from tidy3d.web.core.http_util import http
 from tidy3d.web.core.s3utils import upload_file
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
@@ -894,6 +895,45 @@ def start(
     )
 
 
+def _log_remote_cache_hit(task_id: TaskId) -> None:
+    """Check once for optional cache feedback without retrying an accepted submission."""
+    if not config.web.enable_caching or TaskFactory._REGISTRY.get(task_id) is BatchTask:
+        return
+    try:
+        info = SimulationTask(taskId=task_id).detail()
+    except Exception as error:
+        log.warning(
+            f"Task '{task_id}' was submitted, but remote cache reuse could not be checked: {error}"
+        )
+        return
+    if not info.useCaching:
+        return
+
+    workspace: str | None = info.workspace
+    if workspace is None and info.groupId:
+        try:
+            group = http.get(
+                f"tidy3d/group/{info.groupId}",
+                params={"version": info.version},
+                suppress_404=True,
+            )
+            workspace = ((group or {}).get("workspaceItem") or {}).get("type", "").lower()
+        except Exception as error:
+            log.warning(f"Could not determine the workspace for cached task '{task_id}': {error}")
+
+    cache_label = "Server-side cache"
+    origin = "an earlier simulation run"
+    if workspace == "shared":
+        cache_label = "Shared workspace cache"
+        origin = "an earlier run in this shared workspace. Another member may have started that run"
+    elif workspace == "private":
+        origin = "one of your earlier runs"
+    get_logging_console().log(
+        f"{cache_label}: task '{info.taskName or task_id}' ({task_id}) reused results from "
+        f"{origin}. The solver did not run again."
+    )
+
+
 @wait_for_connection
 def get_run_info(task_id: TaskId) -> tuple[float | None, float | None]:
     task = TaskFactory.get(task_id)
@@ -1552,6 +1592,16 @@ def estimate_cost_info(
             _log_flex_credit_estimate(console, estimate)
         return estimate
 
+    if detail.useCaching:
+        estimate = FlexCreditEstimate(
+            maximum=0.0, task_type=detail.taskType, is_final_billed_cost=True
+        )
+        if verbose:
+            console.log(
+                "Estimated FlexCredit cost: 0.000. Results reused from the server cache at no charge."
+            )
+        return estimate
+
     task.estimate_cost(solver_version=solver_version)
     task_info = _get_task_detail(task)
     status = task_info.metadataStatus
@@ -1625,16 +1675,24 @@ def real_cost(task_id: TaskId, verbose: bool = True) -> float | None:
 
     console = get_logging_console() if verbose else None
     task_info = _get_task_info(task_id, verbose=verbose)
-    flex_unit = task_info.realFlexUnit
+    # Linked task details can still contain the source run's billed cost.
+    cache_hit = getattr(task_info, "useCaching", False)
+    flex_unit = 0.0 if cache_hit else task_info.realFlexUnit
     ori_flex_unit = getattr(task_info, "oriRealFlexUnit", flex_unit)
-    if not flex_unit:
+    if flex_unit == 0 and not cache_hit and task_info.status not in END_STATES:
+        flex_unit = None
+    if flex_unit is None:
         log.warning(
             f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
             "successfully run, it should be available shortly."
         )
     elif verbose:
         console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
-        if flex_unit != ori_flex_unit and "FDTD" in task_info.taskType:
+        if (
+            ori_flex_unit is not None
+            and flex_unit > ori_flex_unit
+            and "FDTD" in (task_info.taskType or "")
+        ):
             console.log(
                 "Note: the task cost pro-rated due to early shutoff was below the minimum "
                 "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
