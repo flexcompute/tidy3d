@@ -266,6 +266,26 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.isotropic:PMCMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
+    # Off the construction path: field order (see ``_validate_frequency_range``).
+    "tidy3d.components.medium.lossy_metal:LossyMetalMedium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.lossy_metal:LossyMetalMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    # Registered because the plan registers every moved class. The roughness models carry no
+    # rules, so they stay off the construction path.
+    "tidy3d.components.medium.roughness:AbstractSurfaceRoughness": None,
+    "tidy3d.components.medium.roughness:HammerstadSurfaceRoughness": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.roughness:HammerstadSurfaceRoughness",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    "tidy3d.components.medium.roughness:HuraySurfaceRoughness": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.roughness:HuraySurfaceRoughness",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    "tidy3d.components.medium.roughness:SurfaceImpedanceFitterParam": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.roughness:SurfaceImpedanceFitterParam",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",

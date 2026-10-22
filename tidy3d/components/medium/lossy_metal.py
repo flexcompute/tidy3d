@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.material.medium.limits import LOSSY_METAL_SCALED_REAL_PART
 from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
@@ -41,8 +42,6 @@ if TYPE_CHECKING:
 from .isotropic import Medium
 from .pole_residue import PoleResidue
 from .roughness import SurfaceImpedanceFitterParam, SurfaceRoughnessType
-
-LOSSY_METAL_SCALED_REAL_PART = 10.0
 
 
 class LossyMetalMedium(Medium):
@@ -132,6 +131,8 @@ class LossyMetalMedium(Medium):
     @classmethod
     def _validate_frequency_range(cls, val: FreqBound) -> FreqBound:
         """Validate that frequency range is finite and non-zero."""
+        # Thin field adapter that calls the core rule (field order: the construction path runs
+        # after every field is parsed, so it would drop this error when another field fails).
         from flexcompute.core._migration.em.material.medium.validation import (
             validate_frequency_range,
         )
