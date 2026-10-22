@@ -25,7 +25,7 @@ from tidy3d.constants import (
     HERTZ,
     PERMITTIVITY,
 )
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -94,9 +94,15 @@ class Lorentz(DispersiveMedium):
         cls, val: tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...]
     ) -> tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...]:
         """f**2 and delta**2 cannot be exactly the same."""
-        for _, f, delta in val:
-            if f**2 == delta**2:
-                raise SetupError("'f' and 'delta' cannot take equal values.")
+        # Thin field adapter that calls the core rule. No moved schema: ``CustomLorentz``
+        # subclasses ``Lorentz`` and has none yet, so it would translate through ``Lorentz``
+        # on the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_lorentz_coefficients,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        raise_first_error(validate_lorentz_coefficients(val), SetupError)
         return val
 
     @model_validator(mode="after")
@@ -109,20 +115,17 @@ class Lorentz(DispersiveMedium):
 
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
-        val = self.coeffs
-        if self.allow_gain:
-            return self
-        for del_ep, _, _ in val:
-            if del_ep < 0:
-                self._raise_validation_error_at_loc(
-                    ValidationError(
-                        "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                        "To simulate a gain medium, please set 'allow_gain=True'. "
-                        "Caution: simulations with a gain medium are unstable, "
-                        "and are likely to diverge."
-                    ),
-                    "coeffs",
-                )
+        # Thin check that calls the core rule. No moved schema: ``CustomLorentz`` subclasses
+        # ``Lorentz`` and has none yet, so it would translate through ``Lorentz`` on the
+        # construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_delta_epsilon_passivity,
+        )
+
+        from tidy3d.em.translate.components import _present
+
+        deltas = [coeff[0] for coeff in self.coeffs]
+        _present(self, validate_delta_epsilon_passivity(deltas, self.allow_gain))
         return self
 
     def _validate_coeffs_shape(self) -> Self:
