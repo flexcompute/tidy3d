@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 import shapely
+from autograd import make_vjp
 from numpy.polynomial.legendre import leggauss as _leggauss
 from pydantic import Field, field_validator, model_validator
 
@@ -981,9 +982,9 @@ class PolySlab(base.Planar):
         polys_union = shapely.unary_union(polygons, grid_size=base.POLY_GRID_SIZE)
 
         if polys_union.geom_type == "Polygon":
-            all_vertices = [np.array(polys_union.exterior.coords)]
+            all_vertices = [np.array(polys_union.exterior.coords[:-1])]
         elif polys_union.geom_type == "MultiPolygon":
-            all_vertices = [np.array(polygon.exterior.coords) for polygon in polys_union.geoms]
+            all_vertices = [np.array(polygon.exterior.coords[:-1]) for polygon in polys_union.geoms]
         return all_vertices
 
     @property
@@ -2423,6 +2424,12 @@ class PolySlab(base.Planar):
         # clouds identical, independent of derivative-path order.
         for key in sorted(path_by_key, key=str):
             if key == _POLYSLAB_SIDEWALL_KEY:
+                if ("vertices",) in paths:
+                    vertices = self._vertex_gradient_reference_polygon
+                else:
+                    vertices = self.reference_polygon
+                    if not self.is_ccw:
+                        vertices = vertices[::-1]
                 sample_sets.update(
                     self._make_sidewall_sample_sets(
                         sim_min=sim_min,
@@ -2430,6 +2437,7 @@ class PolySlab(base.Planar):
                         is_2d=is_2d,
                         dx=ctx.spacing,
                         settings=settings,
+                        vertices=vertices,
                     )
                 )
                 continue
@@ -2557,29 +2565,44 @@ class PolySlab(base.Planar):
 
         # distribute to vertices using vectorized accumulation
         vertices, _, _, basis = self._edge_geometry_arrays(
-            dtype=derivative_info.settings.gradient_dtype_float
+            vertices=self._vertex_gradient_reference_polygon,
+            dtype=derivative_info.settings.gradient_dtype_float,
         )
         normals_2d = np.delete(basis["norm"], self.axis, axis=1)
         edge_idx = np.asarray(metadata.edge_indices.values).astype(int)
         s = np.asarray(metadata.s_vals.values)
-        w0 = (1.0 - s) * patch_vjps
-        w1 = s * patch_vjps
         edge_norms = normals_2d[edge_idx]
 
         # Accumulate per-vertex contributions using bincount (O(N_patches))
         num_vertices = vertices.shape[0]
-        contrib0 = w0[:, None] * edge_norms  # (n_patches, 2)
-        contrib1 = w1[:, None] * edge_norms  # (n_patches, 2)
-
         idx0 = edge_idx
         idx1 = (edge_idx + 1) % num_vertices
 
-        v0x = np.bincount(idx0, weights=contrib0[:, 0], minlength=num_vertices)
-        v0y = np.bincount(idx0, weights=contrib0[:, 1], minlength=num_vertices)
-        v1x = np.bincount(idx1, weights=contrib1[:, 0], minlength=num_vertices)
-        v1y = np.bincount(idx1, weights=contrib1[:, 1], minlength=num_vertices)
+        def scatter(patch_forces: NDArray) -> NDArray:
+            """Scatter forces from each sampled cross-section to its vertices."""
+            w0 = (1.0 - s) * patch_forces
+            w1 = s * patch_forces
+            contrib0 = w0[:, None] * edge_norms
+            contrib1 = w1[:, None] * edge_norms
+            v0x = np.bincount(idx0, weights=contrib0[:, 0], minlength=num_vertices)
+            v0y = np.bincount(idx0, weights=contrib0[:, 1], minlength=num_vertices)
+            v1x = np.bincount(idx1, weights=contrib1[:, 0], minlength=num_vertices)
+            v1y = np.bincount(idx1, weights=contrib1[:, 1], minlength=num_vertices)
+            return np.stack((v0x + v1x, v0y + v1y), axis=1)
 
-        vjp_per_vertex = np.stack((v0x + v1x, v0y + v1y), axis=1)
+        vjp_per_vertex = scatter(patch_vjps)
+        if not math.isclose(self.dilation, 0) or not self._has_vertical_sidewall:
+            offsets = self.dilation - (
+                sample_set.points.values[:, self.axis] - self.reference_axis_pos
+            ) * np.tan(self.sidewall_angle)
+            # Offset vertices are v + distance * unit_shift(v). Accumulate the
+            # distance-weighted forces before one pullback, including both dilation
+            # and the sidewall offset at each height, rather than tracing every slice.
+            offset_sign = 1.0 if self.is_ccw else -1.0
+            shift_vjp, _ = make_vjp(lambda v: self._shift_vertices(v, offset_sign)[0] - v)(
+                np.array(self.vertices)
+            )
+            vjp_per_vertex += shift_vjp(scatter(patch_vjps * offsets))
         return vjp_per_vertex
 
     # ---- Shared helpers for VJP surface integrations ----
@@ -3424,8 +3447,9 @@ class PolySlab(base.Planar):
         is_2d: bool,
         dx: float,
         settings: GeometryAdjointSettings,
+        vertices: NDArray,
     ) -> dict[PathType, SurfaceSampleSet]:
-        """Sidewall sample sets in the raw vertex winding, serving the ``vertices`` path.
+        """Sidewall sample sets from the supplied reference polygon in the input winding.
 
         Weights are the patch areas; the per-vertex scatter data (edge indices and
         parametric edge positions) travels in the metadata for consumption by
@@ -3444,7 +3468,8 @@ class PolySlab(base.Planar):
             else None
         )
         vertices, next_v, edges, basis = self._edge_geometry_arrays(
-            dtype=float if slice_axis is not None else settings.gradient_dtype_float
+            vertices=vertices,
+            dtype=float if slice_axis is not None else settings.gradient_dtype_float,
         )
 
         # collect patches once
@@ -3507,6 +3532,33 @@ class PolySlab(base.Planar):
                 ),
             )
         return sample_sets
+
+    @cached_property
+    def _vertex_gradient_reference_polygon(self) -> NDArray:
+        """Offset vertices with input ordering preserved for the vertex-gradient scatter.
+
+        Polygon healing changes the vertex correspondence and is not differentiable.
+        Reject such dilation rather than sampling a different polygon.
+        """
+        if math.isclose(self.dilation, 0) and self._has_vertical_sidewall:
+            return self.vertices
+        proper_vertices = self._proper_vertices(self.vertices)
+        if len(proper_vertices) != len(self.vertices):
+            raise AdjointError(
+                "Vertex gradients for a 'PolySlab' with nonzero 'dilation' or "
+                "'sidewall_angle' require distinct neighboring vertices. "
+                "Remove repeated vertices, including "
+                "a repeated closing vertex."
+            )
+        if math.isclose(self.dilation, 0):
+            return self.vertices
+        if self._edge_events_detection(proper_vertices, self.dilation, ignore_at_dist=False):
+            raise AdjointError(
+                "Vertex gradients for a 'PolySlab' are not supported when 'dilation' "
+                "changes the polygon topology. Reduce the magnitude of 'dilation'."
+            )
+        offset = self.dilation if self.is_ccw else -self.dilation
+        return self._shift_vertices(np.array(self.vertices), offset)[0]
 
     def _edge_geometry_arrays(
         self,
