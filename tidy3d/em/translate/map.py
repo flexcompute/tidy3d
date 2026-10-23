@@ -795,6 +795,31 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.source.validation:validate",
         on_construction=True,
     ),
+    # mode: ``import tidy3d`` builds ModeSortSpec, ModeInterpSpec and ChebSampling objects (the
+    # EMEModeSpec default), so they stay off the construction path.
+    "tidy3d.components.mode_spec:ModeSortSpec": ComponentScope(
+        "flexcompute.core._migration.em.mode.spec.schema:ModeSortSpec",
+        "flexcompute.core._migration.em.mode.spec.validation:validate",
+    ),
+    "tidy3d.components.mode_spec:FrequencySamplingSpec": None,
+    "tidy3d.components.mode_spec:UniformSampling": ComponentScope(
+        "flexcompute.core._migration.em.mode.spec.schema:UniformSampling",
+        "flexcompute.core._migration.em.mode.spec.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.mode_spec:ChebSampling": ComponentScope(
+        "flexcompute.core._migration.em.mode.spec.schema:ChebSampling",
+        "flexcompute.core._migration.em.mode.spec.validation:validate",
+    ),
+    "tidy3d.components.mode_spec:CustomSampling": ComponentScope(
+        "flexcompute.core._migration.em.mode.spec.schema:CustomSampling",
+        "flexcompute.core._migration.em.mode.spec.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.mode_spec:ModeInterpSpec": ComponentScope(
+        "flexcompute.core._migration.em.mode.spec.schema:ModeInterpSpec",
+        "flexcompute.core._migration.em.mode.spec.validation:validate",
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -847,6 +872,9 @@ COMPONENT_ERROR_TYPES = {
     "em.source.non_increasing_time_coords": "tidy3d.exceptions:ValidationError",
     "em.source.nan_dataset": "tidy3d.exceptions:ValidationError",
     "em.source.duplicate_dataset_coords": "tidy3d.exceptions:DataError",
+    # mode
+    "em.mode.spec.custom_sampling_min_points": "tidy3d.exceptions:ValidationError",
+    "em.mode.spec.custom_sampling_sorted": "tidy3d.exceptions:ValidationError",
 }
 
 

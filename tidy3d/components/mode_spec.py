@@ -3,10 +3,27 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from math import isclose
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
+from flexcompute.core._migration.em.mode.spec.constants import (
+    MODE_DATA_KEY_SORT_ORDER,
+    MODE_DATA_KEYS,
+    _build_sort_order_description,
+)
+from flexcompute.core._migration.em.mode.spec.validation import (
+    validate_angle_rotation,
+    validate_bend_axis,
+    validate_bend_radius,
+    validate_fill_fraction_box,
+    validate_filter_pol_sort_conflict,
+    validate_filtered_modes,
+    validate_group_index_step,
+    validate_interpolation_points,
+    validate_interpolation_tracking,
+    validate_keep_modes_count,
+)
+from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
     FiniteFloat,
@@ -32,57 +49,6 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Axis, Bound
 
 GROUP_INDEX_STEP = 0.005
-MODE_DATA_KEYS = Literal[
-    "n_eff",
-    "k_eff",
-    "TE_fraction",
-    "TM_fraction",
-    "wg_TE_fraction",
-    "wg_TM_fraction",
-    "mode_area",
-    "fill_fraction_box",
-]
-
-# Default sort order for each mode data key when no sort_reference is provided.
-# "descending" for quantities where higher values are typically preferred.
-# "ascending" for quantities where lower values are typically preferred.
-# NOTE: When adding a new key to MODE_DATA_KEYS, you must also add it here.
-MODE_DATA_KEY_SORT_ORDER: dict[str, Literal["ascending", "descending"]] = {
-    "n_eff": "descending",  # higher n_eff = more confined
-    "k_eff": "ascending",  # lower k_eff = less loss
-    "TE_fraction": "descending",  # higher = more TE-like
-    "TM_fraction": "descending",  # higher = more TM-like
-    "wg_TE_fraction": "descending",  # higher = more TE-like
-    "wg_TM_fraction": "descending",  # higher = more TM-like
-    "mode_area": "ascending",  # smaller = more confined
-    "fill_fraction_box": "descending",  # higher = more overlap with box
-}
-
-# Validate that all MODE_DATA_KEYS are present in MODE_DATA_KEY_SORT_ORDER
-_MODE_DATA_KEYS_SET = set(MODE_DATA_KEYS.__args__)
-_missing_keys = _MODE_DATA_KEYS_SET - set(MODE_DATA_KEY_SORT_ORDER.keys())
-if _missing_keys:
-    raise RuntimeError(
-        f"MODE_DATA_KEY_SORT_ORDER is missing entries for: {_missing_keys}. "
-        "Please add default sort orders for all MODE_DATA_KEYS."
-    )
-
-
-def _build_sort_order_description() -> str:
-    """Build the sort_order field description dynamically from MODE_DATA_KEY_SORT_ORDER."""
-    descending_keys = [k for k, v in MODE_DATA_KEY_SORT_ORDER.items() if v == "descending"]
-    ascending_keys = [k for k, v in MODE_DATA_KEY_SORT_ORDER.items() if v == "ascending"]
-
-    desc_str = ", ".join(f"``{k}``" for k in descending_keys)
-    asc_str = ", ".join(f"``{k}``" for k in ascending_keys)
-
-    return (
-        "Sort order for the selected key or difference to reference value. "
-        "If ``None``, the default depends on ``sort_key`` and ``sort_reference``. "
-        "When ``sort_reference`` is provided, defaults to ``'ascending'`` (closest to reference first). "
-        f"Otherwise, defaults to the natural order for each key: ``'descending'`` for {desc_str} "
-        f"(higher values first); ``'ascending'`` for {asc_str} (lower values first)."
-    )
 
 
 class ModeSortSpec(Tidy3dBaseModel):
@@ -185,25 +151,23 @@ class ModeSortSpec(Tidy3dBaseModel):
 
     @model_validator(mode="after")
     def _drop_requires_filter(self: Self) -> Self:
-        val = self.keep_modes
-        if val == "filtered" and self.filter_key is None:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "ModeSortSpec.keep_modes 'filtered' requires 'filter_key' to be set."
-                ),
-                "filter_key",
-            )
+        # A thin check: ``import tidy3d`` builds a ModeSortSpec as the ModeSpec default, so the
+        # construction path would load the moved schema at import.
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_filtered_modes(self.keep_modes, self.filter_key))
         return self
 
     @model_validator(mode="before")
     @classmethod
     def _bounding_box_required_for_fill_fraction(cls, data: dict[str, Any]) -> dict[str, Any]:
-        bbox = data.get("bounding_box")
-        keys = (data.get("filter_key"), data.get("sort_key"))
-        if any(key == "fill_fraction_box" for key in keys) and bbox is None:
-            raise ValidationError(
-                "ModeSortSpec.bounding_box must be set when using 'fill_fraction_box'."
-            )
+        # A thin check, built at import as ``_drop_requires_filter`` says.
+        raise_first_error(
+            validate_fill_fraction_box(
+                data.get("filter_key"), data.get("sort_key"), data.get("bounding_box")
+            ),
+            ValidationError,
+        )
         return data
 
     def _bounding_box_intersects_tangentially(
@@ -352,20 +316,6 @@ class CustomSampling(FrequencySamplingSpec):
         "sorted frequency grid.",
     )
 
-    @field_validator("freqs")
-    @classmethod
-    def _validate_freqs(cls, val: FreqArray) -> FreqArray:
-        """Validate custom frequencies."""
-        freqs_array = np.asarray(val)
-        if freqs_array.size < 2:
-            raise ValidationError("Custom sampling requires at least 2 frequency points.")
-        if np.any(np.diff(freqs_array) <= 0):
-            raise ValidationError(
-                "Custom sampling frequencies must be strictly increasing: stored mode "
-                "data and its interpolation assume a sorted frequency grid."
-            )
-        return val
-
     def sampling_points(self, freqs: FreqArray) -> FreqArray:
         """Return the custom frequency sampling points.
 
@@ -457,30 +407,11 @@ class ModeInterpSpec(Tidy3dBaseModel):
     @model_validator(mode="after")
     def _validate_method_needs_points(self) -> Self:
         """Validate that the method has enough points."""
-        val = self.method
-        sampling_spec = self.sampling_spec
-        if sampling_spec is None:
-            return self
+        # A thin check: ``import tidy3d`` builds ModeInterpSpec objects, so the construction path
+        # would load the moved schema at import.
+        from tidy3d.em.translate.components import _present
 
-        num_points = sampling_spec._num_points
-        if val == "cubic" and num_points < 4:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "Cubic interpolation requires at least 4 frequency points. "
-                    f"Got {num_points} points. "
-                    "Use method='linear' or increase num_points."
-                ),
-                "method",
-            )
-        if val == "poly" and num_points < 3:
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "Polynomial interpolation requires at least 3 frequency points. "
-                    f"Got {num_points} points. "
-                    "Use method='linear' or increase num_points."
-                ),
-                "method",
-            )
+        _present(self, validate_interpolation_points(self.method, self.num_points))
         return self
 
     @classmethod
@@ -766,23 +697,13 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         cls._normalize_legacy_mode_sort_spec(data)
         return data
 
+    # The checks below call the core rules from the class itself. ModeSpec has no moved schema
+    # yet, because EMEModeSpec and the microwave mode specs subclass it.
     @model_validator(mode="after")
     def _keep_modes_at_most_num_modes(self: Self) -> Self:
-        val = self.sort_spec
-        if val is not None:
-            if isinstance(val.keep_modes, int):
-                num_modes = self.num_modes
-                if val.keep_modes > num_modes:
-                    raise ValidationError(
-                        "ModeSortSpec.keep_modes cannot be larger than 'num_modes'. "
-                        f"Currently these are {val.keep_modes} and {num_modes}. "
-                        "The mode solver computes 'num_modes' modes, applies "
-                        "the mode sorting and filtering from the 'ModeSortSpec', "
-                        "and then keeps the top 'keep_modes' modes. Consider lowering "
-                        "'keep_modes', increasing 'num_modes', setting "
-                        "'keep_modes=\"filtered\"' to keep exactly those modes matching "
-                        "the filter, or setting 'keep_modes=\"all\"' to keep all modes."
-                    )
+        raise_first_error(
+            validate_keep_modes_count(self.num_modes, self.sort_spec.keep_modes), ValidationError
+        )
         return self
 
     @field_validator("group_index_step", mode="before")
@@ -797,18 +718,14 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     @classmethod
     def _validate_group_index_step_size(cls, val: bool | PositiveFloat) -> bool | PositiveFloat:
         """Ensure group-index step is < 1."""
-        if val is not False and val >= 1:
-            raise ValidationError(
-                "Parameter 'group_index_step' must be a fractional value less than 1."
-            )
+        raise_first_error(validate_group_index_step(val), ValidationError)
         return val
 
     @field_validator("bend_radius")
     @classmethod
     def _validate_bend_radius_not_zero(cls, v: float | None) -> float | None:
         """`bend_radius` magnitude must be non-zero."""
-        if v is not None and isclose(v, 0):
-            raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
+        raise_first_error(validate_bend_radius(v), SetupError)
         return v
 
     @field_validator("angle_theta")
@@ -825,17 +742,15 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     @model_validator(mode="after")
     def _check_bend_axis_given(self) -> Self:
         """``bend_axis`` must be provided when ``bend_radius`` is set."""
-        if self.bend_radius is not None and self.bend_axis is None:
-            raise SetupError("'bend_axis' must also be defined if 'bend_radius' is defined.")
+        raise_first_error(validate_bend_axis(self.bend_radius, self.bend_axis), SetupError)
         return self
 
     @model_validator(mode="after")
     def _check_angle_rotation_with_phi(self) -> Self:
         """``angle_rotation`` requires ``angle_phi`` % (π/2) == 0."""
-        if self.angle_rotation and not isclose(self.angle_phi % (np.pi / 2), 0):
-            raise ValidationError(
-                "'angle_phi' must be a multiple of 'π/2' when 'angle_rotation' is enabled."
-            )
+        raise_first_error(
+            validate_angle_rotation(self.angle_rotation, self.angle_phi), ValidationError
+        )
         return self
 
     @model_validator(mode="after")
@@ -863,12 +778,12 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     @model_validator(mode="after")
     def _filter_pol_and_sort_spec_exclusive(self) -> Self:
         """Ensure that 'filter_pol' and 'sort_spec' are not used together."""
-        sort_spec = self.sort_spec
-        if self.filter_pol is not None and sort_spec.has_custom_sort_or_filter:
-            raise SetupError(
-                "'filter_pol' cannot be used simultaneously with sorting or filtering "
-                "defined in 'sort_spec'. Define the filtering in 'sort_spec' exclusively."
-            )
+        raise_first_error(
+            validate_filter_pol_sort_conflict(
+                self.filter_pol, self.sort_spec.has_custom_sort_or_filter
+            ),
+            SetupError,
+        )
         return self
 
     @field_validator("filter_pol")
@@ -926,19 +841,10 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     @model_validator(mode="after")
     def _interp_spec_needs_tracking(self) -> Self:
         """Ensure frequency tracking is enabled when using interpolation."""
-        val = self.interp_spec
-        if val is None:
-            return self
-
-        # Check if track_freq is enabled (prefer ModeSpec.track_freq, else sort_spec.track_freq)
-        track_freq = self.track_freq
-        sort_spec = self.sort_spec
-        if self.__class__._track_freq_from_specs(track_freq, sort_spec) is None:
-            raise ValidationError(
-                "Mode frequency interpolation requires frequency tracking to be enabled. "
-                "Please set 'sort_spec.track_freq' to 'central', 'lowest', or 'highest'."
-            )
-
+        raise_first_error(
+            validate_interpolation_tracking(self.interp_spec is not None, self._track_freq),
+            ValidationError,
+        )
         return self
 
     @property
