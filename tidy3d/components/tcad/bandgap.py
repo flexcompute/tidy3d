@@ -129,6 +129,22 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
         temperature, so both statistics give the same :math:`n_0 p_0` in a neutral region at every
         temperature.
 
+        The fit also takes the majority-carrier density to be :math:`|N_D - N_A|`, which assumes
+        fully ionized dopants. Where the medium sets ``donor_ionization`` or
+        ``acceptor_ionization``, the neutral majority-carrier density :math:`n_{maj}` is lower,
+        and under either statistics the solver uses
+
+        .. math::
+
+            \\Delta E_G' = \\Delta E_G + k_B T \\left(\\eta_{maj}
+            - \\ln \\frac{|N_D - N_A|}{N_{maj}}\\right),
+
+        with :math:`\\eta_{maj}` the reduced Fermi level of :math:`n_{maj}`, that is
+        :math:`F_{1/2}^{-1}(n_{maj}/N_{maj})` with Fermi-Dirac statistics and
+        :math:`\\ln(n_{maj}/N_{maj})` with Boltzmann statistics. The minority-carrier density of a
+        neutral region is then the one the narrowing was fitted to. At full ionization this is
+        the expression above.
+
         .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON' Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992
 
         .. [2] D. Yan and A. Cuevas, 'Empirical determination of the energy band gap narrowing in highly doped n+ silicon', Journal of Applied Physics 114, 044508, 2013

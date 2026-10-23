@@ -7,6 +7,7 @@ from tidy3d.components.tcad.data.monitor_data.charge import (
     SteadyCapacitanceData,
     SteadyChargeResidualData,
     SteadyCurrentDensityData,
+    SteadyDopingData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
     SteadyFreeCarrierData,
@@ -25,5 +26,6 @@ TCADMonitorDataType = (
     | SteadyCurrentDensityData
     | SteadyChargeResidualData
     | SteadyGenerationRecombinationData
+    | SteadyDopingData
     | SelfHeatingData
 )

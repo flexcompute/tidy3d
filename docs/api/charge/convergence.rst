@@ -192,6 +192,8 @@ names the offending feature:
 
 - ``MasettiMobility``
 - ``AlloyMobility``
+- Incomplete ionization (``donor_ionization`` and ``acceptor_ionization`` on a
+  ``SemiconductorMedium``)
 - ``CanaliFieldDependence`` (high-field velocity saturation, attached to any
   mobility model through ``field_dependence``)
 - ``TransferredElectronFieldDependence`` (high-field negative differential
@@ -203,6 +205,8 @@ names the offending feature:
 - ``SteadyChargeResidualMonitor`` (per-node residual debug monitor)
 - ``SteadyGenerationRecombinationMonitor`` (per-node generation-recombination
   rates)
+- ``SteadyDopingMonitor`` (per-node doping and ionized dopant
+  concentrations)
 - Schottky contacts (``VoltageBC`` with ``model="schottky_mott"``); supported
   by the charge solver only -- in conduction simulations the ``model`` flag
   has no effect and the boundary applies the plain potential

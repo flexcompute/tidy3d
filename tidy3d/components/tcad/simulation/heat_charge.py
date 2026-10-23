@@ -86,6 +86,7 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
+    SteadyDopingMonitor,
     SteadyElectricFieldMonitor,
     SteadyFreeCarrierMonitor,
     SteadyGenerationRecombinationMonitor,
@@ -159,6 +160,7 @@ ChargeMonitorTypes = (
     SteadyCurrentDensityMonitor,
     SteadyChargeResidualMonitor,
     SteadyGenerationRecombinationMonitor,
+    SteadyDopingMonitor,
     SelfHeatingMonitor,
 )
 
@@ -1247,7 +1249,7 @@ class HeatChargeSimulation(AbstractSimulation):
         if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in self.monitors):
             raise SetupError(
                 "Charge simulations require the definition of, at least, one of these monitors: "
-                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor, SteadyChargeResidualMonitor, SteadyGenerationRecombinationMonitor, SelfHeatingMonitor]' "
+                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor, SteadyChargeResidualMonitor, SteadyGenerationRecombinationMonitor, SteadyDopingMonitor, SelfHeatingMonitor]' "
                 "but none have been defined."
             )
         # NOTE: in Charge we're only supporting unstructured monitors.
@@ -1296,9 +1298,14 @@ class HeatChargeSimulation(AbstractSimulation):
     def _validate_accelerated_only_monitor_requirements(self) -> Self:
         """Validate monitors that exist only on the accelerated charge solver.
 
-        ``SteadyChargeResidualMonitor`` and ``SteadyGenerationRecombinationMonitor``
-        require a configured charge analysis and the accelerated solver."""
-        accelerated_only = (SteadyChargeResidualMonitor, SteadyGenerationRecombinationMonitor)
+        ``SteadyChargeResidualMonitor``, ``SteadyGenerationRecombinationMonitor`` and
+        ``SteadyDopingMonitor`` require a configured charge analysis and the accelerated
+        solver."""
+        accelerated_only = (
+            SteadyChargeResidualMonitor,
+            SteadyGenerationRecombinationMonitor,
+            SteadyDopingMonitor,
+        )
         simulation_types = self._check_simulation_types()
         charge_configured = TCADAnalysisTypes.CHARGE in simulation_types
         for idx, mnt in enumerate(self.monitors):
@@ -4229,6 +4236,11 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
         ):
             features.append("AlloyMobility")
+        if any(
+            charge.donor_ionization is not None or charge.acceptor_ionization is not None
+            for _loc, charge in self._iter_semiconductor_charge_media()
+        ):
+            features.append("Incomplete ionization ('donor_ionization', 'acceptor_ionization')")
         field_dependence_names = {
             type(mobility.field_dependence).__name__
             for _loc, charge in self._iter_semiconductor_charge_media()

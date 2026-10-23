@@ -100,6 +100,32 @@ Spatial dopant distributions applied to a semiconductor medium.
    CustomDoping
 
 
+Dopant Ionization
+^^^^^^^^^^^^^^^^^
+
+Incomplete ionization of the donors and acceptors, assigned to
+``SemiconductorMedium.donor_ionization`` and ``acceptor_ionization``. Without
+them the dopants are fully ionized.
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   PearsonBardeenIonization
+   AltermattSchenkIonization
+   MultiSiteIonization
+   IonizationSite
+
+.. note::
+   Incomplete ionization is supported only on the accelerated solver. The
+   ionized concentrations enter the Poisson equation and the charge neutrality
+   of ohmic contacts; mobility, lifetime and bandgap narrowing models keep
+   reading the total doping, except that a ``SlotboomBandGapNarrowing`` is shifted
+   so that neutral material keeps its fitted minority-carrier density.
+   ``SteadyDopingMonitor`` records the total doping and the ionized
+   concentrations.
+
+
 Bandgap
 ^^^^^^^
 

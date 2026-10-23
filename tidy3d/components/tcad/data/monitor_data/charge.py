@@ -26,6 +26,7 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
+    SteadyDopingMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
@@ -53,6 +54,9 @@ UnstructuredFieldType = discriminated_union(TriangularGridDataset | TetrahedralG
 # A 1D (line) monitor has no unstructured form, so its field is Cartesian; in a charge
 # simulation it is also resolved over bias.
 VoltageFieldDataset = UnstructuredFieldType | SpatialVoltageDataArray
+
+# Bias-independent field: the doping does not change with the applied voltage.
+DopingFieldDataset = UnstructuredFieldType | SpatialDataArray
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
@@ -128,6 +132,91 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
                         f"In the data associated with monitor {self.monitor}, the "
                         f"field {field} does not contain data associated to any voltage value."
                     )
+        return self
+
+
+class SteadyDopingData(HeatChargeMonitorData):
+    """
+    Stores the doping and the ionized dopant concentrations of a charge simulation.
+
+    Notes
+    -----
+
+        ``donors`` and ``acceptors`` are the total donor and acceptor concentrations :math:`N_d`
+        and :math:`N_a` in :math:`cm^{-3}`. They do not depend on bias, so they carry no
+        voltage coordinate.
+
+        ``ionized_donors`` and ``ionized_acceptors`` are the concentrations :math:`N_d^+` and
+        :math:`N_a^-` that enter the Poisson equation, per bias point. They are ``None``
+        unless some semiconductor medium of the simulation sets ``donor_ionization`` or
+        ``acceptor_ionization``. The ionized fraction is one division, for example
+        :math:`N_d^+/N_d` where :math:`N_d > 0`. See :class:`.SteadyDopingMonitor`.
+    """
+
+    monitor: SteadyDopingMonitor = Field(
+        title="Doping monitor",
+        description="Doping data associated with a Charge simulation.",
+    )
+
+    donors: DopingFieldDataset | None = Field(
+        default=None,
+        title="Donors",
+        description=r"Contains the total donor concentration :math:`N_d`, independent of bias.",
+        json_schema_extra={"units": "1/cm^3"},
+    )
+
+    acceptors: DopingFieldDataset | None = Field(
+        default=None,
+        title="Acceptors",
+        description=r"Contains the total acceptor concentration :math:`N_a`, independent of bias.",
+        json_schema_extra={"units": "1/cm^3"},
+    )
+
+    ionized_donors: VoltageFieldDataset | None = Field(
+        default=None,
+        title="Ionized donors series",
+        description=r"Contains the ionized donor concentration :math:`N_d^+` per bias point. "
+        "``None`` unless a semiconductor medium sets ``donor_ionization`` or "
+        "``acceptor_ionization``.",
+        json_schema_extra={"units": "1/cm^3"},
+    )
+
+    ionized_acceptors: VoltageFieldDataset | None = Field(
+        default=None,
+        title="Ionized acceptors series",
+        description=r"Contains the ionized acceptor concentration :math:`N_a^-` per bias "
+        "point. ``None`` unless a semiconductor medium sets ``donor_ionization`` or "
+        "``acceptor_ionization``.",
+        json_schema_extra={"units": "1/cm^3"},
+    )
+
+    @property
+    def field_components(self) -> dict[str, DopingFieldDataset | VoltageFieldDataset | None]:
+        """Maps the field components to their associated data."""
+        return {
+            "donors": self.donors,
+            "acceptors": self.acceptors,
+            "ionized_donors": self.ionized_donors,
+            "ionized_acceptors": self.ionized_acceptors,
+        }
+
+    @model_validator(mode="after")
+    def check_correct_data_type(self) -> Self:
+        """Issue error if the voltage coordinate is missing from ionized fields or present in the doping."""
+        for field, data in self.field_components.items():
+            if not isinstance(data, TetrahedralGridDataset | TriangularGridDataset):
+                continue
+            has_voltage = isinstance(data.values, IndexedVoltageDataArray)
+            if field.startswith("ionized") and not has_voltage:
+                raise ValueError(
+                    f"In the data associated with monitor {self.monitor}, the "
+                    f"field {field} does not contain data associated to any voltage value."
+                )
+            if not field.startswith("ionized") and has_voltage:
+                raise ValueError(
+                    f"In the data associated with monitor {self.monitor}, the "
+                    f"field {field} does not depend on bias and must not contain a voltage coordinate."
+                )
         return self
 
 
@@ -344,8 +433,11 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     The small-signal capacitance of electrons :math:`C_n` and holes :math:`C_p` is the derivative
     of the electron charge :math:`Q_n = q \\int n \\, dV` and the hole charge
     :math:`Q_p = q \\int p \\, dV`, integrated over the monitor region, with respect to the
-    applied voltage. At a bias point :math:`V_i` of the sweep it is the central difference
-    over the neighboring bias points:
+    applied voltage. Where a medium sets ``donor_ionization`` or ``acceptor_ionization``, the
+    charges count the carriers bound on dopants, :math:`Q_n = q \\int (n + N_D - N_D^+) \\, dV`
+    and :math:`Q_p = q \\int (p + N_A - N_A^-) \\, dV`, so that the capacitance equals the
+    small-signal capacitance of the AC analysis. At a bias point :math:`V_i` of the sweep it is
+    the central difference over the neighboring bias points:
 
     .. math::
 

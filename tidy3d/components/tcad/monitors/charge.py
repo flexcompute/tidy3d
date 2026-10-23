@@ -160,6 +160,36 @@ class SteadyGenerationRecombinationMonitor(HeatChargeMonitor):
     )
 
 
+class SteadyDopingMonitor(HeatChargeMonitor):
+    """
+    Doping monitor for Charge simulations.
+
+    Notes
+    -----
+    Records the total donor and acceptor concentrations :math:`N_d` and :math:`N_a` in
+    :math:`cm^{-3}`, which do not depend on bias. When some semiconductor medium sets
+    ``donor_ionization`` or ``acceptor_ionization``, it also records the ionized
+    concentrations :math:`N_d^+` and :math:`N_a^-` that enter the Poisson equation at each
+    bias point, which follow the local quasi-Fermi levels; where a medium has no law they
+    equal the doping. Without any law in the simulation the ionized fields are ``None``.
+    The ionized fraction is one division, for example :math:`N_d^+/N_d` where :math:`N_d > 0`.
+    Available only on the accelerated solver.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> doping_monitor = td.SteadyDopingMonitor(
+    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="doping_z0",
+    ... )
+    """
+
+    unstructured: Literal[True] = Field(
+        default=True,
+        title="Unstructured Grid",
+        description="Return data on the original unstructured grid.",
+    )
+
+
 class SelfHeatingMonitor(HeatChargeMonitor):
     """
     Volumetric self-heating monitor for Charge/Conduction simulations.

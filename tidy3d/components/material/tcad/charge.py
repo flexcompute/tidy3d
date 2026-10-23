@@ -13,6 +13,7 @@ from tidy3d.components.material.tensor import AbstractPrincipalAxesTensor
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
 from tidy3d.components.tcad.generation_recombination import DistributedGeneration
+from tidy3d.components.tcad.ionization import DopantIonizationModelType, MultiSiteIonization
 from tidy3d.components.tcad.types import (
     AlloyMobility,
     BandGapNarrowingModelType,
@@ -288,10 +289,18 @@ class SemiconductorMedium(AbstractChargeMedium):
          - Description
        * - :math:`N_a`
          - ``N_a``
-         - Ionized acceptors density
+         - Acceptor concentration
        * - :math:`N_d`
          - ``N_d``
-         - Ionized donors density
+         - Donor concentration
+       * - :math:`N_a^-`
+         - ``acceptor_ionization``
+         - Ionized acceptor concentration, :math:`N_a` unless the acceptors are incompletely
+           ionized
+       * - :math:`N_d^+`
+         - ``donor_ionization``
+         - Ionized donor concentration, :math:`N_d` unless the donors are incompletely
+           ionized
        * - :math:`N_c`
          - ``N_c``
          - Effective density of states in the conduction band.
@@ -316,6 +325,21 @@ class SemiconductorMedium(AbstractChargeMedium):
        * - :math:`q`
          - ``tidy3d.constants.Q_e``
          - Fundamental electron charge.
+
+    Note
+    ----
+        An incomplete ionization law of ``donor_ionization`` or ``acceptor_ionization`` makes
+        the level exchange carriers with one band: donors follow the electron quasi-Fermi level
+        :math:`E_{Fn}`, acceptors the hole quasi-Fermi level :math:`E_{Fp}`. With Boltzmann
+        statistics :math:`\\exp((E_{Fn} - E_c)/k_B T) = n/N_c`, and with Fermi-Dirac statistics
+        the exponent is the reduced Fermi level of the local carrier density. The occupation is
+        the steady state of the level, also in small-signal analyses, where it follows the signal
+        at every frequency: the response is the low-frequency limit of the dopant charge.
+
+        The ionized concentrations enter the Poisson equation and the charge neutrality of ohmic
+        contacts, and they shift a :class:`SlotboomBandGapNarrowing` so that neutral material keeps
+        the minority-carrier density the narrowing was fitted to. Mobility, lifetime and bandgap
+        narrowing models otherwise keep reading the total doping.
 
     Example
     -------
@@ -495,6 +519,24 @@ class SemiconductorMedium(AbstractChargeMedium):
         json_schema_extra={"units": PERCMCUBE},
     )
 
+    donor_ionization: DopantIonizationModelType | None = Field(
+        default=None,
+        discriminator=TYPE_TAG_STR,
+        title="Donor ionization",
+        description="Incomplete ionization of the donors: the law that gives the ionized donor "
+        "concentration :math:`N_d^+` from the electron quasi-Fermi level. When ``None``, the "
+        "donors are fully ionized. Supported only by the accelerated charge solver.",
+    )
+
+    acceptor_ionization: DopantIonizationModelType | None = Field(
+        default=None,
+        discriminator=TYPE_TAG_STR,
+        title="Acceptor ionization",
+        description="Incomplete ionization of the acceptors: the law that gives the ionized "
+        "acceptor concentration :math:`N_a^-` from the hole quasi-Fermi level. When ``None``, "
+        "the acceptors are fully ionized. Supported only by the accelerated charge solver.",
+    )
+
     @field_validator("R")
     @classmethod
     def _warn_one_model_per_mechanism(
@@ -595,6 +637,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         """Run post-init validations in an explicit, dependency-aware order."""
         super()._run_after_validators()
         self._check_alloy_mole_fractions_match()
+        self._check_ionization_energies_below_band_gap()
         return self
 
     def _check_alloy_mole_fractions_match(self) -> Self:
@@ -612,4 +655,29 @@ class SemiconductorMedium(AbstractChargeMedium):
                 "mobility_p",
                 "mole_fraction",
             )
+        return self
+
+    def _check_ionization_energies_below_band_gap(self) -> Self:
+        """Every ionization energy lies below the largest band gap of the medium."""
+        gap = self.E_g.eg if isinstance(self.E_g, ConstantEnergyBandGap) else self.E_g.eg_0
+        for name in ("donor_ionization", "acceptor_ionization"):
+            law = getattr(self, name)
+            if law is None:
+                continue
+            if isinstance(law, MultiSiteIonization):
+                levels = [
+                    (("sites", k, "level"), f"sites[{k}].level.", site.level)
+                    for k, site in enumerate(law.sites)
+                ]
+            else:
+                levels = [((), "", law)]
+            for loc, text, level in levels:
+                if level.energy >= gap:
+                    self._raise_validation_error_at_loc(
+                        f"'{name}.{text}energy' is {level.energy!r} eV, which is not below the "
+                        f"band gap of the medium ({gap!r} eV). Ionization energies are in eV.",
+                        name,
+                        *loc,
+                        "energy",
+                    )
         return self

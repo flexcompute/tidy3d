@@ -45,6 +45,7 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
+    SteadyDopingMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
@@ -81,6 +82,7 @@ HeatChargeMonitorType = (
     | SteadyCurrentDensityMonitor
     | SteadyChargeResidualMonitor
     | SteadyGenerationRecombinationMonitor
+    | SteadyDopingMonitor
     | SelfHeatingMonitor
 )
 HeatChargeSourceType = HeatSource | HeatFromElectricSource | UniformHeatSource

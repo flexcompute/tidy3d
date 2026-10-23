@@ -323,6 +323,23 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.tcad.ionization:PearsonBardeenIonization": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.ionization:PearsonBardeenIonization",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.ionization:AltermattSchenkIonization": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.ionization:AltermattSchenkIonization",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.ionization:IonizationSite": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.ionization:IonizationSite",
+        "flexcompute.core._migration.tcad.validation:validate",
+    ),
+    "tidy3d.components.tcad.ionization:MultiSiteIonization": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.ionization:MultiSiteIonization",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.tcad.mobility:CaugheyThomasMobility": ComponentScope(
         "flexcompute.core._migration.tcad.schema.mobility:CaugheyThomasMobility",
         "flexcompute.core._migration.tcad.validation:validate",
