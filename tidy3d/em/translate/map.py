@@ -729,6 +729,72 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.structure.schema:MeshOverrideStructure",
         "flexcompute.core._migration.em.structure.validation:validate",
     ),
+    # source
+    "tidy3d.components.source.current:UniformCurrentSource": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.current:UniformCurrentSource",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.current:PointDipole": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.current:PointDipole",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.current:CustomCurrentSource": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.current:CustomCurrentSource",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:CustomFieldSource": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:CustomFieldSource",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:ModeSource": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:ModeSource",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:PlaneWave": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:PlaneWave",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:GaussianBeam": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:GaussianBeam",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:AstigmaticGaussianBeam": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:AstigmaticGaussianBeam",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:ThinLensBeam": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:ThinLensBeam",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.field:TFSF": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.field:TFSF",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.time:GaussianPulse": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.time:GaussianPulse",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.time:ContinuousWave": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.time:ContinuousWave",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.source.time:CustomSourceTime": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.time:CustomSourceTime",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -776,6 +842,11 @@ COMPONENT_ERROR_TYPES = {
     "em.microwave.missing_integrals": "tidy3d.exceptions:ValidationError",
     # scene: structure
     "em.structure.non_finite_min_steps_per_size": "builtins:ValueError",
+    # source
+    "em.source.too_few_time_coords": "tidy3d.exceptions:ValidationError",
+    "em.source.non_increasing_time_coords": "tidy3d.exceptions:ValidationError",
+    "em.source.nan_dataset": "tidy3d.exceptions:ValidationError",
+    "em.source.duplicate_dataset_coords": "tidy3d.exceptions:DataError",
 }
 
 

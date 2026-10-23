@@ -474,21 +474,6 @@ class CustomSourceTime(Pulse):
     _no_nans_dataset = validate_no_nans("source_time_dataset")
     _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
 
-    @field_validator("source_time_dataset")
-    @classmethod
-    def _validate_time_coords(cls, val: TimeDataset | None) -> TimeDataset | None:
-        """Time coordinates must have more than one point and be strictly increasing."""
-        if val is None:
-            return val
-        if val.values.size <= 1:
-            raise ValidationError("'CustomSourceTime' must have more than one time coordinate.")
-        times = val.values.coords["t"].values
-        if not np.all(np.diff(times) > 0):
-            raise ValidationError(
-                "'CustomSourceTime' time coordinates must be strictly monotonically increasing."
-            )
-        return val
-
     @classmethod
     def from_values(
         cls, freq0: float, fwidth: float, values: ArrayComplex1D, dt: float

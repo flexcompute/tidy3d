@@ -20,7 +20,6 @@ from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.bound_ops import bounds_intersection
 from tidy3d.components.data.dataset import FieldDataset
-from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.source.frame import PECFrame
@@ -36,7 +35,7 @@ from tidy3d.components.validators import (
     warn_if_dataset_none,
 )
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
-from tidy3d.exceptions import AdjointError, SetupError
+from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 
 from .adjoint_helpers import (
@@ -316,27 +315,8 @@ class CustomFieldSource(FieldSource, PlanarSource):
         "fields patterns to inject. At least one tangential field component must be specified.",
     )
 
-    _no_nans_dataset = validate_no_nans("field_dataset")
     _field_dataset_none_warning = warn_if_dataset_none("field_dataset")
     _field_dataset_single_freq = assert_single_freq_in_range("field_dataset")
-    _can_interpolate = validate_can_interpolate("field_dataset")
-
-    @model_validator(mode="after")
-    def _tangential_component_defined(self) -> FieldDataset:
-        """Assert that at least one tangential field component is provided."""
-        val = self.field_dataset
-        if val is None:
-            return self
-        normal_axis = self.size.index(0.0)
-        _, (cmp1, cmp2) = self.pop_axis("xyz", axis=normal_axis)
-        for field in "EH":
-            for cmp_name in (cmp1, cmp2):
-                tangential_field = field + cmp_name
-                if tangential_field in val.field_components:
-                    return self
-        self._raise_validation_error_at_loc(
-            SetupError("No tangential field found in the suppled 'field_dataset'."), "field_dataset"
-        )
 
     def _derivative_terms(self, paths: list[PathType], target: SourceTarget) -> Compiled:
         """One pullback term per traced field component, on that component's own grid."""

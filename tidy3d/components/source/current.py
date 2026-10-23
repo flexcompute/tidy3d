@@ -11,7 +11,6 @@ from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
-from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.types import Polarization
 from tidy3d.components.validators import assert_single_freq_in_range, warn_if_dataset_none
 from tidy3d.constants import MICROMETER
@@ -255,10 +254,8 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         "electric and magnetic current patterns to inject.",
     )
 
-    _no_nans_dataset = validate_no_nans("current_dataset")
     _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
     _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
-    _can_interpolate = validate_can_interpolate("current_dataset")
 
     def _adjoint_interp_methods(self) -> dict[str, str]:
         """Interpolation mode per axis for source VJP projection."""
