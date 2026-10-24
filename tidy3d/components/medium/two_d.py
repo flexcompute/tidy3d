@@ -94,11 +94,19 @@ class Medium2D(AbstractMedium):
     @classmethod
     def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
         """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls.__name__}."
-            )
+        # Thin field adapter that calls the core rule. ``import tidy3d`` builds ``Medium2D``
+        # (built at import), so it stays off the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_unsupported_modulation_spec,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        raise_first_error(
+            validate_unsupported_modulation_spec(
+                cls.__name__, None if val is None else str(type(val))
+            ),
+            ValidationError,
+        )
         return val
 
     @model_validator(mode="after")
@@ -120,15 +128,20 @@ class Medium2D(AbstractMedium):
 
     def _validate_inplane_pec(self) -> Self:
         """ss/tt components must be both PEC or non-PEC."""
-        val = self.tt
-        if isinstance(val, PECMedium) != isinstance(self.ss, PECMedium):
-            self._raise_validation_error_at_loc(
-                ValidationError(
-                    "Materials describing ss- and tt-components must be "
-                    "either both 'PECMedium', or non-'PECMedium'."
-                ),
-                "tt",
-            )
+        # Thin check that calls the core rule. ``import tidy3d`` builds ``Medium2D`` (built at
+        # import), so it stays off the construction path.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            validate_two_d_inplane_pec,
+        )
+
+        from tidy3d.em.translate.components import _present
+
+        _present(
+            self,
+            validate_two_d_inplane_pec(
+                isinstance(self.ss, PECMedium), isinstance(self.tt, PECMedium)
+            ),
+        )
         return self
 
     @classmethod

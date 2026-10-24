@@ -304,11 +304,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         )
         facts = self._component_support_facts()
         if models:
-            class_names = tuple(cls.__name__ for cls in type(self).__mro__)
+            # ``abstract_custom`` imports this module, so the class is imported here.
+            from tidy3d.components.medium.abstract_custom import AbstractCustomMedium
+
             facts |= {
-                "medium_classes": class_names,
+                "medium_classes": tuple(cls.__name__ for cls in type(self).__mro__),
                 "time_modulated": self.is_time_modulated,
-                "isotropic": "AbstractCustomMedium" not in class_names or self.is_isotropic,
+                "isotropic": not isinstance(self, AbstractCustomMedium) or self.is_isotropic,
             }
         return SpecSupportInput(
             medium_name=type(self).__name__,

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_terms import Compiled
-    from tidy3d.components.autograd.types import PathType, TracedFloat
+    from tidy3d.components.autograd.types import PathType
     from tidy3d.components.medium.derivative_terms import MediumTarget
     from tidy3d.components.time_modulation import ModulationSpec
     from tidy3d.components.transformation import RotationType
@@ -413,41 +413,6 @@ class FullyAnisotropicMedium(AbstractMedium):
         "of the complex permittivity at angular frequency omega is given by conductivity/omega.",
         json_schema_extra={"units": CONDUCTIVITY},
     )
-
-    @field_validator("modulation_spec")
-    @classmethod
-    def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
-        """Check compatibility with modulation_spec."""
-        # Thin field adapter that calls the core rule (field order: the construction path runs
-        # after every field is parsed, so it would drop this error when another field fails).
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_unsupported_modulation_spec,
-        )
-        from flexcompute.core.validation import raise_first_error
-
-        raise_first_error(
-            validate_unsupported_modulation_spec(
-                cls.__name__, None if val is None else str(type(val))
-            ),
-            ValidationError,
-        )
-        return val
-
-    @field_validator("permittivity")
-    @classmethod
-    def permittivity_spd_and_ge_one(cls, val: TracedFloat) -> TracedFloat:
-        """Check that provided permittivity tensor is symmetric positive definite
-        with eigenvalues >= 1.
-        """
-        # Thin field adapter that calls the core rule (field order: the construction path runs
-        # after every field is parsed, so it would drop this error when another field fails).
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_anisotropic_permittivity,
-        )
-        from flexcompute.core.validation import raise_first_error
-
-        raise_first_error(validate_anisotropic_permittivity(val), ValidationError)
-        return val
 
     @classmethod
     def from_diagonal(cls, xx: Medium, yy: Medium, zz: Medium, rotation: RotationType) -> Self:

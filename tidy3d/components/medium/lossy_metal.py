@@ -6,11 +6,9 @@ from typing import TYPE_CHECKING, Literal
 
 import autograd.numpy as np
 from flexcompute.core._migration.em.material.medium.limits import LOSSY_METAL_SCALED_REAL_PART
-from flexcompute.core.validation import raise_first_error
 from pydantic import (
     Field,
     PositiveFloat,
-    field_validator,
 )
 
 from tidy3d.components.base import cached_property
@@ -28,7 +26,7 @@ from tidy3d.constants import (
     MU_0,
     PERMITTIVITY,
 )
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
     from tidy3d.components.types import (
@@ -126,19 +124,6 @@ class LossyMetalMedium(Medium):
         "uses the lossy-metal handling selected by ``Simulation.subpixel.lossy_metal`` (e.g. a "
         "surface impedance boundary condition).",
     )
-
-    @field_validator("frequency_range")
-    @classmethod
-    def _validate_frequency_range(cls, val: FreqBound) -> FreqBound:
-        """Validate that frequency range is finite and non-zero."""
-        # Thin field adapter that calls the core rule (field order: the construction path runs
-        # after every field is parsed, so it would drop this error when another field fails).
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_frequency_range,
-        )
-
-        raise_first_error(validate_frequency_range(val), ValidationError)
-        return val
 
     @cached_property
     def is_pec_like(self) -> bool:

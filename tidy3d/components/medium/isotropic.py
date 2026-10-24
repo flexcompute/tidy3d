@@ -52,6 +52,24 @@ from .base import (  # noqa: E402
 )
 
 
+def _reject_modulation_spec(medium_name: str, val: ModulationSpec | None) -> ModulationSpec | None:
+    """Thin field adapter of ``PECMedium`` and ``PMCMedium`` that calls the core rule."""
+    # ``import tidy3d`` builds both classes (built at import), so they stay off the construction
+    # path.
+    from flexcompute.core._migration.em.material.medium.validation import (
+        validate_unsupported_modulation_spec,
+    )
+    from flexcompute.core.validation import raise_first_error
+
+    raise_first_error(
+        validate_unsupported_modulation_spec(
+            medium_name, None if val is None else type(val).__name__
+        ),
+        ValidationError,
+    )
+    return val
+
+
 class PECMedium(AbstractMedium):
     """Perfect electrical conductor class.
 
@@ -68,12 +86,7 @@ class PECMedium(AbstractMedium):
     @classmethod
     def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
         """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val).__name__} is not "
-                f"currently supported for medium class {cls.__name__}."
-            )
-        return val
+        return _reject_modulation_spec(cls.__name__, val)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -114,12 +127,7 @@ class PMCMedium(AbstractMedium):
     @classmethod
     def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
         """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val).__name__} is not "
-                f"currently supported for medium class {cls.__name__}."
-            )
-        return val
+        return _reject_modulation_spec(cls.__name__, val)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:

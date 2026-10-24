@@ -266,10 +266,10 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.isotropic:PMCMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
-    # Off the construction path: field order (see ``_validate_frequency_range``).
     "tidy3d.components.medium.lossy_metal:LossyMetalMedium": ComponentScope(
         "flexcompute.core._migration.em.material.medium.schema.lossy_metal:LossyMetalMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
     ),
     # Registered because the plan registers every moved class. The roughness models carry no
     # rules, so they stay off the construction path.
@@ -290,6 +290,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.anisotropic:FullyAnisotropicMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
+    ),
+    # ``import tidy3d`` builds Medium2D, so it stays off the construction path.
+    "tidy3d.components.medium.two_d:Medium2D": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.two_d:Medium2D",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
@@ -865,6 +870,8 @@ COMPONENT_ERROR_TYPES = {
     "em.material.medium.anisotropic_permittivity_symmetric": "tidy3d.exceptions:ValidationError",
     "em.material.medium.anisotropic_permittivity_ge_one": "tidy3d.exceptions:ValidationError",
     "em.material.medium.modulation_spec_unsupported": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.nonfinite_frequency_range": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.nonpositive_frequency_range": "tidy3d.exceptions:ValidationError",
     # tcad
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes
