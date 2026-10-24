@@ -308,6 +308,52 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.medium.drude:Drude": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.drude:Drude",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.debye:Debye": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.debye:Debye",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.lorentz:Lorentz": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.lorentz:Lorentz",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    # ``import tidy3d`` builds Sellmeier, so it stays off the construction path.
+    "tidy3d.components.medium.sellmeier:Sellmeier": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.sellmeier:Sellmeier",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    # Resolved through the mirror module, like the custom isotropic media above.
+    "tidy3d.components.medium.custom.dispersive:CustomPoleResidue": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomPoleResidue",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.custom.dispersive:CustomSellmeier": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomSellmeier",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.custom.dispersive:CustomLorentz": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomLorentz",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.custom.dispersive:CustomDrude": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomDrude",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.custom.dispersive:CustomDebye": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomDebye",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
@@ -890,6 +936,23 @@ COMPONENT_ERROR_TYPES = {
     "em.material.medium.custom_isotropic_conductivity_real": "tidy3d.exceptions:SetupError",
     "em.material.medium.custom_isotropic_conductivity_coordinates": "tidy3d.exceptions:SetupError",
     "em.material.medium.custom_isotropic_passive_conductivity_nonnegative": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.custom_eps_inf_real": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_eps_inf_nonnegative": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_coeffs_coordinates": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_coeffs_real": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_lorentz_delta_nonnegative": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.custom_debye_tau_minimum": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_sellmeier_coordinates": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_sellmeier_real": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_sellmeier_c_positive": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_sellmeier_c_near_zero": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_lorentz_delta_ordering": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_passive_delta_epsilon_nonnegative": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.custom_passive_sellmeier_b_nonnegative": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.pole_residue_causal": "tidy3d.exceptions:SetupError",
+    "em.material.medium.pole_a_too_large": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.pole_c_too_large": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.lorentz_f_delta_distinct": "tidy3d.exceptions:SetupError",
     # tcad
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes

@@ -267,13 +267,6 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         """Validate that the dataarray is real"""
         return np.all(np.isreal(_get_numpy_array(dataarray)))
 
-    @staticmethod
-    def _validate_isreal_dataarray_tuple(
-        dataarray_tuple: tuple[CustomSpatialDataType, ...],
-    ) -> bool:
-        """Validate that the dataarray is real"""
-        return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
-
     @abstractmethod
     def _sel_custom_data_inside(self, bounds: Bound) -> Self:
         """Return a new medium that contains the minimal amount custom data necessary to cover

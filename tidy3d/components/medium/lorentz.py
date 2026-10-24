@@ -6,7 +6,7 @@ from math import isclose
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field
 
 from tidy3d.components.autograd.path_utils import (
     traced_paths,
@@ -25,7 +25,6 @@ from tidy3d.constants import (
     HERTZ,
     PERMITTIVITY,
 )
-from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -87,50 +86,6 @@ class Lorentz(DispersiveMedium):
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         json_schema_extra={"units": (PERMITTIVITY, HERTZ, HERTZ)},
     )
-
-    @field_validator("coeffs")
-    @classmethod
-    def _coeffs_unequal_f_delta(
-        cls, val: tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...]
-    ) -> tuple[tuple[TracedFloat, TracedFloat, TracedNonNegativeFloat], ...]:
-        """f**2 and delta**2 cannot be exactly the same."""
-        # Thin field adapter that calls the core rule. No moved schema: ``CustomLorentz``
-        # subclasses ``Lorentz`` and has none yet, so it would translate through ``Lorentz``
-        # on the construction path.
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_lorentz_coefficients,
-        )
-        from flexcompute.core.validation import raise_first_error
-
-        raise_first_error(validate_lorentz_coefficients(val), SetupError)
-        return val
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._validate_coeffs_shape()
-        self._passivity_validation()
-        return self
-
-    def _passivity_validation(self) -> Self:
-        """Assert passive medium if ``allow_gain`` is False."""
-        # Thin check that calls the core rule. No moved schema: ``CustomLorentz`` subclasses
-        # ``Lorentz`` and has none yet, so it would translate through ``Lorentz`` on the
-        # construction path.
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_delta_epsilon_passivity,
-        )
-
-        from tidy3d.em.translate.components import _present
-
-        deltas = [coeff[0] for coeff in self.coeffs]
-        _present(self, validate_delta_epsilon_passivity(deltas, self.allow_gain))
-        return self
-
-    def _validate_coeffs_shape(self) -> Self:
-        """Hook for subclasses that need coeff shape checks."""
-        return self
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:

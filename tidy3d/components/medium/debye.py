@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
-from pydantic import Field, model_validator
+from flexcompute.core._migration.em.material.medium.limits import DEBYE_TAU_MINIMUM
+from pydantic import Field
 
 from tidy3d.components.autograd.path_utils import (
     traced_paths,
@@ -19,7 +20,6 @@ from tidy3d.components.data.utils import (
     _get_numpy_array,
 )
 from tidy3d.constants import (
-    LARGEST_FP_NUMBER,
     PERMITTIVITY,
     SECOND,
 )
@@ -27,7 +27,6 @@ from tidy3d.constants import (
 if TYPE_CHECKING:
     from pydantic import PositiveFloat
 
-    from tidy3d.compat import Self
     from tidy3d.components.types import FreqBound
 
 
@@ -90,33 +89,6 @@ class Debye(DispersiveMedium):
         json_schema_extra={"units": (PERMITTIVITY, SECOND)},
     )
 
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._validate_coeffs_shape()
-        self._passivity_validation()
-        return self
-
-    def _passivity_validation(self) -> Self:
-        """Assert passive medium if `allow_gain` is False."""
-        # Thin check that calls the core rule. No moved schema: ``CustomDebye`` subclasses
-        # ``Debye`` and has none yet, so it would translate through ``Debye`` on the
-        # construction path.
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_delta_epsilon_passivity,
-        )
-
-        from tidy3d.em.translate.components import _present
-
-        deltas = [delta for delta, _ in self.coeffs]
-        _present(self, validate_delta_epsilon_passivity(deltas, self.allow_gain))
-        return self
-
-    def _validate_coeffs_shape(self) -> Self:
-        """Hook for subclasses that need coeff shape checks."""
-        return self
-
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
@@ -134,7 +106,7 @@ class Debye(DispersiveMedium):
         eps_inf = self.eps_inf
         for de, tau in self.coeffs:
             # for |tau| close to 0, it's equivalent to modifying eps_inf
-            if np.any(abs(_get_numpy_array(tau)) < 1 / 2 / np.pi / LARGEST_FP_NUMBER):
+            if np.any(abs(_get_numpy_array(tau)) < DEBYE_TAU_MINIMUM):
                 eps_inf = eps_inf + de
             else:
                 a = -2 * np.pi / tau + 0j

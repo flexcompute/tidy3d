@@ -52,7 +52,10 @@ def from_component(model: BaseModel) -> object | None:
         return None
     from flexcompute.core.log import log as copied_log
 
-    data = model.model_dump()
+    from tidy3d.components.autograd.utils import get_static
+
+    # The schema only validates, so a traced value is reduced to its number.
+    data = get_static(model.model_dump())
     if owner is not type(model):
         from tidy3d.components.types import TYPE_TAG_STR
 

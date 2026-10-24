@@ -110,10 +110,10 @@ class DispersiveMedium(AbstractMedium, ABC):
     def _modulation_validation(self) -> Self:
         """Assert ``eps_inf`` stays positive and the medium allows gain under modulation."""
         # Thin check that calls the core rule. ``import tidy3d`` builds ``PoleResidue`` and
-        # ``Sellmeier`` (built at import), and ``Drude``, ``Debye`` and ``Lorentz`` have
-        # custom subclasses without a moved schema, so none of them is on the construction
-        # path. It raises ``ValidationError`` at the model, as the old validators did:
-        # ``_present`` would raise ``ValueError`` for these unmapped codes.
+        # ``Sellmeier`` (built at import), so they stay off the construction path. The registered
+        # subclasses inherit this check and also run the rule on the construction path. It raises
+        # ``ValidationError`` at the model, as the old validators did: ``_present`` would raise
+        # ``ValueError`` for these unmapped codes.
         from flexcompute.core._migration.em.material.medium.validation import (
             max_modulations,
             validate_dispersive_modulation,

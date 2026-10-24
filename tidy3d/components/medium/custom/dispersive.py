@@ -7,7 +7,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -23,7 +23,6 @@ from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.constants import (
     EPSILON_0,
     HERTZ,
-    LARGEST_FP_NUMBER,
     MICROMETER,
     PERMITTIVITY,
     RADPERSEC,
@@ -36,11 +35,9 @@ from tidy3d.log import log
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from pydantic import PositiveFloat
-
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_terms import Compiled
-    from tidy3d.components.autograd.types import PathType, TracedPositiveFloat
+    from tidy3d.components.autograd.types import PathType
     from tidy3d.components.data.utils import CustomSpatialDataType
     from tidy3d.components.grid.grid import Coords
     from tidy3d.components.medium.base import (
@@ -282,39 +279,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     _no_nans = validate_no_nans("eps_inf", "poles")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("poles")
 
-    @field_validator("eps_inf")
-    @classmethod
-    def _eps_inf_positive(cls, val: CustomSpatialDataType) -> CustomSpatialDataType:
-        """eps_inf must be positive"""
-        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
-            raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
-            raise SetupError("'eps_inf' must be positive.")
-        return val
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._poles_correct_shape()
-        return self
-
-    def _poles_correct_shape(self) -> Self:
-        """poles must have the same shape."""
-        val = self.poles
-
-        for coeffs in val:
-            for coeff in coeffs:
-                if not _check_same_coordinates(coeff, self.eps_inf):
-                    self._raise_validation_error_at_loc(
-                        SetupError(
-                            "All pole coefficients 'a' and 'c' must have the same coordinates; "
-                            "The coordinates must also be consistent with 'eps_inf'."
-                        ),
-                        "poles",
-                    )
-        return self
-
     @cached_property
     def is_spatially_uniform(self) -> bool:
         """Whether the medium is spatially uniform."""
@@ -491,55 +455,28 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     _no_nans = validate_no_nans("coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @field_validator("coeffs")
-    @classmethod
-    def _correct_shape_and_sign(
-        cls,
-        val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...],
-    ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]:
-        """every term in coeffs must have the same shape, and B>=0 and C>0."""
-        if len(val) == 0:
-            return val
-        for B, C in val:
-            if not _check_same_coordinates(B, val[0][0]) or not _check_same_coordinates(
-                C, val[0][0]
-            ):
-                raise SetupError("Every term in 'coeffs' must have the same coordinates.")
-            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
-                raise SetupError("'B' and 'C' must be real.")
-            if np.any(_get_numpy_array(C) <= 0):
-                raise SetupError("'C' must be positive.")
-        return val
-
     def _passivity_validation(self) -> Self:
         """Assert passive medium if `allow_gain` is False."""
-        val = self.coeffs
-        if self.allow_gain:
-            return self
-        for B, _ in val:
-            if np.any(_get_numpy_array(B) < 0):
-                raise ValidationError(
-                    "For passive medium, 'B_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
-                    "and are likely to diverge."
-                )
-        return self
+        # Thin check that calls the core rule with the code of the custom media, which has no
+        # location (``Sellmeier`` reports at ``coeffs``). It runs here, and not only on the
+        # construction path, so that it comes before the modulation check, as before.
+        from flexcompute.core._migration.em.material.medium.validation import (
+            CUSTOM_PASSIVE_SELLMEIER_B,
+            validate_sellmeier_passivity,
+        )
 
-    @field_validator("coeffs")
-    @classmethod
-    def _coeffs_C_all_near_zero_or_much_greater(
-        cls, val: tuple[tuple[float, PositiveFloat], ...]
-    ) -> tuple[tuple[float, PositiveFloat], ...]:
-        """We restrict either all C~=0, or very different from 0."""
-        for _, C in val:
-            c_array_near_zero = np.isclose(_get_numpy_array(C), 0)
-            if np.any(c_array_near_zero) and not np.all(c_array_near_zero):
-                raise SetupError(
-                    "Coefficients 'C_i' are restricted to be "
-                    "either all near zero or much greater than 0."
-                )
-        return val
+        from tidy3d.em.translate.components import _present
+
+        _present(
+            self,
+            validate_sellmeier_passivity(
+                [_get_numpy_array(b) for b, _ in self.coeffs],
+                self.allow_gain,
+                (),
+                CUSTOM_PASSIVE_SELLMEIER_B,
+            ),
+        )
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -715,80 +652,6 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     _no_nans = validate_no_nans("eps_inf", "coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @field_validator("eps_inf")
-    @classmethod
-    def _eps_inf_positive(cls, val: CustomSpatialDataType) -> CustomSpatialDataType:
-        """eps_inf must be positive"""
-        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
-            raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
-            raise SetupError("'eps_inf' must be positive.")
-        return val
-
-    @field_validator("coeffs")
-    @classmethod
-    def _coeffs_unequal_f_delta(
-        cls, val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]
-    ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]:
-        """f and delta cannot be exactly the same.
-        Not needed for now because we have a more strict
-        validator `_coeffs_delta_all_smaller_or_larger_than_fi`.
-        """
-        return val
-
-    def _coeffs_correct_shape(self) -> Self:
-        """coeffs must have consistent shape."""
-        val = self.coeffs
-        for de, f, delta in val:
-            if (
-                not _check_same_coordinates(de, self.eps_inf)
-                or not _check_same_coordinates(f, self.eps_inf)
-                or not _check_same_coordinates(delta, self.eps_inf)
-            ):
-                raise SetupError(
-                    "All terms in 'coeffs' must have the same coordinates; "
-                    "The coordinates must also be consistent with 'eps_inf'."
-                )
-            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, f, delta)):
-                raise SetupError("All terms in 'coeffs' must be real.")
-        return self
-
-    def _validate_coeffs_shape(self) -> Self:
-        return self._coeffs_correct_shape()
-
-    @field_validator("coeffs")
-    @classmethod
-    def _coeffs_delta_all_smaller_or_larger_than_fi(
-        cls,
-        val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType], ...],
-    ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType], ...]:
-        """We restrict either all f**2>delta**2 or all f**2<delta**2 for now."""
-        for _, f, delta in val:
-            f2 = f**2
-            delta2 = delta**2
-            if not (Lorentz._all_larger(f2, delta2) or Lorentz._all_larger(delta2, f2)):
-                raise SetupError(
-                    "Coefficients in 'coeffs' are restricted to have "
-                    "either all 'delta**2'<'f**2' or all 'delta**2'>'f**2'."
-                )
-        return val
-
-    def _passivity_validation(self) -> Self:
-        """Assert passive medium if ``allow_gain`` is False."""
-        val = self.coeffs
-        allow_gain = self.allow_gain
-        for del_ep, _, delta in val:
-            if np.any(_get_numpy_array(delta) < 0):
-                raise ValidationError("For stable medium, 'delta_i' must be non-negative.")
-            if not allow_gain and np.any(_get_numpy_array(del_ep) < 0):
-                raise ValidationError(
-                    "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
-                    "and are likely to diverge."
-                )
-        return self
-
     @cached_property
     def is_spatially_uniform(self) -> bool:
         """Whether the medium is spatially uniform."""
@@ -916,47 +779,6 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     _no_nans = validate_no_nans("eps_inf", "coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @field_validator("eps_inf")
-    @classmethod
-    def _eps_inf_positive(cls, val: TracedPositiveFloat) -> TracedPositiveFloat:
-        """eps_inf must be positive"""
-        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
-            raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
-            raise SetupError("'eps_inf' must be positive.")
-        return val
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._coeffs_correct_shape_and_sign()
-        return self
-
-    def _coeffs_correct_shape_and_sign(self) -> Self:
-        """coeffs must have consistent shape and sign."""
-        val = self.coeffs
-        for f, delta in val:
-            if not _check_same_coordinates(f, self.eps_inf) or not _check_same_coordinates(
-                delta, self.eps_inf
-            ):
-                self._raise_validation_error_at_loc(
-                    SetupError(
-                        "All terms in 'coeffs' must have the same coordinates; "
-                        "The coordinates must also be consistent with 'eps_inf'."
-                    ),
-                    "coeffs",
-                )
-            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
-                self._raise_validation_error_at_loc(
-                    SetupError("All terms in 'coeffs' must be real."), "coeffs"
-                )
-            if np.any(_get_numpy_array(delta) <= 0):
-                self._raise_validation_error_at_loc(
-                    SetupError("For stable medium, 'delta' must be positive."), "coeffs"
-                )
-        return self
-
     @cached_property
     def is_spatially_uniform(self) -> bool:
         """Whether the medium is spatially uniform."""
@@ -1075,63 +897,6 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
     _no_nans = validate_no_nans("eps_inf", "coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
-
-    @field_validator("eps_inf")
-    @classmethod
-    def _eps_inf_positive(cls, val: TracedPositiveFloat) -> TracedPositiveFloat:
-        """eps_inf must be positive"""
-        if not CustomDispersiveMedium._validate_isreal_dataarray(val):
-            raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
-            raise SetupError("'eps_inf' must be positive.")
-        return val
-
-    def _coeffs_correct_shape(self) -> Self:
-        """coeffs must have consistent shape."""
-        val = self.coeffs
-        for de, tau in val:
-            if not _check_same_coordinates(de, self.eps_inf) or not _check_same_coordinates(
-                tau, self.eps_inf
-            ):
-                raise SetupError(
-                    "All terms in 'coeffs' must have the same coordinates; "
-                    "The coordinates must also be consistent with 'eps_inf'."
-                )
-            if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
-                raise SetupError("All terms in 'coeffs' must be real.")
-        return self
-
-    def _validate_coeffs_shape(self) -> Self:
-        return self._coeffs_correct_shape()
-
-    @field_validator("coeffs")
-    @classmethod
-    def _coeffs_tau_all_sufficient_positive(
-        cls, val: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]
-    ) -> tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...]:
-        """We restrict either all tau is sufficently greater than 0."""
-        for _, tau in val:
-            if np.any(_get_numpy_array(tau) < 1 / 2 / np.pi / LARGEST_FP_NUMBER):
-                raise SetupError(
-                    "Coefficients 'tau_i' are restricted to be sufficiently greater than 0."
-                )
-        return val
-
-    def _passivity_validation(self) -> Self:
-        """Assert passive medium if ``allow_gain`` is False."""
-        val = self.coeffs
-        allow_gain = self.allow_gain
-        for del_ep, tau in val:
-            if np.any(_get_numpy_array(tau) <= 0):
-                raise SetupError("For stable medium, 'tau_i' must be positive.")
-            if not allow_gain and np.any(_get_numpy_array(del_ep) < 0):
-                raise ValidationError(
-                    "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
-                    "and are likely to diverge."
-                )
-        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
