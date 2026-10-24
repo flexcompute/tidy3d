@@ -50,7 +50,7 @@ TASK_PUBLIC_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
 }
 
 TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
-    Tidy3DSolverTaskMap.FDTD: "flexcompute.core._migration.em.schema.tidy3d.components.simulation:Simulation",
+    Tidy3DSolverTaskMap.FDTD: "flexcompute.core._migration.solver.fdtd.schema.model:Simulation",
     Tidy3DSolverTaskMap.MODE_SOLVER: (
         "flexcompute.core._migration.em.schema.tidy3d.components.mode.mode_solver:ModeSolver"
     ),

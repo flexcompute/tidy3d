@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from flexcompute.core._migration.em.schema.tidy3d.components.simulation import (
-    Simulation as SimulationTaskInput,
-)
+from flexcompute.core._migration.solver.fdtd.schema.model import Simulation as SimulationTaskInput
 
 from tidy3d.em.translate.base import (
     apply_type_field_map,
