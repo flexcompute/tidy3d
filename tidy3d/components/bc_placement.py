@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from abc import ABC
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.exceptions import SetupError
 
 from .base import Tidy3dBaseModel
 from .types import BoxSurface
@@ -44,16 +43,6 @@ class StructureStructureInterface(AbstractBCPlacement):
         description="Names of two structures.",
     )
 
-    @field_validator("structures")
-    @classmethod
-    def unique_names(cls, val: tuple[str, str]) -> tuple[str, str]:
-        """Error if the same structure is provided twice"""
-        if val[0] == val[1]:
-            raise SetupError(
-                "The same structure is provided twice in 'StructureStructureInterface'."
-            )
-        return val
-
 
 class MediumMediumInterface(AbstractBCPlacement):
     """Placement of boundary conditions between two mediums.
@@ -67,14 +56,6 @@ class MediumMediumInterface(AbstractBCPlacement):
         title="Mediums",
         description="Names of two mediums.",
     )
-
-    @field_validator("mediums")
-    @classmethod
-    def unique_names(cls, val: tuple[str, str]) -> tuple[str, str]:
-        """Error if the same structure is provided twice"""
-        if val[0] == val[1]:
-            raise SetupError("The same medium is provided twice in 'MediumMediumInterface'.")
-        return val
 
 
 class SimulationBoundary(AbstractBCPlacement):

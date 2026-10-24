@@ -900,6 +900,33 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.mode.spec.schema:ModeInterpSpec",
         "flexcompute.core._migration.em.mode.spec.validation:validate",
     ),
+    # boundary: placement
+    "tidy3d.components.bc_placement:AbstractBCPlacement": None,
+    "tidy3d.components.bc_placement:StructureBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.placement.schema:StructureBoundary",
+        "flexcompute.core._migration.em.boundary.placement.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.bc_placement:StructureStructureInterface": ComponentScope(
+        "flexcompute.core._migration.em.boundary.placement.schema:StructureStructureInterface",
+        "flexcompute.core._migration.em.boundary.placement.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.bc_placement:MediumMediumInterface": ComponentScope(
+        "flexcompute.core._migration.em.boundary.placement.schema:MediumMediumInterface",
+        "flexcompute.core._migration.em.boundary.placement.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.bc_placement:SimulationBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.placement.schema:SimulationBoundary",
+        "flexcompute.core._migration.em.boundary.placement.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.bc_placement:StructureSimulationBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.placement.schema:StructureSimulationBoundary",
+        "flexcompute.core._migration.em.boundary.placement.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -980,6 +1007,9 @@ COMPONENT_ERROR_TYPES = {
     # mode
     "em.mode.spec.custom_sampling_min_points": "tidy3d.exceptions:ValidationError",
     "em.mode.spec.custom_sampling_sorted": "tidy3d.exceptions:ValidationError",
+    # boundary: placement
+    "em.boundary.placement.duplicate_structure": "tidy3d.exceptions:SetupError",
+    "em.boundary.placement.duplicate_medium": "tidy3d.exceptions:SetupError",
 }
 
 
