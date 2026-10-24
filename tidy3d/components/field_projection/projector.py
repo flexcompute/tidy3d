@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 import xarray as xr
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 from pydantic import Field, PrivateAttr, model_validator
 
 from tidy3d._runtime import always_validate
@@ -150,6 +151,7 @@ class FieldProjector(
         )
         total_structures = [structure_bg, *list(sim.structures or [])]
         surface_mediums = []
+        surface_keys = set()
 
         with log as consolidated_logger:
             for surface in self.surfaces:
@@ -159,9 +161,13 @@ class FieldProjector(
                     monitor=surface.monitor,
                     structures=total_structures,
                 )
-                if len(mediums) > 1:
+                medium_keys = {
+                    optical_medium_key(Structure._get_public_optical_medium(medium))
+                    for medium in mediums
+                }
+                if len(medium_keys) > 1:
                     raise SetupError(
-                        f"{len(mediums)} different mediums detected on plane intersecting local "
+                        f"{len(medium_keys)} different mediums detected on plane intersecting local "
                         f"field projection monitor '{surface.monitor.name}'. Plane must be homogeneous."
                     )
                 if len(mediums) < 1:
@@ -179,8 +185,9 @@ class FieldProjector(
                         "Make sure custom medium is uniform on the plane."
                     )
                 surface_mediums.append(medium)
+                surface_keys.update(medium_keys)
 
-        if len(set(surface_mediums)) > 1:
+        if len(surface_keys) > 1:
             raise SetupError(
                 "All near-field monitors used for local field projection must lie in the same "
                 "homogeneous medium."

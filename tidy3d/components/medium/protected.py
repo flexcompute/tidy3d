@@ -545,6 +545,11 @@ class ProtectedOpticalMediumRef(Tidy3dBaseModel):
     def optical(self) -> ProtectedOpticalMediumRef:
         return self
 
+    @property
+    def _optical_medium_key(self) -> ProtectedOpticalMediumRef:
+        """Keep protected asset identity when comparing unresolved optical references."""
+        return self
+
     @cached_property
     def is_spatially_uniform(self) -> bool:
         return self.surrogate.is_spatially_uniform

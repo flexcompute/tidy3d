@@ -6,6 +6,7 @@ import math
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 
 from tidy3d.components.boundary import AbsorberSpec, BlochBoundary, Periodic
 from tidy3d.components.geometry.base import Box
@@ -45,9 +46,9 @@ from . import constants
 
 
 def _source_medium(self: Any, source: PlaneWave) -> AbstractMedium | None:
-    """Return the single medium intersecting a plane-wave source."""
+    """Return a representative medium intersecting a homogeneous plane-wave source."""
     mediums = self.scene.intersecting_media(source, self.structures)
-    if len(mediums) > 1:
+    if len({optical_medium_key(Structure._get_optical_medium(medium)) for medium in mediums}) > 1:
         return None
     return mediums.pop() if mediums else self.medium
 
@@ -189,7 +190,8 @@ def _source_homogeneous_isotropic(self: Any) -> Self:
                         source_id,
                     )
                 public_mediums = {
-                    Structure._get_public_optical_medium(medium) for medium in mediums
+                    optical_medium_key(Structure._get_public_optical_medium(medium))
+                    for medium in mediums
                 }
                 if len(public_mediums) > 1:
                     self._raise_validation_error_at_loc(
@@ -440,7 +442,9 @@ def _validate_gaussian_like_beam_background_medium(
             loc_ind,
         )
 
-    public_mediums = {Structure._get_public_optical_medium(medium) for medium in mediums}
+    public_mediums = {
+        optical_medium_key(Structure._get_public_optical_medium(medium)) for medium in mediums
+    }
     if len(public_mediums) > 1:
         self._raise_validation_error_at_loc(
             f"{len(public_mediums)} different public optical mediums detected on plane "

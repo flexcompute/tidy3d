@@ -346,6 +346,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return None
 
     @cached_property
+    def _optical_medium_key(self) -> Self:
+        """Optical comparison key excluding nonphysical display metadata."""
+        return self.updated_copy(name=None, attrs={}, deep=False, validate=False)
+
+    @cached_property
     def _nonlinear_models(self) -> list:
         """The nonlinear models in the nonlinear_spec."""
         if self.nonlinear_spec is None:

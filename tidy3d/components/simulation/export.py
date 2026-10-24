@@ -6,6 +6,7 @@ import pathlib
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 
 from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.medium import AbstractCustomMedium
@@ -293,13 +294,9 @@ def _optical_medium_export_key(
     cache: dict[AbstractMedium | None, OpticalMediumExportKey],
 ) -> OpticalMediumExportKey:
     """Normalized public optical-medium key used for GDS export semantics."""
-    if medium in cache:
-        return cache[medium]
-    if medium is None:
-        cache[medium] = None
-        return None
-    exclude_fields = {"name", "attrs"}
-    cache[medium] = medium.model_dump(exclude=exclude_fields, round_trip=True)
+    if medium not in cache:
+        key = optical_medium_key(medium)
+        cache[medium] = key.model_dump(round_trip=True) if key is not None else None
     return cache[medium]
 
 

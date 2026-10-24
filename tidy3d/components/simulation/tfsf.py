@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, Periodic
@@ -322,7 +323,7 @@ def _validate_fixed_angle_tfsf_semi_infinite_injection_axis(self: Any) -> Self:
             # ~10⁶ structures (e.g., a metalens) is too costly to
             # run at validation time.
             public_mediums = {
-                Structure._get_public_optical_medium(medium)
+                optical_medium_key(Structure._get_public_optical_medium(medium))
                 for medium in Scene.intersecting_media(probe, total_structures)
             }
             if None in public_mediums:
@@ -649,7 +650,9 @@ def _dipole_emission_tfsf_injection_medium(
     plane_media = Scene.intersecting_media(
         injection_plane, [simulation_background, *list(self.structures or [])]
     )
-    public_plane_media = {Structure._get_public_optical_medium(medium) for medium in plane_media}
+    public_plane_media = {
+        optical_medium_key(Structure._get_public_optical_medium(medium)) for medium in plane_media
+    }
     if len(public_plane_media) != 1:
         message = (
             "DipoleEmissionMonitor requires a homogeneous medium on the TFSF injection "
@@ -837,7 +840,9 @@ def _aux_tfsf_source(self: Any, source: TFSF) -> PlaneWave:
     plane_mediums = Scene.intersecting_media(
         injection_plane_probe, [injection_bg, *list(self.structures or [])]
     )
-    public_plane_media = {Structure._get_public_optical_medium(medium) for medium in plane_mediums}
+    public_plane_media = {
+        optical_medium_key(Structure._get_public_optical_medium(medium)) for medium in plane_mediums
+    }
     injection_medium = (
         next(iter(public_plane_media))
         if len(public_plane_media) == 1

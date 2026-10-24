@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 from pydantic import (
     model_validator,
 )
@@ -455,7 +456,9 @@ def _single_public_optical_medium_on_abc(
     self: Any, mediums: set[MediumType3D], axis_name: str, side_name: str
 ) -> MediumType3D:
     """Return the unique public optical medium used by ABC automatic medium detection."""
-    public_mediums = {Structure._get_public_optical_medium(medium) for medium in mediums}
+    public_mediums = {
+        optical_medium_key(Structure._get_public_optical_medium(medium)) for medium in mediums
+    }
     if not public_mediums:
         self._raise_validation_error_at_loc(
             "No medium detected on plane containing 'ABCBoundary', "

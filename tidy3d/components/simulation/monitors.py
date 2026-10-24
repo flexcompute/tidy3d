@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, get_args
 
 import autograd.numpy as np
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, Periodic
@@ -418,7 +419,8 @@ def _projection_monitors_homogeneous(self: Any) -> Self:
                     structures=total_structures,
                 )
                 public_mediums = {
-                    Structure._get_public_optical_medium(medium) for medium in mediums
+                    optical_medium_key(Structure._get_public_optical_medium(medium))
+                    for medium in mediums
                 }
                 if len(public_mediums) < 1:
                     continue
@@ -960,7 +962,7 @@ def monitor_medium(self: Any, monitor: MonitorType) -> AbstractMedium:
         _require_public_optical_medium(medium)
         for medium in Scene.intersecting_media(monitor, self.structures)
     }
-    if len(medium_set) > 1:
+    if len({optical_medium_key(medium) for medium in medium_set}) > 1:
         raise SetupError(  # post-init-tidy3d-error: ignore
             f"Monitor '{monitor.name}' intersects more than one medium."
         )

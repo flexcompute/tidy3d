@@ -6,6 +6,7 @@ from abc import ABC
 from typing import TYPE_CHECKING
 
 import numpy as np
+from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 from flexcompute.core._migration.em.thin_lens.validation import (
     validate_lens_geometry,
     validate_num_plane_waves,
@@ -328,7 +329,7 @@ def validate_thin_lens_adjoint_background(
     ]
     effective_active = active_plane_structures(effective_structures)
     media = {
-        Structure._get_optical_medium(effective_structures[index].medium)
+        optical_medium_key(Structure._get_optical_medium(effective_structures[index].medium))
         for index in effective_active
     }
     if len(media) != 1:
