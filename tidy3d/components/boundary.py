@@ -6,6 +6,7 @@ from abc import ABC
 from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
+from flexcompute.core._migration.em.boundary.validation import validate_edges
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -19,7 +20,7 @@ from tidy3d._runtime import always_validate
 from tidy3d.components.validators import _assert_min_freq, assert_plane
 from tidy3d.components.viz import ARROW_ALPHA, ARROW_COLOR_ABSORBER, plot_params_absorber
 from tidy3d.constants import C_0, CONDUCTIVITY, EPSILON_0, HERTZ, MU_0, PML_SIGMA
-from tidy3d.exceptions import DataError, SetupError, ValidationError
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.log import log
 
 from .base import Tidy3dBaseModel, cached_property
@@ -144,17 +145,6 @@ class ABCBoundary(AbstractABCBoundary):
         json_schema_extra={"units": CONDUCTIVITY},
     )
 
-    @model_validator(mode="after")
-    def _conductivity_only_with_float_permittivity(self) -> Self:
-        """Validate that conductivity can be provided only with float permittivity."""
-        if self.conductivity is not None and self.permittivity is None:
-            self._raise_validation_error_at_loc(
-                "Field 'conductivity' in 'ABCBoundary' can only be provided "
-                "simultaneously with 'permittivity'.",
-                "conductivity",
-            )
-        return self
-
 
 class BroadbandModeABCFitterParam(Tidy3dBaseModel):
     """Parameters for fitting the mode propagation index over the frequency range using pole-residue pair model.
@@ -218,10 +208,8 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
     @field_validator("frequency_range", mode="after")
     @classmethod
     def validate_frequency_range(cls, val: FreqBound) -> FreqBound:
-        """Validate that max frequency is greater than min frequency."""
+        """Validate that the min frequency is above the minimum frequency."""
         _assert_min_freq(val[0], "min frequency")
-        if val[1] <= val[0]:
-            raise ValidationError("max frequency must be greater than min frequency.")
         return val
 
     @classmethod
@@ -356,90 +344,6 @@ class ModeABCBoundary(AbstractABCBoundary):
         "where the modes are solved, and this plane is ignored.",
     )
 
-    @field_validator("plane")
-    @classmethod
-    def is_plane(cls, val: Box) -> Box:
-        """Raise validation error if not planar."""
-        if val.size.count(0.0) != 1:
-            raise ValidationError(
-                f"'ModeABCBoundary' target plane must be planar, given size={val.size}"
-            )
-        return val
-
-    @model_validator(mode="after")
-    def _validate_mode_index_tuple_nonempty(self) -> Self:
-        """Reject empty tuple form ``mode_index=()`` with a loc-aware error."""
-        if isinstance(self.mode_index, tuple) and len(self.mode_index) == 0:
-            self._raise_validation_error_at_loc(
-                "'mode_index' must contain at least one index when given as a tuple; "
-                "got an empty tuple.",
-                "mode_index",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_mode_index_tuple_unique(self) -> Self:
-        """Reject duplicate entries in the tuple form of ``mode_index``.
-
-        Downstream counts each entry independently, so a duplicate index would
-        double-count one physical mode as a phantom extra absorbed mode.
-        """
-        if not isinstance(self.mode_index, tuple):
-            return self
-        if len(set(self.mode_index)) != len(self.mode_index):
-            self._raise_validation_error_at_loc(
-                f"'mode_index' must not contain duplicate entries; got {list(self.mode_index)}.",
-                "mode_index",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_primary_mode_index(self) -> Self:
-        """``primary_mode_index`` only makes sense in the multi-mode tuple form, and
-        when set must be one of the entries in ``mode_index`` -- it designates the
-        dominant mode within the absorbed set, so naming a mode the absorber never
-        acts on is ill-defined.
-        """
-        if not isinstance(self.mode_index, tuple):
-            if self.primary_mode_index is not None:
-                self._raise_validation_error_at_loc(
-                    "'primary_mode_index' is only meaningful when 'mode_index' is a tuple "
-                    "(multi-mode regime); set 'mode_index' to a tuple or remove "
-                    "'primary_mode_index'.",
-                    "primary_mode_index",
-                )
-            return self
-        if self.primary_mode_index is None:
-            return self
-        if len(self.mode_index) <= 1:
-            self._raise_validation_error_at_loc(
-                "'primary_mode_index' is only meaningful when 'mode_index' has more than one "
-                "entry (multi-mode regime); remove 'primary_mode_index'.",
-                "primary_mode_index",
-            )
-        if self.primary_mode_index not in self.mode_index:
-            self._raise_validation_error_at_loc(
-                f"'primary_mode_index={self.primary_mode_index}' must be one of the entries "
-                f"in 'mode_index'={list(self.mode_index)}.",
-                "primary_mode_index",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_tolerance(self) -> Self:
-        """``tolerance`` groups the absorbed modes by effective index, which only happens when
-        more than one mode is absorbed. Outside that regime the value is never read, so accepting
-        one would silently drop it."""
-        if self._num_absorbed_modes > 1:
-            return self
-        if self.tolerance != DEFAULT_MODE_ABC_TOLERANCE:
-            self._raise_validation_error_at_loc(
-                "'tolerance' is only meaningful when 'mode_index' has more than one entry "
-                "(multi-mode regime); remove 'tolerance'.",
-                "tolerance",
-            )
-        return self
-
     @cached_property
     def _mode_indices_tuple(self) -> tuple[int, ...]:
         """Normalized tuple of absorbed mode indices: ``(mode_index,)`` in the
@@ -567,18 +471,6 @@ class InternalAbsorber(Box):
     )
 
     _plane_validator = assert_plane()
-
-    @field_validator("boundary_spec")
-    @classmethod
-    def _must_provide_permittivity(
-        cls, val: ModeABCBoundary | ABCBoundary
-    ) -> ModeABCBoundary | ABCBoundary:
-        """Validate that permittivity is provided for ABCBoundary."""
-        if isinstance(val, ABCBoundary) and val.permittivity is None:
-            raise ValidationError(
-                "Must provide 'permittivity' in 'ABCBoundary' when used in an internal absorber."
-            )
-        return val
 
     @cached_property
     def _dir_vector(self) -> tuple[float, float, float]:
@@ -1201,43 +1093,15 @@ class Boundary(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _multimode_mode_abc_only_in_internal_absorber(self) -> Self:
-        """Multi-mode ``ModeABCBoundary`` is only valid as ``InternalAbsorber.boundary_spec``;
-        it is not supported as a domain boundary.
+    def _validate_edges(self) -> Self:
+        """Check the pair of edges with the core boundary rules.
+
+        A thin check: building the ``BoundarySpec`` docstring during ``import tidy3d`` constructs
+        boundaries, so the construction path would load the moved schema at import.
         """
-        for loc, edge in (("plus", self.plus), ("minus", self.minus)):
-            if isinstance(edge, ModeABCBoundary) and edge._num_absorbed_modes > 1:
-                self._raise_validation_error_at_loc(
-                    "Multi-mode 'ModeABCBoundary' (more than one entry in 'mode_index') "
-                    "is only valid as 'InternalAbsorber.boundary_spec'; on a domain boundary, "
-                    "use a single integer or single-element tuple for 'mode_index'.",
-                    loc,
-                )
-        return self
+        from tidy3d.em.translate.components import _present
 
-    @model_validator(mode="after")
-    def bloch_on_both_sides(self) -> Self:
-        """Error if a Bloch boundary is applied on only one side."""
-        num_bloch = isinstance(self.plus, BlochBoundary) + isinstance(self.minus, BlochBoundary)
-        if num_bloch == 1:
-            loc = "plus" if isinstance(self.plus, BlochBoundary) else "minus"
-            self._raise_validation_error_at_loc(
-                "Bloch boundaries must be applied either on both sides or on neither side.", loc
-            )
-        return self
-
-    @model_validator(mode="after")
-    def periodic_with_pml(self) -> Self:
-        """Error if PBC is specified with a PML."""
-        num_pbc = isinstance(self.plus, Periodic) + isinstance(self.minus, Periodic)
-        num_pml = isinstance(
-            self.plus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary)
-        ) + isinstance(self.minus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary))
-        if num_pbc == 1 and num_pml == 1:
-            loc = "plus" if isinstance(self.plus, Periodic) else "minus"
-            self._raise_validation_error_at_loc(
-                "Cannot have both 'PML' and 'Periodic' along the same dimension.", loc
-            )
+        _present(self, validate_edges(self.plus, self.minus))
         return self
 
     @model_validator(mode="after")

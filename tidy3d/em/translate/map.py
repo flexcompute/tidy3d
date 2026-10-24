@@ -927,6 +927,90 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.boundary.placement.validation:validate",
         on_construction=True,
     ),
+    # boundary: boundary conditions
+    "tidy3d.components.boundary:BoundaryEdge": None,
+    "tidy3d.components.boundary:AbstractABCBoundary": None,
+    "tidy3d.components.boundary:ABCBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:ABCBoundary",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:BroadbandModeABCSpec": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:BroadbandModeABCSpec",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:ModeABCBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:ModeABCBoundary",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:InternalAbsorber": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:InternalAbsorber",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    # Built at import as the default fit parameters, so off the construction path; it has no rule.
+    "tidy3d.components.boundary:BroadbandModeABCFitterParam": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:BroadbandModeABCFitterParam",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    # Built at import by the BoundarySpec docstring and the default parameters, so these stay off
+    # the construction path; Boundary runs its rules from a thin check.
+    "tidy3d.components.boundary:Boundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:Boundary",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    "tidy3d.components.boundary:BoundarySpec": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:BoundarySpec",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    "tidy3d.components.boundary:PML": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:PML",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    "tidy3d.components.boundary:PECBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:PECBoundary",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    "tidy3d.components.boundary:PMLParams": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:PMLParams",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    "tidy3d.components.boundary:AbsorberParams": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:AbsorberParams",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+    ),
+    "tidy3d.components.boundary:Periodic": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:Periodic",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:PMCBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:PMCBoundary",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:BlochBoundary": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:BlochBoundary",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:AbsorberSpec": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:AbsorberSpec",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:StablePML": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:StablePML",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.boundary:Absorber": ComponentScope(
+        "flexcompute.core._migration.em.boundary.schema:Absorber",
+        "flexcompute.core._migration.em.boundary.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -1010,6 +1094,10 @@ COMPONENT_ERROR_TYPES = {
     # boundary: placement
     "em.boundary.placement.duplicate_structure": "tidy3d.exceptions:SetupError",
     "em.boundary.placement.duplicate_medium": "tidy3d.exceptions:SetupError",
+    # boundary: boundary conditions
+    "em.boundary.frequency_range_order": "tidy3d.exceptions:ValidationError",
+    "em.boundary.mode_abc_plane_not_planar": "tidy3d.exceptions:ValidationError",
+    "em.boundary.internal_absorber_permittivity": "tidy3d.exceptions:ValidationError",
 }
 
 
