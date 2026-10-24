@@ -296,6 +296,18 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.two_d:Medium2D",
         "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
+    # The custom media resolve through the mirror module: its package import runs the
+    # forward-reference rebuild for ``derived_from``, which the moved schema module does not.
+    "tidy3d.components.medium.custom.isotropic:CustomIsotropicMedium": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.isotropic:CustomIsotropicMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.custom.isotropic:CustomMedium": ComponentScope(
+        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.isotropic:CustomMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
@@ -872,6 +884,12 @@ COMPONENT_ERROR_TYPES = {
     "em.material.medium.modulation_spec_unsupported": "tidy3d.exceptions:ValidationError",
     "em.material.medium.nonfinite_frequency_range": "tidy3d.exceptions:ValidationError",
     "em.material.medium.nonpositive_frequency_range": "tidy3d.exceptions:ValidationError",
+    "em.material.medium.permittivity_component_single_frequency": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_isotropic_permittivity_real": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_isotropic_permittivity_ge_one": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_isotropic_conductivity_real": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_isotropic_conductivity_coordinates": "tidy3d.exceptions:SetupError",
+    "em.material.medium.custom_isotropic_passive_conductivity_nonnegative": "tidy3d.exceptions:ValidationError",
     # tcad
     "tcad.refinement_line_infinite_point": "tidy3d.exceptions:ValidationError",
     # invdes
