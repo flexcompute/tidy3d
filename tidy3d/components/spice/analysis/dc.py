@@ -239,60 +239,6 @@ class SteadyChargeDCAnalysis(Tidy3dBaseModel):
             )
         return data
 
-    @model_validator(mode="after")
-    def _check_prescribed_temperature_is_usable(self) -> SteadyChargeDCAnalysis:
-        """A prescribed lattice temperature must be positive, finite and ascending.
-
-        All three are about a field the solver can sample rather than about the physics, so
-        they share one registration. Values first: kT/q and exp(-Eg/2kT) divide
-        by T, so a stray zero would surface deep in the solver rather than here. Then the
-        coordinates: ``SpatialDataArray`` accepts any coordinate order, but the solver
-        locates each mesh node by bisection and clamps against the first and last entry of
-        each axis, so on a descending axis every node compares as "left of the data" and
-        takes that axis's first plane -- a plausible temperature that was never sampled.
-        Rejected rather than sorted silently, because reversed axes usually mean the values
-        are transposed with respect to the intended geometry too.
-        """
-        temperature = self.temperature
-        # A scalar on the isothermal subclass is already constrained by 'PositiveFloat'.
-        if temperature is None or not isinstance(temperature, SpatialDataArray):
-            return self
-
-        values = np.asarray(temperature.values)
-        if not np.all(np.isfinite(values)):
-            self._raise_validation_error_at_loc(
-                "'temperature' contains non-finite values (NaN or infinity). A prescribed "
-                "lattice temperature must be finite everywhere.",
-                "temperature",
-            )
-        if np.any(values <= 0):
-            hint = ""
-            if np.isclose(values.min(), 0.0):
-                # 'to_spatial_data_array' defaults to fill_value=0.0: right for a source
-                # term, 0 K for a temperature.
-                hint = (
-                    " If this field came from 'to_spatial_data_array', pass a physical "
-                    "'fill_value' (the ambient temperature): its default of 0.0 is meant "
-                    "for source terms, not temperatures."
-                )
-            self._raise_validation_error_at_loc(
-                f"'temperature' must be strictly positive everywhere, but its minimum is "
-                f"{values.min():.4g} K. A prescribed lattice temperature is an absolute "
-                f"temperature in Kelvin.{hint}",
-                "temperature",
-            )
-
-        for axis in "xyz":
-            coords = np.atleast_1d(np.asarray(temperature.coords[axis].values))
-            if coords.size > 1 and np.any(coords[1:] <= coords[:-1]):
-                self._raise_validation_error_at_loc(
-                    f"'temperature' has a '{axis}' coordinate that is not strictly "
-                    f"ascending. Sort the field along every axis before prescribing it, "
-                    f"e.g. 'T.sortby(['x', 'y', 'z'])'.",
-                    "temperature",
-                )
-        return self
-
 
 class IsothermalSteadyChargeDCAnalysis(SteadyChargeDCAnalysis):
     """

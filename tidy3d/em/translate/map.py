@@ -1022,6 +1022,32 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.solver.heat_charge.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.spice.analysis.ac:AbstractSSACAnalysis": None,
+    # Built at import as the default `tolerance_settings`, so off the construction path; no rule.
+    "tidy3d.components.spice.analysis.dc:ChargeToleranceSpec": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.dc:ChargeToleranceSpec",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+    ),
+    "tidy3d.components.spice.analysis.dc:SteadyChargeDCAnalysis": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.dc:SteadyChargeDCAnalysis",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.spice.analysis.dc:IsothermalSteadyChargeDCAnalysis": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.dc:IsothermalSteadyChargeDCAnalysis",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.spice.analysis.ac:SSACAnalysis": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.ac:SSACAnalysis",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.spice.analysis.ac:IsothermalSSACAnalysis": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.ac:IsothermalSSACAnalysis",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -1109,6 +1135,10 @@ COMPONENT_ERROR_TYPES = {
     "em.boundary.frequency_range_order": "tidy3d.exceptions:ValidationError",
     "em.boundary.mode_abc_plane_not_planar": "tidy3d.exceptions:ValidationError",
     "em.boundary.internal_absorber_permittivity": "tidy3d.exceptions:ValidationError",
+    # heat-charge
+    "solver.heat_charge.ssac_freqs_empty": "builtins:ValueError",
+    "solver.heat_charge.ssac_freqs_infinite": "builtins:ValueError",
+    "solver.heat_charge.ssac_freqs_negative": "builtins:ValueError",
 }
 
 

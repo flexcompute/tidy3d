@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import ClassVar
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.spice.analysis.dc import (
@@ -12,7 +12,6 @@ from tidy3d.components.spice.analysis.dc import (
 )
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import HERTZ, VOLT
-from tidy3d.constants import inf as td_inf
 
 
 class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
@@ -53,19 +52,6 @@ class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
         "with the CPU charge solver, leave this as ``None``.",
         json_schema_extra={"units": VOLT},
     )
-
-    @field_validator("freqs")
-    @classmethod
-    def validate_freqs(cls, val: ArrayFloat1D) -> ArrayFloat1D:
-        if len(val) == 0:
-            raise ValueError("'freqs' cannot be empty (size 0).")
-        else:
-            for freq in val:
-                if freq == td_inf:
-                    raise ValueError("'freqs' cannot contain infinite frequencies.")
-                elif freq < 0:
-                    raise ValueError("'freqs' cannot contain negative frequencies.")
-        return val
 
 
 class SSACAnalysis(SteadyChargeDCAnalysis, AbstractSSACAnalysis):
