@@ -1011,6 +1011,17 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.boundary.validation:validate",
         on_construction=True,
     ),
+    # heat-charge
+    "tidy3d.components.tcad.analysis.heat_simulation_type:UnsteadySpec": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.heat_simulation_type:UnsteadySpec",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.analysis.heat_simulation_type:UnsteadyHeatAnalysis": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.heat_simulation_type:UnsteadyHeatAnalysis",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {

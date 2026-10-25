@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import numpy as np
-from pydantic import Field, PositiveFloat, PositiveInt, model_validator
+from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -102,76 +101,3 @@ class UnsteadyHeatAnalysis(Tidy3dBaseModel):
         title="Unsteady specification",
         description="Time step and total time steps for the unsteady simulation.",
     )
-
-    @model_validator(mode="after")
-    def _check_initial_temperature_field_is_usable(self) -> UnsteadyHeatAnalysis:
-        """A spatial initial temperature must be non-empty, finite, positive and on ascending
-        finite axes.
-
-        Same contract as the prescribed lattice temperature of
-        :class:`.SteadyChargeDCAnalysis`: the solver samples the field by bisecting each
-        axis and clamping against its ends, so a descending axis would resolve every node to
-        one plane. Non-positive values are rejected here because an absolute temperature of
-        0 K would only surface as a nonsensical solve rather than an error.
-
-        The empty and non-finite-coordinate cases are checked first because the value checks
-        below pass vacuously on an empty array and every comparison against NaN is false.
-        """
-        temperature = self.initial_temperature
-        # A scalar is already constrained by 'FinitePositiveFloat'.
-        if not isinstance(temperature, SpatialDataArray):
-            return self
-
-        values = np.asarray(temperature.values)
-        if values.size == 0:
-            self._raise_validation_error_at_loc(
-                "'initial_temperature' is empty: it holds no values to interpolate from. A "
-                "'sel' or 'interp' that matched nothing along an axis is the usual cause.",
-                "initial_temperature",
-            )
-        if np.iscomplexobj(values):
-            self._raise_validation_error_at_loc(
-                "'initial_temperature' contains complex values. An initial temperature field "
-                "must be real.",
-                "initial_temperature",
-            )
-        if not np.all(np.isfinite(values)):
-            self._raise_validation_error_at_loc(
-                "'initial_temperature' contains non-finite values (NaN or infinity). An "
-                "initial temperature field must be finite everywhere.",
-                "initial_temperature",
-            )
-        if np.any(values <= 0):
-            hint = ""
-            if np.isclose(values.min(), 0.0):
-                # 'to_spatial_data_array' defaults to fill_value=0.0: right for a source
-                # term, 0 K for a temperature.
-                hint = (
-                    " If this field came from 'to_spatial_data_array', pass a physical "
-                    "'fill_value' (e.g. the background temperature): its default of 0.0 is "
-                    "meant for source terms, not temperatures."
-                )
-            self._raise_validation_error_at_loc(
-                f"'initial_temperature' must be strictly positive everywhere, but its minimum "
-                f"is {values.min():.4g} K. An initial temperature is an absolute temperature "
-                f"in Kelvin.{hint}",
-                "initial_temperature",
-            )
-
-        for axis in "xyz":
-            coords = np.atleast_1d(np.asarray(temperature.coords[axis].values))
-            if not np.all(np.isfinite(coords)):
-                self._raise_validation_error_at_loc(
-                    f"'initial_temperature' has a non-finite '{axis}' coordinate (NaN or "
-                    f"infinity). Mesh nodes are placed on each axis by comparing against its "
-                    f"coordinates, which no comparison against NaN can do.",
-                    "initial_temperature",
-                )
-            if coords.size > 1 and np.any(coords[1:] <= coords[:-1]):
-                self._raise_validation_error_at_loc(
-                    f"'initial_temperature' has a '{axis}' coordinate that is not strictly "
-                    f"ascending. Sort the field along every axis before using it, "
-                    f"e.g. 'T.sortby(['x', 'y', 'z'])'.",
-                    "initial_temperature",
-                )
-        return self
