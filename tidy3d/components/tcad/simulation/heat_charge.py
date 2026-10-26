@@ -17,7 +17,6 @@ from tidy3d.components.bc_placement import (
     StructureSimulationBoundary,
     StructureStructureInterface,
 )
-from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box, Transformed
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.geometry.primitives import Cylinder
@@ -164,8 +163,6 @@ ChargeMonitorTypes = (
 
 AnalysisSpecType = ElectricalAnalysisType | UnsteadyHeatAnalysis
 
-# define some limits for transient heat simulations
-TRANSIENT_HEAT_MAX_STEPS = 1000
 
 # Minimum tolerance for cylinder radii
 CYLINDER_RADIUS_TOL = 1e-6
@@ -743,18 +740,6 @@ class HeatChargeSimulation(AbstractSimulation):
             )
             self._check_conduction_sim_permittivity()
         self._call_with_validation_loc(("grid_spec",), self._estimate_charge_mesh_size)
-        if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
-            self._call_with_validation_loc(("monitors",), self._check_transient_heat_monitors)
-            self._call_with_validation_loc(
-                ("structures",), self._check_transient_heat_solid_properties
-            )
-            self._call_with_validation_loc(
-                ("analysis_spec",), self._check_transient_heat_time_steps
-            )
-            self._call_with_validation_loc(
-                ("analysis_spec",), self._check_transient_heat_initial_temperature
-            )
-            self._check_transient_heat_time_warning()
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -2801,120 +2786,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "submitted but if the maximum number of nodes is indeed exceeded "
                 "the pipeline will be stopped. If this happens the grid specification "
                 "may need to be modified."
-            )
-        return self
-
-    def _check_transient_heat_monitors(self) -> Self:
-        """Validate monitor settings for transient heat simulations."""
-        monitors = self.monitors
-        for mnt in monitors:
-            if isinstance(mnt, TemperatureMonitor):
-                if not mnt.unstructured:
-                    raise SetupError(
-                        f"Unsteady simulations require the temperature monitor '{mnt.name}' to be unstructured."
-                    )
-        return self
-
-    def _transient_heat_material_lists(
-        self,
-    ) -> tuple[list[float], list[float], list[float | SpatialDataArray]]:
-        """Collect thermal property values used by transient heat validators."""
-        capacities = []
-        densities = []
-        conductivities = []
-        structures = self.structures
-        for structure in structures:
-            heat_properties = None
-            if isinstance(structure.medium, MultiPhysicsMedium):
-                heat_properties = structure.medium.heat
-            # now check legacy Medium too
-            elif isinstance(structure.medium, Medium):
-                heat_properties = structure.medium.heat_spec
-
-            if isinstance(heat_properties, SolidMedium):
-                if heat_properties.capacity is not None:
-                    capacities.append(heat_properties._reference_capacity)
-                if heat_properties.density is not None:
-                    densities.append(heat_properties.density)
-                conductivity = heat_properties._reference_conductivity
-                # Scalar diffusion-time estimate: reduce a tensor to its mean principal value.
-                if isinstance(conductivity, AnisotropicConductivity):
-                    conductivity = (conductivity.xx + conductivity.yy + conductivity.zz) / 3
-                conductivities.append(conductivity)
-        return capacities, densities, conductivities
-
-    def _check_transient_heat_solid_properties(self) -> Self:
-        """Validate thermal material properties for transient heat simulations."""
-        capacities, densities, conductivities = self._transient_heat_material_lists()
-        if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
-            raise SetupError(
-                "Unsteady simulations require the SolidSpec to have 'capacity', 'density', and 'conductivity' "
-                "defined. Please check the definition of the SolidSpec in the Medium or MultiPhysicsMedium."
-            )
-        return self
-
-    def _check_transient_heat_time_steps(self) -> Self:
-        """Validate transient heat analysis time-step count."""
-        analysis_type = self.analysis_spec
-        if analysis_type.unsteady_spec.total_time_steps > TRANSIENT_HEAT_MAX_STEPS:
-            raise SetupError(
-                "Unsteady simulations require the number of time-steps to be less than "
-                f"{TRANSIENT_HEAT_MAX_STEPS} but {analysis_type.unsteady_spec.total_time_steps} were provided."
-            )
-        return self
-
-    def _check_transient_heat_initial_temperature(self) -> Self:
-        """Reject a planar initial temperature that a 3D mesh would silently extrude.
-
-        The solver reads an axis holding one coordinate as invariant and skips the
-        bounding-box test along it. That is what makes a 2D simulation work: its mesh is one
-        cell thick along the zero-size dimension, so a field sampled on the plane -- what a
-        planar monitor hands back -- has to reach the nodes off it. On any other axis the same
-        rule extrudes the plane through the whole domain instead of leaving the surrounding
-        nodes at 'background_temperature', which is not what 'initial_temperature' promises.
-        """
-        temperature = self.analysis_spec.initial_temperature
-        if not isinstance(temperature, SpatialDataArray):
-            return self
-
-        extruded = [
-            dim
-            for dim in range(3)
-            if temperature.coords["xyz"[dim]].size <= 1 and dim not in self.zero_dims
-        ]
-        if not extruded:
-            return self
-
-        axes = ", ".join(f"'{'xyz'[dim]}'" for dim in extruded)
-        self._raise_validation_error_at_loc(
-            f"'initial_temperature' holds a single coordinate along {axes}. An axis with one "
-            "coordinate is invariant, not zero-thickness: the field is extruded along it, so "
-            "nodes away from the plane start at the field's value rather than at "
-            "'background_temperature'. Only the zero-size dimension of a 2D simulation may be "
-            f"invariant; give {axes} at least two coordinates to bound the field there.",
-            "analysis_spec",
-        )
-        return self
-
-    def _check_transient_heat_time_warning(self) -> Self:
-        """Warn when transient heat simulation time is likely excessive."""
-        analysis_type = self.analysis_spec
-        capacities, densities, conductivities = self._transient_heat_material_lists()
-        if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
-            return self
-        domain_length = np.max([d for d in self.size if d != np.inf])
-        # Units are Tidy3D-native (um, J/(kg*K), kg/um^3, W/(um*K)); this is already seconds.
-        characteristic_time = (
-            domain_length**2 * np.mean(capacities) * np.mean(densities) / np.mean(conductivities)
-        )
-        if (
-            analysis_type.unsteady_spec.time_step * analysis_type.unsteady_spec.total_time_steps
-            > 100 * characteristic_time
-        ):
-            log.warning(
-                "The simulation time is larger than 100 times the estimated characteristic time of the system. "
-                "This may lead to unnecessary long simulation times. "
-                "Consider reducing the simulation time or the time step size."
             )
         return self
 
