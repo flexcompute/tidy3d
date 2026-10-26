@@ -868,7 +868,6 @@ class Simulation(AbstractYeeGridSimulation):
     # SimulationRuntime
     _simple_bc = _runtime_methods._simple_bc
     _validate_relax_courant_compatibility = _runtime_methods._validate_relax_courant_compatibility
-    _validate_low_freq_smoothing = _runtime_methods._validate_low_freq_smoothing
     _validate_size = _runtime_methods._validate_size
     _run_time = _runtime_methods._run_time
     _resolve_run_time = _runtime_methods._resolve_run_time
@@ -1125,7 +1124,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._source_homogeneous_isotropic()
         self._diffraction_monitor_order_grid_size()
         self._check_normalize_index()
-        self._validate_low_freq_smoothing()
         self._warn_source_monitor_normalization_grid()
         self._validate_scene()
         return self

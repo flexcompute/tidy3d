@@ -18,7 +18,6 @@ from tidy3d.components.medium import FullyAnisotropicMedium, LossyMetalMedium
 from tidy3d.components.monitor import (
     FreqMonitor,
     MediumMonitor,
-    ModeMonitor,
     PermittivityMonitor,
     PointCloudPermittivityMonitor,
 )
@@ -26,7 +25,6 @@ from tidy3d.components.run_time_spec import RunTimeSpec
 from tidy3d.components.source.field import TFSF, AbstractModeSource, FixedAngleSpec, PlaneWave
 from tidy3d.config import config
 from tidy3d.constants import C_0
-from tidy3d.em.translate.components import _present, validate
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -121,24 +119,6 @@ def _validate_relax_courant_compatibility(self: Any) -> Self:
             "relax_courant",
         )
 
-    return self
-
-
-def _validate_low_freq_smoothing(self: Any) -> Self:
-    """Validate the low frequency smoothing parameters."""
-    from flexcompute.core._migration.em.frequency_extrapolation.schema import (
-        LowFrequencySmoothingContext,
-    )
-
-    spec = self.low_freq_smoothing
-    if spec is None:
-        return self
-    context = LowFrequencySmoothingContext(
-        available_mode_monitor_names=frozenset(
-            monitor.name for monitor in self.monitors if isinstance(monitor, ModeMonitor)
-        )
-    )
-    _present(self, validate(spec, path=("low_freq_smoothing",), context=context))
     return self
 
 
