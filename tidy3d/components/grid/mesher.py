@@ -162,6 +162,7 @@ class GradedMesher(Mesher):
         self._insert_snapping_points(
             min_step=min_step,
             axis=axis,
+            domain_bounds=(interval_coords[0], interval_coords[-1]),
             interval_coords=interval_coords,
             max_dl_list=max_dl_list,
             snapping_points=snapping_points,
@@ -172,6 +173,7 @@ class GradedMesher(Mesher):
         self,
         min_step: float,
         axis: Axis,
+        domain_bounds: tuple[float, float],
         interval_coords: list[float],
         max_dl_list: list[float],
         snapping_points: list[CoordinateOptional],
@@ -183,7 +185,9 @@ class GradedMesher(Mesher):
         modified in place. Splitting an interval duplicates its structure membership, as in
         ``insert_bbox``.
         Interval boundaries closer than ``min_step`` to a snapping point are replaced by it
-        rather than kept alongside it.
+        rather than kept alongside it, except the simulation boundaries ``domain_bounds``.
+        These are given explicitly because ``interval_coords`` may still hold coordinates of
+        structures extending past the domain.
         """
 
         if len(snapping_points) < 1 or len(interval_coords) == 1:
@@ -194,7 +198,7 @@ class GradedMesher(Mesher):
             if new_coord is None:
                 continue
             # Skip if the point is outside the domain
-            if new_coord >= interval_coords[-1] or new_coord <= interval_coords[0]:
+            if new_coord >= domain_bounds[1] or new_coord <= domain_bounds[0]:
                 continue
             # search insertion location
             ind = bisect.bisect_left(interval_coords, new_coord)
@@ -208,7 +212,7 @@ class GradedMesher(Mesher):
             # give priority to the snapping_point and replace
             if d_1 < min_step:
                 # Don't replace if the boundary is the simulation boundary
-                if ind == 1:
+                if interval_coords[ind - 1] == domain_bounds[0]:
                     continue
                 interval_coords[ind - 1] = new_coord
                 continue
@@ -216,7 +220,7 @@ class GradedMesher(Mesher):
             # give priority to the snapping_point and replace
             if d_2 < min_step:
                 # Don't replace if the boundary is the simulation boundary
-                if ind == len(interval_coords) - 1:
+                if interval_coords[ind] == domain_bounds[1]:
                     continue
                 interval_coords[ind] = new_coord
                 continue
@@ -371,6 +375,8 @@ class GradedMesher(Mesher):
                         # built from.
                         min_step=dl_min if dl_min != 0.0 else np.amin(structure_steps) / 2,
                         axis=axis,
+                        # Not yet truncated, so the list ends can lie outside the domain
+                        domain_bounds=domain_bounds,
                         interval_coords=intervals["coords"],
                         max_dl_list=intervals["min_steps"],
                         snapping_points=snapping_points,
