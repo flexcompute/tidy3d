@@ -65,7 +65,6 @@ from tidy3d.components.tcad.generation_recombination import (
 from tidy3d.components.tcad.grid import (
     AutoUnstructuredGrid,
     DistanceUnstructuredGrid,
-    UniformUnstructuredGrid,
     UnstructuredGridType,
 )
 from tidy3d.components.tcad.mobility import (
@@ -723,23 +722,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
         self._call_with_validation_loc(("sources",), self._names_exist_sources)
         self._call_with_validation_loc(("structures",), self._check_medium_specs)
-        # A charge analysis solves its temperature inside the charge run and reports through
-        # its own monitors, so a 'TemperatureMonitor' is optional there.
-        if TCADAnalysisTypes.HEAT in simulation_types and not isinstance(
-            self.analysis_spec, ChargeTypes
-        ):
-            self._call_with_validation_loc(("monitors",), self._check_heat_sim)
-        if TCADAnalysisTypes.CONDUCTION in simulation_types:
-            self._call_with_validation_loc(("monitors",), self._check_conduction_sim_monitors)
-            self._call_with_validation_loc(
-                ("boundary_spec",), self._check_conduction_sim_voltage_arrays
-            )
-            self._call_with_validation_loc(("structures",), self._check_conduction_sim_structures)
-            self._call_with_validation_loc(
-                ("boundary_spec",), self._check_current_bc_not_on_conduction
-            )
-            self._check_conduction_sim_permittivity()
-        self._call_with_validation_loc(("grid_spec",), self._estimate_charge_mesh_size)
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -1839,25 +1821,6 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    def _check_current_bc_not_on_conduction(self) -> Self:
-        """Reject ``CurrentBC`` on a conduction simulation.
-
-        ``CurrentBC`` prescribes a terminal current and is supported only for
-        charge simulations on the accelerated solver. A conduction simulation
-        has no such contact; use ``VoltageBC`` instead.
-        """
-        current_bcs = self._current_bc_indices()
-        if not current_bcs:
-            return self
-        self._raise_validation_error_at_loc(
-            "'CurrentBC' prescribes a terminal current and is supported only for charge "
-            "simulations on the accelerated solver; for a conduction simulation use "
-            "'VoltageBC' instead.",
-            "boundary_spec",
-            current_bcs[0],
-        )
-        return self
-
     def _check_heterojunction_sr_placement(
         self,
         index: int,
@@ -2649,67 +2612,6 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
-    def _check_heat_sim(self) -> Self:
-        """Make sure that heat simulations have at least one monitor defined."""
-        if not any(isinstance(mnt, TemperatureMonitor) for mnt in self.monitors):
-            raise SetupError(
-                "Heat simulations require the definition of, at least, one "
-                "'TemperatureMonitor' but none have been defined."
-            )
-        return self
-
-    def _check_conduction_sim_monitors(self) -> Self:
-        """Validate conduction simulations have at least one potential monitor."""
-        if not any(isinstance(mnt, SteadyPotentialMonitor) for mnt in self.monitors):
-            if any(isinstance(s, HeatFromElectricSource) for s in self.sources):
-                log.warning(
-                    "A Conduction simulation has been defined but no "
-                    "SteadyPotentialMonitor has been defined. "
-                )
-            else:
-                raise SetupError(
-                    "Conduction simulations require the definition of, at least, one "
-                    "'SteadyPotentialMonitor' but none have been defined."
-                )
-        return self
-
-    def _check_conduction_sim_voltage_arrays(self) -> Self:
-        """Validate conduction simulations don't use voltage arrays."""
-        for bc in self.boundary_spec:
-            if isinstance(bc.condition, VoltageBC):
-                if isinstance(bc.condition.source, DCVoltageSource):
-                    if len(bc.condition.source.voltage) > 1:
-                        raise SetupError(
-                            "A Conduction simulation has been defined but a VoltageBC with an array of voltages "
-                            "has been defined. This is not supported in Conduction simulations."
-                        )
-        return self
-
-    def _check_conduction_sim_structures(self) -> Self:
-        """Validate conduction simulations include conductive multiphysics media."""
-        if all(isinstance(s.medium, Medium) for s in self.structures):
-            raise SetupError(
-                "Conduction simulations must be defined using 'MultiPhysicsMedium' but none have been defined."
-            )
-        if not any(isinstance(s.medium.charge, ChargeConductorMedium) for s in self.structures):
-            raise SetupError(
-                "Conduction simulations require at least one structure with a 'ChargeConductorMedium' "
-                "but none have been defined."
-            )
-
-        return self
-
-    def _check_conduction_sim_permittivity(self) -> Self:
-        """Reject an anisotropic permittivity in conduction simulations, which take only a
-        scalar permittivity."""
-        for loc in self._anisotropic_permittivity_locs():
-            self._raise_validation_error_at_loc(
-                "An anisotropic permittivity ('AnisotropicPermittivity') is supported only in "
-                "charge simulations. Provide a scalar 'permittivity' for conduction simulations.",
-                *loc,
-            )
-        return self
-
     def _check_symmetry_permittivity(self) -> Self:
         """Reject reflection symmetry across a plane that an anisotropic permittivity is not
         mirror-symmetric across."""
@@ -2720,72 +2622,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "to the other axes, so the medium is not mirror-symmetric across that plane. Set "
                 f"'symmetry' to 0 along {name}, or align a principal axis with {name}.",
                 *loc,
-            )
-        return self
-
-    def _estimate_charge_mesh_size(self) -> Self:
-        """Make an estimate of the mesh size and raise a warning if too big.
-        NOTE: this is a very rough estimate. The back-end will actually stop
-        execution based on actual node-count."""
-
-        if TCADAnalysisTypes.CHARGE not in self._get_simulation_types():
-            return self
-
-        # let's raise a warning if the estimate is larger than 2M nodes
-        max_nodes = 2e6
-        nodes_estimate = 0
-
-        grid_spec = self.grid_spec
-
-        non_refined_structures = grid_spec.non_refined_structures
-
-        sim_center = self.center
-        sim_size = self.size
-
-        if isinstance(grid_spec, UniformUnstructuredGrid):
-            dl_min = grid_spec.dl
-            dl_max = dl_min
-        elif isinstance(grid_spec, DistanceUnstructuredGrid):
-            dl_min = grid_spec.dl_interface
-            dl_max = grid_spec.dl_bulk
-        elif isinstance(grid_spec, AutoUnstructuredGrid):
-            dl_min = grid_spec._automatic_min_mesh_size
-            dl_max = grid_spec.dl_bulk
-        else:
-            raise TypeError(
-                f"Unsupported grid_spec type '{type(grid_spec).__name__}'. "
-                "Expected UniformUnstructuredGrid, DistanceUnstructuredGrid, or "
-                "AutoUnstructuredGrid."
-            )
-
-        for struct in self.structures:
-            name = struct.name
-            bounds = np.array(struct.geometry.bounds)
-            for dim in range(3):
-                bounds[0, dim] = max(bounds[0, dim], sim_center[dim] - sim_size[dim] / 2)
-                bounds[1, dim] = min(bounds[1, dim], sim_center[dim] + sim_size[dim] / 2)
-
-            dl = dl_min
-            if name in non_refined_structures:
-                dl = dl_max
-            nodes_structure = 1
-            for coord_min, coord_max in zip(bounds[0], bounds[1]):
-                if (
-                    (coord_min != coord_max)
-                    and (np.abs(coord_min) != np.inf)
-                    and (np.abs(coord_max) != np.inf)
-                ):
-                    nodes_structure = nodes_structure * (coord_max - coord_min) / dl
-
-            nodes_estimate = nodes_estimate + nodes_structure
-
-        if nodes_estimate > max_nodes:
-            log.warning(
-                "It is estimated that the mesh will be larger than the currently "
-                "supported mesh size for Charge simulations. The simulation may be "
-                "submitted but if the maximum number of nodes is indeed exceeded "
-                "the pipeline will be stopped. If this happens the grid specification "
-                "may need to be modified."
             )
         return self
 
@@ -3748,7 +3584,8 @@ class HeatChargeSimulation(AbstractSimulation):
     def _get_simulation_types(self) -> list[TCADAnalysisTypes]:
         """
         Checks through BCs and sources and returns the
-        types of simulations.
+        types of simulations. The construction path rejects inconsistent
+        inputs, so this only reads them.
         """
         simulation_types = []
 
@@ -3760,30 +3597,16 @@ class HeatChargeSimulation(AbstractSimulation):
             return [TCADAnalysisTypes.HEAT]
 
         heat_source_present = any(isinstance(s, HeatSourceTypes) for s in self.sources)
-
         heat_BCs_present = any(isinstance(bc.condition, HeatBCTypes) for bc in self.boundary_spec)
-
-        if heat_source_present and not heat_BCs_present:
-            raise SetupError("Heat sources defined but no heat BCs present.")
         if heat_BCs_present or heat_source_present:
             simulation_types.append(TCADAnalysisTypes.HEAT)
 
-        # check for conduction simulation
         electric_spec_present = any(
             structure.medium.charge is not None for structure in self.structures
         )
-
         electric_BCs_present = any(
             isinstance(bc.condition, ElectricBCTypes) for bc in self.boundary_spec
         )
-
-        if electric_BCs_present and not electric_spec_present:
-            raise SetupError(
-                "Electric BC were specified but no structure in the simulation has "
-                "a defined '.medium.charge'. Structures with "
-                "'.medium.charge=None' are treated as insulators, thus, "
-                "the solution domain is empty."
-            )
         if electric_BCs_present and electric_spec_present:
             simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
