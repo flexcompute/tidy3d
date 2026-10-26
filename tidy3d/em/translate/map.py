@@ -375,6 +375,26 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
+    # ``import tidy3d`` builds these, so they stay off the construction path. Their thin
+    # client checks call the core rules.
+    "tidy3d.components.medium.isotropic:Medium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.isotropic:Medium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    "tidy3d.components.medium.pole_residue:PoleResidue": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.pole_residue:PoleResidue",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+    ),
+    "tidy3d.components.medium.perturbation:PerturbationMedium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.perturbation:PerturbationMedium",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.perturbation:PerturbationPoleResidue": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.perturbation:PerturbationPoleResidue",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.time_modulation:SpaceModulation": ComponentScope(
         "flexcompute.core._migration.em.material.time_modulation.schema.time_modulation:SpaceModulation",
         "flexcompute.core._migration.em.material.time_modulation.validation:validate",
@@ -1101,6 +1121,8 @@ COMPONENT_ERROR_TYPES = {
     "em.material.medium.nonpositive_frequency_range": "tidy3d.exceptions:ValidationError",
     "em.material.medium.anisotropic_surface_lossy_metal_component": "tidy3d.exceptions:ValidationError",
     "em.material.medium.custom_anisotropic_component_not_isotropic": "tidy3d.exceptions:SetupError",
+    "em.material.medium.perturbation_shape_mismatch": "tidy3d.exceptions:SetupError",
+    "em.material.medium.perturbation_complex": "tidy3d.exceptions:SetupError",
     "em.material.medium.permittivity_component_single_frequency": "tidy3d.exceptions:SetupError",
     "em.material.medium.custom_isotropic_permittivity_real": "tidy3d.exceptions:SetupError",
     "em.material.medium.custom_isotropic_permittivity_ge_one": "tidy3d.exceptions:SetupError",

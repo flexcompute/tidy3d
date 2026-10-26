@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import (
     Field,
-    model_validator,
 )
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -26,7 +25,6 @@ from tidy3d.constants import (
     PERMITTIVITY,
     RADPERSEC,
 )
-from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
@@ -171,34 +169,6 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         "conductivity",
         allowed_complex=False,
     )
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._check_overdefining()
-        return self
-
-    def _check_overdefining(self) -> Self:
-        """Check that perturbation model is provided either directly or through
-        ``perturbation_spec``, but not both.
-        """
-
-        perm_p = self.permittivity_perturbation is not None
-        cond_p = self.conductivity_perturbation is not None
-        p_spec = self.perturbation_spec is not None
-
-        if p_spec and (perm_p or cond_p):
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Must provide perturbation model either as 'perturbation_spec' or as "
-                    "'permittivity_perturbation' and 'conductivity_perturbation', "
-                    "but not in both ways simultaneously."
-                ),
-                "perturbation_spec",
-            )
-
-        return self
 
     def perturbed_copy(
         self,
@@ -345,34 +315,6 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         "poles_perturbation",
         "poles",
     )
-
-    @model_validator(mode="after")
-    def _run_after_validators(self) -> Self:
-        """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
-        self._check_overdefining()
-        return self
-
-    def _check_overdefining(self) -> Self:
-        """Check that perturbation model is provided either directly or through
-        ``perturbation_spec``, but not both.
-        """
-
-        eps_i_p = self.eps_inf_perturbation is not None
-        poles_p = self.poles_perturbation is not None
-        p_spec = self.perturbation_spec is not None
-
-        if p_spec and (eps_i_p or poles_p):
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Must provide perturbation model either as 'perturbation_spec' or as "
-                    "'eps_inf_perturbation' and 'poles_perturbation', "
-                    "but not in both ways simultaneously."
-                ),
-                "perturbation_spec",
-            )
-
-        return self
 
     def perturbed_copy(
         self,
