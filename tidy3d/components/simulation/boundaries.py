@@ -301,22 +301,6 @@ def _structures_not_at_edges(self: Any) -> Self:
     return self
 
 
-def _bloch_with_symmetry(self: Any) -> Self:
-    """Error if a Bloch boundary is applied with symmetry"""
-    val = self.boundary_spec
-    boundaries = val.to_list
-    symmetry = self.symmetry
-    for dim, boundary in enumerate(boundaries):
-        num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
-        if num_bloch > 0 and symmetry[dim] != 0:
-            self._raise_validation_error_at_loc(
-                f"Bloch boundaries cannot be used with a symmetry along dimension {dim}.",
-                "boundary_spec",
-                "xyz"[dim],
-            )
-    return self
-
-
 def _bloch_boundaries_diff_mnt(self: Any) -> Self:
     """Error if there are diffraction monitors incompatible with boundary conditions."""
 

@@ -849,9 +849,6 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_microwave_mode_specs = _rf_integration_methods._validate_microwave_mode_specs
 
     # SimulationModeIntegration
-    _validate_no_bloch_with_modal_decomposition = (
-        _mode_integration_methods._validate_no_bloch_with_modal_decomposition
-    )
     _validate_internal_absorber_placement = (
         _mode_integration_methods._validate_internal_absorber_placement
     )
@@ -955,7 +952,6 @@ class Simulation(AbstractYeeGridSimulation):
         _tfsf_methods._validate_fixed_angle_tfsf_source_time_localization
     )
     _warn_fixed_angle_tfsf_long_run_time = _tfsf_methods._warn_fixed_angle_tfsf_long_run_time
-    _tfsf_with_symmetry = _tfsf_methods._tfsf_with_symmetry
     _get_periodic_fixed_angle_sources = _tfsf_methods._get_periodic_fixed_angle_sources
     _check_fixed_angle_components = _tfsf_methods._check_fixed_angle_components
     _validate_dipole_emission_monitor_sources = (
@@ -999,7 +995,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationBoundaries
     _structures_not_at_edges = _boundaries_methods._structures_not_at_edges
-    _bloch_with_symmetry = _boundaries_methods._bloch_with_symmetry
     _bloch_boundaries_diff_mnt = _boundaries_methods._bloch_boundaries_diff_mnt
     _validate_frequency_mode_abc = _boundaries_methods._validate_frequency_mode_abc
     _validate_absorber_in_zero_dims = _boundaries_methods._validate_absorber_in_zero_dims
@@ -1070,7 +1065,6 @@ class Simulation(AbstractYeeGridSimulation):
         call_wrapped_validator(validate_mode_objects_symmetry, self, "sources")
         call_wrapped_validator(validate_mode_objects_symmetry, self, "monitors")
         self._structures_not_at_edges()
-        self._bloch_with_symmetry()
         self._plane_wave_boundaries()
         self._bloch_boundaries_diff_mnt()
 
@@ -1081,7 +1075,6 @@ class Simulation(AbstractYeeGridSimulation):
         # DipoleEmissionMonitor.
         self._validate_dipole_emission_monitor_sources()
         self._tfsf_boundaries()
-        self._tfsf_with_symmetry()
         self._warn_fixed_angle_tfsf_normal_incidence()
         self._validate_fixed_angle_tfsf_angle_theta()
         self._validate_fixed_angle_tfsf_source_time_type()
@@ -1098,7 +1091,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_frequency_mode_abc()
         self._validate_relax_courant_compatibility()
         self._validate_absorber_in_zero_dims()
-        self._validate_no_bloch_with_modal_decomposition()
         self._validate_internal_absorber_placement()
 
         # Validate monitor frequency, geometry, medium, and surface constraints.

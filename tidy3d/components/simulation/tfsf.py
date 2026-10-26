@@ -454,16 +454,6 @@ def _warn_fixed_angle_tfsf_long_run_time(self: Any) -> Self:
     return self
 
 
-def _tfsf_with_symmetry(self: Any) -> Self:
-    """Error if a TFSF source is applied with symmetry"""
-    for source_ind, source in enumerate(self.sources):
-        if isinstance(source, TFSF) and not all(sym == 0 for sym in self.symmetry):
-            self._raise_validation_error_at_loc(
-                "TFSF sources cannot be used with symmetries.", "sources", source_ind
-            )
-    return self
-
-
 @staticmethod
 def _get_periodic_fixed_angle_sources(
     sources: tuple[SourceType, ...],

@@ -221,29 +221,6 @@ def _validate_finalized(self: Any) -> None:
         ) from e
 
 
-def _validate_no_bloch_with_modal_decomposition(self: Any) -> Self:
-    """Reject Bloch boundaries combined with ``ModeTimeMonitor`` or multi-mode
-    ``ModeABCBoundary``. ``Periodic`` boundaries and single-mode
-    ``ModeABCBoundary`` remain supported.
-    """
-    if not any(isinstance(boundary[0], BlochBoundary) for boundary in self.boundary_spec.to_list):
-        return self
-    message = (
-        "Bloch boundaries are not supported in combination with "
-        "'ModeTimeMonitor' or multi-mode 'ModeABCBoundary'. "
-        "Use 'Periodic' boundaries instead, or remove the "
-        "modal-decomposition feature."
-    )
-    for idx, monitor in enumerate(self.monitors):
-        if isinstance(monitor, ModeTimeMonitor):
-            self._raise_validation_error_at_loc(message, "monitors", idx)
-    for idx, absorber in enumerate(self.internal_absorbers or []):
-        boundary_spec = absorber.boundary_spec
-        if isinstance(boundary_spec, ModeABCBoundary) and boundary_spec._num_absorbed_modes > 1:
-            self._raise_validation_error_at_loc(message, "internal_absorbers", idx)
-    return self
-
-
 def _validate_internal_absorber_placement(self: Any) -> Self:
     """Require an ``InternalAbsorber`` to sit strictly inside the domain along its normal.
 
