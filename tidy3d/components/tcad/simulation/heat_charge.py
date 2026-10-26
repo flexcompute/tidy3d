@@ -755,10 +755,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 ("analysis_spec",), self._check_transient_heat_initial_temperature
             )
             self._check_transient_heat_time_warning()
-        self._call_with_validation_loc(("structures",), self._check_non_isothermal_is_possible)
-        self._call_with_validation_loc(
-            ("analysis_spec",), self._validate_prescribed_temperature_requirements
-        )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -2668,69 +2664,6 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
-    def _validate_prescribed_temperature_requirements(self) -> Self:
-        """Checks for a charge analysis running on a prescribed lattice temperature field."""
-        if not self._temperature_prescribed:
-            return self
-
-        if self.use_accelerated_solver is False:
-            self._raise_validation_error_at_loc(
-                "A prescribed lattice temperature ('SteadyChargeDCAnalysis.temperature') is "
-                "only supported by the accelerated charge solver, but "
-                "'use_accelerated_solver=False' was set. Use the accelerated solver (the "
-                "default), or use 'IsothermalSteadyChargeDCAnalysis' for a uniform "
-                "temperature.",
-                "use_accelerated_solver",
-                log_error=False,
-            )
-
-        # Via the shared iterator so a semiconductor background 'medium' counts too: it
-        # fills the whole domain, so a field sized to the structures falls short.
-        semiconductor_bounds = []
-        for loc, _charge in self._iter_semiconductor_charge_media():
-            if loc == ("medium",):
-                semiconductor_bounds.append(self.bounds)
-            else:
-                semiconductor_bounds.append(self.structures[loc[1]].geometry.bounds)
-        if not semiconductor_bounds:
-            return self
-
-        # Clip to the simulation domain: an unbounded semiconductor structure is only ever
-        # meshed where it overlaps the domain, so that is all the field has to cover.
-        sim_rmin, sim_rmax = self.bounds
-        device_min = [
-            max(min(b[0][d] for b in semiconductor_bounds), sim_rmin[d]) for d in range(3)
-        ]
-        device_max = [
-            min(max(b[1][d] for b in semiconductor_bounds), sim_rmax[d]) for d in range(3)
-        ]
-
-        temperature = self.analysis_spec.temperature
-        uncovered = []
-        for dim_index, dim in enumerate("xyz"):
-            coords = np.asarray(temperature.coords[dim])
-            # Singleton axis reads as "invariant along it" to the sampler, so it covers.
-            if coords.size <= 1:
-                continue
-            if device_min[dim_index] < coords.min() or device_max[dim_index] > coords.max():
-                uncovered.append(
-                    f"{dim}: field spans [{coords.min():.4g}, {coords.max():.4g}] but "
-                    f"semiconductors span [{device_min[dim_index]:.4g}, "
-                    f"{device_max[dim_index]:.4g}]"
-                )
-
-        if uncovered:
-            log.warning(
-                "The prescribed lattice temperature "
-                "('SteadyChargeDCAnalysis.temperature') does not cover the whole "
-                "semiconductor region, so outside its bounding box the temperature is "
-                "clamped to the nearest value on the field's boundary rather than "
-                "interpolated. Extend the field to cover the device if that is not "
-                "intended. Shortfall by axis -- " + "; ".join(uncovered) + "."
-            )
-
-        return self
-
     def _check_heat_sim(self) -> Self:
         """Make sure that heat simulations have at least one monitor defined."""
         if not any(isinstance(mnt, TemperatureMonitor) for mnt in self.monitors):
@@ -2983,81 +2916,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "This may lead to unnecessary long simulation times. "
                 "Consider reducing the simulation time or the time step size."
             )
-        return self
-
-    def _check_non_isothermal_is_possible(self) -> Self:
-        """Make sure that when a non-isothermal case is defined the simulation
-        has both electrical and thermal properties.
-
-        Both halves scan the background 'medium' as well as every structure, since the
-        mesher composes them into the same domain: asking the two questions over
-        different sets of media is what let a background semiconductor satisfy the
-        charge-medium requirement and then be reported here as absent.
-
-        Gated on ``_thermal_solver_active``: a prescribed temperature is non-isothermal but
-        solves no heat equation, so demanding a thermal conductivity would reject a
-        runnable setup.
-
-        A semiconductor without a solid heat medium only warns; no solid heat medium at all is
-        an error. Conductors take no part in the heat solve, so when they alone carry a heat
-        medium nothing is solved and the run is isothermal: that also only warns, once."""
-
-        if not self._thermal_solver_active:
-            return self
-
-        semiconductor_locs = {loc for loc, _ in self._iter_semiconductor_charge_media()}
-        has_heat = False
-        heat_outside_conductors = False
-        locs_without_heat = []
-        for loc, medium in self._iter_media_with_locs():
-            heat_spec = (
-                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
-            )
-            if isinstance(heat_spec, SolidMedium):
-                has_heat = True
-                if not isinstance(self._charge_spec(medium), ChargeConductorMedium):
-                    heat_outside_conductors = True
-            elif loc in semiconductor_locs:
-                locs_without_heat.append(loc)
-
-        # Anchored to the semiconductor itself: the caller's fallback loc is ('structures',),
-        # which points at nothing when it is the background medium.
-        if semiconductor_locs and not has_heat:
-            self._raise_validation_error_at_loc(
-                "The current simulation is defined as non-isothermal but no solid "
-                "materials with heat properties have been defined. ",
-                *locs_without_heat[0],
-            )
-        if semiconductor_locs and not heat_outside_conductors:
-            log.warning(
-                "Only conductors carry a solid heat medium, and conductors take no part in the "
-                "heat solve of a non-isothermal charge simulation, so it solves no temperature: "
-                "the semiconductors are held at the ambient temperature and their heat is "
-                "dropped. Use a 'MultiPhysicsMedium' with 'heat=SolidMedium(...)' for the "
-                "semiconductors. Future versions of Tidy3D may reject this setup."
-            )
-            return self
-        for loc in locs_without_heat:
-            log.warning(
-                f"{self._medium_label(loc)} is a semiconductor without a solid heat medium. "
-                "A non-isothermal charge simulation generates its Joule and recombination "
-                "heat in the semiconductors and solves the temperature only in solid media, "
-                "so this semiconductor is held at the ambient temperature and its heat is "
-                "dropped. Use a 'MultiPhysicsMedium' with 'heat=SolidMedium(...)' for it. "
-                "Future versions of Tidy3D may reject this setup."
-            )
-
-        if not semiconductor_locs and has_heat:
-            raise SetupError(
-                "The current simulation is defined as non-isothermal but no "
-                "semiconductor materials have been defined. "
-            )
-        if not semiconductor_locs:
-            raise SetupError(
-                "The current simulation is defined as non-isothermal but no "
-                "solid or semiconductor materials have been defined. "
-            )
-
         return self
 
     def _check_self_heating_has_heat_sink(self) -> Self:
