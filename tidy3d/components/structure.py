@@ -43,6 +43,7 @@ from .data.data_array import PointDataArray, ScalarFieldDataArray
 from .geometry.base import Box, Geometry
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .material.multi_physics import MultiPhysicsMedium
+from .material.tcad.charge import AbstractChargeMedium
 from .material.types import StructureMediumType
 from .medium import (
     AbstractCustomMedium,
@@ -455,9 +456,10 @@ class Structure(AbstractStructure):
             return self.priority
 
         if priority_mode == "conductor":
-            # classify the optical medium, or a wrapped conductor sorts as a plain dielectric
-            medium = _require_public_optical_medium(self._required_optical_medium)
-            if medium.is_pec:
+            # classify the optical medium, or a wrapped conductor sorts as a plain dielectric;
+            # a medium without one, e.g. a charge medium, is not a conductor here
+            medium = self._public_optical_medium
+            if medium is not None and medium.is_pec:
                 return 100
             if isinstance(medium, LossyMetalMedium):
                 return 90
@@ -465,8 +467,7 @@ class Structure(AbstractStructure):
 
     @property
     def viz_spec(self) -> VisualizationSpec | None:
-        medium = self._public_optical_medium
-        return None if medium is None else medium.viz_spec
+        return self._get_viz_spec(self.medium)
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
@@ -500,6 +501,16 @@ class Structure(AbstractStructure):
         """Return the public optical model used for local client behavior."""
         return _get_public_optical_medium(medium)
 
+    @staticmethod
+    def _get_viz_spec(medium: StructureMediumType) -> VisualizationSpec | None:
+        """Return the ``viz_spec`` of the optical medium, else of the charge medium."""
+        optical = _get_public_optical_medium(medium)
+        if optical is not None:
+            return optical.viz_spec
+        # a charge medium carries its own 'viz_spec' without being an optical medium
+        charge = medium.charge if isinstance(medium, MultiPhysicsMedium) else medium
+        return charge.viz_spec if isinstance(charge, AbstractChargeMedium) else None
+
     @property
     def _optical_medium(self) -> StructureMediumType | None:
         """Optical medium of the structure, or ``None`` if the medium defines no optical portion."""
@@ -509,11 +520,11 @@ class Structure(AbstractStructure):
     def _required_optical_medium(self) -> StructureMediumType:
         """Optical medium of the structure, raising if it defines no optical portion."""
         medium = self._optical_medium
-        if medium is None:
+        if not isinstance(medium, AbstractMedium | ProtectedOpticalMediumRef):
             name = f" '{self.name}'" if self.name else ""
             raise SetupError(
-                f"Structure{name} has a 'MultiPhysicsMedium' without an 'optical' medium, so its "
-                "optical properties are undefined. Set 'MultiPhysicsMedium.optical'."
+                f"Structure{name} has no optical medium, so its optical properties are undefined. "
+                "Use an optical medium, or a 'MultiPhysicsMedium' with 'optical' set."
             )
         return medium
 

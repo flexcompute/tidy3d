@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
 
 from tidy3d._runtime import always_validate
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.material.tensor import AbstractPrincipalAxesTensor
-from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
 from tidy3d.components.tcad.generation_recombination import DistributedGeneration
 from tidy3d.components.tcad.ionization import DopantIonizationModelType, MultiSiteIonization
@@ -26,11 +26,14 @@ from tidy3d.components.tcad.types import (
 )
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
+from tidy3d.components.viz import VisualizationSpec
 from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY, fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
+    from pydantic import ValidationInfo
+
     from tidy3d.compat import Self
     from tidy3d.components.types import PermittivityComponent
 
@@ -138,8 +141,27 @@ class AnisotropicPermittivity(AbstractPrincipalAxesTensor):
         )
 
 
-class AbstractChargeMedium(AbstractMedium):
+# Fields that charge media do not have but files may carry, with the values that mean unset.
+_REMOVED_OPTICAL_FIELDS = {
+    "frequency_range": None,
+    "allow_gain": False,
+    "nonlinear_spec": None,
+    "modulation_spec": None,
+}
+
+
+class AbstractChargeMedium(Tidy3dBaseModel):
     """Abstract charge medium with a frequency-independent permittivity, scalar or tensor."""
+
+    name: str | None = Field(
+        default=None, title="Name", description="Optional unique name for medium."
+    )
+
+    viz_spec: VisualizationSpec | None = Field(
+        default=None,
+        title="Visualization Specification",
+        description="Plotting specification for visualizing medium.",
+    )
 
     permittivity: Annotated[float, Field(ge=1.0)] | AnisotropicPermittivity = Field(
         default=1.0,
@@ -157,12 +179,46 @@ class AbstractChargeMedium(AbstractMedium):
         """
         return self
 
-    def eps_model(self, frequency: float) -> complex:
-        """Relative permittivity; the mean of the principal values for an anisotropic one."""
-        eps = self.permittivity
-        if isinstance(eps, AnisotropicPermittivity):
-            return (eps.xx + eps.yy + eps.zz) / 3
-        return eps
+    @property
+    def electrical(self) -> None:
+        return None
+
+    @property
+    def heat(self) -> None:
+        return None
+
+    @property
+    def heat_spec(self) -> None:
+        return None
+
+    @property
+    def optical(self) -> None:
+        return None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_removed_optical_fields(cls, data: Any, info: ValidationInfo) -> Any:
+        """Drop the optical-medium fields that loaded files may carry.
+
+        A set ``heat_spec`` is rejected on any construction, to point at ``MultiPhysicsMedium``.
+        The other fields are dropped only on file loads (the ``from_file`` context); in-memory
+        construction still raises via ``extra="forbid"``. An empty mapping counts as unset.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("heat_spec"):
+            raise ValueError(
+                f"'{cls.__name__}' does not accept 'heat_spec'. To combine heat and charge "
+                "properties, use 'MultiPhysicsMedium(heat=..., charge=...)'."
+            )
+        if not (info.context or {}).get("from_file"):
+            return data
+        data = {key: val for key, val in data.items() if key != "heat_spec"}
+        for name, default in _REMOVED_OPTICAL_FIELDS.items():
+            value = data.pop(name, default)
+            if value != default and value != {}:
+                log.warning(f"'{cls.__name__}' has no field '{name}'; the loaded value is ignored.")
+        return data
 
     def _static_eps_plot(self, eps_component: PermittivityComponent | None = None) -> float:
         """Relative permittivity for plotting, independent of frequency.
@@ -184,9 +240,6 @@ class AbstractChargeMedium(AbstractMedium):
             return float(np.trace(matrix) / 3)
         row, col = ("xyz".index(axis) for axis in eps_component)
         return float(matrix[row, col])
-
-    def n_cfl(self) -> None:
-        return None
 
 
 class ChargeInsulatorMedium(AbstractChargeMedium):
@@ -657,7 +710,6 @@ class SemiconductorMedium(AbstractChargeMedium):
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
-        super()._run_after_validators()
         self._check_alloy_mole_fractions_match()
         self._check_ionization_energies_below_band_gap()
         return self

@@ -19,10 +19,12 @@ from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.subpixel_spec import SubpixelSpec
+from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.structure import Structure
 
 
 from . import boundaries as _boundaries_methods
@@ -227,6 +229,21 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     ) -> Literal["autograd_fwd", "autograd_bwd", "tidy3d"]:
         """Enforce the simulation_type is 'tidy3d' if passed as None for bkwrds compatibility."""
         return "tidy3d" if val is None else val
+
+    @field_validator("structures")
+    @classmethod
+    def _validate_structure_media_are_optical(
+        cls, val: tuple[Structure, ...]
+    ) -> tuple[Structure, ...]:
+        """Check that each structure medium is optical or wraps an optical medium."""
+        for i, structure in enumerate(val):
+            if structure._public_optical_medium is None:
+                raise ValidationError(
+                    f"The medium of 'structures[{i}]' must be an optical medium or a "
+                    "'MultiPhysicsMedium' with optical properties, not "
+                    f"'{type(structure.medium).__name__}'."
+                )
+        return val
 
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:

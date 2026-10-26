@@ -72,7 +72,6 @@ from .grid.grid import Coords
 from .material.multi_physics import MultiPhysicsMedium
 from .medium import (
     AbstractCustomMedium,
-    AbstractMedium,
     AbstractPerturbationMedium,
     Medium,
     Medium2D,
@@ -125,16 +124,9 @@ def _heat_conductivity_scalar(conductivity: float | AnisotropicConductivity) -> 
     return conductivity
 
 
-def _optical_plot_medium(medium: StructureMediumType) -> Any:
-    """Optical part of a medium for plot styling, or ``None`` if it has none."""
-    optical = Structure._get_public_optical_medium(medium)
-    # charge media still subclass the optical medium, but have no optical properties
-    return None if isinstance(optical, AbstractChargeMedium) else optical
-
-
 def _is_pec_plot(medium: StructureMediumType) -> bool:
     """Whether a medium is drawn as a PEC."""
-    optical = _optical_plot_medium(medium)
+    optical = Structure._get_public_optical_medium(medium)
     return optical is not None and optical.is_pec
 
 
@@ -147,7 +139,7 @@ def _eps_plot_value(
 
     ``None`` for a medium with neither, e.g. a heat medium.
     """
-    optical = _optical_plot_medium(medium)
+    optical = Structure._get_public_optical_medium(medium)
     if optical is not None:
         return optical._eps_plot(freq, eps_component)
     charge = medium.charge if isinstance(medium, MultiPhysicsMedium) else medium
@@ -664,7 +656,7 @@ class Scene(Tidy3dBaseModel):
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
 
-        optical = _optical_plot_medium(medium)
+        optical = Structure._get_public_optical_medium(medium)
         is_pec = optical is not None and optical.is_pec
         is_pmc = optical is not None and optical.is_pmc
         is_time_modulated = optical is not None and optical.is_time_modulated
@@ -694,16 +686,16 @@ class Scene(Tidy3dBaseModel):
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
             plot_params = plot_params.copy(update={"facecolor": facecolor})
-            if hasattr(medium, "viz_spec"):
-                if medium.viz_spec is not None:
-                    plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+            viz_spec = Structure._get_viz_spec(medium)
+            if viz_spec is not None:
+                plot_params = plot_params.override_with_viz_spec(viz_spec)
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
             plot_params = plot_params.copy(update={"facecolor": facecolor})
-            if hasattr(medium, "viz_spec"):
-                if medium.viz_spec is not None:
-                    plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+            viz_spec = Structure._get_viz_spec(medium)
+            if viz_spec is not None:
+                plot_params = plot_params.override_with_viz_spec(viz_spec)
 
         if not fill:
             plot_params = plot_params.copy(update={"fill": False})
@@ -1626,13 +1618,13 @@ class Scene(Tidy3dBaseModel):
                 mpl = None  # Triggers grayscale fallback
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if isinstance(medium, AbstractMedium):
-            if medium.viz_spec is not None:
-                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        viz_spec = Structure._get_viz_spec(medium)
+        if viz_spec is not None:
+            plot_params = plot_params.override_with_viz_spec(viz_spec)
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
-        optical = _optical_plot_medium(medium)
+        optical = Structure._get_public_optical_medium(medium)
         if optical is not None and optical.is_pec:
             # perfect electrical conductor
             plot_params = plot_params.copy(
@@ -1887,9 +1879,9 @@ class Scene(Tidy3dBaseModel):
         """
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if hasattr(medium, "viz_spec"):
-            if medium.viz_spec is not None:
-                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        viz_spec = Structure._get_viz_spec(medium)
+        if viz_spec is not None:
+            plot_params = plot_params.override_with_viz_spec(viz_spec)
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
