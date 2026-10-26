@@ -719,9 +719,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("boundary_spec",), self._check_self_heating_has_heat_sink)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
-        self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
-        self._call_with_validation_loc(("sources",), self._names_exist_sources)
-        self._call_with_validation_loc(("structures",), self._check_medium_specs)
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -2351,63 +2348,6 @@ class HeatChargeSimulation(AbstractSimulation):
                                 ref_ind,
                                 "selection",
                             )
-
-        return self
-
-    def _warn_if_minimal_mesh_size_override(self) -> Self:
-        """Warn if minimal mesh size limit overrides desired mesh size."""
-        val = self.grid_spec
-        max_size = np.max(self.size)
-        min_dl = val.relative_min_dl * max_size
-        desired_min_dl = val.min_mesh_size
-        if isinstance(val, DistanceUnstructuredGrid):
-            # Keep the grid property's geometry-processing contract unchanged;
-            # this warning must also consider a finer requested bulk size.
-            desired_min_dl = min(desired_min_dl, val.dl_bulk)
-
-        if desired_min_dl < min_dl:
-            log.warning(
-                f"The resulting limit for minimal mesh size from parameter 'relative_min_dl={val.relative_min_dl}' is {min_dl}, while provided mesh size in 'grid_spec' is {desired_min_dl}. "
-                "Consider lowering parameter 'relative_min_dl' if a finer grid is required."
-            )
-
-        return self
-
-    def _names_exist_sources(self) -> Self:
-        """Error if a heat-charge source point to non-existing structures."""
-        structures_names = {s.name for s in self.structures}
-
-        sources = [s for s in self.sources if not isinstance(s, HeatFromElectricSource)]
-
-        for source in sources:
-            for name in source.structures:
-                if name not in structures_names:
-                    raise SetupError(
-                        f"Structure '{name}' provided in a '{source.type}' "
-                        "is not found among simulation structures."
-                    )
-        return self
-
-    def _check_medium_specs(self) -> Self:
-        """Error if no appropriate specs."""
-
-        sim_box = (Box(size=self.size, center=self.center),)
-
-        failed_solid_idx, failed_elect_idx = self._check_cross_solids(sim_box)
-
-        simulation_types = self._check_simulation_types()
-
-        for sim_type in simulation_types:
-            if sim_type == TCADAnalysisTypes.HEAT:
-                if len(failed_solid_idx) > 0:
-                    raise SetupError(
-                        "No solid materials ('SolidSpec') are detected in heat simulation. Solution domain is empty."
-                    )
-            elif sim_type == TCADAnalysisTypes.CONDUCTION:
-                if len(failed_elect_idx) > 0:
-                    raise SetupError(
-                        "No conducting materials ('ChargeConductorMedium') are detected in conduction simulation. Solution domain is empty."
-                    )
 
         return self
 
