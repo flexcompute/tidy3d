@@ -268,6 +268,52 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.dispersion_fitter.schema.dispersion_fitter:FastFitterData",
         "flexcompute.core._migration.em.material.dispersion_fitter.validation:validate",
     ),
+    "tidy3d.components.parameter_perturbation:ParameterPerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:ParameterPerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.parameter_perturbation:PermittivityPerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:PermittivityPerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.parameter_perturbation:IndexPerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:IndexPerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    # The abstract roots have no schema. The concrete classes below carry no rules, so their
+    # facade reports nothing.
+    "tidy3d.components.parameter_perturbation:AbstractPerturbation": None,
+    "tidy3d.components.parameter_perturbation:HeatPerturbation": None,
+    "tidy3d.components.parameter_perturbation:ChargePerturbation": None,
+    "tidy3d.components.parameter_perturbation:AbstractDeltaModel": None,
+    "tidy3d.components.parameter_perturbation:LinearHeatPerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:LinearHeatPerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.parameter_perturbation:CustomHeatPerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:CustomHeatPerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.parameter_perturbation:LinearChargePerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:LinearChargePerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.parameter_perturbation:CustomChargePerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:CustomChargePerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.parameter_perturbation:NedeljkovicSorefMashanovich": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:NedeljkovicSorefMashanovich",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
     # ``import tidy3d`` builds these, so they stay off the construction path.
     "tidy3d.components.medium.isotropic:PECMedium": ComponentScope(
         "flexcompute.core._migration.em.material.medium.schema.isotropic:PECMedium",

@@ -930,24 +930,6 @@ class ParameterPerturbation(Tidy3dBaseModel):
         description="Charge perturbation to apply.",
     )
 
-    @model_validator(mode="after")
-    def _check_not_empty(self) -> Self:
-        """Check that perturbation model is not empty."""
-
-        heat = self.heat
-        charge = self.charge
-
-        if heat is None and charge is None:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'heat' and 'charge' in 'ParameterPerturbation' cannot be "
-                    "simultaneously 'None'."
-                ),
-                "heat",
-            )
-
-        return self
-
     @cached_property
     def perturbation_list(self) -> list[PerturbationType]:
         """Provided perturbations as a list."""
@@ -1074,53 +1056,6 @@ class PermittivityPerturbation(Tidy3dBaseModel):
         title="Conductivity Perturbation",
         description="Perturbation model for conductivity.",
     )
-
-    @model_validator(mode="after")
-    def _check_not_complex(self) -> Self:
-        """Check that perturbation values are not complex."""
-
-        delta_eps = self.delta_eps
-        delta_sigma = self.delta_sigma
-
-        delta_eps_complex = False if delta_eps is None else delta_eps.is_complex
-        delta_sigma_complex = False if delta_sigma is None else delta_sigma.is_complex
-
-        if delta_eps_complex:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
-                    "complex-valued."
-                ),
-                "delta_eps",
-            )
-        if delta_sigma_complex:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
-                    "complex-valued."
-                ),
-                "delta_sigma",
-            )
-
-        return self
-
-    @model_validator(mode="after")
-    def _check_not_empty(self) -> Self:
-        """Check that perturbation model is not empty."""
-
-        delta_eps = self.delta_eps
-        delta_sigma = self.delta_sigma
-
-        if delta_eps is None and delta_sigma is None:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
-                    "simultaneously 'None'."
-                ),
-                "delta_eps",
-            )
-
-        return self
 
     def _delta_eps_delta_sigma_ranges(
         self,
@@ -1656,51 +1591,6 @@ class IndexPerturbation(Tidy3dBaseModel):
         description="Frequency to evaluate permittivity at (Hz).",
         json_schema_extra={"units": HERTZ},
     )
-
-    @model_validator(mode="after")
-    def _check_not_complex(self) -> Self:
-        """Check that perturbation values are not complex."""
-
-        dn = self.delta_n
-        dk = self.delta_k
-
-        dn_complex = False if dn is None else dn.is_complex
-        dk_complex = False if dk is None else dk.is_complex
-
-        if dn_complex:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be complex-valued."
-                ),
-                "delta_n",
-            )
-        if dk_complex:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be complex-valued."
-                ),
-                "delta_k",
-            )
-
-        return self
-
-    @model_validator(mode="after")
-    def _check_not_empty(self) -> Self:
-        """Check that perturbation model is not empty."""
-
-        dn = self.delta_n
-        dk = self.delta_k
-
-        if dn is None and dk is None:
-            self._raise_validation_error_at_loc(
-                DataError(
-                    "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
-                    "simultaneously 'None'."
-                ),
-                "delta_n",
-            )
-
-        return self
 
     def _delta_eps_delta_sigma_ranges(
         self, n: float, k: float
