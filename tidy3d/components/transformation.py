@@ -129,7 +129,12 @@ class RotationAroundAxis(AbstractRotation):
         # A thin check for field order and performance: as a field error, Pydantic reports it
         # together with the model's other field errors, and the construction path would make
         # every rotation and reflection the geometry helpers build several times slower.
-        raise_first_error(validate_nonzero_norm(val, "axis"), ValidationError)
+        from flexcompute.core._migration.em.transformation.schema import (
+            RotationAroundAxis as RotationAroundAxisSchema,
+        )
+
+        rotation = RotationAroundAxisSchema.model_construct(axis=val)
+        raise_first_error(validate_nonzero_norm(rotation), ValidationError)
         return val
 
     @cached_property
@@ -204,7 +209,12 @@ class ReflectionFromPlane(AbstractReflection):
     @classmethod
     def _validate_normal_nonzero_norm(cls, val: TracedCoordinate) -> TracedCoordinate:
         # A thin check for field order and performance, as ``RotationAroundAxis.axis`` has.
-        raise_first_error(validate_nonzero_norm(get_static(val), "normal"), ValidationError)
+        from flexcompute.core._migration.em.transformation.schema import (
+            ReflectionFromPlane as ReflectionFromPlaneSchema,
+        )
+
+        reflection = ReflectionFromPlaneSchema.model_construct(normal=get_static(val))
+        raise_first_error(validate_nonzero_norm(reflection), ValidationError)
         return val
 
     @cached_property

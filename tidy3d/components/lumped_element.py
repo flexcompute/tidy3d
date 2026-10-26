@@ -557,11 +557,15 @@ class CoaxialLumpedResistor(LumpedElement):
         # A thin check for field order: as a field error, Pydantic reports it together with the
         # model's other field errors. The construction path runs after the model is built and
         # raises one error.
+        from flexcompute.core._migration.em.lumped_element.schema import (
+            CoaxialLumpedResistor as CoaxialLumpedResistorSchema,
+        )
         from flexcompute.core._migration.em.lumped_element.validation import (
             validate_center_finite,
         )
 
-        raise_first_error(validate_center_finite(val), ValidationError)
+        resistor = CoaxialLumpedResistorSchema.model_construct(center=val)
+        raise_first_error(validate_center_finite(resistor), ValidationError)
         return val
 
     @cached_property
@@ -1106,11 +1110,15 @@ class _AdmittanceFitter(MicrowaveBaseModel, ABC):
         # A thin check for field order: as a field error, Pydantic reports it together with the
         # model's other field errors. The construction path runs after the model is built and
         # raises one error.
+        from flexcompute.core._migration.em.lumped_element.schema import (
+            CircuitImpedanceModel as CircuitImpedanceModelSchema,
+        )
         from flexcompute.core._migration.em.lumped_element.validation import (
             validate_fit_freq_range,
         )
 
-        raise_first_error(validate_fit_freq_range(v), ValueError)
+        model = CircuitImpedanceModelSchema.model_construct(freq_range=v)
+        raise_first_error(validate_fit_freq_range(model), ValueError)
         return v
 
     @abstractmethod

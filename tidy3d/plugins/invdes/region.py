@@ -78,14 +78,24 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     @field_validator("eps_bounds")
     @classmethod
     def _validate_ge_one(cls, v: tuple[float, float]) -> tuple[float, float]:
-        raise_first_error(validate_eps_bounds_not_below_one(v), ValueError)
+        from flexcompute.core._migration.em.invdes.schema.region import (
+            TopologyDesignRegion as TopologyDesignRegionSchema,
+        )
+
+        carrier = TopologyDesignRegionSchema.model_construct(eps_bounds=v)
+        raise_first_error(validate_eps_bounds_not_below_one(carrier), ValueError)
         return v
 
     # A model validator, not a construction-time check: it has to run before the validators that
     # evaluate the transformations, which would otherwise report a reversed bound first.
     @model_validator(mode="after")
     def _validate_eps_bounds(self) -> Self:
-        raise_first_error(validate_eps_bound_order(self.eps_bounds), ValidationError)
+        from flexcompute.core._migration.em.invdes.schema.region import (
+            TopologyDesignRegion as TopologyDesignRegionSchema,
+        )
+
+        carrier = TopologyDesignRegionSchema.model_construct(eps_bounds=self.eps_bounds)
+        raise_first_error(validate_eps_bound_order(carrier), ValidationError)
         return self
 
     @property
@@ -228,12 +238,9 @@ class TopologyDesignRegion(DesignRegion):
         Runs first in ``_run_validation_checks``, before the checks that evaluate the transformations
         on the same grid, so a bad grid reports first.
         """
-        if diagnostics := validate_ssp_grid(
-            [transformation.projection for transformation in self.transformations],
-            self.params_shape,
-            self.size,
-            self.pixel_size,
-        ):
+        from tidy3d.em.translate.components import from_component
+
+        if diagnostics := validate_ssp_grid(from_component(self)):
             self._raise_validation_error_at_loc(diagnostics[0].message, *diagnostics[0].path)
 
     def _validate_eps_values(self) -> None:

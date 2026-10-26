@@ -70,9 +70,13 @@ class DCVoltageSource(Tidy3dBaseModel):
     @field_validator("voltage")
     @classmethod
     def check_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
+        from flexcompute.core._migration.spice.schema.sources import (
+            DCVoltageSource as DCVoltageSourceSchema,
+        )
         from flexcompute.core._migration.spice.validation import validate_dc_voltage
 
-        raise_first_error(validate_dc_voltage(val), ValueError)
+        source = DCVoltageSourceSchema.model_construct(voltage=val)
+        raise_first_error(validate_dc_voltage(source), ValueError)
         return val
 
     @field_validator("voltage")
@@ -83,9 +87,13 @@ class DCVoltageSource(Tidy3dBaseModel):
         Uses tolerance-based comparison to handle floating-point representation
         differences (e.g., values from single vs double precision sources).
         """
+        from flexcompute.core._migration.spice.schema.sources import (
+            DCVoltageSource as DCVoltageSourceSchema,
+        )
         from flexcompute.core._migration.spice.validation import validate_repeated_dc_voltage
 
-        for diagnostic in validate_repeated_dc_voltage(val):
+        source = DCVoltageSourceSchema.model_construct(voltage=val)
+        for diagnostic in validate_repeated_dc_voltage(source):
             log.warning(diagnostic.message)
         return val
 

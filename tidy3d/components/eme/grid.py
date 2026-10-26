@@ -185,7 +185,13 @@ class EMEModeSpec(ModeSpec):
     @classmethod
     def _validate_group_index_step(cls, val: Any) -> Any:
         """Reject group-index work that EME cannot consume or return."""
-        raise_first_error(validate_group_index_step(val), SetupError)
+        # The rule reads the raw value before parsing, so the spec only carries it.
+        from flexcompute.core._migration.em.eme.schema.grid import (
+            EMEModeSpec as EMEModeSpecSchema,
+        )
+
+        spec = EMEModeSpecSchema.model_construct(group_index_step=val)
+        raise_first_error(validate_group_index_step(spec), SetupError)
         return False
 
     # this method is not supported because not all ModeSpec features are supported

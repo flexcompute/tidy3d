@@ -1446,15 +1446,27 @@ class MeshOverrideStructure(AbstractStructure):
     def _min_steps_per_size_finite(cls, val: tuple) -> tuple:
         """Reject non-finite ``min_steps_per_size``: ``inf`` would imply a zero grid size
         (``bounding_box_size / inf``) and silently drive the mesher into a zero-step path."""
-        raise_first_error(validate_min_steps_per_size_finite(val), ValueError)
+        from flexcompute.core._migration.em.structure.schema import (
+            MeshOverrideStructure as MeshOverrideStructureSchema,
+        )
+
+        structure = MeshOverrideStructureSchema.model_construct(min_steps_per_size=val)
+        raise_first_error(validate_min_steps_per_size_finite(structure), ValueError)
         return val
 
     @model_validator(mode="after")
     def _unshadowed_cannot_be_enforced(self) -> Self:
         """Unshadowed structure cannot be enforced."""
+        from flexcompute.core._migration.em.structure.schema import (
+            MeshOverrideStructure as MeshOverrideStructureSchema,
+        )
+
         from tidy3d.em.translate.components import _present
 
-        _present(self, validate_unshadowed_not_enforced(self.shadow, self.enforce))
+        structure = MeshOverrideStructureSchema.model_construct(
+            shadow=self.shadow, enforce=self.enforce
+        )
+        _present(self, validate_unshadowed_not_enforced(structure))
         return self
 
     @model_validator(mode="after")

@@ -401,24 +401,24 @@ class TimeMonitor(Monitor, ABC):
         _present(self, validate_sampling_spec_fields(set_fields))
         return self
 
-    def _reject_sampling_spec(self, fixed_interval: bool = False) -> Self:
+    def _reject_sampling_spec(self, schema: type, fixed_interval: bool = False) -> Self:
         """Reject ``sampling_dt`` / ``num_samples``, for monitors that support only ``interval``.
 
-        With ``fixed_interval``, the monitor records at every step and cannot be downsampled at
-        all, so pointing at ``interval`` would only produce a second failure.
+        ``schema`` is the moved schema class of the monitor, which carries the fields the core
+        rule reads. With ``fixed_interval``, the monitor records at every step and cannot be
+        downsampled at all, so pointing at ``interval`` would only produce a second failure.
         """
         # The subclasses override the presence-sensitive base check by name and call this, so
-        # the actionable message also wins on copies; the condition itself lives in core.
+        # the actionable message also wins on copies; the condition itself lives in core. It also
+        # runs in fast mode, so it fills a schema with the three fields instead of translating.
         from flexcompute.core._migration.em.monitor.validation import (
             validate_sampling_not_supported,
         )
 
-        _present(
-            self,
-            validate_sampling_not_supported(
-                self.type, self.sampling_dt, self.num_samples, fixed_interval=fixed_interval
-            ),
+        monitor = schema.model_construct(
+            type=self.type, sampling_dt=self.sampling_dt, num_samples=self.num_samples
         )
+        _present(self, validate_sampling_not_supported(monitor, fixed_interval=fixed_interval))
         return self
 
     @model_validator(mode="after")
@@ -1293,20 +1293,24 @@ class PointCloudFieldMonitor(FreqMonitor):
             preserve_index=True,
         )
 
-    # Point-cloud monitors call the core value rules instead of using the construction path:
-    # translating one dumps and reparses the point array, which about doubles the construction
-    # time of a million-point cloud.
+    # Point-cloud monitors pass the core rules a schema that holds only the checked fields,
+    # instead of using the construction path: translating one dumps and reparses the point
+    # array, which about doubles the construction time of a million-point cloud.
     @field_validator("fields")
     @classmethod
     def _validate_unique_fields(
         cls, val: tuple[PointCloudFieldComponent, ...]
     ) -> tuple[PointCloudFieldComponent, ...]:
         """Reject duplicate point-cloud field components before sparse reconstruction."""
+        from flexcompute.core._migration.em.monitor.schema import (
+            PointCloudFieldMonitor as PointCloudFieldMonitorSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import (
             validate_point_cloud_fields_unique,
         )
 
-        raise_first_error(validate_point_cloud_fields_unique(val), ValueError)
+        monitor = PointCloudFieldMonitorSchema.model_construct(fields=val)
+        raise_first_error(validate_point_cloud_fields_unique(monitor), ValueError)
         return val
 
     @staticmethod
@@ -1433,19 +1437,19 @@ class DipoleEmissionMonitor(PointCloudFieldMonitor):
         """Validate reduction metadata dimensions."""
         # Same reason as ``PointCloudFieldMonitor._validate_unique_fields`` above: the point
         # array makes translating this class on construction expensive.
+        from flexcompute.core._migration.em.monitor.schema import (
+            DipoleEmissionMonitor as DipoleEmissionMonitorSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import (
             validate_dipole_emission_metadata,
         )
 
-        _present(
-            self,
-            validate_dipole_emission_metadata(
-                self.position_weights,
-                self.num_points,
-                np.asarray(self.points.values).shape,
-                self.store_position_indexes,
-            ),
+        monitor = DipoleEmissionMonitorSchema.model_construct(
+            points=self.points,
+            position_weights=self.position_weights,
+            store_position_indexes=self.store_position_indexes,
         )
+        _present(self, validate_dipole_emission_metadata(monitor))
         return self
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -1541,7 +1545,11 @@ class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
         rejection fires on every path -- construction and ``copy()``/``updated_copy()``
         re-validation alike -- and is never shadowed by the generic error when the payload
         carries the materialized ``interval`` alongside a physical-sampling field."""
-        return self._reject_sampling_spec()
+        from flexcompute.core._migration.em.monitor.schema import (
+            AuxFieldTimeMonitor as AuxFieldTimeMonitorSchema,
+        )
+
+        return self._reject_sampling_spec(AuxFieldTimeMonitorSchema)
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -2065,6 +2073,9 @@ class ModeSolverMonitor(AbstractModeMonitor):
         """Ensure 'store_fields_direction' is compatible with 'direction'."""
         # Not on the construction path: ``MicrowaveModeSolverMonitor`` subclasses this class
         # and is not migrated yet, so the check stays here, next to the derivation.
+        from flexcompute.core._migration.em.monitor.schema import (
+            ModeSolverMonitor as ModeSolverMonitorSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import (
             validate_store_fields_direction,
         )
@@ -2072,10 +2083,10 @@ class ModeSolverMonitor(AbstractModeMonitor):
         if self.store_fields_direction is None:
             object.__setattr__(self, "store_fields_direction", self.direction)
         else:
-            _present(
-                self,
-                validate_store_fields_direction(self.direction, self.store_fields_direction),
+            monitor = ModeSolverMonitorSchema.model_construct(
+                direction=self.direction, store_fields_direction=self.store_fields_direction
             )
+            _present(self, validate_store_fields_direction(monitor))
         return self
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
@@ -2184,7 +2195,11 @@ class ModeTimeMonitor(TimeMonitor, PlanarMonitor):
         carries the materialized ``interval`` alongside a physical-sampling field.
 
         ``interval`` is pinned to 1 here, so the message must not send the user to it."""
-        return self._reject_sampling_spec(fixed_interval=True)
+        from flexcompute.core._migration.em.monitor.schema import (
+            ModeTimeMonitor as ModeTimeMonitorSchema,
+        )
+
+        return self._reject_sampling_spec(ModeTimeMonitorSchema, fixed_interval=True)
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of the final ``modeAmps`` payload returned to the user."""
@@ -2247,13 +2262,21 @@ class FieldProjectionSurface(Tidy3dBaseModel):
     @classmethod
     def is_plane(cls, val: FieldMonitor) -> FieldMonitor:
         """Ensures that the monitor is a plane, i.e., its ``size`` attribute has exactly 1 zero"""
+        from flexcompute.core._migration.em.monitor.schema import (
+            FieldMonitor as FieldMonitorSchema,
+        )
+        from flexcompute.core._migration.em.monitor.schema import (
+            FieldProjectionSurface as FieldProjectionSurfaceSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import (
             validate_projection_surface_planar,
         )
 
         # Thin check kept for ``field order``: it reports next to the other field errors, which the
         # construction path cannot reproduce. The facade repeats it after construction.
-        raise_first_error(validate_projection_surface_planar(val.name, val.size), ValidationError)
+        monitor = FieldMonitorSchema.model_construct(name=val.name, size=val.size)
+        surface = FieldProjectionSurfaceSchema.model_construct(monitor=monitor)
+        raise_first_error(validate_projection_surface_planar(surface), ValidationError)
         return val
 
 
@@ -2325,11 +2348,16 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     @classmethod
     def window_size_leq_one(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Ensures that each component of the window size is less than or equal to 1."""
+        from flexcompute.core._migration.em.monitor.schema import (
+            FieldProjectionAngleMonitor as FieldProjectionAngleMonitorSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import validate_window_size_leq_one
 
         # Thin check kept for ``field order``: it reports next to the other field errors, which the
-        # construction path cannot reproduce. The facade repeats it after construction.
-        raise_first_error(validate_window_size_leq_one(val), ValidationError)
+        # construction path cannot reproduce. The facade repeats it after construction. The rule
+        # reads only ``window_size``, which every projection monitor schema declares.
+        monitor = FieldProjectionAngleMonitorSchema.model_construct(window_size=val)
+        raise_first_error(validate_window_size_leq_one(monitor), ValidationError)
         return val
 
     @property
@@ -2910,11 +2938,15 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     @classmethod
     def diffraction_monitor_size(cls: type[DiffractionMonitor], val: Size) -> Size:
         """Ensure that the monitor is infinite in the transverse direction."""
+        from flexcompute.core._migration.em.monitor.schema import (
+            DiffractionMonitor as DiffractionMonitorSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import validate_diffraction_size
 
         # Thin check kept for ``field order``: it reports next to the other field errors, which the
         # construction path cannot reproduce. The facade repeats it after construction.
-        raise_first_error(validate_diffraction_size(val), SetupError)
+        monitor = DiffractionMonitorSchema.model_construct(size=val)
+        raise_first_error(validate_diffraction_size(monitor), SetupError)
         return val
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -3080,13 +3112,17 @@ class SurfaceFieldStructureMonitor(SurfaceFieldMonitor):
     @classmethod
     def _require_magnetic_field(cls, val: tuple[EMSurfaceField, ...]) -> tuple[EMSurfaceField, ...]:
         """Surface loss needs ``H``: reject a field selection without it before the solver runs."""
+        from flexcompute.core._migration.em.monitor.schema import (
+            SurfaceFieldStructureMonitor as SurfaceFieldStructureMonitorSchema,
+        )
         from flexcompute.core._migration.em.monitor.validation import (
             validate_surface_structure_fields,
         )
 
         # Thin check kept for ``field order``: it reports next to the other field errors, which the
         # construction path cannot reproduce. The facade repeats it after construction.
-        raise_first_error(validate_surface_structure_fields(val), ValueError)
+        monitor = SurfaceFieldStructureMonitorSchema.model_construct(fields=val)
+        raise_first_error(validate_surface_structure_fields(monitor), ValueError)
         return val
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

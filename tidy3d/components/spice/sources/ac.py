@@ -56,7 +56,11 @@ class SSACVoltageSource(Tidy3dBaseModel):
     @field_validator("voltage")
     @classmethod
     def validate_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
+        from flexcompute.core._migration.spice.schema.sources import (
+            SSACVoltageSource as SSACVoltageSourceSchema,
+        )
         from flexcompute.core._migration.spice.validation import validate_ac_voltage
 
-        raise_first_error(validate_ac_voltage(val), ValueError)
+        source = SSACVoltageSourceSchema.model_construct(voltage=val)
+        raise_first_error(validate_ac_voltage(source), ValueError)
         return val

@@ -101,13 +101,27 @@ class AbstractThinLens(Tidy3dBaseModel, ABC):
         cls, val: PositiveInt | tuple[PositiveInt, PositiveInt]
     ) -> PositiveInt | tuple[PositiveInt, PositiveInt]:
         """Ensure the angular grid is large enough to sample a circular pupil."""
-        raise_first_error(validate_num_plane_waves(val), ValueError)
+        from flexcompute.core._migration.em.thin_lens.schema.thin_lens import (
+            AbstractThinLens as AbstractThinLensSchema,
+        )
+
+        lens = AbstractThinLensSchema.model_construct(num_plane_waves=val)
+        raise_first_error(validate_num_plane_waves(lens), ValueError)
         return val
 
     @model_validator(mode="after")
     def _validate_lens_geometry(self) -> Self:
         """Validate coupled lens-pupil settings."""
-        for diagnostic in validate_lens_geometry(self):
+        from flexcompute.core._migration.em.thin_lens.schema.thin_lens import (
+            AbstractThinLens as AbstractThinLensSchema,
+        )
+
+        lens = AbstractThinLensSchema.model_construct(
+            fill_lens=self.fill_lens,
+            lens_diameter=self.lens_diameter,
+            beam_diameter=self.beam_diameter,
+        )
+        for diagnostic in validate_lens_geometry(lens):
             self._raise_validation_error_at_loc(diagnostic.message, *diagnostic.path)
         return self
 

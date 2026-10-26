@@ -99,7 +99,12 @@ class CustomInitializationSpec(AbstractInitializationSpec):
     @classmethod
     def _validate_params_range(cls, val: NDArray) -> NDArray:
         """Ensure that all parameter values are between 0 and 1."""
-        raise_first_error(validate_params_range(val), ValidationError)
+        from flexcompute.core._migration.em.invdes.schema.initialization import (
+            CustomInitializationSpec as CustomInitializationSpecSchema,
+        )
+
+        carrier = CustomInitializationSpecSchema.model_construct(params=val)
+        raise_first_error(validate_params_range(carrier), ValidationError)
         return val
 
     @field_validator("params")
@@ -107,7 +112,12 @@ class CustomInitializationSpec(AbstractInitializationSpec):
     @always_validate
     def _validate_params_dtype(cls, val: NDArray) -> NDArray:
         """Ensure that params is real-valued."""
-        raise_first_error(validate_params_dtype(val.dtype), ValidationError)
+        from flexcompute.core._migration.em.invdes.schema.initialization import (
+            CustomInitializationSpec as CustomInitializationSpecSchema,
+        )
+
+        carrier = CustomInitializationSpecSchema.model_construct(params=val)
+        raise_first_error(validate_params_dtype(carrier), ValidationError)
         if np.issubdtype(val.dtype, np.bool_):
             td.log.warning(
                 "Got a boolean array for 'params'. This will be treated as a floating point array."
@@ -119,13 +129,23 @@ class CustomInitializationSpec(AbstractInitializationSpec):
     @classmethod
     def _validate_params_3d(cls, val: NDArray) -> NDArray:
         """Ensure that params is a 3D array."""
-        raise_first_error(validate_params_rank(val.ndim), ValidationError)
+        from flexcompute.core._migration.em.invdes.schema.initialization import (
+            CustomInitializationSpec as CustomInitializationSpecSchema,
+        )
+
+        carrier = CustomInitializationSpecSchema.model_construct(params=val)
+        raise_first_error(validate_params_rank(carrier), ValidationError)
         return val
 
     def create_parameters(self, shape: tuple[int, ...]) -> NDArray:
         """Return the custom parameters provided by the user."""
+        from flexcompute.core._migration.em.invdes.schema.initialization import (
+            CustomInitializationSpec as CustomInitializationSpecSchema,
+        )
+
         params = np.asarray(self.params)
-        raise_first_error(validate_params_shape(params.shape, shape), ValueError)
+        carrier = CustomInitializationSpecSchema.model_construct(params=params)
+        raise_first_error(validate_params_shape(carrier, shape), ValueError)
         return params
 
 
