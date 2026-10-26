@@ -7,6 +7,7 @@ from tidy3d.components.microwave.time import (
     BasebandGaussianPulse,
     BasebandRectangularPulse,
     BasebandStep,
+    DigitalSourceTime,
 )
 from tidy3d.components.source.time import (
     BroadbandPulse,
@@ -24,4 +25,5 @@ SourceTimeType = (
     | BasebandGaussianPulse
     | BasebandRectangularPulse
     | BasebandCustomSourceTime
+    | DigitalSourceTime
 )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -19,10 +20,18 @@ from tidy3d.components.source.time import DEFAULT_SIGMA, END_TIME_FACTOR_GAUSSIA
 from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.types import ArrayFloat1D, FreqBound
+
+EdgeShapeType = Literal["erf", "logistic", "raised_cosine", "linear"]
+
+# Longest bit sequence accepted by ``DigitalSourceTime``, which bounds the cost of evaluating
+# the waveform: every transition contributes to every sample, so an unbounded pattern makes
+# that quadratic.
+MAX_BITS = 64
 
 
 class BasebandSourceTime(SourceTime, ABC):
@@ -433,3 +442,208 @@ class BasebandCustomSourceTime(BasebandSourceTime):
             return None
 
         return float(np.max(t_non_zero))
+
+
+# Not exported from ``tidy3d``: ``flexcompute.rf.tidy3d`` is its public home.
+class DigitalSourceTime(BasebandSourceTime):
+    """Digital (bit-sequence) source time profile with smooth transitions.
+
+    Notes
+    -----
+    Each bit of ``bits`` occupies a slot of ``bit_duration``, held at ``amplitude`` for a
+    '1' and at zero for a '0', joined by transitions of independent ``rise_time`` and
+    ``fall_time`` whose functional form is set by ``edge_shape``. The line code is
+    selected by ``duty_cycle``.
+
+    As for every baseband source, the faster of ``rise_time`` and ``fall_time`` sets the band
+    and, unless ``freq0`` is given, the characteristic frequency, so that an automatic grid
+    resolves the transitions; see :class:`.BasebandSourceTime`.
+
+    Example
+    -------
+    >>> digital = DigitalSourceTime(bits='0110', bit_duration=1e-9, rise_time=1e-10)
+    >>> rc_edges = DigitalSourceTime(
+    ...     bits='0110', bit_duration=1e-9, rise_time=1e-10, edge_shape='raised_cosine'
+    ... )
+    >>> mode_at_1ghz = digital.updated_copy(freq0=1e9)
+    """
+
+    bits: str = Field(
+        title="Bit Sequence",
+        description="Sequence of '0' and '1' characters defining the signal, e.g. "
+        "``'011010'``. Each bit occupies one slot of duration ``bit_duration``, held at "
+        "``amplitude`` for a '1' and at zero for a '0'. The sequence is padded with a "
+        "virtual '0' at both ends, so the signal starts and ends at zero, and must contain "
+        "at least one '1', since a pattern of only '0' bits produces no signal at all.",
+        max_length=MAX_BITS,
+    )
+
+    bit_duration: PositiveFloat = Field(
+        title="Bit Duration",
+        description="Duration of a single bit slot in seconds.",
+        allow_inf_nan=False,
+    )
+
+    duty_cycle: float = Field(
+        default=1.0,
+        title="Duty Cycle",
+        description="Fraction of each bit slot for which a '1' bit is held high, which "
+        "selects the line code. The default of 1 gives non-return-to-zero (NRZ) "
+        "signaling, whereas a value below 1 gives return-to-zero (RZ) signaling.",
+        gt=0,
+        le=1,
+    )
+
+    rise_time: PositiveFloat = Field(
+        title="Rise Time",
+        description="The 10%-to-90% rise time of '0' -> '1' transitions in seconds.",
+        allow_inf_nan=False,
+    )
+
+    fall_time: PositiveFloat | None = Field(
+        default=None,
+        title="Fall Time",
+        description="The 90%-to-10% fall time of '1' -> '0' transitions in seconds. "
+        "If ``None``, ``rise_time`` is used.",
+        allow_inf_nan=False,
+    )
+
+    offset: float = Field(
+        default=0.5,
+        title="Offset",
+        description="Delay of the first bit slot in units of ``bit_duration``, at least half a "
+        "slot, which is the default. The source must rise from zero after ``t = 0``: a "
+        "transition too slow to settle within the offset is rejected with the smallest "
+        "``offset`` that fits it.",
+        ge=0.5,
+        allow_inf_nan=False,
+    )
+
+    edge_shape: EdgeShapeType = Field(
+        default="erf",
+        title="Edge Shape",
+        description="Functional form of each bit transition: ``'erf'`` a Gaussian integral, "
+        "``'logistic'`` a sigmoid, ``'raised_cosine'`` a half cosine, and ``'linear'`` a "
+        "straight ramp. ``'raised_cosine'`` and ``'linear'`` reach each level in a finite "
+        "time, so the signal is exactly flat between transitions; ``'erf'`` and "
+        "``'logistic'`` approach their levels asymptotically instead, but are smooth to all "
+        "orders. The 50% crossing lies on the bit-slot boundary for every shape, so "
+        "changing the shape does not shift the bit timing.",
+    )
+
+    @field_validator("bits")
+    @classmethod
+    def _validate_bits(cls, value: str) -> str:
+        """Bit sequence must be a string of '0' and '1' characters holding at least one '1'."""
+        if set(value) - {"0", "1"}:
+            raise ValidationError(
+                f"'bits' must contain only '0' and '1' characters, got '{value}'."
+            )
+        if "1" not in value:
+            raise ValidationError("'bits' must contain at least one '1' to produce a signal.")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_source_starts_from_zero(self) -> DigitalSourceTime:
+        """Reject setups whose first transition is already under way at ``t = 0``.
+
+        A transition cut off at the start of the simulation switches the source on with a
+        step, injecting content that no grid sized to the transitions resolves. Half a slot
+        fits a transition that settles within its share of a level's hold, but unequal
+        ``rise_time`` and ``fall_time`` may give one of them nearly the whole hold. Each
+        transition is held at ``t = 0`` to the tolerance of every settled level, one at a
+        time as ``end_time`` treats them, so the suggested ``offset``, which starts every
+        settling window after ``t = 0`` and is rounded up, is accepted.
+        """
+        step = self._edge_shape_spec.step
+        level = max(step(-t_edge / edge_time) for t_edge, _, edge_time in self._transitions)
+        if level > baseband_numerics.EDGE_LEVEL_TOLERANCE:
+            start = baseband_numerics.digital_start_time(
+                transitions=self._transitions, edge_shape=self.edge_shape
+            )
+            # rounded up to a ten-thousandth of a slot, so never below what the check needs
+            required = math.ceil((self.offset - start / self.bit_duration) * 1e4) / 1e4
+            self._raise_validation_error_at_loc(
+                "With these transition times a transition is already under way at t = 0, so "
+                f"the source would switch on abruptly. Set 'offset' to at least {required:.4f}.",
+                "offset",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _warn_edges_exceed_hold(self) -> DigitalSourceTime:
+        """Warn about setups whose bits cannot reach their level.
+
+        Every level is held from the 50% crossing of the transition into it to the 50%
+        crossing of the transition out of it, so the hold has to fit the settling half of
+        one edge and the approaching half of the other: the rise and fall times together,
+        not the slower of the two alone. The allowance is twice the single-edge one, which
+        the shapes are calibrated against with equal edges.
+        """
+        edge_times = self.rise_time + self._fall_time
+        allowed = 2 * self._edge_shape_spec.max_edge_fraction * self._hold_window
+        if edge_times > allowed:
+            log.warning(
+                f"'DigitalSourceTime' has a 'rise_time' of {self.rise_time:.3e} s and a "
+                f"'fall_time' of {self._fall_time:.3e} s, which together are too long for the "
+                f"shortest level hold of {self._hold_window:.3e} s (set by 'bit_duration' "
+                "and 'duty_cycle'), so the signal will not settle at 'amplitude' or zero "
+                "before the next transition. Keep 'rise_time' plus 'fall_time' below "
+                f"{allowed:.3e} s for '{self.edge_shape}' edges, or lengthen 'bit_duration'."
+            )
+        return self
+
+    @cached_property
+    def _fall_time(self) -> float:
+        """Fall time, defaulting to the rise time."""
+        return self.rise_time if self.fall_time is None else self.fall_time
+
+    @cached_property
+    def _edge_shape_spec(self) -> baseband_numerics.EdgeShape:
+        """Step function and calibration of the selected ``edge_shape``."""
+        return baseband_numerics.EDGE_SHAPES[self.edge_shape]
+
+    @cached_property
+    def _hold_window(self) -> float:
+        """Shortest time the waveform holds a level, in seconds."""
+        return baseband_numerics.digital_hold_window(
+            bit_duration=self.bit_duration, duty_cycle=self.duty_cycle
+        )
+
+    @cached_property
+    def t_start(self) -> float:
+        """Start time of the first bit slot in seconds."""
+        return self.offset * self.bit_duration
+
+    @cached_property
+    def _transitions(self) -> list[tuple[float, float, float]]:
+        """``(time, direction, edge_time)`` of each transition, in time order."""
+        return baseband_numerics.digital_transitions(
+            bits=self.bits,
+            bit_duration=self.bit_duration,
+            duty_cycle=self.duty_cycle,
+            rise_time=self.rise_time,
+            fall_time=self._fall_time,
+            t_start=self.t_start,
+        )
+
+    @property
+    def _fastest_transition_time(self) -> float:
+        """The faster of the 10%-to-90% rise and fall times."""
+        return min(self.rise_time, self._fall_time)
+
+    def _envelope(self, time: ArrayFloat1D) -> ArrayFloat1D:
+        """Signed sum of the transition steps, running between 0 and 1."""
+        return baseband_numerics.digital_envelope(
+            time, transitions=self._transitions, edge_shape=self.edge_shape
+        )
+
+    def amp_time(self, time: float | ArrayFloat1D) -> ArrayFloat1D:
+        """Real-valued source amplitude as a function of time."""
+        return self.amplitude * self._envelope(time)
+
+    def end_time(self) -> float:
+        """Time after which the source is effectively zero."""
+        return baseband_numerics.digital_end_time(
+            transitions=self._transitions, edge_shape=self.edge_shape
+        )
