@@ -42,7 +42,7 @@ from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.analysis.dc import ITERATIVE_ONLY_TOLERANCE_FIELDS
 from tidy3d.components.spice.sources.ac import SSACVoltageSource
-from tidy3d.components.spice.sources.dc import DCVoltageSource, GroundVoltage
+from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource, GroundVoltage
 from tidy3d.components.spice.types import (
     ElectricalAnalysisType,
     IsothermalSSACAnalysis,
@@ -1080,9 +1080,9 @@ class HeatChargeSimulation(AbstractSimulation):
         terminals = self._voltage_terminals(self._swept_bc_indices())
         if len(terminals) > 1:
             self._raise_validation_error_at_loc(
-                "More than one voltage array has been provided. Currently voltage arrays are "
-                "supported only for one terminal; entries naming one metal structure with the "
-                "same source count as one.",
+                "More than one voltage or current array has been provided. Currently such "
+                "arrays are supported only for one terminal; entries naming one metal "
+                "structure with the same source count as one.",
                 "boundary_spec",
                 terminals[1],
                 "condition",
@@ -1099,18 +1099,26 @@ class HeatChargeSimulation(AbstractSimulation):
         ]
 
     def _swept_bc_indices(self) -> list[int]:
-        """Indices of the ``VoltageBC`` entries that sweep more than one voltage.
+        """Indices of the contact entries that sweep more than one voltage or current.
 
-        Both DC and SSAC sources carry a DC sweep array; counting only one type
-        would admit an ambiguous two-sweep setup.
+        Both DC and SSAC sources carry a DC sweep array, and a ``CurrentBC`` sweeps
+        its current; counting only one type would admit an ambiguous two-sweep setup.
         """
         return [
             i
             for i, bc in enumerate(self.boundary_spec)
-            if isinstance(bc.condition, VoltageBC)
-            and isinstance(bc.condition.source, (DCVoltageSource, SSACVoltageSource))
-            and len(bc.condition.source.voltage) > 1
+            if (
+                isinstance(bc.condition, VoltageBC)
+                and isinstance(bc.condition.source, (DCVoltageSource, SSACVoltageSource))
+                and len(bc.condition.source.voltage) > 1
+            )
+            or self._is_current_sweep(i)
         ]
+
+    def _is_current_sweep(self, index: int) -> bool:
+        """Whether ``boundary_spec[index]`` is a ``CurrentBC`` with more than one current."""
+        condition = self.boundary_spec[index].condition
+        return isinstance(condition, CurrentBC) and np.size(condition.source.current) > 1
 
     def _driven_terminal_split_across_entries(self) -> bool:
         """Whether a swept or SSAC terminal is named by more than one ``boundary_spec`` entry.
@@ -1281,7 +1289,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 reason = "Charge simulations record temperature only on the unstructured grid"
             elif self.zero_dims:
                 reason = "2D Charge simulations record no Cartesian data"
-            elif len(self._dc_voltages) > 1:
+            elif len(self._dc_voltages) > 1 or len(self._dc_currents) > 1:
                 reason = "Cartesian data covers one bias point and this simulation sweeps the bias"
             else:
                 continue
@@ -1342,7 +1350,7 @@ class HeatChargeSimulation(AbstractSimulation):
     def _bc_is_schottky(bc_spec: Any) -> bool:
         """``True`` when this boundary requests Schottky physics."""
         condition = bc_spec.condition
-        return isinstance(condition, VoltageBC) and condition.model == "schottky_mott"
+        return isinstance(condition, (VoltageBC, CurrentBC)) and condition.model == "schottky_mott"
 
     def _check_schottky_supported_modes(self) -> Self:
         """Reject Schottky configurations outside the validated solver model."""
@@ -1352,7 +1360,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if self.use_accelerated_solver is False:
             self._raise_validation_error_at_loc(
-                "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") are "
+                'Schottky contacts (model="schottky_mott") are '
                 "implemented only by the accelerated charge solver, but "
                 "'use_accelerated_solver=False' selects the legacy solver. "
                 'Either set model="ohmic" or set '
@@ -1365,7 +1373,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 continue
             if isinstance(bc_spec.placement, (StructureSimulationBoundary, SimulationBoundary)):
                 self._raise_validation_error_at_loc(
-                    "Schottky contacts ('VoltageBC' with model=\"schottky_mott\") "
+                    'Schottky contacts (model="schottky_mott") '
                     f"cannot be placed on '{type(bc_spec.placement).__name__}': the "
                     "metal-semiconductor contact cannot be identified there. Place "
                     "the condition on the metal structure's 'StructureBoundary' or "
@@ -1417,7 +1425,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         indices = []
         for i, condition, charge_specs, conductor_names in placements:
-            if isinstance(condition, VoltageBC) and condition.model != "ohmic":
+            if condition.model != "ohmic":
                 continue
             if any(isinstance(spec, SemiconductorMedium) for spec in charge_specs):
                 continue
@@ -1575,7 +1583,6 @@ class HeatChargeSimulation(AbstractSimulation):
     def _check_surface_recombination_bcs(self) -> Self:
         """Run all ``SurfaceRecombinationBC`` setup checks."""
         self._check_surface_recombination_requires_accelerated()
-        self._check_surface_recombination_not_stacked_with_current_bc()
         self._check_surface_recombination_not_stacked_with_insulating_bc()
         self._check_surface_recombination_not_stacked_with_schottky()
         self._check_surface_recombination_qf_on_voltage_overlay()
@@ -1604,6 +1611,9 @@ class HeatChargeSimulation(AbstractSimulation):
         """
         if isinstance(source, GroundVoltage):
             source = DCVoltageSource(voltage=0)
+        if isinstance(source, DCCurrentSource) and np.size(source.current) == 1:
+            # A one-element array drives the same current as its scalar.
+            source = source.updated_copy(current=float(np.ravel(source.current)[0]))
         metadata = {"name": None, "attrs": {}}
         updates = {
             key: value for key, value in metadata.items() if key in type(source).model_fields
@@ -1718,10 +1728,10 @@ class HeatChargeSimulation(AbstractSimulation):
     def _check_current_bcs(self) -> Self:
         """Run ``CurrentBC`` setup checks."""
         self._check_current_bc_requires_accelerated()
-        self._check_at_most_one_current_bc()
+        self._check_one_current_per_metal()
         self._check_current_bc_not_stacked_with_voltage_bc()
         self._check_current_bc_not_on_gate()
-        self._check_current_bc_not_with_ssac()
+        self._check_current_sweep_not_with_ssac_bias_selection()
         return self
 
     def _check_current_bc_not_on_gate(self) -> Self:
@@ -1767,20 +1777,14 @@ class HeatChargeSimulation(AbstractSimulation):
             if conductors
         ]
 
-    def _check_at_most_one_current_bc(self) -> Self:
-        """Allow one current-driven terminal; repeated entries must agree."""
+    def _check_one_current_per_metal(self) -> Self:
+        """Require repeated ``CurrentBC`` entries naming one metal to agree on the current."""
         entries = self._identified_current_bc_conductors()
         for position, (idx, conductors) in enumerate(entries):
             for other_idx, other_conductors in entries[:position]:
                 shared = conductors & other_conductors
                 if not shared:
-                    self._raise_validation_error_at_loc(
-                        "A charge simulation supports at most one current-driven terminal, "
-                        f"but 'boundary_spec[{other_idx}]' and 'boundary_spec[{idx}]' drive "
-                        "different ones. Drive the other contacts with 'VoltageBC' instead.",
-                        "boundary_spec",
-                        idx,
-                    )
+                    continue
                 if self._drive_of(self.boundary_spec[idx].condition.source) != self._drive_of(
                     self.boundary_spec[other_idx].condition.source
                 ):
@@ -1841,23 +1845,22 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    def _check_current_bc_not_with_ssac(self) -> Self:
-        """Reject small-signal analysis; a constant-current contact is an AC open."""
-        current_bcs = self._current_bc_indices()
-        if not current_bcs:
-            return self
+    def _check_current_sweep_not_with_ssac_bias_selection(self) -> Self:
+        """Reject ``at_voltages`` with a current sweep, whose bias voltages are solved for."""
         analysis_spec = self.analysis_spec
-        if (
-            isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis))
-            and len(analysis_spec.freqs) > 0
-        ):
+        if not isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
+            return self
+        if analysis_spec.at_voltages is None:
+            return self
+        swept = [i for i in self._swept_bc_indices() if self._is_current_sweep(i)]
+        if swept:
             self._raise_validation_error_at_loc(
-                "A small-signal analysis ('freqs') cannot be combined with a "
-                "'CurrentBC'. The correct treatment of a current-driven contact "
-                "under small-signal excitation is an AC open, which is not yet "
-                "supported; remove the 'CurrentBC' or drop 'freqs'.",
-                "boundary_spec",
-                current_bcs[0],
+                "'at_voltages' selects small-signal bias points by voltage, but "
+                f"'boundary_spec[{swept[0]}]' sweeps a current, so the bias voltages are "
+                "solved for rather than known in advance. Remove 'at_voltages'; the "
+                "small-signal analysis then runs at the last entry of 'current'.",
+                "analysis_spec",
+                "at_voltages",
             )
         return self
 
@@ -1927,24 +1930,6 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    def _check_surface_recombination_not_stacked_with_current_bc(self) -> Self:
-        """Reject ``SurfaceRecombinationBC`` sharing a placement with ``CurrentBC``,
-        which would prescribe the carrier flux on the same face twice."""
-        for i, sr_bc in enumerate(self.boundary_spec):
-            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
-                continue
-            for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, CurrentBC):
-                    continue
-                if self._placements_overlap(sr_bc.placement, other_bc.placement):
-                    raise SetupError(
-                        "'SurfaceRecombinationBC' cannot share a placement with "
-                        "'CurrentBC'. CurrentBC prescribes the normal carrier "
-                        "flux; composing it with a Robin SR contribution is "
-                        "deferred."
-                    )
-        return self
-
     def _check_surface_recombination_not_stacked_with_schottky(self) -> Self:
         """Reject ``SurfaceRecombinationBC`` sharing a placement with a Schottky
         contact, which does not support a surface recombination overlay."""
@@ -1957,27 +1942,27 @@ class HeatChargeSimulation(AbstractSimulation):
                 if self._placements_overlap(sr_bc.placement, other_bc.placement):
                     raise SetupError(
                         "'SurfaceRecombinationBC' cannot share a placement with a "
-                        "Schottky contact ('VoltageBC' with model=\"schottky_mott\"). "
+                        'Schottky contact (model="schottky_mott"). '
                         "Contact surface recombination overlays are supported only "
                         'for ohmic contacts (model="ohmic").'
                     )
         return self
 
     def _check_surface_recombination_qf_on_voltage_overlay(self) -> Self:
-        """Reject non-zero ``Q_f`` on a placement shared with ``VoltageBC``,
-        where the contact screens fixed sheet charge."""
+        """Reject non-zero ``Q_f`` on a placement shared with a contact,
+        which screens fixed sheet charge."""
         for i, sr_bc in enumerate(self.boundary_spec):
             if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
                 continue
             if not sr_bc.condition.Q_f:
                 continue
             for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, VoltageBC):
+                if i == j or not isinstance(other_bc.condition, (VoltageBC, CurrentBC)):
                     continue
                 if self._placements_overlap(sr_bc.placement, other_bc.placement):
                     raise SetupError(
                         "'SurfaceRecombinationBC' with a non-zero 'Q_f' "
-                        "cannot share a placement with 'VoltageBC'. The "
+                        f"cannot share a placement with '{type(other_bc.condition).__name__}'. The "
                         "metal contact pins the electrostatic potential and "
                         "screens fixed sheet charge, so the Poisson "
                         "contribution from Q_f would be ignored on the "
@@ -1987,7 +1972,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _check_surface_recombination_tat_on_voltage_overlay(self) -> Self:
         """Reject a trap-assisted tunneling enhancement on a placement shared with
-        ``VoltageBC``, where the surface term is contact exchange and not trap SRH."""
+        a contact, where the surface term is contact exchange and not trap SRH."""
         for i, sr_bc in enumerate(self.boundary_spec):
             if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
                 continue
@@ -1998,13 +1983,13 @@ class HeatChargeSimulation(AbstractSimulation):
             ):
                 continue
             for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, VoltageBC):
+                if i == j or not isinstance(other_bc.condition, (VoltageBC, CurrentBC)):
                     continue
                 if self._placements_overlap(sr_bc.placement, other_bc.placement):
                     raise SetupError(
                         "'SurfaceShockleyReedHallRecombination' with a "
                         "'field_enhancement' cannot share a placement with "
-                        "'VoltageBC'. On a contact overlay the surface term "
+                        f"'{type(other_bc.condition).__name__}'. On a contact overlay the surface term "
                         "relaxes the minority-carrier density towards the ohmic "
                         "equilibrium value, which is carrier exchange with the "
                         "metal rather than recombination through a trap, so a "
@@ -2014,7 +1999,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     def _check_surface_recombination_heterojunction_not_on_contact(self) -> Self:
-        """Reject a heterojunction SR model on a placement shared with ``VoltageBC``,
+        """Reject a heterojunction SR model on a placement shared with a contact,
         where the surface term is contact exchange and not trap SRH."""
         for i, sr_bc in enumerate(self.boundary_spec):
             if not isinstance(sr_bc.condition, SurfaceRecombinationBC) or not isinstance(
@@ -2022,12 +2007,12 @@ class HeatChargeSimulation(AbstractSimulation):
             ):
                 continue
             for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, VoltageBC):
+                if i == j or not isinstance(other_bc.condition, (VoltageBC, CurrentBC)):
                     continue
                 if self._placements_overlap(sr_bc.placement, other_bc.placement):
                     self._raise_validation_error_at_loc(
                         "'HeterojunctionSurfaceShockleyReedHallRecombination' cannot share "
-                        "a placement with 'VoltageBC': on a contact the surface term is "
+                        f"a placement with '{type(other_bc.condition).__name__}': on a contact the surface term is "
                         "carrier exchange with the metal, not recombination through an "
                         "interface trap.",
                         "boundary_spec",
@@ -4139,13 +4124,23 @@ class HeatChargeSimulation(AbstractSimulation):
         return voltages
 
     @property
+    def _dc_currents(self) -> list[float]:
+        """Currents of the swept ``CurrentBC`` (validation permits one sweep), else empty."""
+        for index in self._swept_bc_indices():
+            if self._is_current_sweep(index):
+                current = self.boundary_spec[index].condition.source.current
+                return [float(c) for c in np.atleast_1d(current)]
+        return []
+
+    @property
     def _num_dc_solves(self) -> int:
         """Number of nonlinear solves the charge solver runs to cover the DC sweep.
 
         Mirrors the solver's sweep construction: a single requested voltage is
         one direct solve; otherwise the sweep starts at 0 V and covers positive
         then negative voltages by increasing magnitude, inserting a warm-start
-        solve per ``convergence_dv`` interval within each pass. Doping ramp-up
+        solve per ``convergence_dv`` interval within each pass. A current sweep is
+        ordered the same way but inserts no warm-start solves. Doping ramp-up
         adds ``tolerance_settings.ramp_up_iters - 1`` solves. With impact
         ionization, or with a quasi-Fermi-gradient driving force in a field
         dependence, every bias point is solved twice: first with the
@@ -4162,6 +4157,12 @@ class HeatChargeSimulation(AbstractSimulation):
         # but not the ramp levels.
         staged = self._uses_impact_ionization() or self._uses_quasi_fermi_driving_force()
         solves_per_point = 2 if staged else 1
+
+        currents = self._dc_currents
+        if currents:
+            # 1 for the initial zero-current solve, then one per nonzero current.
+            bias_points = 1 + sum(1 for c in currents if c != 0)
+            return solves_per_point * bias_points + ramp_solves
 
         if len(voltages) <= 1:
             # No sweep: one direct solve at the requested bias.

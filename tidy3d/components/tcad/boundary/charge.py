@@ -108,21 +108,52 @@ class CurrentBC(HeatChargeBC):
     depth. With ``symmetry`` on the simulation, the accelerated charge solver
     takes it as the current of the whole device, not of the simulated portion.
     All faces of one :class:`.ChargeConductorMedium` form one terminal.
-    At most one terminal may be current-driven, and at least one
-    :class:`.VoltageBC` must provide the potential reference. ``current=0``
-    makes the contact float. A nonzero current needs a semiconductor path to
+    Several terminals may be current-driven. At least one :class:`.VoltageBC`
+    must provide the potential reference, and terminals joined through
+    semiconductor regions must include a voltage-driven one. The exception is a
+    terminal that is the only contact on its semiconductor regions: with
+    ``current=0`` it floats, and its potential is then set by where the
+    simulation starts rather than by the device. A floating terminal must be
+    the only current-driven terminal of the simulation and is not supported in
+    a small-signal analysis. A nonzero current needs a semiconductor path to
     another contact that crosses no :class:`.InsulatingBC`, since no steady
-    state can carry it otherwise. A contact reaching only an insulator is a gate and
-    is rejected, including at ``current=0``; drive a gate with
+    state can carry it otherwise. A contact reaching only an insulator is a
+    gate and is rejected, including at ``current=0``; drive a gate with
     :class:`.VoltageBC`. Supported only by the accelerated charge solver; not
-    supported for a conduction simulation, where :class:`.VoltageBC` should
-    be used instead.
+    supported for a conduction simulation, where :class:`.VoltageBC` should be
+    used instead.
 
-    There is no current continuation: if the device's current-voltage curve
-    passes through the requested current at more than one voltage (for
-    example, a negative differential resistance region), the voltage this
-    boundary condition settles on depends on where the simulation starts,
-    not only on the requested current.
+    The contact is ohmic by default. ``model="schottky_mott"`` makes it a
+    Schottky contact, with the same requirements as on :class:`.VoltageBC`. A
+    :class:`.SurfaceRecombinationBC` may share the placement of an ohmic
+    current-driven contact, as it may share that of a :class:`.VoltageBC`. An
+    ohmic current-driven contact without a :class:`.SurfaceRecombinationBC`
+    may reach a heterojunction interface; a Schottky contact or one sharing its
+    placement with a :class:`.SurfaceRecombinationBC` may not.
+
+    An array of currents sweeps the terminal. The currents are solved in the
+    order of a voltage sweep: zero first, then the positive currents in
+    increasing order, then the negative ones by increasing magnitude, each
+    starting from the solution of the previous one. At most one
+    ``boundary_spec`` entry may sweep, by a voltage array or a current array,
+    and every terminal a swept ``CurrentBC`` entry names carries the swept
+    current. The current-voltage data of a current sweep are indexed by the
+    solved potential of a swept terminal, which need not increase with the
+    current. Without a sweep, the reported current-voltage point is that of
+    the first current-driven terminal in ``boundary_spec``, at its solved
+    potential.
+
+    In a small-signal analysis a current-driven terminal is an open circuit:
+    its potential follows the small-signal drive while its current stays at
+    the prescribed value. With a current sweep the small-signal analysis runs
+    at the last entry of ``current``, and ``at_voltages`` is not supported.
+
+    If the device's current-voltage curve passes through the requested current
+    at more than one voltage (for example, a negative differential resistance
+    region), the voltage this boundary condition settles on depends on where
+    the simulation starts, not only on the requested current. A current sweep
+    starts each point from the previous one, so closely spaced currents follow
+    one branch of the curve.
 
     Example
     -------
@@ -135,6 +166,17 @@ class CurrentBC(HeatChargeBC):
         title="Current Source",
         description="Total current through this terminal, positive into the device and, in 2D, per micron of device depth. With ``symmetry`` on the simulation, it is the current of the whole device, not of the simulated portion.",
         json_schema_extra={"units": AMP},
+    )
+
+    model: ContactModelType = Field(
+        default="ohmic",
+        title="Contact model",
+        description='Contact model. ``"ohmic"`` (default) is the ohmic '
+        'contact path. ``"schottky_mott"`` enables the Schottky-Mott + '
+        "Richardson-Dushman thermionic contact and requires ``work_function`` "
+        "on the adjacent :class:`.ChargeConductorMedium` plus "
+        "``electron_affinity``, ``richardson_electron``, ``richardson_hole`` on "
+        "the adjacent :class:`.SemiconductorMedium`.",
     )
 
 
