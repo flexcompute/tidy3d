@@ -6,16 +6,13 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import autograd.numpy as np
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.types import TYPE_TAG_STR, InterpMethod
-from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from pydantic import FieldValidationInfo
-
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_terms import Compiled
     from tidy3d.components.autograd.types import PathType
@@ -114,16 +111,6 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         title="Subpixel averaging",
         description="This field is ignored. Please set ``subpixel`` in each component",
     )
-
-    @field_validator("xx", "yy", "zz")
-    @classmethod
-    def _isotropic_xx(
-        cls, val: IsotropicCustomMediumType | CustomMedium, info: FieldValidationInfo
-    ) -> IsotropicCustomMediumType | CustomMedium:
-        """If it's `CustomMedium`, make sure it's isotropic."""
-        if isinstance(val, CustomMedium) and not val.is_isotropic:
-            raise SetupError(f"The {info.field_name}-component medium type is not isotropic.")
-        return val
 
     def _ignored_fields(self) -> Self:
         """The field is ignored."""

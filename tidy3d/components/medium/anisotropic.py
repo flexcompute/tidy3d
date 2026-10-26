@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 from pydantic import (
     Field,
-    field_validator,
     model_validator,
 )
 
@@ -23,13 +22,10 @@ from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from pydantic import FieldValidationInfo
-
     from tidy3d.compat import Self
     from tidy3d.components.autograd.derivative_terms import Compiled
     from tidy3d.components.autograd.types import PathType
     from tidy3d.components.medium.derivative_terms import MediumTarget
-    from tidy3d.components.time_modulation import ModulationSpec
     from tidy3d.components.transformation import RotationType
     from tidy3d.components.types import (
         Ax,
@@ -100,48 +96,6 @@ class AnisotropicMedium(AbstractMedium):
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
-
-    @field_validator("modulation_spec")
-    @classmethod
-    def _validate_modulation_spec(cls, val: ModulationSpec | None) -> ModulationSpec | None:
-        """Check compatibility with modulation_spec."""
-        # Thin field adapter that calls the core rule. No moved schema:
-        # ``CustomAnisotropicMedium`` subclasses ``AnisotropicMedium`` and has none yet, so it
-        # would translate through ``AnisotropicMedium`` on the construction path.
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_unsupported_modulation_spec,
-        )
-        from flexcompute.core.validation import raise_first_error
-
-        raise_first_error(
-            validate_unsupported_modulation_spec(
-                cls.__name__,
-                None if val is None else str(type(val)),
-                " Please add modulation to each component.",
-            ),
-            ValidationError,
-        )
-        return val
-
-    @field_validator("xx", "yy", "zz")
-    @classmethod
-    def _no_surface_lossy_metal_component(
-        cls, val: IsotropicUniformMediumType, info: FieldValidationInfo
-    ) -> IsotropicUniformMediumType:
-        """A non-penetrable lossy metal has no anisotropic-component formulation."""
-        # Thin check that calls the core rule. No moved schema: ``CustomAnisotropicMedium``
-        # subclasses ``AnisotropicMedium`` and has none yet, so it would translate through
-        # ``AnisotropicMedium`` on the construction path.
-        from flexcompute.core._migration.em.material.medium.validation import (
-            validate_anisotropic_components,
-        )
-        from flexcompute.core.validation import raise_first_error
-
-        raise_first_error(
-            validate_anisotropic_components([(info.field_name, getattr(val, "penetrable", None))]),
-            ValidationError,
-        )
-        return val
 
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
