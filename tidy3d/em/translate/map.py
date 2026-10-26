@@ -296,18 +296,22 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.two_d:Medium2D",
         "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
-    # The custom media resolve through the mirror module: its package import runs the
-    # forward-reference rebuild for ``derived_from``, which the moved schema module does not.
     "tidy3d.components.medium.custom.isotropic:CustomIsotropicMedium": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.isotropic:CustomIsotropicMedium",
+        "flexcompute.core._migration.em.material.medium.schema.custom.isotropic:CustomIsotropicMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.isotropic:CustomMedium": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.isotropic:CustomMedium",
+        "flexcompute.core._migration.em.material.medium.schema.custom.isotropic:CustomMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
+    # Abstract family roots with no schema: a Tidy3D subclass that misses its own registration fails,
+    # and one defined elsewhere opts out.
+    "tidy3d.components.medium.pole_residue:DispersiveMedium": None,
+    "tidy3d.components.medium.abstract_custom:AbstractCustomMedium": None,
+    "tidy3d.components.medium.custom.dispersive:CustomDispersiveMedium": None,
+    "tidy3d.components.medium.perturbation:AbstractPerturbationMedium": None,
     "tidy3d.components.medium.drude:Drude": ComponentScope(
         "flexcompute.core._migration.em.material.medium.schema.drude:Drude",
         "flexcompute.core._migration.em.material.medium.validation:validate",
@@ -328,50 +332,48 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.medium.schema.sellmeier:Sellmeier",
         "flexcompute.core._migration.em.material.medium.validation:validate",
     ),
-    # Resolved through the mirror module, like the custom isotropic media above.
     "tidy3d.components.medium.custom.dispersive:CustomPoleResidue": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomPoleResidue",
+        "flexcompute.core._migration.em.material.medium.schema.custom.dispersive:CustomPoleResidue",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.dispersive:CustomSellmeier": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomSellmeier",
+        "flexcompute.core._migration.em.material.medium.schema.custom.dispersive:CustomSellmeier",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.dispersive:CustomLorentz": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomLorentz",
+        "flexcompute.core._migration.em.material.medium.schema.custom.dispersive:CustomLorentz",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.dispersive:CustomDrude": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomDrude",
+        "flexcompute.core._migration.em.material.medium.schema.custom.dispersive:CustomDrude",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.dispersive:CustomDebye": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.dispersive:CustomDebye",
+        "flexcompute.core._migration.em.material.medium.schema.custom.dispersive:CustomDebye",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
-    # Resolved through the mirror modules for the forward-reference rebuild, as above.
     "tidy3d.components.medium.anisotropic:AnisotropicMedium": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.anisotropic:AnisotropicMedium",
+        "flexcompute.core._migration.em.material.medium.schema.anisotropic:AnisotropicMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.anisotropic:AnisotropicMediumFromMedium2D": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.anisotropic:AnisotropicMediumFromMedium2D",
+        "flexcompute.core._migration.em.material.medium.schema.anisotropic:AnisotropicMediumFromMedium2D",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.anisotropic:CustomAnisotropicMedium": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.anisotropic:CustomAnisotropicMedium",
+        "flexcompute.core._migration.em.material.medium.schema.custom.anisotropic:CustomAnisotropicMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
     "tidy3d.components.medium.custom.anisotropic:CustomAnisotropicMediumInternal": ComponentScope(
-        "flexcompute.core._migration.em.schema.tidy3d.components.medium.custom.anisotropic:CustomAnisotropicMediumInternal",
+        "flexcompute.core._migration.em.material.medium.schema.custom.anisotropic:CustomAnisotropicMediumInternal",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),
