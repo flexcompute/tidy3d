@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from .viz import PlotParams
 
 from tidy3d.components.material.tcad.charge import (
+    AbstractChargeMedium,
     ChargeConductorMedium,
     SemiconductorMedium,
 )
@@ -122,6 +123,37 @@ def _heat_conductivity_scalar(conductivity: float | AnisotropicConductivity) -> 
     if isinstance(conductivity, AnisotropicConductivity):
         return (conductivity.xx + conductivity.yy + conductivity.zz) / 3
     return conductivity
+
+
+def _optical_plot_medium(medium: StructureMediumType) -> Any:
+    """Optical part of a medium for plot styling, or ``None`` if it has none."""
+    optical = Structure._get_public_optical_medium(medium)
+    # charge media still subclass the optical medium, but have no optical properties
+    return None if isinstance(optical, AbstractChargeMedium) else optical
+
+
+def _is_pec_plot(medium: StructureMediumType) -> bool:
+    """Whether a medium is drawn as a PEC."""
+    optical = _optical_plot_medium(medium)
+    return optical is not None and optical.is_pec
+
+
+def _eps_plot_value(
+    medium: StructureMediumType,
+    freq: float | None,
+    eps_component: PermittivityComponent | None = None,
+) -> float | None:
+    """Real permittivity to plot, with charge media using their static permittivity.
+
+    ``None`` for a medium with neither, e.g. a heat medium.
+    """
+    optical = _optical_plot_medium(medium)
+    if optical is not None:
+        return optical._eps_plot(freq, eps_component)
+    charge = medium.charge if isinstance(medium, MultiPhysicsMedium) else medium
+    if isinstance(charge, AbstractChargeMedium):
+        return charge._static_eps_plot(eps_component)
+    return None
 
 
 class Scene(Tidy3dBaseModel):
@@ -632,14 +664,10 @@ class Scene(Tidy3dBaseModel):
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
 
-        if isinstance(medium, MultiPhysicsMedium):
-            is_pec = medium.optical is not None and medium.optical.is_pec
-            is_pmc = medium.optical is not None and medium.optical.is_pmc
-            is_time_modulated = medium.optical is not None and medium.optical.is_time_modulated
-        else:
-            is_pec = medium.is_pec
-            is_pmc = medium.is_pmc
-            is_time_modulated = medium.is_time_modulated
+        optical = _optical_plot_medium(medium)
+        is_pec = optical is not None and optical.is_pec
+        is_pmc = optical is not None and optical.is_pmc
+        is_time_modulated = optical is not None and optical.is_time_modulated
 
         if mat_index == 0 or medium == self.medium:
             # background medium
@@ -1180,7 +1208,7 @@ class Scene(Tidy3dBaseModel):
                 eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq, eps_component=eps_component)
                 property_min = property_min if property_min is not None else eps_min_sim
                 property_max = property_max if property_max is not None else eps_max_sim
-                linthresh = 1e-2 * property_min
+                linthresh = 1e-2 * np.abs(property_min)
 
             if property in ["N_d", "N_a", "doping"]:
                 acceptor_limits, donor_limits = self.doping_bounds()
@@ -1379,8 +1407,8 @@ class Scene(Tidy3dBaseModel):
         eps_component: PermittivityComponent | None = None,
     ) -> tuple[float, float]:
         """Compute range of (real) permittivity present in the mediums at frequency "freq"."""
-        medium_list = [medium for medium in medium_list if not medium.is_pec]
-        eps_list = [medium._eps_plot(freq, eps_component) for medium in medium_list]
+        medium_list = [medium for medium in medium_list if not _is_pec_plot(medium)]
+        eps_list = [_eps_plot_value(medium, freq, eps_component) for medium in medium_list]
         eps_list = [eps for eps in eps_list if eps is not None]
         eps_min = min(eps_list, default=1)
         eps_max = max(eps_list, default=1)
@@ -1604,12 +1632,13 @@ class Scene(Tidy3dBaseModel):
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
-        if medium.is_pec:
+        optical = _optical_plot_medium(medium)
+        if optical is not None and optical.is_pec:
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
-        elif medium.is_pmc:
+        elif optical is not None and optical.is_pmc:
             # perfect magnetic conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "purple", "edgecolor": "k", "linewidth": 1}
@@ -1617,8 +1646,13 @@ class Scene(Tidy3dBaseModel):
         elif isinstance(medium, Medium2D):
             # 2d material
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
+        elif (eps_medium := _eps_plot_value(medium, freq, eps_component)) is None:
+            # no permittivity, e.g. a heat medium: hatched, so it reads as no colormap value with
+            # either colormap direction, and covers the structures under it
+            plot_params = plot_params.copy(
+                update={"facecolor": "white", "edgecolor": "k", "linewidth": 1, "hatch": "//"}
+            )
         else:
-            eps_medium = medium._eps_plot(frequency=freq, eps_component=eps_component)
             if norm is not None:
                 color_value = float(norm(eps_medium))
             elif eps_min == eps_max:

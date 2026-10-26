@@ -32,6 +32,7 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.types import PermittivityComponent
 
 
 class AnisotropicPermittivity(AbstractPrincipalAxesTensor):
@@ -162,6 +163,27 @@ class AbstractChargeMedium(AbstractMedium):
         if isinstance(eps, AnisotropicPermittivity):
             return (eps.xx + eps.yy + eps.zz) / 3
         return eps
+
+    def _static_eps_plot(self, eps_component: PermittivityComponent | None = None) -> float:
+        """Relative permittivity for plotting, independent of frequency.
+
+        Parameters
+        ----------
+        eps_component : PermittivityComponent | None = None
+            Component of the permittivity tensor in the global frame, e.g. ``"xx"`` or ``"xy"``.
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor.
+        """
+        eps = self.permittivity
+        matrix = eps.matrix if isinstance(eps, AnisotropicPermittivity) else eps * np.eye(3)
+        if eps_component is None:
+            return float(np.trace(matrix) / 3)
+        row, col = ("xyz".index(axis) for axis in eps_component)
+        return float(matrix[row, col])
 
     def n_cfl(self) -> None:
         return None
