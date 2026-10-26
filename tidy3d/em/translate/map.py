@@ -1154,6 +1154,12 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.solver.eme.validation:validate",
         on_construction=True,
     ),
+    # fdtd
+    "tidy3d.components.simulation.model:Simulation": ComponentScope(
+        "flexcompute.core._migration.solver.fdtd.schema.model:Simulation",
+        "flexcompute.core._migration.solver.fdtd.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -1252,6 +1258,8 @@ COMPONENT_ERROR_TYPES = {
     # eme-workflow
     "solver.eme.duplicate_freqs": "tidy3d.exceptions:SetupError",
     "solver.eme.non_reciprocal_medium": "tidy3d.exceptions:SetupError",
+    # fdtd
+    "solver.fdtd.too_many_sources": "tidy3d.exceptions:SetupError",
 }
 
 

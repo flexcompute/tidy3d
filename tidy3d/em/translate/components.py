@@ -7,6 +7,8 @@ from functools import cache
 from operator import is_
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+import xarray as xr
 from flexcompute.core.validation import prefix_paths
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
@@ -213,8 +215,28 @@ def _present(model: Tidy3dBaseModel, diagnostics: Iterable[ValidationDiagnostic]
         )
 
 
+def _changes_in_place(value: Any) -> bool:
+    """Whether ``value`` holds a list, dict or writable array, through tuples and model fields."""
+    if isinstance(value, BaseModel):
+        return any(_changes_in_place(v) for k, v in value.__dict__.items() if k != "attrs")
+    if isinstance(value, tuple):
+        return any(map(_changes_in_place, value))
+    if isinstance(value, xr.DataArray):
+        value = value.data
+    return isinstance(value, (list, dict)) or (
+        isinstance(value, np.ndarray) and value.flags.writeable
+    )
+
+
 # Holds the field values an instance passed its construction checks with.
 _VALIDATED_ON_CONSTRUCTION = "_validated_on_construction"
+
+
+class _PassedValues(tuple):
+    """Field values an instance passed with. A deep copy shares them instead of copying."""
+
+    def __deepcopy__(self, memo: dict) -> _PassedValues:
+        return self
 
 
 def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
@@ -224,26 +246,22 @@ def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
     this hook again when a parent takes the instance as a field. An instance whose field
     values are the ones it passed with is not checked again. A validated copy starts with an
     empty cache. A ``model_copy(update=...)`` shares the cache but holds a new value, so it
-    is checked. An instance with a list or dict field other than ``attrs`` is always checked,
-    since that field can change in place.
+    is checked. A deep copy shares the stored values instead of copying them, so it is
+    checked when a parent takes it unless its fields are the same objects. An instance that
+    holds a list, dict or writable array anywhere below it, other than in ``attrs``, is
+    always checked, since that value can change in place. Data arrays are writable. Array
+    fields such as ``ArrayFloat1D`` are read-only, so they do not count.
     """
     owner = _translating_class(type(model))
     if owner is None or not COMPONENT_SCOPES[_key(owner)].on_construction:
         return model
     values = tuple(model.__dict__.values())
     passed = model._cached_properties.get(_VALIDATED_ON_CONSTRUCTION)
-    if (
-        passed is not None
-        and all(map(is_, passed, values))
-        and not any(
-            isinstance(value, (list, dict))
-            for name, value in model.__dict__.items()
-            if name != "attrs"
-        )
-    ):
+    if passed is not None and all(map(is_, passed, values)):
         return model
     _present(model, validate(model))
-    model._cached_properties[_VALIDATED_ON_CONSTRUCTION] = values
+    if not _changes_in_place(model):
+        model._cached_properties[_VALIDATED_ON_CONSTRUCTION] = _PassedValues(values)
     return model
 
 

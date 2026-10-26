@@ -74,7 +74,6 @@ if TYPE_CHECKING:
 
 from . import adjoint as _adjoint_methods
 from . import boundaries as _boundaries_methods
-from . import constants
 from . import construction as _construction_methods
 from . import export as _export_methods
 from . import grid as _grid_methods
@@ -1130,25 +1129,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_source_monitor_normalization_grid()
         self._validate_scene()
         return self
-
-    @field_validator("sources")
-    @classmethod
-    def _validate_num_sources(
-        cls, val: tuple[SourceType, ...] | None
-    ) -> tuple[SourceType, ...] | None:
-        """Error if too many sources present."""
-
-        if val is None:
-            return val
-
-        if len(val) > constants.MAX_NUM_SOURCES:
-            raise SetupError(
-                f"Number of distinct sources exceeds the maximum allowed {constants.MAX_NUM_SOURCES}. "
-                "For a complex source setup, consider using 'CustomFieldSource' or "
-                "'CustomCurrentSource' to combine multiple sources into one object."
-            )
-
-        return val
 
     @field_validator("structures")
     @classmethod
