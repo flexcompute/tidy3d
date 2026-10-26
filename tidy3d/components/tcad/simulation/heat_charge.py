@@ -66,8 +66,6 @@ from tidy3d.components.tcad.generation_recombination import (
 from tidy3d.components.tcad.grid import (
     AutoUnstructuredGrid,
     DistanceUnstructuredGrid,
-    GridRefinementLine,
-    GridRefinementRegion,
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
@@ -725,7 +723,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("boundary_spec",), self._check_self_heating_has_heat_sink)
         self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
         self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
-        self._call_with_validation_loc(("grid_spec",), self._check_experimental_mesher_support)
         self._call_with_validation_loc(("grid_spec",), self._warn_if_minimal_mesh_size_override)
         self._call_with_validation_loc(("sources",), self._names_exist_sources)
         self._call_with_validation_loc(("structures",), self._check_medium_specs)
@@ -761,9 +758,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("structures",), self._check_non_isothermal_is_possible)
         self._call_with_validation_loc(
             ("analysis_spec",), self._validate_prescribed_temperature_requirements
-        )
-        self._call_with_validation_loc(
-            ("use_accelerated_solver",), self._check_use_accelerated_solver
         )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
@@ -2349,46 +2343,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 f"Current Neumann BCs are {names_neumann_Bcs}"
             )
 
-        return self
-
-    def _check_experimental_mesher_support(self) -> Self:
-        """Reject what the experimental mesher cannot mesh, where the simulation alone decides it.
-
-        The backend refuses these at mesh time too, along with the settings only it can check.
-        """
-        if self.grid_spec.mesher != "experimental":
-            return self
-        if isinstance(self.grid_spec, AutoUnstructuredGrid):
-            raise SetupError(
-                "The experimental mesher does not yet support 'AutoUnstructuredGrid'. "
-                "Set 'grid_spec.mesher' to 'default' to use the default mesher."
-            )
-        if self.zero_dims:
-            raise SetupError(
-                "The experimental mesher does not yet support simulations with a zero-size "
-                "dimension. Set 'grid_spec.mesher' to 'default' to use the default mesher."
-            )
-        if isinstance(self.grid_spec, DistanceUnstructuredGrid):
-            sim_lo, sim_hi = (np.asarray(corner, dtype=float) for corner in self.bounds)
-            for index, refinement in enumerate(self.grid_spec.mesh_refinements):
-                requirement = None
-                if isinstance(refinement, GridRefinementRegion):
-                    # Planarity of the part inside the domain, as the backend judges it.
-                    lo = np.maximum(np.asarray(refinement.bounds[0], dtype=float), sim_lo)
-                    hi = np.minimum(np.asarray(refinement.bounds[1], dtype=float), sim_hi)
-                    planar = np.all(hi >= lo) and np.any(np.isclose(hi - lo, 0.0))
-                    if planar and refinement.transition_thickness == 0:
-                        requirement = (
-                            "a planar refinement region needs a nonzero 'transition_thickness'"
-                        )
-                elif isinstance(refinement, GridRefinementLine) and refinement.distance_bulk == 0:
-                    requirement = "a refinement line needs a nonzero 'distance_bulk'"
-                if requirement is not None:
-                    raise SetupError(
-                        "The experimental mesher cannot apply "
-                        f"'grid_spec.mesh_refinements[{index}]': {requirement}. Set one, or set "
-                        "'grid_spec.mesher' to 'default' to use the default mesher."
-                    )
         return self
 
     def _names_exist_grid_spec(self) -> Self:
@@ -4875,53 +4829,18 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    def _check_use_accelerated_solver(self) -> Self:
-        """Validate ``use_accelerated_solver`` for the simulation type and features.
-
-        Resolving the flag raises a ``SetupError`` for invalid combinations
-        (``use_accelerated_solver=False`` on a non-charge simulation, or on a charge
-        simulation that uses an accelerated-only feature). Triggering it here surfaces
-        the error at construction, anchored to the field by ``_call_with_validation_loc``.
-        """
-        _ = self._resolve_use_accelerated_solver
-        return self
-
     @property
     def _resolve_use_accelerated_solver(self) -> bool:
         """Resolved value of :attr:`use_accelerated_solver`.
 
-        The accelerated solver is the default for every simulation. The
-        ``use_accelerated_solver`` flag only applies to charge simulations:
-
-        * Charge simulations use the accelerated solver unless
-          ``use_accelerated_solver=False`` selects the CPU charge solver. That
-          request raises when the configuration uses a feature only the
-          accelerated solver supports (e.g. ``MasettiMobility``).
-        * Heat and conduction simulations always run on the accelerated solver, so
-          ``use_accelerated_solver=False`` is rejected for them. The accelerated
-          *charge* mesh/solver path does not apply, so this resolves to ``False``
-          (no charge prism mesh is generated).
+        The accelerated solver is the default for every simulation, and the flag only
+        selects the CPU solver for a charge analysis. Heat and conduction always run on the
+        accelerated solver, but its charge mesh and solver path does not apply, so they
+        resolve to ``False``. The construction path rejects an invalid flag.
         """
-        is_charge = isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
-
-        if not is_charge:
-            if not self.use_accelerated_solver:
-                raise SetupError(
-                    "'use_accelerated_solver=False' is only valid for charge simulations; "
-                    "heat and conduction simulations always run on the GPU accelerated solver."
-                )
-            return False
-
-        if not self.use_accelerated_solver:
-            accelerated_only = self._accelerated_only_features()
-            if accelerated_only:
-                raise SetupError(
-                    f"{', '.join(accelerated_only)} is supported only by the GPU accelerated "
-                    "charge solver. Use 'use_accelerated_solver=True' (the default)."
-                )
-            return False
-
-        return True
+        return (
+            isinstance(self.analysis_spec, SteadyChargeDCAnalysis) and self.use_accelerated_solver
+        )
 
     def _useHeatSourceFromConductionSim(self) -> bool:
         """Returns True if 'HeatFromElectricSource' has been defined."""

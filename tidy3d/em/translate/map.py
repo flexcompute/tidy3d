@@ -55,10 +55,10 @@ TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
         "flexcompute.core._migration.em.schema.tidy3d.components.mode.mode_solver:ModeSolver"
     ),
     Tidy3DSolverTaskMap.HEAT: (
-        "flexcompute.core._migration.em.schema.tidy3d.components.tcad.simulation.heat:HeatSimulation"
+        "flexcompute.core._migration.solver.heat_charge.schema.heat:HeatSimulation"
     ),
     Tidy3DSolverTaskMap.HEAT_CHARGE: (
-        "flexcompute.core._migration.em.schema.tidy3d.components.tcad.simulation.heat_charge:HeatChargeSimulation"
+        "flexcompute.core._migration.solver.heat_charge.schema.heat_charge:HeatChargeSimulation"
     ),
     Tidy3DSolverTaskMap.EME: "flexcompute.core._migration.solver.eme.schema.simulation:EMESimulation",
     Tidy3DSolverTaskMap.MODE: "flexcompute.core._migration.em.schema.tidy3d.components.mode.simulation:ModeSimulation",
@@ -1145,6 +1145,16 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
     ),
     "tidy3d.components.spice.analysis.ac:IsothermalSSACAnalysis": ComponentScope(
         "flexcompute.core._migration.solver.heat_charge.schema.ac:IsothermalSSACAnalysis",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.simulation.heat_charge:HeatChargeSimulation": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.heat_charge:HeatChargeSimulation",
+        "flexcompute.core._migration.solver.heat_charge.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.tcad.simulation.heat:HeatSimulation": ComponentScope(
+        "flexcompute.core._migration.solver.heat_charge.schema.heat:HeatSimulation",
         "flexcompute.core._migration.solver.heat_charge.validation:validate",
         on_construction=True,
     ),

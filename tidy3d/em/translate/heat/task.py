@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from flexcompute.core._migration.em.schema.tidy3d.components.tcad.simulation.heat import (
+from flexcompute.core._migration.solver.heat_charge.schema.heat import (
     HeatSimulation as HeatSimulationTaskInput,
 )
 
