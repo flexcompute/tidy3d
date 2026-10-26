@@ -257,6 +257,17 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.nonlinear.validation:validate",
         on_construction=True,
     ),
+    # Off the construction path for performance: a 3-pole fit copies ``FastFitterData`` about 2000
+    # times, and translating each copy makes the fit 46% slower (1.19 s to 1.74 s). The client keeps
+    # a field adapter and a thin model check that call the core rules.
+    "tidy3d.components.dispersion_fitter:AdvancedFastFitterParam": ComponentScope(
+        "flexcompute.core._migration.em.material.dispersion_fitter.schema.dispersion_fitter:AdvancedFastFitterParam",
+        "flexcompute.core._migration.em.material.dispersion_fitter.validation:validate",
+    ),
+    "tidy3d.components.dispersion_fitter:FastFitterData": ComponentScope(
+        "flexcompute.core._migration.em.material.dispersion_fitter.schema.dispersion_fitter:FastFitterData",
+        "flexcompute.core._migration.em.material.dispersion_fitter.validation:validate",
+    ),
     # ``import tidy3d`` builds these, so they stay off the construction path.
     "tidy3d.components.medium.isotropic:PECMedium": ComponentScope(
         "flexcompute.core._migration.em.material.medium.schema.isotropic:PECMedium",

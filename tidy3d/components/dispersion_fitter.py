@@ -210,10 +210,18 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
     @classmethod
     def _max_loss_geq_min_loss(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Must have max_loss >= min_loss."""
-        if val[0] > val[1]:
-            raise ValidationError(
-                "The loss lower bound cannot be larger than the loss upper bound."
-            )
+        # Thin check kept off the construction path for performance: the fitter copies
+        # FastFitterData, which inherits this check, about 2000 times per fit.
+        from flexcompute.core._migration.em.material.dispersion_fitter.schema.dispersion_fitter import (
+            AdvancedFastFitterParam as AdvancedFastFitterParamSchema,
+        )
+        from flexcompute.core._migration.em.material.dispersion_fitter.validation import (
+            validate_loss_bounds,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        param = AdvancedFastFitterParamSchema.model_construct(loss_bounds=val)
+        raise_first_error(validate_loss_bounds(param), ValidationError)
         return val
 
     @field_validator("weights")
@@ -301,8 +309,19 @@ class FastFitterData(AdvancedFastFitterParam):
     def _eps_inf_geq_one(self) -> Self:
         """Must have eps_inf >= 1 unless it is being optimized.
         In the latter case, it will be made >= 1 later."""
-        if self.optimize_eps_inf is False and self.eps_inf < 1:
-            raise ValidationError("The value of 'eps_inf' must be at least 1.")
+        # Thin check kept off the construction path for performance, as the loss bounds.
+        from flexcompute.core._migration.em.material.dispersion_fitter.schema.dispersion_fitter import (
+            FastFitterData as FastFitterDataSchema,
+        )
+        from flexcompute.core._migration.em.material.dispersion_fitter.validation import (
+            validate_eps_inf,
+        )
+        from flexcompute.core.validation import raise_first_error
+
+        data = FastFitterDataSchema.model_construct(
+            eps_inf=self.eps_inf, optimize_eps_inf=self.optimize_eps_inf
+        )
+        raise_first_error(validate_eps_inf(data), ValidationError)
         return self
 
     @model_validator(mode="after")
