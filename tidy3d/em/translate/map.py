@@ -60,7 +60,7 @@ TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
     Tidy3DSolverTaskMap.HEAT_CHARGE: (
         "flexcompute.core._migration.em.schema.tidy3d.components.tcad.simulation.heat_charge:HeatChargeSimulation"
     ),
-    Tidy3DSolverTaskMap.EME: "flexcompute.core._migration.em.schema.tidy3d.components.eme.simulation:EMESimulation",
+    Tidy3DSolverTaskMap.EME: "flexcompute.core._migration.solver.eme.schema.simulation:EMESimulation",
     Tidy3DSolverTaskMap.MODE: "flexcompute.core._migration.em.schema.tidy3d.components.mode.simulation:ModeSimulation",
     Tidy3DSolverTaskMap.VOLUME_MESH: "flexcompute.core._migration.em.schema.tidy3d.components.tcad.mesher:VolumeMesher",
     Tidy3DSolverTaskMap.MODAL_CM: (
@@ -1091,6 +1091,12 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.solver.heat_charge.validation:validate",
         on_construction=True,
     ),
+    # eme-workflow
+    "tidy3d.components.eme.simulation:EMESimulation": ComponentScope(
+        "flexcompute.core._migration.solver.eme.schema.simulation:EMESimulation",
+        "flexcompute.core._migration.solver.eme.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -1186,6 +1192,9 @@ COMPONENT_ERROR_TYPES = {
     "solver.heat_charge.ssac_freqs_empty": "builtins:ValueError",
     "solver.heat_charge.ssac_freqs_infinite": "builtins:ValueError",
     "solver.heat_charge.ssac_freqs_negative": "builtins:ValueError",
+    # eme-workflow
+    "solver.eme.duplicate_freqs": "tidy3d.exceptions:SetupError",
+    "solver.eme.non_reciprocal_medium": "tidy3d.exceptions:SetupError",
 }
 
 

@@ -16,10 +16,8 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.material.tensor_rotation import (
     cell_center_rotations_from_lengths,
-    medium_rotated_tensors,
-    rotated_tensors_equal,
 )
-from tidy3d.components.medium import AbstractCustomMedium, AnisotropicMedium, FullyAnisotropicMedium
+from tidy3d.components.medium import AnisotropicMedium, FullyAnisotropicMedium
 from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -69,20 +67,15 @@ if TYPE_CHECKING:
     from tidy3d.components.data.data_array import EMESMatrixDataArray
     from tidy3d.components.grid.grid import Grid
     from tidy3d.components.material.tensor_rotation import EMEAnisotropicMedium
-    from tidy3d.components.material.types import StructureMediumType
-    from tidy3d.components.medium import MediumType3D
     from tidy3d.components.mode.data.sim_data import ModeSimulationData
     from tidy3d.components.mode.simulation import ModeSimulation
     from tidy3d.components.mode_spec import ModeSpec
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.types import (
         ArrayComplex3D,
-        ArrayFloat1D,
         ArrayInt1D,
         Ax,
         BoundOptional,
-        Coordinate,
-        Size,
         Symmetry,
         TensorReal,
     )
@@ -471,74 +464,6 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _validate_auto_grid_wavelength(cls, val: GridSpec) -> GridSpec:
         """Handle the case where grid_spec is auto and wavelength is not provided."""
         # this is handled instead post-init to ensure freqs is defined
-        return val
-
-    @field_validator("freqs")
-    @classmethod
-    def _validate_freqs(cls, val: FreqArray) -> FreqArray:
-        """Freqs cannot contain duplicates."""
-        if len(set(val)) != len(val):
-            raise SetupError(f"'EMESimulation' 'freqs={val}' cannot contain duplicate frequencies.")
-        return val
-
-    @staticmethod
-    def _validate_fully_anisotropic_medium_reciprocity(
-        medium: StructureMediumType, field_path: str
-    ) -> None:
-        """Reject non-reciprocal fully anisotropic media in EME."""
-        # ``MultiPhysicsMedium`` forwards attribute access to its optical component but
-        # cannot answer ``isinstance``, so a type test against a raw structure medium
-        # silently misses wrapped media. Normalise before every type test in this module.
-        medium = Structure._get_optical_medium(medium)
-        if not isinstance(medium, FullyAnisotropicMedium):
-            return
-
-        permittivity = np.asarray(medium.permittivity)
-        if not np.allclose(permittivity, permittivity.T, atol=fp_eps, rtol=0):
-            raise SetupError(
-                f"{field_path} has a non-reciprocal 'FullyAnisotropicMedium'. "
-                "EME currently supports only reciprocal fully anisotropic media "
-                "(symmetric permittivity and conductivity tensors)."
-            )
-
-        conductivity = np.asarray(medium.conductivity)
-        if not np.allclose(conductivity, conductivity.T, atol=fp_eps, rtol=0):
-            raise SetupError(
-                f"{field_path} has a non-reciprocal 'FullyAnisotropicMedium'. "
-                "EME currently supports only reciprocal fully anisotropic media "
-                "(symmetric permittivity and conductivity tensors)."
-            )
-
-    @field_validator("medium")
-    @classmethod
-    def _validate_medium(cls, val: MediumType3D) -> MediumType3D:
-        """Validate background medium compatibility."""
-        cls._validate_fully_anisotropic_medium_reciprocity(
-            medium=val,
-            field_path="The simulation background medium",
-        )
-        return val
-
-    @field_validator("structures")
-    @classmethod
-    def _validate_structures(cls, val: tuple[Structure, ...]) -> tuple[Structure, ...]:
-        """Validate and warn for certain medium types."""
-        for ind, structure in enumerate(val):
-            medium = structure.medium
-            cls._validate_fully_anisotropic_medium_reciprocity(
-                medium=medium,
-                field_path=f"Structure at 'structures[{ind}]'",
-            )
-            if medium.is_time_modulated:
-                log.warning(
-                    f"Structure at 'structures[{ind}]' is time-modulated. The "
-                    "time modulation is ignored in the EME solver."
-                )
-            if medium.is_nonlinear:
-                log.warning(
-                    f"Structure at 'structures[{ind}] is nonlinear. The nonlinearity "
-                    "is ignored in the EME solver."
-                )
         return val
 
     @equal_aspect
@@ -954,18 +879,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         super()._run_after_validators()
         self._validate_grid()
         self._validate_eme_grid()
-        self._validate_mode_sort_spec_bounding_boxes()
         self._validate_mode_solver_monitors()
         self._validate_cell_index_pairs()
-        self._validate_too_close_to_edges()
-        self._validate_port_offsets()
-        self._validate_symmetry()
-        self._validate_sweep_spec()
-        self._validate_bent_custom_media_frames()
-        self._validate_anisotropic_bend_repetitions()
-        self._validate_monitor_setup()
         self._validate_record_in_pml_unsupported()
-        self._validate_interp_specs()
         return self
 
     def _validate_grid(self) -> Self:
@@ -974,23 +890,6 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_eme_grid(self) -> Self:
         _ = self.eme_grid
-        return self
-
-    def _validate_mode_sort_spec_bounding_boxes(self) -> Self:
-        """Validate authored cell fill-fraction boxes against the tangential bounds."""
-        for mode_spec, mode_spec_loc in self.eme_grid_spec._mode_specs_with_locs():
-            if not mode_spec.sort_spec._bounding_box_intersects_tangentially(
-                self.bounds, self.axis
-            ):
-                self._raise_validation_error_at_loc(
-                    "'ModeSortSpec.bounding_box' must intersect the "
-                    "simulation domain along both axes tangential to the normal axis. "
-                    "Please move or resize the bounding box in the tangential directions.",
-                    "eme_grid_spec",
-                    *mode_spec_loc,
-                    "sort_spec",
-                    "bounding_box",
-                )
         return self
 
     def _validate_mode_solver_monitors(self) -> Self:
@@ -1014,38 +913,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         # self._warn_monitor_interval()
         log.end_capture(self)
 
-    def _validate_too_close_to_edges(self) -> Self:
-        """Can't have mode planes closer to boundary than extreme Yee grid center."""
-        cell_centers = self.eme_grid.centers
-        yee_centers = list(self.grid.centers.to_dict.values())[self.axis]
-        if cell_centers[0] < yee_centers[0]:
-            self._raise_validation_error_at_loc(
-                "The first EME cell center must be further from the boundary "
-                "than the first Yee cell center, "
-                f"currently {cell_centers[0]} compared to {yee_centers[0]}.",
-                "eme_grid_spec",
-            )
-        if cell_centers[-1] > yee_centers[-1]:
-            self._raise_validation_error_at_loc(
-                "The last EME cell center must be further from the boundary "
-                "than the last Yee cell center, "
-                f"currently {cell_centers[-1]} compared to {yee_centers[-1]}.",
-                "eme_grid_spec",
-            )
-        for ind, monitor in enumerate(self.monitors):
-            if isinstance(monitor, ModeSolverMonitor) and monitor.normal_axis == self.axis:
-                center = monitor.center[monitor.normal_axis]
-                if center < yee_centers[0] or center > yee_centers[-1]:
-                    self._raise_validation_error_at_loc(
-                        f"'ModeSolverMonitor' at 'monitors[{ind}]' has "
-                        f"center {center}, which is within half a Yee cell "
-                        "of the simulation boundary along the propagation axis. "
-                        "Please move the monitor further from the boundary.",
-                        "monitors",
-                        ind,
-                    )
-        return self
-
     def _validate_constraint(self) -> None:
         """Constraint can be slow with too many modes. Warn in this case."""
         constraint = self.constraint
@@ -1058,29 +925,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                 "a constraint can significantly slow down the simulation. Consider "
                 "reducing the number of modes or setting 'constraint=None'."
             )
-
-    def _validate_port_offsets(self) -> Self:
-        """Port offsets cannot jointly exceed simulation length."""
-        total_offset = self.port_offsets[0] + self.port_offsets[1]
-        size = self.size
-        axis = self.axis
-        if size[axis] < total_offset:
-            self._raise_validation_error_at_loc(
-                "The sum of the two 'port_offset' fields "
-                "cannot exceed the simulation 'size' in the 'axis' direction.",
-                "port_offsets",
-            )
-        return self
-
-    def _validate_symmetry(self) -> Self:
-        """Symmetry in propagation direction is not supported."""
-        if self.symmetry[self.axis] != 0:
-            self._raise_validation_error_at_loc(
-                "Symmetry in the propagation direction is not currently supported.",
-                "symmetry",
-                self.axis,
-            )
-        return self
 
     # uncomment once interval_space != 1 is supported in any monitors
     # def _warn_monitor_interval(self):
@@ -1108,100 +952,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                 f"which exceeds the maximum allowed '{MAX_NUM_SWEEP}'."
             )
 
-    def _validate_sweep_spec(self) -> Self:
-        """Validate sweep spec."""
-        if self.sweep_spec is None:
-            return self
-        num_sweep = self.sweep_spec.num_sweep
-        if num_sweep == 0:
-            self._raise_validation_error_at_loc(
-                "Simulation 'sweep_spec' has 'num_sweep=0'.",
-                "sweep_spec",
-                "num_sweep",
-            )
-        if isinstance(self.sweep_spec, EMEModeSweep):
-            if any(self.sweep_spec.num_modes > self.max_num_modes):
-                self._raise_validation_error_at_loc(
-                    "Simulation 'sweep_spec' is an 'EMEModeSweep'. "
-                    "The number of modes should not exceed the maximum number of "
-                    "modes in any EME cell. Provided "
-                    f"'num_modes={self.sweep_spec.num_modes}'; the maximum "
-                    f"number of EME modes is '{self.max_num_modes}'.",
-                    "sweep_spec",
-                    "num_modes",
-                )
-            for mode_spec in self.eme_grid.mode_specs:
-                sort_spec = mode_spec.sort_spec
-                if sort_spec is not None and isinstance(sort_spec.keep_modes, int):
-                    self._raise_validation_error_at_loc(
-                        "ModeSortSpec.keep_modes as an integer cannot be combined with "
-                        "EMEModeSweep because both set a propagation-mode count. Use "
-                        "EMEModeSweep.num_modes for the sweep and keep "
-                        "ModeSortSpec.keep_modes as 'all' or 'filtered'.",
-                        "sweep_spec",
-                    )
-        elif isinstance(self.sweep_spec, EMELengthSweep):
-            scale_factors_shape = self.sweep_spec.scale_factors.shape
-            if len(scale_factors_shape) > 2:
-                self._raise_validation_error_at_loc(
-                    "Simulation 'sweep_spec.scale_factors' must have either one or two dimensions.",
-                    "sweep_spec",
-                    "scale_factors",
-                )
-            if len(scale_factors_shape) == 2:
-                num_scale_factors = scale_factors_shape[1]
-                if num_scale_factors != self.eme_grid.num_cells:
-                    self._raise_validation_error_at_loc(
-                        "Simulation 'sweep_spec.scale_factors' has shape "
-                        f"'{scale_factors_shape}'. The size of the second dimension "
-                        "must equal the number of EME cells in the simulation, which is "
-                        f"'{self.eme_grid.num_cells}'.",
-                        "sweep_spec",
-                        "scale_factors",
-                    )
-            for i, monitor in enumerate(self.monitors):
-                if isinstance(monitor, EMEFieldMonitor):
-                    self._raise_validation_error_at_loc(
-                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
-                        "which is not compatible with 'EMELengthSweep'.",
-                        "monitors",
-                        i,
-                    )
-        elif isinstance(self.sweep_spec, EMEPeriodicitySweep):
-            for i, monitor in enumerate(self.monitors):
-                if isinstance(monitor, EMEFieldMonitor):
-                    self._raise_validation_error_at_loc(
-                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
-                        "which is not compatible with 'EMEPeriodicitySweep'.",
-                        "monitors",
-                        i,
-                    )
-                if isinstance(monitor, EMECoefficientMonitor):
-                    self._raise_validation_error_at_loc(
-                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMECoefficientMonitor', "
-                        "which is not compatible with 'EMEPeriodicitySweep'.",
-                        "monitors",
-                        i,
-                    )
-            if self.store_coeffs:
-                self._raise_validation_error_at_loc(
-                    "'EMESimulation.store_coeffs' is not compatible with 'EMEPeriodicitySweep'.",
-                    "store_coeffs",
-                )
-        return self
-
-    @cached_property
-    def _anisotropic_validation_freqs_by_cell(self) -> tuple[FreqArray, ...]:
-        """Per-cell frequencies at which anisotropic mode tensors may be evaluated."""
-        freqs_by_cell = []
-        for mode_spec in self.eme_grid.mode_specs:
-            freqs = {
-                float(freq)
-                for freq in mode_spec._sampling_freqs_mode_solver(freqs=list(self.freqs))
-            }
-            freqs_by_cell.append(np.asarray(sorted(freqs), dtype=float))
-        return tuple(freqs_by_cell)
-
     @keyed_cache()
     def _plane_anisotropic_media(self, plane: Box) -> tuple[EMEAnisotropicMedium, ...]:
         """Anisotropic media intersecting ``plane``."""
@@ -1219,430 +969,10 @@ class EMESimulation(AbstractYeeGridSimulation):
             )
         )
 
-    @keyed_cache()
-    def _plane_custom_media(self, plane: Box) -> tuple[AbstractCustomMedium, ...]:
-        """Custom media intersecting ``plane``."""
-        total_structures = [self.scene.background_structure, *list(self.volumetric_structures)]
-        mediums = self.scene.intersecting_media(plane, total_structures)
-        optical = (Structure._get_optical_medium(medium) for medium in mediums)
-        return tuple(
-            sorted(
-                (medium for medium in optical if isinstance(medium, AbstractCustomMedium)), key=hash
-            )
-        )
-
-    def _grid_rotation_validation_data(
-        self,
-        eme_grid_spec: EMEGridSpecType,
-        center: Coordinate,
-        size: Size,
-        lengths: ArrayFloat1D | None = None,
-    ) -> tuple[
-        EMEGrid, ArrayFloat1D, tuple[TensorReal, ...], tuple[int, ...], tuple[TensorReal, ...]
-    ]:
-        """Grid rotations for real and virtual EME cells."""
-        eme_grid = eme_grid_spec.make_grid(center=center, size=size, axis=self.axis)
-        real_lengths = np.asarray(eme_grid.lengths, dtype=float)
-        if lengths is not None:
-            real_lengths = np.asarray(lengths, dtype=float)
-        real_rotations = cell_center_rotations_from_lengths(
-            real_lengths, eme_grid.mode_specs, normal_axis=self.axis
-        )
-        virtual_cell_indices = tuple(ind for ind in eme_grid_spec.virtual_cell_indices)
-        virtual_lengths = np.asarray(
-            [real_lengths[ind] for ind in virtual_cell_indices], dtype=float
-        )
-        virtual_mode_specs = tuple(eme_grid.mode_specs[ind] for ind in virtual_cell_indices)
-        virtual_rotations = cell_center_rotations_from_lengths(
-            virtual_lengths, virtual_mode_specs, normal_axis=self.axis
-        )
-        return eme_grid, real_lengths, real_rotations, virtual_cell_indices, virtual_rotations
-
     @staticmethod
     def _rotation_is_identity(rotation: TensorReal) -> bool:
         """Whether ``rotation`` is effectively the identity."""
         return np.allclose(rotation, np.eye(3), atol=fp_eps, rtol=0)
-
-    def _has_unsupported_global_frame_custom_media(
-        self,
-        eme_grid_spec: EMEGridSpecType,
-        center: Coordinate,
-        size: Size,
-        lengths: ArrayFloat1D | None = None,
-    ) -> bool:
-        """Whether bent cells would require unsupported global-frame custom-medium remapping."""
-        eme_grid, _, real_rotations, virtual_cell_indices, virtual_rotations = (
-            self._grid_rotation_validation_data(
-                eme_grid_spec=eme_grid_spec,
-                center=center,
-                size=size,
-                lengths=lengths,
-            )
-        )
-        mode_planes = eme_grid.mode_planes
-        for plane, rotation in zip(mode_planes, real_rotations):
-            # ``cell_center_rotations_from_lengths()`` returns identity for co-rotating cells,
-            # so any nontrivial rotation here means global-frame custom-medium remapping.
-            if not self._rotation_is_identity(rotation) and self._plane_custom_media(plane):
-                return True
-        for real_cell_index, rotation in zip(virtual_cell_indices, virtual_rotations):
-            if not self._rotation_is_identity(rotation) and self._plane_custom_media(
-                mode_planes[real_cell_index]
-            ):
-                return True
-        return False
-
-    def _validate_bent_custom_media_frames(self) -> Self:
-        """Reject global-frame bent EME cells intersecting custom media."""
-        if not any(
-            isinstance(Structure._get_optical_medium(medium), AbstractCustomMedium)
-            for medium in self.scene.mediums
-        ):
-            return self
-
-        error_msg = (
-            "Custom media are not currently supported in EME cells that use "
-            "'bend_medium_frame=\"global\"' and see a nontrivial bend rotation. "
-            "Global-frame remapping of custom-medium data into bent physical space is "
-            "not implemented. Use 'bend_medium_frame=\"co_rotating\"' or avoid bends."
-        )
-
-        center = tuple(self.eme_grid.center)
-        size = tuple(self.eme_grid.size)
-        if self._has_unsupported_global_frame_custom_media(
-            eme_grid_spec=self.eme_grid_spec,
-            center=center,
-            size=size,
-        ):
-            self._raise_validation_error_at_loc(error_msg, "eme_grid_spec")
-
-        if isinstance(self.sweep_spec, EMEPeriodicitySweep):
-            for num_reps in self.sweep_spec.num_reps:
-                eme_grid_spec = self.eme_grid_spec._updated_copy_num_reps(num_reps=num_reps)
-                if self._has_unsupported_global_frame_custom_media(
-                    eme_grid_spec=eme_grid_spec,
-                    center=center,
-                    size=size,
-                ):
-                    self._raise_validation_error_at_loc(error_msg, "sweep_spec", "num_reps")
-
-        if isinstance(self.sweep_spec, EMELengthSweep):
-            base_lengths = np.asarray(self.eme_grid.lengths, dtype=float)
-            for lengths in self._length_sweep_scaled_lengths(base_lengths=base_lengths):
-                if self._has_unsupported_global_frame_custom_media(
-                    eme_grid_spec=self.eme_grid_spec,
-                    center=center,
-                    size=size,
-                    lengths=lengths,
-                ):
-                    self._raise_validation_error_at_loc(error_msg, "sweep_spec", "scale_factors")
-
-        return self
-
-    def _plane_rotated_tensors_match(
-        self,
-        plane: Box,
-        freqs: FreqArray,
-        reference_rotation: TensorReal,
-        comparison_rotation: TensorReal,
-    ) -> bool:
-        """Whether anisotropic tensors on ``plane`` match under two orientations."""
-        for medium in self._plane_anisotropic_media(plane):
-            reference_tensors = medium_rotated_tensors(
-                medium=medium,
-                freqs=freqs,
-                rotation_matrix=reference_rotation,
-            )
-            comparison_tensors = medium_rotated_tensors(
-                medium=medium,
-                freqs=freqs,
-                rotation_matrix=comparison_rotation,
-            )
-            if not rotated_tensors_equal(reference_tensors, comparison_tensors):
-                return False
-        return True
-
-    def _has_incompatible_anisotropic_rotations_from_data(
-        self,
-        eme_grid: EMEGrid,
-        virtual_cell_indices: tuple[int, ...],
-        virtual_rotations: tuple[TensorReal, ...],
-        reference_rotations: tuple[TensorReal, ...],
-        mode_planes: Sequence[Box] | None = None,
-    ) -> bool:
-        """Whether reused modes would require different anisotropic tensors."""
-        # Supplied planes must come from a grid with identical geometry.
-        if mode_planes is None:
-            mode_planes = eme_grid.mode_planes
-        for real_cell_index, virtual_rotation in zip(virtual_cell_indices, virtual_rotations):
-            if not self._plane_rotated_tensors_match(
-                plane=mode_planes[real_cell_index],
-                freqs=self._anisotropic_validation_freqs_by_cell[real_cell_index],
-                reference_rotation=reference_rotations[real_cell_index],
-                comparison_rotation=virtual_rotation,
-            ):
-                return True
-        return False
-
-    def _has_incompatible_anisotropic_rotations(
-        self,
-        eme_grid_spec: EMEGridSpecType,
-        center: Coordinate,
-        size: Size,
-        reference_rotations: tuple[TensorReal, ...],
-        lengths: ArrayFloat1D | None = None,
-        mode_planes: Sequence[Box] | None = None,
-    ) -> bool:
-        """Whether reused modes would require different anisotropic tensors."""
-        eme_grid, _, _, virtual_cell_indices, virtual_rotations = (
-            self._grid_rotation_validation_data(
-                eme_grid_spec=eme_grid_spec,
-                center=center,
-                size=size,
-                lengths=lengths,
-            )
-        )
-        return self._has_incompatible_anisotropic_rotations_from_data(
-            eme_grid=eme_grid,
-            virtual_cell_indices=virtual_cell_indices,
-            virtual_rotations=virtual_rotations,
-            reference_rotations=reference_rotations,
-            mode_planes=mode_planes,
-        )
-
-    def _length_sweep_scaled_lengths(self, base_lengths: ArrayFloat1D) -> tuple[ArrayFloat1D, ...]:
-        """Cell lengths for each length-sweep index after normalizing scale-factor shape."""
-        if not isinstance(self.sweep_spec, EMELengthSweep):
-            return ()
-
-        base_lengths = np.asarray(base_lengths, dtype=float)
-        scale_factors = np.asarray(self.sweep_spec.scale_factors, dtype=float)
-        if scale_factors.ndim == 1:
-            scale_factors = np.repeat(scale_factors[:, None], len(base_lengths), axis=1)
-        return tuple(
-            base_lengths * np.asarray(scale_row, dtype=float) for scale_row in scale_factors
-        )
-
-    def _validate_anisotropic_bend_repetitions(self) -> Self:
-        """Reject repeated bent units when each repetition would need a distinct anisotropy frame."""
-        # Keep this marker here because ``copy(validate=False)`` clears cached properties.
-        cache_key = "_anisotropic_bend_repetitions_validated"
-        if self._cached_properties.get(cache_key):
-            return self
-
-        if not any(
-            isinstance(
-                Structure._get_optical_medium(medium),
-                AnisotropicMedium | FullyAnisotropicMedium,
-            )
-            for medium in self.scene.mediums
-        ):
-            self._cached_properties[cache_key] = True
-            return self
-
-        error_msg = (
-            "Bent anisotropic media with 'bend_medium_frame=\"global\"' are not compatible "
-            "with periodic repetition of EME subgrids when a reused mode would see a "
-            "nontrivial relative bend rotation. If the material profile should follow the "
-            "bend, set 'bend_medium_frame=\"co_rotating\"'. Otherwise split the bent "
-            "section into multiple cells, solve each orientation explicitly, and check "
-            "convergence with respect to the number of EME cells."
-        )
-
-        center = tuple(self.eme_grid.center)
-        size = tuple(self.eme_grid.size)
-        (
-            base_grid,
-            base_lengths,
-            base_rotations,
-            base_virtual_cell_indices,
-            base_virtual_rotations,
-        ) = self._grid_rotation_validation_data(
-            eme_grid_spec=self.eme_grid_spec,
-            center=center,
-            size=size,
-        )
-        base_mode_planes = tuple(base_grid.mode_planes)
-
-        if self._has_incompatible_anisotropic_rotations_from_data(
-            eme_grid=base_grid,
-            virtual_cell_indices=base_virtual_cell_indices,
-            virtual_rotations=base_virtual_rotations,
-            reference_rotations=base_rotations,
-            mode_planes=base_mode_planes,
-        ):
-            self._raise_validation_error_at_loc(error_msg, "eme_grid_spec")
-
-        if isinstance(self.sweep_spec, EMEPeriodicitySweep):
-            for num_reps in self.sweep_spec.num_reps:
-                eme_grid_spec = self.eme_grid_spec._updated_copy_num_reps(num_reps=num_reps)
-                (
-                    sweep_grid,
-                    _,
-                    sweep_rotations,
-                    sweep_virtual_cell_indices,
-                    sweep_virtual_rotations,
-                ) = self._grid_rotation_validation_data(
-                    eme_grid_spec=eme_grid_spec,
-                    center=center,
-                    size=size,
-                )
-                if self._has_incompatible_anisotropic_rotations_from_data(
-                    eme_grid=sweep_grid,
-                    virtual_cell_indices=sweep_virtual_cell_indices,
-                    virtual_rotations=sweep_virtual_rotations,
-                    reference_rotations=sweep_rotations,
-                ):
-                    self._raise_validation_error_at_loc(error_msg, "sweep_spec", "num_reps")
-
-        if isinstance(self.sweep_spec, EMELengthSweep):
-            invalid_length_sweep = False
-            for lengths in self._length_sweep_scaled_lengths(base_lengths=base_lengths):
-                if np.allclose(lengths, base_lengths, atol=fp_eps, rtol=0):
-                    continue
-
-                if self._has_incompatible_anisotropic_rotations(
-                    eme_grid_spec=self.eme_grid_spec,
-                    center=center,
-                    size=size,
-                    reference_rotations=base_rotations,
-                    lengths=lengths,
-                    mode_planes=base_mode_planes,
-                ):
-                    invalid_length_sweep = True
-                    break
-
-            if invalid_length_sweep:
-                self._raise_validation_error_at_loc(
-                    "Bent anisotropic media with 'bend_medium_frame=\"global\"' are not "
-                    "compatible with 'EMELengthSweep' when changing bent cell lengths changes "
-                    "the absolute orientation at one or more EME cell centers. Those local "
-                    "modes would need to be recomputed. If the material profile should follow "
-                    "the bend, set 'bend_medium_frame=\"co_rotating\"'; otherwise use "
-                    "separate simulations or explicitly resolved cells for each length, "
-                    "and check convergence with respect to the number of EME cells.",
-                    "sweep_spec",
-                    "scale_factors",
-                )
-
-        self._cached_properties[cache_key] = True
-        return self
-
-    def _validate_monitor_setup(self) -> Self:
-        """Check monitor setup."""
-        for i, monitor in enumerate(self.monitors):
-            if isinstance(monitor, ModeSolverMonitor):
-                mode_plane_bounds = Box.bounds_intersection(monitor.bounds, self.bounds)
-                sort_spec = getattr(monitor.mode_spec, "sort_spec", None)
-                if sort_spec is not None and not sort_spec._bounding_box_intersects_tangentially(
-                    mode_plane_bounds, monitor.normal_axis
-                ):
-                    self._raise_validation_error_at_loc(
-                        "'ModeSortSpec.bounding_box' must intersect the effective mode plane "
-                        "along both tangential axes. Please move or resize the bounding box in "
-                        "the tangential directions.",
-                        "monitors",
-                        i,
-                        "mode_spec",
-                        "sort_spec",
-                        "bounding_box",
-                    )
-            if isinstance(monitor, EMEMonitor):
-                _ = self._call_with_validation_loc(
-                    ["monitors", i], self._monitor_eme_cell_indices, monitor=monitor
-                )
-            if (
-                hasattr(monitor, "freqs")
-                and monitor.freqs is not None
-                and not (len(set(monitor.freqs)) == len(monitor.freqs))
-            ):
-                self._raise_validation_error_at_loc(
-                    f"Monitor 'freqs={monitor.freqs}' cannot contain duplicates.",
-                    "monitors",
-                    i,
-                )
-            if (
-                hasattr(monitor, "freqs")
-                and monitor.freqs is not None
-                and not (set(monitor.freqs).issubset(set(self.freqs)))
-            ):
-                self._raise_validation_error_at_loc(
-                    f"Monitor 'freqs={monitor.freqs}' "
-                    f"must be a subset of simulation 'freqs={self.freqs}'.",
-                    "monitors",
-                    i,
-                )
-            if (
-                hasattr(monitor, "num_modes")
-                and monitor.num_modes is not None
-                and not (monitor.num_modes <= self.max_num_modes)
-            ):
-                self._raise_validation_error_at_loc(
-                    f"Monitor has 'num_modes={monitor.num_modes}', which exceeds the "
-                    "maximum number of modes in the 'eme_grid', which is "
-                    f"'mode_spec.num_modes={self.max_num_modes}'.",
-                    "monitors",
-                    i,
-                )
-            if (
-                hasattr(monitor, "num_sweep")
-                and monitor.num_sweep is not None
-                and self.sweep_spec is not None
-                and not (monitor.num_sweep <= self.sweep_spec.num_sweep)
-            ):
-                self._raise_validation_error_at_loc(
-                    f"Monitor has 'num_sweep={monitor.num_sweep}', which exceeds the "
-                    "number of sweep indices in the simulation 'sweep_spec', which is "
-                    f"'{self.sweep_spec.num_sweep}'.",
-                    "monitors",
-                    i,
-                )
-
-            if (
-                isinstance(monitor, EMEFieldMonitor)
-                and monitor.num_modes is not None
-                and not (monitor.num_modes <= self.max_port_modes)
-            ):
-                self._raise_validation_error_at_loc(
-                    f"EMEFieldMonitor has 'num_modes={monitor.num_modes}', which exceeds the "
-                    "max number of modes of the two EME ports, which is "
-                    f"'mode_spec.num_modes={self.max_port_modes}'.",
-                    "monitors",
-                    i,
-                )
-            if isinstance(monitor, EMEFieldMonitor):
-                if not np.array_equal(
-                    self.eme_grid_spec.virtual_cell_indices, self.eme_grid_spec.real_cell_indices
-                ):
-                    self._raise_validation_error_at_loc(
-                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
-                        "which is not compatible with periodic repetition "
-                        "('num_reps != 1' in any 'EMEGridSpec'.)",
-                        "monitors",
-                        i,
-                    )
-        return self
-
-    def _validate_interp_specs(self) -> Self:
-        """Require that the interp_specs are identical."""
-        mode_specs_with_locs = tuple(self.eme_grid_spec._mode_specs_with_locs())
-        interp_specs = [mode_spec.interp_spec for mode_spec, _ in mode_specs_with_locs]
-        if len(set(interp_specs)) > 1:
-            reference_interp_spec = interp_specs[0]
-            mismatch_index = next(
-                index
-                for index, interp_spec in enumerate(interp_specs[1:], start=1)
-                if interp_spec != reference_interp_spec
-            )
-            _, mode_spec_loc = mode_specs_with_locs[mismatch_index]
-            self._raise_validation_error_at_loc(
-                "All of the 'mode_spec.interp_spec' in the EME grid must be identical. "
-                f"Currently, they are {set(interp_specs)}.",
-                "eme_grid_spec",
-                *mode_spec_loc,
-                "interp_spec",
-            )
-        return self
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
