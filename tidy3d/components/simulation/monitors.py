@@ -8,7 +8,6 @@ import autograd.numpy as np
 from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.boundary import BlochBoundary, Periodic
 from tidy3d.components.data.point_cloud import (
     POINT_CLOUD_PERMITTIVITY_COMPONENTS,
     point_cloud_nearest_sampled_cells_upper_bound,
@@ -362,32 +361,6 @@ def _validate_field_structure_monitor_overlaps(self: Any) -> Self:
     return self
 
 
-def _diffraction_monitor_boundaries(self: Any) -> Self:
-    """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
-    transverse directions are periodic or Bloch."""
-    monitors = self.monitors
-    boundary_spec = self.boundary_spec
-    for monitor_index, monitor in enumerate(monitors):
-        if isinstance(monitor, DiffractionMonitor):
-            _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis)
-            boundaries = [
-                boundary_spec[n_x].plus,
-                boundary_spec[n_x].minus,
-                boundary_spec[n_y].plus,
-                boundary_spec[n_y].minus,
-            ]
-            # make sure the transverse boundaries are either periodic or Bloch
-            for boundary in boundaries:
-                if not isinstance(boundary, Periodic | BlochBoundary):
-                    self._raise_validation_error_at_loc(
-                        f"The 'DiffractionMonitor' {monitor.name} requires periodic "
-                        f"or Bloch boundaries along dimensions {n_x} and {n_y}.",
-                        "monitors",
-                        monitor_index,
-                    )
-    return self
-
-
 def _projection_monitors_homogeneous(self: Any) -> Self:
     """Error if any field projection monitor is not in a homogeneous region."""
     val = self.monitors
@@ -624,27 +597,6 @@ def _projection_monitors_distance(self: Any) -> Self:
     return self
 
 
-def _projection_monitors_boundaries(self: Any) -> Self:
-    """Error if 3D field projection monitors are used with periodic or Bloch boundaries."""
-    monitors = self.monitors
-
-    if not monitors or self.size.count(0.0) != 0 or not any(self._periodic):
-        return self
-
-    for monitor_ind, monitor in enumerate(monitors):
-        if isinstance(monitor, AbstractFieldProjectionMonitor):
-            self._raise_validation_error_at_loc(
-                f"Monitor '{monitor.name}' of type '{monitor.type}' cannot be used with "
-                "periodic/Bloch boundaries in 3D simulations. This projection would "
-                "require a periodic Green's function. Please use 'DiffractionMonitor' for "
-                "transmission/reflection analysis with periodic/Bloch boundaries.",
-                "monitors",
-                monitor_ind,
-            )
-
-    return self
-
-
 def _projection_mnts_2d(self: Any) -> Self:
     """
     Validate if the field projection monitor is set up for a 2D simulation and
@@ -759,20 +711,6 @@ def _error_empty_surface_monitor(self: Any) -> Self:
                 self._raise_validation_error_at_loc(
                     f"Surface monitor {mnt.name} does not cross any PEC or lossy metal "
                     "(LossyMetalMedium with penetrable=False) surface.",
-                    "monitors",
-                    monitor_ind,
-                )
-    return self
-
-
-def _error_surface_monitors_with_zero_size(self: Any) -> Self:
-    """Error if simulation has surface monitors and the size of domain is zero along any dimension."""
-    not_3d = any(dim == 0 for dim in self.size)
-    if not_3d:
-        for monitor_ind, mnt in enumerate(self.monitors):
-            if isinstance(mnt, get_args(SurfaceMonitorType)):
-                self._raise_validation_error_at_loc(
-                    "Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case.",
                     "monitors",
                     monitor_ind,
                 )

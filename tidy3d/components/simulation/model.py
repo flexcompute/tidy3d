@@ -911,14 +911,12 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_field_structure_monitor_overlaps = (
         _monitors_methods._validate_field_structure_monitor_overlaps
     )
-    _diffraction_monitor_boundaries = _monitors_methods._diffraction_monitor_boundaries
     _projection_monitors_homogeneous = _monitors_methods._projection_monitors_homogeneous
     _projection_monitor_mediums_in_bounds = _monitors_methods._projection_monitor_mediums_in_bounds
     _projection_monitor_media_on_plane = _monitors_methods._projection_monitor_media_on_plane
     _proj_distance_for_approx = _monitors_methods._proj_distance_for_approx
     _integration_surfaces_in_bounds = _monitors_methods._integration_surfaces_in_bounds
     _projection_monitors_distance = _monitors_methods._projection_monitors_distance
-    _projection_monitors_boundaries = _monitors_methods._projection_monitors_boundaries
     _projection_mnts_2d = _monitors_methods._projection_mnts_2d
     _diffraction_and_directivity_monitor_medium = (
         _monitors_methods._diffraction_and_directivity_monitor_medium
@@ -926,9 +924,6 @@ class Simulation(AbstractYeeGridSimulation):
     _diffraction_monitor_order_grid_size = _monitors_methods._diffraction_monitor_order_grid_size
     _get_surface_monitor_bounds = _monitors_methods._get_surface_monitor_bounds
     _error_empty_surface_monitor = _monitors_methods._error_empty_surface_monitor
-    _error_surface_monitors_with_zero_size = (
-        _monitors_methods._error_surface_monitors_with_zero_size
-    )
     _validate_monitor_size = _monitors_methods._validate_monitor_size
     _validate_time_monitors_num_steps = _monitors_methods._validate_time_monitors_num_steps
     _validate_freq_monitors_freq_range = _monitors_methods._validate_freq_monitors_freq_range
@@ -1099,8 +1094,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_monitor_simulation_frequency_range()
         self._validate_point_cloud_monitor_points_in_bounds()
         self._validate_field_structure_monitor_overlaps()
-        self._projection_monitors_boundaries()
-        self._diffraction_monitor_boundaries()
         self._projection_monitors_homogeneous()
         self._abc_boundaries_homogeneous()
         self._proj_distance_for_approx()
@@ -1109,7 +1102,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._projection_mnts_2d()
         self._diffraction_and_directivity_monitor_medium()
         self._error_empty_surface_monitor()
-        self._error_surface_monitors_with_zero_size()
 
         # Finish with grid/source checks and aggregate scene validation.
         self._warn_grid_size_too_small()
