@@ -10,7 +10,6 @@ from flexcompute.core._migration.em.material.medium.comparison import optical_me
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, Periodic
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.grid.grid_spec import UniformGrid
 from tidy3d.components.medium import (
     AbstractCustomMedium,
     FullyAnisotropicMedium,
@@ -684,101 +683,6 @@ def _dipole_emission_background_index(
     return float(background_n.real[0])
 
 
-def _validate_tfsf_has_grid_cells(self: Any) -> None:
-    """Each TFSF source must contain at least one grid center on every
-    axis. Fixed-angle TFSF additionally needs at least two cells along
-    the injection axis inside the simulation's physical domain."""
-    for source_ind, source in enumerate(self.sources):
-        if not isinstance(source, TFSF):
-            continue
-        centers = self.grid.centers.to_list
-        tfsf_bounds = source.bounds
-        sim_bounds = self.bounds
-        for ind in range(3):
-            n_in = sum(
-                1 for center in centers[ind] if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
-            )
-            if n_in == 0:
-                self._raise_validation_error_at_loc(
-                    f"TFSF source at index {source_ind} has no grid cells along the "
-                    f"'{'xyz'[ind]}' axis within its box. The source size or center is "
-                    f"too small relative to the grid spacing, or the box falls outside "
-                    f"the simulation domain.",
-                    "sources",
-                    source_ind,
-                )
-        if isinstance(source.angular_spec, FixedAngleSpec):
-            inj = source.injection_axis
-            n_inj_phys = sum(
-                1 for c in centers[inj] if sim_bounds[0][inj] <= c <= sim_bounds[1][inj]
-            )
-            if n_inj_phys < 2:
-                self._raise_validation_error_at_loc(
-                    f"Fixed-angle TFSF source at index {source_ind} needs at least 2 "
-                    f"grid cells along its injection axis '{'xyz'[inj]}' inside the "
-                    f"simulation's physical domain (got {n_inj_phys}). Increase the "
-                    f"physical-domain extent along that axis, or refine the grid.",
-                    "sources",
-                    source_ind,
-                )
-
-
-def _validate_tfsf_nonuniform_grid(self: Any) -> None:
-    """Warn (or error) if the grid is nonuniform along the directions tangential to the
-    injection plane, inside the TFSF box. A fixed-angle TFSF source requires a uniform
-    transverse grid and errors out; other TFSF sources only see degraded incident-field
-    cancellation, so we warn.
-    """
-    if not any(isinstance(source, TFSF) for source in self.sources):
-        return
-
-    with log as consolidated_logger:
-        for source_ind, source in enumerate(self.sources):
-            if not isinstance(source, TFSF):
-                continue
-
-            fixed_angle = isinstance(source.angular_spec, FixedAngleSpec)
-            centers = self.grid.centers.to_list
-            sizes = self.grid.sizes.to_list
-            tfsf_bounds = source.bounds
-            _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
-            grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
-            for ind in plane_inds:
-                grid_type = grid_list[ind]
-                if isinstance(grid_type, UniformGrid):
-                    continue
-
-                sizes_in_tfsf = [
-                    size
-                    for size, center in zip(sizes[ind], centers[ind])
-                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
-                ]
-
-                # check if all the grid sizes are sufficiently unequal
-                if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
-                    if fixed_angle:
-                        self._raise_validation_error_at_loc(
-                            f"Fixed-angle TFSF requires a uniform transverse grid inside the "
-                            f"TFSF box, but the grid is nonuniform along the '{'xyz'[ind]}' "
-                            f"axis within the source region. Add a 'MeshOverrideStructure' "
-                            f"covering the TFSF box with a uniform 'dl' on the non-injection "
-                            f"axes to force uniform spacing, or remove the non-uniformity "
-                            f"from the structures intersecting the source.",
-                            "sources",
-                            source_ind,
-                        )
-                    else:
-                        consolidated_logger.warning(
-                            f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
-                            "to sub-optimal cancellation of the incident field in the "
-                            "scattered-field region for the total-field scattered-field (TFSF) "
-                            f"source '{source.name}'. For best results, we recommended ensuring a "
-                            "uniform grid in both directions tangential to the TFSF injection "
-                            f"axis, '{'xyz'[source.injection_axis]}'.",
-                            custom_loc=["sources", source_ind],
-                        )
-
-
 def _aux_tfsf_source(self: Any, source: TFSF) -> PlaneWave:
     """Create the auxiliary plane wave source for a give TFSF source."""
     # center and size of the plane wave source
@@ -868,15 +772,6 @@ def _aux_tfsf_source(self: Any, source: TFSF) -> PlaneWave:
         num_freqs=source.num_freqs,
         use_colocated_integration=source.use_colocated_integration,
     )
-
-
-def _validate_tfsf_aux_sources(self: Any) -> None:
-    """Validate that PlaneWave sources auxiliary to TFSF sources can be successfully created."""
-    for source_ind, source in enumerate(self.sources):
-        if isinstance(source, TFSF):
-            _ = self._call_with_validation_loc(
-                ["sources", source_ind], self._aux_tfsf_source, source=source
-            )
 
 
 @cached_property

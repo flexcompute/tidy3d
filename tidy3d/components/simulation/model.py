@@ -955,10 +955,7 @@ class Simulation(AbstractYeeGridSimulation):
     _dipole_emission_tfsf_injection_plane = _tfsf_methods._dipole_emission_tfsf_injection_plane
     _dipole_emission_tfsf_injection_medium = _tfsf_methods._dipole_emission_tfsf_injection_medium
     _dipole_emission_background_index = _tfsf_methods._dipole_emission_background_index
-    _validate_tfsf_has_grid_cells = _tfsf_methods._validate_tfsf_has_grid_cells
-    _validate_tfsf_nonuniform_grid = _tfsf_methods._validate_tfsf_nonuniform_grid
     _aux_tfsf_source = _tfsf_methods._aux_tfsf_source
-    _validate_tfsf_aux_sources = _tfsf_methods._validate_tfsf_aux_sources
     aux_fields = _tfsf_methods.aux_fields
     _validate_tfsf_structure_intersections = _tfsf_methods._validate_tfsf_structure_intersections
     _fixed_angle_sources = _tfsf_methods._fixed_angle_sources
