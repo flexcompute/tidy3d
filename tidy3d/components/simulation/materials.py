@@ -270,9 +270,7 @@ def _validate_scene(self: Any) -> Self:
     self._validate_tfsf_aux_sources()
     self._validate_nonlinear_specs()
     self._validate_custom_source_time()
-    self._validate_mode_objects()
     self._warn_rf_license()
-    self._validate_internal_abc_no_fully_anisotropic()
     return self
 
 

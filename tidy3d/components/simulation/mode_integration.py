@@ -14,28 +14,13 @@ from tidy3d.components.grid.snapping import (
     find_snap_location,
 )
 from tidy3d.components.medium import PECMedium
-from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
-from tidy3d.components.mode.geometry import (
-    effective_mode_plane,
-    rotation_kwargs,
-    rotation_translate_kwargs,
-    rotation_validation_freqs,
-    snapped_mode_domain,
-)
-from tidy3d.components.mode.validation import (
-    make_rotated_structures,
-    validate_microwave_mode_spec,
-    validate_mode_plane_radius,
-    validate_plane_rotation_media,
-    warn_thick_pml,
-)
+from tidy3d.components.mode.geometry import snapped_mode_domain
 from tidy3d.components.monitor import (
     AbstractModeMonitor,
     FieldMonitor,
     ModeMonitor,
     ModeTimeMonitor,
 )
-from tidy3d.components.scene import Scene
 from tidy3d.components.source.field import AbstractModeSource
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.structure import Structure
@@ -286,103 +271,6 @@ def _validate_internal_absorber_placement(self: Any) -> Self:
                     idx,
                 )
     return self
-
-
-def _validate_mode_objects(self: Any) -> None:
-    """Apply the mode-solver setup checks to each modal source and monitor."""
-
-    def validate_mode_sort_spec_bounding_box(
-        mode_obj: ModeSource | AbstractModeMonitor, validation_loc: tuple[str, int]
-    ) -> None:
-        """Validate a fill-fraction box against the effective mode plane."""
-        sort_spec = getattr(mode_obj.mode_spec, "sort_spec", None)
-        if sort_spec is None:
-            return
-
-        mode_plane_bounds = Box.bounds_intersection(mode_obj.bounds, self.bounds)
-        normal_axis = mode_obj.geometry.zero_dims[0]
-        if not sort_spec._bounding_box_intersects_tangentially(mode_plane_bounds, normal_axis):
-            self._raise_validation_error_at_loc(
-                "'ModeSortSpec.bounding_box' must intersect the effective mode plane along "
-                "both tangential axes. Please move or resize the bounding box in the "
-                "tangential directions.",
-                *validation_loc,
-                "mode_spec",
-                "sort_spec",
-                "bounding_box",
-            )
-
-    def validate_mode_object(mode_obj: ModeSource | AbstractModeMonitor, msg_prefix: str) -> None:
-        # Warn if pml is too thick
-        warn_thick_pml(
-            simulation=self,
-            plane=mode_obj.geometry,
-            mode_spec=mode_obj.mode_spec,
-            msg_prefix=msg_prefix,
-        )
-        # Error if mode plane radius is too small
-        validate_mode_plane_radius(
-            mode_spec=mode_obj.mode_spec,
-            plane=mode_obj.geometry,
-            sim_geom=self.geometry,
-        )
-        # Test if structures can be rotated if ``angle_rotation=True``
-        theta = mode_obj.mode_spec.angle_theta
-        if np.abs(theta) > 0 and mode_obj.mode_spec.angle_rotation:
-            structs_in = Scene.intersecting_structures(mode_obj.geometry, self.structures)
-            total_structures = [
-                self.scene.background_structure,
-                *list(self.volumetric_structures),
-            ]
-            mediums_in = list(Scene.intersecting_media(mode_obj.geometry, total_structures))
-            translate_kwargs = rotation_translate_kwargs(mode_obj.geometry, mode_obj.mode_spec)
-            rotate_kwargs_value = rotation_kwargs(mode_obj.geometry, mode_obj.mode_spec)
-            validation_freqs = rotation_validation_freqs(mode_obj)
-            validate_plane_rotation_media(
-                mediums=mediums_in,
-                rotate_kwargs=rotate_kwargs_value,
-                freqs=validation_freqs,
-            )
-            make_rotated_structures(
-                structs_in,
-                translate_kwargs,
-                rotate_kwargs_value,
-                validation_freqs,
-            )
-        # Validate microwave mode spec with mode solver setup
-        if isinstance(mode_obj.mode_spec, MicrowaveModeSpec):
-            validate_microwave_mode_spec(
-                mode_spec=mode_obj.mode_spec,
-                plane=effective_mode_plane(mode_obj.geometry, self.geometry),
-            )
-
-    for imnt, monitor in enumerate(self.monitors):
-        if isinstance(monitor, (AbstractModeMonitor, ModeTimeMonitor)):
-            validate_mode_sort_spec_bounding_box(monitor, ("monitors", imnt))
-            try:
-                validate_mode_object(mode_obj=monitor, msg_prefix=f"'monitors[{imnt}]'")
-            except Exception as e:
-                self._raise_validation_error_at_loc(
-                    format_chained_exception_message(
-                        f"Monitor at 'monitors[{imnt}]' failed validation", e
-                    ),
-                    "monitors",
-                    imnt,
-                )
-
-    for isrc, source in enumerate(self.sources):
-        if isinstance(source, AbstractModeSource):
-            validate_mode_sort_spec_bounding_box(source, ("sources", isrc))
-            try:
-                validate_mode_object(mode_obj=source, msg_prefix=f"'sources[{isrc}]'")
-            except Exception as e:
-                self._raise_validation_error_at_loc(
-                    format_chained_exception_message(
-                        f"Source at 'sources[{isrc}]' failed validation", e
-                    ),
-                    "sources",
-                    isrc,
-                )
 
 
 def _validate_modes_size(self: Any) -> None:

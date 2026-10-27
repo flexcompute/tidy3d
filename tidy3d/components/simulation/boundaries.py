@@ -710,23 +710,6 @@ def _validate_pec_frame_not_in_pml_extrusion(self: Any) -> None:
                     )
 
 
-def _validate_internal_abc_no_fully_anisotropic(self: Any) -> Self:
-    """Error if internal absorber intersect fully anisotropic mediums."""
-
-    total_structures = [self.scene.background_structure, *list(self.structures)]
-
-    for abc_index, abc in enumerate(self._shifted_internal_absorbers):
-        mediums = Scene.intersecting_media(abc, tuple(total_structures))
-
-        if any(isinstance(med, FullyAnisotropicMedium) for med in mediums):
-            self._raise_validation_error_at_loc(
-                "A 'InternalAbsorber' cannot cross a 'FullyAnisotropicMedium'.",
-                "internal_absorbers",
-                abc_index,
-            )
-    return self
-
-
 def _num_non_pml_cells(self: Any) -> int:
     """Number of grid cells in the simulation domain excluding PML/absorber layers."""
     non_pml_cells_dim = []

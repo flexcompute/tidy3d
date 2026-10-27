@@ -852,7 +852,6 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_internal_absorber_placement = (
         _mode_integration_methods._validate_internal_absorber_placement
     )
-    _validate_mode_objects = _mode_integration_methods._validate_mode_objects
     _validate_modes_size = _mode_integration_methods._validate_modes_size
     _validate_num_cells_in_mode_objects = (
         _mode_integration_methods._validate_num_cells_in_mode_objects
@@ -999,9 +998,6 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_no_structures_close_to_pml = _boundaries_methods._validate_no_structures_close_to_pml
     _validate_pec_frame_not_in_pml_extrusion = (
         _boundaries_methods._validate_pec_frame_not_in_pml_extrusion
-    )
-    _validate_internal_abc_no_fully_anisotropic = (
-        _boundaries_methods._validate_internal_abc_no_fully_anisotropic
     )
     _num_non_pml_cells = _boundaries_methods._num_non_pml_cells
     _check_bloch_vec = _boundaries_methods._check_bloch_vec
