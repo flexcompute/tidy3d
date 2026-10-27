@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
@@ -19,7 +19,6 @@ from tidy3d.components.diffraction import (
 )
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import (
-    AbstractCustomMedium,
     AnisotropicMedium,
     AnisotropicMediumFromMedium2D,
     Medium2D,
@@ -29,7 +28,6 @@ from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DipoleEmissionMonitor,
-    DirectivityMonitor,
     FieldStructureMonitor,
     FieldTimeMonitor,
     FreqMonitor,
@@ -44,11 +42,9 @@ from tidy3d.components.monitor import (
 )
 from tidy3d.components.scene import Scene
 from tidy3d.components.structure import Structure, _require_public_optical_medium
-from tidy3d.components.types.monitor import SurfaceMonitorType
 from tidy3d.components.validators import (
     named_obj_descr,
     points_outside_bounds,
-    validate_field_projection_monitors_2d,
 )
 from tidy3d.config import config
 from tidy3d.exceptions import SetupError, Tidy3dError
@@ -59,7 +55,7 @@ if TYPE_CHECKING:
     from tidy3d.components.grid.grid import Coords1D
     from tidy3d.components.medium import AbstractMedium, MediumType3D
     from tidy3d.components.monitor import AbstractGaussianOverlapMonitor, FieldMonitor, Monitor
-    from tidy3d.components.types import Bound, Coordinate
+    from tidy3d.components.types import Coordinate
     from tidy3d.components.types.monitor import MonitorType
 
 from . import constants
@@ -506,189 +502,6 @@ def _projection_monitor_media_on_plane(
                 mediums.add(medium)
 
     return mediums
-
-
-def _proj_distance_for_approx(self: Any) -> Self:
-    """Warn if projection distance for projection monitors is not large compared to monitor or,
-    simulation size, yet far_field_approx is True."""
-    val = self.monitors
-
-    if val is None:
-        return self
-
-    sim_size = self.size
-
-    with log as consolidated_logger:
-        for monitor_ind, monitor in enumerate(val):
-            if not isinstance(monitor, AbstractFieldProjectionMonitor):
-                continue
-
-            name = monitor.name
-            max_size = min(np.max(monitor.size), np.max(sim_size))
-
-            if monitor.far_field_approx and np.abs(monitor.proj_distance) < 10 * max_size:
-                consolidated_logger.warning(
-                    f"Monitor {name} projects to a distance comparable to the size of the "
-                    "monitor; we recommend setting ``far_field_approx=False`` to disable "
-                    "far-field approximations for this monitor, because the approximations "
-                    "are valid only when the observation points are very far compared to the "
-                    "size of the monitor that records near fields.",
-                    custom_loc=["monitors", monitor_ind],
-                )
-    return self
-
-
-def _integration_surfaces_in_bounds(self: Any) -> Self:
-    """Error if all of the integration surfaces are outside of the simulation domain."""
-    val = self.monitors
-
-    if val is None:
-        return self
-
-    sim_center = self.center
-    sim_size = self.size
-    sim_box = Box(size=sim_size, center=sim_center)
-
-    for monitor_ind, mnt in enumerate(val):
-        if not isinstance(mnt, SurfaceIntegrationMonitor):
-            continue
-        if not any(sim_box.intersects(surf) for surf in mnt.integration_surfaces):
-            self._raise_validation_error_at_loc(
-                f"All integration surfaces of monitor '{mnt.name}' are outside of the "
-                "simulation bounds.",
-                "monitors",
-                monitor_ind,
-            )
-
-    return self
-
-
-def _projection_monitors_distance(self: Any) -> Self:
-    """Warn if the projection distance is large for exact projections."""
-    val = self.monitors
-
-    if val is None:
-        return self
-
-    sim_size = self.size
-
-    with log as consolidated_logger:
-        for idx, monitor in enumerate(val):
-            if isinstance(monitor, AbstractFieldProjectionMonitor):
-                if (
-                    np.abs(monitor.proj_distance) > 1.0e4 * np.max(sim_size)
-                    and not monitor.far_field_approx
-                ):
-                    monitor = monitor.copy(update={"far_field_approx": True})
-                    val = list(val)
-                    val[idx] = monitor
-                    val = tuple(val)
-                    consolidated_logger.warning(
-                        "A very large projection distance was set for the field projection "
-                        f"monitor '{monitor.name}'. Using exact field projections may result "
-                        "in precision loss for large distances; automatically enabling "
-                        "far-field approximations ('far_field_approx = True') for better "
-                        "precision. To insist on exact projections, consider using client-side "
-                        "projections via the 'FieldProjector' class, where higher precision is "
-                        "available.",
-                        custom_loc=["monitors", idx, "proj_distance"],
-                    )
-    return self
-
-
-def _projection_mnts_2d(self: Any) -> Self:
-    """
-    Validate if the field projection monitor is set up for a 2D simulation and
-    ensure the observation parameters are configured correctly.
-
-    - For a 2D simulation in the x-y plane, ``theta`` should be set to ``pi/2``.
-    - For a 2D simulation in the y-z plane, ``phi`` should be set to ``pi/2`` or ``3*pi/2``.
-    - For a 2D simulation in the x-z plane, ``phi`` should be set to ``0`` or ``pi``.
-
-    Note: Exact far field projection is not available yet. Currently, only
-    ``far_field_approx = True`` is supported.
-    """
-    validate_field_projection_monitors_2d(
-        self.monitors,
-        self.size,
-        raise_error=lambda message, monitor_ind: self._raise_validation_error_at_loc(
-            message, "monitors", monitor_ind
-        ),
-    )
-    return self
-
-
-def _diffraction_and_directivity_monitor_medium(self: Any) -> Self:
-    """If any :class:`.DiffractionMonitor` or  :class:`.DirectivityMonitor` exists, ensure it does not lie in a lossy medium."""
-    monitors = self.monitors
-    structures = self.structures
-    background_medium = self.medium
-    for monitor_ind, monitor in enumerate(monitors):
-        if isinstance(monitor, DiffractionMonitor | DirectivityMonitor):
-            medium_set = Scene.intersecting_media(monitor, structures)
-            raw_medium = medium_set.pop() if medium_set else background_medium
-            medium = Structure._get_public_optical_medium(raw_medium)
-            if medium is None:
-                self._raise_validation_error_at_loc(
-                    f"No optical medium detected on plane intersecting a {monitor.type}.",
-                    "monitors",
-                    monitor_ind,
-                )
-            freqs = np.array(monitor.freqs)
-            if isinstance(medium, AbstractCustomMedium) and len(freqs) > 1:
-                freqs = 0.5 * (np.min(freqs) + np.max(freqs))
-            _, index_k = medium.nk_model(frequency=freqs)
-            if not np.all(index_k == 0):
-                self._raise_validation_error_at_loc(
-                    f"'{monitor.type}' must not lie in a lossy medium.",
-                    "monitors",
-                    monitor_ind,
-                )
-    return self
-
-
-@classmethod
-def _get_surface_monitor_bounds(
-    cls: Any,
-    center: Coordinate,
-    size: Coordinate,
-    monitor: SurfaceMonitorType,
-    medium: MediumType3D,
-    structures: list[Structure],
-) -> list[Bound]:
-    """Intersect a surface monitor with the bounding box of each PEC structure."""
-
-    sim_box = Box(center=center, size=size)
-    mnt_bounds = Box.bounds_intersection(monitor.bounds, sim_box.bounds)
-
-    if medium.is_pec_like:
-        return [mnt_bounds]
-
-    bounds = []
-    for structure in structures:
-        if structure.medium.is_pec_like:
-            intersection_bounds = Box.bounds_intersection(mnt_bounds, structure.geometry.bounds)
-            if all(bmin <= bmax for bmin, bmax in zip(*intersection_bounds)):
-                bounds.append(intersection_bounds)
-
-    return bounds
-
-
-def _error_empty_surface_monitor(self: Any) -> Self:
-    """Error if any surface monitor does not at least cross a bounding box of a PEC/LossyMetal structure."""
-    for monitor_ind, mnt in enumerate(self.monitors):
-        if isinstance(mnt, get_args(SurfaceMonitorType)):
-            bounds = self._get_surface_monitor_bounds(
-                self.center, self.size, mnt, self.medium, self.structures
-            )
-            if len(bounds) == 0:
-                self._raise_validation_error_at_loc(
-                    f"Surface monitor {mnt.name} does not cross any PEC or lossy metal "
-                    "(LossyMetalMedium with penetrable=False) surface.",
-                    "monitors",
-                    monitor_ind,
-                )
-    return self
 
 
 def _validate_monitor_size(self: Any) -> None:

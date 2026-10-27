@@ -913,15 +913,6 @@ class Simulation(AbstractYeeGridSimulation):
     _projection_monitors_homogeneous = _monitors_methods._projection_monitors_homogeneous
     _projection_monitor_mediums_in_bounds = _monitors_methods._projection_monitor_mediums_in_bounds
     _projection_monitor_media_on_plane = _monitors_methods._projection_monitor_media_on_plane
-    _proj_distance_for_approx = _monitors_methods._proj_distance_for_approx
-    _integration_surfaces_in_bounds = _monitors_methods._integration_surfaces_in_bounds
-    _projection_monitors_distance = _monitors_methods._projection_monitors_distance
-    _projection_mnts_2d = _monitors_methods._projection_mnts_2d
-    _diffraction_and_directivity_monitor_medium = (
-        _monitors_methods._diffraction_and_directivity_monitor_medium
-    )
-    _get_surface_monitor_bounds = _monitors_methods._get_surface_monitor_bounds
-    _error_empty_surface_monitor = _monitors_methods._error_empty_surface_monitor
     _validate_monitor_size = _monitors_methods._validate_monitor_size
     _validate_time_monitors_num_steps = _monitors_methods._validate_time_monitors_num_steps
     _validate_freq_monitors_freq_range = _monitors_methods._validate_freq_monitors_freq_range
@@ -1083,12 +1074,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_field_structure_monitor_overlaps()
         self._projection_monitors_homogeneous()
         self._abc_boundaries_homogeneous()
-        self._proj_distance_for_approx()
-        self._integration_surfaces_in_bounds()
-        self._projection_monitors_distance()
-        self._projection_mnts_2d()
-        self._diffraction_and_directivity_monitor_medium()
-        self._error_empty_surface_monitor()
 
         # Finish with grid/source checks and aggregate scene validation.
         self._warn_grid_size_too_small()
