@@ -16,7 +16,6 @@ from tidy3d.components.data.point_cloud import (
 )
 from tidy3d.components.diffraction import (
     diffraction_monitor_storage_size,
-    diffraction_order_grid_size,
 )
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import (
@@ -645,31 +644,6 @@ def _diffraction_and_directivity_monitor_medium(self: Any) -> Self:
                     "monitors",
                     monitor_ind,
                 )
-    return self
-
-
-def _diffraction_monitor_order_grid_size(self: Any) -> Self:
-    """Error if a diffraction monitor would generate an excessively large order grid."""
-
-    for monitor_ind, monitor in enumerate(self.monitors):
-        if not isinstance(monitor, DiffractionMonitor):
-            continue
-
-        medium = self.monitor_medium(monitor)
-        total_orders = diffraction_order_grid_size(self, monitor, medium)
-        if total_orders > constants.MAX_DIFFRACTION_ORDER_GRID_SIZE:
-            self._raise_validation_error_at_loc(
-                f"The 'DiffractionMonitor' {monitor.name} would generate "
-                f"{total_orders} diffraction order combinations, which exceeds "
-                f"the supported limit of {constants.MAX_DIFFRACTION_ORDER_GRID_SIZE}. "
-                "Verify that units are set correctly (by default, lengths are specified "
-                "in microns and frequencies in Hz). Reduce the monitor frequencies, "
-                "the refractive index on the monitor plane, or the simulation size "
-                "along the transverse directions.",
-                "monitors",
-                monitor_ind,
-            )
-
     return self
 
 

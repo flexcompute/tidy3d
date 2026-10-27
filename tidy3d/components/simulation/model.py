@@ -920,7 +920,6 @@ class Simulation(AbstractYeeGridSimulation):
     _diffraction_and_directivity_monitor_medium = (
         _monitors_methods._diffraction_and_directivity_monitor_medium
     )
-    _diffraction_monitor_order_grid_size = _monitors_methods._diffraction_monitor_order_grid_size
     _get_surface_monitor_bounds = _monitors_methods._get_surface_monitor_bounds
     _error_empty_surface_monitor = _monitors_methods._error_empty_surface_monitor
     _validate_monitor_size = _monitors_methods._validate_monitor_size
@@ -965,11 +964,6 @@ class Simulation(AbstractYeeGridSimulation):
     _source_medium = _sources_methods._source_medium
     _plane_wave_boundaries = _sources_methods._plane_wave_boundaries
     _check_source_freq_available = _sources_methods._check_source_freq_available
-    _source_homogeneous_isotropic = _sources_methods._source_homogeneous_isotropic
-    _check_normalize_index = _sources_methods._check_normalize_index
-    _warn_source_monitor_normalization_grid = (
-        _sources_methods._warn_source_monitor_normalization_grid
-    )
     _validate_custom_source_time = _sources_methods._validate_custom_source_time
     _thin_lens_source_plane_cells = _sources_methods._thin_lens_source_plane_cells
     _thin_lens_setup_work_units = _sources_methods._thin_lens_setup_work_units
@@ -1098,10 +1092,6 @@ class Simulation(AbstractYeeGridSimulation):
 
         # Finish with grid/source checks and aggregate scene validation.
         self._warn_grid_size_too_small()
-        self._source_homogeneous_isotropic()
-        self._diffraction_monitor_order_grid_size()
-        self._check_normalize_index()
-        self._warn_source_monitor_normalization_grid()
         self._validate_scene()
         return self
 
