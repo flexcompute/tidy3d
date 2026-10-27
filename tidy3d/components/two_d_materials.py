@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
+from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
 
 from tidy3d.components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from tidy3d.components.geometry.float_utils import increment_float
@@ -33,9 +34,7 @@ if TYPE_CHECKING:
 
 def snap_coordinate_to_grid(grid: Grid, center: float, axis: Axis) -> float:
     """2D materials are snapped to grid along their normal axis"""
-    new_centers = grid.boundaries.to_list[axis]
-    new_center = new_centers[np.argmin(abs(new_centers - center))]
-    return new_center
+    return grid_numerics.nearest_grid_boundary(grid.boundaries.to_list[axis], center)
 
 
 def get_bounds(geom: Geometry, axis: Axis) -> tuple[float, float]:
