@@ -70,6 +70,10 @@ _POLYSLAB_COPLANAR_SIDEWALL_KEY = ("coplanar_sidewall_patches",)
 _POLYSLAB_SIDEWALL_ANGLE_KEY = ("sidewall_angle_patches",)
 _POLYSLAB_SLAB_FACE = "slab_face"  # keys are ('slab_face', 0) and ('slab_face', 1)
 
+# axial shift of the vertex reference plane per unit shift of ('slab_bounds', 0/1); with a
+# nonzero sidewall angle, that shift also translates the tilted sidewalls along the axis
+_REFERENCE_PLANE_SHIFT = {"bottom": (1.0, 0.0), "middle": (0.5, 0.5), "top": (0.0, 1.0)}
+
 # Warn before triangulating large polyslabs due to inefficiency
 _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
 
@@ -2409,6 +2413,8 @@ class PolySlab(base.Planar):
             key = self._canonical_key_for_path(path)
             if key is not None:
                 path_by_key[key] = path
+            if key is not None and key[0] == _POLYSLAB_SLAB_FACE and self._sidewall_shift(key[1]):
+                path_by_key.setdefault(_POLYSLAB_SIDEWALL_KEY, path)
 
         # early return if polyslab is not in simulation domain
         slab_min, slab_max = self.slab_bounds
@@ -2531,17 +2537,44 @@ class PolySlab(base.Planar):
                 g = self._sample_set_integrand(derivative_info, key)
                 vjps[path] = float(np.real(np.sum(g * sample_set.weights.values)))
             else:  # slab_bounds
-                if sample_set.num_points == 0:
-                    vjps[path] = 0.0
-                    continue
-                g = self._sample_set_integrand(derivative_info, key)
-                v = np.real(np.sum(g * sample_set.weights.values)).item()
-                # outward-normal convention
-                if path[1] == 0:
-                    v *= -1
+                v = 0.0
+                if sample_set.num_points > 0:
+                    g = self._sample_set_integrand(derivative_info, key)
+                    v = np.real(np.sum(g * sample_set.weights.values)).item()
+                    # outward-normal convention
+                    if path[1] == 0:
+                        v *= -1
+                shift = self._sidewall_shift(path[1])
+                if shift:
+                    v += shift * self._sidewall_axial_vjp(sample_sets, derivative_info)
                 vjps[path] = v
 
         return vjps
+
+    def _sidewall_shift(self, bound_index: int) -> float:
+        """Axial sidewall shift per unit shift of ``slab_bounds[bound_index]``."""
+        if self._has_vertical_sidewall:
+            return 0.0
+        return _REFERENCE_PLANE_SHIFT[self.reference_plane][bound_index]
+
+    def _sidewall_axial_vjp(
+        self,
+        sample_sets: dict[PathType, SurfaceSampleSet],
+        derivative_info: ShapeDerivativeContext,
+    ) -> float:
+        """VJP of a rigid axial translation of the sidewalls (normal velocity ``n_axis``)."""
+        if _POLYSLAB_SIDEWALL_KEY not in sample_sets:
+            raise AdjointError(
+                f"'PolySlab' sample sets are missing the canonical {_POLYSLAB_SIDEWALL_KEY} key "
+                "needed for slab-bound derivatives with a nonzero sidewall angle; got keys "
+                f"{tuple(sample_sets)}."
+            )
+        sample_set = sample_sets[_POLYSLAB_SIDEWALL_KEY]
+        if sample_set.num_points == 0:
+            return 0.0
+        g = self._sample_set_integrand(derivative_info, _POLYSLAB_SIDEWALL_KEY)
+        normal_axis = sample_set.normals.values[:, self.axis]
+        return np.real(np.sum(g * sample_set.weights.values * normal_axis)).item()
 
     def _vertices_vjp_from_sample_set(
         self,
