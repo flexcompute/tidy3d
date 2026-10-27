@@ -477,10 +477,10 @@ class Tidy3dBaseModel(BaseModel):
                 except Exception:
                     # This validator runs outside the wrap validator that aborts a failed
                     # model's capture frame, so drop the frame here.
-                    if log._capture:
+                    if log._per_thread.capture:
                         log.abort_capture()
                     raise
-                if log._capture:
+                if log._per_thread.capture:
                     log.end_capture(self)
                 return self
 
@@ -533,7 +533,7 @@ class Tidy3dBaseModel(BaseModel):
         data: Any,
         handler: ModelWrapValidatorHandler[T],
     ) -> T:
-        if not log._capture:
+        if not log._per_thread.capture:
             return handler(data)
 
         log.begin_capture()

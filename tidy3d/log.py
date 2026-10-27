@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import sys
+import threading
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -112,6 +114,17 @@ class LogHandler:
                 )
 
 
+class _ThreadState(threading.local):
+    """Logger state each thread keeps separately; a new thread starts with no capture or
+    consolidation in progress."""
+
+    def __init__(self) -> None:
+        self.counts: dict[int, int] | None = None
+        self.capture_stack: list[dict[str, Any]] | None = None
+        self.capture = False
+        self.captured_warnings: list[dict[str, Any]] = []
+
+
 class Logger:
     """Custom logger to avoid the complexities of the logging module.
 
@@ -126,35 +139,38 @@ class Logger:
     record warnings emitted during model validation (and other explicit begin/end capture regions,
     e.g. validation routines like ``validate_pre_upload``). A structured copy of captured warnings
     can then be recovered through 'captured_warnings'.
+
+    Consolidation and capture are tracked per thread, so threads logging at the same time never
+    count into or capture from each other. Output suppression follows the calling context
+    (``contextvars``): it covers the calling thread and work run in a copy of its context, such
+    as jobs submitted to ``Batch``'s thread pools, but not other threads.
     """
 
     _static_cache: set[str] = set()
+    _static_cache_lock = threading.Lock()
 
     def __init__(self) -> None:
         self.handlers: dict[str, LogHandler] = {}
         self.suppression = True
         self.warn_once = False
-        self._counts: dict[int, int] | None = None
-        self._stack: list[dict[str, Any]] | None = None
-        self._capture = False
-        self._captured_warnings: list[dict[str, Any]] = []
-        self._suppress_all = False
+        self._per_thread = _ThreadState()
+        self._suppress_output: ContextVar[bool] = ContextVar("suppress_output", default=False)
 
     def set_capture(self, capture: bool) -> None:
-        """Turn on/off tree-like capturing of log messages."""
-        self._capture = capture
+        """Turn on/off tree-like capturing of log messages in the calling thread."""
+        self._per_thread.capture = capture
 
     def captured_warnings(self) -> list[dict[str, Any]]:
         """Get the formatted list of captured log messages."""
-        captured_warnings = self._captured_warnings
-        self._captured_warnings = []
+        captured_warnings = self._per_thread.captured_warnings
+        self._per_thread.captured_warnings = []
         return captured_warnings
 
     def __enter__(self) -> Self:
         """If suppression is enabled, enter a consolidation context (only a single message is
         emitted)."""
-        if self.suppression and self._counts is None:
-            self._counts = {}
+        if self.suppression and self._per_thread.counts is None:
+            self._per_thread.counts = {}
         return self
 
     def __exit__(
@@ -164,34 +180,37 @@ class Logger:
         traceback: TracebackType | None,
     ) -> Literal[False]:
         """Exist a consolidation context (report the number of messages discarded)."""
-        if self._counts is not None:
-            total = sum(v for v in self._counts.values())
+        if self._per_thread.counts is not None:
+            total = sum(v for v in self._per_thread.counts.values())
             if total > 0:
-                max_level = max(k for k, v in self._counts.items() if v > 0)
-                counts = [f"{v} {_level_name[k]}" for k, v in self._counts.items() if v > 0]
-            self._counts = None
+                max_level = max(k for k, v in self._per_thread.counts.items() if v > 0)
+                counts = [
+                    f"{v} {_level_name[k]}" for k, v in self._per_thread.counts.items() if v > 0
+                ]
+            self._per_thread.counts = None
             if total > 0:
                 noun = " messages." if total > 1 else " message."
                 # Temporarily prevent capturing messages to emit consolidated summary
-                stack = self._stack
-                self._stack = None
+                stack = self._per_thread.capture_stack
+                self._per_thread.capture_stack = None
                 self.log(max_level, "Suppressed " + ", ".join(counts) + noun)
-                self._stack = stack
+                self._per_thread.capture_stack = stack
         return False
 
     @contextmanager
     def suppress_output(self) -> Generator[None, None, None]:
-        """Context manager to suppress all log output.
+        """Context manager to suppress all log output in the calling context.
 
         This is useful for speculative operations where validation failures are expected
-        and their error messages should not be shown to the user.
+        and their error messages should not be shown to the user. Work run in a copy of the
+        calling context, such as jobs submitted to ``Batch``'s thread pools, is suppressed too;
+        other threads keep logging.
         """
-        old_value = self._suppress_all
-        self._suppress_all = True
+        token = self._suppress_output.set(True)
         try:
             yield
         finally:
-            self._suppress_all = old_value
+            self._suppress_output.reset(token)
 
     def begin_capture(self) -> None:
         """Start capturing log stack for consolidated validation log.
@@ -199,26 +218,26 @@ class Logger:
         This method should be called before a validation routine starts. It must be followed by a
         corresponding 'end_capture'.
         """
-        if not self._capture:
+        if not self._per_thread.capture:
             return
 
         stack_item = {"messages": [], "children": {}}
-        if self._stack:
-            self._stack.append(stack_item)
+        if self._per_thread.capture_stack:
+            self._per_thread.capture_stack.append(stack_item)
         else:
-            self._stack = [stack_item]
+            self._per_thread.capture_stack = [stack_item]
 
     def abort_capture(self) -> None:
         """Undo the last ``begin_capture()`` call.
 
         This is used when validation fails before reaching the corresponding ``end_capture()``.
         """
-        if not self._stack:
+        if not self._per_thread.capture_stack:
             return
 
-        self._stack.pop()
-        if len(self._stack) == 0:
-            self._stack = None
+        self._per_thread.capture_stack.pop()
+        if len(self._per_thread.capture_stack) == 0:
+            self._per_thread.capture_stack = None
 
     def end_capture(self, model: BaseModel) -> None:
         """End capturing log stack for consolidated validation log.
@@ -226,12 +245,12 @@ class Logger:
         This method should be called after a validation routine ends. It must follow a
         corresponding 'begin_capture'.
         """
-        if not self._stack:
+        if not self._per_thread.capture_stack:
             return
 
-        stack_item = self._stack.pop()
-        if len(self._stack) == 0:
-            self._stack = None
+        stack_item = self._per_thread.capture_stack.pop()
+        if len(self._per_thread.capture_stack) == 0:
+            self._per_thread.capture_stack = None
 
         # Check if this stack item contains any messages or children
         if len(stack_item["messages"]) > 0 or len(stack_item["children"]) > 0:
@@ -243,13 +262,13 @@ class Logger:
                 child_dict["parent_fields"] = model_fields.get(child_hash, [])
 
             # Are we at the bottom of the stack?
-            if self._stack is None:
+            if self._per_thread.capture_stack is None:
                 # Yes, we're root
                 self._parse_warning_capture(current_loc=[], stack_item=stack_item)
             else:
                 # No, we're someone else's child
                 hash_ = hash(model)
-                self._stack[-1]["children"][hash_] = stack_item
+                self._per_thread.capture_stack[-1]["children"][hash_] = stack_item
 
     def _parse_warning_capture(self, current_loc: list[Any], stack_item: dict[str, Any]) -> None:
         """Process capture tree to compile formatted captured warnings."""
@@ -266,7 +285,9 @@ class Logger:
                 # process current level warnings
                 for level, msg, custom_loc in stack_item["messages"]:
                     if level == "WARNING":
-                        self._captured_warnings.append({"loc": new_loc + custom_loc, "msg": msg})
+                        self._per_thread.captured_warnings.append(
+                            {"loc": new_loc + custom_loc, "msg": msg}
+                        )
 
                 # initialize processing at children level
                 for child_stack in stack_item["children"].values():
@@ -276,7 +297,9 @@ class Logger:
             # process current level warnings
             for level, msg, custom_loc in stack_item["messages"]:
                 if level == "WARNING":
-                    self._captured_warnings.append({"loc": current_loc + custom_loc, "msg": msg})
+                    self._per_thread.captured_warnings.append(
+                        {"loc": current_loc + custom_loc, "msg": msg}
+                    )
 
             # initialize processing at children level
             for child_stack in stack_item["children"].values():
@@ -295,7 +318,7 @@ class Logger:
         """Distribute log messages to all handlers"""
 
         # Skip all output if suppression is active (for speculative operations)
-        if self._suppress_all:
+        if self._suppress_output.get():
             return
 
         # Check global cache if requested or if warn_once is enabled for warnings
@@ -303,9 +326,10 @@ class Logger:
         should_check_cache = log_once or (self.warn_once and level_name == "WARNING")
         if should_check_cache:
             # Use the message body before composition as key
-            if message in self._static_cache:
-                return
-            self._static_cache.add(message)
+            with self._static_cache_lock:
+                if message in self._static_cache:
+                    return
+                self._static_cache.add(message)
 
         # Compose message
         if len(args) > 0:
@@ -318,20 +342,23 @@ class Logger:
             composed_message = message
 
         # Capture all messages (even if suppressed later)
-        if self._stack and capture:
+        if self._per_thread.capture_stack and capture:
             if custom_loc is None:
                 custom_loc = []
-            self._stack[-1]["messages"].append((level_name, composed_message, custom_loc))
+            self._per_thread.capture_stack[-1]["messages"].append(
+                (level_name, composed_message, custom_loc)
+            )
 
         # Context-local logger emits a single message and consolidates the rest
-        if self._counts is not None:
-            if len(self._counts) > 0:
-                self._counts[level] = 1 + self._counts.get(level, 0)
+        if self._per_thread.counts is not None:
+            if len(self._per_thread.counts) > 0:
+                self._per_thread.counts[level] = 1 + self._per_thread.counts.get(level, 0)
                 return
-            self._counts[level] = 0
+            self._per_thread.counts[level] = 0
 
         # Forward message to handlers
-        for handler in self.handlers.values():
+        # Snapshot, as another thread may add or remove handlers meanwhile
+        for handler in tuple(self.handlers.values()):
             handler.handle(level, level_name, composed_message)
 
     def log(self, level: LogValue, message: str, *args: Any, log_once: bool = False) -> None:
@@ -470,14 +497,15 @@ def set_logging_file(
     if filemode not in "wa":
         raise ValueError("filemode must be either 'w' or 'a'")
 
-    # Close previous handler, if any
-    if "file" in log.handlers:
+    # Unregister the previous file handler before closing it, so later log calls skip it. A log
+    # call in another thread that already copied the handlers can still reach the closed file and
+    # raise.
+    previous = log.handlers.pop("file", None)
+    if previous is not None:
         try:
-            log.handlers["file"].console.file.close()
+            previous.console.file.close()
         except Exception:  # TODO: catch specific exception
             log.warning("Log file could not be closed")
-        finally:
-            del log.handlers["file"]
 
     if str(fname) == "":
         # Empty string can be passed to just stop previously opened file handler
