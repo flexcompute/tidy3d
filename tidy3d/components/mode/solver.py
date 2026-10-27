@@ -33,8 +33,8 @@ TOL_DEGENERATE_CANDIDATE = 1e3 * TOL_EIGS
 TOL_NEEDS_ORTHOGONALIZATION = 1e2 * TOL_EIGS
 # Tolerance for deciding on the matrix to be diagonal or tensorial
 TOL_TENSORIAL = 1e-6
-# Re(P_z) must exceed this fraction of |P_z| to be a reliable direction indicator;
-# below this, the mode is treated as lossless-evanescent (Re(P_z) ≈ 0 by physics).
+# Re(P_z) must exceed this fraction of the mode's self-product |0.5 * integral(E x H)| to be a
+# reliable direction indicator; below this, the mode carries no power (Re(P_z) ≈ 0 by physics).
 TOL_POWER_FLOW_DIRECTION = 1e2 * TOL_EIGS
 # shift target neff by this value, both rel and abs, whichever results in larger shift
 TARGET_SHIFT = 10 * fp_eps
@@ -485,8 +485,10 @@ class EigSolver(Tidy3dBaseModel):
             # Convention: ``direction`` here means the time-averaged power
             # flow direction, NOT the sign of the phase constant. Re(n_eff)
             # is allowed to be negative (e.g. a lossy guide below cutoff).
-            # For purely evanescent modes Re(P_z) ≈ 0, we fall back
-            # to the algebraic passive convention ``keff ≥ 0``.
+            # For modes that carry no power Re(P_z) ≈ 0, and we fall back
+            # to the algebraic passive convention ``keff ≥ 0``. These are evanescent
+            # modes and the complex modes of lossless guides, whose whole P_z vanishes,
+            # so Re(P_z) is judged against the self-product that normalizes the mode.
             # The flip_mask is invariant to subsequent rescaling because power_flow
             # scales as |c|² under (E,H)→c·(E,H), preserving sign(Re P_z).
             if not is_tensorial:
@@ -498,8 +500,10 @@ class EigSolver(Tidy3dBaseModel):
                 power_flow = field_data_numerics.complex_power_flow(E_tan, H_tan, dS)
 
                 expected_sign = 1.0 if direction == "+" else -1.0
-                abs_pz = np.abs(power_flow)
-                reliable = np.abs(power_flow.real) > TOL_POWER_FLOW_DIRECTION * abs_pz
+                self_product = np.abs(
+                    field_data_numerics.dot(E_tan, H_tan, E_tan, H_tan, dS, conjugate=False)
+                )
+                reliable = np.abs(power_flow.real) > TOL_POWER_FLOW_DIRECTION * self_product
                 flip_for_direction = reliable & (power_flow.real * expected_sign < 0)
                 flip_for_passive = (~reliable) & (keff < 0)
                 flip_mask = flip_for_direction | flip_for_passive
