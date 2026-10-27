@@ -688,15 +688,6 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._warn_heterojunction_electron_affinity
             )
-            self._call_with_validation_loc(
-                ("structures",), self._warn_same_bands_different_narrowing
-            )
-            self._call_with_validation_loc(("boundary_spec",), self._check_current_bcs)
-            # After the CurrentBC checks: a current-driven gate is rejected outright,
-            # so demanding its work function first would send the user after a value
-            # that cannot make the input valid.
-            self._call_with_validation_loc(("boundary_spec",), self._check_gate_voltage_bcs)
-            self._check_grad_quasi_fermi_impact_ionization()
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -1317,60 +1308,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
         return self
 
-    def _gate_bc_indices(self) -> list[int]:
-        """Indices of the ohmic contacts whose terminal reaches only insulators.
-
-        A gate reaches an insulator and no semiconductor; its metal work
-        function sets the potential reference. Conductor/conductor and
-        metal/fluid interfaces do not qualify.
-
-        Gate identity follows contacted materials, independent of the drive.
-
-        Judged from :meth:`_placement_contact_media`, so a
-        ``StructureSimulationBoundary`` counts while ``StructureBoundary`` and
-        ``SimulationBoundary`` stay unresolved until the simulation runs. An
-        unresolved contact on a candidate metal defers that metal; one naming no
-        metal at all could touch any of them and defers the whole simulation.
-        """
-        placements = []
-        metals_touching_semiconductor = set()
-        metals_with_unknown_contacts = set()
-        has_unidentified_contact = False
-        for i, bc in enumerate(self.boundary_spec):
-            condition = bc.condition
-            if not isinstance(condition, (VoltageBC, CurrentBC)):
-                continue
-            sides = self._placement_contact_media(bc.placement)
-            conductor_names = self._placement_conductor_structures(bc.placement)
-            if sides is None:
-                metals_with_unknown_contacts.update(conductor_names)
-                if not conductor_names:
-                    has_unidentified_contact = True
-                continue
-            charge_specs = [self._charge_spec(side) for side in sides]
-            if any(isinstance(spec, SemiconductorMedium) for spec in charge_specs):
-                metals_touching_semiconductor.update(conductor_names)
-            placements.append((i, condition, charge_specs, conductor_names))
-
-        if has_unidentified_contact:
-            return []
-
-        indices = []
-        for i, condition, charge_specs, conductor_names in placements:
-            if condition.model != "ohmic":
-                continue
-            if any(isinstance(spec, SemiconductorMedium) for spec in charge_specs):
-                continue
-            if not any(isinstance(spec, ChargeInsulatorMedium) for spec in charge_specs):
-                continue
-            if conductor_names and any(
-                name in metals_touching_semiconductor or name in metals_with_unknown_contacts
-                for name in conductor_names
-            ):
-                continue
-            indices.append(i)
-        return indices
-
     def _insulator_face_bc_indices(self) -> list[int]:
         """Indices of ``VoltageBC`` entries with a face lying on an insulator.
 
@@ -1378,9 +1315,8 @@ class HeatChargeSimulation(AbstractSimulation):
         reference from; only the accelerated charge solver supports it, so the
         legacy solver is refused rather than run with a shifted flat-band voltage.
 
-        Wider than :meth:`_gate_bc_indices`: an oxide-clad ohmic contact is not a
-        gate and still has an insulator face. Judged only where
-        :meth:`_placement_contact_media` determines the materials.
+        An oxide-clad ohmic contact is not a gate and still has an insulator face.
+        Judged only where :meth:`_placement_contact_media` determines the materials.
         """
         indices = []
         for i, bc in enumerate(self.boundary_spec):
@@ -1392,62 +1328,6 @@ class HeatChargeSimulation(AbstractSimulation):
             if any(isinstance(self._charge_spec(side), ChargeInsulatorMedium) for side in sides):
                 indices.append(i)
         return indices
-
-    def _check_gate_voltage_bcs(self) -> Self:
-        """Require the metal work function, and the electron affinity, once a gate is present.
-
-        A gate's potential is referenced to the metal work function, which a
-        contact touching the semiconductor never has to state. The electron
-        affinity cancels out of every potential difference while all contacts
-        touch the semiconductor, but against a gate it sets where the bands sit,
-        and leaving it unset shifts the flat-band voltage by whole volts.
-
-        The same references apply to voltage- and current-driven gates.
-        """
-        gate_indices = self._gate_bc_indices()
-        if not gate_indices:
-            return self
-
-        for i in gate_indices:
-            condition_name = type(self.boundary_spec[i].condition).__name__
-            charge_specs = [
-                self._charge_spec(side)
-                for side in self._placement_contact_media(self.boundary_spec[i].placement)
-            ]
-            has_metal_w = any(
-                isinstance(spec, ChargeConductorMedium) and spec.work_function is not None
-                for spec in charge_specs
-            )
-            if not has_metal_w:
-                self._raise_validation_error_at_loc(
-                    f"'{condition_name}' is placed on an interface where neither side is a "
-                    "'SemiconductorMedium', which makes it a gate on an insulator. A gate's "
-                    "potential is referenced to the metal work function, so one side must be "
-                    "a 'ChargeConductorMedium' carrying 'work_function'. Without it the gate "
-                    "potential is off by the metal work function minus the semiconductor "
-                    "electron affinity and the flat-band voltage is wrong.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                    log_error=False,
-                )
-
-        gate_conditions = sorted(
-            {type(self.boundary_spec[i].condition).__name__ for i in gate_indices}
-        )
-        gate_names = " or ".join(f"'{name}'" for name in gate_conditions)
-        for loc, charge in self._iter_semiconductor_charge_media():
-            if charge.electron_affinity is not None:
-                continue
-            self._raise_validation_error_at_loc(
-                f"This simulation places a {gate_names} on an insulator (a gate), whose "
-                "potential is referenced to the vacuum level. Every 'SemiconductorMedium' must "
-                "then carry 'electron_affinity', or its bands sit at an arbitrary offset from "
-                "the gate and the flat-band voltage is wrong by several volts.",
-                *loc,
-                log_error=False,
-            )
-        return self
 
     def _check_one_bias_per_metal(self) -> Self:
         """Reject a ``ChargeConductorMedium`` structure driven by two disagreeing sources.
@@ -1657,36 +1537,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
         return self
 
-    def _check_current_bcs(self) -> Self:
-        """Run ``CurrentBC`` setup checks."""
-        self._check_current_bc_requires_accelerated()
-        self._check_one_current_per_metal()
-        self._check_current_bc_not_stacked_with_voltage_bc()
-        self._check_current_bc_not_on_gate()
-        self._check_current_sweep_not_with_ssac_bias_selection()
-        return self
-
-    def _check_current_bc_not_on_gate(self) -> Self:
-        """Reject ``CurrentBC`` on a contact that resolves to a gate.
-
-        A gate reaches only an insulator, so its terminal current is zero at
-        every contact potential and an imposed current, zero included, leaves
-        that potential undetermined. Drive the gate with ``VoltageBC`` instead.
-        """
-        for i in self._gate_bc_indices():
-            if not isinstance(self.boundary_spec[i].condition, CurrentBC):
-                continue
-            self._raise_validation_error_at_loc(
-                "'CurrentBC' is placed on a contact that reaches only an insulator and no "
-                "semiconductor, which makes it a gate. An imposed terminal current is not "
-                "supported on a gate, including a current of exactly zero. Drive this "
-                "contact with 'VoltageBC' instead.",
-                "boundary_spec",
-                i,
-                log_error=False,
-            )
-        return self
-
     def _current_bc_indices(self) -> list[int]:
         return [
             idx for idx, bc in enumerate(self.boundary_spec) if isinstance(bc.condition, CurrentBC)
@@ -1698,103 +1548,6 @@ class HeatChargeSimulation(AbstractSimulation):
         if isinstance(placement, MediumMediumInterface):
             return set()
         return set(self._placement_conductor_structures(placement))
-
-    def _identified_current_bc_conductors(self) -> list[tuple[int, set[str]]]:
-        """Return ``CurrentBC`` entries with identifiable terminals."""
-        return [
-            (idx, conductors)
-            for idx, conductors in (
-                (idx, self._contact_conductors(idx)) for idx in self._current_bc_indices()
-            )
-            if conductors
-        ]
-
-    def _check_one_current_per_metal(self) -> Self:
-        """Require repeated ``CurrentBC`` entries naming one metal to agree on the current."""
-        entries = self._identified_current_bc_conductors()
-        for position, (idx, conductors) in enumerate(entries):
-            for other_idx, other_conductors in entries[:position]:
-                shared = conductors & other_conductors
-                if not shared:
-                    continue
-                if self._drive_of(self.boundary_spec[idx].condition.source) != self._drive_of(
-                    self.boundary_spec[other_idx].condition.source
-                ):
-                    self._raise_validation_error_at_loc(
-                        f"Structure '{sorted(shared)[0]}' is a 'ChargeConductorMedium' named "
-                        f"by two 'CurrentBC' entries with different sources "
-                        f"('boundary_spec[{other_idx}]' and 'boundary_spec[{idx}]'). A metal "
-                        "structure is one terminal, so the current through it is one number; "
-                        "give both entries the same source.",
-                        "boundary_spec",
-                        idx,
-                        "condition",
-                        log_error=False,
-                    )
-        return self
-
-    def _check_current_bc_not_stacked_with_voltage_bc(self) -> Self:
-        """Reject prescribing current and potential on any face of one terminal."""
-        for idx in self._current_bc_indices():
-            current_bc = self.boundary_spec[idx]
-            conductors = self._contact_conductors(idx)
-            for other_idx, other_bc in enumerate(self.boundary_spec):
-                if other_idx == idx or not isinstance(other_bc.condition, VoltageBC):
-                    continue
-                if self._placements_overlap(current_bc.placement, other_bc.placement):
-                    self._raise_validation_error_at_loc(
-                        "'CurrentBC' cannot share a placement with 'VoltageBC'. A "
-                        "current-driven contact has its potential solved for, so it "
-                        "cannot also be held at a prescribed one.",
-                        "boundary_spec",
-                        idx,
-                    )
-                shared = conductors & self._contact_conductors(other_idx)
-                if shared:
-                    self._raise_validation_error_at_loc(
-                        f"Structure '{sorted(shared)[0]}' is a 'ChargeConductorMedium' named "
-                        f"by both a 'CurrentBC' ('boundary_spec[{idx}]') and a 'VoltageBC' "
-                        f"('boundary_spec[{other_idx}]'). A metal structure is one terminal, "
-                        "so the two entries drive one contact, whose potential cannot be both "
-                        "solved for and prescribed. Use one or the other.",
-                        "boundary_spec",
-                        idx,
-                    )
-        return self
-
-    def _check_current_bc_requires_accelerated(self) -> Self:
-        """Reject ``CurrentBC`` when the accelerated charge solver is off."""
-        current_bcs = self._current_bc_indices()
-        if not current_bcs:
-            return self
-        if not self._resolve_use_accelerated_solver:
-            self._raise_validation_error_at_loc(
-                "'CurrentBC' is supported only by the accelerated charge solver. "
-                "Either drive this contact with a 'VoltageBC' or set "
-                "'use_accelerated_solver=True'.",
-                "boundary_spec",
-                current_bcs[0],
-            )
-        return self
-
-    def _check_current_sweep_not_with_ssac_bias_selection(self) -> Self:
-        """Reject ``at_voltages`` with a current sweep, whose bias voltages are solved for."""
-        analysis_spec = self.analysis_spec
-        if not isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
-            return self
-        if analysis_spec.at_voltages is None:
-            return self
-        swept = [i for i in self._swept_bc_indices() if self._is_current_sweep(i)]
-        if swept:
-            self._raise_validation_error_at_loc(
-                "'at_voltages' selects small-signal bias points by voltage, but "
-                f"'boundary_spec[{swept[0]}]' sweeps a current, so the bias voltages are "
-                "solved for rather than known in advance. Remove 'at_voltages'; the "
-                "small-signal analysis then runs at the last entry of 'current'.",
-                "analysis_spec",
-                "at_voltages",
-            )
-        return self
 
     def _check_heterojunction_sr_placement(
         self,
@@ -3373,38 +3126,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 log.warning(message)
         return self
 
-    def _warn_same_bands_different_narrowing(self) -> Self:
-        """Warn if two semiconductors without a band offset differ in band-gap narrowing.
-
-        Where two such media meet, the accelerated solver keeps the carrier densities
-        continuous, which holds only when both sides narrow the band gap alike. Only media
-        that may meet are warned about.
-        """
-        try:
-            if not self._resolve_use_accelerated_solver:
-                return self
-        except SetupError:
-            return self
-
-        semiconductors = self._distinct_semiconductor_charge_media()
-        for index, (loc_a, medium_a) in enumerate(semiconductors):
-            for loc_b, medium_b in semiconductors[index + 1 :]:
-                if (
-                    medium_a.delta_E_g == medium_b.delta_E_g
-                    or _is_material_heterojunction(medium_a, medium_b)
-                    or not self._semiconductor_charge_media_may_meet(medium_a, medium_b)
-                ):
-                    continue
-                log.warning(
-                    f"{self._medium_label(loc_a)} and {self._medium_label(loc_b)} have the "
-                    "same 'N_c', 'N_v', 'E_g' and 'electron_affinity' but different 'delta_E_g'. "
-                    "Where they meet, the accelerated charge solver keeps the carrier densities "
-                    "continuous, so the difference in band-gap narrowing acts as a voltage source "
-                    "there. Use the same 'delta_E_g' on both. "
-                    "Future versions of Tidy3D may reject this setup."
-                )
-        return self
-
     def _distinct_semiconductor_charge_media(
         self,
     ) -> list[tuple[tuple[Any, ...], SemiconductorMedium]]:
@@ -3414,28 +3135,6 @@ class HeatChargeSimulation(AbstractSimulation):
             if not any(medium is other or medium == other for _, other in semiconductors):
                 semiconductors.append((loc, medium))
         return semiconductors
-
-    def _semiconductor_charge_media_may_meet(
-        self, medium_a: SemiconductorMedium, medium_b: SemiconductorMedium
-    ) -> bool:
-        """Whether a structure carrying ``medium_a`` and one carrying ``medium_b`` may touch.
-
-        The background meets every structure. Bounding boxes decide, so non-box shapes may
-        over-report, but a real contact is never missed.
-        """
-        locs_a, locs_b = [], []
-        for loc, medium in self._iter_semiconductor_charge_media():
-            if medium is medium_a or medium == medium_a:
-                locs_a.append(loc)
-            if medium is medium_b or medium == medium_b:
-                locs_b.append(loc)
-        if ("medium",) in locs_a or ("medium",) in locs_b:
-            return True
-        return any(
-            self.structures[i].geometry.intersects(self.structures[j].geometry)
-            for _, i in locs_a
-            for _, j in locs_b
-        )
 
     def _medium_label(self, loc: tuple[Any, ...]) -> str:
         """How messages name the medium at ``loc``: the background or a structure."""
@@ -3582,22 +3281,6 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
             for model in charge.R
         )
-
-    def _check_grad_quasi_fermi_impact_ionization(self) -> Self:
-        """Restrict GradQuasiFermi impact ionization to accelerated isothermal charge."""
-        if not self._uses_grad_quasi_fermi_impact_ionization():
-            return self
-
-        if not isinstance(
-            self.analysis_spec, (IsothermalSteadyChargeDCAnalysis, IsothermalSSACAnalysis)
-        ):
-            self._raise_validation_error_at_loc(
-                "'GradQuasiFermi' impact ionization is supported only for isothermal "
-                "charge analyses.",
-                "analysis_spec",
-            )
-
-        return self
 
     def _analysis_temperature_extremes(self) -> tuple[float, float] | None:
         """Coldest and hottest lattice temperature the analysis prescribes, if any.
