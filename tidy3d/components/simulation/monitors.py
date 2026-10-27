@@ -18,43 +18,30 @@ from tidy3d.components.diffraction import (
     diffraction_monitor_storage_size,
 )
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.medium import (
-    AnisotropicMedium,
-    AnisotropicMediumFromMedium2D,
-    Medium2D,
-)
 from tidy3d.components.monitor import (
-    AbstractFieldProjectionMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DipoleEmissionMonitor,
-    FieldStructureMonitor,
     FieldTimeMonitor,
     FreqMonitor,
     MediumMonitor,
-    ModeTimeMonitor,
     PermittivityMonitor,
     PointCloudFieldMonitor,
     PointCloudPermittivityMonitor,
-    SurfaceFieldStructureMonitor,
     SurfaceIntegrationMonitor,
     TimeMonitor,
 )
 from tidy3d.components.scene import Scene
-from tidy3d.components.structure import Structure, _require_public_optical_medium
-from tidy3d.components.validators import (
-    named_obj_descr,
-    points_outside_bounds,
-)
+from tidy3d.components.structure import _require_public_optical_medium
 from tidy3d.config import config
-from tidy3d.exceptions import SetupError, Tidy3dError
+from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.grid.grid import Coords1D
     from tidy3d.components.medium import AbstractMedium, MediumType3D
     from tidy3d.components.monitor import AbstractGaussianOverlapMonitor, FieldMonitor, Monitor
+    from tidy3d.components.structure import Structure
     from tidy3d.components.types import Coordinate
     from tidy3d.components.types.monitor import MonitorType
 
@@ -107,314 +94,6 @@ def _validate_record_in_pml_unsupported(self: Any) -> None:
                 index,
                 "record_in_pml",
             )
-
-
-def _validate_mode_time_monitor_freq_range(self: Any) -> Self:
-    """Validate the solve frequency for ``ModeTimeMonitor``\\ s with ``freq_spec=None``.
-
-    A ``ModeTimeMonitor`` with ``freq_spec=None`` derives its single solve frequency from
-    the sources (the central frequency of the first source). Error if there are no sources
-    to derive it from; warn if the sources do not share a common central frequency.
-    """
-    needs_freq = [
-        idx
-        for idx, monitor in enumerate(self.monitors)
-        if isinstance(monitor, ModeTimeMonitor) and monitor.freq_spec is None
-    ]
-    if not needs_freq:
-        return self
-
-    idx = needs_freq[0]
-    self._check_source_freq_available(
-        no_source_error=(
-            f"'ModeTimeMonitor' '{self.monitors[idx].name}' has 'freq_spec=None', which "
-            "requires the simulation to contain at least one source to derive the "
-            "mode-sampling frequency from. Set 'freq_spec' explicitly for a "
-            "source-free simulation."
-        ),
-        no_source_loc=("monitors", idx),
-        multi_freq_warning=(
-            "At least one 'ModeTimeMonitor' does not specify 'freq_spec', the frequency at "
-            "which its mode profiles are solved. The central frequency of the first source "
-            "will be used."
-        ),
-    )
-    return self
-
-
-def _warn_monitor_mediums_frequency_range(self: Any) -> Self:
-    """Warn user if any DFT monitors have frequencies outside of medium frequency range."""
-    val = self.monitors
-
-    if val is None:
-        return self
-
-    structures = self.structures or []
-    medium_bg = self.medium
-    mediums = [medium_bg] + [structure.medium for structure in structures]
-
-    with log as consolidated_logger:
-        for monitor_index, monitor in enumerate(val):
-            if not isinstance(monitor, FreqMonitor):
-                continue
-
-            freqs = np.array(monitor.freqs)
-            fmin_mon = freqs.min()
-            fmax_mon = freqs.max()
-            for medium_index, raw_medium in enumerate(mediums):
-                medium = Structure._get_public_optical_medium(raw_medium)
-                if medium is None:
-                    continue
-                # skip mediums that have no freq range (all freqs valid)
-                if medium.frequency_range is None:
-                    continue
-
-                # make sure medium frequency range includes all monitor frequencies
-                fmin_med, fmax_med = medium.frequency_range
-                sci_fmin_med, sci_fmax_med = self._scientific_notation(fmin_med, fmax_med)
-
-                if fmin_mon < fmin_med or fmax_mon > fmax_med:
-                    if medium_index == 0:
-                        medium_str = "The simulation background medium"
-                        custom_loc = ["medium", "frequency_range"]
-                    else:
-                        medium_descr = named_obj_descr(medium, "mediums", medium_index)
-                        medium_str = f"The medium associated with {medium_descr}"
-                        custom_loc = [
-                            "structures",
-                            str(medium_index - 1),
-                            "medium",
-                            "frequency_range",
-                        ]
-
-                    monitor_descr = named_obj_descr(monitor, "monitors", monitor_index)
-                    consolidated_logger.warning(
-                        f"{medium_str} has a frequency range: ({sci_fmin_med}, {sci_fmax_med}) "
-                        "(Hz) that does not fully cover the frequencies contained "
-                        f"in {monitor_descr}."
-                        "This can cause inaccuracies in the recorded results.",
-                        custom_loc=custom_loc,
-                    )
-    return self
-
-
-def _warn_monitor_simulation_frequency_range(self: Any) -> Self:
-    """Warn if any DFT monitors have frequencies outside of the simulation frequency range."""
-    val = self.monitors
-
-    if val is None:
-        return self
-
-    source_ranges = [source.source_time._frequency_range_sigma_cached for source in self.sources]
-    if not source_ranges:
-        # Commented out to eliminate this message from Mode real time log in GUI
-        # TODO: Bring it back when it doesn't interfere with mode solver
-        # log.info("No sources in simulation.")
-        return self
-
-    freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
-    freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
-    sci_fmin, sci_fmax = self._scientific_notation(freq_min, freq_max)
-
-    with log as consolidated_logger:
-        for monitor_index, monitor in enumerate(val):
-            if not isinstance(monitor, FreqMonitor) or isinstance(
-                monitor, PermittivityMonitor | MediumMonitor | PointCloudPermittivityMonitor
-            ):
-                continue
-
-            freqs = np.array(monitor.freqs)
-            if freqs.min() < freq_min or freqs.max() > freq_max:
-                consolidated_logger.warning(
-                    f"'monitors[{monitor_index}]' contains frequencies "
-                    f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
-                    "(Hz) as defined by the sources.",
-                    custom_loc=["monitors", monitor_index, "freqs"],
-                )
-    return self
-
-
-def _validate_point_cloud_monitor_points_in_bounds(self: Any) -> Self:
-    """Error if any point-cloud monitor point lies outside the simulation domain."""
-
-    if not self.monitors:
-        return self
-
-    bounds = np.asarray(self.bounds, dtype=float)
-    strict_inequality = np.asarray([size != 0 for size in self.size], dtype=bool)
-    for monitor_ind, monitor in enumerate(self.monitors):
-        if not isinstance(monitor, (PointCloudFieldMonitor, PointCloudPermittivityMonitor)):
-            continue
-
-        points = np.asarray(monitor.points.values, dtype=float)
-        outside = points_outside_bounds(points, bounds, strict_inequality)
-        if np.any(outside):
-            first_row = int(np.nonzero(outside)[0][0])
-            first_index = np.asarray(monitor.points.coords["index"].values)[first_row]
-            first_index = first_index.item() if hasattr(first_index, "item") else first_index
-            num_outside = int(np.count_nonzero(outside))
-            self._raise_validation_error_at_loc(
-                f"Point-cloud monitor '{monitor.name}' has {num_outside} point(s) outside "
-                "the simulation domain. The first outside point has index "
-                f"{first_index} and coordinates {points[first_row].tolist()}.",
-                "monitors",
-                monitor_ind,
-                "points",
-            )
-
-    return self
-
-
-def _forms_metal_surface(medium: AbstractMedium | None) -> bool:
-    """Whether the solver reconstructs a metal surface on a structure of this medium: it does so
-    when any component is a PEC or a non-penetrable lossy metal."""
-    if medium is None:
-        return False
-    if isinstance(medium, Medium2D | AnisotropicMedium):
-        return any(component.is_pec_like for component in medium.elements.values())
-    return medium.is_pec_like
-
-
-def _validate_field_structure_monitor_overlaps(self: Any) -> Self:
-    """Reject a ``FieldStructureMonitor``/``SurfaceFieldStructureMonitor`` overlapping a
-    structure that has no index in ``simulation.structures``.
-
-    The check runs against both the user-specified geometries and the finalized
-    (grid-snapped) geometries the solver sees: conversion snaps a 2D sheet to the nearest
-    grid boundary — up to half a cell along its normal — so the user geometry alone would
-    miss a monitor that overlaps only the snapped sheet.
-
-    A ``SurfaceFieldStructureMonitor`` records owners only at metal surface vertices, so it may
-    overlap a 2D material that forms no metal surface.
-    """
-    field_structure_monitors = [
-        (ind, monitor)
-        for ind, monitor in enumerate(self.monitors)
-        if isinstance(monitor, (FieldStructureMonitor, SurfaceFieldStructureMonitor))
-    ]
-    if not field_structure_monitors:
-        return self
-
-    # Unwrap the optical medium so MultiPhysicsMedium(optical=Medium2D(...)) is also caught;
-    # its derived volumetric structure likewise has no public ownership index.
-    # Each entry also says whether the structure can carry metal surface vertices.
-    derived = [
-        (
-            "a 2D-material structure",
-            structure.geometry,
-            _forms_metal_surface(structure._optical_medium),
-        )
-        for structure in self.structures
-        if isinstance(structure._optical_medium, Medium2D | AnisotropicMediumFromMedium2D)
-    ]
-    derived += [("a lumped element", element.geometry, True) for element in self.lumped_elements]
-    derived += [
-        ("an automatic PEC frame around a mode source or internal absorber", frame.geometry, True)
-        for frame in self._modal_plane_frames
-    ]
-    if not derived:
-        return self
-
-    if self._contains_converted_volumetric_structures:
-        # The derived structures are exactly the finalized entries with no counterpart in
-        # ``static_structures`` — the same identity rule the solver export uses to assign
-        # "no public owner" ownership (``public_str_index = -1``).
-        try:
-            kept = {id(structure) for structure in self.static_structures}
-            kept |= {id(frame) for frame in self._modal_plane_frames}
-            derived += [
-                (
-                    "the grid-snapped volumetric equivalent of a 2D material or lumped element",
-                    structure.geometry,
-                    _forms_metal_surface(structure._optical_medium),
-                )
-                for structure in self._finalized_volumetric_structures
-                if id(structure) not in kept
-            ]
-        except Tidy3dError:
-            # Conversion can fail on degenerate grids (e.g. a sheet snapped to the domain
-            # edge); that failure is diagnosed with a clearer error at export, so fall back
-            # to the user-specified geometries only.
-            pass
-
-    for monitor_ind, monitor in field_structure_monitors:
-        region = monitor.geometry
-        surface_only = isinstance(monitor, SurfaceFieldStructureMonitor)
-        for description, geometry, forms_metal_surface in derived:
-            if surface_only and not forms_metal_surface:
-                continue
-            if region.intersects(geometry):
-                self._raise_validation_error_at_loc(
-                    f"'{type(monitor).__name__}' '{monitor.name}' overlaps {description}. This "
-                    "monitor records structure-ownership indices into 'simulation.structures', "
-                    "which is undefined for structures that have no index there (2D materials, "
-                    "lumped elements, and automatic PEC frames). Move or resize the monitor so "
-                    "it does not intersect these structures.",
-                    "monitors",
-                    monitor_ind,
-                )
-    return self
-
-
-def _projection_monitors_homogeneous(self: Any) -> Self:
-    """Error if any field projection monitor is not in a homogeneous region."""
-    val = self.monitors
-
-    if val is None:
-        return self
-
-    # list of structures including background as a Box()
-    structure_bg = Structure(
-        geometry=Box(
-            size=self.size,
-            center=self.center,
-        ),
-        medium=self.medium,
-    )
-
-    structures = self.structures or []
-    total_structures = [structure_bg, *list(structures)]
-
-    with log as consolidated_logger:
-        for monitor_ind, monitor in enumerate(val):
-            if isinstance(monitor, AbstractFieldProjectionMonitor | DiffractionMonitor):
-                mediums = self._call_with_validation_loc(
-                    ["monitors", monitor_ind],
-                    self._projection_monitor_mediums_in_bounds,
-                    center=self.center,
-                    size=self.size,
-                    monitor=monitor,
-                    structures=total_structures,
-                )
-                public_mediums = {
-                    optical_medium_key(Structure._get_public_optical_medium(medium))
-                    for medium in mediums
-                }
-                if len(public_mediums) < 1:
-                    continue
-                if None in public_mediums:
-                    self._raise_validation_error_at_loc(
-                        f"No optical medium detected on plane intersecting a {monitor.type}.",
-                        "monitors",
-                        monitor_ind,
-                    )
-                # make sure there is no more than one medium in the returned list
-                if len(public_mediums) > 1:
-                    self._raise_validation_error_at_loc(
-                        f"{len(public_mediums)} different mediums detected on plane "
-                        f"intersecting a {monitor.type}. Plane must be homogeneous.",
-                        "monitors",
-                        monitor_ind,
-                    )
-                # 1 medium, check if the medium is spatially uniform
-                if not list(public_mediums)[0].is_spatially_uniform:
-                    consolidated_logger.warning(
-                        f"Nonuniform custom medium detected on plane intersecting a {monitor.type}. "
-                        "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
-                        custom_loc=["monitors", monitor_ind],
-                    )
-
-    return self
 
 
 @classmethod

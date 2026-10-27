@@ -5,11 +5,11 @@ from __future__ import annotations
 from flexcompute.core._migration.solver.fdtd.schema.validation_schema import (
     MAX_DIFFRACTION_ORDER_GRID_SIZE,  # noqa: F401 - re-exported; the limit lives once in core
     MAX_NUM_SOURCES,  # noqa: F401 - re-exported; the limit lives once in core
+    MIN_GRIDS_PER_WVL,  # noqa: F401 - re-exported; the limit lives once in core
 )
 
 from tidy3d.constants import inf
 
-MIN_GRIDS_PER_WVL = 6.0
 MAX_TIME_STEPS = 1e7
 WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9

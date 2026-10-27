@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
-from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 from pydantic import (
     model_validator,
 )
@@ -28,12 +27,10 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.snapping import (
     _shift_object,
 )
-from tidy3d.components.medium import AnisotropicMedium, FullyAnisotropicMedium
 from tidy3d.components.monitor import DiffractionMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.source.field import AbstractModeSource, FixedAngleSpec, PlaneWave
 from tidy3d.components.source.frame import PECFrame
-from tidy3d.components.structure import Structure
 from tidy3d.components.validators import named_obj_descr
 from tidy3d.constants import C_0
 from tidy3d.log import log
@@ -43,8 +40,9 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.boundary import BoundaryEdgeType, BoundarySpec, InternalAbsorber
-    from tidy3d.components.medium import MediumType, MediumType3D
+    from tidy3d.components.medium import MediumType
     from tidy3d.components.source.utils import SourceType
+    from tidy3d.components.structure import Structure
     from tidy3d.components.types import Axis
 
 from . import constants
@@ -396,131 +394,6 @@ def _validate_absorber_in_zero_dims(self: Any) -> Self:
                 "internal_absorbers",
                 abc_index,
             )
-
-    return self
-
-
-@classmethod
-def _get_mediums_on_abc(
-    cls: Any,
-    boundary_spec: BoundarySpec,
-    sim_structure: Structure,
-    structures: tuple[Structure, ...],
-) -> tuple[
-    list[MediumType3D],
-    list[MediumType3D],
-    list[MediumType3D],
-    list[MediumType3D],
-    list[MediumType3D],
-    list[MediumType3D],
-]:
-    """For each ABC boundary that needs an automatic medium detection (permittivity=None)
-    determine mediums it crosses.
-    """
-
-    # list of structures including background as a Box()
-    surface_box = sim_structure.geometry
-    # expand zero dimensions to make sure surface are extracted correctly and treatment is uniform
-    surface_box = surface_box.updated_copy(size=[1e-6 if s == 0 else s for s in surface_box.size])
-    surfaces = Box.surfaces(center=surface_box.center, size=surface_box.size)
-
-    total_structures = [sim_structure, *list(structures)]
-
-    mediums = []
-    for boundary, surface in zip(np.ravel(boundary_spec.to_list), surfaces):
-        if isinstance(boundary, ABCBoundary) and boundary.permittivity is None:
-            mediums.append(Scene.intersecting_media(surface, total_structures))
-        else:
-            mediums.append(None)
-
-    return mediums
-
-
-def _single_public_optical_medium_on_abc(
-    self: Any, mediums: set[MediumType3D], axis_name: str, side_name: str
-) -> MediumType3D:
-    """Return the unique public optical medium used by ABC automatic medium detection."""
-    public_mediums = {
-        optical_medium_key(Structure._get_public_optical_medium(medium)) for medium in mediums
-    }
-    if not public_mediums:
-        self._raise_validation_error_at_loc(
-            "No medium detected on plane containing 'ABCBoundary', "
-            "indicating an unexpected error. Please create a github issue so "
-            "that the problem can be investigated.",
-            "boundary_spec",
-            axis_name,
-            side_name,
-        )
-
-    if None in public_mediums:
-        self._raise_validation_error_at_loc(
-            "No optical medium detected on plane containing 'ABCBoundary'. "
-            "Boundary automatic medium detection requires an optical medium. "
-            "Alternatively, effective permittivity and conductivity can be directly provided as "
-            "parameters for an 'ABCBoundary', in which case this medium check is skipped.",
-            "boundary_spec",
-            axis_name,
-            side_name,
-        )
-
-    if len(public_mediums) != 1:
-        self._raise_validation_error_at_loc(
-            f"{len(public_mediums)} different mediums detected on an 'ABCBoundary'. Boundary must be homogeneous. "
-            "Alternatively, effective permittivity and conductivity can be directly provided as "
-            "parameters for an 'ABCBoundary', in which case this medium check is skipped.",
-            "boundary_spec",
-            axis_name,
-            side_name,
-        )
-
-    return next(iter(public_mediums))
-
-
-def _abc_boundaries_homogeneous(self: Any) -> Self:
-    """Error if abc boundaries intersect multiple mediums or anisotropic mediums."""
-    val = self.boundary_spec
-    if val is None:
-        return val
-
-    sim_structure = Structure(
-        geometry=Box(size=self.size, center=self.center),
-        medium=self.medium,
-    )
-
-    mediums_all_sides = self._get_mediums_on_abc(
-        boundary_spec=val,
-        sim_structure=sim_structure,
-        structures=self.structures or [],
-    )
-    boundary_locs = [
-        ("x", "minus"),
-        ("x", "plus"),
-        ("y", "minus"),
-        ("y", "plus"),
-        ("z", "minus"),
-        ("z", "plus"),
-    ]
-
-    with log as consolidated_logger:
-        for (axis_name, side_name), mediums in zip(boundary_locs, mediums_all_sides):
-            if mediums is not None:
-                # 1 medium, check if the medium is spatially uniform
-                medium = _single_public_optical_medium_on_abc(self, mediums, axis_name, side_name)
-                if not medium.is_spatially_uniform:
-                    consolidated_logger.warning(
-                        "Nonuniform custom medium detected on an 'ABCBoundary'. "
-                        "Boundary must be homogeneous. Make sure custom medium is uniform on the boundary.",
-                    )
-
-                if isinstance(medium, AnisotropicMedium | FullyAnisotropicMedium):
-                    self._raise_validation_error_at_loc(
-                        "An anisotropic medium is detected on an 'ABCBoundary'. "
-                        "Boundary medium must be homogeneous and isotropic.",
-                        "boundary_spec",
-                        axis_name,
-                        side_name,
-                    )
 
     return self
 

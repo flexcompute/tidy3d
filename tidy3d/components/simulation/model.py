@@ -897,20 +897,6 @@ class Simulation(AbstractYeeGridSimulation):
     perturbed_mediums_copy = _materials_methods.perturbed_mediums_copy
 
     # SimulationMonitors
-    _validate_mode_time_monitor_freq_range = (
-        _monitors_methods._validate_mode_time_monitor_freq_range
-    )
-    _warn_monitor_mediums_frequency_range = _monitors_methods._warn_monitor_mediums_frequency_range
-    _warn_monitor_simulation_frequency_range = (
-        _monitors_methods._warn_monitor_simulation_frequency_range
-    )
-    _validate_point_cloud_monitor_points_in_bounds = (
-        _monitors_methods._validate_point_cloud_monitor_points_in_bounds
-    )
-    _validate_field_structure_monitor_overlaps = (
-        _monitors_methods._validate_field_structure_monitor_overlaps
-    )
-    _projection_monitors_homogeneous = _monitors_methods._projection_monitors_homogeneous
     _projection_monitor_mediums_in_bounds = _monitors_methods._projection_monitor_mediums_in_bounds
     _projection_monitor_media_on_plane = _monitors_methods._projection_monitor_media_on_plane
     _validate_monitor_size = _monitors_methods._validate_monitor_size
@@ -974,8 +960,6 @@ class Simulation(AbstractYeeGridSimulation):
     _bloch_boundaries_diff_mnt = _boundaries_methods._bloch_boundaries_diff_mnt
     _validate_frequency_mode_abc = _boundaries_methods._validate_frequency_mode_abc
     _validate_absorber_in_zero_dims = _boundaries_methods._validate_absorber_in_zero_dims
-    _get_mediums_on_abc = _boundaries_methods._get_mediums_on_abc
-    _abc_boundaries_homogeneous = _boundaries_methods._abc_boundaries_homogeneous
     _validate_no_structures_pml = _boundaries_methods._validate_no_structures_pml
     _validate_no_structures_close_to_pml = _boundaries_methods._validate_no_structures_close_to_pml
     _validate_pec_frame_not_in_pml_extrusion = (
@@ -986,7 +970,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationGrid
     _validate_auto_grid_wavelength = _grid_methods._validate_auto_grid_wavelength
-    _warn_grid_size_too_small = _grid_methods._warn_grid_size_too_small
     _validate_lumped_element_grid_size = _grid_methods._validate_lumped_element_grid_size
     num_cells = _grid_methods._simulation_num_cells
     _num_computational_grid_points_dim = _grid_methods._num_computational_grid_points_dim
@@ -1066,17 +1049,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_absorber_in_zero_dims()
         self._validate_internal_absorber_placement()
 
-        # Validate monitor frequency, geometry, medium, and surface constraints.
-        self._validate_mode_time_monitor_freq_range()
-        self._warn_monitor_mediums_frequency_range()
-        self._warn_monitor_simulation_frequency_range()
-        self._validate_point_cloud_monitor_points_in_bounds()
-        self._validate_field_structure_monitor_overlaps()
-        self._projection_monitors_homogeneous()
-        self._abc_boundaries_homogeneous()
-
-        # Finish with grid/source checks and aggregate scene validation.
-        self._warn_grid_size_too_small()
+        # Finish with the aggregate scene validation.
         self._validate_scene()
         return self
 

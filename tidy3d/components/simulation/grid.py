@@ -17,9 +17,9 @@ from tidy3d.components.boundary import BlochBoundary, PECBoundary, Periodic, PMC
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.grid.grid import Coords, Grid
-from tidy3d.components.grid.grid_spec import UniformGrid, _GeneratedGridSizeError
+from tidy3d.components.grid.grid_spec import _GeneratedGridSizeError
 from tidy3d.components.lumped_element import RectangularLumpedElement
-from tidy3d.components.medium import AnisotropicMedium, Medium2D
+from tidy3d.components.medium import Medium2D
 from tidy3d.components.medium.protected import (
     ProtectedOpticalMediumRef,
     has_protected_media,
@@ -758,69 +758,6 @@ def _validate_auto_grid_wavelength(self: Any) -> Self:
     val = self.grid_spec
     if val.wavelength is None and val.auto_grid_used:
         _ = val.wavelength_from_sources(sources=self.sources)
-    return self
-
-
-def _warn_grid_size_too_small(self: Any) -> Self:
-    """Warn user if any grid size is too large compared to minimum wavelength in material."""
-    val = self.grid_spec
-
-    if val is None:
-        return self
-
-    structures = self.structures
-    structures = structures or []
-    medium_bg = self.medium
-    mediums = [medium_bg] + [structure.to_static().medium for structure in structures]
-
-    with log as consolidated_logger:
-        for source_index, source in enumerate(self.sources):
-            freq0 = source.source_time._freq0
-
-            for medium_index, medium in enumerate(mediums):
-                # min wavelength in PEC/PMC is meaningless and we'll get divide by inf errors
-                if medium.is_pec or medium.is_pmc:
-                    continue
-                # min wavelength in Medium2D is meaningless
-                if isinstance(medium, Medium2D):
-                    continue
-
-                eps_material = medium.eps_model(freq0)
-                n_material, _ = medium.eps_complex_to_nk(eps_material)
-
-                for comp, (key, grid_spec) in enumerate(
-                    zip("xyz", (val.grid_x, val.grid_y, val.grid_z))
-                ):
-                    if (
-                        medium.is_pec
-                        or medium.is_pmc
-                        or (isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp))
-                    ):
-                        n_material = 1.0
-                    lambda_min = C_0 / freq0 / n_material
-
-                    if (
-                        isinstance(grid_spec, UniformGrid)
-                        and grid_spec.dl > lambda_min / constants.MIN_GRIDS_PER_WVL
-                    ):
-                        if medium_index == 0:
-                            medium_str = "the simulation background medium"
-                        else:
-                            medium_str = (
-                                f"the medium associated with structures[{medium_index - 1}]"
-                            )
-
-                        # This diagnostic can run with protected material; do not print its wavelength.
-                        consolidated_logger.warning(
-                            f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
-                            ", which was detected as being large when compared to the "
-                            f"central wavelength of sources[{source_index}] "
-                            f"within {medium_str}. To avoid inaccuracies, "
-                            "it is recommended the grid size is reduced. ",
-                            custom_loc=["grid_spec", f"grid_{key}", "dl"],
-                        )
-                        # TODO: warn about custom grid spec
-
     return self
 
 
