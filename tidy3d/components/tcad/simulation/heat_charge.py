@@ -697,16 +697,6 @@ class HeatChargeSimulation(AbstractSimulation):
             # that cannot make the input valid.
             self._call_with_validation_loc(("boundary_spec",), self._check_gate_voltage_bcs)
             self._check_grad_quasi_fermi_impact_ionization()
-        # Ahead of the 'validate_not_all_neumann' rule, whose generic message would hide the
-        # real mistake when a 'HeatFromElectricSource' has no heat BCs.
-        self._call_with_validation_loc(("sources",), self._check_charge_heat_coupling_unsupported)
-        # Ahead of the heat-BC rules of the core validation, whose generic messages would
-        # hide that the input is ignored.
-        self._call_with_validation_loc(
-            ("boundary_spec",), self._warn_heat_inputs_need_thermal_solve
-        )
-        self._call_with_validation_loc(("sources",), self._check_coupling_source_can_be_applied)
-        self._call_with_validation_loc(("sources",), self._warn_coupling_source_is_no_op)
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -2127,7 +2117,7 @@ class HeatChargeSimulation(AbstractSimulation):
             if not isinstance(source, HeatSourceTypes):
                 continue
             # A non-isothermal charge analysis ignores 'HeatFromElectricSource'
-            # (_warn_coupling_source_is_no_op), so it must not contribute a HEAT type
+            # ('validate_coupling_source_no_op'), so it must not contribute a HEAT type
             # either: that would subject the user to the heat-only checks -- a required
             # 'TemperatureMonitor', not-all-Neumann -- on account of a source that does
             # nothing, right after being told it is ignored.
@@ -2136,115 +2126,6 @@ class HeatChargeSimulation(AbstractSimulation):
             simulation_types.append(TCADAnalysisTypes.HEAT)
 
         return set(simulation_types)
-
-    def _check_coupling_source_can_be_applied(self) -> Self:
-        """Error if 'HeatFromElectricSource' has no conduction solve to draw heating from."""
-
-        HeatSourceTypes_noCoupling = (UniformHeatSource, HeatSource)
-
-        # Exclude the source itself: it must not establish the HEAT type it is validated
-        # against.
-        simulation_types = self._check_simulation_types(HeatSourceTypes=HeatSourceTypes_noCoupling)
-
-        # Charge is rejected with a specific message elsewhere; let that one win.
-        if TCADAnalysisTypes.CHARGE in simulation_types:
-            return self
-
-        if (
-            TCADAnalysisTypes.HEAT in simulation_types
-            and TCADAnalysisTypes.CONDUCTION in simulation_types
-        ):
-            return self
-
-        for index, source in enumerate(self.sources):
-            if not isinstance(source, HeatFromElectricSource):
-                continue
-            present = ", ".join(sorted(sim_type.name for sim_type in simulation_types)) or "none"
-            self._raise_validation_error_at_loc(
-                f"Using 'HeatFromElectricSource' requires both "
-                f"{TCADAnalysisTypes.CONDUCTION.name} and {TCADAnalysisTypes.HEAT.name}, "
-                "since the conduction solve supplies the volumetric heating the heat solve "
-                f"consumes. The current simulation setup defines: {present}.",
-                "sources",
-                index,
-            )
-
-        return self
-
-    def _check_charge_heat_coupling_unsupported(self) -> Self:
-        """Reject 'HeatFromElectricSource' in a charge simulation; the bias is ambiguous.
-
-        Non-isothermal specs are excluded: there the source is redundant rather than
-        ambiguous, and ``_warn_coupling_source_is_no_op`` warns instead.
-        """
-        if not isinstance(self.analysis_spec, ChargeTypes) or self._thermal_solver_active:
-            return self
-
-        for index, source in enumerate(self.sources):
-            if not isinstance(source, HeatFromElectricSource):
-                continue
-            self._raise_validation_error_at_loc(
-                "'HeatFromElectricSource' cannot drive a heat simulation from a charge "
-                "simulation. A charge simulation solves at a list of bias points while a "
-                "heat simulation solves once, so the bias the temperature would correspond "
-                "to is ambiguous. Record the charge simulation's self-heating with a "
-                "'SelfHeatingMonitor' instead, then pass the bias point you want to a "
-                "separate heat simulation: "
-                '\'HeatSource(rate=data["self_heat"].to_spatial_data_array('
-                "bounds=..., resolution=..., voltage=...), structures=[...])'.",
-                "sources",
-                index,
-            )
-
-        return self
-
-    def _warn_heat_inputs_need_thermal_solve(self) -> Self:
-        """Warn about heat BCs and heat sources in a charge analysis that solves no temperature.
-
-        They are accepted and never applied. 'HeatFromElectricSource' has its own
-        message in ``_check_charge_heat_coupling_unsupported``.
-        """
-        if not isinstance(self.analysis_spec, ChargeTypes) or self._thermal_solver_active:
-            return self
-
-        if self._temperature_prescribed:
-            temperature = "a prescribed lattice temperature field"
-        else:
-            temperature = f"a uniform lattice temperature of {self.analysis_spec.temperature} K"
-        consequence = (
-            f"'{type(self.analysis_spec).__name__}' runs on {temperature} and solves no heat "
-            "equation, so it is ignored. Remove it, or use 'SteadyChargeDCAnalysis' or "
-            "'SSACAnalysis' without a 'temperature' to solve the temperature with self-heating. "
-            "Future versions of Tidy3D may reject this setup."
-        )
-        for index, bc in enumerate(self.boundary_spec):
-            if isinstance(bc.condition, HeatBCTypes):
-                log.warning(
-                    f"'boundary_spec[{index}]' ('{type(bc.condition).__name__}') has no effect "
-                    f"here: {consequence}"
-                )
-        for index, source in enumerate(self.sources):
-            if isinstance(source, (UniformHeatSource, HeatSource)):
-                log.warning(
-                    f"'sources[{index}]' ('{type(source).__name__}') has no effect here: "
-                    f"{consequence}"
-                )
-        return self
-
-    def _warn_coupling_source_is_no_op(self) -> Self:
-        """Warn that 'HeatFromElectricSource' does nothing on a non-isothermal charge sim."""
-        if not self._thermal_solver_active:
-            return self
-        if not any(isinstance(source, HeatFromElectricSource) for source in self.sources):
-            return self
-
-        log.warning(
-            "'HeatFromElectricSource' is ignored in a non-isothermal charge simulation. "
-            f"'{type(self.analysis_spec).__name__}' already couples self-heating to the "
-            "temperature field self-consistently, so the source adds nothing. It can be "
-            "removed."
-        )
-        return self
 
     def _validate_self_heating_monitor_requirements(self) -> Self:
         """'SelfHeatingMonitor' requires an electric (charge or conduction) analysis."""
@@ -3322,19 +3203,6 @@ class HeatChargeSimulation(AbstractSimulation):
         return (
             isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
             and self.analysis_spec.temperature is None
-        )
-
-    @property
-    def _temperature_prescribed(self) -> bool:
-        """Whether the charge analysis runs on a fixed, spatially varying lattice temperature.
-
-        Distinguishes a prescribed-T run from a uniform isothermal one: both skip the
-        thermal solve, but only this one ships a field to the solver.
-        """
-        return (
-            isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
-            and not isinstance(self.analysis_spec, IsothermalSteadyChargeDCAnalysis)
-            and self.analysis_spec.temperature is not None
         )
 
     def _accelerated_only_features(self) -> list[str]:
