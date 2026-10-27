@@ -62,11 +62,7 @@ from tidy3d.components.tcad.generation_recombination import (
     ShockleyReedHallRecombination,
     SurfaceShockleyReedHallRecombination,
 )
-from tidy3d.components.tcad.grid import (
-    AutoUnstructuredGrid,
-    DistanceUnstructuredGrid,
-    UnstructuredGridType,
-)
+from tidy3d.components.tcad.grid import UnstructuredGridType
 from tidy3d.components.tcad.mobility import (
     CANALI_BETA_MAX,
     CANALI_BETA_MIN,
@@ -129,17 +125,13 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.bc_placement import BCPlacementType
-    from tidy3d.components.geometry.base import Geometry
     from tidy3d.components.types import Ax, Bound, Shapely
-    from tidy3d.components.types.base import ArrayFloat1D, BoxSurface
+    from tidy3d.components.types.base import ArrayFloat1D
     from tidy3d.components.viz import PlotParams
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 
 HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC, RadiationBC, ThermalContactResistance)
-# Neumann in the temperature rows, exactly as the adiabatic wall a dropped condition
-# leaves behind is: losing one cannot leave the steady solve unanchored.
-NeumannHeatBCTypes = (HeatFluxBC, ThermalContactResistance)
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC, SurfaceRecombinationBC)
@@ -705,20 +697,16 @@ class HeatChargeSimulation(AbstractSimulation):
             # that cannot make the input valid.
             self._call_with_validation_loc(("boundary_spec",), self._check_gate_voltage_bcs)
             self._check_grad_quasi_fermi_impact_ionization()
-        # Ahead of '_not_all_neumann', whose generic message would hide the real mistake when
-        # a 'HeatFromElectricSource' has no heat BCs.
+        # Ahead of the 'validate_not_all_neumann' rule, whose generic message would hide the
+        # real mistake when a 'HeatFromElectricSource' has no heat BCs.
         self._call_with_validation_loc(("sources",), self._check_charge_heat_coupling_unsupported)
-        # Ahead of the heat-BC checks below, whose generic messages would hide that the
-        # input is ignored.
+        # Ahead of the heat-BC rules of the core validation, whose generic messages would
+        # hide that the input is ignored.
         self._call_with_validation_loc(
             ("boundary_spec",), self._warn_heat_inputs_need_thermal_solve
         )
         self._call_with_validation_loc(("sources",), self._check_coupling_source_can_be_applied)
         self._call_with_validation_loc(("sources",), self._warn_coupling_source_is_no_op)
-        self._call_with_validation_loc(("boundary_spec",), self._heat_bcs_reach_solids)
-        self._call_with_validation_loc(("boundary_spec",), self._check_self_heating_has_heat_sink)
-        self._call_with_validation_loc(("boundary_spec",), self._not_all_neumann)
-        self._call_with_validation_loc(("grid_spec",), self._names_exist_grid_spec)
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -2087,270 +2075,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 break
         return self
 
-    def _domain_surface_box(self, surface: BoxSurface) -> Box | None:
-        """Zero-thickness :class:`.Box` for one domain face; ``None`` if unbounded there."""
-        axis = "xyz".index(surface[0])
-        position = self.bounds[0 if surface[1] == "-" else 1][axis]
-        if not math.isfinite(position):
-            return None
-        center = list(self.center)
-        size = list(self.size)
-        center[axis] = position
-        size[axis] = 0.0
-        return Box(center=center, size=size)
-
-    def _takes_part_in_heat(self, medium: StructureMediumType) -> bool:
-        """Whether ``medium`` carries a temperature the heat solve constrains.
-
-        Mirrors ``Zone.remove_from_heat`` in the mesher: a fluid holds no temperature,
-        and a charge simulation hands its conductors to the electric solve instead.
-        """
-        if not isinstance(medium.heat_spec, SolidMedium):
-            return False
-        if TCADAnalysisTypes.CHARGE in self._check_simulation_types():
-            return not isinstance(medium.charge, ChargeConductorMedium)
-        return True
-
-    def _overlaps_face(self, face: Box, geometry: Geometry) -> bool:
-        """Whether ``geometry`` covers part of ``face`` with positive area.
-
-        Contact along an edge or a corner carries no boundary patch, so touching bounds
-        is not enough. A domain flat in a second dimension leaves no area to measure and
-        falls back to plain intersection.
-        """
-        if face.size.count(0.0) != 1:
-            return face.intersects(geometry)
-        return any(shape.area > 0 for shape in face.intersections_with(geometry))
-
-    def _reaches_heat_solve(self, face: Box) -> bool:
-        """Whether a medium taking part in the heat solve covers part of ``face``."""
-        background = Structure(geometry=Box(size=self.size, center=self.center), medium=self.medium)
-        structures = [background, *self.structures]
-        participating = [s for s in structures if self._takes_part_in_heat(s.medium)]
-        if not any(self._overlaps_face(face, s.geometry) for s in participating):
-            return False
-        if face.size.count(0.0) != 1:
-            return True
-        # and it has to be the medium left exposed there, not one hidden behind another
-        return any(
-            self._takes_part_in_heat(medium)
-            for medium in Scene.intersecting_media(face, structures)
-        )
-
-    def _heat_bc_placement_problem(self, placement: BCPlacementType) -> str | None:
-        """Why a heat boundary condition at ``placement`` reaches no heat solve, if so.
-
-        Conservative: a placement this side cannot resolve reports no problem, leaving
-        the exact call to the mesher, which has the zones. Each branch knows a different
-        reason, so it returns its own rather than one blaming fluid for all of them.
-        """
-        sides = self._placement_side_media(placement)
-        if sides is not None:
-            if any(self._takes_part_in_heat(side) for side in sides):
-                return None
-            return "is placed on an interface where neither side takes part in the heat solve"
-
-        if isinstance(placement, SimulationBoundary | StructureSimulationBoundary):
-            faces = tuple(self._domain_surface_box(surface) for surface in placement.surfaces)
-            if any(face is None for face in faces):
-                return None
-            if isinstance(placement, SimulationBoundary):
-                if any(self._reaches_heat_solve(face) for face in faces):
-                    return None
-                return (
-                    "is placed on simulation boundary faces that reach nothing taking "
-                    "part in the heat solve"
-                )
-            # Only the named structure's share of those faces carries the condition, so
-            # it has to reach one of them. Whether it also owns that share depends on
-            # the structures above it, which the mesher resolves.
-            structure = next((s for s in self.structures if s.name == placement.structure), None)
-            if structure is None:
-                return None
-            if not any(self._overlaps_face(face, structure.geometry) for face in faces):
-                return (
-                    f"names structure '{placement.structure}', which does not reach the "
-                    "simulation boundary faces it lists"
-                )
-            # The patch is the named structure's share of the face, so it alone decides;
-            # a participating background elsewhere on the same face does not rescue it.
-            if self._takes_part_in_heat(structure.medium):
-                return None
-            return f"names structure '{placement.structure}', which takes no part in the heat solve"
-
-        # A fluid structure's boundary can still coincide with the solid facing it.
-        return None
-
-    def _heat_bcs_reach_solids(self) -> Self:
-        """Report a heat BC placed where no solid material is present.
-
-        Temperature is solved only inside solid media, so the mesher drops such a
-        condition and leaves an adiabatic wall in its place. An error when that leaves
-        nothing to anchor the temperature -- the steady solve then diverges while the
-        task reports success -- and a warning when another condition still anchors it,
-        which only makes the dropped one redundant. An unsteady analysis is pinned by
-        its initial condition, so nothing there is left undetermined either.
-
-        An anchor is any condition this side cannot disprove, ``_heat_bc_placement_problem``
-        leaving what it cannot settle to the mesher. That errs towards the warning: a
-        well-posed setup stays buildable, and a setup only this side thought anchored
-        still fails at mesh time, where ``_check_unapplied_heat_bcs`` has the zones and
-        is exact.
-        """
-        # (index, condition, message up to the consequence)
-        dropped = []
-        anchored = isinstance(self.analysis_spec, UnsteadyHeatAnalysis)
-        for index, bc in enumerate(self.boundary_spec):
-            if not isinstance(bc.condition, HeatBCTypes):
-                continue
-            problem = self._heat_bc_placement_problem(bc.placement)
-            if problem is None:
-                anchored |= not isinstance(bc.condition, NeumannHeatBCTypes)
-                continue
-            dropped.append(
-                (
-                    index,
-                    bc.condition,
-                    f"'{type(bc.condition).__name__}' {problem}. Temperature is solved "
-                    "only inside solid media -- and a charge simulation solves its "
-                    "conductors electrically instead -- so this condition would be "
-                    "dropped when the mesh is built and the surface left adiabatic",
-                )
-            )
-
-        if not dropped:
-            return self
-
-        if anchored:
-            for index, _condition, message in dropped:
-                log.warning(
-                    f"{message}, with no effect on the result.",
-                    custom_loc=["boundary_spec", index, "placement"],
-                )
-            return self
-
-        # Name the condition whose loss unanchors the solve, not a Neumann one that
-        # happens to come first.
-        index, _condition, message = next(
-            (item for item in dropped if not isinstance(item[1], NeumannHeatBCTypes)),
-            dropped[0],
-        )
-        self._raise_validation_error_at_loc(
-            f"{message}, leaving nothing to anchor the temperature.",
-            "boundary_spec",
-            index,
-            "placement",
-        )
-        return self
-
-    def _not_all_neumann(self) -> Self:
-        """Make sure not all BCs are of Neumann type"""
-
-        # SurfaceRecombinationBC is Robin in the carrier rows, but it does
-        # not anchor the electrostatic potential.
-        NeumannBCsCharge = (CurrentBC, InsulatingBC, SurfaceRecombinationBC)
-
-        simulation_types = self._check_simulation_types()
-
-        raise_error = False
-        for sim_type in simulation_types:
-            if sim_type == TCADAnalysisTypes.HEAT:
-                # Transient heat is well-posed with all-Neumann BCs (initial
-                # condition pins the solution); only steady state is ambiguous.
-                if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
-                    continue
-                type_bcs = [
-                    bc for bc in self.boundary_spec if isinstance(bc.condition, HeatBCTypes)
-                ]
-                if len(type_bcs) == 0 or all(
-                    isinstance(bc.condition, NeumannHeatBCTypes) for bc in type_bcs
-                ):
-                    raise_error = True
-            elif sim_type == TCADAnalysisTypes.CONDUCTION:
-                type_bcs = [
-                    bc for bc in self.boundary_spec if isinstance(bc.condition, ElectricBCTypes)
-                ]
-                if len(type_bcs) == 0 or all(
-                    isinstance(bc.condition, NeumannBCsCharge) for bc in type_bcs
-                ):
-                    raise_error = True
-
-        names_neumann_Bcs = [BC.__name__ for BC in NeumannHeatBCTypes]
-        names_neumann_Bcs.extend([BC.__name__ for BC in NeumannBCsCharge])
-        if raise_error:
-            raise SetupError(
-                "Current 'HeatChargeSimulation' contains only Neumann-type boundary conditions. "
-                "Steady-state solution is undefined in this case. "
-                f"Current Neumann BCs are {names_neumann_Bcs}"
-            )
-
-        return self
-
-    def _names_exist_grid_spec(self) -> Self:
-        """Check grid spec structure/medium references."""
-        structures_names = {s.name for s in self.structures}
-        mediums_names = {s.medium.name for s in self.structures}
-        mediums_names.add(self.medium.name)
-
-        for structure_name in self.grid_spec.non_refined_structures:
-            if structure_name not in structures_names:
-                log.warning(
-                    f"Structure '{structure_name}' listed as a non-refined structure in "
-                    "'HeatChargeSimulation.grid_spec' is not present in 'HeatChargeSimulation.structures'"
-                )
-
-        if isinstance(self.grid_spec, DistanceUnstructuredGrid | AutoUnstructuredGrid):
-            for med_ind, medium_name in enumerate(self.grid_spec.uniform_grid_mediums):
-                if medium_name not in mediums_names:
-                    self._raise_validation_error_at_loc(
-                        f"Medium '{medium_name}' listed in 'grid_spec.uniform_grid_mediums' "
-                        "is not found among simulation mediums.",
-                        "grid_spec",
-                        "uniform_grid_mediums",
-                        med_ind,
-                    )
-
-        if isinstance(self.grid_spec, AutoUnstructuredGrid):
-            for ref_ind, refinement in enumerate(self.grid_spec.interface_refinements):
-                selection = refinement.selection
-                if isinstance(selection, StructureBoundary):
-                    if selection.structure not in structures_names:
-                        self._raise_validation_error_at_loc(
-                            f"Structure '{selection.structure}' provided in "
-                            f"'grid_spec.interface_refinements[{ref_ind}].selection' "
-                            f"(type '{selection.type}') is not found among simulation structures.",
-                            "grid_spec",
-                            "interface_refinements",
-                            ref_ind,
-                            "selection",
-                        )
-                elif isinstance(selection, StructureStructureInterface):
-                    for struct_name in selection.structures:
-                        if struct_name not in structures_names:
-                            self._raise_validation_error_at_loc(
-                                f"Structure '{struct_name}' provided in "
-                                f"'grid_spec.interface_refinements[{ref_ind}].selection' "
-                                f"(type '{selection.type}') is not found among simulation structures.",
-                                "grid_spec",
-                                "interface_refinements",
-                                ref_ind,
-                                "selection",
-                            )
-                elif isinstance(selection, MediumMediumInterface):
-                    for med_name in selection.mediums:
-                        if med_name not in mediums_names:
-                            self._raise_validation_error_at_loc(
-                                f"Medium '{med_name}' provided in "
-                                f"'grid_spec.interface_refinements[{ref_ind}].selection' "
-                                f"(type '{selection.type}') is not found among simulation mediums.",
-                                "grid_spec",
-                                "interface_refinements",
-                                ref_ind,
-                                "selection",
-                            )
-
-        return self
-
     def _check_semiconductor_electric_bcs_require_charge_analysis(self) -> Self:
         """Require an explicit charge analysis for electrical semiconductor simulations.
 
@@ -2564,55 +2288,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 *loc,
             )
         return self
-
-    def _check_self_heating_has_heat_sink(self) -> Self:
-        """Warn if a self-heating charge analysis has no boundary that lets the heat leave.
-
-        Surfaces without a thermal BC are adiabatic, so the steady heat equation has no
-        solution unless a 'TemperatureBC', a 'RadiationBC' or a 'ConvectionBC' that exchanges
-        heat (by convection or by its 'emissivity') exists. The suggested sinks leave out
-        radiation when 'use_accelerated_solver=False', which refuses it. Raises instead when
-        '_not_all_neumann' refuses the setup anyway, since its generic message would otherwise
-        win.
-        """
-        if not self._thermal_solver_active:
-            return self
-        if any(self._is_heat_sink(bc.condition) for bc in self.boundary_spec):
-            return self
-        if self.use_accelerated_solver:
-            sinks = (
-                "a 'TemperatureBC', a 'ConvectionBC' with a positive 'transfer_coeff' or "
-                "'emissivity', or a 'RadiationBC'"
-            )
-        else:
-            sinks = "a 'TemperatureBC' or a 'ConvectionBC' with a positive 'transfer_coeff'"
-        message = (
-            "A non-isothermal charge analysis solves a steady heat equation for the "
-            "self-heating, which has no solution unless the heat can leave the device: "
-            "surfaces without a thermal boundary condition are adiabatic, and a 'HeatFluxBC', "
-            "'ThermalContactResistance' or 'ConvectionBC' with a zero 'transfer_coeff' and no "
-            f"'emissivity' does not take heat out. Add {sinks} where the device is heat-sunk."
-        )
-        heat_bcs = [bc for bc in self.boundary_spec if isinstance(bc.condition, HeatBCTypes)]
-        if TCADAnalysisTypes.HEAT in self._check_simulation_types() and all(
-            isinstance(bc.condition, NeumannHeatBCTypes) for bc in heat_bcs
-        ):
-            self._raise_validation_error_at_loc(message, "boundary_spec")
-        log.warning(f"{message} Future versions of Tidy3D may reject this setup.")
-        return self
-
-    @staticmethod
-    def _is_heat_sink(condition: Any) -> bool:
-        """Whether a heat BC can carry heat out of the domain."""
-        if isinstance(condition, (TemperatureBC, RadiationBC)):
-            return True
-        if isinstance(condition, ConvectionBC):
-            return (
-                isinstance(condition.transfer_coeff, VerticalNaturalConvectionCoeffModel)
-                or condition.transfer_coeff > 0
-                or bool(condition.emissivity)
-            )
-        return False
 
     def _check_heat_feature_placement_in_charge(self) -> Self:
         """Reject heat features placed where the electric side of a self-heating run cannot follow.
