@@ -27,7 +27,6 @@ from tidy3d.components.material.tcad.charge import (
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
-    FluidMedium,
     SolidMedium,
 )
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
@@ -46,7 +45,6 @@ from tidy3d.components.spice.types import (
 )
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
-from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
 from tidy3d.components.tcad.generation_recombination import (
     SelberherrImpactIonization,
@@ -540,11 +538,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._check_single_ssac()
         self._check_only_one_voltage_array_provided()
         self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
-        self._call_with_validation_loc(("boundary_spec",), self._names_exist_bcs)
-        self._call_with_validation_loc(("boundary_spec",), self._check_natural_convection_bc)
-        self._call_with_validation_loc(
-            ("boundary_spec",), self._check_thermal_contact_resistance_placement
-        )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -678,127 +671,6 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    def _check_natural_convection_bc(self) -> Self:
-        """Make sure that natural convection BCs are defined correctly."""
-        boundary_spec = self.boundary_spec
-        if not boundary_spec:
-            return self
-
-        structures = self.structures
-        boundary_spec = self.boundary_spec
-        bg_medium = self.medium
-
-        # Create mappings for easy lookup of media and structures by name.
-        media = {s.medium.name: s.medium for s in structures if s.medium.name}
-        if bg_medium and bg_medium.name:
-            media[bg_medium.name] = bg_medium
-        structures_map = {s.name: s for s in structures if s.name}
-
-        def check_fluid_medium_attr(fluid_medium: FluidMedium) -> None:
-            if (
-                (fluid_medium.thermal_conductivity is None)
-                or (fluid_medium.viscosity is None)
-                or (fluid_medium.specific_heat is None)
-                or (fluid_medium.density is None)
-                or (fluid_medium.expansivity is None)
-            ):
-                raise SetupError(
-                    f"Boundary spec at index {i}: The fluid medium at the natural convection interface "
-                    f"must have 'thermal_conductivity', 'viscosity', 'specific_heat', 'density' and 'expansivity' defined."
-                )
-
-        for i, bc in enumerate(boundary_spec):
-            if not (
-                isinstance(bc.condition, ConvectionBC)
-                and isinstance(bc.condition.transfer_coeff, VerticalNaturalConvectionCoeffModel)
-            ):
-                continue
-
-            natural_conv_model = bc.condition.transfer_coeff
-            placement = bc.placement
-
-            # Case 1: The fluid medium is inferred from the placement interface.
-            # We use direct dictionary access, assuming '_names_exist_bcs' validator has already run.
-            if natural_conv_model.medium is None:
-                if isinstance(placement, MediumMediumInterface):
-                    med1 = media[placement.mediums[0]]
-                    med2 = media[placement.mediums[1]]
-                elif isinstance(placement, StructureStructureInterface):
-                    med1 = structures_map[placement.structures[0]].medium
-                    med2 = structures_map[placement.structures[1]].medium
-                else:
-                    raise SetupError(
-                        f"Boundary spec at index {i}: 'VerticalNaturalConvectionCoeffModel' with no medium specified requires "
-                        f"the 'placement' to be of type 'MediumMediumInterface' or 'StructureStructureInterface', "
-                        f"but got '{type(placement).__name__}'."
-                    )
-                specs = [
-                    med1.heat if isinstance(med1, MultiPhysicsMedium) else med1,
-                    med2.heat if isinstance(med2, MultiPhysicsMedium) else med2,
-                ]
-
-                # Check for a single fluid in the interface.
-                is_fluid = [isinstance(s, FluidMedium) for s in specs]
-                if is_fluid.count(True) != 1:
-                    raise SetupError(
-                        f"Boundary spec at index {i}: A natural convection boundary at an interface "
-                        f"must be between exactly one solid and one fluid medium. "
-                        f"Found types '{type(specs[0]).__name__}' and '{type(specs[1]).__name__}'."
-                    )
-                fluid_medium = specs[is_fluid.index(True)]
-                check_fluid_medium_attr(fluid_medium)
-
-            # Case 2: The fluid medium IS specified directly in the convection model.
-            else:
-                check_fluid_medium_attr(natural_conv_model.medium)
-        return self
-
-    def _check_thermal_contact_resistance_placement(self) -> Self:
-        """Make sure 'ThermalContactResistance' conditions are placed on an interface
-        between two solid heat regions."""
-        # name -> medium / structure lookups (assumes '_names_exist_bcs' has already run)
-        media = {s.medium.name: s.medium for s in self.structures if s.medium.name}
-        if self.medium and self.medium.name:
-            media[self.medium.name] = self.medium
-        structures_map = {s.name: s for s in self.structures if s.name}
-
-        for i, bc in enumerate(self.boundary_spec):
-            if not isinstance(bc.condition, ThermalContactResistance):
-                continue
-            placement = bc.placement
-            if not isinstance(placement, (MediumMediumInterface, StructureStructureInterface)):
-                self._raise_validation_error_at_loc(
-                    "'ThermalContactResistance' represents an interfacial thermal resistance "
-                    "between two touching solids, so its 'placement' must be a "
-                    "'MediumMediumInterface' or a 'StructureStructureInterface', "
-                    f"but got '{type(placement).__name__}'.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                )
-
-            # Both sides must take part in the heat solve as solids; otherwise the interface
-            # is physically meaningless and would only fail later, at mesh time, with an
-            # opaque backend error.
-            if isinstance(placement, MediumMediumInterface):
-                side_media = [media.get(name) for name in placement.mediums]
-            else:
-                side_media = [
-                    structures_map[name].medium if name in structures_map else None
-                    for name in placement.structures
-                ]
-            for medium in side_media:
-                if medium is not None and not isinstance(medium.heat_spec, SolidMedium):
-                    self._raise_validation_error_at_loc(
-                        "'ThermalContactResistance' can only be placed on an interface "
-                        "between two solid materials: each side must define a solid heat "
-                        f"specification ('SolidSpec'), but medium '{medium.name}' does not.",
-                        "boundary_spec",
-                        i,
-                        "placement",
-                    )
-        return self
-
     @field_validator("size")
     @classmethod
     def _check_zero_dim_domain(cls, val: Any) -> Any:
@@ -820,40 +692,6 @@ class HeatChargeSimulation(AbstractSimulation):
             raise SetupError(mssg)
 
         return val
-
-    def _names_exist_bcs(self) -> Self:
-        """Error if boundary conditions point to non-existing structures/media."""
-        structures = self.structures
-        structures_names = {s.name for s in structures}
-        mediums_names = {s.medium.name for s in structures}
-        mediums_names.add(self.medium.name)
-
-        for bc_ind, bc_spec in enumerate(self.boundary_spec):
-            bc_place = bc_spec.placement
-            if isinstance(bc_place, (StructureBoundary, StructureSimulationBoundary)):
-                if bc_place.structure not in structures_names:
-                    raise SetupError(
-                        f"Structure '{bc_place.structure}' provided in "
-                        f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}') "
-                        "is not found among simulation structures."
-                    )
-            if isinstance(bc_place, (StructureStructureInterface)):
-                for struct_name in bc_place.structures:
-                    if struct_name and struct_name not in structures_names:
-                        raise SetupError(
-                            f"Structure '{struct_name}' provided in "
-                            f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}') "
-                            "is not found among simulation structures."
-                        )
-            if isinstance(bc_place, (MediumMediumInterface)):
-                for med_name in bc_place.mediums:
-                    if med_name not in mediums_names:
-                        raise SetupError(
-                            f"Material '{med_name}' provided in "
-                            f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}') "
-                            "is not found among simulation mediums."
-                        )
-        return self
 
     def _check_only_one_voltage_array_provided(self) -> Self:
         """Error if more than one terminal is swept."""
