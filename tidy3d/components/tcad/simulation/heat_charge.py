@@ -23,11 +23,7 @@ from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.material.tcad.charge import (
     AbstractChargeMedium,
-    ChargeConductorMedium,
     SemiconductorMedium,
-)
-from tidy3d.components.material.tcad.heat import (
-    SolidMedium,
 )
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
@@ -43,7 +39,6 @@ from tidy3d.components.spice.types import (
     SSACAnalysis,
     SteadyChargeDCAnalysis,
 )
-from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
 from tidy3d.components.tcad.generation_recombination import (
@@ -51,9 +46,6 @@ from tidy3d.components.tcad.generation_recombination import (
 )
 from tidy3d.components.tcad.grid import UnstructuredGridType
 from tidy3d.components.tcad.monitors.charge import (
-    SteadyCapacitanceMonitor,
-    SteadyCurrentDensityMonitor,
-    SteadyElectricFieldMonitor,
     SteadyPotentialMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
@@ -96,6 +88,7 @@ if TYPE_CHECKING:
     from pydantic import FiniteFloat
 
     from tidy3d.compat import Self
+    from tidy3d.components.structure import Structure
     from tidy3d.components.types import Ax, Bound, Shapely
     from tidy3d.components.types.base import ArrayFloat1D
     from tidy3d.components.viz import PlotParams
@@ -472,161 +465,19 @@ class HeatChargeSimulation(AbstractSimulation):
                     _get_cylinder_radii_with_meshing_tol(base_geometry)
         return val
 
-    def _check_cross_solids(self, objs: tuple[Box, ...]) -> tuple[int, ...]:
-        """Given model dictionary ``values``, check whether objects in list ``objs`` cross
-        a ``SolidSpec`` medium.
-        """
-
-        # NOTE: when considering Conduction or Charge cases, both conductors and semiconductors
-        # will be accepted
-        valid_electric_medium = (SemiconductorMedium, ChargeConductorMedium)
-
-        # list of structures including background as a Box()
-        structure_bg = Structure(
-            geometry=Box(
-                size=self.size,
-                center=self.center,
-            ),
-            medium=self.medium,
-        )
-
-        total_structures = [structure_bg, *list(self.structures)]
-
-        obj_do_not_cross_solid_idx = []
-        obj_do_not_cross_cond_idx = []
-        for ind, obj in enumerate(objs):
-            if obj.size.count(0.0) == 1:
-                # for planar objects we could do a rigorous check
-                medium_set = Scene.intersecting_media(obj, total_structures)
-                crosses_solid = any(
-                    isinstance(medium.heat_spec, SolidMedium) for medium in medium_set
-                )
-                crosses_elec_spec = any(
-                    isinstance(medium.charge, valid_electric_medium) for medium in medium_set
-                )
-            else:
-                # approximate check for volumetric objects based on bounding boxes
-                # thus, it could still miss a case when there is no data inside the monitor
-                crosses_solid = any(
-                    obj.intersects(structure.geometry)
-                    for structure in total_structures
-                    if isinstance(structure.medium.heat_spec, SolidMedium)
-                )
-                crosses_elec_spec = any(
-                    obj.intersects(structure.geometry)
-                    for structure in total_structures
-                    if isinstance(structure.medium.charge, valid_electric_medium)
-                )
-
-            if not crosses_solid:
-                obj_do_not_cross_solid_idx.append(ind)
-            if not crosses_elec_spec:
-                obj_do_not_cross_cond_idx.append(ind)
-
-        return obj_do_not_cross_solid_idx, obj_do_not_cross_cond_idx
-
     @model_validator(mode="after")
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
         self._call_with_validation_loc(("structures",), super()._run_after_validators)
         self._call_with_validation_loc(("structures",), self._structures_not_at_edges)
         self._call_with_validation_loc(("structures",), self._validate_scene)
-        self._call_with_validation_loc(("monitors",), self._monitors_cross_solids)
-        self._call_with_validation_loc(("monitors",), self._check_monitor_dimensionality)
-        self._call_with_validation_loc(("symmetry",), self._check_symmetry_not_normal_to_zero_dim)
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
-        return self
-
-    def _check_symmetry_not_normal_to_zero_dim(self) -> Self:
-        """Reject a symmetry plane normal to the zero-size axis of a 2D simulation."""
-        for axis in self.zero_dims:
-            if self.symmetry[axis] != 0:
-                self._raise_validation_error_at_loc(
-                    f"'symmetry' is on along {'xyz'[axis]}, the axis along which the 2D "
-                    "simulation has zero size. Set 'symmetry' to 0 along that axis.",
-                    "symmetry",
-                    axis,
-                )
-        return self
-
-    def _check_monitor_dimensionality(self) -> Self:
-        """Reject monitors whose recorded quantity needs more than a line.
-
-        A monitor also collapses along the simulation's own invariant dimensions, so one
-        zero-size dimension in a 2D simulation already records a line, not a plane.
-        """
-        needs_two_dims = {
-            SteadyCapacitanceMonitor: "integrates charge over mesh cells",
-            SteadyElectricFieldMonitor: "records a vector field",
-            SteadyCurrentDensityMonitor: "records a vector field",
-        }
-        sim_zero_dims = set(self.zero_dims)
-
-        for idx, mnt in enumerate(self.monitors):
-            reason = next(
-                (why for mnt_type, why in needs_two_dims.items() if isinstance(mnt, mnt_type)),
-                None,
-            )
-            if reason is None:
-                continue
-
-            zero_dims = sim_zero_dims | set(mnt.zero_dims)
-            if len(zero_dims) < 2:
-                continue
-
-            axes = ", ".join("xyz"[dim] for dim in sorted(zero_dims))
-            note = "" if set(mnt.zero_dims) >= zero_dims else " (with the simulation's own)"
-            self._raise_validation_error_at_loc(
-                f"'{type(mnt).__name__}' (monitor '{mnt.name}') {reason}, so it needs two "
-                f"non-zero dimensions, but it has zero size along {axes}{note} and records "
-                "only a line or a point. Give it a non-zero size in two dimensions the "
-                "simulation resolves.",
-                "monitors",
-                idx,
-            )
-
         return self
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized heat/charge simulation before web upload."""
         assert_no_protected_media(self, "charge, heat, or heat-charge simulations")
         self._validate_charge_cartesian_monitors()
-
-    def _monitors_cross_solids(self) -> Self:
-        """Error if monitors does not cross any solid medium."""
-        val = self.monitors
-
-        failed_solid_idx, failed_elect_idx = self._check_cross_solids(val)
-
-        temp_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, TemperatureMonitor)]
-        volt_monitors = [
-            idx for idx, mnt in enumerate(val) if isinstance(mnt, SteadyPotentialMonitor)
-        ]
-
-        failed_temp_mnt = [idx for idx in temp_monitors if idx in failed_solid_idx]
-        failed_volt_mnt = [idx for idx in volt_monitors if idx in failed_elect_idx]
-
-        if len(failed_temp_mnt) > 0:
-            failed_idx = failed_temp_mnt[0]
-            self._raise_validation_error_at_loc(
-                "Temperature monitor does not cross any solid materials "
-                "('heat_spec=SolidSpec(...)'). Temperature distribution is only recorded inside solid "
-                "materials. Thus, no information will be recorded in this monitor.",
-                "monitors",
-                failed_idx,
-            )
-
-        if len(failed_volt_mnt) > 0:
-            failed_idx = failed_volt_mnt[0]
-            self._raise_validation_error_at_loc(
-                "Steady potential monitor does not cross any conducting materials "
-                "('charge=ChargeConductorMedium(...)'). The voltage is only stored inside conducting "
-                "materials. Thus, no information will be recorded in this monitor.",
-                "monitors",
-                failed_idx,
-            )
-
-        return self
 
     @field_validator("size")
     @classmethod
@@ -1462,7 +1313,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         Example
         -------
-        >>> from tidy3d import Scene, Medium, Box, Structure, UniformUnstructuredGrid, TemperatureMonitor
+        >>> from tidy3d import Scene, Medium, Box, Structure, SolidMedium, UniformUnstructuredGrid, TemperatureMonitor
         >>> box = Structure(
         ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
         ...     medium=Medium(permittivity=5),
