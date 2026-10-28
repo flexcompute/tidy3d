@@ -545,14 +545,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("boundary_spec",), self._check_thermal_contact_resistance_placement
         )
-        self._call_with_validation_loc(
-            ("structures",), self._check_heat_feature_placement_in_charge
-        )
-        self._call_with_validation_loc(("structures",), self._check_solids_have_charge_medium)
-        self._call_with_validation_loc(("structures",), self._warn_conductor_heat_medium_unused)
-        self._call_with_validation_loc(
-            ("analysis_spec",), self._check_semiconductor_electric_bcs_require_charge_analysis
-        )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -1012,179 +1004,12 @@ class HeatChargeSimulation(AbstractSimulation):
         }
         return source.updated_copy(**updates) if updates else source
 
-    def _placement_side_media(self, placement: BCPlacementType) -> list | None:
-        """The two media a placement names, or ``None`` if it names only one side.
-
-        A ``StructureBoundary`` or simulation-boundary placement names one side
-        only; the opposing material follows from the geometry and is resolved
-        when the simulation runs. Assumes ``_names_exist_bcs`` has already run.
-        """
-        media = {s.medium.name: s.medium for s in self.structures if s.medium.name}
-        if self.medium and self.medium.name:
-            media[self.medium.name] = self.medium
-        structures_map = {s.name: s for s in self.structures if s.name}
-
-        if isinstance(placement, MediumMediumInterface):
-            sides = [media.get(name) for name in placement.mediums]
-        elif isinstance(placement, StructureStructureInterface):
-            # An unnamed side is the background medium the structure sits in.
-            sides = [
-                structures_map[name].medium if name in structures_map else self.medium
-                for name in placement.structures
-            ]
-        else:
-            return None
-        return None if any(side is None for side in sides) else sides
-
     def _contact_conductors(self, idx: int) -> set[str]:
         """Return named conductors; empty means geometry must identify the terminal."""
         placement = self.boundary_spec[idx].placement
         if isinstance(placement, MediumMediumInterface):
             return set()
         return set(self._placement_conductor_structures(placement))
-
-    def _check_semiconductor_electric_bcs_require_charge_analysis(self) -> Self:
-        """Require an explicit charge analysis for electrical semiconductor simulations.
-
-        The rule is deliberately not placement-aware: the simulation type classifier suppresses
-        the CONDUCTION type from a global 'semiconductor_present' flag, so any electrical
-        boundary anywhere in a model that holds a semiconductor anywhere leaves the
-        simulation unclassified at validation time while the runtime classifier still calls
-        it conduction. Match that predicate here so no such setup slips through."""
-        if isinstance(self.analysis_spec, ChargeTypes):
-            return self
-        if not any(self._iter_semiconductor_charge_media()):
-            return self
-        if any(isinstance(bc.condition, ElectricBCTypes) for bc in self.boundary_spec):
-            raise SetupError(
-                "Simulations that contain a 'SemiconductorMedium' together with electrical "
-                "boundary conditions require a charge 'analysis_spec', such as "
-                "'IsothermalSteadyChargeDCAnalysis'. A charge analysis additionally requires "
-                "at least two 'VoltageBC' contacts, so boundaries of another electrical type "
-                "may need to be converted as well."
-            )
-        return self
-
-    def _check_heat_feature_placement_in_charge(self) -> Self:
-        """Reject heat features placed where the electric side of a self-heating run cannot follow.
-
-        The heat solve of a non-isothermal charge simulation applies advection and resistive
-        interfaces, but the carriers of a moving semiconductor are not advected, a resistive
-        interface between two semiconductors would break the carrier coupling across it, and
-        conductors take no part in the heat solve. The solver choice is checked by
-        '_accelerated_only_features'. Heat, conduction+heat, and isothermal or
-        prescribed-temperature charge analyses are unaffected."""
-        if not self._thermal_solver_active:
-            return self
-
-        for loc, medium in self._iter_media_with_locs():
-            heat_spec = (
-                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
-            )
-            velocity = getattr(heat_spec, "velocity", None)
-            moving = velocity is not None and any(v != 0.0 for v in velocity)
-            if moving and isinstance(self._charge_spec(medium), SemiconductorMedium):
-                self._raise_validation_error_at_loc(
-                    f"{self._medium_label(loc)} is a semiconductor with an advection "
-                    "velocity ('SolidMedium.velocity'). A non-isothermal charge simulation "
-                    "advects the heat of a moving solid but not its carriers, so the two "
-                    "would move apart. Remove 'velocity' from this medium.",
-                    *loc,
-                )
-
-        for i, bc in enumerate(self.boundary_spec):
-            if not isinstance(bc.condition, ThermalContactResistance):
-                continue
-            sides = self._placement_side_media(bc.placement) or []
-            charges = [self._charge_spec(side) for side in sides]
-            if any(isinstance(charge, ChargeConductorMedium) for charge in charges):
-                self._raise_validation_error_at_loc(
-                    "'ThermalContactResistance' cannot be placed on a conductor "
-                    "('ChargeConductorMedium') in a charge simulation: conductors take no part "
-                    "in its heat solve, so this face bounds it. To model a resistive contact to "
-                    "a metal at a known temperature, place a 'ConvectionBC' here with "
-                    "'transfer_coeff' equal to 1/'resistance' and that temperature as "
-                    "'ambient_temperature'.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                )
-            if len(charges) == 2 and all(
-                isinstance(charge, SemiconductorMedium) for charge in charges
-            ):
-                self._raise_validation_error_at_loc(
-                    "'ThermalContactResistance' between two semiconductors is not supported "
-                    "in non-isothermal charge simulations. Where both have the same band "
-                    "parameters, the charge solver ties their carrier densities across the "
-                    "interface, which a temperature jump would make inconsistent. A resistive "
-                    "heterojunction is not supported either. Place it where at least one side "
-                    "is an insulator.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                )
-        return self
-
-    def _warn_conductor_heat_medium_unused(self) -> Self:
-        """Warn that the solid heat medium of a conductor is not used in a self-heating run.
-
-        Conductors take no part in the heat solve of a charge simulation, so the heat medium the
-        user gave them has no effect. One warning names every such conductor."""
-        if not self._thermal_solver_active:
-            return self
-        labels = [
-            self._medium_label(loc)
-            for loc, medium in self._iter_media_with_locs()
-            if isinstance(self._charge_spec(medium), ChargeConductorMedium)
-            and isinstance(getattr(medium, "heat_spec", None), SolidMedium)
-        ]
-        if not labels:
-            return self
-        subject = (
-            f"{labels[0]} is a conductor"
-            if len(labels) == 1
-            else f"{', '.join(labels)} are conductors"
-        )
-        log.warning(
-            f"{subject} whose heat medium is not used: conductors take no part in the heat "
-            "solve of a self-heating charge simulation, so the faces they share with other "
-            "solids are adiabatic. To let heat leave through a conductor, place a "
-            "'TemperatureBC' or 'ConvectionBC' on those faces."
-        )
-        return self
-
-    def _check_solids_have_charge_medium(self) -> Self:
-        """Require a 'charge' medium on every solid of a non-isothermal charge simulation.
-
-        A solid that conducts heat in the coupled thermal solve also takes part in the
-        electrostatics, so its electrical role and permittivity must be declared. Fluids, and
-        isothermal or prescribed-temperature charge analyses, are unaffected."""
-        if not self._thermal_solver_active:
-            return self
-
-        media_sources = [(("medium",), self.medium, "The background 'medium'")]
-        media_sources.extend(
-            (("structures", i), struct.medium, f"Structure '{struct.name}'")
-            if struct.name
-            else (("structures", i), struct.medium, f"'structures[{i}]'")
-            for i, struct in enumerate(self.structures)
-        )
-        for loc, medium, label in media_sources:
-            heat_spec = (
-                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
-            )
-            if not isinstance(heat_spec, SolidMedium):
-                continue
-            charge = None if medium is heat_spec else medium.charge
-            if charge is None:
-                self._raise_validation_error_at_loc(
-                    f"{label} has a solid heat medium but no 'charge' medium. In a "
-                    "non-isothermal charge simulation every solid also takes part in the "
-                    "electrostatics. For an insulating solid, use a 'MultiPhysicsMedium' with "
-                    "'charge=ChargeInsulatorMedium(permittivity=...)'.",
-                    *loc,
-                )
-        return self
 
     @equal_aspect
     @add_ax_if_none
@@ -2081,30 +1906,6 @@ class HeatChargeSimulation(AbstractSimulation):
         # 1 for the initial 0 V solve; each pass warm-starts from the 0 V solution.
         bias_points = 1 + pass_solves(positive) + pass_solves(negative)
         return solves_per_point * bias_points + ramp_solves
-
-    @property
-    def _thermal_solver_active(self) -> bool:
-        """Whether a coupled thermal solve runs alongside the charge analysis.
-
-        One test suffices -- a thermal solve runs exactly when the lattice temperature is
-        unknown -- because neither way of supplying it leaves the field unset: the
-        isothermal spec narrows ``temperature`` to a scalar defaulting to 300 K, and a
-        prescribed field is frozen rather than solved for. The AC specs inherit from both,
-        so they classify with no extra cases.
-
-        Gates the ``residual_temperature`` report, the heat-solver feature checks, and the
-        coupling-source checks.
-        """
-        return (
-            isinstance(self.analysis_spec, SteadyChargeDCAnalysis)
-            and self.analysis_spec.temperature is None
-        )
-
-    def _medium_label(self, loc: tuple[Any, ...]) -> str:
-        """How messages name the medium at ``loc``: the background or a structure."""
-        if loc == ("medium",):
-            return "The background 'medium'"
-        return f"Structure '{self.structures[loc[1]].name or loc[1]}'"
 
     def _iter_media_with_locs(self) -> Iterator[tuple[tuple[Any, ...], Any]]:
         """Yield ``(loc, medium)`` for the background ``medium`` and each structure's medium."""
