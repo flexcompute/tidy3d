@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 
     from pydantic import FieldValidationInfo
 
-    from tidy3d import Simulation
     from tidy3d.components.base_sim.simulation import AbstractSimulation
     from tidy3d.components.data.monitor_data import AbstractFieldData
     from tidy3d.components.types import FreqArray
@@ -198,45 +197,6 @@ def validate_unique(
     return field_has_unique_entries
 
 
-def validate_mode_objects_symmetry(field_name: str) -> Callable[[T], T]:
-    """If a Mode-like object (ModeSource / ModeMonitor / ModeTimeMonitor),
-    check that the object is fully in the main quadrant in the presence
-    of symmetry along a given axis, or else centered on the symmetry
-    center. ModeTimeMonitor shares the ModeMonitor mode-solver pipeline
-    and inherits the same restriction."""
-
-    if field_name == "sources":
-        obj_types: tuple[str, ...] = ("ModeSource",)
-    else:
-        obj_types = ("ModeMonitor", "ModeTimeMonitor")
-
-    @model_validator(mode="after")
-    def check_symmetry(self: T) -> T:
-        """check for intersection of each structure with simulation bounds."""
-        val: Sequence[Any] = getattr(self, field_name)
-        sim_center = self.center
-        for position_index, geometric_object in enumerate(val):
-            if geometric_object.type in obj_types:
-                bounds_min, _ = geometric_object.bounds
-                for dim, sym in enumerate(self.symmetry):
-                    if (
-                        sym != 0
-                        and bounds_min[dim] < sim_center[dim]
-                        and geometric_object.center[dim] != sim_center[dim]
-                    ):
-                        obj_descr = named_obj_descr(geometric_object, field_name, position_index)
-                        self._raise_validation_error_at_loc(
-                            f"{geometric_object.type}: {obj_descr} in presence of symmetries must "
-                            "be in the main quadrant, or centered on the symmetry axis.",
-                            field_name,
-                            position_index,
-                        )
-
-        return self
-
-    return check_symmetry
-
-
 def validate_field_projection_monitors_2d(
     monitors: Sequence[Any] | None,
     sim_size: tuple[float, float, float],
@@ -403,47 +363,6 @@ def assert_objects_in_sim_bounds(
         return self
 
     return objects_in_sim_bounds
-
-
-def assert_objects_contained_in_sim_bounds(
-    field_name: str,
-    error: bool = True,
-    strict_inequality: bool = False,
-    strict_for_zero_size_dim: bool = False,
-) -> Callable[[Simulation], Simulation]:
-    """Makes sure all objects in field are completely inside the simulation bounds."""
-
-    @model_validator(mode="after")
-    def objects_contained_in_sim_bounds(self: Simulation) -> Simulation:
-        """check for containment of each structure with simulation bounds."""
-        val: Sequence[Any] = getattr(self, field_name)
-        sim_center = self.center
-        sim_size = self.size
-        sim_box = Box(size=sim_size, center=sim_center)
-
-        # Do a strict check, unless simulation is 0D along a dimension
-        strict_ineq: list[bool] = [size != 0 and strict_inequality for size in sim_size]
-        with log as consolidated_logger:
-            for position_index, geometric_object in enumerate(val):
-                geo_strict_ineq = list(strict_ineq)
-                # Optionally ensure that zero size dimensions are strictly contained
-                if strict_for_zero_size_dim:
-                    zero_dims = geometric_object.geometry.zero_dims
-                    for zero_dim in zero_dims:
-                        geo_strict_ineq[zero_dim] = True
-                if not sim_box.contains(
-                    geometric_object.geometry, strict_inequality=geo_strict_ineq
-                ):
-                    obj_descr = named_obj_descr(geometric_object, field_name, position_index)
-                    message = f"{obj_descr} is not completely inside the simulation domain."
-                    custom_loc = [field_name, position_index]
-                    if error:
-                        self._raise_validation_error_at_loc(message, *custom_loc)
-                    consolidated_logger.warning(message, custom_loc=custom_loc)
-
-        return self
-
-    return objects_contained_in_sim_bounds
 
 
 def enforce_monitor_fields_present() -> Callable[[AbstractFieldData], AbstractFieldData]:

@@ -53,11 +53,8 @@ from tidy3d.components.types import TYPE_TAG_STR, Symmetry
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor import MonitorType
 from tidy3d.components.validators import (
-    assert_objects_contained_in_sim_bounds,
-    assert_objects_in_sim_bounds,
     call_wrapped_validator,
     named_obj_descr,
-    validate_mode_objects_symmetry,
 )
 from tidy3d.config import config
 from tidy3d.constants import SECOND
@@ -984,21 +981,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_auto_grid_wavelength()
         super()._run_after_validators()
         self._warn_3d_structures_missing_2d_yee_sampling_plane()
-
-        # Validate object containment, mode symmetry, and boundary/source relationships.
-        call_wrapped_validator(
-            assert_objects_in_sim_bounds, self, "sources", strict_inequality=True
-        )
-        call_wrapped_validator(
-            assert_objects_contained_in_sim_bounds,
-            self,
-            "lumped_elements",
-            error=False,
-            strict_inequality=False,
-            strict_for_zero_size_dim=True,
-        )
-        call_wrapped_validator(validate_mode_objects_symmetry, self, "sources")
-        call_wrapped_validator(validate_mode_objects_symmetry, self, "monitors")
         self._structures_not_at_edges()
 
         # Validate boundary-dependent runtime and modal-decomposition features.
