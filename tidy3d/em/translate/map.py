@@ -909,6 +909,12 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.structure.schema:MeshOverrideStructure",
         "flexcompute.core._migration.em.structure.validation:validate",
     ),
+    # A simulation builds its scene on demand, so ``Scene`` stays off the construction path and
+    # keeps thin checks. Registered for the simulation scopes that will run its rules.
+    "tidy3d.components.scene:Scene": ComponentScope(
+        "flexcompute.core._migration.em.scene.schema:Scene",
+        "flexcompute.core._migration.em.scene.validation:validate",
+    ),
     # source
     "tidy3d.components.source.current:UniformCurrentSource": ComponentScope(
         "flexcompute.core._migration.em.source.schema.current:UniformCurrentSource",
@@ -1246,6 +1252,9 @@ COMPONENT_ERROR_TYPES = {
     "em.microwave.missing_integrals": "tidy3d.exceptions:ValidationError",
     # scene: structure
     "em.structure.non_finite_min_steps_per_size": "builtins:ValueError",
+    # scene: media
+    "em.scene.too_many_mediums": "tidy3d.exceptions:SetupError",
+    "em.scene.too_many_structures_per_medium": "tidy3d.exceptions:SetupError",
     # source
     "em.source.too_few_time_coords": "tidy3d.exceptions:ValidationError",
     "em.source.non_increasing_time_coords": "tidy3d.exceptions:ValidationError",

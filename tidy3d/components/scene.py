@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 import shapely
+from flexcompute.core._migration.em.scene.validation import (
+    validate_mediums,
+    validate_structures_per_medium,
+)
+from flexcompute.core.validation import report_setup_diagnostics
 from pydantic import Field, field_validator
 
 if TYPE_CHECKING:
@@ -102,15 +107,8 @@ _MPL_NOT_LOADED = object()
 # - module: matplotlib module when successfully imported
 mpl: Any = _MPL_NOT_LOADED
 
-# maximum number of mediums supported
-MAX_NUM_MEDIUMS = 65530
-
 # # maximum geometry count in a single structure
 # MAX_GEOMETRY_COUNT = 5000
-
-# warn and error out if the same medium is present in too many structures
-WARN_STRUCTURES_PER_MEDIUM = 200
-MAX_STRUCTURES_PER_MEDIUM = 1_000
 
 
 def _get_colormap(reverse: bool = False) -> str:
@@ -204,29 +202,19 @@ class Scene(Tidy3dBaseModel):
 
     _unique_structure_names = assert_unique_names("structures")
 
+    # The media checks are thin checks that call the core rules, for two reasons. Performance: a
+    # simulation builds its scene on demand, and translating each one is too slow for the
+    # construction path. Field order: they stay field adapters, so an error reports together with
+    # the model's other field errors.
+
     @field_validator("structures")
     @classmethod
     def _validate_mediums(cls, val: tuple[Structure, ...] | None) -> tuple[Structure, ...] | None:
         """Error if too many mediums present. Warn if different mediums have the same name."""
+        from flexcompute.core._migration.em.scene.schema import Scene as SceneSchema
 
-        if val is None:
-            return val
-
-        mediums = {structure.medium for structure in val}
-        if len(mediums) > MAX_NUM_MEDIUMS:
-            raise SetupError(
-                f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct mediums."
-                f"{len(mediums)} were supplied."
-            )
-
-        medium_names = [medium.name for medium in mediums if medium.name is not None]
-        if len(medium_names) != len(set(medium_names)):
-            log.warning(
-                "Different mediums with the same name were detected. "
-                "This may error in future Tidy3D versions, and using unique names for distinct "
-                "media is recommended."
-            )
-
+        scene = SceneSchema.model_construct(structures=val)
+        report_setup_diagnostics(validate_mediums(scene), SetupError, logger=log)
         return val
 
     # @field_validator("structures")
@@ -259,38 +247,10 @@ class Scene(Tidy3dBaseModel):
         cls, val: tuple[Structure, ...] | None
     ) -> tuple[Structure, ...] | None:
         """Error if too many structures share the same medium; suggest using GeometryGroup."""
-        if val is None:
-            return val
+        from flexcompute.core._migration.em.scene.schema import Scene as SceneSchema
 
-        # if total structures are <= warn limit, the constraint cannot be violated.
-        if len(val) <= WARN_STRUCTURES_PER_MEDIUM:
-            return val
-
-        # Count structures per medium
-        counts = {}
-        get = counts.get
-        for structure in val:
-            key = structure.medium
-            new_count = get(key, 0) + 1
-            # Exit early to avoid slow counting if many structures present
-            if new_count > MAX_STRUCTURES_PER_MEDIUM:
-                raise SetupError(
-                    f"More than {MAX_STRUCTURES_PER_MEDIUM} structures use the same medium. "
-                    "For performance, use a 'GeometryGroup' or boolean operations to combine "
-                    "geometries that share a medium."
-                )
-            counts[key] = new_count
-
-        # Now check if we should warn
-        for count in counts.values():
-            if count > WARN_STRUCTURES_PER_MEDIUM:
-                log.warning(
-                    f"More than {WARN_STRUCTURES_PER_MEDIUM} structures use the same medium. "
-                    "For performance, use a 'GeometryGroup' or boolean operations to combine "
-                    "geometries that share a medium."
-                )
-                break
-
+        scene = SceneSchema.model_construct(structures=val)
+        report_setup_diagnostics(validate_structures_per_medium(scene), SetupError, logger=log)
         return val
 
     """ Accounting """

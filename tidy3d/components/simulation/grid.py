@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
+from flexcompute.core._migration.em.scene import validation as scene_validation
 from pydantic import (
     ValidationError as PydanticValidationError,
 )
 
-from tidy3d.components import scene as scene_module
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BlochBoundary, PECBoundary, Periodic, PMCBoundary
 from tidy3d.components.geometry.base import Box
@@ -140,9 +140,9 @@ def _validate_num_lumped_elements(self: Any) -> Self:
     structures = self.structures
     mediums = {structure.medium for structure in structures}
     total_num_mediums = len(val) + len(mediums)
-    if total_num_mediums > scene_module.MAX_NUM_MEDIUMS:
+    if total_num_mediums > scene_validation.MAX_NUM_MEDIUMS:
         self._raise_validation_error_at_loc(
-            f"Tidy3D only supports {scene_module.MAX_NUM_MEDIUMS} distinct lumped elements and structures."
+            f"Tidy3D only supports {scene_validation.MAX_NUM_MEDIUMS} distinct lumped elements and structures."
             f" {total_num_mediums} were supplied.",
             "lumped_elements",
         )

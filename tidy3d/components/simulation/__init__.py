@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from flexcompute.core._migration.em.scene.validation import MAX_NUM_MEDIUMS
+
 from tidy3d.components.monitor import DiffractionMonitor, FieldMonitor, ModeMonitor
-from tidy3d.components.scene import MAX_NUM_MEDIUMS
 from tidy3d.components.thin_lens import MAX_THIN_LENS_SETUP_WORK_UNITS
 from tidy3d.packaging import tidy3d_extras
 
