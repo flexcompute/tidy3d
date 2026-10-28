@@ -27,9 +27,7 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.snapping import (
     _shift_object,
 )
-from tidy3d.components.monitor import DiffractionMonitor
-from tidy3d.components.scene import Scene
-from tidy3d.components.source.field import AbstractModeSource, FixedAngleSpec, PlaneWave
+from tidy3d.components.source.field import AbstractModeSource
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.validators import named_obj_descr
 from tidy3d.constants import C_0
@@ -40,8 +38,6 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.boundary import BoundaryEdgeType, BoundarySpec, InternalAbsorber
-    from tidy3d.components.medium import MediumType
-    from tidy3d.components.source.utils import SourceType
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import Axis
 
@@ -299,48 +295,6 @@ def _structures_not_at_edges(self: Any) -> Self:
     return self
 
 
-def _bloch_boundaries_diff_mnt(self: Any) -> Self:
-    """Error if there are diffraction monitors incompatible with boundary conditions."""
-
-    monitors = self.monitors
-
-    if not monitors or not any(isinstance(mnt, DiffractionMonitor) for mnt in monitors):
-        return self
-
-    boundaries = self.boundary_spec.to_list
-    sources = self.sources
-    size = self.size
-    sim_medium = self.medium
-    structures = self.structures
-    for source_ind, source in enumerate(sources):
-        if not isinstance(source, PlaneWave):
-            continue
-
-        if isinstance(source.angular_spec, FixedAngleSpec):
-            continue
-
-        _, tan_dirs = self.pop_axis([0, 1, 2], axis=source.injection_axis)
-        medium_set = Scene.intersecting_media(source, structures)
-        medium = medium_set.pop() if medium_set else sim_medium
-
-        for tan_dir in tan_dirs:
-            boundary = boundaries[tan_dir]
-
-            # check the Bloch boundary + angled plane wave case
-            num_bloch = sum(isinstance(bnd, Periodic | BlochBoundary) for bnd in boundary)
-            if num_bloch > 0:
-                self._check_bloch_vec(
-                    source=source,
-                    source_ind=source_ind,
-                    bloch_vec=boundary[0].bloch_vec,
-                    dim=tan_dir,
-                    medium=medium,
-                    domain_size=size[tan_dir],
-                    has_diff_mnt=True,
-                )
-    return self
-
-
 def _validate_frequency_mode_abc(self: Any) -> Self:
     """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
 
@@ -590,53 +544,3 @@ def _num_non_pml_cells(self: Any) -> int:
         num_pml_cells_dim = num_pml_layers_dim[0] + num_pml_layers_dim[1]
         non_pml_cells_dim.append(num_cells_dim - num_pml_cells_dim)
     return int(np.prod(non_pml_cells_dim))
-
-
-@staticmethod
-def _check_bloch_vec(
-    source: SourceType,
-    source_ind: int,
-    bloch_vec: float,
-    dim: Axis,
-    medium: MediumType,
-    domain_size: float,
-    has_diff_mnt: bool = False,
-) -> None:
-    """Helper to check if a given Bloch vector is consistent with a given source."""
-
-    # make a dummy Bloch boundary to check for correctness
-    dummy_bnd = BlochBoundary.from_source(
-        source=source, domain_size=domain_size, axis=dim, medium=medium
-    )
-    expected_bloch_vec = dummy_bnd.bloch_vec
-
-    if bloch_vec != expected_bloch_vec:
-        test_val = np.real(expected_bloch_vec - bloch_vec)
-
-        test_val_is_int = np.isclose(test_val, np.round(test_val))
-        src_name = f" '{source.name}'" if source.name else ""
-
-        if has_diff_mnt and test_val_is_int and not np.isclose(test_val, 0):
-            # the given Bloch vector is offset by an integer
-            log.warning(
-                f"The wave vector of source{src_name} along dimension "
-                f"'{dim}' is equal to the Bloch vector of the simulation "
-                "boundaries along that dimension plus an integer reciprocal "
-                "lattice vector. If using a 'DiffractionMonitor', diffraction "
-                "order 0 will not correspond to the angle of propagation "
-                "of the source. Consider using 'BlochBoundary.from_source()'.",
-                custom_loc=["boundary_spec", "xyz"[dim]],
-            )
-
-        if not test_val_is_int:
-            # the given Bloch vector is neither equal to the expected value, nor
-            # off by an integer
-            log.warning(
-                f"The Bloch vector along dimension '{dim}' may be incorrectly "
-                f"set with respect to the source{src_name}. The absolute "
-                "difference between the expected and provided values in "
-                "bandstructure units, up to an integer offset, is greater than "
-                "1e-6. Consider using ``BlochBoundary.from_source()``, or "
-                "double-check that it was defined correctly.",
-                custom_loc=["boundary_spec", "xyz"[dim]],
-            )

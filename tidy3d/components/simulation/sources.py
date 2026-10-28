@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 from flexcompute.core._migration.em.material.medium.comparison import optical_medium_key
 
-from tidy3d.components.boundary import AbsorberSpec, BlochBoundary, Periodic
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import AnisotropicMedium, FullyAnisotropicMedium
 from tidy3d.components.monitor import (
@@ -16,20 +15,16 @@ from tidy3d.components.monitor import (
     ThinLensOverlapMonitor,
 )
 from tidy3d.components.scene import Scene
-from tidy3d.components.source.field import (
-    FixedAngleSpec,
-    PlaneWave,
-    ThinLensBeam,
-)
+from tidy3d.components.source.field import ThinLensBeam
 from tidy3d.components.structure import Structure
 from tidy3d.components.thin_lens import MAX_THIN_LENS_SETUP_WORK_UNITS, thin_lens_pupil_grid_samples
 from tidy3d.config import config
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.medium import AbstractMedium
+    from tidy3d.components.source.field import PlaneWave
     from tidy3d.components.types import ArrayFloat1D
 
 from . import constants
@@ -41,63 +36,6 @@ def _source_medium(self: Any, source: PlaneWave) -> AbstractMedium | None:
     if len({optical_medium_key(Structure._get_optical_medium(medium)) for medium in mediums}) > 1:
         return None
     return mediums.pop() if mediums else self.medium
-
-
-def _plane_wave_boundaries(self: Any) -> Self:
-    """Error if there are plane wave sources incompatible with boundary conditions."""
-    boundaries = self.boundary_spec.to_list
-    sources = self.sources
-    size = self.size
-    sim_medium = self.medium
-    structures = self.structures
-    for source_ind, source in enumerate(sources):
-        if not isinstance(source, PlaneWave):
-            continue
-
-        _, tan_dirs = self.pop_axis([0, 1, 2], axis=source.injection_axis)
-        medium_set = Scene.intersecting_media(source, structures)
-        medium = medium_set.pop() if medium_set else sim_medium
-
-        for tan_dir in tan_dirs:
-            boundary = boundaries[tan_dir]
-
-            # check the PML/absorber + angled plane wave case
-            num_pml = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
-            if num_pml > 0 and source.angle_theta != 0:
-                self._raise_validation_error_at_loc(
-                    "Angled plane wave sources are not compatible with the absorbing boundary "
-                    f"along dimension {tan_dir}. Either set the source ``angle_theta`` to "
-                    "``0``, or use Bloch boundaries that match the source angle.",
-                    "sources",
-                    source_ind,
-                )
-
-            # check the Bloch boundary + angled plane wave case
-            if isinstance(source.angular_spec, FixedAngleSpec):
-                num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
-                if num_bloch > 0:
-                    self._raise_validation_error_at_loc(
-                        "Fixed angle plane wave sources ('FixedAngleSpec' and 'angle_theta' != 0) do "
-                        f"not require the Bloch boundary along dimension {tan_dir}. "
-                        "Either set the boundary conditions to 'Periodic' to proceed to simulate a plane "
-                        "wave with frequency-independent propagation direction, or switch to "
-                        "'FixedInPlaneKSpec' specification to simulate a plane wave with a fixed "
-                        "in-plane Bloch vector (frequency-dependent propagation direction).",
-                        "sources",
-                        source_ind,
-                    )
-            else:
-                num_bloch = sum(isinstance(bnd, Periodic | BlochBoundary) for bnd in boundary)
-                if num_bloch > 0:
-                    self._check_bloch_vec(
-                        source=source,
-                        source_ind=source_ind,
-                        bloch_vec=boundary[0].bloch_vec,
-                        dim=tan_dir,
-                        medium=medium,
-                        domain_size=size[tan_dir],
-                    )
-    return self
 
 
 def _check_source_freq_available(

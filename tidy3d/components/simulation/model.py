@@ -922,7 +922,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationSources
     _source_medium = _sources_methods._source_medium
-    _plane_wave_boundaries = _sources_methods._plane_wave_boundaries
     _check_source_freq_available = _sources_methods._check_source_freq_available
     _thin_lens_source_plane_cells = _sources_methods._thin_lens_source_plane_cells
     _thin_lens_setup_work_units = _sources_methods._thin_lens_setup_work_units
@@ -939,7 +938,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationBoundaries
     _structures_not_at_edges = _boundaries_methods._structures_not_at_edges
-    _bloch_boundaries_diff_mnt = _boundaries_methods._bloch_boundaries_diff_mnt
     _validate_frequency_mode_abc = _boundaries_methods._validate_frequency_mode_abc
     _validate_absorber_in_zero_dims = _boundaries_methods._validate_absorber_in_zero_dims
     _validate_no_structures_pml = _boundaries_methods._validate_no_structures_pml
@@ -948,7 +946,6 @@ class Simulation(AbstractYeeGridSimulation):
         _boundaries_methods._validate_pec_frame_not_in_pml_extrusion
     )
     _num_non_pml_cells = _boundaries_methods._num_non_pml_cells
-    _check_bloch_vec = _boundaries_methods._check_bloch_vec
 
     # SimulationGrid
     _validate_auto_grid_wavelength = _grid_methods._validate_auto_grid_wavelength
@@ -1003,8 +1000,6 @@ class Simulation(AbstractYeeGridSimulation):
         call_wrapped_validator(validate_mode_objects_symmetry, self, "sources")
         call_wrapped_validator(validate_mode_objects_symmetry, self, "monitors")
         self._structures_not_at_edges()
-        self._plane_wave_boundaries()
-        self._bloch_boundaries_diff_mnt()
 
         # Validate boundary-dependent runtime and modal-decomposition features.
         self._validate_frequency_mode_abc()
