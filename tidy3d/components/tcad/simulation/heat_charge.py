@@ -51,12 +51,9 @@ from tidy3d.components.spice.types import (
 )
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
-from tidy3d.components.tcad.bandgap import VarshniEnergyBandGap
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
-from tidy3d.components.tcad.effective_DOS import ConstantEffectiveDOS
 from tidy3d.components.tcad.generation_recombination import (
-    HeterojunctionSurfaceShockleyReedHallRecombination,
     PalankovskiQuayApproxCarrierLifetime,
     SelberherrImpactIonization,
     ShockleyReedHallRecombination,
@@ -166,55 +163,6 @@ MIN_CYLINDER_RADIUS_FRACTION = 0.01
 # the user did not configure. Mirrored by SSAC_VOLTAGE_MATCH_TOL_V in
 # Flow360DriftDiffusionSolver.cpp; keep in sync.
 SSAC_VOLTAGE_MATCH_TOL_V = 1e-14
-
-# Band parameters further apart than this, relative to the larger (absolute below 1),
-# make two semiconductors a heterojunction.
-HETEROJUNCTION_REL_TOL = 1e-12
-
-
-def _band_signature(medium: SemiconductorMedium) -> tuple[tuple[Any, ...], ...]:
-    """Band parameters that set a band offset, one ``(kind, *values)`` per field.
-
-    Doping and bandgap narrowing are excluded. An effective DOS reduces to its
-    temperature law and ``N(T=1)``, so forms that give the same ``N(T)`` match.
-    """
-    signature: list[tuple[Any, ...]] = []
-    for dos in (medium.N_c, medium.N_v):
-        if isinstance(dos, ConstantEffectiveDOS):
-            signature.append(("constant", dos.N))
-        else:
-            signature.append(("temperature_dependent", float(dos.calc_eff_dos(1.0))))
-    signature.append(_band_gap_signature(medium))
-    signature.append(("affinity", medium.electron_affinity or 0.0))
-    return tuple(signature)
-
-
-def _band_gap_signature(medium: SemiconductorMedium) -> tuple[Any, ...]:
-    """The band-gap model as ``(kind, *values)``."""
-    band_gap = medium.E_g
-    if isinstance(band_gap, VarshniEnergyBandGap):
-        return ("varshni", band_gap.eg_0, band_gap.alpha, band_gap.beta)
-    return ("constant", band_gap.eg)
-
-
-def _band_fields_differ(field_a: tuple[Any, ...], field_b: tuple[Any, ...]) -> bool:
-    """Whether two ``(kind, *values)`` band fields differ beyond ``HETEROJUNCTION_REL_TOL``."""
-    return field_a[0] != field_b[0] or any(
-        abs(a - b) > HETEROJUNCTION_REL_TOL * max(1.0, abs(a), abs(b))
-        for a, b in zip(field_a[1:], field_b[1:], strict=True)
-    )
-
-
-def _is_material_heterojunction(
-    medium_a: SemiconductorMedium, medium_b: SemiconductorMedium
-) -> bool:
-    """Whether two semiconductors meet in a band offset."""
-    return any(
-        _band_fields_differ(field_a, field_b)
-        for field_a, field_b in zip(
-            _band_signature(medium_a), _band_signature(medium_b), strict=True
-        )
-    )
 
 
 def _get_cylinder_radii_with_meshing_tol(
@@ -674,20 +622,6 @@ class HeatChargeSimulation(AbstractSimulation):
             self._call_with_validation_loc(
                 ("structures",), self._check_surface_dependence_mobility_models
             )
-            # Schottky contacts and surface recombination apply only to
-            # charge simulations, so validate them inside the charge guard;
-            # heat-only and conduction-only simulations skip these checks.
-            self._call_with_validation_loc(("boundary_spec",), self._check_schottky_supported_modes)
-            self._call_with_validation_loc(("boundary_spec",), self._check_one_bias_per_metal)
-            self._call_with_validation_loc(
-                ("boundary_spec",), self._check_surface_recombination_bcs
-            )
-            self._call_with_validation_loc(
-                ("structures",), self._warn_non_accelerated_ignores_electron_affinity
-            )
-            self._call_with_validation_loc(
-                ("structures",), self._warn_heterojunction_electron_affinity
-            )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -1057,8 +991,8 @@ class HeatChargeSimulation(AbstractSimulation):
         """First ``boundary_spec`` index of each terminal among the given contact entries.
 
         Entries that name a common ``ChargeConductorMedium`` structure and carry the same
-        drive are one terminal, as in :meth:`_check_one_bias_per_metal`; any other entry
-        is a terminal of its own.
+        drive are one terminal, as in the ``validate_one_bias_per_metal`` rule; any other
+        entry is a terminal of its own.
         """
         terminals: list[tuple[int, set[str], Any]] = []
         for i in indices:
@@ -1269,45 +1203,6 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return self
 
-    @staticmethod
-    def _bc_is_schottky(bc_spec: Any) -> bool:
-        """``True`` when this boundary requests Schottky physics."""
-        condition = bc_spec.condition
-        return isinstance(condition, (VoltageBC, CurrentBC)) and condition.model == "schottky_mott"
-
-    def _check_schottky_supported_modes(self) -> Self:
-        """Reject Schottky configurations outside the validated solver model."""
-        has_schottky = any(self._bc_is_schottky(bc) for bc in self.boundary_spec)
-        if not has_schottky:
-            return self
-
-        if self.use_accelerated_solver is False:
-            self._raise_validation_error_at_loc(
-                'Schottky contacts (model="schottky_mott") are '
-                "implemented only by the accelerated charge solver, but "
-                "'use_accelerated_solver=False' selects the legacy solver. "
-                'Either set model="ohmic" or set '
-                "'use_accelerated_solver=True'.",
-                "use_accelerated_solver",
-                log_error=False,
-            )
-        for index, bc_spec in enumerate(self.boundary_spec):
-            if not self._bc_is_schottky(bc_spec):
-                continue
-            if isinstance(bc_spec.placement, (StructureSimulationBoundary, SimulationBoundary)):
-                self._raise_validation_error_at_loc(
-                    'Schottky contacts (model="schottky_mott") '
-                    f"cannot be placed on '{type(bc_spec.placement).__name__}': the "
-                    "metal-semiconductor contact cannot be identified there. Place "
-                    "the condition on the metal structure's 'StructureBoundary' or "
-                    "on a 'StructureStructureInterface' between the metal and "
-                    "semiconductor structures.",
-                    "boundary_spec",
-                    index,
-                    log_error=False,
-                )
-        return self
-
     def _insulator_face_bc_indices(self) -> list[int]:
         """Indices of ``VoltageBC`` entries with a face lying on an insulator.
 
@@ -1328,44 +1223,6 @@ class HeatChargeSimulation(AbstractSimulation):
             if any(isinstance(self._charge_spec(side), ChargeInsulatorMedium) for side in sides):
                 indices.append(i)
         return indices
-
-    def _check_one_bias_per_metal(self) -> Self:
-        """Reject a ``ChargeConductorMedium`` structure driven by two disagreeing sources.
-
-        A metal is equipotential, so the several ``boundary_spec`` entries that
-        may name one metal structure — its semiconductor contact and its oxide
-        cladding, say — declare one terminal and must agree on its bias.
-        Medium-based placements need geometric adjacency to identify the
-        contacted structures, so their consistency is checked when running.
-        Sources are compared through :meth:`_drive_of`, so differing labels
-        alone are not a disagreement. Terminal identity comes from
-        :meth:`_contact_conductors`, the same grouping the ``CurrentBC``
-        checks use.
-        """
-        source_by_structure: dict[str, tuple[int, Any]] = {}
-        for i, bc in enumerate(self.boundary_spec):
-            if not isinstance(bc.condition, VoltageBC):
-                continue
-            source = self._drive_of(bc.condition.source)
-            for name in self._contact_conductors(i):
-                first = source_by_structure.setdefault(name, (i, source))
-                if first[1] == source:
-                    continue
-                self._raise_validation_error_at_loc(
-                    f"Structure '{name}' is a 'ChargeConductorMedium' named by two 'VoltageBC' "
-                    f"entries with different sources ('boundary_spec[{first[0]}]' and "
-                    f"'boundary_spec[{i}]'). A metal structure is one terminal and a metal is "
-                    "equipotential, so its contacts must share one source. Give both entries "
-                    "the same source; or, if this structure is several electrically separate "
-                    "pieces of metal -- disjoint islands of one 'GeometryGroup', say -- give "
-                    "each piece its own 'Structure', since one structure cannot carry two "
-                    "potentials.",
-                    "boundary_spec",
-                    i,
-                    "condition",
-                    log_error=False,
-                )
-        return self
 
     def _placement_conductor_structures(self, placement: BCPlacementType) -> list[str]:
         """Names of the ``ChargeConductorMedium`` structures a placement names.
@@ -1391,18 +1248,6 @@ class HeatChargeSimulation(AbstractSimulation):
             if structure.name in named
             and isinstance(self._charge_spec(structure.medium), ChargeConductorMedium)
         ]
-
-    def _check_surface_recombination_bcs(self) -> Self:
-        """Run all ``SurfaceRecombinationBC`` setup checks."""
-        self._check_surface_recombination_requires_accelerated()
-        self._check_surface_recombination_not_stacked_with_insulating_bc()
-        self._check_surface_recombination_not_stacked_with_schottky()
-        self._check_surface_recombination_qf_on_voltage_overlay()
-        self._check_surface_recombination_tat_on_voltage_overlay()
-        self._check_surface_recombination_heterojunction_not_on_contact()
-        self._check_surface_recombination_no_duplicate_placement()
-        self._check_surface_recombination_interface_materials()
-        return self
 
     @staticmethod
     def _charge_spec(medium: Any) -> Any:
@@ -1475,68 +1320,6 @@ class HeatChargeSimulation(AbstractSimulation):
             return None if medium is None else [medium]
         return self._placement_side_media(placement)
 
-    def _check_surface_recombination_interface_materials(self) -> Self:
-        """Reject ``SurfaceRecombinationBC`` on an interface that cannot carry it.
-
-        Only placements naming both sides are checked; for the rest the opposing
-        material follows from the geometry and is resolved when the simulation
-        runs. A heterojunction model must name both sides, so it is always checked.
-        """
-        for i, bc in enumerate(self.boundary_spec):
-            if not isinstance(bc.condition, SurfaceRecombinationBC):
-                continue
-            heterojunction_model = isinstance(
-                bc.condition.model, HeterojunctionSurfaceShockleyReedHallRecombination
-            )
-            if heterojunction_model:
-                self._check_heterojunction_sr_placement(i, bc.condition.model, bc.placement)
-            sides = self._placement_side_media(bc.placement)
-            if sides is None:
-                continue
-
-            semiconductors = [
-                spec
-                for spec in (self._charge_spec(side) for side in sides)
-                if isinstance(spec, SemiconductorMedium)
-            ]
-
-            if not semiconductors:
-                self._raise_validation_error_at_loc(
-                    "'SurfaceRecombinationBC' is placed on an interface where neither "
-                    "side is a 'SemiconductorMedium'. Surface recombination consumes "
-                    "electrons and holes, so it needs a semiconductor on at least one "
-                    "side of the interface.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                )
-            at_heterojunction = len(semiconductors) == 2 and _is_material_heterojunction(
-                *semiconductors
-            )
-            if heterojunction_model and not at_heterojunction:
-                self._raise_validation_error_at_loc(
-                    "'HeterojunctionSurfaceShockleyReedHallRecombination' is placed on an "
-                    "interface that is not a heterojunction: the two 'SemiconductorMedium' "
-                    "materials must differ in 'N_c', 'N_v', 'E_g' or 'electron_affinity'. Use "
-                    "'SurfaceShockleyReedHallRecombination' there: it covers free surfaces, "
-                    "semiconductor/insulator interfaces and junctions between regions of "
-                    "the same material.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                )
-            if not heterojunction_model and at_heterojunction:
-                self._raise_validation_error_at_loc(
-                    "'SurfaceShockleyReedHallRecombination' is placed on a heterojunction, "
-                    "where the interface trap exchanges carriers with both semiconductors. "
-                    "Use 'HeterojunctionSurfaceShockleyReedHallRecombination' on this "
-                    "placement.",
-                    "boundary_spec",
-                    i,
-                    "placement",
-                )
-        return self
-
     def _current_bc_indices(self) -> list[int]:
         return [
             idx for idx, bc in enumerate(self.boundary_spec) if isinstance(bc.condition, CurrentBC)
@@ -1548,275 +1331,6 @@ class HeatChargeSimulation(AbstractSimulation):
         if isinstance(placement, MediumMediumInterface):
             return set()
         return set(self._placement_conductor_structures(placement))
-
-    def _check_heterojunction_sr_placement(
-        self,
-        index: int,
-        model: HeterojunctionSurfaceShockleyReedHallRecombination,
-        placement: BCPlacementType,
-    ) -> None:
-        """Require a heterojunction SR model on an interface named after its two sides."""
-        if isinstance(placement, StructureStructureInterface):
-            names, kind = placement.structures, "structure"
-        elif isinstance(placement, MediumMediumInterface):
-            names, kind = placement.mediums, "medium"
-        else:
-            self._raise_validation_error_at_loc(
-                "'HeterojunctionSurfaceShockleyReedHallRecombination' is placed with a "
-                f"'{placement.type}'. It needs a 'StructureStructureInterface' or a "
-                "'MediumMediumInterface' that names the two sides of the heterojunction.",
-                "boundary_spec",
-                index,
-                "placement",
-            )
-        side_names = {side.name for side in model.sides}
-        if set(names) != side_names:
-            self._raise_validation_error_at_loc(
-                f"The side names {sorted(side_names)} of "
-                "'HeterojunctionSurfaceShockleyReedHallRecombination' do not match the "
-                f"{kind} names {list(names)} of its '{placement.type}' placement. Name "
-                f"each side after the {kind} on that side of the interface.",
-                "boundary_spec",
-                index,
-                "placement",
-            )
-
-    def _check_surface_recombination_requires_accelerated(self) -> Self:
-        """Reject ``SurfaceRecombinationBC`` when the accelerated charge solver is off."""
-        has_sr = any(isinstance(bc.condition, SurfaceRecombinationBC) for bc in self.boundary_spec)
-        if not has_sr:
-            return self
-        # May raise if the user forced an unsupported configuration; let it propagate.
-        if not self._resolve_use_accelerated_solver:
-            raise SetupError(
-                "'SurfaceRecombinationBC' is supported only by the "
-                "accelerated charge solver. Either remove the surface "
-                "recombination boundary condition or set "
-                "'use_accelerated_solver=True'."
-            )
-        return self
-
-    def _check_surface_recombination_not_stacked_with_schottky(self) -> Self:
-        """Reject ``SurfaceRecombinationBC`` sharing a placement with a Schottky
-        contact, which does not support a surface recombination overlay."""
-        for i, sr_bc in enumerate(self.boundary_spec):
-            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
-                continue
-            for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not self._bc_is_schottky(other_bc):
-                    continue
-                if self._placements_overlap(sr_bc.placement, other_bc.placement):
-                    raise SetupError(
-                        "'SurfaceRecombinationBC' cannot share a placement with a "
-                        'Schottky contact (model="schottky_mott"). '
-                        "Contact surface recombination overlays are supported only "
-                        'for ohmic contacts (model="ohmic").'
-                    )
-        return self
-
-    def _check_surface_recombination_qf_on_voltage_overlay(self) -> Self:
-        """Reject non-zero ``Q_f`` on a placement shared with a contact,
-        which screens fixed sheet charge."""
-        for i, sr_bc in enumerate(self.boundary_spec):
-            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
-                continue
-            if not sr_bc.condition.Q_f:
-                continue
-            for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, (VoltageBC, CurrentBC)):
-                    continue
-                if self._placements_overlap(sr_bc.placement, other_bc.placement):
-                    raise SetupError(
-                        "'SurfaceRecombinationBC' with a non-zero 'Q_f' "
-                        f"cannot share a placement with '{type(other_bc.condition).__name__}'. The "
-                        "metal contact pins the electrostatic potential and "
-                        "screens fixed sheet charge, so the Poisson "
-                        "contribution from Q_f would be ignored on the "
-                        "overlay nodes."
-                    )
-        return self
-
-    def _check_surface_recombination_tat_on_voltage_overlay(self) -> Self:
-        """Reject a trap-assisted tunneling enhancement on a placement shared with
-        a contact, where the surface term is contact exchange and not trap SRH."""
-        for i, sr_bc in enumerate(self.boundary_spec):
-            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
-                continue
-            model = sr_bc.condition.model
-            if (
-                not isinstance(model, SurfaceShockleyReedHallRecombination)
-                or model.field_enhancement is None
-            ):
-                continue
-            for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, (VoltageBC, CurrentBC)):
-                    continue
-                if self._placements_overlap(sr_bc.placement, other_bc.placement):
-                    raise SetupError(
-                        "'SurfaceShockleyReedHallRecombination' with a "
-                        "'field_enhancement' cannot share a placement with "
-                        f"'{type(other_bc.condition).__name__}'. On a contact overlay the surface term "
-                        "relaxes the minority-carrier density towards the ohmic "
-                        "equilibrium value, which is carrier exchange with the "
-                        "metal rather than recombination through a trap, so a "
-                        "trap-assisted tunneling enhancement has no meaning "
-                        "there. Drop 'field_enhancement' on this face."
-                    )
-        return self
-
-    def _check_surface_recombination_heterojunction_not_on_contact(self) -> Self:
-        """Reject a heterojunction SR model on a placement shared with a contact,
-        where the surface term is contact exchange and not trap SRH."""
-        for i, sr_bc in enumerate(self.boundary_spec):
-            if not isinstance(sr_bc.condition, SurfaceRecombinationBC) or not isinstance(
-                sr_bc.condition.model, HeterojunctionSurfaceShockleyReedHallRecombination
-            ):
-                continue
-            for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, (VoltageBC, CurrentBC)):
-                    continue
-                if self._placements_overlap(sr_bc.placement, other_bc.placement):
-                    self._raise_validation_error_at_loc(
-                        "'HeterojunctionSurfaceShockleyReedHallRecombination' cannot share "
-                        f"a placement with '{type(other_bc.condition).__name__}': on a contact the surface term is "
-                        "carrier exchange with the metal, not recombination through an "
-                        "interface trap.",
-                        "boundary_spec",
-                        i,
-                        "placement",
-                    )
-        return self
-
-    def _check_surface_recombination_not_stacked_with_insulating_bc(self) -> Self:
-        """Reject ``SurfaceRecombinationBC`` sharing a placement with ``InsulatingBC``,
-        whose zero-flux condition it already replaces."""
-        for i, sr_bc in enumerate(self.boundary_spec):
-            if not isinstance(sr_bc.condition, SurfaceRecombinationBC):
-                continue
-            for j, other_bc in enumerate(self.boundary_spec):
-                if i == j or not isinstance(other_bc.condition, InsulatingBC):
-                    continue
-                if self._placements_overlap(sr_bc.placement, other_bc.placement):
-                    raise SetupError(
-                        "'SurfaceRecombinationBC' cannot share a placement "
-                        "with 'InsulatingBC'. The SR Robin term already "
-                        "replaces the natural zero-flux BC; drop the "
-                        "'InsulatingBC' spec on this face."
-                    )
-        return self
-
-    def _check_surface_recombination_no_duplicate_placement(self) -> Self:
-        """Reject two ``SurfaceRecombinationBC`` entries on the same placement."""
-        for i, bc_i in enumerate(self.boundary_spec):
-            if not isinstance(bc_i.condition, SurfaceRecombinationBC):
-                continue
-            for j in range(i + 1, len(self.boundary_spec)):
-                bc_j = self.boundary_spec[j]
-                if not isinstance(bc_j.condition, SurfaceRecombinationBC):
-                    continue
-                if self._placements_overlap(bc_i.placement, bc_j.placement):
-                    raise SetupError(
-                        "Two 'SurfaceRecombinationBC' entries share the same "
-                        "placement. Use distinct placements (e.g. one "
-                        "'MediumMediumInterface' per semiconductor face) so "
-                        "each interface picks up its own kinetic model."
-                    )
-        return self
-
-    def _medium_pair_for_structure_pair(self, structures: tuple[str, str]) -> frozenset[str] | None:
-        """Return the medium-pair key for a structure pair, if it is unambiguous."""
-        structure_to_medium = {
-            structure.name: structure.medium.name
-            for structure in self.structures
-            if structure.name is not None and structure.medium.name is not None
-        }
-        medium_names = tuple(structure_to_medium.get(name) for name in structures)
-        if None in medium_names or medium_names[0] == medium_names[1]:
-            return None
-        return frozenset(medium_names)
-
-    def _placements_overlap(self, first: Any, second: Any) -> bool:
-        """Conservatively detect placement overlaps used by SR validation.
-
-        Interface pairs are treated as unordered, ``MediumMediumInterface``
-        is treated as a material-wide superset of matching structure
-        interfaces, and simulation-boundary surface lists are considered
-        overlapping if they share any surface.
-        """
-        if first == second:
-            return True
-
-        if isinstance(first, StructureStructureInterface) and isinstance(
-            second, StructureStructureInterface
-        ):
-            return frozenset(first.structures) == frozenset(second.structures)
-
-        if isinstance(first, MediumMediumInterface) and isinstance(second, MediumMediumInterface):
-            return frozenset(first.mediums) == frozenset(second.mediums)
-
-        if isinstance(first, StructureStructureInterface) and isinstance(
-            second, MediumMediumInterface
-        ):
-            return self._medium_pair_for_structure_pair(first.structures) == frozenset(
-                second.mediums
-            )
-
-        if isinstance(first, MediumMediumInterface) and isinstance(
-            second, StructureStructureInterface
-        ):
-            return self._placements_overlap(second, first)
-
-        if isinstance(first, SimulationBoundary) and isinstance(second, SimulationBoundary):
-            return bool(set(first.surfaces) & set(second.surfaces))
-
-        if isinstance(first, StructureSimulationBoundary) and isinstance(
-            second, StructureSimulationBoundary
-        ):
-            return first.structure == second.structure and bool(
-                set(first.surfaces) & set(second.surfaces)
-            )
-
-        if isinstance(first, SimulationBoundary) and isinstance(
-            second, StructureSimulationBoundary
-        ):
-            return bool(set(first.surfaces) & set(second.surfaces))
-
-        if isinstance(first, StructureSimulationBoundary) and isinstance(
-            second, SimulationBoundary
-        ):
-            return self._placements_overlap(second, first)
-
-        # A StructureBoundary names a whole structure's boundary, and surface
-        # recombination never applies to faces a contact already occupies. Such
-        # a placement is therefore not an overlap: it is a valid configuration
-        # in which the contacted faces carry no surface recombination.
-
-        return False
-
-    def _warn_non_accelerated_ignores_electron_affinity(self) -> Self:
-        """Warn when the non-accelerated charge solver path will ignore electron affinity."""
-        try:
-            use_accelerated = self._resolve_use_accelerated_solver
-        except SetupError:
-            # Solver routing itself is invalid; the downstream error will surface
-            # on its own and there is nothing to warn about here.
-            return self
-        if use_accelerated:
-            return self
-
-        for _loc, semiconductor in self._iter_semiconductor_charge_media():
-            if (
-                semiconductor.electron_affinity is not None
-                and semiconductor.electron_affinity != 0.0
-            ):
-                log.warning(
-                    "'SemiconductorMedium.electron_affinity' is currently supported only "
-                    "when 'use_accelerated_solver=True'. With the non-accelerated charge "
-                    "solver this value is ignored and an electron affinity of 0 eV is used. "
-                    "Set 'use_accelerated_solver=True' to honour the configured value."
-                )
-                break
-        return self
 
     def _check_semiconductor_electric_bcs_require_charge_analysis(self) -> Self:
         """Require an explicit charge analysis for electrical semiconductor simulations.
@@ -3078,63 +2592,6 @@ class HeatChargeSimulation(AbstractSimulation):
             ):
                 return True
         return False
-
-    def _warn_heterojunction_electron_affinity(self) -> Self:
-        """Warn if an unset electron affinity would decide a band offset.
-
-        The accelerated solver places the bands of two semiconductors by their electron
-        affinities (Anderson's rule) and reads an unset one as 0 eV. With one of the pair
-        unset, that 0 eV meets the other's affinity. With both unset, a band-gap difference
-        lands entirely in the valence band; equal band gaps lose nothing, whatever their
-        densities of states. The non-accelerated solver ignores 'electron_affinity'
-        (``_warn_non_accelerated_ignores_electron_affinity``).
-        """
-        try:
-            if not self._resolve_use_accelerated_solver:
-                return self
-        except SetupError:
-            return self
-
-        semiconductors = self._distinct_semiconductor_charge_media()
-        for index, (loc_a, medium_a) in enumerate(semiconductors):
-            for loc_b, medium_b in semiconductors[index + 1 :]:
-                missing = [
-                    loc
-                    for loc, medium in ((loc_a, medium_a), (loc_b, medium_b))
-                    if medium.electron_affinity is None
-                ]
-                pair = f"{self._medium_label(loc_a)} and {self._medium_label(loc_b)}"
-                if len(missing) == 1 and _is_material_heterojunction(medium_a, medium_b):
-                    message = (
-                        f"The band offset between {pair} follows from their electron "
-                        f"affinities, and {self._medium_label(missing[0])} has no "
-                        "'electron_affinity', which is read as 0 eV against the other's. "
-                        "Set it. Future versions of Tidy3D may reject this setup."
-                    )
-                elif len(missing) == 2 and _band_fields_differ(
-                    _band_gap_signature(medium_a), _band_gap_signature(medium_b)
-                ):
-                    message = (
-                        f"{pair} have different band gaps, so their band offset follows from "
-                        "their electron affinities. Neither sets 'electron_affinity': both "
-                        "are read as 0 eV, which puts the whole band-gap difference into "
-                        "the valence band. Set 'electron_affinity' on both. "
-                        "Future versions of Tidy3D may reject this setup."
-                    )
-                else:
-                    continue
-                log.warning(message)
-        return self
-
-    def _distinct_semiconductor_charge_media(
-        self,
-    ) -> list[tuple[tuple[Any, ...], SemiconductorMedium]]:
-        """``(loc, charge)`` of each distinct ``SemiconductorMedium``, first occurrence kept."""
-        semiconductors: list[tuple[tuple[Any, ...], SemiconductorMedium]] = []
-        for loc, medium in self._iter_semiconductor_charge_media():
-            if not any(medium is other or medium == other for _, other in semiconductors):
-                semiconductors.append((loc, medium))
-        return semiconductors
 
     def _medium_label(self, loc: tuple[Any, ...]) -> str:
         """How messages name the medium at ``loc``: the background or a structure."""
