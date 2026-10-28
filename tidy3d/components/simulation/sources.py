@@ -21,10 +21,8 @@ from tidy3d.components.source.field import (
     PlaneWave,
     ThinLensBeam,
 )
-from tidy3d.components.source.time import CustomSourceTime
 from tidy3d.components.structure import Structure
 from tidy3d.components.thin_lens import MAX_THIN_LENS_SETUP_WORK_UNITS, thin_lens_pupil_grid_samples
-from tidy3d.components.validators import named_obj_descr
 from tidy3d.config import config
 from tidy3d.log import log
 
@@ -125,25 +123,6 @@ def _check_source_freq_available(
     freq0s = [source.source_time._freq0 for source in sources]
     if not all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
         log.warning(multi_freq_warning, capture=False)
-
-
-def _validate_custom_source_time(self: Any) -> None:
-    """Warn if all simulation times are outside CustomSourceTime definition range."""
-    run_time = self._run_time
-    for idx, source in enumerate(self.sources):
-        if isinstance(source.source_time, CustomSourceTime):
-            if source.source_time._all_outside_range(run_time=run_time):
-                data_times = source.source_time.data_times
-                mint = np.min(data_times)
-                maxt = np.max(data_times)
-                obj_descr = named_obj_descr(source, "sources", idx)
-                log.warning(
-                    f"'CustomSourceTime': {obj_descr} is defined over a time range "
-                    f"'({mint}, {maxt})' which does not include any of the 'Simulation' "
-                    f"times '({0, run_time})'. The envelope will be constant extrapolated "
-                    "from the first or last value in the 'CustomSourceTime', which may not "
-                    "be the desired outcome."
-                )
 
 
 def _thin_lens_source_plane_cells(self: Any, source: ThinLensBeam) -> int:

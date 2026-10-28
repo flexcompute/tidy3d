@@ -909,24 +909,7 @@ class Simulation(AbstractYeeGridSimulation):
     monitor_medium = _monitors_methods.monitor_medium
 
     # SimulationTFSF
-    _tfsf_boundaries = _tfsf_methods._tfsf_boundaries
-    _warn_fixed_angle_tfsf_normal_incidence = _tfsf_methods._warn_fixed_angle_tfsf_normal_incidence
-    _validate_fixed_angle_tfsf_angle_theta = _tfsf_methods._validate_fixed_angle_tfsf_angle_theta
-    _validate_fixed_angle_tfsf_source_time_type = (
-        _tfsf_methods._validate_fixed_angle_tfsf_source_time_type
-    )
-    _validate_fixed_angle_tfsf_semi_infinite_injection_axis = (
-        _tfsf_methods._validate_fixed_angle_tfsf_semi_infinite_injection_axis
-    )
-    _validate_fixed_angle_tfsf_source_time_localization = (
-        _tfsf_methods._validate_fixed_angle_tfsf_source_time_localization
-    )
-    _warn_fixed_angle_tfsf_long_run_time = _tfsf_methods._warn_fixed_angle_tfsf_long_run_time
     _get_periodic_fixed_angle_sources = _tfsf_methods._get_periodic_fixed_angle_sources
-    _check_fixed_angle_components = _tfsf_methods._check_fixed_angle_components
-    _validate_dipole_emission_monitor_sources = (
-        _tfsf_methods._validate_dipole_emission_monitor_sources
-    )
     _dipole_emission_tfsf_source = _tfsf_methods._dipole_emission_tfsf_source
     _dipole_emission_tfsf_injection_plane = _tfsf_methods._dipole_emission_tfsf_injection_plane
     _dipole_emission_tfsf_injection_medium = _tfsf_methods._dipole_emission_tfsf_injection_medium
@@ -941,7 +924,6 @@ class Simulation(AbstractYeeGridSimulation):
     _source_medium = _sources_methods._source_medium
     _plane_wave_boundaries = _sources_methods._plane_wave_boundaries
     _check_source_freq_available = _sources_methods._check_source_freq_available
-    _validate_custom_source_time = _sources_methods._validate_custom_source_time
     _thin_lens_source_plane_cells = _sources_methods._thin_lens_source_plane_cells
     _thin_lens_setup_work_units = _sources_methods._thin_lens_setup_work_units
     _thin_lens_setup_work_limit = _sources_methods._thin_lens_setup_work_limit
@@ -1023,25 +1005,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._structures_not_at_edges()
         self._plane_wave_boundaries()
         self._bloch_boundaries_diff_mnt()
-
-        # Preserve the dependency-sensitive TFSF and fixed-angle validation order.
-        # Before the generic TFSF-boundary checks: a dipole-emission monitor requires a
-        # 3D simulation, and reporting that directly is clearer than the TFSF-touches-
-        # boundary error a 2D domain would otherwise raise first. No-op without a
-        # DipoleEmissionMonitor.
-        self._validate_dipole_emission_monitor_sources()
-        self._tfsf_boundaries()
-        self._warn_fixed_angle_tfsf_normal_incidence()
-        self._validate_fixed_angle_tfsf_angle_theta()
-        self._validate_fixed_angle_tfsf_source_time_type()
-        self._validate_fixed_angle_tfsf_semi_infinite_injection_axis()
-        # Localization rejects non-decaying source times (and is evaluated
-        # before the long-run-time warning, which accesses ``self._run_time``;
-        # that evaluation is only well-defined once the sources are known to
-        # decay — see ``_validate_fixed_angle_tfsf_source_time_localization``).
-        self._validate_fixed_angle_tfsf_source_time_localization()
-        self._warn_fixed_angle_tfsf_long_run_time()
-        self._check_fixed_angle_components()
 
         # Validate boundary-dependent runtime and modal-decomposition features.
         self._validate_frequency_mode_abc()

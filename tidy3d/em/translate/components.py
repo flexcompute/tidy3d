@@ -14,7 +14,12 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import InitErrorDetails
 
-from tidy3d.em.translate.map import COMPONENT_ERROR_TYPES, COMPONENT_SCOPES, resolve
+from tidy3d.em.translate.map import (
+    COMPONENT_ERROR_TYPES,
+    COMPONENT_SCOPES,
+    COMPONENT_WARNINGS_LOGGED_ONCE,
+    resolve,
+)
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -189,11 +194,16 @@ def _present(model: Tidy3dBaseModel, diagnostics: Iterable[ValidationDiagnostic]
     Only the first error's type is resolved from ``COMPONENT_ERROR_TYPES``. An error with a
     path raises there: a mapped type in Pydantic's ``Value error, `` form with the value at
     the path as its input, otherwise the bare message through the model's location helper.
-    An error without a path raises its mapped type, ``ValueError`` by default.
+    An error without a path raises its mapped type, ``ValueError`` by default. A warning whose
+    code is in ``COMPONENT_WARNINGS_LOGGED_ONCE`` logs once per session.
     """
     for diagnostic in diagnostics:
         if diagnostic.severity == "warning":
-            log.warning(diagnostic.message, custom_loc=list(diagnostic.path))
+            log.warning(
+                diagnostic.message,
+                custom_loc=list(diagnostic.path),
+                log_once=diagnostic.code in COMPONENT_WARNINGS_LOGGED_ONCE,
+            )
             continue
         type_path = COMPONENT_ERROR_TYPES.get(diagnostic.code)
         error_type = resolve(type_path) if type_path else None

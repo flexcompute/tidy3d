@@ -1281,6 +1281,14 @@ COMPONENT_ERROR_TYPES = {
     "solver.fdtd.too_many_sources": "tidy3d.exceptions:SetupError",
 }
 
+# Warnings that Tidy3D logs once per session, as their client checks did.
+COMPONENT_WARNINGS_LOGGED_ONCE = frozenset(
+    {
+        "solver.fdtd.fixed_angle_tfsf_normal_incidence",
+        "solver.fdtd.fixed_angle_tfsf_long_run_time",
+    }
+)
+
 
 def resolve(path: str) -> Any:
     """Resolve a ``module:attribute`` path lazily."""

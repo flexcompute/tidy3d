@@ -266,7 +266,6 @@ def _validate_scene(self: Any) -> Self:
     self._validate_no_structures_close_to_pml()
     self._validate_pec_frame_not_in_pml_extrusion()
     self._validate_nonlinear_specs()
-    self._validate_custom_source_time()
     self._warn_rf_license()
     return self
 
