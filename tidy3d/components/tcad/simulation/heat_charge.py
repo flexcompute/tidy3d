@@ -53,13 +53,9 @@ from tidy3d.components.tcad.generation_recombination import (
 )
 from tidy3d.components.tcad.grid import UnstructuredGridType
 from tidy3d.components.tcad.monitors.charge import (
-    SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
-    SteadyChargeResidualMonitor,
     SteadyCurrentDensityMonitor,
-    SteadyDopingMonitor,
     SteadyElectricFieldMonitor,
-    SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
@@ -127,13 +123,6 @@ AnalysisSpecType = ElectricalAnalysisType | UnsteadyHeatAnalysis
 CYLINDER_RADIUS_TOL = 1e-6
 # Minimum radius as fraction of the larger radius (for tapered cylinders)
 MIN_CYLINDER_RADIUS_FRACTION = 0.01
-
-# Absolute tolerance (V) for matching SSAC `at_voltages` against the DC sweep.
-# Both lists travel through JSON as IEEE-754 doubles, so a machine-epsilon-scale
-# value is intentional — any larger tolerance would silently accept a voltage
-# the user did not configure. Mirrored by SSAC_VOLTAGE_MATCH_TOL_V in
-# Flow360DriftDiffusionSolver.cpp; keep in sync.
-SSAC_VOLTAGE_MATCH_TOL_V = 1e-14
 
 
 def _get_cylinder_radii_with_meshing_tol(
@@ -564,16 +553,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("analysis_spec",), self._check_semiconductor_electric_bcs_require_charge_analysis
         )
-        self._call_with_validation_loc(("boundary_spec",), self._check_freqs_requires_ac_source)
-        self._call_with_validation_loc(
-            ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
-        )
-        self._call_with_validation_loc(
-            ("monitors",), self._validate_accelerated_only_monitor_requirements
-        )
-        self._call_with_validation_loc(
-            ("monitors",), self._validate_self_heating_monitor_requirements
-        )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -948,66 +927,6 @@ class HeatChargeSimulation(AbstractSimulation):
             terminals.append((first, conductors, drive))
         return sorted(terminal[0] for terminal in terminals)
 
-    def _check_freqs_requires_ac_source(self) -> Self:
-        """Ensure that if freqs is provided, at least one ACVoltageSource is present."""
-        analysis_spec = self.analysis_spec
-        if (
-            isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis))
-            and len(analysis_spec.freqs) > 0
-        ):
-            bcs = self.boundary_spec
-            has_ac_source = False
-            for bc in bcs:
-                if isinstance(bc.condition, VoltageBC):
-                    if isinstance(bc.condition.source, SSACVoltageSource):
-                        has_ac_source = True
-                        break
-
-            if not has_ac_source:
-                raise SetupError(
-                    "If 'freqs' is provided and not empty, at least one "
-                    "'SSACVoltageSource' must be present in the boundary conditions."
-                )
-
-        return self
-
-    def _check_ssac_specific_voltages(self) -> Self:
-        """Validate user-selected SSAC bias points against the DC voltage sweep."""
-        analysis_spec = self.analysis_spec
-        if not isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
-            return self
-        if analysis_spec.at_voltages is None:
-            return self
-
-        dc_voltages = np.asarray(self._dc_voltages, dtype=float)
-        if dc_voltages.size < 2:
-            # No sweep: ``_dc_voltages`` is just the first scalar source, so
-            # validate against the SSAC operating point (the AC drive's DC bias).
-            ssac_voltages = [
-                float(v)
-                for bc in self.boundary_spec
-                if isinstance(bc.condition, VoltageBC)
-                and isinstance(bc.condition.source, SSACVoltageSource)
-                for v in bc.condition.source.voltage
-            ]
-            dc_voltages = np.asarray(ssac_voltages, dtype=float)
-        if dc_voltages.size == 0:
-            return self
-
-        missing_voltages = [
-            voltage
-            for voltage in analysis_spec.at_voltages
-            if not np.any(np.isclose(dc_voltages, voltage, rtol=0.0, atol=SSAC_VOLTAGE_MATCH_TOL_V))
-        ]
-        if missing_voltages:
-            raise SetupError(
-                "Every entry in 'at_voltages' must be present in the DC voltage sweep "
-                "(with no multi-voltage sweep, the SSAC source bias). "
-                f"Missing voltages: {missing_voltages}."
-            )
-
-        return self
-
     def _validate_charge_cartesian_monitors(self) -> None:
         """Reject a Cartesian monitor that a Charge simulation cannot record.
 
@@ -1039,41 +958,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "monitors",
                 idx,
             )
-
-    def _validate_accelerated_only_monitor_requirements(self) -> Self:
-        """Validate monitors that exist only on the accelerated charge solver.
-
-        ``SteadyChargeResidualMonitor``, ``SteadyGenerationRecombinationMonitor`` and
-        ``SteadyDopingMonitor`` require a configured charge analysis and the accelerated
-        solver."""
-        accelerated_only = (
-            SteadyChargeResidualMonitor,
-            SteadyGenerationRecombinationMonitor,
-            SteadyDopingMonitor,
-        )
-        simulation_types = self._check_simulation_types()
-        charge_configured = TCADAnalysisTypes.CHARGE in simulation_types
-        for idx, mnt in enumerate(self.monitors):
-            if not isinstance(mnt, accelerated_only):
-                continue
-            mnt_type = type(mnt).__name__
-            if not charge_configured:
-                self._raise_validation_error_at_loc(
-                    f"'{mnt_type}' is only available when a charge analysis "
-                    "is configured (the simulation must include voltage BCs and a "
-                    "'SteadyChargeDCAnalysis' or derivative analysis spec).",
-                    "monitors",
-                    idx,
-                )
-            if self.use_accelerated_solver is False:
-                self._raise_validation_error_at_loc(
-                    f"'{mnt_type}' (monitor '{mnt.name}') is only available "
-                    "through the accelerated charge solver, but 'use_accelerated_solver=False' "
-                    "was set. Remove the monitor or use the accelerated solver (the default).",
-                    "monitors",
-                    idx,
-                )
-        return self
 
     def _placement_conductor_structures(self, placement: BCPlacementType) -> list[str]:
         """Names of the ``ChargeConductorMedium`` structures a placement names.
@@ -1162,7 +1046,7 @@ class HeatChargeSimulation(AbstractSimulation):
     def _check_semiconductor_electric_bcs_require_charge_analysis(self) -> Self:
         """Require an explicit charge analysis for electrical semiconductor simulations.
 
-        The rule is deliberately not placement-aware: '_check_simulation_types' suppresses
+        The rule is deliberately not placement-aware: the simulation type classifier suppresses
         the CONDUCTION type from a global 'semiconductor_present' flag, so any electrical
         boundary anywhere in a model that holds a semiconductor anywhere leaves the
         simulation unclassified at validation time while the runtime classifier still calls
@@ -1179,76 +1063,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "at least two 'VoltageBC' contacts, so boundaries of another electrical type "
                 "may need to be converted as well."
             )
-        return self
-
-    def _check_simulation_types(
-        self,
-        HeatBCTypes: tuple[type, ...] = HeatBCTypes,
-        ElectricBCTypes: tuple[type, ...] = ElectricBCTypes,
-        HeatSourceTypes: tuple[type, ...] = HeatSourceTypes,
-    ) -> list[TCADAnalysisTypes]:
-        """Given model dictionary ``values``, check the type of simulations to be run
-        based on BCs and sources.
-        """
-        simulation_types = []
-
-        analysis_spec = self.analysis_spec
-
-        if isinstance(analysis_spec, ChargeTypes):
-            simulation_types.append(TCADAnalysisTypes.CHARGE)
-
-        semiconductor_present = any(self._iter_semiconductor_charge_media())
-
-        for boundary in self.boundary_spec:
-            if isinstance(boundary.condition, HeatBCTypes):
-                simulation_types.append(TCADAnalysisTypes.HEAT)
-            if isinstance(boundary.condition, ElectricBCTypes):
-                # Add CONDUCTION type if we have no semiconductors
-                if not semiconductor_present:
-                    simulation_types.append(TCADAnalysisTypes.CONDUCTION)
-
-        for source in self.sources:
-            if not isinstance(source, HeatSourceTypes):
-                continue
-            # A non-isothermal charge analysis ignores 'HeatFromElectricSource'
-            # ('validate_coupling_source_no_op'), so it must not contribute a HEAT type
-            # either: that would subject the user to the heat-only checks -- a required
-            # 'TemperatureMonitor', not-all-Neumann -- on account of a source that does
-            # nothing, right after being told it is ignored.
-            if isinstance(source, HeatFromElectricSource) and self._thermal_solver_active:
-                continue
-            simulation_types.append(TCADAnalysisTypes.HEAT)
-
-        return set(simulation_types)
-
-    def _validate_self_heating_monitor_requirements(self) -> Self:
-        """'SelfHeatingMonitor' requires an electric (charge or conduction) analysis."""
-        simulation_types = self._check_simulation_types()
-        charge_configured = TCADAnalysisTypes.CHARGE in simulation_types
-        electric_configured = charge_configured or TCADAnalysisTypes.CONDUCTION in simulation_types
-
-        for index, mnt in enumerate(self.monitors):
-            if not isinstance(mnt, SelfHeatingMonitor):
-                continue
-            if not electric_configured:
-                self._raise_validation_error_at_loc(
-                    f"'SelfHeatingMonitor' (monitor '{mnt.name}') records the volumetric "
-                    "heating produced by an electric solve, so it is only available when a "
-                    f"{TCADAnalysisTypes.CHARGE.name} or {TCADAnalysisTypes.CONDUCTION.name} "
-                    "analysis is configured. A heat-only simulation generates no self-heating.",
-                    "monitors",
-                    index,
-                )
-            if charge_configured and self.use_accelerated_solver is False:
-                self._raise_validation_error_at_loc(
-                    f"'SelfHeatingMonitor' (monitor '{mnt.name}') is only available in a "
-                    f"{TCADAnalysisTypes.CHARGE.name} simulation through the accelerated "
-                    "charge solver, but 'use_accelerated_solver=False' was set. Remove the "
-                    "monitor or use the accelerated solver (the default).",
-                    "monitors",
-                    index,
-                )
-
         return self
 
     def _check_heat_feature_placement_in_charge(self) -> Self:
