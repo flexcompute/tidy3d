@@ -878,7 +878,6 @@ class Simulation(AbstractYeeGridSimulation):
         _materials_methods._warn_3d_structures_missing_2d_yee_sampling_plane
     )
     _validate_scene = _materials_methods._validate_scene
-    _validate_nonlinear_specs = _materials_methods._validate_nonlinear_specs
     _check_custom_medium_geometry_overlap = _materials_methods._check_custom_medium_geometry_overlap
     mediums = _materials_methods.mediums
     medium_map = _materials_methods.medium_map

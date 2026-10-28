@@ -31,7 +31,6 @@ from tidy3d.components.medium import (
     Medium2D,
     public_medium,
 )
-from tidy3d.components.monitor import AuxFieldTimeMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.field import CustomFieldSource
@@ -262,24 +261,9 @@ def _warn_3d_structures_missing_2d_yee_sampling_plane(self: Any) -> Self:
 def _validate_scene(self: Any) -> Self:
     _ = self.scene
     self._validate_pec_frame_not_in_pml_extrusion()
-    self._validate_nonlinear_specs()
+    # Stays on the client: the product warning logs once per session and reads the client config.
     self._warn_rf_license()
     return self
-
-
-def _validate_nonlinear_specs(self: Any) -> None:
-    """Warn about auxiliary-field monitors that no nonlinear model in the simulation uses."""
-    for i, monitor in enumerate(self.monitors):
-        if isinstance(monitor, AuxFieldTimeMonitor):
-            for aux_field in monitor.fields:
-                if aux_field not in self.aux_fields:
-                    obj_descr = named_obj_descr(monitor, "monitors", i)
-                    log.warning(
-                        f"Monitor: {obj_descr} stores field '{aux_field}', "
-                        "which is not used by any of the nonlinear models present "
-                        "in the mediums in the simulation. The resulting data "
-                        "will be zero."
-                    )
 
 
 def _check_custom_medium_geometry_overlap(self: Any, sim_fields_keys: AutogradFieldMap) -> None:
