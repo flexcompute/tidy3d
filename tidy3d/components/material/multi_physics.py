@@ -42,7 +42,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     ...         E_g=td.ConstantEnergyBandGap(eg=1.11),
     ...         mobility_n=td.CaugheyThomasMobility(
     ...             mu_min=52.2,
-    ...             mu=1471.0,
+    ...             mu=1417.0,
     ...             ref_N=9.68e16,
     ...             exp_N=0.68,
     ...             exp_1=-0.57,

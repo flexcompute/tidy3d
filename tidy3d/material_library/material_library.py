@@ -2465,7 +2465,7 @@ cSi_MultiPhysics = VariantItem(
             E_g=ConstantEnergyBandGap(eg=1.11),
             mobility_n=CaugheyThomasMobility(
                 mu_min=52.2,
-                mu=1471.0,
+                mu=1417.0,
                 ref_N=9.68e16,
                 exp_N=0.68,
                 exp_1=-0.57,
@@ -2496,7 +2496,7 @@ cSi_MultiPhysics = VariantItem(
             ),
         ),
     ),
-    reference=[material_refs["Palik_LowLoss"]],
+    reference=[material_refs["Palik_LowLoss"], material_refs["Masetti1983"]],
 )
 
 

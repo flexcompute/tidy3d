@@ -228,4 +228,10 @@ material_refs = {
         journal="E. D. Palik. Handbook of Optical Constants of Solids, Academic Press (1998)",
         doi="https://doi.org/10.1016/B978-0-08-055630-7.50001-8",
     ),
+    "Masetti1983": ReferenceData(
+        journal="G. Masetti, M. Severi, and S. Solmi. Modeling of carrier mobility against "
+        "carrier concentration in arsenic-, phosphorus-, and boron-doped silicon, "
+        "IEEE Trans. Electron Devices 30, 7, 764-769 (1983)",
+        doi="https://doi.org/10.1109/T-ED.1983.21207",
+    ),
 }

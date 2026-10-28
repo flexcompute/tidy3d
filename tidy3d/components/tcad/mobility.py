@@ -185,7 +185,7 @@ class CanaliFieldDependence(_HighFieldDependenceBase):
 
         >>> mobility_n = td.CaugheyThomasMobility(
         ...   mu_min=52.2,
-        ...   mu=1471.0,
+        ...   mu=1417.0,
         ...   ref_N=9.68e16,
         ...   exp_N=0.68,
         ...   exp_1=-0.57,
@@ -601,13 +601,19 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
 
     .. [1] M. Caughey and R.E. Thomas. Carrier mobilities in silicon empirically related to doping
            and field. Proceedings of the IEEE, 55(12):2192–2193, December 1967
+    .. [2] G. Masetti, M. Severi, and S. Solmi. Modeling of carrier mobility against
+           carrier concentration in arsenic-, phosphorus-, and boron-doped silicon.
+           IEEE Transactions on Electron Devices, 30(7):764-769, 1983.
 
     Example
     -------
+    Silicon, with the doping parameters (``mu_min``, ``mu``, ``ref_N``, ``exp_N``) of
+    Masetti et al. [2]_:
+
         >>> import tidy3d as td
         >>> mobility_Si_n = td.CaugheyThomasMobility(
         ...   mu_min=52.2,
-        ...   mu=1471.0,
+        ...   mu=1417.0,
         ...   ref_N=9.68e16,
         ...   exp_N=0.68,
         ...   exp_1=-0.57,
