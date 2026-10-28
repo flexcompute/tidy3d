@@ -23,15 +23,10 @@ from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.material.tcad.charge import (
     AbstractChargeMedium,
-    AnisotropicPermittivity,
     ChargeConductorMedium,
-    ChargeInsulatorMedium,
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
-    AbstractConductivityModel,
-    AbstractHeatCapacityModel,
-    AnisotropicConductivity,
     FluidMedium,
     SolidMedium,
 )
@@ -54,13 +49,9 @@ from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAna
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import HeatBoundarySpec, HeatChargeBoundarySpec
 from tidy3d.components.tcad.generation_recombination import (
-    PalankovskiQuayApproxCarrierLifetime,
     SelberherrImpactIonization,
-    ShockleyReedHallRecombination,
-    SurfaceShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.grid import UnstructuredGridType
-from tidy3d.components.tcad.mobility import AlloyMobility, MasettiMobility
 from tidy3d.components.tcad.monitors.charge import (
     SelfHeatingMonitor,
     SteadyCapacitanceMonitor,
@@ -68,7 +59,6 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyCurrentDensityMonitor,
     SteadyDopingMonitor,
     SteadyElectricFieldMonitor,
-    SteadyFreeCarrierMonitor,
     SteadyGenerationRecombinationMonitor,
     SteadyPotentialMonitor,
 )
@@ -128,16 +118,6 @@ ChargeTypes = (
     IsothermalSteadyChargeDCAnalysis,
     SSACAnalysis,
     IsothermalSSACAnalysis,
-)
-ChargeMonitorTypes = (
-    SteadyPotentialMonitor,
-    SteadyFreeCarrierMonitor,
-    SteadyCapacitanceMonitor,
-    SteadyCurrentDensityMonitor,
-    SteadyChargeResidualMonitor,
-    SteadyGenerationRecombinationMonitor,
-    SteadyDopingMonitor,
-    SelfHeatingMonitor,
 )
 
 AnalysisSpecType = ElectricalAnalysisType | UnsteadyHeatAnalysis
@@ -588,22 +568,12 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(
             ("analysis_spec", "at_voltages"), self._check_ssac_specific_voltages
         )
-        simulation_types = self._check_simulation_types()
         self._call_with_validation_loc(
             ("monitors",), self._validate_accelerated_only_monitor_requirements
         )
         self._call_with_validation_loc(
             ("monitors",), self._validate_self_heating_monitor_requirements
         )
-        if TCADAnalysisTypes.CHARGE in simulation_types:
-            self._check_symmetry_permittivity()
-            self._call_with_validation_loc(
-                ("boundary_spec",), self._check_charge_simulation_voltage_bcs
-            )
-            self._call_with_validation_loc(("monitors",), self._check_charge_simulation_monitors)
-            self._call_with_validation_loc(
-                ("structures",), self._check_charge_simulation_semiconductors
-            )
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -959,16 +929,6 @@ class HeatChargeSimulation(AbstractSimulation):
         condition = self.boundary_spec[index].condition
         return isinstance(condition, CurrentBC) and np.size(condition.source.current) > 1
 
-    def _driven_terminal_split_across_entries(self) -> bool:
-        """Whether a swept or SSAC terminal is named by more than one ``boundary_spec`` entry.
-
-        The legacy solver drives or measures only one of those entries.
-        """
-        return any(
-            len(self._voltage_terminals(indices)) < len(indices)
-            for indices in (self._swept_bc_indices(), self._ssac_bc_indices())
-        )
-
     def _voltage_terminals(self, indices: list[int]) -> list[int]:
         """First ``boundary_spec`` index of each terminal among the given contact entries.
 
@@ -1048,68 +1008,6 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
-    def _check_charge_simulation_voltage_bcs(self) -> Self:
-        """Require two charge contacts and at least one prescribed potential."""
-        voltage_idx = [
-            i for i, bc in enumerate(self.boundary_spec) if isinstance(bc.condition, VoltageBC)
-        ]
-        current_idx = self._current_bc_indices()
-        n_entries = len(voltage_idx) + len(current_idx)
-        if n_entries < 2:
-            raise SetupError(
-                "Defining a Charge simulation requires at least two contact boundaries. "
-                "Use 'VoltageBC' (Schottky contacts opt in via model=\"schottky_mott\") "
-                "or 'CurrentBC'. So far "
-                f"{n_entries} contact boundaries have been set."
-            )
-        if not voltage_idx:
-            raise SetupError(
-                "Defining a Charge simulation requires at least one 'VoltageBC' to fix the "
-                "potential reference. A 'CurrentBC' prescribes a current, not a potential, "
-                "so a device driven only by currents leaves the electric potential "
-                "undetermined."
-            )
-        terminals = self._voltage_terminals(voltage_idx) + self._voltage_terminals(current_idx)
-        if len(terminals) >= 2:
-            return self
-        driven = set(self._swept_bc_indices()) | set(self._ssac_bc_indices())
-        if driven & set(voltage_idx):
-            self._raise_validation_error_at_loc(
-                "Defining a Charge simulation requires at least two contact terminals, but "
-                "the 'boundary_spec' entries form a single terminal that is swept or carries "
-                "an 'SSACVoltageSource'. Entries naming one metal structure count as one "
-                "terminal. Add a second terminal.",
-                "boundary_spec",
-                voltage_idx[0],
-                "condition",
-            )
-        log.warning(
-            f"The {n_entries} contact entries in 'boundary_spec' form a single terminal, "
-            "because they name one metal structure with one source. A charge simulation "
-            "needs two terminals to carry current. Future versions of Tidy3D may reject this "
-            "setup."
-        )
-        return self
-
-    def _check_charge_simulation_monitors(self) -> Self:
-        """Validate Charge simulation has at least one charge monitor."""
-        if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in self.monitors):
-            raise SetupError(
-                "Charge simulations require the definition of, at least, one of these monitors: "
-                "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor, SteadyChargeResidualMonitor, SteadyGenerationRecombinationMonitor, SteadyDopingMonitor, SelfHeatingMonitor]' "
-                "but none have been defined."
-            )
-        # NOTE: in Charge we're only supporting unstructured monitors.
-        # only Temperature and Potential monitors can be structured.
-        for mnt in self.monitors:
-            if isinstance(mnt, SteadyPotentialMonitor) or isinstance(mnt, TemperatureMonitor):
-                if not mnt.unstructured:
-                    log.warning(
-                        "Currently, Charge simulations support only unstructured monitors. Please set "
-                        f"monitor '{mnt.name}' to 'unstructured = True'."
-                    )
-        return self
-
     def _validate_charge_cartesian_monitors(self) -> None:
         """Reject a Cartesian monitor that a Charge simulation cannot record.
 
@@ -1176,35 +1074,6 @@ class HeatChargeSimulation(AbstractSimulation):
                     idx,
                 )
         return self
-
-    def _check_charge_simulation_semiconductors(self) -> Self:
-        """Validate Charge simulation has at least one semiconductor medium."""
-        if not any(self._iter_semiconductor_charge_media()):
-            raise SetupError(
-                f"{TCADAnalysisTypes.CHARGE} simulations require the definition of at least one semiconductor medium."
-            )
-        return self
-
-    def _insulator_face_bc_indices(self) -> list[int]:
-        """Indices of ``VoltageBC`` entries with a face lying on an insulator.
-
-        Such a face has no semiconductor of its own to take its potential
-        reference from; only the accelerated charge solver supports it, so the
-        legacy solver is refused rather than run with a shifted flat-band voltage.
-
-        An oxide-clad ohmic contact is not a gate and still has an insulator face.
-        Judged only where :meth:`_placement_contact_media` determines the materials.
-        """
-        indices = []
-        for i, bc in enumerate(self.boundary_spec):
-            if not isinstance(bc.condition, VoltageBC):
-                continue
-            sides = self._placement_contact_media(bc.placement)
-            if sides is None:
-                continue
-            if any(isinstance(self._charge_spec(side), ChargeInsulatorMedium) for side in sides):
-                indices.append(i)
-        return indices
 
     def _placement_conductor_structures(self, placement: BCPlacementType) -> list[str]:
         """Names of the ``ChargeConductorMedium`` structures a placement names.
@@ -1282,30 +1151,6 @@ class HeatChargeSimulation(AbstractSimulation):
         else:
             return None
         return None if any(side is None for side in sides) else sides
-
-    def _placement_contact_media(self, placement: BCPlacementType) -> list | None:
-        """Every medium a contact on ``placement`` is certainly made against.
-
-        Wider than :meth:`_placement_side_media`, which answers only for
-        placements naming *two* sides: a ``StructureSimulationBoundary`` names one
-        structure and the simulation box, so its contact materials are fully
-        determined by that one medium.
-
-        ``None`` where a side could be any material the geometry puts there
-        (``StructureBoundary``, ``SimulationBoundary``); resolving those needs
-        structure adjacency, which is computed when the simulation runs.
-        """
-        if isinstance(placement, StructureSimulationBoundary):
-            structures_map = {s.name: s for s in self.structures if s.name}
-            named = structures_map.get(placement.structure)
-            medium = named.medium if named is not None else self.medium
-            return None if medium is None else [medium]
-        return self._placement_side_media(placement)
-
-    def _current_bc_indices(self) -> list[int]:
-        return [
-            idx for idx, bc in enumerate(self.boundary_spec) if isinstance(bc.condition, CurrentBC)
-        ]
 
     def _contact_conductors(self, idx: int) -> set[str]:
         """Return named conductors; empty means geometry must identify the terminal."""
@@ -1404,19 +1249,6 @@ class HeatChargeSimulation(AbstractSimulation):
                     index,
                 )
 
-        return self
-
-    def _check_symmetry_permittivity(self) -> Self:
-        """Reject reflection symmetry across a plane that an anisotropic permittivity is not
-        mirror-symmetric across."""
-        for loc, axis in self._symmetry_breaking_permittivity():
-            name = "xyz"[axis]
-            self._raise_validation_error_at_loc(
-                f"'symmetry' is on along {name}, but this 'AnisotropicPermittivity' couples {name} "
-                "to the other axes, so the medium is not mirror-symmetric across that plane. Set "
-                f"'symmetry' to 0 along {name}, or align a principal axis with {name}.",
-                *loc,
-            )
         return self
 
     def _check_heat_feature_placement_in_charge(self) -> Self:
@@ -2454,127 +2286,6 @@ class HeatChargeSimulation(AbstractSimulation):
             and self.analysis_spec.temperature is None
         )
 
-    def _accelerated_only_features(self) -> list[str]:
-        """Configured features that only the accelerated charge solver supports.
-
-        These cannot run on the CPU charge solver, so requesting
-        ``use_accelerated_solver=False`` while any of them is present is an error.
-        Returns the human-readable feature names; an empty list means the
-        configuration is fully supported by the CPU charge solver.
-        """
-        features = []
-        if any(
-            isinstance(charge.mobility_n, MasettiMobility)
-            or isinstance(charge.mobility_p, MasettiMobility)
-            for _loc, charge in self._iter_semiconductor_charge_media()
-        ):
-            features.append("MasettiMobility")
-        if any(
-            isinstance(charge.mobility_n, AlloyMobility)
-            or isinstance(charge.mobility_p, AlloyMobility)
-            for _loc, charge in self._iter_semiconductor_charge_media()
-        ):
-            features.append("AlloyMobility")
-        if any(
-            charge.donor_ionization is not None or charge.acceptor_ionization is not None
-            for _loc, charge in self._iter_semiconductor_charge_media()
-        ):
-            features.append("Incomplete ionization ('donor_ionization', 'acceptor_ionization')")
-        field_dependence_names = {
-            type(mobility.field_dependence).__name__
-            for _loc, charge in self._iter_semiconductor_charge_media()
-            for mobility in (charge.mobility_n, charge.mobility_p)
-            if mobility.field_dependence is not None
-        }
-        features.extend(sorted(field_dependence_names))
-        if any(
-            self._surface_dependence(charge.mobility_n) is not None
-            or self._surface_dependence(charge.mobility_p) is not None
-            for _loc, charge in self._iter_semiconductor_charge_media()
-        ):
-            features.append("LombardiSurfaceDependence")
-
-        if self._insulator_face_bc_indices():
-            features.append("'VoltageBC' on an insulator face")
-
-        if self._driven_terminal_split_across_entries():
-            features.append("Swept or SSAC terminal named by several 'boundary_spec' entries")
-
-        if self._anisotropic_permittivity_locs():
-            features.append("AnisotropicPermittivity")
-
-        if self._uses_gpu_only_lifetime_model():
-            features.append("PalankovskiQuayApproxCarrierLifetime")
-
-        if self._uses_grad_quasi_fermi_impact_ionization():
-            features.append("GradQuasiFermi impact ionization")
-
-        if self._uses_trap_assisted_tunneling():
-            features.append("HurkxTrapAssistedTunneling")
-
-        if self._ssac_uses_bias_point_selection():
-            features.append("SSAC 'at_voltages' bias-point selection")
-
-        if self.linear_solver == "direct":
-            features.append("linear_solver='direct'")
-
-        if self._thermal_solver_active and self._uses_temperature_dependent_thermal_properties():
-            features.append("Temperature-dependent thermal properties in a non-isothermal run")
-
-        if self._thermal_solver_active:
-            features.extend(self._accelerated_only_heat_features())
-
-        return features
-
-    def _accelerated_only_heat_features(self) -> list[str]:
-        """Heat features that only the accelerated solver carries into the thermal solve of a
-        non-isothermal charge simulation."""
-        heat_specs = [
-            medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
-            for _loc, medium in self._iter_media_with_locs()
-        ]
-        conditions = [bc.condition for bc in self.boundary_spec]
-        features = []
-        if any(
-            getattr(spec, "velocity", None) is not None and any(v != 0.0 for v in spec.velocity)
-            for spec in heat_specs
-        ):
-            features.append(
-                "Solid-medium advection ('SolidMedium.velocity') in a non-isothermal run"
-            )
-        if any(
-            isinstance(spec, SolidMedium)
-            and isinstance(spec._reference_conductivity, AnisotropicConductivity)
-            for spec in heat_specs
-        ):
-            features.append("'AnisotropicConductivity' in a non-isothermal run")
-        if any(isinstance(condition, ThermalContactResistance) for condition in conditions):
-            features.append("'ThermalContactResistance' in a non-isothermal run")
-        if any(
-            isinstance(condition, RadiationBC)
-            or (isinstance(condition, ConvectionBC) and condition.emissivity)
-            for condition in conditions
-        ):
-            features.append(
-                "Surface radiation ('RadiationBC', or 'ConvectionBC' with a positive "
-                "'emissivity') in a non-isothermal run"
-            )
-        return features
-
-    def _uses_temperature_dependent_thermal_properties(self) -> bool:
-        """Whether any solid heat spec has a temperature-dependent conductivity or capacity."""
-        media = [self.medium] + [struct.medium for struct in self.structures]
-        for medium in media:
-            heat_spec = (
-                medium if isinstance(medium, SolidMedium) else getattr(medium, "heat_spec", None)
-            )
-            if isinstance(heat_spec, SolidMedium) and (
-                isinstance(heat_spec.conductivity, AbstractConductivityModel)
-                or isinstance(heat_spec.capacity, AbstractHeatCapacityModel)
-            ):
-                return True
-        return False
-
     def _medium_label(self, loc: tuple[Any, ...]) -> str:
         """How messages name the medium at ``loc``: the background or a structure."""
         if loc == ("medium",):
@@ -2615,88 +2326,6 @@ class HeatChargeSimulation(AbstractSimulation):
             if isinstance(charge, SemiconductorMedium):
                 yield loc, charge
 
-    def _anisotropic_permittivity_locs(self) -> list[tuple[Any, ...]]:
-        """Field paths of the media whose charge medium has an ``AnisotropicPermittivity``."""
-        return [
-            loc
-            for loc, charge in self._iter_charge_media()
-            if isinstance(charge.permittivity, AnisotropicPermittivity)
-        ]
-
-    def _symmetry_breaking_permittivity(self) -> list[tuple[tuple[Any, ...], int]]:
-        """``(loc, axis)`` for each charge medium whose ``AnisotropicPermittivity`` is not
-        mirror-symmetric across the symmetry plane normal to ``axis``.
-
-        Reflecting ``axis`` flips the sign of the off-diagonal components that couple it to the
-        other axes, so with those nonzero the symmetry plane acts as an extra insulating wall.
-        A component that couples to the zero-size axis of a 2D simulation does not enter the
-        solve and is ignored.
-        """
-        zero_dims = set(self.zero_dims)
-        # A symmetry plane normal to the zero-size axis is rejected on its own.
-        sym_axes = [
-            axis for axis, sym in enumerate(self.symmetry) if sym != 0 and axis not in zero_dims
-        ]
-        if not sym_axes:
-            return []
-        found = []
-        for loc, charge in self._iter_charge_media():
-            if not isinstance(charge.permittivity, AnisotropicPermittivity):
-                continue
-            matrix = charge.permittivity.matrix
-            tol = 1e-9 * np.max(np.diag(matrix))
-            for axis in sym_axes:
-                coupled = (other for other in range(3) if other != axis and other not in zero_dims)
-                if any(abs(matrix[axis, other]) > tol for other in coupled):
-                    found.append((loc, axis))
-        return found
-
-    def _ssac_uses_bias_point_selection(self) -> bool:
-        """Whether SSAC selects specific bias points via ``at_voltages``.
-
-        The CPU charge solver always evaluates the AC response at every swept bias
-        point and cannot honor an explicit selection, so any ``at_voltages`` is only
-        available on the accelerated solver.
-        """
-        return (
-            isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis))
-            and self.analysis_spec.at_voltages is not None
-        )
-
-    def _uses_gpu_only_lifetime_model(self) -> bool:
-        """Whether the simulation uses an SRH lifetime model unavailable in the CPU charge solver."""
-        for _loc, charge in self._iter_semiconductor_charge_media():
-            for model in charge.R:
-                if not isinstance(model, ShockleyReedHallRecombination):
-                    continue
-                for tau in (model.tau_n, model.tau_p):
-                    if isinstance(tau, PalankovskiQuayApproxCarrierLifetime):
-                        return True
-        return False
-
-    def _uses_trap_assisted_tunneling(self) -> bool:
-        """Whether any bulk or surface SRH model carries a trap-assisted tunneling enhancement."""
-        for _loc, charge in self._iter_semiconductor_charge_media():
-            for model in charge.R:
-                if (
-                    isinstance(model, ShockleyReedHallRecombination)
-                    and model.field_enhancement is not None
-                ):
-                    return True
-
-        for bc_spec in self.boundary_spec:
-            condition = bc_spec.condition
-            if not isinstance(condition, SurfaceRecombinationBC):
-                continue
-            model = condition.model
-            if (
-                isinstance(model, SurfaceShockleyReedHallRecombination)
-                and model.field_enhancement is not None
-            ):
-                return True
-
-        return False
-
     def _uses_impact_ionization(self) -> bool:
         """Whether any semiconductor medium enables an impact-ionization model."""
         for _loc, charge in self._iter_semiconductor_charge_media():
@@ -2712,19 +2341,6 @@ class HeatChargeSimulation(AbstractSimulation):
             for _loc, charge in self._iter_semiconductor_charge_media()
             for mobility in (charge.mobility_n, charge.mobility_p)
         )
-
-    def _uses_grad_quasi_fermi_impact_ionization(self) -> bool:
-        """Whether any semiconductor selects the GradQuasiFermi formulation."""
-        return any(
-            isinstance(model, SelberherrImpactIonization) and model.formulation == "GradQuasiFermi"
-            for _loc, charge in self._iter_semiconductor_charge_media()
-            for model in charge.R
-        )
-
-    @staticmethod
-    def _surface_dependence(mobility: Any) -> Any:
-        """The ``surface_dependence`` of a mobility model, ``None`` for models without one."""
-        return getattr(mobility, "surface_dependence", None)
 
     def _warn_direct_linear_solver(self) -> Self:
         """Warn about the direct solver's cost, and about the settings it ignores.
@@ -2766,19 +2382,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 log_once=True,
             )
         return self
-
-    @property
-    def _resolve_use_accelerated_solver(self) -> bool:
-        """Resolved value of :attr:`use_accelerated_solver`.
-
-        The accelerated solver is the default for every simulation, and the flag only
-        selects the CPU solver for a charge analysis. Heat and conduction always run on the
-        accelerated solver, but its charge mesh and solver path does not apply, so they
-        resolve to ``False``. The construction path rejects an invalid flag.
-        """
-        return (
-            isinstance(self.analysis_spec, SteadyChargeDCAnalysis) and self.use_accelerated_solver
-        )
 
     def _useHeatSourceFromConductionSim(self) -> bool:
         """Returns True if 'HeatFromElectricSource' has been defined."""
