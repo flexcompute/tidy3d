@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-import autograd.numpy as np
 from pydantic import (
     Field,
     NonNegativeFloat,
     NonNegativeInt,
     PositiveFloat,
-    field_validator,
     model_validator,
 )
 
@@ -19,14 +17,11 @@ from tidy3d.components.boundary import PML, Absorber, BoundarySpec, StablePML
 from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
 
 # ``Box`` is used by the ``Simulation`` class doctest.
-from tidy3d.components.geometry.base import Box, Geometry
-from tidy3d.components.geometry.utils import flatten_groups
+from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.medium import (
-    AnisotropicMediumFromMedium2D,
     Medium,
-    Medium2D,
     ProtectedOpticalMediumPlacementType3D,
 )
 from tidy3d.components.medium.protected import (
@@ -34,10 +29,7 @@ from tidy3d.components.medium.protected import (
     protected_fdtd_monitor_policy_error,
 )
 from tidy3d.components.monitor import (
-    AbstractFieldProjectionMonitor,
     AbstractMediumPropertyMonitor,
-    FieldProjectionAngleMonitor,
-    FieldProjectionKSpaceMonitor,
     FieldStructureMonitor,
     ModeMonitor,
     PointCloudFieldMonitor,
@@ -60,13 +52,13 @@ from tidy3d.config import config
 from tidy3d.constants import SECOND
 from tidy3d.exceptions import (
     SetupError,
-    ValidationError,
 )
 from tidy3d.log import log
 from tidy3d.updater import Updater
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.geometry.base import Geometry
 
 
 from . import adjoint as _adjoint_methods
@@ -870,9 +862,6 @@ class Simulation(AbstractYeeGridSimulation):
     nyquist_step = _runtime_methods.nyquist_step
 
     # SimulationMaterials
-    _warn_3d_structures_missing_2d_yee_sampling_plane = (
-        _materials_methods._warn_3d_structures_missing_2d_yee_sampling_plane
-    )
     _validate_scene = _materials_methods._validate_scene
     _check_custom_medium_geometry_overlap = _materials_methods._check_custom_medium_geometry_overlap
     mediums = _materials_methods.mediums
@@ -966,135 +955,10 @@ class Simulation(AbstractYeeGridSimulation):
         call_wrapped_validator(validate_boundaries_for_zero_dims, self)
         self._validate_auto_grid_wavelength()
         super()._run_after_validators()
-        self._warn_3d_structures_missing_2d_yee_sampling_plane()
 
         # Build the scene, then warn about RF licensing.
         self._validate_scene()
         return self
-
-    @field_validator("structures")
-    @classmethod
-    def _validate_2d_geometry_has_2d_medium(
-        cls, val: tuple[Structure, ...]
-    ) -> tuple[Structure, ...]:
-        """Warn if a geometry bounding box has zero size in a certain dimension."""
-
-        if val is None:
-            return val
-
-        with log as consolidated_logger:
-            for i, structure in enumerate(val):
-                if isinstance(structure.medium, Medium2D | AnisotropicMediumFromMedium2D):
-                    continue
-                for geom in flatten_groups(structure.geometry):
-                    zero_dims = geom.zero_dims
-                    if len(zero_dims) > 0:
-                        obj_descr = named_obj_descr(structure, "structures", i)
-                        consolidated_logger.warning(
-                            f"Structure: {obj_descr} has geometry with zero size along "
-                            f"dimensions {zero_dims}, and with a medium that is not a 'Medium2D'. "
-                            "This is probably not correct, since the resulting simulation will "
-                            "depend on the details of the numerical grid. Consider either "
-                            "giving the geometry a nonzero thickness or using a 'Medium2D'."
-                        )
-
-        return val
-
-    @field_validator("structures")
-    @classmethod
-    def _validate_incompatible_material_intersections(
-        cls, val: tuple[Structure, ...]
-    ) -> tuple[Structure, ...]:
-        """Check for intersections of incompatible materials."""
-        structures = val
-        incompatible_indices = []
-        incompatible_structures = []
-        # first just isolate the incompatible structures, to avoid unnecessary double looping
-        # keep track of indices to give helpful error message
-        for i, structure in enumerate(structures):
-            if structure.medium._has_incompatibilities:
-                incompatible_indices.append(i)
-                incompatible_structures.append(structure)
-        for i, (ind1, structure_ind1) in enumerate(
-            zip(incompatible_indices, incompatible_structures)
-        ):
-            for ind2, structure_ind2 in zip(
-                incompatible_indices[i + 1 :], incompatible_structures[i + 1 :]
-            ):
-                if not structure_ind1._compatible_with(structure_ind2):
-                    raise ValidationError(
-                        f"The structure at 'structures[{ind1}]' and the structure at "
-                        f"'structures[{ind2}]' have incompatible medium types "
-                        f"{structure_ind1.medium._incompatible_material_types} and "
-                        f"{structure_ind2.medium._incompatible_material_types} "
-                        "respectively, and so are not allowed to intersect. "
-                        "Please ensure that the bounding boxes of the two geometries "
-                        "do not intersect."
-                    )
-        return val
-
-    @field_validator("monitors")
-    @classmethod
-    def _projection_direction(cls, val: tuple[MonitorType, ...]) -> tuple[MonitorType, ...]:
-        """Warn if field projection observation points are behind surface projection monitors."""
-        # This validator belongs to the concrete simulation model rather than ``monitor.py``:
-        # volume monitors are eventually converted to bounding surface projection monitors, and
-        # this check must not run during that conversion.
-        if val is None:
-            return val
-
-        with log as consolidated_logger:
-            for monitor_ind, monitor in enumerate(val):
-                if isinstance(monitor, AbstractFieldProjectionMonitor):
-                    if monitor.size.count(0.0) != 1:
-                        continue
-
-                    normal_dir = monitor.projection_surfaces[0].normal_dir
-                    normal_ind = monitor.size.index(0.0)
-
-                    projecting_backwards = False
-                    if isinstance(monitor, FieldProjectionAngleMonitor):
-                        r, theta, phi = np.meshgrid(
-                            monitor.proj_distance,
-                            monitor.theta,
-                            monitor.phi,
-                            indexing="ij",
-                        )
-                        x, y, z = Geometry.sph_2_car(r=r, theta=theta, phi=phi)
-                    elif isinstance(monitor, FieldProjectionKSpaceMonitor):
-                        uxs, uys, _ = np.meshgrid(
-                            monitor.ux,
-                            monitor.uy,
-                            monitor.proj_distance,
-                            indexing="ij",
-                        )
-                        theta, phi = monitor.kspace_2_sph(uxs, uys, monitor.proj_axis)
-                        x, y, z = Geometry.sph_2_car(r=monitor.proj_distance, theta=theta, phi=phi)
-                    else:
-                        pts = monitor.unpop_axis(
-                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind
-                        )
-                        x, y, z = pts
-
-                    center = np.array(monitor.center) - np.array(monitor.local_origin)
-                    pts = [np.array(i) for i in [x, y, z]]
-                    normal_displacement = pts[normal_ind] - center[normal_ind]
-                    if (np.any(normal_displacement < 0) and normal_dir == "+") or (
-                        np.any(normal_displacement > 0) and normal_dir == "-"
-                    ):
-                        projecting_backwards = True
-
-                    if projecting_backwards:
-                        consolidated_logger.warning(
-                            f"Field projection monitor '{monitor.name}' has observation points set "
-                            "up such that the monitor is projecting backwards with respect to its "
-                            "'normal_dir'. If this was not intentional, please take a look at the "
-                            "documentation associated with this type of projection monitor to "
-                            "check how the observation point coordinate system is defined.",
-                            custom_loc=["monitors", monitor_ind],
-                        )
-
-        return val
 
     def _preprocess_cache_ineligibility(self) -> tuple[str, tuple[str | int, ...]] | None:
         """Return why preprocess caching is unsupported and the location of the cause."""

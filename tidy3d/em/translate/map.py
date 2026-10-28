@@ -1278,6 +1278,7 @@ COMPONENT_ERROR_TYPES = {
     "solver.eme.duplicate_freqs": "tidy3d.exceptions:SetupError",
     "solver.eme.non_reciprocal_medium": "tidy3d.exceptions:SetupError",
     # fdtd
+    "solver.fdtd.incompatible_material_intersection": "tidy3d.exceptions:ValidationError",
     "solver.fdtd.too_many_sources": "tidy3d.exceptions:SetupError",
 }
 
