@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from tidy3d.compat import Self
-    from tidy3d.components.boundary import BoundaryEdgeType, BoundarySpec, InternalAbsorber
+    from tidy3d.components.boundary import BoundarySpec, InternalAbsorber
     from tidy3d.components.types import Axis
 
 from . import constants
@@ -279,45 +279,6 @@ def num_pml_layers(self: Any) -> list[tuple[float, float]]:
                 num_layers[idx_i][idx_j] = boundary.num_layers
 
     return num_layers
-
-
-def _validate_frequency_mode_abc(self: Any) -> Self:
-    """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
-
-    def boundary_needs_freq(
-        boundary: ModeABCBoundary | ABCBoundary | BoundaryEdgeType,
-    ) -> bool:
-        return (isinstance(boundary, ModeABCBoundary) and boundary.freq_spec is None) or (
-            isinstance(boundary, ABCBoundary)
-            and (
-                (boundary.conductivity is not None and boundary.conductivity != 0)
-                or (boundary.permittivity is None and boundary.conductivity is None)
-            )
-        )
-
-    # check domain boundaries
-    boundaries = self.boundary_spec.to_list
-    need_wavelength = any(boundary_needs_freq(edge) for edge in np.ravel(boundaries))
-
-    # check dinternal absorbers
-    need_wavelength = need_wavelength or any(
-        boundary_needs_freq(abc.boundary_spec) for abc in self.internal_absorbers
-    )
-
-    if need_wavelength:
-        self._check_source_freq_available(
-            no_source_error=(
-                "At least one 'ModeABCBoundary'/'ABCBoundary' needs specification of frequency at which the absorbed mode must be evaluated. "
-                "Add at least one source or use parameter 'frequency' for 'ModeABCBoundary'."
-            ),
-            no_source_loc=("sources",),
-            multi_freq_warning=(
-                "At least one 'ModeABCBoundary' does not specify frequency at which the absorbed mode must be evaluated. "
-                "The central frequency of the first source will be used."
-            ),
-        )
-
-    return self
 
 
 def _num_non_pml_cells(self: Any) -> int:

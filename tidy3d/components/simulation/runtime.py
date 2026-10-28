@@ -9,12 +9,11 @@ import autograd.numpy as np
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import (
     ABCBoundary,
-    Absorber,
     BlochBoundary,
     ModeABCBoundary,
     Periodic,
 )
-from tidy3d.components.medium import FullyAnisotropicMedium, LossyMetalMedium
+from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.monitor import (
     FreqMonitor,
     MediumMonitor,
@@ -22,7 +21,7 @@ from tidy3d.components.monitor import (
     PointCloudPermittivityMonitor,
 )
 from tidy3d.components.run_time_spec import RunTimeSpec
-from tidy3d.components.source.field import TFSF, AbstractModeSource, FixedAngleSpec, PlaneWave
+from tidy3d.components.source.field import AbstractModeSource
 from tidy3d.config import config
 from tidy3d.constants import C_0
 from tidy3d.exceptions import (
@@ -36,7 +35,6 @@ from tidy3d.packaging import (
 )
 
 if TYPE_CHECKING:
-    from tidy3d.compat import Self
     from tidy3d.components.grid.grid import Coords1D
     from tidy3d.components.types import FreqBound
     from tidy3d.components.types.time import SourceTimeType
@@ -57,69 +55,6 @@ def _simple_bc(self: Any) -> tuple[bool, bool, bool]:
             )
         )
     return tuple(simple)
-
-
-def _validate_relax_courant_compatibility(self: Any) -> Self:
-    """Error if ``relax_courant`` is enabled with incompatible components."""
-
-    if not self.relax_courant:
-        return self
-
-    incompatible = []
-
-    if len(self.internal_absorbers) > 0:
-        incompatible.append("Internal absorbers are not supported.")
-
-    boundary_spec = self.boundary_spec
-    if boundary_spec is not None:
-        for axis_name in ("x", "y", "z"):
-            boundary = boundary_spec[axis_name]
-            if isinstance(boundary.plus, Absorber) or isinstance(boundary.minus, Absorber):
-                incompatible.append(f"Adiabatic absorber boundary condition along {axis_name}.")
-
-    for source in self.sources:
-        if isinstance(source, TFSF):
-            incompatible.append(f"TFSF source '{source.name}'.")
-        elif isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec):
-            incompatible.append(f"Fixed-angle PlaneWave source '{source.name}'.")
-
-    mediums = [self.medium] + [structure.medium for structure in self.structures]
-    for medium in mediums:
-        if isinstance(medium, FullyAnisotropicMedium):
-            incompatible.append("Contains a 'FullyAnisotropicMedium'.")
-        if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec is not None:
-            incompatible.append("Contains a nonlinear medium.")
-        if hasattr(medium, "modulation_spec") and medium.modulation_spec is not None:
-            incompatible.append("Contains a time-modulated medium.")
-
-    if any(s == 0 for s in self.size):
-        incompatible.append("Zero-size (collapsed) simulation dimensions.")
-
-    for axis_name, num_cells in zip(("x", "y", "z"), self.grid.num_cells):
-        if num_cells <= 1:
-            incompatible.append(f"Single-cell {axis_name}-axis (quasi-2D simulation).")
-
-    if boundary_spec is not None:
-        if not any(self._simple_bc):
-            incompatible.append(
-                "No axis free of Periodic, Bloch, ABC, and ModeABC boundary conditions "
-                "(at least one such axis is required)."
-            )
-        for axis_name in ("x", "y", "z"):
-            axis_boundary = boundary_spec[axis_name]
-            if isinstance(axis_boundary.plus, ABCBoundary | ModeABCBoundary) or isinstance(
-                axis_boundary.minus, ABCBoundary | ModeABCBoundary
-            ):
-                incompatible.append(f"ABC or ModeABC boundary condition along {axis_name}.")
-
-    if incompatible:
-        detail = "\n".join(f"  - {item}" for item in incompatible)
-        self._raise_validation_error_at_loc(
-            "'relax_courant' is incompatible with the current simulation:\n" + detail,
-            "relax_courant",
-        )
-
-    return self
 
 
 def _validate_size(self: Any) -> None:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
@@ -36,31 +35,6 @@ def _source_medium(self: Any, source: PlaneWave) -> AbstractMedium | None:
     if len({optical_medium_key(Structure._get_optical_medium(medium)) for medium in mediums}) > 1:
         return None
     return mediums.pop() if mediums else self.medium
-
-
-def _check_source_freq_available(
-    self: Any,
-    *,
-    no_source_error: str,
-    no_source_loc: tuple[object, ...],
-    multi_freq_warning: str,
-) -> None:
-    """Shared source-frequency availability check.
-
-    Used by objects that derive a single evaluation frequency from the simulation's
-    sources when none is given explicitly (``ModeABCBoundary`` / ``ABCBoundary`` and
-    ``ModeTimeMonitor``). Raises a loc-aware error (at ``no_source_loc``) when there are
-    no sources to derive the frequency from, and warns (``multi_freq_warning``) when the
-    sources do not share a common central frequency — the first source's central
-    frequency is then used.
-    """
-    sources = self.sources
-    if len(sources) == 0:
-        self._raise_validation_error_at_loc(no_source_error, *no_source_loc)
-
-    freq0s = [source.source_time._freq0 for source in sources]
-    if not all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
-        log.warning(multi_freq_warning, capture=False)
 
 
 def _thin_lens_source_plane_cells(self: Any, source: ThinLensBeam) -> int:

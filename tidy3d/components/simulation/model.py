@@ -857,7 +857,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationRuntime
     _simple_bc = _runtime_methods._simple_bc
-    _validate_relax_courant_compatibility = _runtime_methods._validate_relax_courant_compatibility
     _validate_size = _runtime_methods._validate_size
     _run_time = _runtime_methods._run_time
     _resolve_run_time = _runtime_methods._resolve_run_time
@@ -915,7 +914,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationSources
     _source_medium = _sources_methods._source_medium
-    _check_source_freq_available = _sources_methods._check_source_freq_available
     _thin_lens_source_plane_cells = _sources_methods._thin_lens_source_plane_cells
     _thin_lens_setup_work_units = _sources_methods._thin_lens_setup_work_units
     _thin_lens_setup_work_limit = _sources_methods._thin_lens_setup_work_limit
@@ -930,7 +928,6 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_thin_lens_setup_size = _sources_methods._validate_thin_lens_setup_size
 
     # SimulationBoundaries
-    _validate_frequency_mode_abc = _boundaries_methods._validate_frequency_mode_abc
     _num_non_pml_cells = _boundaries_methods._num_non_pml_cells
 
     # SimulationGrid
@@ -970,10 +967,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_auto_grid_wavelength()
         super()._run_after_validators()
         self._warn_3d_structures_missing_2d_yee_sampling_plane()
-
-        # Validate boundary-dependent runtime features.
-        self._validate_frequency_mode_abc()
-        self._validate_relax_courant_compatibility()
 
         # Build the scene, then warn about RF licensing.
         self._validate_scene()
