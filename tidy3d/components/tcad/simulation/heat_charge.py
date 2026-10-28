@@ -35,7 +35,7 @@ from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.analysis.dc import ITERATIVE_ONLY_TOLERANCE_FIELDS
 from tidy3d.components.spice.sources.ac import SSACVoltageSource
-from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource, GroundVoltage
+from tidy3d.components.spice.sources.dc import DCVoltageSource
 from tidy3d.components.spice.types import (
     ElectricalAnalysisType,
     IsothermalSSACAnalysis,
@@ -96,7 +96,6 @@ if TYPE_CHECKING:
     from pydantic import FiniteFloat
 
     from tidy3d.compat import Self
-    from tidy3d.components.bc_placement import BCPlacementType
     from tidy3d.components.types import Ax, Bound, Shapely
     from tidy3d.components.types.base import ArrayFloat1D
     from tidy3d.components.viz import PlotParams
@@ -535,9 +534,6 @@ class HeatChargeSimulation(AbstractSimulation):
         self._call_with_validation_loc(("monitors",), self._monitors_cross_solids)
         self._call_with_validation_loc(("monitors",), self._check_monitor_dimensionality)
         self._call_with_validation_loc(("symmetry",), self._check_symmetry_not_normal_to_zero_dim)
-        self._check_single_ssac()
-        self._check_only_one_voltage_array_provided()
-        self._call_with_validation_loc(("boundary_spec",), self._check_voltage_array_if_capacitance)
         self._call_with_validation_loc(("linear_solver",), self._warn_direct_linear_solver)
         return self
 
@@ -632,45 +628,6 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return self
 
-    def _check_voltage_array_if_capacitance(self) -> Self:
-        """Make sure an array of voltages has been defined if a
-        SteadyCapacitanceMonitor' has been defined"""
-        boundary_spec = self.boundary_spec
-        monitors = self.monitors
-
-        is_capacitance_mnt = any(isinstance(mnt, SteadyCapacitanceMonitor) for mnt in monitors)
-        voltage_array_present = False
-        if is_capacitance_mnt:
-            for bc in boundary_spec:
-                if isinstance(bc.condition, VoltageBC):
-                    if isinstance(bc.condition.source, DCVoltageSource):
-                        if len(bc.condition.source.voltage) > 1:
-                            voltage_array_present = True
-                    elif isinstance(bc.condition.source, SSACVoltageSource):
-                        if len(bc.condition.source.voltage) > 1:
-                            voltage_array_present = True
-        if is_capacitance_mnt and not voltage_array_present:
-            raise SetupError(
-                "Monitors of type 'SteadyCapacitanceMonitor' have been defined but no array of voltages "
-                "has been supplied as voltage source, which is required for this type of monitor. "
-                "Voltage arrays can be included in a source in this manner: "
-                "'VoltageBC(source=DCVoltageSource(voltage=yourArray))'"
-            )
-        return self
-
-    def _check_single_ssac(self) -> Self:
-        """Error if more than one terminal carries an ``SSACVoltageSource``."""
-        terminals = self._voltage_terminals(self._ssac_bc_indices())
-        if len(terminals) > 1:
-            self._raise_validation_error_at_loc(
-                "Only a single 'SSACVoltageSource' source can be supplied. Entries naming one "
-                "metal structure with the same source count as one.",
-                "boundary_spec",
-                terminals[1],
-                "condition",
-            )
-        return self
-
     @field_validator("size")
     @classmethod
     def _check_zero_dim_domain(cls, val: Any) -> Any:
@@ -693,29 +650,6 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return val
 
-    def _check_only_one_voltage_array_provided(self) -> Self:
-        """Error if more than one terminal is swept."""
-        terminals = self._voltage_terminals(self._swept_bc_indices())
-        if len(terminals) > 1:
-            self._raise_validation_error_at_loc(
-                "More than one voltage or current array has been provided. Currently such "
-                "arrays are supported only for one terminal; entries naming one metal "
-                "structure with the same source count as one.",
-                "boundary_spec",
-                terminals[1],
-                "condition",
-            )
-        return self
-
-    def _ssac_bc_indices(self) -> list[int]:
-        """Indices of the ``VoltageBC`` entries with an ``SSACVoltageSource``."""
-        return [
-            i
-            for i, bc in enumerate(self.boundary_spec)
-            if isinstance(bc.condition, VoltageBC)
-            and isinstance(bc.condition.source, SSACVoltageSource)
-        ]
-
     def _swept_bc_indices(self) -> list[int]:
         """Indices of the contact entries that sweep more than one voltage or current.
 
@@ -737,25 +671,6 @@ class HeatChargeSimulation(AbstractSimulation):
         """Whether ``boundary_spec[index]`` is a ``CurrentBC`` with more than one current."""
         condition = self.boundary_spec[index].condition
         return isinstance(condition, CurrentBC) and np.size(condition.source.current) > 1
-
-    def _voltage_terminals(self, indices: list[int]) -> list[int]:
-        """First ``boundary_spec`` index of each terminal among the given contact entries.
-
-        Entries that name a common ``ChargeConductorMedium`` structure and carry the same
-        drive are one terminal, as in the ``validate_one_bias_per_metal`` rule; any other
-        entry is a terminal of its own.
-        """
-        terminals: list[tuple[int, set[str], Any]] = []
-        for i in indices:
-            conductors = self._contact_conductors(i)
-            drive = self._drive_of(self.boundary_spec[i].condition.source)
-            joined = [t for t in terminals if t[2] == drive and t[1] & conductors]
-            for terminal in joined:
-                terminals.remove(terminal)
-                conductors |= terminal[1]
-            first = min([i] + [terminal[0] for terminal in joined])
-            terminals.append((first, conductors, drive))
-        return sorted(terminal[0] for terminal in terminals)
 
     def _validate_charge_cartesian_monitors(self) -> None:
         """Reject a Cartesian monitor that a Charge simulation cannot record.
@@ -789,31 +704,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 idx,
             )
 
-    def _placement_conductor_structures(self, placement: BCPlacementType) -> list[str]:
-        """Names of the ``ChargeConductorMedium`` structures a placement names.
-
-        ``MediumMediumInterface`` names media rather than structures, so every
-        structure carrying a named medium counts.
-        """
-        if isinstance(placement, (StructureBoundary, StructureSimulationBoundary)):
-            named = {placement.structure}
-        elif isinstance(placement, StructureStructureInterface):
-            named = set(placement.structures)
-        elif isinstance(placement, MediumMediumInterface):
-            named = {
-                structure.name
-                for structure in self.structures
-                if structure.medium.name in placement.mediums
-            }
-        else:
-            return []
-        return [
-            structure.name
-            for structure in self.structures
-            if structure.name in named
-            and isinstance(self._charge_spec(structure.medium), ChargeConductorMedium)
-        ]
-
     @staticmethod
     def _charge_spec(medium: Any) -> Any:
         """The charge medium of ``medium``, reading through a ``MultiPhysicsMedium``.
@@ -823,31 +713,6 @@ class HeatChargeSimulation(AbstractSimulation):
         charge medium classes.
         """
         return medium.charge if isinstance(medium, MultiPhysicsMedium) else medium
-
-    @staticmethod
-    def _drive_of(source: Any) -> Any:
-        """The drive ``source`` prescribes, stripped of its name and attributes.
-
-        ``GroundVoltage`` is documented as equivalent to
-        ``DCVoltageSource(voltage=0)`` and compares as that source.
-        """
-        if isinstance(source, GroundVoltage):
-            source = DCVoltageSource(voltage=0)
-        if isinstance(source, DCCurrentSource) and np.size(source.current) == 1:
-            # A one-element array drives the same current as its scalar.
-            source = source.updated_copy(current=float(np.ravel(source.current)[0]))
-        metadata = {"name": None, "attrs": {}}
-        updates = {
-            key: value for key, value in metadata.items() if key in type(source).model_fields
-        }
-        return source.updated_copy(**updates) if updates else source
-
-    def _contact_conductors(self, idx: int) -> set[str]:
-        """Return named conductors; empty means geometry must identify the terminal."""
-        placement = self.boundary_spec[idx].placement
-        if isinstance(placement, MediumMediumInterface):
-            return set()
-        return set(self._placement_conductor_structures(placement))
 
     @equal_aspect
     @add_ax_if_none
