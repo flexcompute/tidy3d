@@ -29,6 +29,7 @@ PEC-vs-dielectric integration at consumption.
 
 from __future__ import annotations
 
+from itertools import chain
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -71,6 +72,8 @@ _EPS_COMPONENT_GRID_KEYS = {"xx": "Ex", "yy": "Ey", "zz": "Ez"}
 # half a cell clears faceted samples that sit slightly inside a curved surface (e.g. a
 # Cylinder's polygon sidewall, ~1e-3 um inside), while composite-interior faces stay inside
 _BOUNDARY_PROBE_FRACTION = 0.5
+# queries per neighbour-vote block
+_VOTE_BLOCK = 16384
 _E_COMPONENT_KEYS = ("Ex", "Ey", "Ez")
 _H_COMPONENT_KEYS = ("Hx", "Hy", "Hz")
 
@@ -257,18 +260,28 @@ class _SurfaceVote:
     ) -> np.ndarray:
         """Containment of ``points``, each offset from the surface sample at ``origins``."""
         reach = np.linalg.norm(points - origins, axis=1) + 2 * self.spacing
+        inside = np.zeros(len(points), dtype=bool)
+        undecided = np.zeros(len(points), dtype=bool)
+        # blocks bound the neighbour lists held at once: a dense mesh has many samples within reach
+        for start in range(0, len(points), _VOTE_BLOCK):
+            block = slice(start, start + _VOTE_BLOCK)
+            inside[block], undecided[block] = self._vote(points[block], reach[block])
+        if undecided.any():
+            inside[undecided] = containment.inside(points[undecided])
+        return inside
+
+    def _vote(self, points: np.ndarray, reach: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Unanimous-vote containment and the mask of points whose voters disagree (or are missing)."""
         neighbors = self.tree.query_ball_point(points, reach)
         counts = np.fromiter(map(len, neighbors), dtype=int, count=len(points))
-        voters = np.concatenate([np.asarray(n, dtype=int) for n in neighbors])
+        voters = np.fromiter(chain.from_iterable(neighbors), dtype=np.intp, count=int(counts.sum()))
         owner = np.repeat(np.arange(len(points)), counts)
         signed = np.einsum("pj,pj->p", points[owner] - self.points[voters], self.normals[voters])
         votes_inside = np.bincount(owner, weights=signed < 0, minlength=len(points))
         votes_outside = np.bincount(owner, weights=signed > 0, minlength=len(points))
         inside = (votes_inside == counts) & (counts > 0)
         undecided = ~(inside | ((votes_outside == counts) & (counts > 0)))
-        if undecided.any():
-            inside[undecided] = containment.inside(points[undecided])
-        return inside
+        return inside, undecided
 
 
 class _Containment:

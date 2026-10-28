@@ -62,6 +62,69 @@ def _warn_if_slow_ray_backend(mesh: Trimesh) -> None:
         )
 
 
+# Ray directions of the point-in-mesh test: close to each axis in turn. A ray close to an axis has a long,
+# thin bounding box, so trimesh's candidate search only meets the triangles in line with it, where its
+# default oblique ray meets tens of thousands on a large, flat, finely meshed surface (about 1 MB per
+# point). The rays are tilted by about 0.07 deg rather than exactly axis-aligned because axis-aligned
+# geometry has faces and edges in axis-parallel planes: a ray lying in such a plane has a degenerate hit
+# test and gives an inconclusive crossing count (an L-shaped prism with grid-aligned points is enough to
+# see it).
+_POINT_IN_MESH_DIRECTIONS = np.array(
+    [[1.0, 1.3e-3, 0.7e-3], [0.7e-3, 1.0, 1.3e-3], [1.3e-3, 0.7e-3, 1.0]]
+)
+_POINT_IN_MESH_DIRECTIONS /= np.linalg.norm(_POINT_IN_MESH_DIRECTIONS, axis=1, keepdims=True)
+# points per ray batch, and per batch of the final ``trimesh`` fallback (about 1 MB of candidates each)
+_POINT_IN_MESH_BATCH = 50_000
+_POINT_IN_MESH_FALLBACK_BATCH = 250
+
+
+def _crossing_parity(
+    mesh: Trimesh, points: np.ndarray, direction: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Inside flag and whether it is conclusive, from rays cast both ways along ``direction``.
+
+    Both rays of a point cross the closed surface an odd number of times from the inside and an even number
+    from the outside, so a disagreement means a ray hit an edge or vertex. A ray that hits nothing proves
+    the point outside.
+    """
+    count = len(points)
+    _, ray_index, _ = mesh.ray.intersects_location(
+        np.vstack((points, points)),
+        np.vstack((np.tile(direction, (count, 1)), np.tile(-direction, (count, 1)))),
+        multiple_hits=True,
+    )
+    hits = np.bincount(ray_index, minlength=2 * count).reshape(2, count)
+    odd = hits % 2 == 1
+    agree = odd[0] == odd[1]
+    return odd[0] & agree, agree | (hits == 0).any(axis=0)
+
+
+def _contains_points(mesh: Trimesh, points: np.ndarray) -> np.ndarray:
+    """``mesh.contains(points)`` for ``(N, 3)`` points, with memory bounded for dense, flat meshes.
+
+    Only trimesh's pure-Python ray backend needs this; other backends (Embree) keep their own ``contains``.
+    Each point is settled by the first direction of ``_POINT_IN_MESH_DIRECTIONS`` along which its rays are
+    conclusive. Points that stay inconclusive in every direction use ``mesh.contains`` in small batches.
+    """
+    if type(mesh.ray).__module__ != _TRIMESH_PYTHON_RAY_BACKEND:
+        return mesh.contains(points)
+    contains = np.zeros(len(points), dtype=bool)
+    lower, upper = mesh.bounds
+    pending = np.flatnonzero(np.all((points >= lower) & (points <= upper), axis=1))
+    for direction in _POINT_IN_MESH_DIRECTIONS:
+        inconclusive = []
+        for start in range(0, pending.size, _POINT_IN_MESH_BATCH):
+            batch = pending[start : start + _POINT_IN_MESH_BATCH]
+            inside, conclusive = _crossing_parity(mesh, points[batch], direction)
+            contains[batch[conclusive]] = inside[conclusive]
+            inconclusive.append(batch[~conclusive])
+        pending = np.concatenate(inconclusive) if inconclusive else pending
+    for start in range(0, pending.size, _POINT_IN_MESH_FALLBACK_BATCH):
+        batch = pending[start : start + _POINT_IN_MESH_FALLBACK_BATCH]
+        contains[batch] = mesh.contains(points[batch])
+    return contains
+
+
 # canonical adjoint sample-set key for the triangle-mesh surface samples
 _MESH_SURFACE_KEY = ("surface_samples",)
 
@@ -759,7 +822,7 @@ class TriangleMesh(base.Geometry, ABC):
         arrays_stacked = np.stack(tuple(arrays_flat), axis=-1)
         mesh = self.trimesh
         _warn_if_slow_ray_backend(mesh)
-        inside = mesh.contains(arrays_stacked)
+        inside = _contains_points(mesh, arrays_stacked)
         return inside.reshape(arrays[0].shape)
 
     @equal_aspect
