@@ -9,7 +9,6 @@ import autograd.numpy as anp
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.boundary import BlochBoundary, Periodic
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import Medium, ProtectedOpticalMediumPlacementType3D
 from tidy3d.components.scene import Scene
@@ -192,68 +191,6 @@ class AbstractSimulation(Box, ABC):
         )
         call_wrapped_validator(assert_objects_in_sim_bounds, self, "structures", error=False)
         return self
-
-    def _validate_structures_not_at_edges(self) -> None:
-        """Warn if any structures lie at the simulation boundaries (post-init check with full field access)."""
-        if not self.structures:
-            return
-
-        sim_bound_min, sim_bound_max = self.bounds
-        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
-
-        # Get boundaries - now guaranteed to be available since we're post-init
-        boundary_spec = self.boundary_spec
-        try:
-            boundaries = (
-                boundary_spec.to_list
-                if boundary_spec is not None and hasattr(boundary_spec, "to_list")
-                else None
-            )
-        except Exception:
-            boundaries = None
-
-        with log as consolidated_logger:
-            for istruct, structure in enumerate(self.structures):
-                struct_bound_min, struct_bound_max = structure.geometry.bounds
-                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
-
-                for idx, (sim_val, struct_val) in enumerate(zip(sim_bounds, struct_bounds)):
-                    if anp.isclose(sim_val, struct_val):
-                        # Index 0-2: min bounds for x, y, z → boundaries[axis][0] (minus side)
-                        # Index 3-5: max bounds for x, y, z → boundaries[axis][1] (plus side)
-                        axis_idx = idx % 3
-                        side_idx = idx // 3
-
-                        if not self._warn_if_structure_touches_boundary(
-                            boundaries, axis_idx, side_idx
-                        ):
-                            continue
-
-                        consolidated_logger.warning(
-                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
-                            "to simulation edges. This can cause unexpected behavior. "
-                            "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit.",
-                            custom_loc=["structures", istruct],
-                        )
-
-    @staticmethod
-    def _warn_if_structure_touches_boundary(boundaries: Any, axis_idx: int, side_idx: int) -> bool:
-        """Return whether a structure touching a boundary should emit a warning."""
-        if boundaries is None:
-            return True
-
-        try:
-            boundary_edge = boundaries[axis_idx][side_idx]
-        except (IndexError, TypeError):
-            return True
-
-        if isinstance(boundary_edge, (Periodic, BlochBoundary)):
-            return False
-
-        return not (
-            hasattr(boundary_edge, "extrude_structures") and boundary_edge.extrude_structures
-        )
 
     def _validate_scene(self) -> Self:
         _ = self.scene

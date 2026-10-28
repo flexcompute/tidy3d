@@ -261,9 +261,6 @@ def _warn_3d_structures_missing_2d_yee_sampling_plane(self: Any) -> Self:
 
 def _validate_scene(self: Any) -> Self:
     _ = self.scene
-    self._validate_structures_not_at_edges()
-    self._validate_no_structures_pml()
-    self._validate_no_structures_close_to_pml()
     self._validate_pec_frame_not_in_pml_extrusion()
     self._validate_nonlinear_specs()
     self._warn_rf_license()

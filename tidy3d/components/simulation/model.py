@@ -934,11 +934,8 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_thin_lens_setup_size = _sources_methods._validate_thin_lens_setup_size
 
     # SimulationBoundaries
-    _structures_not_at_edges = _boundaries_methods._structures_not_at_edges
     _validate_frequency_mode_abc = _boundaries_methods._validate_frequency_mode_abc
     _validate_absorber_in_zero_dims = _boundaries_methods._validate_absorber_in_zero_dims
-    _validate_no_structures_pml = _boundaries_methods._validate_no_structures_pml
-    _validate_no_structures_close_to_pml = _boundaries_methods._validate_no_structures_close_to_pml
     _validate_pec_frame_not_in_pml_extrusion = (
         _boundaries_methods._validate_pec_frame_not_in_pml_extrusion
     )
@@ -981,7 +978,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_auto_grid_wavelength()
         super()._run_after_validators()
         self._warn_3d_structures_missing_2d_yee_sampling_plane()
-        self._structures_not_at_edges()
 
         # Validate boundary-dependent runtime and modal-decomposition features.
         self._validate_frequency_mode_abc()
