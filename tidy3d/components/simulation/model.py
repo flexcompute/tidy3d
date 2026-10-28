@@ -846,9 +846,6 @@ class Simulation(AbstractYeeGridSimulation):
     _validate_microwave_mode_specs = _rf_integration_methods._validate_microwave_mode_specs
 
     # SimulationModeIntegration
-    _validate_internal_absorber_placement = (
-        _mode_integration_methods._validate_internal_absorber_placement
-    )
     _validate_modes_size = _mode_integration_methods._validate_modes_size
     _validate_num_cells_in_mode_objects = (
         _mode_integration_methods._validate_num_cells_in_mode_objects
@@ -934,10 +931,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     # SimulationBoundaries
     _validate_frequency_mode_abc = _boundaries_methods._validate_frequency_mode_abc
-    _validate_absorber_in_zero_dims = _boundaries_methods._validate_absorber_in_zero_dims
-    _validate_pec_frame_not_in_pml_extrusion = (
-        _boundaries_methods._validate_pec_frame_not_in_pml_extrusion
-    )
     _num_non_pml_cells = _boundaries_methods._num_non_pml_cells
 
     # SimulationGrid
@@ -978,13 +971,11 @@ class Simulation(AbstractYeeGridSimulation):
         super()._run_after_validators()
         self._warn_3d_structures_missing_2d_yee_sampling_plane()
 
-        # Validate boundary-dependent runtime and modal-decomposition features.
+        # Validate boundary-dependent runtime features.
         self._validate_frequency_mode_abc()
         self._validate_relax_courant_compatibility()
-        self._validate_absorber_in_zero_dims()
-        self._validate_internal_absorber_placement()
 
-        # Finish with the aggregate scene validation.
+        # Build the scene, then warn about RF licensing.
         self._validate_scene()
         return self
 

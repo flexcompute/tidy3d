@@ -260,7 +260,6 @@ def _warn_3d_structures_missing_2d_yee_sampling_plane(self: Any) -> Self:
 
 def _validate_scene(self: Any) -> Self:
     _ = self.scene
-    self._validate_pec_frame_not_in_pml_extrusion()
     # Stays on the client: the product warning logs once per session and reads the client config.
     self._warn_rf_license()
     return self

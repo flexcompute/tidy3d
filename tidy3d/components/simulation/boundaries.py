@@ -27,8 +27,6 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.snapping import (
     _shift_object,
 )
-from tidy3d.components.source.field import AbstractModeSource
-from tidy3d.components.source.frame import PECFrame
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -320,77 +318,6 @@ def _validate_frequency_mode_abc(self: Any) -> Self:
         )
 
     return self
-
-
-def _validate_absorber_in_zero_dims(self: Any) -> Self:
-    """Error if internal absorber is oriented along zero size dim."""
-    val = self.internal_absorbers
-    if val is None:
-        return val
-
-    sim_size = self.size
-    for abc_index, abc in enumerate(val):
-        if sim_size[abc._normal_axis] == 0:
-            self._raise_validation_error_at_loc(
-                "Port absorbers are not allowed to be oriented along simulation zero size dimensions.",
-                "internal_absorbers",
-                abc_index,
-            )
-
-    return self
-
-
-def _validate_pec_frame_not_in_pml_extrusion(self: Any) -> None:
-    """Error if an automatically added PEC frame overlaps the PML extrusion region.
-
-    Works in grid-boundary index space: each PEC frame spans ``[beg, end]`` along every axis,
-    and each PML side with ``extrude_structures`` enabled forbids the index range covering
-    the PML plus an additional ``CLIPPING_MARGIN`` cells of interior (the clipping inset).
-    Touching counts as overlap.
-    """
-    # Collect auto-added PEC frame index spans alongside the field/loc they originate from.
-    frames: list[tuple[np.ndarray, str, int, str]] = []
-    for src_idx, src in enumerate(self.sources):
-        if isinstance(src, AbstractModeSource) and isinstance(src.frame, PECFrame):
-            span_inds, _, _ = self._pec_frame_span_inds(src)
-            descr = f"mode source '{src.name}'" if src.name else f"mode source at index {src_idx}"
-            frames.append((span_inds, "sources", src_idx, descr))
-    for abs_idx, absorber in enumerate(self._shifted_internal_absorbers):
-        span_inds, _, _ = self._pec_frame_span_inds(absorber)
-        frames.append(
-            (span_inds, "internal_absorbers", abs_idx, f"internal absorber at index {abs_idx}")
-        )
-    if not frames:
-        return
-
-    boundaries = self.boundary_spec.to_list
-    grid_boundaries = self.grid.boundaries.to_list
-
-    for axis in range(3):
-        n_bounds = len(grid_boundaries[axis])
-        for side in (0, 1):
-            bnd = boundaries[axis][side]
-            if not isinstance(bnd, AbsorberSpec) or not bnd.extrude_structures:
-                continue
-            clip_ind = self._pml_extrusion_clipping_bound_ind(axis, side)
-            if clip_ind is None:
-                continue
-            ext_lo, ext_hi = (0, clip_ind) if side == 0 else (clip_ind, n_bounds - 1)
-            for span_inds, field, loc, descr in frames:
-                beg, end = span_inds[axis]
-                if beg <= ext_hi and end >= ext_lo:
-                    axis_label = "xyz"[axis]
-                    side_label = f"{'-+'[side]}{axis_label}"
-                    self._raise_validation_error_at_loc(
-                        f"The automatically added PEC frame for {descr} overlaps the "
-                        f"{bnd.type} extrusion region on the '{side_label}' boundary. "
-                        f"The extrusion region extends {CLIPPING_MARGIN} grid cells beyond "
-                        f"the {bnd.type} into the simulation domain; increase the simulation "
-                        f"size along '{axis_label}', move the source/absorber away from "
-                        f"that boundary, or disable 'extrude_structures' on that side.",
-                        field,
-                        loc,
-                    )
 
 
 def _num_non_pml_cells(self: Any) -> int:
