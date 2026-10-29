@@ -344,47 +344,6 @@ class ModeSolver(Tidy3dBaseModel):
             )
         return self
 
-    @model_validator(mode="after")
-    def _validate_mode_sort_spec_bounding_box(self) -> Self:
-        """Validate the fill-fraction box against the effective mode-plane bounds."""
-        sort_spec = getattr(self.mode_spec, "sort_spec", None)
-        if sort_spec is None:
-            return self
-
-        sim_box = Box(size=self.simulation.size, center=self.simulation.center)
-        mode_plane = effective_mode_plane(self.plane, sim_box)
-        normal_axis = self.plane.zero_dims[0]
-        if not sort_spec._bounding_box_intersects_tangentially(mode_plane.bounds, normal_axis):
-            self._raise_validation_error_at_loc(
-                "'ModeSortSpec.bounding_box' must intersect the effective mode plane along both "
-                "tangential axes. Please move or resize the bounding box in the tangential "
-                "directions.",
-                "mode_spec",
-                "sort_spec",
-                "bounding_box",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _warn_plane_crosses_symmetry(self) -> Self:
-        """Warn if the mode plane crosses the symmetry plane of the underlying simulation but
-        the centers do not match."""
-        for dim in range(3):
-            if self.simulation.symmetry[dim] != 0:
-                crosses_symmetry = (
-                    self.plane.bounds[0][dim] < self.simulation.center[dim]
-                    and self.plane.bounds[1][dim] > self.simulation.center[dim]
-                )
-                if crosses_symmetry:
-                    if not isclose(self.plane.center[dim], self.simulation.center[dim]):
-                        log.warning(
-                            f"The original simulation is symmetric along {'xyz'[dim]} direction. "
-                            "The mode simulation region does cross the symmetry plane but is "
-                            "not symmetric with respect to it. To preserve correct symmetry, "
-                            "the requested simulation region will be expanded by the solver."
-                        )
-        return self
-
     @staticmethod
     def _rotation_validation_freqs(mode_object: ModeSource | AbstractModeMonitor) -> FreqArray:
         """Frequencies relevant to validating structure rotations for ``angle_rotation``."""
