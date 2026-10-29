@@ -924,8 +924,8 @@ class Tidy3dBaseModel(BaseModel):
             ``xr.DataArray`` and lose the tidy3d subclass
             (``ScalarFieldDataArray``, ``IndexedDataArray``, ...). Validation is
             needed to coerce them back. It is also **not safe** when the model
-            has validators that enforce business logic (e.g.
-            ``Simulation._check_normalize_index``).
+            has checks that enforce business logic (e.g. that ``Simulation.normalize_index``
+            refers to an existing source with a nonzero amplitude).
         update : Optional[Mapping[str, Any]] = None
             Optional mapping of fields to overwrite (passed straight
             through to ``model_copy(update=...)``).

@@ -198,7 +198,7 @@ def volumetric_structures(self: Any) -> tuple[Structure]:
 
 def _validate_scene(self: Any) -> Self:
     _ = self.scene
-    # Stays on the client: the product warning logs once per session and reads the client config.
+    # Kept here because the warning is logged once per session and reads the user's configuration.
     self._warn_rf_license()
     return self
 
