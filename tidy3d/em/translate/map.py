@@ -61,7 +61,7 @@ TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
         "flexcompute.core._migration.solver.heat_charge.schema.heat_charge:HeatChargeSimulation"
     ),
     Tidy3DSolverTaskMap.EME: "flexcompute.core._migration.solver.eme.schema.simulation:EMESimulation",
-    Tidy3DSolverTaskMap.MODE: "flexcompute.core._migration.em.schema.tidy3d.components.mode.simulation:ModeSimulation",
+    Tidy3DSolverTaskMap.MODE: "flexcompute.core._migration.solver.mode.schema.simulation:ModeSimulation",
     Tidy3DSolverTaskMap.VOLUME_MESH: "flexcompute.core._migration.em.schema.tidy3d.components.tcad.mesher:VolumeMesher",
     Tidy3DSolverTaskMap.MODAL_CM: (
         "flexcompute.core._migration.solver.component_modeler.schema:ComponentModelerTaskInput"
@@ -1179,6 +1179,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
     # mode-workflow
     "tidy3d.components.mode.mode_solver:ModeSolver": ComponentScope(
         "flexcompute.core._migration.solver.mode.schema.mode_solver:ModeSolver",
+        "flexcompute.core._migration.solver.mode.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.mode.simulation:ModeSimulation": ComponentScope(
+        "flexcompute.core._migration.solver.mode.schema.simulation:ModeSimulation",
         "flexcompute.core._migration.solver.mode.validation:validate",
         on_construction=True,
     ),

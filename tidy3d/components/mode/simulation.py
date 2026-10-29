@@ -36,7 +36,6 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
-from .geometry import effective_mode_plane
 from .mode_solver import ModeSolver
 
 if TYPE_CHECKING:
@@ -276,42 +275,9 @@ class ModeSimulation(AbstractYeeGridSimulation):
         self._structures_not_at_edges()
         self._validate_scene()
         super()._run_after_validators()
-        self._plane_in_sim_bounds()
-        self._validate_mode_sort_spec_bounding_box()
-        self._validate_mode_structure_monitors()
         self._validate_record_in_pml_unsupported()
         self._validate_mode_solver()
         self._validate_grid()
-        return self
-
-    def _plane_in_sim_bounds(self) -> Self:
-        """Check that the plane is at least partially inside the simulation bounds."""
-        sim_box = Box(size=self.size, center=self.center)
-        if not sim_box.intersects(self.plane):
-            self._raise_validation_error_at_loc(
-                "'ModeSimulation.plane' must intersect 'ModeSimulation.geometry'.",
-                "plane",
-            )
-        return self
-
-    def _validate_mode_sort_spec_bounding_box(self) -> Self:
-        """Validate the fill-fraction box against the effective mode-plane bounds."""
-        sort_spec = getattr(self.mode_spec, "sort_spec", None)
-        if sort_spec is None:
-            return self
-
-        normal_axis = self.plane.zero_dims[0]
-        sim_box = Box(size=self.size, center=self.center)
-        mode_plane = effective_mode_plane(self.plane, sim_box)
-        if not sort_spec._bounding_box_intersects_tangentially(mode_plane.bounds, normal_axis):
-            self._raise_validation_error_at_loc(
-                "'ModeSortSpec.bounding_box' must intersect the effective mode plane along both "
-                "tangential axes. Please move or resize the bounding box in the tangential "
-                "directions.",
-                "mode_spec",
-                "sort_spec",
-                "bounding_box",
-            )
         return self
 
     @cached_property
@@ -331,77 +297,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
                 size = monitor.storage_size(num_cells=num_cells, tmesh=[])
             data_size[monitor.name] = float(size)
         return data_size
-
-    def _validate_mode_structure_monitors(self) -> Self:
-        """Check the simulation can supply what a ``ModeStructureMonitor`` has to pair with.
-
-        The monitor records permittivity and ownership only; the electric field is paired in from
-        the ordinary mode result at read time, which is matched to them just as long as the fields
-        stay on the Yee grid and all three components are kept (RFC EMSOLVER-0010).
-        """
-        for index, monitor in enumerate(self.monitors):
-            if not isinstance(monitor, ModeStructureMonitor):
-                continue
-
-            if self.colocate:
-                self._raise_validation_error_at_loc(
-                    f"'ModeSimulation.colocate' must be 'False' when the 'ModeStructureMonitor' "
-                    f"'{monitor.name}' is present. The monitor's permittivity and "
-                    "structure-ownership maps are recorded on the native Yee grid, and the "
-                    "electric field is paired with them from the mode result, so a colocated "
-                    "mode result would no longer match them. Set 'colocate=False'.",
-                    "colocate",
-                )
-
-            missing = [field for field in ("Ex", "Ey", "Ez") if field not in self.fields]
-            if missing:
-                self._raise_validation_error_at_loc(
-                    f"'ModeSimulation.fields' is missing {missing}, which the "
-                    f"'ModeStructureMonitor' '{monitor.name}' needs: the displacement field and "
-                    "absorbed power sum over all three electric-field components. Add them to "
-                    "'fields'.",
-                    "fields",
-                )
-
-            self._validate_monitor_in_mode_plane(monitor, index)
-        return self
-
-    def _validate_monitor_in_mode_plane(self, monitor: ModeStructureMonitor, index: int) -> None:
-        """Check a ``ModeStructureMonitor`` lies in the mode plane and overlaps it.
-
-        The recorded data only exists on the mode plane, so a monitor on a different plane (or
-        beside it) would silently yield empty data rather than an error.
-        """
-        normal_axis = self.plane.zero_dims[0]
-        if monitor.normal_axis != normal_axis:
-            self._raise_validation_error_at_loc(
-                f"'ModeStructureMonitor' '{monitor.name}' is normal to axis "
-                f"{monitor.normal_axis}, but the mode plane is normal to axis {normal_axis}. "
-                "The monitor must lie in the mode plane.",
-                "monitors",
-                index,
-                "size",
-            )
-
-        mode_plane = effective_mode_plane(self.plane, Box(size=self.size, center=self.center))
-        if not np.isclose(monitor.center[normal_axis], mode_plane.center[normal_axis]):
-            self._raise_validation_error_at_loc(
-                f"'ModeStructureMonitor' '{monitor.name}' is at "
-                f"{'xyz'[normal_axis]}={monitor.center[normal_axis]}, but the mode plane is at "
-                f"{'xyz'[normal_axis]}={mode_plane.center[normal_axis]}. "
-                "The monitor must lie in the mode plane.",
-                "monitors",
-                index,
-                "center",
-            )
-
-        if not mode_plane.intersects(Box(center=monitor.center, size=monitor.size)):
-            self._raise_validation_error_at_loc(
-                f"'ModeStructureMonitor' '{monitor.name}' does not overlap the mode plane, so it "
-                "would record no data. Move or resize it to intersect the plane.",
-                "monitors",
-                index,
-            )
 
     def _validate_mode_solver(self) -> Self:
         _ = self._mode_solver
