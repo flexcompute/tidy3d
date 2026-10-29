@@ -2,7 +2,7 @@
 
 As of version 2.7.0, Tidy3D provides native support for automatic differentiation (AD), empowering you to perform gradient-based optimization and sensitivity analysis of photonic devices directly within your simulation workflow.
 
-The gradient calculation is performed efficiently using the **adjoint method**, which keeps the cost nearly independent of the number of design parameters. In most objectives, only one adjoint simulation is needed because adjoint sources can be grouped by frequency or spatial port. If an objective uses multiple frequencies and multiple spatial ports, the standard adjoint path groups by whichever dimension is smaller, so the number of adjoint simulations is the smaller of the unique frequency count and the spatial-port count.
+The gradient calculation is performed efficiently using the **adjoint method**, which keeps the cost nearly independent of the number of design parameters. In most objectives, only one adjoint simulation is needed because adjoint sources can be grouped by frequency or spatial port. If an objective uses multiple frequencies and multiple spatial ports, the standard adjoint path groups by whichever dimension is smaller, so the number of adjoint simulations is usually the smaller of the unique frequency count and the spatial-port count, and never more than the unique frequency count.
 
 This implementation is powered by the `autograd` library and replaces the previous `jax`-based `adjoint` plugin, offering several key benefits:
 
@@ -66,8 +66,9 @@ An inverse design optimization loop in Tidy3D generally follows these steps:
 The number of adjoint simulations depends on which simulation outputs the objective uses, not on the number of design parameters. The standard adjoint path first builds adjoint sources from the objective's vector-Jacobian product (VJP), then groups them by frequency or spatial port, whichever yields fewer simulations:
 
 * If several objective terms use the same spatial port at multiple frequencies, they can usually be combined into one broadband adjoint simulation.
+* A broadband diffraction port with a fixed in-plane wave vector can split into several adjoint simulations when one grouped source cannot launch all its frequencies accurately, for example near an order's grazing angle or in a strongly dispersive medium.
 * If several objective terms use the same frequency at multiple spatial ports, they can usually be combined into one single-frequency adjoint simulation.
-* If an objective uses multiple frequencies and multiple spatial ports, the standard path uses the smaller of the unique frequency count and the spatial-port count.
+* If an objective uses multiple frequencies and multiple spatial ports, the standard path uses whichever of frequency grouping and port grouping needs fewer simulations.
 
 Unused frequencies in monitors increase forward-run field and permittivity data size, but they do not by themselves create adjoint simulations. Only frequencies that participate in the objective contribute adjoint sources.
 

@@ -272,33 +272,28 @@ def _group_parallel_adjoint_bases_by_port(
     for port_group in port_groups:
         group_sources = list(port_group.sources)
         group_bases = list(port_group.metadata or ())
-        if len(group_sources) == 1:
-            # Source is already width-adjusted when built from the canonical basis.
-            adjoint_source_info = adjoint_source_info_single(group_sources[0], adjust_fwidth=False)
-        elif not sim_data_stub._plane_wave_group_covers_frequencies(
-            group_sources,
-            plane_wave_medium=port_group.plane_wave_medium,
-        ):
-            groups_out.extend(
-                (
-                    [basis],
-                    adjoint_source_info_single(source, adjust_fwidth=False),
+        runs = sim_data_stub._split_plane_wave_port_group(
+            group_sources, plane_wave_medium=port_group.plane_wave_medium
+        )
+        for run in runs:
+            run_sources = [group_sources[i] for i in run]
+            if len(run_sources) == 1:
+                # Source is already width-adjusted when built from the canonical basis.
+                adjoint_source_info = adjoint_source_info_single(
+                    run_sources[0], adjust_fwidth=False
                 )
-                for basis, source in zip(group_bases, group_sources, strict=True)
-            )
-            continue
-        else:
-            src_broadband = sim_data_stub._make_broadband_source_with_medium(
-                adj_srcs=group_sources,
-                plane_wave_medium=port_group.plane_wave_medium,
-            )
-            post_norm = td.SimulationData._make_post_norm_amps(adj_srcs=group_sources)
-            adjoint_source_info = AdjointSourceInfo(
-                sources=(src_broadband,),
-                post_norm=post_norm,
-                normalize_sim=True,
-            )
-        groups_out.append((group_bases, adjoint_source_info))
+            else:
+                src_broadband = sim_data_stub._make_broadband_source_with_medium(
+                    adj_srcs=run_sources,
+                    plane_wave_medium=port_group.plane_wave_medium,
+                )
+                post_norm = td.SimulationData._make_post_norm_amps(adj_srcs=run_sources)
+                adjoint_source_info = AdjointSourceInfo(
+                    sources=(src_broadband,),
+                    post_norm=post_norm,
+                    normalize_sim=True,
+                )
+            groups_out.append(([group_bases[i] for i in run], adjoint_source_info))
 
     return groups_out
 

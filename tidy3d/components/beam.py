@@ -26,7 +26,7 @@ from .thin_lens import (
     AbstractThinLens,
 )
 from .transformation import rotate_points_around_axis
-from .types import TYPE_TAG_STR, Direction, FreqArray
+from .types import TYPE_TAG_STR, Complex, Direction, FreqArray
 from .validators import assert_plane, warn_backward_waist_distance
 
 if TYPE_CHECKING:
@@ -620,14 +620,33 @@ class PlaneWaveBeamProfile(BeamProfile):
         "used.",
     )
 
+    angle_theta_background_n: Complex | None = Field(
+        default=None,
+        title="Background Index at Angle Theta Frequency",
+        description="Complex refractive index of the background at ``angle_theta_frequency``. "
+        "Together with ``angle_theta``, it sets the in-plane wave vector of a fixed in-plane k "
+        "beam. If not supplied, the index of ``background_medium`` at that frequency is used. "
+        "Set it when sampling the beam with a ``background_n`` that differs from "
+        "``background_medium``.",
+    )
+
     @property
     def _angle_theta_frequency(self) -> float:
         if not self.angle_theta_frequency:
             return np.mean(self.freqs)
         return self.angle_theta_frequency
 
-    def in_plane_k(self, background_n: float) -> list[float]:
-        """In-plane wave vector. Only the real part is taken so the beam has no in-plane decay."""
+    @property
+    def _angle_theta_background_n(self) -> complex:
+        if self.angle_theta_background_n is None:
+            return self.background_medium.background_index_from_freqs(
+                [self._angle_theta_frequency]
+            )[0]
+        return self.angle_theta_background_n
+
+    def in_plane_k(self, background_n: complex) -> list[float]:
+        """In-plane wave vector for a background index ``background_n`` at
+        ``angle_theta_frequency``. Only the real part is taken so the beam has no in-plane decay."""
         k0 = 2 * np.pi * self._angle_theta_frequency / C_0 * background_n
         k_in_plane = k0.real * np.sin(self.angle_theta)
         return [k_in_plane * np.cos(self.angle_phi), k_in_plane * np.sin(self.angle_phi)]
@@ -650,7 +669,10 @@ class PlaneWaveBeamProfile(BeamProfile):
     def _angle_theta_actual(self, background_n: NDArray) -> NDArray:
         """Compute the frequency-dependent actual propagation angle theta."""
         k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
-        kx, ky = self.in_plane_k(background_n)
+        # The in-plane wave vector is the same at every frequency: the one ``angle_theta`` sets
+        # at ``angle_theta_frequency``, which in a dispersive background is not the one it would
+        # set in each frequency's own index.
+        kx, ky = self.in_plane_k(self._angle_theta_background_n)
         k_perp = np.sqrt(kx**2 + ky**2)
         return np.real(np.arcsin(k_perp / k0)) * np.sign(self.angle_theta)
 

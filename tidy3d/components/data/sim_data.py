@@ -121,6 +121,9 @@ GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD = 0.2
 PLANE_WAVE_GROUP_NUM_FREQS = 3
 PLANE_WAVE_GROUP_FREQUENCY_MARGIN = 1.25
 PLANE_WAVE_GROUP_MIN_FWIDTH_FRACTION = 0.1
+# Largest relative error a grouped fixed-k plane wave may make, at any of its target frequencies,
+# in the wave it launches toward the structure.
+PLANE_WAVE_GROUP_MAX_FORWARD_ERROR = 1e-2
 
 
 class _LazyMonitorDataMap(Mapping[str, MonitorDataType]):
@@ -238,6 +241,54 @@ def _filter_adjoint_sources(
         source for source in sources if _is_dispatchable_adjoint_source(source, min_amplitude)
     ]
     return filtered_sources, len(sources) - len(filtered_sources)
+
+
+def _fixed_k_forward_error(
+    sample_freqs: NDArray,
+    target_freqs: NDArray,
+    transverse_wave_number: float,
+    medium: AbstractMedium,
+) -> float:
+    """Worst relative error of the wave a grouped fixed-k plane wave launches, over its targets.
+
+    The solver normalizes each frequency sample of a fixed-k plane wave to unit power and
+    interpolates between the samples with a polynomial in frequency. At a fixed transverse wave
+    number the tangential fields then scale as ``x**0.5`` and ``x**-0.5``, with
+    ``x = eta / cos(theta)`` for s and ``x = eta * cos(theta)`` for p polarization. The wave
+    launched in the source direction carries the mean of their relative interpolation errors
+    (their half-difference leaks backward). ``transverse_wave_number`` is in the units of
+    ``PlaneWave._fixed_in_plane_wavevector`` (frequency times refractive index).
+    """
+    sample_freqs = np.asarray(sample_freqs, dtype=float)
+    target_freqs = np.asarray(target_freqs, dtype=float)
+    center = 0.5 * (np.max(sample_freqs) + np.min(sample_freqs))
+    half_span = max(0.5 * (np.max(sample_freqs) - np.min(sample_freqs)), np.finfo(float).tiny)
+
+    def index_and_cos(freqs: NDArray) -> tuple[NDArray, NDArray]:
+        index = np.real(np.sqrt(np.array([medium.eps_model(freq) for freq in freqs])))
+        cos_sq = 1.0 - (transverse_wave_number / (freqs * index)) ** 2
+        return index, np.sqrt(np.clip(cos_sq, 0.0, None))
+
+    sample_index, sample_cos = index_and_cos(sample_freqs)
+    target_index, target_cos = index_and_cos(target_freqs)
+    # a zero real index at normal incidence gives a NaN cosine, which must fail this check too
+    if not (np.all(target_cos > 0) and np.all(sample_cos > 0)):
+        return np.inf
+
+    degree = len(sample_freqs) - 1
+    sample_u = (sample_freqs - center) / half_span
+    target_u = (target_freqs - center) / half_span
+    worst = 0.0
+    for cos_power in (-1.0, 1.0):  # s polarization: eta / cos, p polarization: eta * cos
+        sample_x = sample_cos**cos_power / sample_index
+        target_x = target_cos**cos_power / target_index
+        field_errors = []
+        for field_power in (0.5, -0.5):
+            coefficients = np.polyfit(sample_u, sample_x**field_power, degree)
+            exact = target_x**field_power
+            field_errors.append((np.polyval(coefficients, target_u) - exact) / exact)
+        worst = max(worst, float(np.max(np.abs(0.5 * (field_errors[0] + field_errors[1])))))
+    return worst
 
 
 def _filter_adjoint_source_infos(
@@ -1892,7 +1943,14 @@ class SimulationData(AbstractYeeGridSimulationData):
         adj_srcs: list[SourceType],
         plane_wave_medium: AbstractMedium | None,
     ) -> bool:
-        """Whether a grouped plane wave safely covers all requested frequencies."""
+        """Whether a grouped plane wave safely covers all requested frequencies.
+
+        Its frequency samples must span the targets without extrapolating (extrapolation toward
+        the critical frequency is far less accurate than the interpolation estimate predicts),
+        stay above the near-cutoff clip, and keep the launched wave within
+        ``PLANE_WAVE_GROUP_MAX_FORWARD_ERROR`` at every target. The last check binds when the
+        injection medium is strongly dispersive across the band.
+        """
         if len(adj_srcs) <= 1 or not isinstance(adj_srcs[0], PlaneWave):
             return True
 
@@ -1939,7 +1997,54 @@ class SimulationData(AbstractYeeGridSimulationData):
                 > (1 + FIXED_K_GROUP_RTOL) * wave_number
             ):
                 return False
-        return True
+        forward_error = _fixed_k_forward_error(
+            source_freqs, target_freqs, transverse_wave_number, plane_wave_medium
+        )
+        return forward_error <= PLANE_WAVE_GROUP_MAX_FORWARD_ERROR
+
+    def _split_plane_wave_port_group(
+        self,
+        adj_srcs: list[SourceType],
+        plane_wave_medium: AbstractMedium | None,
+    ) -> list[list[int]]:
+        """Split one port's sources into frequency runs that a single grouped source can serve.
+
+        A port whose grouped source passes ``_plane_wave_group_covers_frequencies`` stays one run,
+        which includes every port that is not a fixed-k plane wave. Otherwise, starting from the
+        highest frequency, each tone joins the current run while the grouped source still passes
+        the check; a tone that does not starts a new run. Errors grow toward a plane wave's
+        critical frequency, so near-cutoff tones split off at the low end instead of sending the
+        whole port to per-frequency simulations. Returns index lists into ``adj_srcs`` in their
+        original order; a one-index run is its own source.
+        """
+        if self._plane_wave_group_covers_frequencies(adj_srcs, plane_wave_medium=plane_wave_medium):
+            return [list(range(len(adj_srcs)))]
+
+        by_descending_freq = sorted(
+            range(len(adj_srcs)), key=lambda index: -adj_srcs[index].source_time._freq0
+        )
+        runs = [[index] for index in by_descending_freq[:1]]
+        for index in by_descending_freq[1:]:
+            candidate = [*runs[-1], index]
+            if self._plane_wave_group_covers_frequencies(
+                [adj_srcs[i] for i in candidate], plane_wave_medium=plane_wave_medium
+            ):
+                runs[-1] = candidate
+            else:
+                runs.append([index])
+
+        num_alone = sum(len(run) == 1 for run in runs)
+        if len(runs) > 1 and num_alone:
+            log.warning(
+                "Adjoint frequencies of one fixed-k plane-wave port (%d of them) cannot share an "
+                "interpolated source with its other frequencies, usually because they lie near "
+                "the critical (grazing) frequency of their diffraction order, or because the "
+                "injection medium is strongly dispersive across the band. Each runs as a "
+                "separate adjoint simulation.",
+                num_alone,
+                log_once=True,
+            )
+        return sorted((sorted(run) for run in runs), key=lambda run: run[0])
 
     def _process_adjoint_sources_standard(
         self,
@@ -1955,52 +2060,59 @@ class SimulationData(AbstractYeeGridSimulationData):
         )
         adj_srcs_process_fwidth = [src for group in port_groups for src in group.sources]
 
+        # Split plane-wave ports whose tones one grouped source cannot all serve. Tones split off
+        # on their own join the per-frequency simulations.
+        grouped_ports: list[tuple[list[SourceType], AbstractMedium | None]] = []
+        split_off_sources: list[SourceType] = []
+        for port_group in port_groups:
+            sources = list(port_group.sources)
+            runs = self._split_plane_wave_port_group(sources, port_group.plane_wave_medium)
+            if len(runs) == 1:
+                grouped_ports.append((sources, port_group.plane_wave_medium))
+                continue
+            for run in runs:
+                if len(run) == 1:
+                    split_off_sources.append(sources[run[0]])
+                else:
+                    grouped_ports.append(([sources[i] for i in run], port_group.plane_wave_medium))
+
         # Group sources by frequency or port, whichever gives fewer groups
-        num_ports = len(port_groups)
+        num_port_sims = len(grouped_ports) + len(
+            self._adjoint_sources_by_frequency(split_off_sources)
+        )
         num_unique_freqs = len(self._adjoint_sources_by_frequency(adj_srcs_process_fwidth))
 
-        log.info(f"Found {num_ports} spatial ports and {num_unique_freqs} unique frequencies.")
+        log.info(
+            f"Found {len(port_groups)} spatial ports ({num_port_sims} port-grouped simulations) "
+            f"and {num_unique_freqs} unique frequencies."
+        )
 
-        adjoint_infos = []
-        if num_unique_freqs <= num_ports:
+        if num_unique_freqs <= num_port_sims:
             log.info("Grouping adjoint sources by frequency.")
             adjoint_infos = self._process_adjoint_sources_by_frequency(
                 adj_srcs_process_fwidth,
                 adjust_fwidth=False,
             )
         else:
-            if not all(
-                self._plane_wave_group_covers_frequencies(
-                    list(group.sources),
-                    plane_wave_medium=group.plane_wave_medium,
-                )
-                for group in port_groups
-            ):
-                log.info(
-                    "Plane-wave port grouping does not safely cover all adjoint frequencies; "
-                    "grouping adjoint sources by frequency."
-                )
-                adjoint_infos = self._process_adjoint_sources_by_frequency(
-                    adj_srcs_process_fwidth,
-                    adjust_fwidth=False,
-                )
-                log.info(f"Created {len(adjoint_infos)} adjoint source groups.")
-                return adjoint_infos
-
             log.info("Grouping adjoint sources by port.")
 
-            self._warn_adjoint_source_grouping_with_symmetry(num_ports)
+            self._warn_adjoint_source_grouping_with_symmetry(num_port_sims)
 
-            for port_group in port_groups:
+            adjoint_infos = []
+            for sources, plane_wave_medium in grouped_ports:
                 processed_srcs, post_norm = self._process_adjoint_sources_broadband(
-                    list(port_group.sources),
-                    plane_wave_medium=port_group.plane_wave_medium,
+                    sources,
+                    plane_wave_medium=plane_wave_medium,
                 )
                 adjoint_infos.append(
                     AdjointSourceInfo(
                         sources=processed_srcs, post_norm=post_norm, normalize_sim=True
                     )
                 )
+            adjoint_infos += self._process_adjoint_sources_by_frequency(
+                split_off_sources,
+                adjust_fwidth=False,
+            )
 
         log.info(f"Created {len(adjoint_infos)} adjoint source groups.")
         return adjoint_infos
