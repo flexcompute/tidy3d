@@ -951,10 +951,13 @@ class Simulation(AbstractYeeGridSimulation):
             # in this chain checks and would be skipped by the class-level guard
             call_wrapped_validator(validate_boundaries_for_zero_dims, self)
             return self
-        # Normalize zero-dimensional inputs and run shared Yee-grid checks first.
+        # Normalize zero-dimensional inputs and check what the grid build needs first.
         call_wrapped_validator(validate_boundaries_for_zero_dims, self)
         self._validate_auto_grid_wavelength()
-        super()._run_after_validators()
+        # The Yee and base simulation hooks add only the grid size check and the monitor and
+        # structure containment, which are rules of the FDTD scope. The EME, mode and heat-charge
+        # simulations call those hooks.
+        self._validate_auto_grid_size()
 
         # Build the scene, then warn about RF licensing.
         self._validate_scene()
