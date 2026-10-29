@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
-from flexcompute.core._migration.em.scene import validation as scene_validation
 from pydantic import (
     ValidationError as PydanticValidationError,
 )
@@ -130,36 +129,6 @@ def _generated_grid_size_validation_error(
         return loc[1], msg
 
     return None
-
-
-def _validate_num_lumped_elements(self: Any) -> Self:
-    """Error if too many lumped elements present."""
-    val = self.lumped_elements
-    if val is None:
-        return self
-    structures = self.structures
-    mediums = {structure.medium for structure in structures}
-    total_num_mediums = len(val) + len(mediums)
-    if total_num_mediums > scene_validation.MAX_NUM_MEDIUMS:
-        self._raise_validation_error_at_loc(
-            f"Tidy3D only supports {scene_validation.MAX_NUM_MEDIUMS} distinct lumped elements and structures."
-            f" {total_num_mediums} were supplied.",
-            "lumped_elements",
-        )
-
-    return self
-
-
-def _check_3d_simulation_with_lumped_elements(self: Any) -> Self:
-    """Error if Simulation contained lumped elements and is not a 3D simulation"""
-    val = self.lumped_elements
-    size = self.size
-    if val and size.count(0.0) > 0:
-        self._raise_validation_error_at_loc(
-            f"'{self.__class__.__name__}' must be a 3D simulation when a 'LumpedElement' is present.",
-            "size",
-        )
-    return self
 
 
 @cached_property

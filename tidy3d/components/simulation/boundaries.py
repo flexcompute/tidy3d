@@ -32,8 +32,7 @@ from tidy3d.log import log
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from tidy3d.compat import Self
-    from tidy3d.components.boundary import BoundarySpec, InternalAbsorber
+    from tidy3d.components.boundary import InternalAbsorber
     from tidy3d.components.types import Axis
 
 from . import constants
@@ -110,30 +109,6 @@ def validate_boundaries_for_zero_dims(
         return self
 
     return boundaries_for_zero_dims
-
-
-def _validate_boundary_spec_symmetry(self: Any) -> Self:
-    """Error if symmetry is imposed along an axis but the boundary conditions are not the same
-    on both sides."""
-
-    def equivalent(plus: BoundarySpec, minus: BoundarySpec) -> bool:
-        """Returns whether two boundary conditions are physically identical."""
-        # Make copies of `plus` and `minus` with the `name` attribute set to "".
-        plus_cpy = plus.updated_copy(name="")
-        minus_cpy = minus.updated_copy(name="")
-        return plus_cpy == minus_cpy
-
-    bs = self.boundary_spec
-    boundaries = [bs.x, bs.y, bs.z]
-    for ax, symmetry, ax_bounds in zip("xyz", self.symmetry, boundaries):
-        if symmetry != 0 and not equivalent(ax_bounds.plus, ax_bounds.minus):
-            self._raise_validation_error_at_loc(
-                f"Symmetry '{symmetry}' along axis {ax} requires the same boundary "
-                f"condition on both sides of the axis.",
-                "boundary_spec",
-                ax,
-            )
-    return self
 
 
 @cached_property

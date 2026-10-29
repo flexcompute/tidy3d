@@ -180,10 +180,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     _layerrefinement_boundary_types = _grid_methods._layerrefinement_boundary_types
     _validate_auto_grid_size = _grid_methods._validate_auto_grid_size
     _generated_grid_size_validation_error = _grid_methods._generated_grid_size_validation_error
-    _validate_num_lumped_elements = _grid_methods._validate_num_lumped_elements
-    _check_3d_simulation_with_lumped_elements = (
-        _grid_methods._check_3d_simulation_with_lumped_elements
-    )
     _internal_layerrefinement_boundary_types = (
         _grid_methods._internal_layerrefinement_boundary_types
     )
@@ -210,7 +206,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     suggest_mesh_overrides = _grid_methods.suggest_mesh_overrides
 
     # YeeBoundaries
-    _validate_boundary_spec_symmetry = _boundaries_methods._validate_boundary_spec_symmetry
     _shifted_internal_absorbers = _boundaries_methods._shifted_internal_absorbers
     bounds_pml = _boundaries_methods.bounds_pml
     simulation_bounds = _boundaries_methods.simulation_bounds
@@ -249,9 +244,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
         super()._run_after_validators()
-        self._validate_num_lumped_elements()
-        self._check_3d_simulation_with_lumped_elements()
-        self._validate_boundary_spec_symmetry()
         self._validate_auto_grid_size()
         return self
 
