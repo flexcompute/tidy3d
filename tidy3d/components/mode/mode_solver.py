@@ -100,9 +100,6 @@ from .geometry import (
 from .validation import (
     make_rotated_structures,
     validate_microwave_mode_spec,
-    validate_mode_plane_radius,
-    validate_plane_rotation_media,
-    warn_thick_pml,
 )
 
 if TYPE_CHECKING:
@@ -387,60 +384,6 @@ class ModeSolver(Tidy3dBaseModel):
                             "the requested simulation region will be expanded by the solver."
                         )
         return self
-
-    @model_validator(mode="after")
-    def _validate_warn_thick_pml(self) -> Self:
-        """Warn if the pml covers a significant portion of the mode plane."""
-        warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
-        self._validate_rotate_structures()
-        return self
-
-    @model_validator(mode="after")
-    def _validate_bend_radius(self) -> Self:
-        """Validate that the bend radius is not too small."""
-        sim_box = Box(size=self.simulation.size, center=self.simulation.center)
-        validate_mode_plane_radius(self.mode_spec, self.plane, sim_box)
-        return self
-
-    @model_validator(mode="after")
-    def _validate_rotate_structures_after(self) -> Self:
-        self._validate_rotate_structures()
-        return self
-
-    @model_validator(mode="after")
-    def _validate_num_grid_points(self) -> Self:
-        """Upper bound on mode plane grid points.
-
-        ARPACK subspace x eigenvector size must fit in a 32-bit integer.
-        Tensorial problems build a 4N x 4N matrix (vs 2N x 2N for scalar),
-        so the dimension factor is doubled.
-        """
-        num_cells, _, num_modes = self._num_cells_freqs_modes
-        matrix_dim_factor = 4 if self._is_tensorial else 2
-        if num_cells * (20 + 2 * num_modes) * matrix_dim_factor > 2**32 - 1:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Too many grid points on the modal plane. Please reduce the modal plane size, apply a coarser grid, "
-                    "or reduce the number of modes."
-                ),
-                "plane",
-            )
-        return self
-
-    def _validate_rotate_structures(self) -> None:
-        """Validate that structures can be rotated if angle_rotation is True."""
-        if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
-            validate_plane_rotation_media(
-                mediums=self._intersecting_media,
-                rotate_kwargs=self._rotation_kwargs,
-                freqs=self._sampling_freqs,
-            )
-            _ = make_rotated_structures(
-                structures=Scene.intersecting_structures(self.plane, self.simulation.structures),
-                translate_kwargs=self._rotation_translate_kwargs,
-                rotate_kwargs=self._rotation_kwargs,
-                freqs=self._sampling_freqs,
-            )
 
     @staticmethod
     def _rotation_validation_freqs(mode_object: ModeSource | AbstractModeMonitor) -> FreqArray:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from flexcompute.core._migration.em.schema.tidy3d.components.mode.mode_solver import (
+from flexcompute.core._migration.solver.mode.schema.mode_solver import (
     ModeSolver as ModeSolverTaskInput,
 )
 

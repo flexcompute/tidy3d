@@ -52,7 +52,7 @@ TASK_PUBLIC_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
 TASK_SCHEMA_CLASSES: dict[Tidy3DSolverTaskMap, str] = {
     Tidy3DSolverTaskMap.FDTD: "flexcompute.core._migration.solver.fdtd.schema.model:Simulation",
     Tidy3DSolverTaskMap.MODE_SOLVER: (
-        "flexcompute.core._migration.em.schema.tidy3d.components.mode.mode_solver:ModeSolver"
+        "flexcompute.core._migration.solver.mode.schema.mode_solver:ModeSolver"
     ),
     Tidy3DSolverTaskMap.HEAT: (
         "flexcompute.core._migration.solver.heat_charge.schema.heat:HeatSimulation"
@@ -1176,6 +1176,12 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.solver.fdtd.validation:validate",
         on_construction=True,
     ),
+    # mode-workflow
+    "tidy3d.components.mode.mode_solver:ModeSolver": ComponentScope(
+        "flexcompute.core._migration.solver.mode.schema.mode_solver:ModeSolver",
+        "flexcompute.core._migration.solver.mode.validation:validate",
+        on_construction=True,
+    ),
 }
 
 COMPONENT_ERROR_TYPES = {
@@ -1280,6 +1286,9 @@ COMPONENT_ERROR_TYPES = {
     # fdtd
     "solver.fdtd.incompatible_material_intersection": "tidy3d.exceptions:ValidationError",
     "solver.fdtd.too_many_sources": "tidy3d.exceptions:SetupError",
+    # mode-workflow
+    "solver.mode.angle_rotation_unsupported_medium": "tidy3d.exceptions:SetupError",
+    "solver.mode.angle_rotation_structure_failed": "tidy3d.exceptions:SetupError",
 }
 
 # Warnings that Tidy3D logs once per session, as their client checks did.
