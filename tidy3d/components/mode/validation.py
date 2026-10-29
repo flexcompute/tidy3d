@@ -17,8 +17,6 @@ from tidy3d.components.structure import Structure
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from tidy3d.components.geometry.base import Box
-    from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import Axis, FreqArray, TensorReal
 
@@ -71,8 +69,3 @@ def make_rotated_structures(
         raise SetupError(  # post-init-tidy3d-error: ignore
             f"'angle_rotation' set to True but could not rotate structures: {exc!s}"
         ) from exc
-
-
-def validate_microwave_mode_spec(mode_spec: MicrowaveModeSpec, plane: Box) -> None:
-    """Validate path integrals configured on a microwave mode specification."""
-    mode_spec._check_path_integrals_within_box(plane)

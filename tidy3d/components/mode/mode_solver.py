@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 import numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 
 from tidy3d._runtime import always_validate
 from tidy3d.components.base import (
@@ -88,7 +88,6 @@ from tidy3d.log import log
 
 from .geometry import (
     bend_axis_3d_from_plane_and_mode_spec,
-    effective_mode_plane,
     rotation_kwargs,
     rotation_translate_kwargs,
     snapped_mode_domain,
@@ -97,10 +96,7 @@ from .geometry import (
 from .geometry import (
     rotation_validation_freqs as get_rotation_validation_freqs,
 )
-from .validation import (
-    make_rotated_structures,
-    validate_microwave_mode_spec,
-)
+from .validation import make_rotated_structures
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -272,24 +268,6 @@ class ModeSolver(Tidy3dBaseModel):
         "like ``mode_area`` require all E-field components.",
     )
 
-    @model_validator(mode="after")
-    def _validate_mode_spec(self) -> Self:
-        """Validate the mode specification against the solver configuration."""
-        if not isinstance(self.mode_spec.num_modes, int):
-            self._raise_validation_error_at_loc(
-                ValidationError("num_modes must be an integer."), "mode_spec"
-            )
-        if isinstance(self.mode_spec, MicrowaveModeSpec):
-            sim_box = Box(size=self.simulation.size, center=self.simulation.center)
-            mode_plane = self.plane
-            if sim_box.intersects(self.plane):
-                mode_plane = effective_mode_plane(self.plane, sim_box)
-            try:
-                validate_microwave_mode_spec(self.mode_spec, mode_plane)
-            except SetupError as exc:
-                self._raise_validation_error_at_loc(exc, "mode_spec")
-        return self
-
     @field_validator("simulation")
     @classmethod
     @always_validate
@@ -313,36 +291,6 @@ class ModeSolver(Tidy3dBaseModel):
 
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
-
-    @model_validator(mode="after")
-    def plane_in_sim_bounds(self) -> Self:
-        """Check that the plane intersects the simulation and, along its normal, lies strictly
-        inside it."""
-        sim_box = Box(size=self.simulation.size, center=self.simulation.center)
-        if not sim_box.intersects(self.plane):
-            self._raise_validation_error_at_loc(
-                SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'."),
-                "plane",
-            )
-
-        # Along its normal, the plane must lie strictly inside the domain: the solver samples a
-        # window of grid cells around the plane, and on a domain face that window has no valid
-        # cell. Planes strictly inside are supported all the way to within half a cell of the
-        # boundary, where the finite-grid correction is skipped instead. Simulations with zero
-        # extent along the normal are exempt.
-        normal_axis = self.plane.size.index(0.0)
-        normal_pos = self.plane.center[normal_axis]
-        sim_min, sim_max = sim_box.bounds[0][normal_axis], sim_box.bounds[1][normal_axis]
-        if sim_max > sim_min and not sim_min < normal_pos < sim_max:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "The mode plane lies on the simulation boundary along its normal "
-                    f"direction, at {normal_pos} with simulation bounds "
-                    f"({sim_min}, {sim_max}). Please move the plane inside the simulation."
-                ),
-                "plane",
-            )
-        return self
 
     @staticmethod
     def _rotation_validation_freqs(mode_object: ModeSource | AbstractModeMonitor) -> FreqArray:
