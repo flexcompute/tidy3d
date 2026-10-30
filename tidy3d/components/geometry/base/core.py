@@ -7,7 +7,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import autograd.numpy as np
 import shapely
-from pydantic import field_validator
+from flexcompute.core.validation import raise_first_error
+from flexcompute.geometry.validation.composites import (
+    validate_transform_affine,
+)
 
 from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.path_utils import (
@@ -23,7 +26,6 @@ from tidy3d.exceptions import (
     AdjointError,
     SetupError,
     ValidationError,
-    format_chained_exception_message,
 )
 from tidy3d.log import log
 
@@ -31,12 +33,13 @@ from . import gds as _gds_methods
 from . import operators as _operator_methods
 from . import plotting as _plot_methods
 from . import transforms as _transform_methods
-from .constants import LINEAR_TRANSFORM_TOL
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Mapping
 
+    from flexcompute.geometry.base import GeometryCore
     from numpy.typing import NDArray
+    from typing_extensions import Self
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
@@ -96,62 +99,12 @@ _bit_operations = {
 
 
 # Validators for geometry classes (defined here instead of validators.py to avoid circular imports)
-def assert_geometry_finite(field_name: str = "geometry") -> Callable[[type, Geometry], Geometry]:
-    """Validator that ensures a geometry field has finite bounds."""
-
-    @field_validator(field_name)
-    @classmethod
-    def geometry_has_finite_bounds(cls: type, val: Geometry) -> Geometry:
-        """Raise validation error if geometry has non-finite bounds."""
-        if not np.isfinite(get_static(val.bounds)).all():
-            raise ValidationError(
-                f"'{cls.__name__}' requires a geometry with finite dimensions. "
-                "Try using a large value instead of 'inf' when creating geometries."
-            )
-        return val
-
-    return geometry_has_finite_bounds
-
-
-def check_transform_invertible(transform: MatrixReal4x4, index: int | None = None) -> None:
-    """Check if a transform matrix is invertible.
-
-    Parameters
-    ----------
-    transform : MatrixReal4x4
-        The 4x4 transformation matrix to check.
-    index : Optional[int]
-        If provided, includes the index in the error message (for array of transforms).
-
-    Raises
-    ------
-    ValidationError
-        If the transform matrix is not invertible.
-    """
-    try:
-        _ = np.linalg.inv(transform)
-    except np.linalg.LinAlgError as err:
-        if index is not None:
-            raise ValidationError(
-                format_chained_exception_message(
-                    f"Transform at index {index} is not invertible", err
-                )
-            ) from err
-        raise ValidationError(
-            format_chained_exception_message("Transform matrix is not invertible", err)
-        ) from err
-
-
-def check_transform_affine(transform: MatrixReal4x4, index: int | None = None) -> None:
+def check_transform_affine(transform: MatrixReal4x4) -> None:
     """Check that a transform supports affine geometry gradients."""
-    bottom_row = np.asarray(transform)[3, :]
-    expected_bottom = np.array([0, 0, 0, 1])
-    if not np.allclose(bottom_row, expected_bottom, rtol=0, atol=LINEAR_TRANSFORM_TOL):
-        index_msg = f" at index {index}" if index is not None else ""
-        raise AdjointError(
-            f"Geometry gradients require an affine transform{index_msg} with bottom row "
-            f"[0, 0, 0, 1]; received {bottom_row.tolist()}."
-        )
+    from flexcompute.geometry.schema import TransformedSchema
+
+    record = TransformedSchema.model_construct(transform=transform)
+    raise_first_error(validate_transform_affine(record), AdjointError)
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -168,6 +121,27 @@ class Geometry(Tidy3dBaseModel, ABC):
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
+
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """Copy the geometry. A copy with updated fields builds its own core.
+
+        Pydantic hands the copy the original's cache, and the geometry rules check the cached
+        core, which describes the original's fields. Other cached values are kept, as for any
+        model.
+        """
+        copied = super().model_copy(update=update, deep=deep)
+        if update:
+            copied._cached_properties = {
+                name: value for name, value in copied._cached_properties.items() if name != "_core"
+            }
+        return copied
+
+    @cached_property
+    def _core(self) -> GeometryCore:
+        """The core geometry this geometry translates to, built once."""
+        from tidy3d.em.translate.geometry import to_core
+
+        return to_core(self)
 
     def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array

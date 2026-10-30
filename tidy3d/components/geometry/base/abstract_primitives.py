@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 import shapely
-from pydantic import Field, NonNegativeFloat, field_validator
+from pydantic import Field, NonNegativeFloat
 
 from tidy3d.components.autograd import TracedCoordinate, TracedFloat
 from tidy3d.components.base import cached_property
@@ -18,9 +18,6 @@ from tidy3d.components.types import (  # noqa: TC
     PlanePosition,
 )
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps
-from tidy3d.exceptions import (
-    ValidationError,
-)
 
 from .core import Geometry
 
@@ -39,14 +36,6 @@ class Centered(Geometry, ABC):
         description="Center of object in x, y, and z.",
         json_schema_extra={"units": MICROMETER},
     )
-
-    @field_validator("center")
-    @classmethod
-    def _center_not_inf(cls, val: tuple[float, float, float]) -> tuple[float, float, float]:
-        """Make sure center is not infinitiy."""
-        if any(np.isinf(v) for v in val):
-            raise ValidationError("center can not contain td.inf terms.")
-        return val
 
 
 class SimplePlaneIntersection(Geometry, ABC):
@@ -184,16 +173,6 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
         "``top`` refers to the positive side of the y-axis.",
     )
-
-    @field_validator("sidewall_angle")
-    @classmethod
-    def validate_angle(cls, val: float) -> float:
-        lower_bound = -np.pi / 2
-        upper_bound = np.pi / 2
-        if (val <= lower_bound) or (val >= upper_bound):
-            # u03C0 is unicode for pi
-            raise ValidationError(f"Sidewall angle ({val}) must be between -π/2 and π/2 rad.")
-        return val
 
     @property
     @abstractmethod
@@ -377,14 +356,6 @@ class Circular(Geometry):
         description="Radius of geometry.",
         json_schema_extra={"units": MICROMETER},
     )
-
-    @field_validator("radius")
-    @classmethod
-    def _radius_not_inf(cls, val: float) -> float:
-        """Make sure center is not infinitiy."""
-        if np.isinf(val):
-            raise ValidationError("radius can not be 'td.inf'.")
-        return val
 
     def _intersect_dist(self, position: float, z0: float) -> float:
         """Distance between points on circle at z=position where center of circle at z=z0.

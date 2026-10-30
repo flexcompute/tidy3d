@@ -7,7 +7,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from tidy3d.components.autograd.path_utils import (
     raise_with_traced_path_context,
@@ -33,19 +33,12 @@ class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
     geometries: tuple[discriminated_union(GeometryType), ...] = Field(
+        min_length=1,
         title="Geometries",
         description="Tuple of geometries in a single grouping. "
         "Can provide significant performance enhancement in ``Structure`` when all geometries are "
         "assigned the same medium.",
     )
-
-    @field_validator("geometries")
-    @classmethod
-    def _geometries_not_empty(cls, val: tuple[GeometryType, ...]) -> tuple[GeometryType, ...]:
-        """make sure geometries are not empty."""
-        if not len(val) > 0:
-            raise ValidationError("GeometryGroup.geometries must not be empty.")
-        return val
 
     @cached_property
     def bounds(self) -> Bound:

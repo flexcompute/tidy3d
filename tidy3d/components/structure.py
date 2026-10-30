@@ -41,7 +41,7 @@ from .contour_conversion import (
 )
 from .data.data_array import PointDataArray, ScalarFieldDataArray
 from .geometry.base import Box, Geometry
-from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
+from .geometry.utils import GeometryType
 from .material.multi_physics import MultiPhysicsMedium
 from .material.tcad.charge import AbstractChargeMedium
 from .material.types import StructureMediumType
@@ -315,13 +315,6 @@ class AbstractStructure(Tidy3dBaseModel):
         return self
 
     _name_validator = validate_name_str()
-
-    @field_validator("geometry")
-    @classmethod
-    def _transformed_slanted_polyslabs_not_allowed(cls, val: GeometryType) -> GeometryType:
-        """Prevents the creation of slanted polyslabs rotated out of plane."""
-        validate_no_transformed_polyslabs(val)
-        return val
 
     def _priority(self, priority_mode: PriorityMode) -> int:
         """Priority of this structure. The priority value is set automatically based on `priority_modes,

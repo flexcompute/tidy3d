@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from functools import cache
 from operator import is_
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import numpy as np
 import xarray as xr
@@ -18,6 +18,7 @@ from tidy3d.em.translate.map import (
     COMPONENT_ERROR_TYPES,
     COMPONENT_SCOPES,
     COMPONENT_WARNINGS_LOGGED_ONCE,
+    INHERITED_SCOPES,
     resolve,
 )
 from tidy3d.log import log
@@ -28,6 +29,13 @@ if TYPE_CHECKING:
     from flexcompute.core.validation import ValidationDiagnostic, ValidationPath
 
     from tidy3d.components.base import Tidy3dBaseModel
+
+
+class _KeepsCore(Protocol):
+    """A model whose inherited scope checks the core it keeps."""
+
+    @property
+    def _core(self) -> object: ...
 
 
 def _key(cls: type) -> str:
@@ -250,7 +258,13 @@ class _PassedValues(tuple):
 
 
 def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
-    """Run the full facade for registrations flagged ``on_construction``.
+    """Run the model's construction scopes, base first.
+
+    The scopes are each inherited scope in the model's class stack, which checks the core
+    the model keeps, then the scope the model translates through, when it is flagged
+    ``on_construction``. Each scope's diagnostics are presented before the next scope runs,
+    so the first scope that reports an error stops the rest: a scope never checks a model
+    whose base failed.
 
     Other models are left alone, but a missing family registration fails here. Pydantic runs
     this hook again when a parent takes the instance as a field. An instance whose field
@@ -263,13 +277,23 @@ def validate_on_construction(model: Tidy3dBaseModel) -> Tidy3dBaseModel:
     fields such as ``ArrayFloat1D`` are read-only, so they do not count.
     """
     owner = _translating_class(type(model))
-    if owner is None or not COMPONENT_SCOPES[_key(owner)].on_construction:
+    translated = owner is not None and COMPONENT_SCOPES[_key(owner)].on_construction
+    # An inherited scope sits on a root such as Geometry, above every family, so it runs first.
+    inherited = [
+        INHERITED_SCOPES[_key(base)]
+        for base in reversed(type(model).__mro__)
+        if _key(base) in INHERITED_SCOPES
+    ]
+    if not translated and not inherited:
         return model
     values = tuple(model.__dict__.values())
     passed = model._cached_properties.get(_VALIDATED_ON_CONSTRUCTION)
     if passed is not None and all(map(is_, passed, values)):
         return model
-    _present(model, validate(model))
+    for facade in inherited:
+        _present(model, resolve(facade)(cast("_KeepsCore", model)._core).diagnostics)
+    if translated:
+        _present(model, validate(model))
     if not _changes_in_place(model):
         model._cached_properties[_VALIDATED_ON_CONSTRUCTION] = _PassedValues(values)
     return model

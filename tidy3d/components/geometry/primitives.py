@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 import autograd.numpy as anp
 import numpy as np
 import shapely
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d._optional_imports import verify_packages_import
 from tidy3d.components.autograd import TracedSize1D, get_static
@@ -21,14 +21,13 @@ from tidy3d.components.geometry.base.core import _TRANSLATION_PATH
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
-from tidy3d.exceptions import AdjointError, SetupError, ValidationError
+from tidy3d.exceptions import AdjointError, ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
 
-    from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import GeometryAdjointSettings
@@ -809,24 +808,6 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         description="Defines thickness of cylinder along axis dimension.",
         json_schema_extra={"units": MICROMETER},
     )
-
-    @model_validator(mode="after")
-    def _only_middle_for_infinite_length_slanted_cylinder(self: Self) -> Self:
-        """For a slanted cylinder of infinite length, ``reference_plane`` can only
-        be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
-        """
-        if isclose(self.sidewall_angle, 0) or not np.isinf(self.length):
-            return self
-        if self.reference_plane != "middle":
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "For a slanted cylinder here is of infinite length, "
-                    "defining the reference_plane other than 'middle' "
-                    "leads to undefined cylinder behaviors near 'center'."
-                ),
-                "reference_plane",
-            )
-        return self
 
     def to_polyslab(
         self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB, **kwargs: Any

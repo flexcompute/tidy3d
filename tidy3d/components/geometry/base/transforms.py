@@ -39,7 +39,7 @@ def translated(
     """
     from .transformed import Transformed
 
-    return Transformed(geometry=self, transform=Transformed.translation(x, y, z))
+    return Transformed.of(self, Transformed.translation(x, y, z))
 
 
 def scaled(
@@ -66,7 +66,7 @@ def scaled(
     """
     from .transformed import Transformed
 
-    return Transformed(geometry=self, transform=Transformed.scaling(x, y, z))
+    return Transformed.of(self, Transformed.scaling(x, y, z))
 
 
 def rotated(
@@ -90,7 +90,7 @@ def rotated(
     """
     from .transformed import Transformed
 
-    return Transformed(geometry=self, transform=Transformed.rotation(angle, axis))
+    return Transformed.of(self, Transformed.rotation(angle, axis))
 
 
 def reflected(
@@ -112,7 +112,7 @@ def reflected(
     """
     from .transformed import Transformed
 
-    return Transformed(geometry=self, transform=Transformed.reflection(normal))
+    return Transformed.of(self, Transformed.reflection(normal))
 
 
 def array(

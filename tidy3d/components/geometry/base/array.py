@@ -3,36 +3,30 @@
 from __future__ import annotations
 
 from numbers import Integral
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import autograd.numpy as np
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field
 
-from tidy3d.components.autograd import TracedCoordinate, TracedMatrixReal4x4, get_static
+from tidy3d.components.autograd import TracedCoordinate, TracedMatrixReal4x4
 from tidy3d.components.autograd.path_utils import resolve_delegated_autograd_route
 from tidy3d.components.autograd.utils import accumulate_field_map
 from tidy3d.components.base import cached_property
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import (
     AdjointError,
-    ValidationError,
 )
 from tidy3d.log import log
 
-from .constants import LINEAR_TRANSFORM_TOL
 from .core import (
     _TRANSLATION_PATH,
     Geometry,
-    assert_geometry_finite,
-    check_transform_affine,
-    check_transform_invertible,
 )
 from .geometry_group import GeometryGroup
 from .transformed import Transformed
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-    from typing_extensions import Self
 
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import GeometryAdjointSettings
@@ -92,7 +86,7 @@ class GeometryArray(Geometry):
         description="Base geometry to be repeated in the array.",
     )
 
-    offsets: tuple[TracedCoordinate, ...] | None = Field(
+    offsets: Annotated[tuple[TracedCoordinate, ...], Field(min_length=1)] | None = Field(
         default=None,
         title="Offsets",
         description="A tuple of 3D coordinate offsets. Each offset translates the base "
@@ -100,7 +94,7 @@ class GeometryArray(Geometry):
         "additional translation is applied beyond any transforms.",
     )
 
-    transforms: tuple[TracedMatrixReal4x4, ...] | None = Field(
+    transforms: Annotated[tuple[TracedMatrixReal4x4, ...], Field(min_length=1)] | None = Field(
         default=None,
         title="Transforms",
         description="A tuple of 4x4 linear-only transformation matrices "
@@ -109,68 +103,6 @@ class GeometryArray(Geometry):
         "Each transform is applied to the base geometry before the corresponding offset translation. "
         "If not provided, only translations from offsets are applied.",
     )
-
-    _geometry_is_finite = assert_geometry_finite("geometry")
-
-    @field_validator("transforms")
-    @classmethod
-    def _validate_transforms(
-        cls, val: tuple[TracedMatrixReal4x4, ...] | None
-    ) -> tuple[TracedMatrixReal4x4, ...] | None:
-        """Validate that transforms are invertible, linear-only, and non-empty if provided."""
-        if val is None:
-            return val
-
-        # Must not be empty if provided
-        if len(val) < 1:
-            raise ValidationError("'transforms' must have at least one transform when provided.")
-
-        # Check each transform
-        for i, transform in enumerate(val):
-            transform_static = get_static(transform)
-            # Check invertibility
-            check_transform_invertible(transform_static, index=i)
-            check_transform_affine(transform_static, index=i)
-
-            # Check linear-only (no translation)
-            transform_array = np.asarray(transform_static)
-
-            # Check translation column: transform[:3, 3] should be zero
-            translation = transform_array[:3, 3]
-            if not np.allclose(translation, 0, atol=LINEAR_TRANSFORM_TOL):
-                idx_msg = f"at index {i}"
-                raise ValidationError(
-                    f"Transform {idx_msg} contains translation in [:3, 3] = {translation.tolist()}. "
-                    "GeometryArray transforms must be linear-only (rotation/reflection/scale/shear). "
-                    "Use the 'offsets' parameter for translations."
-                )
-
-        return val
-
-    @model_validator(mode="after")
-    def _validate_offsets_and_transforms(self) -> Self:
-        """Validate offsets and transforms are consistent."""
-        offsets = self.offsets
-        transforms = self.transforms
-
-        # If offsets provided, must not be empty
-        if offsets is not None and len(offsets) < 1:
-            self._raise_validation_error_at_loc(
-                ValidationError("'offsets' must have at least one offset when provided."), "offsets"
-            )
-
-        # If both provided, lengths must match
-        if offsets is not None and transforms is not None:
-            if len(offsets) != len(transforms):
-                self._raise_validation_error_at_loc(
-                    ValidationError(
-                        f"Number of transforms ({len(transforms)}) must match "
-                        f"number of offsets ({len(offsets)}) when both are provided."
-                    ),
-                    "transforms",
-                )
-
-        return self
 
     @cached_property
     def num_geometries(self) -> int:
@@ -220,10 +152,7 @@ class GeometryArray(Geometry):
     @cached_property
     def _transformed_geometries(self) -> list[Transformed]:
         """List of transformed geometries in the array."""
-        return [
-            Transformed(geometry=self.geometry, transform=transform)
-            for transform in self._all_transforms
-        ]
+        return [Transformed.of(self.geometry, transform) for transform in self._all_transforms]
 
     @cached_property
     def _geometry_group(self) -> GeometryGroup:

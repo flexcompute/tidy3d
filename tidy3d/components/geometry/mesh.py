@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 from autograd import numpy as anp
-from pydantic import Field, field_validator, model_validator
+from autograd.tracer import isbox
+from flexcompute.geometry.mesh import repair_mesh
+from pydantic import Field, field_validator
 
 from tidy3d._optional_imports import verify_packages_import
-from tidy3d._runtime import always_validate
 from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.path_utils import traced_paths
 from tidy3d.components.autograd.types import PathType
@@ -155,13 +156,6 @@ class TriangleMesh(base.Geometry, ABC):
         description="Surface mesh data.",
     )
 
-    @verify_packages_import(["trimesh"])
-    @model_validator(mode="before")
-    @classmethod
-    def _validate_trimesh_library(cls, data: dict[str, Any]) -> dict[str, Any]:
-        """Check if the trimesh package is imported as a validator."""
-        return data
-
     @field_validator("mesh_dataset", mode="before")
     @classmethod
     def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
@@ -170,70 +164,6 @@ class TriangleMesh(base.Geometry, ABC):
             if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
                 log.warning("Loading 'mesh_dataset' without data.")
                 return None
-        return val
-
-    @field_validator("mesh_dataset")
-    @classmethod
-    @always_validate
-    def _check_mesh(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
-        """Check that the mesh is valid."""
-        if val is None:
-            return None
-
-        import trimesh
-
-        surface_mesh = val.surface_mesh
-        triangles = get_static(surface_mesh.data)
-        mesh = cls._triangles_to_trimesh(triangles)
-        if not all(np.array(mesh.area_faces) > AREA_SIZE_THRESHOLD):
-            old_tol = trimesh.tol.merge
-            trimesh.tol.merge = np.sqrt(2 * AREA_SIZE_THRESHOLD)
-            new_mesh = mesh.process(validate=True)
-            trimesh.tol.merge = old_tol
-            val = TriangleMesh.from_trimesh(new_mesh).mesh_dataset
-            log.warning(
-                f"The provided mesh has triangles with near zero area < {AREA_SIZE_THRESHOLD}. "
-                "Triangles which have one edge of their 2D oriented bounding box shorter than "
-                f"'sqrt(2*{AREA_SIZE_THRESHOLD}) are being automatically removed.'"
-            )
-            if not all(np.array(new_mesh.area_faces) > AREA_SIZE_THRESHOLD):
-                raise ValidationError(
-                    f"The provided mesh has triangles with near zero area < {AREA_SIZE_THRESHOLD}. "
-                    "The automatic removal of these triangles has failed. You can try "
-                    "using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
-                    "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
-                )
-        if not mesh.is_watertight:
-            log.warning(
-                "The provided mesh is not watertight. "
-                "This can lead to incorrect permittivity distributions, "
-                "and can also cause problems with plotting and mesh validation. "
-                "You can try 'TriangleMesh.fill_holes', which attempts to repair the mesh. "
-                "Otherwise, the mesh may require manual repair. You can use a "
-                "'PermittivityMonitor' to check if the permittivity distribution is correct. "
-                "You can see which faces are broken using 'trimesh.repair.broken_faces'."
-            )
-        if not mesh.is_winding_consistent:
-            log.warning(
-                "The provided mesh does not have consistent winding (face orientations). "
-                "This can lead to incorrect permittivity distributions, "
-                "and can also cause problems with plotting and mesh validation. "
-                "You can try 'TriangleMesh.fix_winding', which attempts to repair the mesh. "
-                "Otherwise, the mesh may require manual repair. You can use a "
-                "'PermittivityMonitor' to check if the permittivity distribution is correct. "
-            )
-        if not mesh.is_volume:
-            log.warning(
-                "The provided mesh does not represent a valid volume, possibly due to "
-                "incorrect normal vector orientation. "
-                "This can lead to incorrect permittivity distributions, "
-                "and can also cause problems with plotting and mesh validation. "
-                "You can try 'TriangleMesh.fix_normals', "
-                "which attempts to fix the normals to be consistent and outward-facing. "
-                "Otherwise, the mesh may require manual repair. You can use a "
-                "'PermittivityMonitor' to check if the permittivity distribution is correct."
-            )
-
         return val
 
     @verify_packages_import(["trimesh"])
@@ -271,6 +201,7 @@ class TriangleMesh(base.Geometry, ABC):
         scale: float = 1.0,
         origin: tuple[float, float, float] = (0, 0, 0),
         solid_index: int | None = None,
+        remove_degenerate_faces: bool = False,
         **kwargs: Any,
     ) -> TriangleMesh | base.GeometryGroup:
         """Load a :class:`.TriangleMesh` directly from an STL file.
@@ -293,6 +224,9 @@ class TriangleMesh(base.Geometry, ABC):
         solid_index : int = None
             If set, read a single solid with this index from the file.
 
+        remove_degenerate_faces : bool = False
+            Whether to remove the triangles of near-zero area, which a mesh is refused for
+            otherwise. The removal has no gradient, so the triangles may not be traced.
         Returns
         -------
         Union[:class:`.TriangleMesh`, :class:`.GeometryGroup`]
@@ -306,7 +240,7 @@ class TriangleMesh(base.Geometry, ABC):
             """Process a single 'trimesh.Trimesh' using scale and origin."""
             mesh.apply_scale(scale)
             mesh.apply_translation(origin)
-            return cls.from_trimesh(mesh)
+            return cls.from_trimesh(mesh, remove_degenerate_faces=remove_degenerate_faces)
 
         scene = trimesh.load(filename, **kwargs)
         meshes = []
@@ -355,7 +289,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     @classmethod
     @verify_packages_import(["trimesh"])
-    def from_trimesh(cls, mesh: Trimesh) -> TriangleMesh:
+    def from_trimesh(cls, mesh: Trimesh, remove_degenerate_faces: bool = False) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
 
         Parameters
@@ -363,15 +297,22 @@ class TriangleMesh(base.Geometry, ABC):
         trimesh : ``trimesh.Trimesh``
             The Trimesh object containing the surface geometry mesh data.
 
+        remove_degenerate_faces : bool = False
+            Whether to remove the triangles of near-zero area, which a mesh is refused for
+            otherwise. The removal has no gradient, so the triangles may not be traced.
         Returns
         -------
         :class:`.TriangleMesh`
             The custom surface mesh geometry given by the ``trimesh.Trimesh`` provided.
         """
-        return cls.from_vertices_faces(mesh.vertices, mesh.faces)
+        return cls.from_vertices_faces(
+            mesh.vertices, mesh.faces, remove_degenerate_faces=remove_degenerate_faces
+        )
 
     @classmethod
-    def from_triangles(cls, triangles: NDArray) -> TriangleMesh:
+    def from_triangles(
+        cls, triangles: NDArray, remove_degenerate_faces: bool = False
+    ) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a numpy array
         containing the triangles of a surface mesh.
 
@@ -381,6 +322,9 @@ class TriangleMesh(base.Geometry, ABC):
             A numpy array of shape (N, 3, 3) storing the triangles of the surface mesh.
             The first index labels the triangle, the second index labels the vertex
             within a given triangle, and the third index is the coordinate (x, y, or z).
+        remove_degenerate_faces : bool = False
+            Whether to remove the triangles of near-zero area, which a mesh is refused for
+            otherwise. The removal has no gradient, so the triangles may not be traced.
 
         Returns
         -------
@@ -393,19 +337,16 @@ class TriangleMesh(base.Geometry, ABC):
             raise ValidationError(
                 f"Provided 'triangles' must be an N x 3 x 3 array, given {triangles.shape}."
             )
-        num_faces = len(triangles)
-        coords = {
-            "face_index": np.arange(num_faces),
-            "vertex_index": np.arange(3),
-            "axis": np.arange(3),
-        }
-        vertices = TriangleMeshDataArray(triangles, coords=coords)
-        mesh_dataset = TriangleMeshDataset(surface_mesh=vertices)
+        mesh_dataset = _mesh_dataset(triangles)
+        if remove_degenerate_faces:
+            mesh_dataset = repair_mesh_dataset(mesh_dataset, "degenerate")
         return TriangleMesh(mesh_dataset=mesh_dataset)
 
     @classmethod
     @verify_packages_import(["trimesh"])
-    def from_vertices_faces(cls, vertices: NDArray, faces: NDArray) -> TriangleMesh:
+    def from_vertices_faces(
+        cls, vertices: NDArray, faces: NDArray, remove_degenerate_faces: bool = False
+    ) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from numpy arrays containing the data
         of a surface mesh. The first array contains the vertices, and the second array contains
         faces formed from triples of the vertices.
@@ -421,6 +362,9 @@ class TriangleMesh(base.Geometry, ABC):
             in the surface mesh. The first index labels the face, and the second index
             labels the vertex index within the ``vertices`` array.
 
+        remove_degenerate_faces : bool = False
+            Whether to remove the triangles of near-zero area, which a mesh is refused for
+            otherwise. The removal has no gradient, so the triangles may not be traced.
         Returns
         -------
         :class:`.TriangleMesh`
@@ -437,7 +381,10 @@ class TriangleMesh(base.Geometry, ABC):
             )
         if len(faces.shape) != 2 or faces.shape[1] != 3:
             raise ValidationError(f"Provided 'faces' must be an M x 3 array, given {faces.shape}.")
-        return cls.from_triangles(trimesh.Trimesh(vertices, faces).triangles)
+        return cls.from_triangles(
+            trimesh.Trimesh(vertices, faces).triangles,
+            remove_degenerate_faces=remove_degenerate_faces,
+        )
 
     @classmethod
     @verify_packages_import(["trimesh"])
@@ -461,6 +408,7 @@ class TriangleMesh(base.Geometry, ABC):
         base: float,
         grid: tuple[np.ndarray, np.ndarray],
         height: NDArray,
+        remove_degenerate_faces: bool = False,
     ) -> TriangleMesh:
         """Construct a TriangleMesh object from grid based height information.
 
@@ -478,6 +426,9 @@ class TriangleMesh(base.Geometry, ABC):
         height : np.ndarray
             Height values sampled on the given grid. Can be 1D (raveled) or 2D (matching grid mesh).
 
+        remove_degenerate_faces : bool = False
+            Whether to remove the triangles of near-zero area, which a mesh is refused for
+            otherwise. The removal has no gradient, so the triangles may not be traced.
         Returns
         -------
         TriangleMesh
@@ -569,7 +520,9 @@ class TriangleMesh(base.Geometry, ABC):
         ]
         tri_faces = np.vstack(triangles_list)
 
-        return cls.from_vertices_faces(vertices=vertices, faces=tri_faces)
+        return cls.from_vertices_faces(
+            vertices=vertices, faces=tri_faces, remove_degenerate_faces=remove_degenerate_faces
+        )
 
     @classmethod
     def from_height_function(
@@ -581,6 +534,7 @@ class TriangleMesh(base.Geometry, ABC):
         size: tuple[float, float],
         grid_size: tuple[int, int],
         height_func: Callable[[np.ndarray, np.ndarray], np.ndarray],
+        remove_degenerate_faces: bool = False,
     ) -> TriangleMesh:
         """Construct a TriangleMesh object from analytical expression of height function.
         The height function should be vectorized to accept 2D meshgrid arrays.
@@ -606,6 +560,9 @@ class TriangleMesh(base.Geometry, ABC):
             Vectorized function to compute height values from 2D meshgrid coordinate arrays.
             It should take two ndarrays (x_mesh, y_mesh) and return an ndarray of heights.
 
+        remove_degenerate_faces : bool = False
+            Whether to remove the triangles of near-zero area, which a mesh is refused for
+            otherwise. The removal has no gradient, so the triangles may not be traced.
         Returns
         -------
         TriangleMesh
@@ -630,6 +587,7 @@ class TriangleMesh(base.Geometry, ABC):
             base=base,
             grid=(x_lin, y_lin),
             height=height_values,
+            remove_degenerate_faces=remove_degenerate_faces,
         )
 
     @cached_property
@@ -1594,3 +1552,26 @@ class TriangleMesh(base.Geometry, ABC):
             return None
         perp2 = (perp2 / perp2_norm).astype(triangle.dtype, copy=False)
         return perp1, perp2
+
+
+def repair_mesh_dataset(
+    mesh_dataset: TriangleMeshDataset, repair: Literal["degenerate"]
+) -> TriangleMeshDataset:
+    """Return ``mesh_dataset`` with its triangles repaired by the core ``repair_mesh``.
+
+    A repair has no gradient, so the triangles may not be traced.
+    """
+    triangles = mesh_dataset.surface_mesh.data
+    if isbox(triangles):
+        raise AdjointError("A mesh repair needs triangles that are not traced.")
+    return _mesh_dataset(repair_mesh(triangles, repair))
+
+
+def _mesh_dataset(triangles: NDArray) -> TriangleMeshDataset:
+    """The dataset holding ``triangles``, an array of shape ``(N, 3, 3)``."""
+    coords = {
+        "face_index": np.arange(len(triangles)),
+        "vertex_index": np.arange(3),
+        "axis": np.arange(3),
+    }
+    return TriangleMeshDataset(surface_mesh=TriangleMeshDataArray(triangles, coords=coords))

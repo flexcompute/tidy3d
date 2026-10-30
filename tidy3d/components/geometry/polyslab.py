@@ -10,8 +10,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import autograd.numpy as np
 import shapely
 from autograd import make_vjp
+from flexcompute.geometry.validation.polyslab import (
+    DILATION_HEALED,
+    DILATION_SELF_INTERSECTING,
+    FULLY_ERODED,
+    validate_polyslab,
+)
 from numpy.polynomial.legendre import leggauss as _leggauss
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field
 
 from tidy3d._optional_imports import check_import, verify_packages_import
 from tidy3d.components.autograd import TracedArrayFloat2D, get_static
@@ -23,7 +29,7 @@ from tidy3d.components.data.data_array import IndexedDataArray
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
-from tidy3d.exceptions import AdjointError, SetupError, Tidy3dImportError, ValidationError
+from tidy3d.exceptions import AdjointError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
 
 from . import base, triangulation
@@ -37,7 +43,6 @@ if TYPE_CHECKING:
     from numpy.typing import DTypeLike, NDArray
     from pydantic import PositiveFloat
 
-    from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_terms import ShapeDerivativeContext
     from tidy3d.components.autograd.types import GeometryAdjointSettings
@@ -52,10 +57,6 @@ if TYPE_CHECKING:
         Shapely,
     )
     from tidy3d.em.translate.sample_sets import SamplingContext, SurfaceSampleSet
-
-# sampling polygon along dilation for validating polygon to be
-# non self-intersecting during the entire dilation process
-_N_SAMPLE_POLYGON_INTERSECT = 5
 
 _IS_CLOSE_RTOL = np.finfo(float).eps
 
@@ -78,6 +79,8 @@ _REFERENCE_PLANE_SHIFT = {"bottom": (1.0, 0.0), "middle": (0.5, 0.5), "top": (0.
 _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
 
 _MIN_POLYGON_AREA = fp_eps
+
+_DILATION_EDGE_EVENTS = frozenset({FULLY_ERODED, DILATION_SELF_INTERSECTING, DILATION_HEALED})
 
 # Angular resolution for arc discretization (approximately 1 degrees)
 _ARC_DISCRETIZATION_ANGULAR_STEP = np.pi / 180
@@ -531,339 +534,6 @@ class PolySlab(base.Planar):
         """Make a shapely polygon from some vertices, first ensures they are untraced."""
         vertices = get_static(vertices)
         return shapely.Polygon(vertices)
-
-    @field_validator("slab_bounds")
-    @classmethod
-    def slab_bounds_order(cls, val: tuple[float, float]) -> tuple[float, float]:
-        """Maximum position of the slab should be no smaller than its minimal position."""
-        if val[1] < val[0]:
-            raise SetupError(
-                "Polyslab.slab_bounds must be specified in the order of "
-                "minimum and maximum positions of the slab along the axis. "
-                f"But now the maximum {val[1]} is smaller than the minimum {val[0]}."
-            )
-        return val
-
-    @field_validator("vertices")
-    @classmethod
-    def correct_shape(cls, val: ArrayFloat2D) -> ArrayFloat2D:
-        """Makes sure vertices size is correct."""
-        # overall shape of vertices
-        if val.shape[1] != 2:
-            raise SetupError(
-                "PolySlab.vertices must be a 2 dimensional array shaped (N, 2). "
-                f"Given array with shape of {val.shape}."
-            )
-        return val
-
-    @model_validator(mode="after")
-    def _validate_bulge_array_length(self: Self) -> Self:
-        """When ``bulges`` is not None, its length must match ``vertices``."""
-        if self.bulges is None:
-            return self
-        if len(self.bulges) != self.vertices.shape[0]:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "The number of bulge values in 'bulges' must match the number of 'vertices'. "
-                    f"However, this polyslab contains {self.vertices.shape[0]} vertices, but {len(self.bulges)} "
-                    "bulge values."
-                ),
-                "bulges",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_bulges_are_finite(self: Self) -> Self:
-        """All bulge values must be finite (no inf or nan)."""
-        if self.bulges is None:
-            return self
-        if not np.all(np.isfinite(self.bulges)):
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "All 'bulges' values must be finite. Infinite or NaN bulge values are not allowed."
-                ),
-                "bulges",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_no_bulge_on_zero_length_edges(self: Self) -> Self:
-        """Zero-length edges cannot have non-zero bulge values."""
-        if self.bulges is None:
-            return self
-
-        # Detect zero-length edges
-        vertices = np.array(self.vertices)
-        bulges = np.array(self.bulges)
-        vertices_next = np.roll(vertices, shift=-1, axis=0)
-        edge_lengths = np.linalg.norm(vertices - vertices_next, axis=1)
-        is_zero_length = np.isclose(edge_lengths, 0, rtol=_IS_CLOSE_RTOL)
-
-        # Check for zero-length edges with non-zero bulge
-        has_nonzero_bulge = ~np.isclose(bulges, 0)
-        invalid_edges = is_zero_length & has_nonzero_bulge
-        if np.any(invalid_edges):
-            invalid_idx = np.where(invalid_edges)[0][0]  # Report first invalid edge
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    f"Zero-length edge at vertex index {invalid_idx} has a non-zero bulge value "
-                    f"({bulges[invalid_idx]}). A zero-length edge cannot define an arc segment."
-                ),
-                "bulges",
-            )
-        return self
-
-    @cached_property
-    def _polygon_not_degenerate_or_self_intersecting(self) -> bool:
-        """Raise if the polygon encloses no area or is self-intersecting."""
-        vertices = get_static(self.vertices)
-
-        if self.bulges is None or np.allclose(self.bulges, 0) or vertices.shape[0] < 3:
-            # make sure no polygon splitting, islands, 0 area
-            poly_heal = shapely.make_valid(self.make_shapely_polygon(vertices))
-            if poly_heal.area < _MIN_POLYGON_AREA:
-                self._raise_validation_error_at_loc(
-                    SetupError("The polygon almost collapses to a 1D curve."),
-                    "vertices",
-                )
-            if not poly_heal.geom_type == "Polygon" or len(poly_heal.interiors) > 0:
-                self._raise_validation_error_at_loc(
-                    SetupError(
-                        "Polygon is self-intersecting, resulting in "
-                        "polygon splitting or generation of holes/islands. "
-                        "A general treatment to self-intersecting polygon will be available "
-                        "in future releases."
-                    ),
-                    "vertices",
-                )
-            return True
-
-        # with arc segments, the chord polygon can be degenerate (e.g. collinear
-        # vertices) while the arc contour encloses a finite area; gate on the
-        # bulge-aware signed area instead. Self-intersection of the arc contour
-        # is checked in '_validate_no_self_intersection_with_arcs'.
-        if abs(PolySlab._signed_area_with_bulges(vertices, self.bulges)) < _MIN_POLYGON_AREA:
-            self._raise_validation_error_at_loc(
-                SetupError("The polygon almost collapses to a 1D curve."),
-                "vertices",
-            )
-        return True
-
-    @model_validator(mode="after")
-    def _validate_polygon_not_degenerate_or_self_intersecting(self: Self) -> Self:
-        """Polygon must enclose a finite area and not be self-intersecting.
-
-        The check is cached on the instance so it runs once: embedding into a parent
-        model (e.g. 'GeometryGroup') revalidates the same instance and would otherwise
-        repeat the expensive shapely work for every embedding.
-        """
-        _ = self._polygon_not_degenerate_or_self_intersecting
-        return self
-
-    @model_validator(mode="after")
-    def _vertical_sidewall_no_dilation_with_arc(self: Self) -> Self:
-        """In the presence of arc segments, for now sidwall is limited to vertical, and no dilation allowed."""
-        if self.bulges is None:
-            return self
-        if not np.allclose(self.bulges, 0):
-            # a traced angle is rejected even at 0: its derivative probes unsupported nonzero angles
-            if hasbox(self.sidewall_angle) or not self._has_vertical_sidewall:
-                self._raise_validation_error_at_loc(
-                    SetupError(
-                        "Arc segments are present in the polygon. 'sidewall_angle' must be 0 "
-                        "and cannot be traced by autograd. "
-                        "A general treatment for slanted polyslab containing arc segments "
-                        "will be available in future releases."
-                    ),
-                    "sidewall_angle",
-                )
-            if not math.isclose(self.dilation, 0):
-                self._raise_validation_error_at_loc(
-                    SetupError(
-                        "Arc segments are present in the polygon. 'dilation' value must be 0. "
-                        "A general treatment will be available in future releases."
-                    ),
-                    "dilation",
-                )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_no_self_intersection_with_arcs(self: Self) -> Self:
-        """Ensure polygon with arc segments is not self-intersecting."""
-        if self.bulges is None:
-            return self
-        if np.allclose(self.bulges, 0):
-            return self  # No arcs, defer to existing vertex-based validation
-
-        # Use canonical (deduplicated, CCW) vertices and bulges
-        canon_verts, canon_bulges = PolySlab._canonicalize_vertices_and_bulges(
-            self.vertices, self.bulges
-        )
-
-        # Discretize the polygon with arc segments
-        bulge_data = _PolyBulgeUtil._compute_bulge_data(canon_verts, canon_bulges)
-        discretized = _PolyBulgeUtil._polygon_discretize(canon_verts, bulge_data)
-
-        # Check if the resulting polygon is valid
-        poly = shapely.Polygon(discretized)
-        if not poly.is_valid or not poly.is_simple:
-            # when the straight-edge polygon is itself self-intersecting, the
-            # vertex order -- not the bulge values -- is the actionable input
-            chord_heal = shapely.make_valid(self.make_shapely_polygon(self.vertices))
-            if chord_heal.area >= _MIN_POLYGON_AREA and (
-                chord_heal.geom_type != "Polygon" or len(chord_heal.interiors) > 0
-            ):
-                self._raise_validation_error_at_loc(
-                    SetupError(
-                        "Polygon is self-intersecting, resulting in "
-                        "polygon splitting or generation of holes/islands. "
-                        "A general treatment to self-intersecting polygon will be available "
-                        "in future releases."
-                    ),
-                    "vertices",
-                )
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Polygon with arc segments is self-intersecting. "
-                    "Please adjust the bulge values to avoid self-intersection."
-                ),
-                "bulges",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def no_complex_self_intersecting_polygon_at_reference_plane(self: Self) -> Self:
-        """At the reference plane, check if the polygon is self-intersecting.
-
-        There are two types of self-intersection that can occur during dilation:
-        1) the one that creates holes/islands, or splits polygons, or removes everything;
-        2) the one that does not.
-
-        For 1), we issue an error since it is yet to be supported;
-        For 2), we heal the polygon, and warn that the polygon has been cleaned up.
-        """
-        val = self.vertices
-        # no need to validate anything here
-        if math.isclose(self.dilation, 0):
-            return self
-
-        val_np = PolySlab._proper_vertices(val)
-        dist = self.dilation
-
-        # 0) fully eroded
-        if dist < 0 and dist < -PolySlab._maximal_erosion(val_np):
-            self._raise_validation_error_at_loc(
-                SetupError("Erosion value is too large. The polygon is fully eroded."),
-                "dilation",
-            )
-
-        # no edge events
-        if not PolySlab._edge_events_detection(val_np, dist, ignore_at_dist=False):
-            return self
-
-        poly_offset = PolySlab._shift_vertices(val_np, dist)[0]
-        if PolySlab._area(poly_offset) < fp_eps**2:
-            self._raise_validation_error_at_loc(
-                SetupError("Erosion value is too large. The polygon is fully eroded."),
-                "dilation",
-            )
-
-        # edge events
-        poly_offset = shapely.make_valid(self.make_shapely_polygon(poly_offset))
-        # 1) polygon split or create holes/islands
-        if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Dilation/Erosion value is too large, resulting in "
-                    "polygon splitting or generation of holes/islands. "
-                    "A general treatment to self-intersecting polygon will be available "
-                    "in future releases."
-                ),
-                "dilation",
-            )
-
-        # case 2
-        log.warning(
-            "The dilation/erosion value is too large. resulting in a "
-            "self-intersecting polygon. "
-            "The vertices have been modified to make a valid polygon."
-        )
-        return self
-
-    @model_validator(mode="after")
-    def no_self_intersecting_polygon_during_extrusion(self: Self) -> Self:
-        """In this simple polyslab, we don't support self-intersecting polygons yet, meaning that
-        any normal cross section of the PolySlab cannot be self-intersecting. This part checks
-        if any self-interction will occur during extrusion with non-zero sidewall angle.
-
-        There are two types of self-intersection, known as edge events,
-        that can occur during dilation:
-        1) neighboring vertex-vertex crossing. This type of edge event can be treated with
-        ``ComplexPolySlab`` which divides the polyslab into a list of simple polyslabs.
-
-        2) other types of edge events that can create holes/islands or split polygons.
-        To detect this, we sample _N_SAMPLE_POLYGON_INTERSECT cross sections to see if any creation
-        of polygons/holes, and changes in vertices number.
-        """
-        val = self.vertices
-
-        # no need to validate anything here
-        if self._has_vertical_sidewall:
-            return self
-
-        # apply dilation
-        poly_ref = PolySlab._proper_vertices(val)
-        if not math.isclose(self.dilation, 0):
-            poly_ref = PolySlab._shift_vertices(poly_ref, self.dilation)[0]
-            poly_ref = PolySlab._heal_polygon(poly_ref)
-
-        slab_bounds = get_static(self.slab_bounds)
-        _slab_min, _slab_max = slab_bounds
-
-        # first, check vertex-vertex crossing at any point during extrusion
-        length = slab_bounds[1] - slab_bounds[0]
-        dist = [-length * np.tan(self.sidewall_angle)]
-        # reverse the dilation value if it's defined on the top
-        if self.reference_plane == "top":
-            dist = [-dist[0]]
-        # for middle, both direction needs to be examined
-        elif self.reference_plane == "middle":
-            dist = [dist[0] / 2, -dist[0] / 2]
-
-        # capture vertex crossing events
-        max_thick = []
-        for dist_val in dist:
-            max_dist = PolySlab._neighbor_vertices_crossing_detection(poly_ref, dist_val)
-
-            if max_dist is not None:
-                max_thick.append(max_dist / abs(dist_val) * length)
-
-        if len(max_thick) > 0:
-            max_thick = min(max_thick)
-            self._raise_validation_error_at_loc(
-                SetupError(
-                    "Sidewall angle or structure thickness is so large that the polygon "
-                    "is self-intersecting during extrusion. "
-                    f"Please either reduce structure thickness to be < {max_thick:.3e}, "
-                    "or use our plugin 'ComplexPolySlab' to divide the complex polyslab "
-                    "into a list of simple polyslabs."
-                ),
-                "sidewall_angle",
-            )
-
-        # vertex-edge crossing event.
-        for dist_val in dist:
-            if PolySlab._edge_events_detection(poly_ref, dist_val):
-                self._raise_validation_error_at_loc(
-                    SetupError(
-                        "Sidewall angle or structure thickness is too large, "
-                        "resulting in polygon splitting or generation of holes/islands. "
-                        "A general treatment to self-intersecting polygon will be available "
-                        "in future releases."
-                    ),
-                    "sidewall_angle",
-                )
-        return self
 
     @classmethod
     def from_gds(
@@ -2050,58 +1720,6 @@ class PolySlab(base.Planar):
         return PolySlab._orient(PolySlab._remove_duplicate_vertices(vertices_np))
 
     @staticmethod
-    def _edge_events_detection(
-        proper_vertices: NDArray, dilation: float, ignore_at_dist: bool = True
-    ) -> bool:
-        """Detect any edge events within the offset distance ``dilation``.
-        If ``ignore_at_dist=True``, the edge event at ``dist`` is ignored.
-        """
-
-        # ignore the event that occurs right at the offset distance
-        if ignore_at_dist:
-            dilation -= fp_eps * dilation / abs(dilation)
-        # number of vertices before offsetting
-        num_vertices = proper_vertices.shape[0]
-
-        # 0) fully eroded?
-        if dilation < 0 and dilation < -PolySlab._maximal_erosion(proper_vertices):
-            return True
-
-        # sample at a few dilation values
-        dist_list = dilation * np.linspace(0, 1, 1 + _N_SAMPLE_POLYGON_INTERSECT, dtype=float)[1:]
-        for dist in dist_list:
-            # offset: we offset the vertices first, and then use shapely to make it proper
-            # in principle, one can offset with shapely.buffer directly, but shapely somehow
-            # automatically removes some vertices even though no change of topology.
-            poly_offset = PolySlab._shift_vertices(proper_vertices, dist)[0]
-            # flipped winding number
-            if PolySlab._area(poly_offset) < fp_eps**2:
-                return True
-
-            poly_offset = shapely.make_valid(PolySlab.make_shapely_polygon(poly_offset))
-            # 1) polygon split or create holes/islands
-            if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
-                return True
-
-            # 2) reduction in vertex number
-            offset_vertices = PolySlab._proper_vertices(poly_offset.exterior.coords)
-            if offset_vertices.shape[0] != num_vertices:
-                return True
-
-            # 3) some split polygon might fully disappear after the offset, but they
-            # can be detected if we offset back.
-            poly_offset_back = shapely.make_valid(
-                PolySlab.make_shapely_polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
-            )
-            if poly_offset_back.geom_type == "MultiPolygon" or len(poly_offset_back.interiors) > 0:
-                return True
-            offset_back_vertices = poly_offset_back.exterior.coords
-            if PolySlab._proper_vertices(offset_back_vertices).shape[0] != num_vertices:
-                return True
-
-        return False
-
-    @staticmethod
     def _neighbor_vertices_crossing_detection(
         vertices: NDArray, dist: float, ignore_at_dist: bool = True
     ) -> float:
@@ -2272,15 +1890,6 @@ class PolySlab(base.Planar):
         parallel_shift_p = np.roll(copy(parallel_shift), shift=-1)
         edge_reduction = -(parallel_shift + parallel_shift_p)
         return edge_length, edge_reduction
-
-    @staticmethod
-    def _maximal_erosion(vertices: NDArray) -> float:
-        """The erosion value that reduces the length of
-        all edges to be non-positive.
-        """
-        edge_length, edge_reduction = PolySlab._edge_length_and_reduction_rate(vertices)
-        ind_nonzero = abs(edge_reduction) > fp_eps
-        return -np.min(edge_length[ind_nonzero] / edge_reduction[ind_nonzero])
 
     @staticmethod
     def _heal_polygon(vertices: NDArray) -> NDArray:
@@ -3585,7 +3194,9 @@ class PolySlab(base.Planar):
             )
         if math.isclose(self.dilation, 0):
             return self.vertices
-        if self._edge_events_detection(proper_vertices, self.dilation, ignore_at_dist=False):
+        # core's dilation rule reports exactly the dilations that change the polygon's topology
+        diagnostics = validate_polyslab(self._core.data)
+        if any(found.code in _DILATION_EDGE_EVENTS for found in diagnostics):
             raise AdjointError(
                 "Vertex gradients for a 'PolySlab' are not supported when 'dilation' "
                 "changes the polygon topology. Reduce the magnitude of 'dilation'."
@@ -3806,11 +3417,6 @@ class ComplexPolySlabBase(PolySlab):
     ) -> NotImplementedType:
         """Request the generic transformed meshgrid path for complex PolySlabs."""
         return NotImplemented
-
-    @model_validator(mode="after")
-    def no_self_intersecting_polygon_during_extrusion(self: Self) -> Self:
-        """Turn off the validation for this class."""
-        return self
 
     @classmethod
     def from_gds(

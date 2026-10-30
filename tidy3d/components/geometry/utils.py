@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from math import isclose
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -16,7 +15,6 @@ from shapely.geometry.base import (
 )
 from shapely.ops import linemerge
 
-from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.types import Shapely
 from tidy3d.exceptions import SetupError, Tidy3dError
 
@@ -615,34 +613,3 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
         return sum(vertices_from_shapely(geo) for geo in shape.geoms)
 
     raise Tidy3dError(f"Shape {shape} cannot be converted to Geometry.")
-
-
-def validate_no_transformed_polyslabs(
-    geometry: GeometryType, transform: MatrixReal4x4 = None
-) -> None:
-    """Prevents the creation of slanted polyslabs rotated out of plane."""
-    if transform is None:
-        transform = np.eye(4)
-    if isinstance(geometry, polyslab.PolySlab):
-        # sidewall_angle may be autograd-traced; unbox for the check only
-        if not (
-            isclose(get_static(geometry.sidewall_angle), 0)
-            or base.Transformed.preserves_axis(transform, geometry.axis)
-        ):
-            raise Tidy3dError(
-                "Slanted PolySlabs are not allowed to be rotated out of the slab plane."
-            )
-    elif isinstance(geometry, base.Transformed):
-        transform = np.dot(transform, geometry.transform)
-        validate_no_transformed_polyslabs(geometry.geometry, transform)
-    elif isinstance(geometry, base.GeometryGroup):
-        for geo in geometry.geometries:
-            validate_no_transformed_polyslabs(geo, transform)
-    elif isinstance(geometry, base.ClipOperation):
-        validate_no_transformed_polyslabs(geometry.geometry_a, transform)
-        validate_no_transformed_polyslabs(geometry.geometry_b, transform)
-    elif isinstance(geometry, base.GeometryArray):
-        # For GeometryArray, check each instance's transform combined with the base geometry
-        for i in range(geometry.num_geometries):
-            instance_transform = np.dot(transform, geometry._get_full_transform(i))
-            validate_no_transformed_polyslabs(geometry.geometry, instance_transform)

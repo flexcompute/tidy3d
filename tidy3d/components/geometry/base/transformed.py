@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 from tidy3d._runtime import always_validate
 from tidy3d.components.autograd import TracedMatrixReal4x4, get_static
@@ -25,9 +25,7 @@ from tidy3d.log import log
 from .core import (
     _TRANSLATION_PATH,
     Geometry,
-    assert_geometry_finite,
     check_transform_affine,
-    check_transform_invertible,
 )
 
 if TYPE_CHECKING:
@@ -292,16 +290,6 @@ class Transformed(Geometry):
         description="Transform matrix applied to the base geometry.",
     )
 
-    _geometry_is_finite = assert_geometry_finite("geometry")
-
-    @field_validator("transform")
-    @classmethod
-    def _transform_is_invertible(cls, val: MatrixReal4x4) -> MatrixReal4x4:
-        """Raise validation error if transform is not invertible."""
-        transform_static = get_static(val)
-        check_transform_invertible(transform_static)
-        return val
-
     @model_validator(mode="after")
     @always_validate
     def _apply_transforms(self: dict[str, Any]) -> dict[str, Any]:
@@ -310,6 +298,17 @@ class Transformed(Geometry):
             object.__setattr__(self, "geometry", inner.geometry)
             object.__setattr__(self, "transform", np.dot(self.transform, inner.transform))
         return self
+
+    @classmethod
+    def of(cls, geometry: GeometryType, transform: MatrixReal4x4) -> Transformed:
+        """Return ``geometry`` placed by ``transform``, as one transformed geometry.
+
+        A geometry that is already transformed keeps its own geometry, and the two transforms
+        compose into one matrix, as the adjoint of a ``GeometryArray`` copy expects.
+        """
+        if isinstance(geometry, Transformed):
+            return cls(geometry=geometry.geometry, transform=np.dot(transform, geometry.transform))
+        return cls(geometry=geometry, transform=transform)
 
     @cached_property
     def inverse(self) -> MatrixReal4x4:
@@ -351,10 +350,9 @@ class Transformed(Geometry):
         tuple[float, float, float], tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
-        # NOTE (Lucas): The bounds are overestimated because we don't want to calculate
-        # precise TriangleMesh representations for GeometryGroup or ClipOperation.
-        vertices = np.dot(self.transform, self._vertices_from_bounds(self.geometry.bounds))[:3]
-        return (tuple(vertices.min(axis=1)), tuple(vertices.max(axis=1)))
+        # The core composes a nested transform into one matrix, so its bounds stay as tight as
+        # those of the composed transform.
+        return self._core.bounds
 
     def intersections_tilted_plane(
         self,

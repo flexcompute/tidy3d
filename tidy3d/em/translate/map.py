@@ -204,6 +204,13 @@ class ComponentScope(NamedTuple):
     on_construction: bool = False
 
 
+# Scopes that check every subclass, whatever family it belongs to, before the subclass's
+# own scope. Each facade takes the core the model keeps, and these form no family: every
+# geometry, including each Box subclass such as a monitor or a source, checks its core.
+INHERITED_SCOPES: dict[str, str] = {
+    "tidy3d.components.geometry.base.core:Geometry": "flexcompute.geometry.validation:validate",
+}
+
 # Component registration stays here, not on public model classes. Abstract roots
 # mark families whose new subclasses must register their own schema explicitly.
 COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
@@ -1294,6 +1301,18 @@ COMPONENT_ERROR_TYPES = {
     # mode-workflow
     "solver.mode.angle_rotation_unsupported_medium": "tidy3d.exceptions:SetupError",
     "solver.mode.angle_rotation_structure_failed": "tidy3d.exceptions:SetupError",
+    # geometry: the scope checks the fields the geometry classes once checked themselves, and
+    # raises each error as their field check did
+    "geometry.center_infinite": "tidy3d.exceptions:ValidationError",
+    "geometry.radius_infinite": "tidy3d.exceptions:ValidationError",
+    "geometry.sidewall_angle_out_of_range": "tidy3d.exceptions:ValidationError",
+    "geometry.polyslab.slab_bounds_order": "tidy3d.exceptions:SetupError",
+    "geometry.polyslab.vertices_shape": "tidy3d.exceptions:SetupError",
+    "geometry.transform.singular": "tidy3d.exceptions:ValidationError",
+    "geometry.transform.projective": "tidy3d.exceptions:AdjointError",
+    "geometry.array.transform_translates": "tidy3d.exceptions:ValidationError",
+    # geometry: the scope reports an unbounded geometry that a Transformed or GeometryArray places
+    "geometry.unbounded_geometry": "tidy3d.exceptions:ValidationError",
 }
 
 # Warnings that Tidy3D logs once per session, as their client checks did.
