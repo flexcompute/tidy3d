@@ -3402,6 +3402,17 @@ class ComplexPolySlabBase(PolySlab):
         """Request the generic transformed meshgrid path for complex PolySlabs."""
         return NotImplemented
 
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
+        """Containment of the divided polyslabs: past a crossing event, shifting the polygon of
+        this complex polyslab gives a self-intersecting ring, not its cross-section."""
+        return self.geometry_group.inside(x, y, z)
+
+    def inside_meshgrid(
+        self, x: NDArray[float], y: NDArray[float], z: NDArray[float]
+    ) -> NDArray[bool]:
+        """Meshgrid containment of the divided polyslabs, each checked within its own bounds."""
+        return self.geometry_group.inside_meshgrid(x, y, z)
+
     @classmethod
     def from_gds(
         cls,
@@ -3467,7 +3478,7 @@ class ComplexPolySlabBase(PolySlab):
         ]
         return [sub_poly for sub_polys in polyslabs for sub_poly in sub_polys.sub_polyslabs]
 
-    @property
+    @cached_property
     def geometry_group(self) -> base.GeometryGroup:
         """Divide a complex polyslab into a list of simple polyslabs, which
         are assembled into a :class:`.GeometryGroup`.
@@ -3480,7 +3491,7 @@ class ComplexPolySlabBase(PolySlab):
         """
         return base.GeometryGroup(geometries=self.sub_polyslabs)
 
-    @property
+    @cached_property
     def sub_polyslabs(self) -> list[PolySlab]:
         """Divide a complex polyslab into a list of simple polyslabs.
         Only neighboring vertex-vertex crossing events are treated in this
@@ -3495,7 +3506,8 @@ class ComplexPolySlabBase(PolySlab):
         num_division_count = 0
         # initialize sub-polyslab parameters
         sub_polyslab_dict = self.model_dump(exclude={TYPE_TAG_STR}).copy()
-        if self._has_vertical_sidewall:
+        # no extrusion to march over: the polygon cannot self-intersect
+        if self._has_vertical_sidewall or self.finite_length_axis == 0:
             return [PolySlab.model_validate(sub_polyslab_dict)]
 
         sub_polyslab_dict.update({"dilation": 0})  # dilation accounted in setup
