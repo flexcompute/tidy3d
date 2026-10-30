@@ -1515,6 +1515,84 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
+class FieldStructureTimeMonitor(AbstractFieldMonitor, TimeMonitor):
+    """:class:`~tidy3d.Monitor` that records the electric field over time together with the
+    permittivity and conductivity the time stepping applies and the per-Yee structure ownership,
+    on their native Yee grids.
+
+    Notes
+    -----
+
+        The time-domain counterpart of :class:`.FieldStructureMonitor`. Over the same region it
+        records:
+
+        - the electric field components ``Ex``, ``Ey``, ``Ez`` at the sampled times (on the Yee
+          grid, ``colocate=False``);
+        - the frequency-independent relative permittivity ``eps_xx``, ``eps_yy``, ``eps_zz`` and
+          conductivity ``sigma_xx``, ``sigma_yy``, ``sigma_zz`` the solver applies to each
+          component, including the averaging at material interfaces and the correction near PEC
+          edges; the permittivity is NaN at PEC points and in dispersive media, whose update
+          also carries their pole currents;
+        - the per-component structure-ownership maps ``structure_index_x``, ``structure_index_y``,
+          ``structure_index_z`` (``-1`` for the background medium, ``-2`` for a lumped element
+          or an automatic PEC frame, ``i`` for ``simulation.structures[i]``).
+
+        These serve the loss current density ``J = sigma * E(t)``, the loss power density
+        ``p = sum_i sigma_ii E_i(t)^2`` (see :class:`.FieldStructureTimeData`), and the loss per
+        structure over time (:meth:`.SimulationData.per_structure_loss`).
+
+        Only loss through a static conductivity is recorded: a :class:`.Medium` with
+        ``conductivity``, or a lossy metal solved as a volume (``subpixel=False`` on a grid that
+        resolves the skin depth). Most RF models carry little of their loss that way:
+
+        - A dispersive medium carries all of its loss or gain, its conductivity included, in pole
+          currents, which are not recorded. This includes the dielectrics of the RF material
+          library and loss-tangent fits. One with loss or gain in the simulation band is accepted
+          with a warning, and :meth:`.SimulationData.per_structure_loss` reports NaN for it; a
+          lossless one is recorded exactly. A nonlinear medium is treated the same way.
+        - A lossy metal under the surface impedance method, the default, loses power at its
+          surface, which no time-domain monitor records: ``per_structure_loss`` reports NaN for
+          it, with a warning. A PEC loses no power and is reported as 0 W.
+        - A fully anisotropic or time-modulated medium has no static per-component conductivity,
+          so a simulation where one reaches the monitor is rejected.
+
+    Example
+    -------
+    >>> monitor = FieldStructureTimeMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     interval=10,
+    ...     name='loss_time')
+    """
+
+    # Fixed to the full electric-field set (in order): the loss power density sums over all three
+    # components, so a partial set would silently undercount it.
+    fields: tuple[Literal["Ex"], Literal["Ey"], Literal["Ez"]] = Field(
+        default=("Ex", "Ey", "Ez"),
+        title="Field Components",
+        description="Electric field components to record. Fixed to ``Ex``, ``Ey``, and ``Ez``; "
+        "the loss power density requires all three.",
+    )
+
+    colocate: Literal[False] = Field(
+        default=False,
+        title="Colocate Fields",
+        description="The field, conductivity and structure ownership are recorded on the native "
+        "Yee grid. Colocation is applied only when a colocated derived quantity is requested from "
+        ":class:`.FieldStructureTimeData`.",
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # per cell, per time step: one real E per component
+        num_steps = self.num_steps(tmesh)
+        size = BYTES_REAL * num_steps * num_cells * len(self.fields)
+        # per cell, per component: one real permittivity, one real conductivity and one int32
+        # structure-ownership index
+        size += 3 * BYTES_REAL * num_cells * len(self.fields)
+        return size
+
+
 class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
     """:class:`.Monitor` that records auxiliary fields in the time domain.
 

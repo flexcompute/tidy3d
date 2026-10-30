@@ -47,6 +47,23 @@ class StructureLossDataArray(DataArray):
     _data_attrs = {"units": WATT, "long_name": "power loss"}
 
 
+class StructureLossTimeDataArray(DataArray):
+    """Instantaneous electromagnetic power loss per structure in the time domain.
+
+    ``structure_index`` indexes ``Simulation.structures``; ``-1`` is the background medium.
+
+    Example
+    -------
+    >>> t = [0, 1e-12, 2e-12]
+    >>> coords = dict(t=t, structure_index=[-1, 0, 1])
+    >>> loss = StructureLossTimeDataArray(np.random.random((3, 3)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("t", "structure_index")
+    _data_attrs = {"units": WATT, "long_name": "power loss"}
+
+
 class FluxTimeDataArray(DataArray):
     """Flux through a surface in the time-domain.
 

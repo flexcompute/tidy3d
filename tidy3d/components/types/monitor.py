@@ -14,6 +14,7 @@ from tidy3d.components.monitor import (
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     FieldStructureMonitor,
+    FieldStructureTimeMonitor,
     FieldTimeMonitor,
     FluxMonitor,
     FluxTimeMonitor,
@@ -35,6 +36,7 @@ from tidy3d.components.monitor import (
 MonitorType = (
     FieldMonitor
     | FieldStructureMonitor
+    | FieldStructureTimeMonitor
     | FieldTimeMonitor
     | AuxFieldTimeMonitor
     | MediumMonitor

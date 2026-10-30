@@ -65,6 +65,9 @@ PROTECTED_FDTD_MATERIAL_MONITOR_TYPES: frozenset[str] = frozenset(
         "PermittivityMonitor",
         "MediumMonitor",
         "PointCloudPermittivityMonitor",
+        "FieldStructureMonitor",
+        "FieldStructureTimeMonitor",
+        "SurfaceFieldStructureMonitor",
     }
 )
 

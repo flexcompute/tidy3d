@@ -22,6 +22,7 @@ from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DipoleEmissionMonitor,
+    FieldStructureTimeMonitor,
     FieldTimeMonitor,
     FreqMonitor,
     MediumMonitor,
@@ -94,6 +95,8 @@ def _validate_record_in_pml_unsupported(self: Any) -> None:
                 index,
                 "record_in_pml",
             )
+
+    return self
 
 
 @classmethod
@@ -248,7 +251,9 @@ def _validate_time_monitors_num_steps(self: Any) -> None:
 
     for monitor in self.monitors:
         if (
-            not isinstance(monitor, FieldTimeMonitor | AuxFieldTimeMonitor)
+            not isinstance(
+                monitor, FieldTimeMonitor | FieldStructureTimeMonitor | AuxFieldTimeMonitor
+            )
             or len(monitor.zero_dims) == 3
         ):
             continue

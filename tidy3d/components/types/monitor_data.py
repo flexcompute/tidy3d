@@ -13,6 +13,7 @@ from tidy3d.components.data.monitor_data import (
     FieldProjectionCartesianData,
     FieldProjectionKSpaceData,
     FieldStructureData,
+    FieldStructureTimeData,
     FieldTimeData,
     FluxData,
     FluxTimeData,
@@ -35,6 +36,7 @@ ModeSolverDataType = ModeSolverData | MicrowaveModeSolverData
 MonitorDataTypes = (
     FieldData,
     FieldStructureData,
+    FieldStructureTimeData,
     FieldTimeData,
     PermittivityData,
     MediumData,
@@ -62,6 +64,7 @@ MonitorDataTypes = (
 MonitorDataType = (
     FieldData
     | FieldStructureData
+    | FieldStructureTimeData
     | FieldTimeData
     | PermittivityData
     | MediumData

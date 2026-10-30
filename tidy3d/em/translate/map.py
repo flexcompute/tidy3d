@@ -655,6 +655,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.monitor.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.monitor:FieldStructureTimeMonitor": ComponentScope(
+        "flexcompute.core._migration.em.monitor.schema:FieldStructureTimeMonitor",
+        "flexcompute.core._migration.em.monitor.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.monitor:AuxFieldTimeMonitor": ComponentScope(
         "flexcompute.core._migration.em.monitor.schema:AuxFieldTimeMonitor",
         "flexcompute.core._migration.em.monitor.validation:validate",

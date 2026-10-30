@@ -31,6 +31,7 @@ from tidy3d.components.medium.protected import (
 from tidy3d.components.monitor import (
     AbstractMediumPropertyMonitor,
     FieldStructureMonitor,
+    FieldStructureTimeMonitor,
     ModeMonitor,
     PointCloudFieldMonitor,
     SurfaceFieldMonitor,
@@ -983,6 +984,7 @@ class Simulation(AbstractYeeGridSimulation):
         unsupported_monitor_types = (
             AbstractMediumPropertyMonitor,
             FieldStructureMonitor,
+            FieldStructureTimeMonitor,
             SurfaceFieldMonitor,
             SurfaceFieldStructureMonitor,
             SurfaceFieldTimeMonitor,

@@ -13,6 +13,7 @@ from tidy3d.components.types import xyz
 from tidy3d.constants import (
     AMP,
     C_0,
+    CONDUCTIVITY,
     MICROMETER,
     PICOSECOND_PER_NANOMETER_PER_KILOMETER,
     VOLT,
@@ -1174,6 +1175,7 @@ FIELD_STRUCTURE_INDEX_COMPONENTS = (
     "structure_index_y",
     "structure_index_z",
 )
+FIELD_STRUCTURE_SIGMA_COMPONENTS = ("sigma_xx", "sigma_yy", "sigma_zz")
 
 
 class FieldStructureDataset(AbstractFieldDataset):
@@ -1282,6 +1284,141 @@ class FieldStructureDataset(AbstractFieldDataset):
     @property
     def phase_components(self) -> set[str]:
         """Only the electric field carries a phase; the permittivity and structure-ownership
+        components are left untouched by a global phase shift."""
+        return set(FIELD_STRUCTURE_E_COMPONENTS)
+
+
+class FieldStructureTimeDataset(AbstractFieldDataset):
+    """Dataset storing the time-domain electric field with the permittivity and conductivity the
+    solver applies and the structure ownership, each on its native Yee grid.
+
+    ``Ex``/``Ey``/``Ez`` are the electric field components over time, ``eps_xx``/``eps_yy``/
+    ``eps_zz`` and ``sigma_xx``/``sigma_yy``/``sigma_zz`` are the frequency-independent relative
+    permittivities and conductivities applied to the matching components by the time stepping,
+    and ``structure_index_x``/``structure_index_y``/``structure_index_z`` record which
+    structure owns each Yee point (``-1`` for the background medium, ``i`` for
+    ``simulation.structures[i]``).
+    """
+
+    Ex: ScalarFieldTimeDataArray = Field(
+        title="Ex",
+        description="Spatial distribution of the x-component of the electric field over time.",
+    )
+    Ey: ScalarFieldTimeDataArray = Field(
+        title="Ey",
+        description="Spatial distribution of the y-component of the electric field over time.",
+    )
+    Ez: ScalarFieldTimeDataArray = Field(
+        title="Ez",
+        description="Spatial distribution of the z-component of the electric field over time.",
+    )
+    eps_xx: SpatialDataArray = Field(
+        title="Epsilon xx",
+        description="Relative permittivity applied to ``Ex`` by the time stepping, on the ``Ex`` "
+        "Yee grid; NaN at a PEC point and in a dispersive medium.",
+    )
+    eps_yy: SpatialDataArray = Field(
+        title="Epsilon yy",
+        description="Relative permittivity applied to ``Ey`` by the time stepping, on the ``Ey`` "
+        "Yee grid; NaN at a PEC point and in a dispersive medium.",
+    )
+    eps_zz: SpatialDataArray = Field(
+        title="Epsilon zz",
+        description="Relative permittivity applied to ``Ez`` by the time stepping, on the ``Ez`` "
+        "Yee grid; NaN at a PEC point and in a dispersive medium.",
+    )
+    sigma_xx: SpatialDataArray = Field(
+        title="Sigma xx",
+        description="Conductivity applied to ``Ex`` by the time stepping, on the ``Ex`` Yee grid.",
+        json_schema_extra={"units": CONDUCTIVITY},
+    )
+    sigma_yy: SpatialDataArray = Field(
+        title="Sigma yy",
+        description="Conductivity applied to ``Ey`` by the time stepping, on the ``Ey`` Yee grid.",
+        json_schema_extra={"units": CONDUCTIVITY},
+    )
+    sigma_zz: SpatialDataArray = Field(
+        title="Sigma zz",
+        description="Conductivity applied to ``Ez`` by the time stepping, on the ``Ez`` Yee grid.",
+        json_schema_extra={"units": CONDUCTIVITY},
+    )
+    structure_index_x: SpatialDataArray = Field(
+        title="Structure Index (x)",
+        description="Owning structure index at each ``Ex`` Yee point; ``-1`` for the background "
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
+    )
+    structure_index_y: SpatialDataArray = Field(
+        title="Structure Index (y)",
+        description="Owning structure index at each ``Ey`` Yee point; ``-1`` for the background "
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
+    )
+    structure_index_z: SpatialDataArray = Field(
+        title="Structure Index (z)",
+        description="Owning structure index at each ``Ez`` Yee point; ``-1`` for the background "
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the field, permittivity, conductivity, and structure-index components to their
+        data."""
+        return {
+            "Ex": self.Ex,
+            "Ey": self.Ey,
+            "Ez": self.Ez,
+            "eps_xx": self.eps_xx,
+            "eps_yy": self.eps_yy,
+            "eps_zz": self.eps_zz,
+            "sigma_xx": self.sigma_xx,
+            "sigma_yy": self.sigma_yy,
+            "sigma_zz": self.sigma_zz,
+            "structure_index_x": self.structure_index_x,
+            "structure_index_y": self.structure_index_y,
+            "structure_index_z": self.structure_index_z,
+        }
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps each component to the string key of its grid location on the Yee lattice."""
+        locations = {name: name for name in FIELD_STRUCTURE_E_COMPONENTS}
+        for e_name, eps_name, sigma_name, index_name in zip(
+            FIELD_STRUCTURE_E_COMPONENTS,
+            FIELD_STRUCTURE_EPS_COMPONENTS,
+            FIELD_STRUCTURE_SIGMA_COMPONENTS,
+            FIELD_STRUCTURE_INDEX_COMPONENTS,
+        ):
+            locations[eps_name] = e_name
+            locations[sigma_name] = e_name
+            locations[index_name] = e_name
+        return locations
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float] | None]:
+        """Maps components to their symmetry eigenvalues (``None`` = invariant under reflection)."""
+        e_eigenvalues = em_field_symmetry_eigenvalues()
+        eigenvalues = {name: e_eigenvalues[name] for name in FIELD_STRUCTURE_E_COMPONENTS}
+        # the applied material and structure ownership are scalar fields, invariant under
+        # reflection
+        for name in (
+            *FIELD_STRUCTURE_EPS_COMPONENTS,
+            *FIELD_STRUCTURE_SIGMA_COMPONENTS,
+            *FIELD_STRUCTURE_INDEX_COMPONENTS,
+        ):
+            eigenvalues[name] = None
+        return eigenvalues
+
+    @property
+    def nearest_neighbor_components(self) -> set[str]:
+        """Structure-ownership indices are categorical, so regridding must snap to the nearest
+        owning structure rather than linearly interpolating (blended) index values."""
+        return set(FIELD_STRUCTURE_INDEX_COMPONENTS)
+
+    @property
+    def phase_components(self) -> set[str]:
+        """Only the electric field carries a phase; the material and structure-ownership
         components are left untouched by a global phase shift."""
         return set(FIELD_STRUCTURE_E_COMPONENTS)
 

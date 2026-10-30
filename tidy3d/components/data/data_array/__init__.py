@@ -87,6 +87,7 @@ from .monitor import (
     ModeDispersionDataArray,
     ModeIndexDataArray,
     StructureLossDataArray,
+    StructureLossTimeDataArray,
 )
 from .registry import (
     DATA_ARRAY_MAP,
@@ -233,6 +234,7 @@ __all__ = [
     "SphericalAngleDataArray",
     "SteadyVoltageDataArray",
     "StructureLossDataArray",
+    "StructureLossTimeDataArray",
     "TerminalDataArray",
     "TimeDataArray",
     "TriangleMeshDataArray",

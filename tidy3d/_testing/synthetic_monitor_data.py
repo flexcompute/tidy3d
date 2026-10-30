@@ -410,6 +410,42 @@ class SyntheticMonitorDataFactory:
             **components,
         )
 
+    def make_field_structure_time_data(
+        self, monitor: td.FieldStructureTimeMonitor
+    ) -> td.FieldStructureTimeData:
+        components = {}
+        tmesh = self.simulation.tmesh
+        idx_begin, idx_end = monitor.time_inds(tmesh)
+        for field_name, eps_name, sigma_name, index_name in zip(
+            ("Ex", "Ey", "Ez"),
+            ("eps_xx", "eps_yy", "eps_zz"),
+            ("sigma_xx", "sigma_yy", "sigma_zz"),
+            ("structure_index_x", "structure_index_y", "structure_index_z"),
+        ):
+            coords = get_spatial_coords_dict(self.simulation, monitor, field_name)
+            coords["t"] = tmesh[idx_begin:idx_end]
+            components[field_name] = self._make_data(
+                coords=coords, data_array_type=td.ScalarFieldTimeDataArray, is_complex=False
+            )
+            spatial_coords = {dim: coords[dim] for dim in "xyz"}
+            shape = tuple(len(spatial_coords[dim]) for dim in "xyz")
+            components[eps_name] = td.SpatialDataArray(np.full(shape, 2.0), coords=spatial_coords)
+            # a small positive conductivity so the loss power is nonzero
+            components[sigma_name] = td.SpatialDataArray(
+                np.full(shape, 1e-3), coords=spatial_coords
+            )
+            components[index_name] = td.SpatialDataArray(
+                np.zeros(shape, dtype=np.int32), coords=spatial_coords
+            )
+
+        return td.FieldStructureTimeData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=self.simulation.center,
+            grid_expanded=self.simulation.discretize_monitor(monitor),
+            **components,
+        )
+
     def make_diff_data(self, monitor: td.DiffractionMonitor) -> td.DiffractionData:
         axis_names = ("x", "y", "z")
         normal_axis = monitor.normal_axis
@@ -684,6 +720,7 @@ class SyntheticMonitorDataFactory:
             td.PermittivityMonitor: self.make_eps_data,
             td.MediumMonitor: self.make_medium_data,
             td.FieldStructureMonitor: self.make_field_structure_data,
+            td.FieldStructureTimeMonitor: self.make_field_structure_time_data,
             td.DiffractionMonitor: self.make_diff_data,
             td.FluxMonitor: self.make_flux_data,
             td.DirectivityMonitor: self.make_directivity_data,

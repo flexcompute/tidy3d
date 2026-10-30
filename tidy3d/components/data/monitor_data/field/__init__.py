@@ -5,6 +5,7 @@ from __future__ import annotations
 from .data import FieldData
 from .diagnostic import (
     FieldStructureData,
+    FieldStructureTimeData,
     MediumData,
     ModeFieldStructureData,
     ModeStructureData,
@@ -28,6 +29,7 @@ __all__ = [
     "ElectromagneticSurfaceFieldData",
     "FieldData",
     "FieldStructureData",
+    "FieldStructureTimeData",
     "FieldTimeData",
     "MediumData",
     "ModeFieldStructureData",

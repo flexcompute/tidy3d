@@ -10,7 +10,7 @@ from abc import ABC
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar, Union, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -55,6 +55,7 @@ from .monitor_data import (
     AbstractFieldData,
     FieldData,
     FieldStructureData,
+    FieldStructureTimeData,
     FieldTimeData,
     PointCloudFieldData,
     PointCloudPermittivityData,
@@ -85,7 +86,12 @@ if TYPE_CHECKING:
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
 
-    from .data_array import DataArray, ScalarFieldDataArray, StructureLossDataArray
+    from .data_array import (
+        DataArray,
+        ScalarFieldDataArray,
+        StructureLossDataArray,
+        StructureLossTimeDataArray,
+    )
     from .optical_generation import OpticalGenerationData
 
 
@@ -129,6 +135,10 @@ PLANE_WAVE_GROUP_MIN_FWIDTH_FRACTION = 0.1
 # Largest relative error a grouped fixed-k plane wave may make, at any of its target frequencies,
 # in the wave it launches toward the structure.
 PLANE_WAVE_GROUP_MAX_FORWARD_ERROR = 1e-2
+
+
+# the monitor-data type a typed fetch returns
+_MonitorDataT = TypeVar("_MonitorDataT")
 
 
 class _LazyMonitorDataMap(Mapping[str, MonitorDataType]):
@@ -2607,7 +2617,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             Absorbed power, band-gap-gated generation rate, thermalization heat, and pair power.
         """
         return compute_optical_generation(
-            self._field_structure_data(monitor_name, "optical_generation"),
+            self._typed_monitor_data(monitor_name, (FieldStructureData,), "optical_generation"),
             list(self.simulation.structures),
             freq=freq,
             temperature=temperature,
@@ -2633,7 +2643,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         :meth:`optical_generation`.
         """
         return compute_per_component_optical_generation(
-            self._field_structure_data(monitor_name, "per_component_optical_generation"),
+            self._typed_monitor_data(
+                monitor_name, (FieldStructureData,), "per_component_optical_generation"
+            ),
             list(self.simulation.structures),
             freq=freq,
             temperature=temperature,
@@ -2668,7 +2680,9 @@ class SimulationData(AbstractYeeGridSimulationData):
             to :meth:`specific_absorption_rate_from_densities` instead.
         """
         return compute_specific_absorption_rate(
-            self._field_structure_data(monitor_name, "specific_absorption_rate"),
+            self._typed_monitor_data(
+                monitor_name, (FieldStructureData,), "specific_absorption_rate"
+            ),
             self.simulation,
             heat_medium_densities(self.simulation),
             method_name="specific_absorption_rate",
@@ -2737,7 +2751,9 @@ class SimulationData(AbstractYeeGridSimulationData):
             :class:`.CustomMedium` has one density for all its tissues.
         """
         return compute_specific_absorption_rate(
-            self._field_structure_data(monitor_name, "specific_absorption_rate_from_densities"),
+            self._typed_monitor_data(
+                monitor_name, (FieldStructureData,), "specific_absorption_rate_from_densities"
+            ),
             self.simulation,
             density,
             method_name="specific_absorption_rate_from_densities",
@@ -2747,44 +2763,35 @@ class SimulationData(AbstractYeeGridSimulationData):
             ),
         )
 
-    def _field_structure_data(self, monitor_name: str, method_name: str) -> FieldStructureData:
-        """Fetch and type-check a :class:`.FieldStructureData` by monitor name."""
+    def _typed_monitor_data(
+        self, monitor_name: str, data_types: tuple[type[_MonitorDataT], ...], method_name: str
+    ) -> _MonitorDataT:
+        """Fetch a monitor's data by name and check that ``method_name`` accepts its type; the
+        error names the monitors that record the accepted types."""
         try:
-            field_structure = self[monitor_name]
+            data = self[monitor_name]
         except KeyError as exc:
             raise DataError(  # blind-chaining: ignore
                 f"Monitor '{monitor_name}' not found in the simulation data."
             ) from exc
-        if not isinstance(field_structure, FieldStructureData):
-            raise DataError(
-                f"'{method_name}' requires a 'FieldStructureMonitor'; monitor '{monitor_name}' "
-                f"produced '{field_structure.type}'."
+        if not isinstance(data, data_types):
+            monitors = " or ".join(
+                f"'{data_type.model_fields['monitor'].annotation.__name__}'"
+                for data_type in data_types
             )
-        return field_structure
-
-    def _surface_field_structure_data(
-        self, monitor_name: str, method_name: str
-    ) -> SurfaceFieldStructureData:
-        """Fetch and type-check a :class:`.SurfaceFieldStructureData` by monitor name."""
-        try:
-            surface_field_structure = self[monitor_name]
-        except KeyError as exc:
-            raise DataError(  # blind-chaining: ignore
-                f"Monitor '{monitor_name}' not found in the simulation data."
-            ) from exc
-        if not isinstance(surface_field_structure, SurfaceFieldStructureData):
             raise DataError(
-                f"'{method_name}' requires a 'SurfaceFieldStructureMonitor'; monitor "
-                f"'{monitor_name}' produced '{surface_field_structure.type}'."
+                f"'{method_name}' requires a {monitors}; monitor '{monitor_name}' produced "
+                f"'{data.type}'."
             )
-        return surface_field_structure
+        return data
 
     def per_structure_loss(
         self,
         volumetric_monitor_name: str | None = None,
         surface_monitor_name: str | None = None,
-    ) -> StructureLossDataArray:
-        """Total electromagnetic power loss [W] per structure and frequency.
+    ) -> StructureLossDataArray | StructureLossTimeDataArray:
+        """Total electromagnetic power loss [W] per structure and frequency, or per structure and
+        time from a :class:`.FieldStructureTimeMonitor`.
 
         A structure the solver models as a surface (a PEC, or a :class:`.LossyMetalMedium` under
         the default surface impedance subpixel method) loses power at its surface, recorded by a
@@ -2793,7 +2800,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         volume, recorded by a :class:`.FieldStructureMonitor`. Each structure's total is taken from
         the monitor that records its kind. Only structures sampled by a supplied monitor appear,
         and one that its own kind's monitor did not sample (not supplied, or not reaching the
-        structure) is NaN. At least one monitor is required; when both are given they must record
+        structure) is NaN, except a PEC: it loses no power, so it is 0 W whenever a supplied
+        monitor samples it. At least one monitor is required; when both are given they must record
         the same ``freqs``. Volumetric integration
         uses :attr:`.FieldStructureData.per_component_absorbed_power` (not
         :attr:`.FieldStructureData.absorbed_power_density`, which colocates and would blend the
@@ -2807,22 +2815,28 @@ class SimulationData(AbstractYeeGridSimulationData):
         Parameters
         ----------
         volumetric_monitor_name : Optional[str] = None
-            Name of the :class:`.FieldStructureMonitor` whose data to use.
+            Name of the :class:`.FieldStructureMonitor` whose data to use, or of a
+            :class:`.FieldStructureTimeMonitor` for the instantaneous loss over time (which cannot
+            be combined with ``surface_monitor_name``). The time-domain monitor records loss only
+            through a static conductivity, so a structure that carries loss or gain outside one (a
+            dispersive medium with loss or gain in the simulation band, or a nonlinear medium) is
+            NaN, with a warning.
         surface_monitor_name : Optional[str] = None
             Name of the :class:`.SurfaceFieldStructureMonitor` whose data to use.
 
         Returns
         -------
-        :class:`.StructureLossDataArray`
-            Loss over ``f`` and ``structure_index``, where ``structure_index`` indexes
-            ``self.simulation.structures``, ``-1`` (if present) is the background medium
-            (``simulation.medium``), and ``-2`` (if present) collects the lumped elements and
-            automatic PEC frames. Only owners sampled inside a supplied monitor appear; a
-            lossless one has a zero total, and one not sampled by its own kind's monitor is NaN.
-            ``-2`` takes its total from the volumetric monitor, which records the lumped elements'
-            loss, so it is NaN without one. Surface vertices are owned only by PEC-like structures,
-            so a structure that loses power in its volume may be absent from a surface-only result;
-            a warning is logged when the simulation contains a lossy one.
+        Union[:class:`.StructureLossDataArray`, :class:`.StructureLossTimeDataArray`]
+            Loss over ``f`` (or over ``t`` for a time-domain monitor) and ``structure_index``,
+            where ``structure_index`` indexes ``self.simulation.structures``, ``-1`` (if
+            present) is the background medium (``simulation.medium``), and ``-2`` (if present)
+            collects the lumped elements and automatic PEC frames. Only owners sampled inside a
+            supplied monitor appear; a lossless one has a zero total, and one not sampled by its
+            own kind's monitor is NaN. ``-2`` takes its total from the volumetric monitor, which
+            records the lumped elements' loss, so it is NaN without one. Surface vertices are owned
+            only by PEC-like structures, so a structure that loses power in its volume may be
+            absent from a surface-only result; a warning is logged when the simulation contains a
+            lossy one.
 
         Notes
         -----
@@ -2856,12 +2870,18 @@ class SimulationData(AbstractYeeGridSimulationData):
             along that surface.
         """
         field_structure = (
-            self._field_structure_data(volumetric_monitor_name, "per_structure_loss")
+            self._typed_monitor_data(
+                volumetric_monitor_name,
+                (FieldStructureData, FieldStructureTimeData),
+                "per_structure_loss",
+            )
             if volumetric_monitor_name is not None
             else None
         )
         surface_field_structure = (
-            self._surface_field_structure_data(surface_monitor_name, "per_structure_loss")
+            self._typed_monitor_data(
+                surface_monitor_name, (SurfaceFieldStructureData,), "per_structure_loss"
+            )
             if surface_monitor_name is not None
             else None
         )

@@ -53,6 +53,7 @@ from .monitor import (
     ModeDispersionDataArray,
     ModeIndexDataArray,
     StructureLossDataArray,
+    StructureLossTimeDataArray,
 )
 from .spatial import (
     ScalarFieldDataArray,
@@ -110,6 +111,7 @@ DATA_ARRAY_TYPES = [
     ScalarTerminalFieldDataArray,
     FluxDataArray,
     StructureLossDataArray,
+    StructureLossTimeDataArray,
     FluxTimeDataArray,
     ModeAmpsDataArray,
     ModeAmpsTimeDataArray,

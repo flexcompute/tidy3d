@@ -8,10 +8,12 @@ from flexcompute.core._migration.em.numerical.raw import power_loss as loss_nume
 from flexcompute.core._migration.em.numerical.raw.grid import yee_primal_dual_widths_1d
 from pydantic import Field
 
-from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from tidy3d.components.data.dataset import (
     FIELD_STRUCTURE_E_COMPONENTS,
+    AbstractFieldDataset,
     FieldStructureDataset,
+    FieldStructureTimeDataset,
     MediumDataset,
     ModeStructureDataset,
     PermittivityDataset,
@@ -23,10 +25,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import SpatialDataArray
     from tidy3d.components.source.base import Source
     from tidy3d.components.types import ArrayFloat1D
 from tidy3d.components.monitor import (
     FieldStructureMonitor,
+    FieldStructureTimeMonitor,
     MediumMonitor,
     ModeStructureMonitor,
     PermittivityMonitor,
@@ -117,14 +121,149 @@ class MediumData(MediumDataset, AbstractFieldData):
     )
 
 
-class _FieldStructureDerivedMixin(FieldStructureDataset):
+class _NativeYeeDerivedMixin(AbstractFieldDataset):
+    """Colocation and Yee control-volume helpers shared by data that records the electric field
+    and per-component scalars (material data, structure ownership) on native Yee grids.
+
+    Mixed into a concrete monitor-data class, which must provide ``Ex``/``Ey``/``Ez``,
+    ``monitor`` (for ``bounds``, ``center`` and ``downsample``), ``grid_expanded`` and
+    ``colocation_boundaries``.
+    """
+
+    def _colocate_components(
+        self,
+        components: dict[str, ScalarFieldDataArray],
+        method_name: str,
+        coords: tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D],
+    ) -> xr.Dataset:
+        """Interpolate native-grid derived components to the supplied ``(x, y, z)`` coordinates;
+        ``None`` skips that dimension. ``method_name`` names the public caller in errors."""
+        supplied_coord_map = {k: np.array(v) for k, v in zip("xyz", coords) if v is not None}
+        centered: dict[str, ScalarFieldDataArray] = {}
+        for name, data in components.items():
+            for coord_name, coords_supplied in supplied_coord_map.items():
+                if np.array(data.coords[coord_name]).size == 1:
+                    raise DataError(
+                        f"{method_name} given {coord_name}={coords_supplied}, but "
+                        f"'{name}' has a single coordinate at "
+                        f"{coord_name}={np.array(data.coords[coord_name])[0]}. "
+                        f"Supply {coord_name}=None to skip this dimension."
+                    )
+            centered[name] = data.interp(**supplied_coord_map, kwargs={"bounds_error": True})
+        # preserve traced arrays on item access so an (unsupported) objective built from the
+        # result still registers a VJP path and reaches the explicit AdjointError below
+        return self.package_colocate_results(centered)
+
+    def _cell_volumes(self) -> dict[str, xr.DataArray]:
+        """Per-component Yee control volume [um^3] of each recorded E-field sample.
+
+        A component sits at a cell center along its own axis and on a cell boundary along the other
+        two, so its volume is the primal (boundary-to-boundary) width along its own axis times the
+        dual (center-to-center) widths along the transverse axes. Widths are clipped to the monitor
+        bounds and to the grid extent without the recording padding, so samples whose control
+        volume lies outside the monitor carry zero volume; with ``interval_space`` downsampling
+        each kept sample inside the monitor integrates the span around it and the kept padding
+        samples outside it carry zero volume (see ``yee_primal_dual_widths_1d``). An
+        axis with a single recorded cell (the simulation grid has one cell along it, as in a 2D
+        simulation) gets unit width from that helper; ``per_structure_loss`` rejects that case.
+        Frequency-independent; matches :attr:`per_component_absorbed_power`'s spatial shape for
+        each of ``"x"``/``"y"``/``"z"``.
+        """
+        if not self.grid_expanded:
+            raise DataError(
+                "Monitor data requires 'grid_expanded' to compute Yee cell-volume integration "
+                "weights."
+            )
+        dims = "xyz"
+        full_bounds = self.grid_expanded.boundaries.to_dict
+        unpadded_bounds = self.colocation_boundaries.to_dict
+        mnt_bounds = np.array(self.monitor.bounds)
+
+        primal_widths, dual_widths = {}, {}
+        for axis, dim in enumerate(dims):
+            keep_inds = self.monitor.downsample(np.arange(len(full_bounds[dim]) - 1), axis=axis)
+            primal_widths[dim], dual_widths[dim] = yee_primal_dual_widths_1d(
+                full_bounds[dim],
+                mnt_bounds[0, axis],
+                mnt_bounds[1, axis],
+                valid_bounds=(float(unpadded_bounds[dim][0]), float(unpadded_bounds[dim][-1])),
+                keep_inds=keep_inds,
+                weight_only_inside=True,
+            )
+
+        if not isinstance(self, (FieldStructureDataset, FieldStructureTimeDataset)):
+            raise TypeError(f"'{type(self).__name__}' records no native-grid 'Ex'/'Ey'/'Ez'.")
+        e_fields = {"x": self.Ex, "y": self.Ey, "z": self.Ez}
+
+        volumes: dict[str, xr.DataArray] = {}
+        for own_dim in dims:
+            wx, wy, wz = (primal_widths[d] if d == own_dim else dual_widths[d] for d in dims)
+            coords = e_fields[own_dim].coords
+            volumes[own_dim] = xr.DataArray(
+                wx[:, None, None] * wy[None, :, None] * wz[None, None, :],
+                dims=["x", "y", "z"],
+                coords={dim: coords[dim] for dim in dims},
+            )
+        return volumes
+
+    def _colocate_axes(self, per_axis: dict[str, xr.DataArray]) -> dict[str, xr.DataArray]:
+        """Colocate each per-axis native scalar onto the common colocation grid.
+
+        Reuses :attr:`colocation_boundaries` (the same targets as field-monitor colocation) and
+        applies the monitor's ``interval_space`` downsampling, so recorded data is colocated at its
+        own resolution rather than interpolated back onto the full-resolution grid. Dimension-
+        agnostic (no plane/normal assumption): each dimension with more than one sample is
+        interpolated onto its (possibly downsampled) boundary coordinates, while a singleton
+        (plane-normal) dimension is aligned to the monitor-plane center so the components share it.
+        Returns the colocated components keyed as the input.
+        """
+        boundaries = self.colocation_boundaries.to_dict
+        # Match the recorded (possibly ``interval_space``-downsampled) resolution rather than the
+        # full grid; ``downsample`` is a no-op when ``interval_space`` is 1.
+        targets = {
+            dim: self.monitor.downsample(np.asarray(boundaries[dim]), axis=axis)
+            for axis, dim in enumerate("xyz")
+        }
+
+        colocated: dict[str, xr.DataArray] = {}
+        for name, data in per_axis.items():
+            interp_coords = {}
+            align_coords = {}
+            for axis, dim in enumerate("xyz"):
+                if dim not in data.dims:
+                    continue
+                if data.sizes[dim] > 1:
+                    # in-plane: interpolate the staggered component onto the boundary coordinates
+                    interp_coords[dim] = targets[dim]
+                else:
+                    # plane-normal singleton: share the monitor-plane center across components
+                    align_coords[dim] = [self.monitor.center[axis]]
+            if interp_coords:
+                data = data.interp(**interp_coords, kwargs={"fill_value": 0})
+            if align_coords:
+                data = data.assign_coords(align_coords)
+            colocated[name] = data
+        return colocated
+
+    def _colocate_and_sum_axes(self, per_axis: dict[str, xr.DataArray]) -> xr.DataArray:
+        """Colocate the per-axis native scalars onto the common colocation grid and sum them.
+
+        Thin wrapper over :meth:`_colocate_axes` (which handles the shared, ``interval_space``-aware
+        colocation) that sums the colocated components.
+        """
+        total: xr.DataArray | None = None
+        for data in self._colocate_axes(per_axis).values():
+            total = data if total is None else total + data
+        return total
+
+
+class _FieldStructureDerivedMixin(_NativeYeeDerivedMixin, FieldStructureDataset):
     """Derived quantities shared by every producer of matched field/permittivity/ownership data.
 
     Hosts the electromagnetic quantities that follow from the nine stored primitives — the
-    displacement field, the loss current density, the per-component absorbed power, and the shared
-    ``interval_space``-aware colocation — so that each producer's data class (FDTD and mode
-    solver) only has to supply the primitives themselves. Nothing here is specific to how the data
-    was produced.
+    displacement field, the loss current density and the per-component absorbed power — so that
+    each producer's data class (FDTD and mode solver) only has to supply the primitives themselves.
+    Nothing here is specific to how the data was produced.
 
     Mixed into a concrete monitor-data class, which must additionally provide ``monitor`` (for
     ``center`` and ``downsample``) and ``colocation_boundaries``.
@@ -216,30 +355,6 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
         """z-component of the loss current density on the ``Ez`` Yee grid (see :attr:`Jx_loss`)."""
         return self._loss_current_density_component(self.Ez, self.eps_zz)
 
-    def _colocate_components(
-        self,
-        components: dict[str, ScalarFieldDataArray],
-        method_name: str,
-        coords: tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D],
-    ) -> xr.Dataset:
-        """Interpolate native-grid derived components to the supplied ``(x, y, z)`` coordinates;
-        ``None`` skips that dimension. ``method_name`` names the public caller in errors."""
-        supplied_coord_map = {k: np.array(v) for k, v in zip("xyz", coords) if v is not None}
-        centered: dict[str, ScalarFieldDataArray] = {}
-        for name, data in components.items():
-            for coord_name, coords_supplied in supplied_coord_map.items():
-                if np.array(data.coords[coord_name]).size == 1:
-                    raise DataError(
-                        f"{method_name} given {coord_name}={coords_supplied}, but "
-                        f"'{name}' has a single coordinate at "
-                        f"{coord_name}={np.array(data.coords[coord_name])[0]}. "
-                        f"Supply {coord_name}=None to skip this dimension."
-                    )
-            centered[name] = data.interp(**supplied_coord_map, kwargs={"bounds_error": True})
-        # preserve traced arrays on item access so an (unsupported) objective built from the
-        # result still registers a VJP path and reaches the explicit AdjointError below
-        return self.package_colocate_results(centered)
-
     def colocate_displacement(
         self, x: ArrayFloat1D = None, y: ArrayFloat1D = None, z: ArrayFloat1D = None
     ) -> xr.Dataset:
@@ -310,104 +425,6 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
                 eps_imag=eps.imag, e_field=e_field, freq=e_field.coords["f"], epsilon_0=EPSILON_0
             )
         return per_axis
-
-    def _cell_volumes(self) -> dict[str, xr.DataArray]:
-        """Per-component Yee control volume [um^3] of each recorded E-field sample.
-
-        A component sits at a cell center along its own axis and on a cell boundary along the other
-        two, so its volume is the primal (boundary-to-boundary) width along its own axis times the
-        dual (center-to-center) widths along the transverse axes. Widths are clipped to the monitor
-        bounds and to the grid extent without the recording padding, so samples whose control
-        volume lies outside the monitor carry zero volume; with ``interval_space`` downsampling
-        each kept sample inside the monitor integrates the span around it and the kept padding
-        samples outside it carry zero volume (see ``yee_primal_dual_widths_1d``). An
-        axis with a single recorded cell (the simulation grid has one cell along it, as in a 2D
-        simulation) gets unit width from that helper; ``per_structure_loss`` rejects that case.
-        Frequency-independent; matches :attr:`per_component_absorbed_power`'s spatial shape for
-        each of ``"x"``/``"y"``/``"z"``.
-        """
-        if not self.grid_expanded:
-            raise DataError(
-                "Monitor data requires 'grid_expanded' to compute Yee cell-volume integration "
-                "weights."
-            )
-        dims = "xyz"
-        full_bounds = self.grid_expanded.boundaries.to_dict
-        unpadded_bounds = self.colocation_boundaries.to_dict
-        mnt_bounds = np.array(self.monitor.bounds)
-
-        primal_widths, dual_widths = {}, {}
-        for axis, dim in enumerate(dims):
-            keep_inds = self.monitor.downsample(np.arange(len(full_bounds[dim]) - 1), axis=axis)
-            primal_widths[dim], dual_widths[dim] = yee_primal_dual_widths_1d(
-                full_bounds[dim],
-                mnt_bounds[0, axis],
-                mnt_bounds[1, axis],
-                valid_bounds=(float(unpadded_bounds[dim][0]), float(unpadded_bounds[dim][-1])),
-                keep_inds=keep_inds,
-                weight_only_inside=True,
-            )
-
-        volumes: dict[str, xr.DataArray] = {}
-        for own_dim, e_name in zip(dims, FIELD_STRUCTURE_E_COMPONENTS):
-            wx, wy, wz = (primal_widths[d] if d == own_dim else dual_widths[d] for d in dims)
-            coords = getattr(self, e_name).coords
-            volumes[own_dim] = xr.DataArray(
-                wx[:, None, None] * wy[None, :, None] * wz[None, None, :],
-                dims=["x", "y", "z"],
-                coords={dim: coords[dim] for dim in dims},
-            )
-        return volumes
-
-    def _colocate_axes(self, per_axis: dict[str, xr.DataArray]) -> dict[str, xr.DataArray]:
-        """Colocate each per-axis native scalar onto the common colocation grid.
-
-        Reuses :attr:`colocation_boundaries` (the same targets as field-monitor colocation) and
-        applies the monitor's ``interval_space`` downsampling, so recorded data is colocated at its
-        own resolution rather than interpolated back onto the full-resolution grid. Dimension-
-        agnostic (no plane/normal assumption): each dimension with more than one sample is
-        interpolated onto its (possibly downsampled) boundary coordinates, while a singleton
-        (plane-normal) dimension is aligned to the monitor-plane center so the components share it.
-        Returns the colocated components keyed as the input.
-        """
-        boundaries = self.colocation_boundaries.to_dict
-        # Match the recorded (possibly ``interval_space``-downsampled) resolution rather than the
-        # full grid; ``downsample`` is a no-op when ``interval_space`` is 1.
-        targets = {
-            dim: self.monitor.downsample(np.asarray(boundaries[dim]), axis=axis)
-            for axis, dim in enumerate("xyz")
-        }
-
-        colocated: dict[str, xr.DataArray] = {}
-        for name, data in per_axis.items():
-            interp_coords = {}
-            align_coords = {}
-            for axis, dim in enumerate("xyz"):
-                if dim not in data.dims:
-                    continue
-                if data.sizes[dim] > 1:
-                    # in-plane: interpolate the staggered component onto the boundary coordinates
-                    interp_coords[dim] = targets[dim]
-                else:
-                    # plane-normal singleton: share the monitor-plane center across components
-                    align_coords[dim] = [self.monitor.center[axis]]
-            if interp_coords:
-                data = data.interp(**interp_coords, kwargs={"fill_value": 0})
-            if align_coords:
-                data = data.assign_coords(align_coords)
-            colocated[name] = data
-        return colocated
-
-    def _colocate_and_sum_axes(self, per_axis: dict[str, xr.DataArray]) -> xr.DataArray:
-        """Colocate the per-axis native scalars onto the common colocation grid and sum them.
-
-        Thin wrapper over :meth:`_colocate_axes` (which handles the shared, ``interval_space``-aware
-        colocation) that sums the colocated components.
-        """
-        total: xr.DataArray | None = None
-        for data in self._colocate_axes(per_axis).values():
-            total = data if total is None else total + data
-        return total
 
     @property
     def absorbed_power_density(self) -> ScalarFieldDataArray:
@@ -496,6 +513,164 @@ class FieldStructureData(_FieldStructureDerivedMixin, AbstractFieldData):
         """Objectives through this diagnostic monitor's data are unsupported: fail loudly."""
         raise _diagnostic_adjoint_error(
             self.monitor.name, "FieldStructureMonitor", alternative="FieldMonitor"
+        )
+
+
+class FieldStructureTimeData(_NativeYeeDerivedMixin, FieldStructureTimeDataset, AbstractFieldData):
+    """Data for a :class:`.FieldStructureTimeMonitor`: the electric field over time with the
+    permittivity and conductivity the time stepping applies and the per-Yee structure ownership,
+    on their native Yee grids, plus the derived loss current density and loss power density.
+
+    Notes
+    -----
+
+        ``Jx_loss``/``Jy_loss``/``Jz_loss`` are ``sigma_ii * E_i(t)`` on each component's grid. The
+        loss power density ``p(t) = sum_i sigma_ii E_i(t)^2`` is the power the conductivity
+        removes from the field at each instant. Over a period of a steady harmonic field it
+        averages to ``1/2 sigma |E|^2``, the :attr:`.FieldStructureData.absorbed_power_density` of
+        the same field when the medium's loss is all conductivity. Sampled at whole time steps, it
+        overstates the loss of a harmonic field by about ``(w dt)^2 / 4``: 0.8 % with 20 grid
+        cells per vacuum wavelength. Access the symmetry-expanded quantities via
+        ``self.symmetry_expanded``.
+
+        A simulation with complex fields (Bloch boundaries, or a mode decomposition in a lossy
+        simulation) records a complex ``E(t)`` whose real part is the field the sources drive,
+        so the current and loss power use that real part. Under Bloch boundaries with a nonzero
+        Bloch vector, the real part is the response to the real part of the phased source.
+
+        ``eps_ii`` and ``sigma_ii`` are the frequency-independent material the time stepping
+        applies, the complex relative permittivity ``eps_ii + i sigma_ii / (w eps0)``; in a
+        non-dispersive medium away from interfaces it equals the ``eps_ii`` a
+        :class:`.FieldStructureMonitor` records. ``eps_ii E_i(t)`` is ``D_i(t) / eps0``.
+
+    Example
+    -------
+    >>> from tidy3d import Grid, ScalarFieldTimeDataArray, SpatialDataArray
+    >>> from tidy3d.components.grid.grid import Coords
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
+    >>> t = [0, 1e-12, 2e-12]
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], t=t)
+    >>> scoords = dict(x=x[:-1], y=y[:-1], z=z[:-1])
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
+    >>> fld = ScalarFieldTimeDataArray(np.random.random((2,3,4,3)), coords=coords)
+    >>> eps = SpatialDataArray(np.full((2,3,4), 2.0), coords=scoords)
+    >>> sigma = SpatialDataArray(np.full((2,3,4), 0.01), coords=scoords)
+    >>> idx = SpatialDataArray(np.zeros((2,3,4)), coords=scoords)
+    >>> monitor = FieldStructureTimeMonitor(size=(2,4,6), interval=10, name='loss_time')
+    >>> data = FieldStructureTimeData(
+    ...     monitor=monitor, Ex=fld, Ey=fld, Ez=fld,
+    ...     eps_xx=eps, eps_yy=eps, eps_zz=eps,
+    ...     sigma_xx=sigma, sigma_yy=sigma, sigma_zz=sigma,
+    ...     structure_index_x=idx, structure_index_y=idx, structure_index_z=idx,
+    ...     grid_expanded=grid,
+    ... )
+    """
+
+    monitor: FieldStructureTimeMonitor = Field(
+        title="Monitor",
+        description="Time-domain field-conductivity monitor associated with the data.",
+    )
+
+    @staticmethod
+    def _driven_field(e_field: ScalarFieldTimeDataArray) -> ScalarFieldTimeDataArray:
+        """The field the sources drive: the recorded ``E(t)``, or its real part when the
+        simulation runs complex fields."""
+        return e_field.real
+
+    @staticmethod
+    def _loss_current_density_component(
+        e_field: ScalarFieldTimeDataArray, sigma: SpatialDataArray
+    ) -> ScalarFieldTimeDataArray:
+        """Single loss current density component ``J_i(t) = sigma_ii E_i(t)`` [A/um^2]."""
+        current = loss_numerics.conduction_current_density(
+            sigma=sigma, e_field=FieldStructureTimeData._driven_field(e_field)
+        )
+        ordered = current.transpose(*e_field.dims)
+        return ScalarFieldTimeDataArray(ordered.data, coords=ordered.coords)
+
+    def _loss_current_density_components(self) -> dict[str, ScalarFieldTimeDataArray]:
+        """All three loss current density components."""
+        return {"Jx_loss": self.Jx_loss, "Jy_loss": self.Jy_loss, "Jz_loss": self.Jz_loss}
+
+    @property
+    def Jx_loss(self) -> ScalarFieldTimeDataArray:
+        """x-component of the loss current density ``Jx_loss = sigma_xx Ex(t)`` [A/um^2] on the
+        ``Ex`` Yee grid.
+
+        This is the current through the static conductivity only. The frequency-domain
+        :attr:`.FieldStructureData.Jx_loss` is ``w eps0 Im(eps_xx) Ex``, which also carries
+        dielectric and dispersive loss.
+        """
+        return self._loss_current_density_component(self.Ex, self.sigma_xx)
+
+    @property
+    def Jy_loss(self) -> ScalarFieldTimeDataArray:
+        """y-component of the loss current density on the ``Ey`` Yee grid (see :attr:`Jx_loss`)."""
+        return self._loss_current_density_component(self.Ey, self.sigma_yy)
+
+    @property
+    def Jz_loss(self) -> ScalarFieldTimeDataArray:
+        """z-component of the loss current density on the ``Ez`` Yee grid (see :attr:`Jx_loss`)."""
+        return self._loss_current_density_component(self.Ez, self.sigma_zz)
+
+    def colocate_loss_current_density(
+        self, x: ArrayFloat1D = None, y: ArrayFloat1D = None, z: ArrayFloat1D = None
+    ) -> xr.Dataset:
+        """Colocate the loss current density components ``Jx_loss``/``Jy_loss``/``Jz_loss`` to
+        supplied coordinates.
+
+        Symmetry is not expanded here; call on ``self.symmetry_expanded`` for the full domain.
+
+        Parameters
+        ----------
+        x, y, z : Optional[array-like] = None
+            Coordinates to colocate to along each dimension; ``None`` skips that dimension.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing the colocated ``Jx_loss``/``Jy_loss``/``Jz_loss`` components.
+        """
+        return self._colocate_components(
+            self._loss_current_density_components(), "colocate_loss_current_density", (x, y, z)
+        )
+
+    @property
+    def per_component_loss_power(self) -> dict[str, xr.DataArray]:
+        """Per-component loss power density ``p_i(t) = sigma_ii E_i(t)^2`` [W/um^3] on native grids.
+
+        Keys are ``"x"/"y"/"z"``. Colocating and summing these (as :attr:`loss_power_density` does)
+        blends the staggered grids; keeping them separate preserves the exact per-component values.
+        """
+        return {
+            axis: loss_numerics.conduction_loss_power_density(
+                sigma=sigma, e_field=self._driven_field(e_field)
+            )
+            for axis, e_field, sigma in (
+                ("x", self.Ex, self.sigma_xx),
+                ("y", self.Ey, self.sigma_yy),
+                ("z", self.Ez, self.sigma_zz),
+            )
+        }
+
+    @property
+    def loss_power_density(self) -> ScalarFieldTimeDataArray:
+        """Loss power density ``p(t) = sum_i sigma_ii E_i(t)^2`` [W/um^3], colocated.
+
+        The per-component power is formed on each native Yee grid, then colocated onto the common
+        grid-boundary coordinates and summed. Computed from the raw ``self`` arrays; use
+        ``self.symmetry_expanded`` for the full domain.
+        """
+        total = self._colocate_and_sum_axes(self.per_component_loss_power)
+        ordered = total.transpose(*[dim for dim in ("x", "y", "z", "t") if dim in total.dims])
+        return ScalarFieldTimeDataArray(ordered.data, coords=ordered.coords)
+
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Objectives through this diagnostic monitor's data are unsupported: fail loudly."""
+        raise _diagnostic_adjoint_error(
+            self.monitor.name, "FieldStructureTimeMonitor", alternative="FieldTimeMonitor"
         )
 
 
