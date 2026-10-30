@@ -30,6 +30,7 @@ from tidy3d.components.medium.protected import (
     protected_fdtd_monitor_policy_error,
     protected_optical_simulation_error,
 )
+from tidy3d.components.microwave.source import LumpedVoltageSource
 from tidy3d.components.monitor import (
     AbstractMediumPropertyMonitor,
     FieldStructureMonitor,
@@ -54,11 +55,15 @@ from tidy3d.config import config
 from tidy3d.constants import SECOND
 from tidy3d.exceptions import (
     SetupError,
+    Tidy3dError,
 )
 from tidy3d.log import log
 from tidy3d.updater import Updater
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import NoReturn
+
     from tidy3d.compat import Self
     from tidy3d.components.geometry.base import Geometry
 
@@ -1200,8 +1205,75 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_microwave_mode_specs()
         self._warn_mode_ports_not_reaching_absorbing_boundaries()
         log.end_capture(self)
+        self._validate_lumped_voltage_sources_before_upload()
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
+
+    def _validate_lumped_voltage_sources_before_upload(
+        self, references: Sequence[str] | None = None
+    ) -> None:
+        """Each voltage source must be able to set its voltage where the solver places it on the
+        grid (:func:`.placed_lumped_voltage_sources_error`), next to media a lumped element can be
+        placed in. An error is raised at the source's entry in ``sources``; with ``references``,
+        how a caller such as a component modeler names the sources in source order, it is a
+        :class:`.SetupError` naming them instead. Media that fail only with every source in place
+        are a :class:`.SetupError` naming them all."""
+        indices = [
+            index
+            for index, source in enumerate(self.sources)
+            if isinstance(source, LumpedVoltageSource)
+        ]
+        if not indices:
+            return
+        names = (
+            references
+            if references is not None
+            else [self._lumped_voltage_source_reference(self.sources[index]) for index in indices]
+        )
+
+        def reject(position: int, message: str) -> NoReturn:
+            if references is not None:
+                raise SetupError(message)
+            self._raise_validation_error_at_loc(message, "sources", indices[position])
+
+        placed = []
+        for position, (index, reference) in enumerate(zip(indices, names)):
+            try:
+                element, box = self._lumped_voltage_source_sheet(self.sources[index], reference)
+            except SetupError as exc:
+                reject(position, str(exc))
+            placed.append((self.sources[index], element, box, reference))
+        error = self._placed_lumped_voltage_sources_error(placed)
+        if error is not None:
+            reject(*error)
+
+        # the media are judged around each element on its snapped box, as the solver realizes it
+        snapped = [
+            element.updated_copy(center=box.center, size=box.size) for _, element, box, _ in placed
+        ]
+
+        def media_error(elements: list[LumpedElementType], sources: str) -> str | None:
+            with_elements = self.updated_copy(
+                lumped_elements=[*self.lumped_elements, *elements], validate=False, deep=False
+            )
+            try:
+                _ = with_elements.volumetric_structures
+            except Tidy3dError as exc:
+                return (
+                    f"The media around {sources} are not supported next to a lumped voltage "
+                    f"source: {exc}"
+                )
+            return None
+
+        joint_error = media_error(snapped, ", ".join(names))
+        if joint_error is None:
+            return
+        # the error is raised at the first source whose media fail on their own
+        for position, (element, name) in enumerate(zip(snapped, names)):
+            error = media_error([element], name)
+            if error is not None:
+                reject(position, error)
+        raise SetupError(joint_error)
 
     def _validate_protected_asset_policy(self) -> None:
         """Reject protected doping and monitor outputs that expose protected material properties."""

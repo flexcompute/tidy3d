@@ -127,7 +127,21 @@ def eps_bounds(self: Any, freq: float | None = None) -> tuple[float, float]:
 @cached_property
 def static_structures(self: Any) -> list[Structure]:
     """Structures in simulation with all autograd tracers removed."""
-    return [structure.to_static() for structure in self.scene.sorted_structures]
+    return [structure for structure, _ in self._static_structures_with_provenance]
+
+
+@cached_property
+def _static_structures_with_provenance(self: Any) -> list[tuple[Structure, str]]:
+    """:attr:`static_structures`, each with the structure it comes from as an error names it: by
+    its name, or as ``structures[i]`` at its index in ``structures`` if it has none."""
+    references = {
+        id(structure): f"'{structure.name}'" if structure.name else f"structures[{index}]"
+        for index, structure in enumerate(self.structures)
+    }
+    return [
+        (structure.to_static(), references[id(structure)])
+        for structure in self.scene.sorted_structures
+    ]
 
 
 def epsilon(
@@ -193,7 +207,14 @@ def _contains_converted_volumetric_structures(self: Any) -> bool:
 def volumetric_structures(self: Any) -> tuple[Structure]:
     """Generate a tuple of structures wherein any 2D materials are converted to 3D
     volumetric equivalents."""
-    return self._volumetric_structures_grid(self.grid)
+    return tuple(structure for structure, _ in self._volumetric_structures_with_provenance)
+
+
+@cached_property
+def _volumetric_structures_with_provenance(self: Any) -> list[tuple[Structure, str]]:
+    """:attr:`volumetric_structures`, each with what produced it
+    (:meth:`_volumetric_structures_grid_with_provenance`)."""
+    return self._volumetric_structures_grid_with_provenance(self.grid)
 
 
 def _validate_scene(self: Any) -> Self:

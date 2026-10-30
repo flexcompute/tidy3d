@@ -222,8 +222,9 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid, frequency_range=frequency_range)]
 
-    def _check_grid_size(self, grid: Grid) -> None:
-        """Raise :class:`.SetupError` if the simulation grid is too coarse to resolve this element.
+    def _check_grid_size(self, grid: Grid, subject: str | None = None) -> None:
+        """Raise :class:`.SetupError` if the simulation grid is too coarse to resolve this element,
+        naming the element by ``subject`` (its name by default).
 
         No-op by default; subclasses override when a coarse grid can degenerate the geometry."""
 
@@ -287,20 +288,23 @@ class RectangularLumpedElement(LumpedElement, Box):
                 "on the grid and surrounding media); access it via 'Simulation.volumetric_structures'."
             )
 
-    def _check_grid_size(self, grid: Grid) -> None:
-        """Raise :class:`.SetupError` if the grid is too coarse to resolve this element as a sheet.
+    def _check_grid_size(self, grid: Grid, subject: str | None = None) -> None:
+        """Raise :class:`.SetupError` if the grid is too coarse to resolve this element as a sheet,
+        naming the element by ``subject`` (``lumped element '<name>'`` by default).
 
         Both planar and line elements are realized as a single-grid-cell-wide :class:`.Medium2D`
         sheet, so each axis transverse to the ``voltage_axis`` needs at least two grid cells. With
         fewer, the dual-cell snap and neighbor probe degenerate -- otherwise surfacing during
         volumetric resolution as a cryptic "zero volume", ``IndexError``, or divide-by-zero."""
         num_cells = grid.num_cells
+        if subject is None:
+            subject = f"lumped element '{self.name}'"
         for axis in range(3):
             if axis == self.voltage_axis or num_cells[axis] >= 2:
                 continue
             raise SetupError(
-                f"Grid is too coarse along the '{'xyz'[axis]}' axis for lumped element "
-                f"'{self.name}' at '{self.center}': it is realized as a single-grid-cell-wide "
+                f"Grid is too coarse along the '{'xyz'[axis]}' axis for {subject} at "
+                f"'{self.center}': it is realized as a single-grid-cell-wide "
                 f"Medium2D sheet and needs at least two grid cells along each axis transverse to "
                 f"its 'voltage_axis'. Refine the 'GridSpec' along '{'xyz'[axis]}'."
             )

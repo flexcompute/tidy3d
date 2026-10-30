@@ -142,8 +142,17 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     _pec_frame_span_inds = _mode_integration_methods._pec_frame_span_inds
     _pec_frame_box = _mode_integration_methods._pec_frame_box
     _modal_plane_frames = _mode_integration_methods._modal_plane_frames
+    _internal_absorber_backing_plates_with_provenance = (
+        _mode_integration_methods._internal_absorber_backing_plates_with_provenance
+    )
+    _modal_plane_frames_with_provenance = (
+        _mode_integration_methods._modal_plane_frames_with_provenance
+    )
     _finalized = _mode_integration_methods._finalized
     _finalized_volumetric_structures = _mode_integration_methods._finalized_volumetric_structures
+    _finalized_volumetric_structures_with_provenance = (
+        _mode_integration_methods._finalized_volumetric_structures_with_provenance
+    )
     _finalized_public_optical_medium_map = (
         _mode_integration_methods._finalized_public_optical_medium_map
     )
@@ -163,11 +172,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     # YeeMaterials
     eps_bounds = _materials_methods.eps_bounds
     static_structures = _materials_methods.static_structures
+    _static_structures_with_provenance = _materials_methods._static_structures_with_provenance
     epsilon = _materials_methods.epsilon
     _contains_converted_volumetric_structures = (
         _materials_methods._contains_converted_volumetric_structures
     )
     volumetric_structures = _materials_methods.volumetric_structures
+    _volumetric_structures_with_provenance = (
+        _materials_methods._volumetric_structures_with_provenance
+    )
 
     # YeeMonitors
     _monitor_num_cells = _monitors_methods._monitor_num_cells
@@ -202,7 +215,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     discretize = _grid_methods.discretize
     epsilon_on_grid = _grid_methods.epsilon_on_grid
     _promote_line_lumped_element = _grid_methods._promote_line_lumped_element
+    _lumped_element_in_domain = _grid_methods._lumped_element_in_domain
+    _lumped_voltage_source_reference = _grid_methods._lumped_voltage_source_reference
+    _lumped_voltage_source_sheet = _grid_methods._lumped_voltage_source_sheet
+    _placed_lumped_voltage_sources = _grid_methods._placed_lumped_voltage_sources
+    _placed_lumped_voltage_sources_error = _grid_methods._placed_lumped_voltage_sources_error
     _volumetric_structures_grid = _grid_methods._volumetric_structures_grid
+    _volumetric_structures_grid_with_provenance = (
+        _grid_methods._volumetric_structures_grid_with_provenance
+    )
     suggest_mesh_overrides = _grid_methods.suggest_mesh_overrides
 
     # YeeBoundaries

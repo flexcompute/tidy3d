@@ -6,8 +6,12 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field, model_validator
 
+from tidy3d.components.base import cached_property
 from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+from tidy3d.components.source.base import Source
 from tidy3d.components.source.field import AbstractModeSource
+from tidy3d.components.types import Axis
+from tidy3d.components.validators import assert_line_or_plane
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
@@ -75,3 +79,63 @@ class MicrowaveTerminalSource(AbstractModeSource):
             )
 
         return self
+
+
+class LumpedVoltageSource(Source):
+    """Ideal voltage source across a lumped gap.
+
+    The source holds the potential at the end of the box with the larger coordinate along
+    ``voltage_axis`` above the potential at the other end by the voltage of ``source_time``, in
+    volts, along every path through the box parallel to ``voltage_axis``. The same convention
+    defines the voltage of a :class:`.LumpedPort`. After its waveform ends, and throughout when its
+    amplitude is zero, the source holds the voltage at zero, so it shorts the gap.
+
+    The box is planar (one zero-size dimension) or a line (two zero-size dimensions), like a
+    lumped element, and is placed on the grid like one: a sheet snapped to the grid, a line widened
+    to a sheet one grid cell wide. Before upload, a source that cannot set its voltage where it is
+    placed is rejected:
+
+    - not completely inside the simulation domain, or driving no grid edge;
+    - within half a grid cell along ``voltage_axis``, so both its ends snap to one grid plane;
+    - its gap shorted by a conductor, or meeting another voltage source;
+    - touching a lumped element or a 2D material other than at its two ends, or overlapping one;
+    - on a symmetry plane that holds its voltage at zero;
+    - next to a medium a lumped element cannot be placed in.
+
+    The source is meant for a gap in a dielectric or vacuum: a conductive medium inside the gap
+    lowers the voltage it sets, by up to a few percent for a metal.
+
+    Frequency-domain monitor data is normalized by the spectrum of the source voltage.
+
+    Example
+    -------
+    >>> from tidy3d import GaussianPulse
+    >>> pulse = GaussianPulse(freq0=5e9, fwidth=2e9)
+    >>> source = LumpedVoltageSource(
+    ...     center=(0, 0, 500), size=(3000, 0, 1000), voltage_axis=2, source_time=pulse
+    ... )
+    """
+
+    voltage_axis: Axis = Field(
+        title="Voltage Axis",
+        description="Axis along which the voltage is applied. Must be a nonzero-size dimension "
+        "of the source.",
+    )
+
+    _plane_validator = assert_line_or_plane()
+
+    @model_validator(mode="after")
+    def _voltage_axis_has_extent(self) -> Self:
+        """The voltage is applied across a nonzero extent."""
+        if self.size[self.voltage_axis] == 0:
+            self._raise_validation_error_at_loc(
+                "'voltage_axis' must be a nonzero-size dimension of the source.", "voltage_axis"
+            )
+        return self
+
+    @cached_property
+    def _pol_vector(self) -> tuple[float, float, float]:
+        """Unit vector along ``voltage_axis``, for plotting."""
+        pol_vector = [0.0, 0.0, 0.0]
+        pol_vector[self.voltage_axis] = 1.0
+        return tuple(pol_vector)

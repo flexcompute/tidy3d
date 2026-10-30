@@ -15,6 +15,7 @@ from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.geometry.utils import GeometryType
 from tidy3d.components.medium import PublicMediumType
 from tidy3d.components.medium.protected import has_protected_media
+from tidy3d.components.microwave.source import LumpedVoltageSource
 from tidy3d.components.thin_lens import validate_thin_lens_adjoint_setup
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError, DataError
@@ -314,6 +315,13 @@ def _validate_autograd_run_constraints(
     simulation: td.Simulation, traced_fields: AutogradFieldMap
 ) -> None:
     """Validate traced-field requirements that apply to autograd runs."""
+    # the adjoint run replaces the simulation's sources, so it would solve without the voltage
+    # source's short and give wrong gradients
+    if any(isinstance(source, LumpedVoltageSource) for source in simulation.sources):
+        raise AdjointError(
+            "Gradients of a simulation with a 'LumpedVoltageSource' are not supported. Remove the "
+            "voltage source to compute gradients."
+        )
     _validate_autograd_frequency_monitors(simulation)
 
     # if too many structures, raise an error

@@ -126,18 +126,36 @@ def _pec_frame_box(self: Any, obj: AbstractModeSource | InternalAbsorber) -> tup
 @cached_property
 def _modal_plane_frames(self: Any) -> list[Structure]:
     """Return frames to add around mode sources and internal absorbers."""
+    return [frame for frame, _ in self._modal_plane_frames_with_provenance]
+
+
+@cached_property
+def _modal_plane_frames_with_provenance(self: Any) -> list[tuple[Structure, str]]:
+    """:attr:`_modal_plane_frames`, each with the source or internal absorber it surrounds as an
+    error names it: ``the PEC frame of source 'name'``, of ``sources[i]`` for an unnamed source,
+    or of ``internal_absorbers[k]``."""
 
     pec_frames = [
-        self._make_pec_frame(src, name=f"{constants.MODAL_PEC_FRAME_NAME_PREFIX}source_{src_index}")
+        (
+            self._make_pec_frame(
+                src, name=f"{constants.MODAL_PEC_FRAME_NAME_PREFIX}source_{src_index}"
+            ),
+            f"the PEC frame of source '{src.name}'"
+            if src.name
+            else f"the PEC frame of sources[{src_index}]",
+        )
         for src_index, src in enumerate(self.sources)
         if isinstance(src, AbstractModeSource) and isinstance(src.frame, PECFrame)
     ]
 
     for absorber_index, absorber in enumerate(self._shifted_internal_absorbers):
         pec_frames.append(
-            self._make_pec_frame(
-                absorber,
-                name=f"{constants.MODAL_PEC_FRAME_NAME_PREFIX}absorber_{absorber_index}",
+            (
+                self._make_pec_frame(
+                    absorber,
+                    name=f"{constants.MODAL_PEC_FRAME_NAME_PREFIX}absorber_{absorber_index}",
+                ),
+                f"the PEC frame of internal_absorbers[{absorber_index}]",
             )
         )
 
@@ -156,12 +174,40 @@ def _finalized(self: Any) -> Self:
 
 
 @cached_property
+def _internal_absorber_backing_plates_with_provenance(self: Any) -> list[tuple[Structure, str]]:
+    """The PEC backing plate closing each internal absorber's frame on its non-absorbing side,
+    where the solver places it, with the absorber it closes as an error names it: ``the PEC
+    backing plate of internal_absorbers[k]``. The solver imposes the plates as a boundary condition
+    after each update rather than painting them, so they are not among
+    :attr:`_finalized_volumetric_structures`."""
+    coords = self.grid.boundaries.to_list
+    plates = []
+    for absorber_index, absorber in enumerate(self._shifted_internal_absorbers):
+        span_inds, axis, direction = self._pec_frame_span_inds(absorber)
+        plate_ind = span_inds[axis][0] if direction == "-" else span_inds[axis][1]
+        lower = [float(coords[dim][span_inds[dim][0]]) for dim in range(3)]
+        upper = [float(coords[dim][span_inds[dim][1]]) for dim in range(3)]
+        lower[axis] = upper[axis] = float(coords[axis][plate_ind])
+        plate = Structure(geometry=Box.from_bounds(lower, upper), medium=PECMedium())
+        plates.append((plate, f"the PEC backing plate of internal_absorbers[{absorber_index}]"))
+    return plates
+
+
+@cached_property
 def _finalized_volumetric_structures(self: Any) -> list[Structure]:
     """Volumetric structures in the simulation, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
-    modal_frames = self._modal_plane_frames
+    return [structure for structure, _ in self._finalized_volumetric_structures_with_provenance]
+
+
+@cached_property
+def _finalized_volumetric_structures_with_provenance(self: Any) -> list[tuple[Structure, str]]:
+    """:attr:`_finalized_volumetric_structures`, each with what produced it as an error names it
+    (:meth:`_volumetric_structures_grid_with_provenance`,
+    :attr:`_modal_plane_frames_with_provenance`)."""
+    modal_frames = self._modal_plane_frames_with_provenance
     if not self._contains_converted_volumetric_structures:
-        return list(self.static_structures) + modal_frames
-    return list(self.volumetric_structures) + modal_frames
+        return list(self._static_structures_with_provenance) + modal_frames
+    return list(self._volumetric_structures_with_provenance) + modal_frames
 
 
 @cached_property

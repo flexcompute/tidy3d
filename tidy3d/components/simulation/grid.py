@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import autograd.numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
+from flexcompute.core._migration.em.numerical.raw import microwave as microwave_numerics
 from pydantic import (
     ValidationError as PydanticValidationError,
 )
@@ -17,13 +18,18 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.grid.grid_spec import _GeneratedGridSizeError
-from tidy3d.components.lumped_element import RectangularLumpedElement
-from tidy3d.components.medium import Medium2D
+from tidy3d.components.lumped_element import (
+    LinearLumpedElement,
+    RectangularLumpedElement,
+    RLCNetwork,
+)
+from tidy3d.components.medium import AnisotropicMediumFromMedium2D, Medium2D
 from tidy3d.components.medium.protected import (
     ProtectedOpticalMediumRef,
     has_protected_media,
     warn_protected_surrogate,
 )
+from tidy3d.components.microwave.source import LumpedVoltageSource
 from tidy3d.components.structure import Structure
 from tidy3d.components.two_d_materials import (
     choose_line_normal_axis,
@@ -44,6 +50,9 @@ from tidy3d.packaging import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    import shapely
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
@@ -603,12 +612,138 @@ def _promote_line_lumped_element(
     return element.updated_copy(center=tuple(new_center), size=tuple(new_size))
 
 
+def _lumped_voltage_source_reference(self: Any, source: LumpedVoltageSource) -> str:
+    """How errors name ``source``: by its name, or by its index in ``sources``."""
+    if source.name:
+        return f"'LumpedVoltageSource' '{source.name}'"
+    return f"'LumpedVoltageSource' sources[{self.sources.index(source)}]"
+
+
+def _lumped_voltage_source_sheet(
+    self: Any, source: LumpedVoltageSource, reference: str | None = None
+) -> tuple[LinearLumpedElement, Box]:
+    """The lumped element ``source`` is realized as, before its network is sized, and the box it
+    is snapped to on the grid: a line is widened to the single-cell sheet a line lumped element
+    becomes, and the box can have zero length along the voltage axis. Raises
+    :class:`.SetupError` where the grid is too coarse for a sheet, naming the source by
+    ``reference`` (:func:`_lumped_voltage_source_reference` by default)."""
+    grid = self.grid
+    element = LinearLumpedElement(
+        center=source.center,
+        size=source.size,
+        voltage_axis=source.voltage_axis,
+        network=RLCNetwork(resistance=1.0, capacitance=1.0, network_topology="parallel"),
+        name=f"{source.name or 'lumped_voltage_source'}_realization",
+        num_grid_cells=None,
+        enable_snapping_points=False,
+    )
+    if reference is None:
+        reference = self._lumped_voltage_source_reference(source)
+    element._check_grid_size(grid, subject=reference)
+    element = self._promote_line_lumped_element(element, grid)
+    return element, element.to_geometry(grid=grid)
+
+
+def _placed_lumped_voltage_sources(
+    self: Any, references: Sequence[str] | None = None
+) -> list[tuple[LumpedVoltageSource, LinearLumpedElement, Box, str]]:
+    """Each :class:`.LumpedVoltageSource`, in source order, with the lumped element it is realized
+    as, the box that is snapped to (:func:`_lumped_voltage_source_sheet`), and how errors name it:
+    ``references`` in source order, or :func:`_lumped_voltage_source_reference`."""
+    sources = [source for source in self.sources if isinstance(source, LumpedVoltageSource)]
+    if references is None:
+        references = [self._lumped_voltage_source_reference(source) for source in sources]
+    return [
+        (source, *self._lumped_voltage_source_sheet(source, reference), reference)
+        for source, reference in zip(sources, references)
+    ]
+
+
+def _placed_lumped_voltage_sources_error(
+    self: Any, placed: list[tuple[LumpedVoltageSource, LinearLumpedElement, Box, str]]
+) -> tuple[int, str] | None:
+    """Position in ``placed`` (:func:`_placed_lumped_voltage_sources`) and error of the first
+    voltage source that cannot set its voltage where it is placed on the grid
+    (:func:`.placed_lumped_voltage_sources_error`), or ``None``."""
+    return microwave_numerics.placed_lumped_voltage_sources_error(
+        [
+            _placed_gap(self, source, element, box, reference)
+            for source, element, box, reference in placed
+        ],
+        grid_boundaries=self.grid.boundaries.to_list,
+        domain_bounds=self.geometry.bounds,
+        background_is_conductor=self.scene.medium.is_pec_like,
+        symmetry=self.symmetry,
+        center=self.center,
+    )
+
+
+def _placed_gap(
+    sim: Any, source: LumpedVoltageSource, element: LinearLumpedElement, box: Box, reference: str
+) -> microwave_numerics.PlacedLumpedVoltageGap:
+    """``source``, named by ``reference``, as :func:`.placed_lumped_voltage_sources_error` takes
+    it, from its placed ``element`` and snapped ``box``."""
+    window = Box.from_bounds(*microwave_numerics.lumped_gap_window(box.bounds, element.normal_axis))
+    return microwave_numerics.PlacedLumpedVoltageGap(
+        reference=reference,
+        voltage_axis=source.voltage_axis,
+        normal_axis=element.normal_axis,
+        sheet_bounds=box.bounds,
+        structures=_structures_in_window(sim, window),
+    )
+
+
+def _structures_in_window(
+    sim: Any, window: Box
+) -> list[tuple[str, bool, bool, list[shapely.Geometry]]]:
+    """The structures the solver paints, in painting order (``_finalized_volumetric_structures``:
+    2D materials and lumped elements already sheets where the grid places them, automatic PEC
+    frames last, and internal absorbers' PEC backing plates, which the solver imposes after each
+    update, after them), as :func:`.lumped_voltage_gap_error` takes them: each named by what
+    produced it, and cut within the planar ``window``."""
+    structures = []
+    for structure, reference in [
+        *sim._finalized_volumetric_structures_with_provenance,
+        *sim._internal_absorber_backing_plates_with_provenance,
+    ]:
+        medium = structure.medium
+        is_sheet = isinstance(medium, AnisotropicMediumFromMedium2D)
+        shapes = window.intersections_with(structure.geometry)
+        structures.append((reference, medium.is_pec_like, is_sheet, shapes))
+    return structures
+
+
+def _lumped_element_in_domain(self: Any, element: LumpedElementType) -> bool:
+    """Whether a planar lumped element lies inside the simulation domain, strictly so along its
+    normal. Only such elements are converted to structures; the others are left out."""
+    return microwave_numerics.lumped_element_in_domain(
+        element.geometry.bounds, element.normal_axis, self.geometry.bounds
+    )
+
+
 def _volumetric_structures_grid(self: Any, grid: Grid) -> tuple[Structure]:
     """Generate a tuple of structures wherein any 2D materials are converted to 3D
     volumetric equivalents, using ``grid`` as the simulation grid."""
+    return tuple(
+        structure for structure, _ in self._volumetric_structures_grid_with_provenance(grid)
+    )
+
+
+def _volumetric_structures_grid_with_provenance(
+    self: Any, grid: Grid
+) -> list[tuple[Structure, str]]:
+    """The structures of :meth:`_volumetric_structures_grid`, each with what produced it as an
+    error names it:
+
+    - a structure, and each piece of a 2D material it is split into, as for
+      :attr:`_static_structures_with_provenance`;
+    - a lumped element's sheet as ``lumped element 'name'``, and its PEC connection as ``the PEC
+      connection of lumped element 'name'``.
+    """
 
     if not self._contains_converted_volumetric_structures:
-        return self.scene.sorted_structures
+        references = [reference for _, reference in self._static_structures_with_provenance]
+        return list(zip(self.scene.sorted_structures, references))
 
     def get_dls(snapped_center: float, axis: Axis) -> list[float]:
         """Get grid sizes adjacent to a 2D material.
@@ -653,13 +788,20 @@ def _volumetric_structures_grid(self: Any, grid: Grid) -> tuple[Structure]:
         # degenerate (zero-area probe / divide-by-zero) on a single-cell transverse axis
         lumped_element._check_grid_size(grid)
         element = self._promote_line_lumped_element(lumped_element, grid)
-        strict_ineq = 3 * [False]
-        strict_ineq[element.normal_axis] = True
-        if self.geometry.contains(element.geometry, strict_inequality=strict_ineq):
-            lumped_structures += element.to_structures(self.grid)
+        if self._lumped_element_in_domain(element):
+            reference = f"lumped element '{lumped_element.name}'"
+            lumped_structures += [
+                (
+                    structure,
+                    f"the PEC connection of {reference}"
+                    if structure.medium.is_pec_like
+                    else reference,
+                )
+                for structure in element.to_structures(self.grid)
+            ]
 
     # Begin volumetric structures grid
-    all_structures = list(self.static_structures) + lumped_structures
+    all_structures = list(self._static_structures_with_provenance) + lumped_structures
 
     # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
     placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
@@ -670,11 +812,11 @@ def _volumetric_structures_grid(self: Any, grid: Grid) -> tuple[Structure]:
     simulation_background = Structure(geometry=simulation_placeholder_geometry, medium=self.medium)
     background_structures = [simulation_background]
     new_structures = []
-    for structure in all_structures:
+    for structure, reference in all_structures:
         if not isinstance(structure.medium, Medium2D):
             # found a 3D material; keep it
             background_structures.append(structure)
-            new_structures.append(structure)
+            new_structures.append((structure, reference))
             continue
         # otherwise, found a 2D material; replace it with volumetric equivalent
         axis = structure.geometry._normal_2dmaterial
@@ -704,9 +846,9 @@ def _volumetric_structures_grid(self: Any, grid: Grid) -> tuple[Structure]:
                 geometry=new_geometry, medium=new_medium, name=new_name
             )
 
-            new_structures.append(new_structure)
+            new_structures.append((new_structure, reference))
 
-    return tuple(new_structures)
+    return new_structures
 
 
 def suggest_mesh_overrides(self: Any, **kwargs: Any) -> list[MeshOverrideStructure]:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tidy3d.components.microwave.source import MicrowaveTerminalSource
+from tidy3d.components.microwave.source import LumpedVoltageSource, MicrowaveTerminalSource
 
 from .current import CustomCurrentSource, PointDipole, UniformCurrentSource
 from .field import (
@@ -31,4 +31,5 @@ SourceType = (
     | CustomCurrentSource
     | TFSF
     | MicrowaveTerminalSource
+    | LumpedVoltageSource
 )
