@@ -29,7 +29,6 @@ PEC-vs-dielectric integration at consumption.
 
 from __future__ import annotations
 
-from itertools import chain
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -74,6 +73,8 @@ _EPS_COMPONENT_GRID_KEYS = {"xx": "Ex", "yy": "Ey", "zz": "Ez"}
 _BOUNDARY_PROBE_FRACTION = 0.5
 # queries per neighbour-vote block
 _VOTE_BLOCK = 16384
+# nearest surface samples (within reach) that vote on the side of a point, see ``_SurfaceVote``
+_VOTE_NEIGHBORS = 8
 _E_COMPONENT_KEYS = ("Ex", "Ey", "Ez")
 _H_COMPONENT_KEYS = ("Hx", "Hy", "Hz")
 
@@ -239,11 +240,18 @@ def effective_is_pec_at_points(
 class _SurfaceVote:
     """Cheap containment for points near a surface, decided by the surface's own samples.
 
-    Every sample ``q`` within reach of a point votes with the sign of ``(point - q) . n_q``,
-    the side of q's tangent plane the point is on. Near a smooth surface those planes agree
-    with the true surface; near an edge or corner they disagree, and such points are left to
-    the exact test. Only valid when the samples cover the whole surface near the points, as a
-    TriangleMesh's single surface sample set does.
+    The ``_VOTE_NEIGHBORS`` samples ``q`` nearest to a point, within its reach, vote with the
+    sign of ``(point - q) . n_q``, the side of q's tangent plane the point is on. Near a smooth
+    surface those planes agree with the true surface; near an edge or corner they disagree, and
+    such points are left to the exact test. Only valid when the samples cover the whole surface
+    near the points, as a TriangleMesh's single surface sample set does.
+
+    Polling the nearest samples instead of every sample within reach is an approximation: it
+    can decide a point whose farther voters would have disagreed. Next to an edge the nearest
+    samples lie on the face closest to the point, and that face's plane gives the right side,
+    so the decided sides matched the all-sample vote on every mesh tested (a flat lens, acute
+    cones, a pyramid, thin plates, concave rings). It could fail where no single face decides
+    the side, at vertices, or where features are thinner than the sample spacing.
     """
 
     def __init__(self, points: np.ndarray, normals: np.ndarray) -> None:
@@ -272,10 +280,12 @@ class _SurfaceVote:
 
     def _vote(self, points: np.ndarray, reach: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Unanimous-vote containment and the mask of points whose voters disagree (or are missing)."""
-        neighbors = self.tree.query_ball_point(points, reach)
-        counts = np.fromiter(map(len, neighbors), dtype=int, count=len(points))
-        voters = np.fromiter(chain.from_iterable(neighbors), dtype=np.intp, count=int(counts.sum()))
-        owner = np.repeat(np.arange(len(points)), counts)
+        distance, nearest = self.tree.query(
+            points, k=_VOTE_NEIGHBORS, distance_upper_bound=float(reach.max()) * (1 + 1e-12)
+        )
+        owner, column = np.nonzero(distance <= reach[:, None])
+        voters = nearest[owner, column]
+        counts = np.bincount(owner, minlength=len(points))
         signed = np.einsum("pj,pj->p", points[owner] - self.points[voters], self.normals[voters])
         votes_inside = np.bincount(owner, weights=signed < 0, minlength=len(points))
         votes_outside = np.bincount(owner, weights=signed > 0, minlength=len(points))
