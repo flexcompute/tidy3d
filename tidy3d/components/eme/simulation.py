@@ -24,13 +24,12 @@ from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import (
     AbstractYeeGridSimulation,
     Simulation,
-    validate_boundaries_for_zero_dims,
+    normalize_boundaries_for_zero_dims,
 )
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, Axis, FreqArray
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.validators import (
-    call_wrapped_validator,
     validate_freqs_min,
     validate_freqs_not_empty,
 )
@@ -871,11 +870,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         if fast_validation_active():
             # fast mode keeps only the step that changes the model; every other call
             # in this chain checks and would be skipped by the class-level guard
-            call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
+            normalize_boundaries_for_zero_dims(self, warn_on_change=False)
             return self
         self._structures_not_at_edges()
         self._validate_scene()
-        call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
+        # Folded here because `_as_fdtd_sim` and the grid read the folded `boundary_spec`.
+        normalize_boundaries_for_zero_dims(self, warn_on_change=False)
         super()._run_after_validators()
         self._validate_grid()
         self._validate_eme_grid()

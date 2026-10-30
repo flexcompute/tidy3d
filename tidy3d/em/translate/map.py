@@ -196,13 +196,22 @@ class ComponentScope(NamedTuple):
     """Where a public class translates to, which facade checks it, and when.
 
     ``on_construction`` runs the full facade after every construction of the public
-    class. Client policy validators stay on the public class.
+    class. Client policy validators stay on the public class. ``translator`` names a fold
+    the translation applies to the dumped data before the schema validates it, so the
+    rules check the folded form.
     """
 
     schema: str
     facade: str
     on_construction: bool = False
+    translator: str | None = None
 
+
+# The FDTD, EME and mode simulations translate with the same absorber on both sides of a
+# zero-size axis folded into ``Periodic``.
+ZERO_SIZE_AXIS_FOLD = (
+    "flexcompute.core._migration.solver.fdtd.conversion.boundaries:fold_boundaries_for_zero_dims"
+)
 
 # Scopes that check every subclass, whatever family it belongs to, before the subclass's
 # own scope. Each facade takes the core the model keeps, and these form no family: every
@@ -1186,12 +1195,14 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.solver.eme.schema.simulation:EMESimulation",
         "flexcompute.core._migration.solver.eme.validation:validate",
         on_construction=True,
+        translator=ZERO_SIZE_AXIS_FOLD,
     ),
     # fdtd
     "tidy3d.components.simulation.model:Simulation": ComponentScope(
         "flexcompute.core._migration.solver.fdtd.schema.model:Simulation",
         "flexcompute.core._migration.solver.fdtd.validation:validate",
         on_construction=True,
+        translator=ZERO_SIZE_AXIS_FOLD,
     ),
     # mode-workflow
     "tidy3d.components.mode.mode_solver:ModeSolver": ComponentScope(
@@ -1203,6 +1214,7 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.solver.mode.schema.simulation:ModeSimulation",
         "flexcompute.core._migration.solver.mode.validation:validate",
         on_construction=True,
+        translator=ZERO_SIZE_AXIS_FOLD,
     ),
 }
 

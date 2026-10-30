@@ -153,12 +153,15 @@ def from_component(model: BaseModel) -> object | None:
     # The public model already logged its warnings; copies would repeat them past td.log.
     # The copy's error lines are kept and logged only if the translation fails, because then
     # the public model's own check never ran.
+    scope = COMPONENT_SCOPES[_key(owner)]
+    if scope.translator is not None:
+        data = resolve(scope.translator)(data)
     _capture_copied_errors(copied_log)
     errors: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     token = _copied_errors.set(errors)
     try:
         with copied_log.suppress_output():
-            return resolve(COMPONENT_SCOPES[_key(owner)].schema).model_validate(data)
+            return resolve(scope.schema).model_validate(data)
     except PydanticValidationError:
         for args, kwargs in errors:
             log.error(*args, **kwargs)

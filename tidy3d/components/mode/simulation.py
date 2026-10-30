@@ -27,13 +27,13 @@ from tidy3d.components.monitor import (
 from tidy3d.components.simulation import (
     AbstractYeeGridSimulation,
     Simulation,
-    validate_boundaries_for_zero_dims,
+    normalize_boundaries_for_zero_dims,
 )
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.types import Direction, EMField, FreqArray
 from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
-from tidy3d.components.validators import call_wrapped_validator, validate_colocated_integration
+from tidy3d.components.validators import validate_colocated_integration
 from tidy3d.constants import C_0
 from tidy3d.em.translate import data_to_tidy3d
 from tidy3d.exceptions import SetupError, ValidationError
@@ -270,12 +270,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
     @always_validate
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
+        # Folded here because `_as_fdtd_sim` and the grid read the folded `boundary_spec`.
+        normalize_boundaries_for_zero_dims(self, warn_on_change=False)
         if fast_validation_active():
-            # fast mode keeps only the step that changes the model; every other call
-            # in this chain checks and would be skipped by the class-level guard
-            call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
+            # fast mode keeps only the fold; every other call in this chain checks and would be
+            # skipped by the class-level guard
             return self
-        call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
         self._structures_not_at_edges()
         self._validate_scene()
         super()._run_after_validators()

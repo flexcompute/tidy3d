@@ -48,7 +48,6 @@ from tidy3d.components.types import TYPE_TAG_STR, Symmetry
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor import MonitorType
 from tidy3d.components.validators import (
-    call_wrapped_validator,
     named_obj_descr,
 )
 from tidy3d.config import config
@@ -77,7 +76,7 @@ from . import runtime as _runtime_methods
 from . import sources as _sources_methods
 from . import tfsf as _tfsf_methods
 from . import visualization as _visualization_methods
-from .boundaries import validate_boundaries_for_zero_dims
+from .boundaries import normalize_boundaries_for_zero_dims
 from .yee import AbstractYeeGridSimulation
 
 _ABSORBING_BOUNDARIES = (PML, StablePML, Absorber)
@@ -949,13 +948,15 @@ class Simulation(AbstractYeeGridSimulation):
     @always_validate
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
+        # Fold the boundaries of zero-size axes here because public code reads the folded
+        # `boundary_spec`: the grid build, `num_pml_layers` and the solver upload. The translation
+        # folds them too, and their checks are a rule of the FDTD scope.
+        normalize_boundaries_for_zero_dims(self)
         if fast_validation_active():
-            # fast mode keeps only the step that changes the model; every other call
-            # in this chain checks and would be skipped by the class-level guard
-            call_wrapped_validator(validate_boundaries_for_zero_dims, self)
+            # fast mode keeps only the fold; every other call in this chain checks and would be
+            # skipped by the class-level guard
             return self
-        # Normalize zero-dimensional inputs and check what the grid build needs first.
-        call_wrapped_validator(validate_boundaries_for_zero_dims, self)
+        # Check what the grid build needs.
         self._validate_auto_grid_wavelength()
         # The parent hooks add only the grid size check and the monitor and structure containment
         # checks. This simulation runs the containment checks later, while it validates, and calls

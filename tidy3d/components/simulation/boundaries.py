@@ -5,11 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
-from pydantic import (
-    model_validator,
-)
 
-from tidy3d._runtime import always_validate
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import (
     CLIPPING_MARGIN,
@@ -30,85 +26,37 @@ from tidy3d.components.grid.snapping import (
 from tidy3d.log import log
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from tidy3d.components.boundary import InternalAbsorber
     from tidy3d.components.types import Axis
 
 from . import constants
 
 
-def validate_boundaries_for_zero_dims(
-    warn_on_change: bool = True,
-) -> Callable[[Any], Any]:
-    """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+def normalize_boundaries_for_zero_dims(sim: Any, warn_on_change: bool = True) -> None:
+    """Replace the absorbing boundary on both sides of a zero-size axis with ``Periodic``.
 
-    @model_validator(mode="after")
-    @always_validate
-    def boundaries_for_zero_dims(self: Any) -> Any:
-        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
-        val = self.boundary_spec
-        boundaries = val.to_list
-        size = self.size
-        symmetry = self.symmetry
-        axis_names = "xyz"
-
-        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
-            if size_dim == 0:
-                axis = axis_names[dim]
-                num_absorbing_bdries = sum(
-                    isinstance(bnd, AbsorberSpec | ABCBoundary | ModeABCBoundary)
-                    for bnd in boundary
-                )
-                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
-
-                if num_absorbing_bdries > 0:
-                    pbc = Boundary(minus=Periodic(), plus=Periodic())
-                    val = val.updated_copy(**{axis: pbc})
-                    if warn_on_change:
-                        log.warning(
-                            f"The simulation has zero size along the {axis} axis, so "
-                            "using a PML or absorbing boundary along that axis is incorrect. "
-                            f"Use either 'Periodic' or 'BlochBoundary' along {axis}. "
-                            "Using 'Periodic' boundary by default."
-                        )
-
-                if num_bloch_bdries > 0:
-                    self._raise_validation_error_at_loc(
-                        f"The simulation has zero size along the {axis} axis, "
-                        "using a Bloch boundary along such an axis is not supported because of "
-                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
-                        "but nonzero size along the dimension instead.",
-                        "boundary_spec",
-                        axis,
-                    )
-
-                if symmetry_dim != 0:
-                    self._raise_validation_error_at_loc(
-                        f"The simulation has zero size along the {axis} axis, so "
-                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
-                        "or 'PMCBoundary' to select source polarization if needed and set "
-                        f"Simulation.symmetry to 0 along {axis}.",
-                        "symmetry",
-                        dim,
-                    )
-
-                if boundary[0] != boundary[1]:
-                    self._raise_validation_error_at_loc(
-                        f"The simulation has zero size along the {axis} axis. "
-                        f"The boundary condition for {axis} plus and {axis} "
-                        "minus must be the same.",
-                        "boundary_spec",
-                        axis,
-                    )
-
-        # Update boundary_spec if it was modified
-        if val != self.boundary_spec:
-            object.__setattr__(self, "boundary_spec", val)
-
-        return self
-
-    return boundaries_for_zero_dims
+    Only an axis whose two sides are the same absorber changes, so a boundary that the rule
+    ``validate_boundaries_for_zero_dims`` rejects keeps the sides it reports.
+    """
+    val = sim.boundary_spec
+    for dim, (boundary, size_dim) in enumerate(zip(val.to_list, sim.size)):
+        if (
+            size_dim != 0
+            or boundary[0] != boundary[1]
+            or not isinstance(boundary[0], AbsorberSpec | ABCBoundary | ModeABCBoundary)
+        ):
+            continue
+        axis = "xyz"[dim]
+        val = val.updated_copy(**{axis: Boundary(minus=Periodic(), plus=Periodic())})
+        if warn_on_change:
+            log.warning(
+                f"The simulation has zero size along the {axis} axis, so "
+                "using a PML or absorbing boundary along that axis is incorrect. "
+                f"Use either 'Periodic' or 'BlochBoundary' along {axis}. "
+                "Using 'Periodic' boundary by default."
+            )
+    if val != sim.boundary_spec:
+        object.__setattr__(sim, "boundary_spec", val)
 
 
 @cached_property

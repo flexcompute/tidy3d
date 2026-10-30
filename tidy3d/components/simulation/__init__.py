@@ -8,7 +8,7 @@ from tidy3d.components.monitor import DiffractionMonitor, FieldMonitor, ModeMoni
 from tidy3d.components.thin_lens import MAX_THIN_LENS_SETUP_WORK_UNITS
 from tidy3d.packaging import tidy3d_extras
 
-from .boundaries import validate_boundaries_for_zero_dims
+from .boundaries import normalize_boundaries_for_zero_dims
 from .constants import (
     FIXED_ANGLE_DT_SAFETY_FACTOR,
     MAX_CELLS_TIMES_STEPS,
@@ -73,6 +73,6 @@ __all__ = [
     "OpticalMediumExportKey",
     "OutputMonitorTypes",
     "Simulation",
+    "normalize_boundaries_for_zero_dims",
     "tidy3d_extras",
-    "validate_boundaries_for_zero_dims",
 ]
