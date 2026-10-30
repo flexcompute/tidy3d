@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import autograd.numpy as np
 import shapely
 from autograd import make_vjp
+from flexcompute.geometry.polyslab import PolySlabCore
 from flexcompute.geometry.validation.polyslab import (
     DILATION_HEALED,
     DILATION_SELF_INTERSECTING,
@@ -854,6 +855,32 @@ class PolySlab(base.Planar):
         return _PolyBulgeUtil._polygon_discretize(self.reference_polygon, self._bulge_data)
 
     @cached_property
+    def _middle_polygon_shift_basis(self) -> tuple[NDArray, NDArray, NDArray, NDArray]:
+        """Offset-independent factors for shifting the middle polygon to any height."""
+        return PolySlabCore.shift_vertices_basis(get_static(self.middle_polygon))
+
+    def _inside_face_polygon(self, dist: float) -> shapely.Polygon:
+        """Prepared cross-section of a slanted sidewall ``dist`` out from the middle polygon.
+
+        It is grown by ``fp_eps``, so a point on its boundary counts as inside despite rounding.
+        The edges move out by that much and meet again, which is cheap but mitres the corners: an
+        acute one reaches ``fp_eps / sin(half angle)``. Outward needs the counter-clockwise
+        middle polygon.
+        """
+        basis = self._middle_polygon_shift_basis
+        face_polygon = self.make_shapely_polygon(
+            PolySlabCore.shift_with_basis(basis, dist + fp_eps)[0]
+        )
+        if not face_polygon.is_valid:
+            # a notch narrower than ``2 * fp_eps`` closed up and inverted its walls: grow the
+            # polygon without the extra shift by a round buffer instead
+            face_polygon = self.make_shapely_polygon(
+                PolySlabCore.shift_with_basis(basis, dist)[0]
+            ).buffer(fp_eps)
+        shapely.prepare(face_polygon)
+        return face_polygon
+
+    @cached_property
     def is_ccw(self) -> bool:
         """Is this ``PolySlab`` CCW-oriented?"""
         return PolySlab._area(self.vertices) > 0
@@ -914,12 +941,6 @@ class PolySlab(base.Planar):
                 def _move_axis(arr: NDArray) -> NDArray:
                     return np.moveaxis(arr, source=self.axis, destination=-1)
 
-                def _make_face_polygon(dist_z: float) -> shapely.Polygon:
-                    vertices_z = self._shift_vertices(self.middle_polygon, dist_z)[0]
-                    face_polygon = self.make_shapely_polygon(vertices_z).buffer(fp_eps)
-                    shapely.prepare(face_polygon)
-                    return face_polygon
-
                 def _is_meshgrid_like() -> bool:
                     # Only true meshgrids can reuse one shifted polygon per z slice; transformed
                     # geometries arrive here as flattened local points with per-point offsets.
@@ -949,7 +970,7 @@ class PolySlab(base.Planar):
                     for z_i in range(z.shape[self.axis]):
                         if not inside_height_axis[0, 0, z_i]:
                             continue
-                        face_polygon = _make_face_polygon(dist_axis[0, 0, z_i])
+                        face_polygon = self._inside_face_polygon(dist_axis[0, 0, z_i])
                         inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs, y=ys)
                         inside_polygon_axis[:, :, z_i] = inside_polygon_slab.reshape(
                             x_axis.shape[:2]
@@ -976,7 +997,7 @@ class PolySlab(base.Planar):
 
                     for dist_z, start, end in zip(dist_vals, group_starts[:-1], group_starts[1:]):
                         dist_inds = sort_inds[start:end]
-                        face_polygon = _make_face_polygon(dist_z)
+                        face_polygon = self._inside_face_polygon(dist_z)
                         inside_polygon_slab[dist_inds] = shapely.contains_xy(
                             face_polygon, x=xs_slab[dist_inds], y=ys_slab[dist_inds]
                         )
@@ -984,9 +1005,9 @@ class PolySlab(base.Planar):
         else:
             if self._has_vertical_sidewall:
                 poly_vertices = self._discretized_reference_polygon
+                face_polygon = self.make_shapely_polygon(poly_vertices).buffer(fp_eps)
             else:
-                poly_vertices = self._shift_vertices(self.middle_polygon, dist)[0]
-            face_polygon = self.make_shapely_polygon(poly_vertices).buffer(fp_eps)
+                face_polygon = self._inside_face_polygon(dist)
             point = shapely.Point(x, y)
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
@@ -1062,7 +1083,10 @@ class PolySlab(base.Planar):
                 # line/point boundary contact, while ``inside`` is boundary-inclusive.
                 inside_view[:, :, z_ind] = inside_z_slice(z_pos)
                 continue
-            section = shapely.unary_union(sections).buffer(fp_eps)
+            # mitred like the face polygons of ``inside``, so both paths agree near corners
+            section = shapely.unary_union(sections).buffer(
+                fp_eps, join_style="mitre", mitre_limit=1e10
+            )
             shapely.prepare(section)
             inside_view[:, :, z_ind] = shapely.contains_xy(section, x=xs, y=ys).reshape(
                 x_grid.shape
@@ -1820,47 +1844,7 @@ class PolySlab(base.Planar):
         if not hasbox(dist) and math.isclose(dist, 0):
             return vertices, np.zeros(vertices.shape[0], dtype=float), None
 
-        def rot90(v: tuple[NDArray, NDArray]) -> NDArray:
-            """90 degree rotation of 2d vector
-            vx -> vy
-            vy -> -vx
-            """
-            vxs, vys = v
-            return np.stack((-vys, vxs), axis=0)
-
-        def cross(u: NDArray, v: NDArray) -> Any:
-            return u[0] * v[1] - u[1] * v[0]
-
-        def normalize(v: NDArray) -> NDArray:
-            return v / np.linalg.norm(v, axis=0)
-
-        vs_orig = copy(vertices.T)
-        vs_next = np.roll(copy(vs_orig), axis=-1, shift=-1)
-        vs_previous = np.roll(copy(vs_orig), axis=-1, shift=+1)
-
-        asp = normalize(vs_next - vs_orig)
-        asm = normalize(vs_orig - vs_previous)
-
-        # the vertex shift is decomposed into parallel and perpendicular directions
-        perpendicular_shift = -dist
-        det = cross(asm, asp)
-
-        tan_half_angle = np.where(
-            np.isclose(det, 0, rtol=_IS_CLOSE_RTOL),
-            0.0,
-            cross(asm, rot90(asm - asp)) / (det + np.isclose(det, 0, rtol=_IS_CLOSE_RTOL)),
-        )
-        parallel_shift = dist * tan_half_angle
-
-        shift_total = perpendicular_shift * rot90(asm) + parallel_shift * asm
-        shift_x = shift_total[0, :]
-        shift_y = shift_total[1, :]
-
-        return (
-            np.swapaxes(vs_orig + shift_total, -2, -1),
-            parallel_shift,
-            (shift_x, shift_y),
-        )
+        return PolySlabCore.shift_vertices(vertices, dist)
 
     @staticmethod
     def _edge_length_and_reduction_rate(
