@@ -821,8 +821,8 @@ class SelberherrImpactIonization(Tidy3dBaseModel):
         evaluated at a carrier density of at least
         :math:`10^{8}\\,\\text{cm}^{-3}` and held constant below it: the
         quasi-Fermi level of a fully depleted region is not resolvable there and
-        carries no ionization. This formulation is supported only for isothermal
-        charge simulations using the accelerated solver.
+        carries no ionization. This formulation is supported only by the
+        accelerated solver, in two or three dimensions.
 
     Example
     -------
