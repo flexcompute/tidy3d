@@ -331,6 +331,12 @@ If ``angle_theta`` is within ``GLANCING_CUTOFF`` of an odd multiple of ``np.pi/2
 angled source or in mode spec, raise warning.
 """
 
+DERIVED_STRUCTURE_INDEX = -2
+"""
+Structure-ownership index recorded for what the solver adds without an entry in
+``Simulation.structures``: lumped elements and automatic PEC frames. ``-1`` is the background.
+"""
+
 UnitScaling = MappingProxyType(
     {
         "nm": 1e3,

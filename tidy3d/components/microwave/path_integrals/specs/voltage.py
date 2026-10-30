@@ -163,7 +163,8 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
     -----
 
     Use :class:`.AxisAlignedVoltageIntegralSpec` if possible, since interpolation
-    near conductors will not be accurate.
+    near conductors will not be accurate. To evaluate the path on recorded field data, use
+    :class:`.Custom2DVoltageIntegral`.
 
     .. TODO Improve by including extrapolate_to_endpoints field, non-trivial extension."""
 

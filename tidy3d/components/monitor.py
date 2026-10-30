@@ -1081,7 +1081,8 @@ class FieldStructureMonitor(AbstractFieldMonitor, FreqMonitor):
           the matching ``Ex``/``Ey``/``Ez`` grid);
         - the per-component structure-ownership maps ``structure_index_x``, ``structure_index_y``,
           ``structure_index_z``, recording which structure owns each Yee point
-          (``-1`` for the background medium, ``i`` for ``simulation.structures[i]``).
+          (``-1`` for the background medium, ``-2`` for a lumped element or an automatic PEC
+          frame, ``i`` for ``simulation.structures[i]``).
 
         These primitives serve the derived displacement field ``D`` (see :class:`.FieldStructureData`),
         the absorbed power density, and optical carrier generation
@@ -1140,8 +1141,8 @@ class ModeStructureMonitor(PlanarMonitor):
         - the diagonal, complex relative permittivity ``eps_xx``, ``eps_yy``, ``eps_zz`` (each on
           the matching ``Ex``/``Ey``/``Ez`` Yee grid), at every :attr:`.ModeSimulation.freqs`;
         - the per-component structure-ownership maps ``structure_index_x``, ``structure_index_y``,
-          ``structure_index_z`` (``-1`` for the background medium, ``i`` for
-          ``simulation.structures[i]``), recorded once -- ownership is frequency- and
+          ``structure_index_z`` (``-1`` for the background medium, ``-2`` for a lumped element
+          or an automatic PEC frame, ``i`` for ``simulation.structures[i]``), recorded once -- ownership is frequency- and
           mode-independent.
 
         The electric field comes from the ordinary mode result, paired with these arrays at read
@@ -3085,8 +3086,8 @@ class SurfaceFieldStructureMonitor(SurfaceFieldMonitor):
 
         A frequency-domain monitor that records, over the same triangulated surface mesh as
         :class:`.SurfaceFieldMonitor`, one additional primitive: the per-vertex
-        structure-ownership index (``-1`` for the background medium, ``i`` for
-        ``simulation.structures[i]``), recorded unconditionally regardless of which of ``fields``
+        structure-ownership index (``-1`` for the background medium, ``-2`` for an automatic PEC
+        frame, ``i`` for ``simulation.structures[i]``), recorded unconditionally regardless of which of ``fields``
         is requested. ``fields`` must include ``"H"``, from which the surface loss is computed;
         ``"E"`` is optional.
 

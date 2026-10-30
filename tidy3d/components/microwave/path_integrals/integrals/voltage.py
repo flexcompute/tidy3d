@@ -61,6 +61,11 @@ class Custom2DVoltageIntegral(Custom2DPathIntegral, Custom2DVoltageIntegralSpec)
     Use :class:`.AxisAlignedVoltageIntegral` if possible, since interpolation
     near conductors will not be accurate.
 
+    :meth:`compute_voltage` evaluates the path on recorded field data, such as that of a
+    :class:`.FieldMonitor` (giving the voltage over frequency) or a :class:`.FieldTimeMonitor` (over
+    time). The data must hold the two electric-field components in the path's plane; for a 3D
+    monitor the recorded plane nearest to ``position`` is used.
+
     .. TODO Improve by including extrapolate_to_endpoints field, non-trivial extension.
 
     Example
@@ -72,6 +77,8 @@ class Custom2DVoltageIntegral(Custom2DPathIntegral, Custom2DVoltageIntegralSpec)
     ...     position=0.0,
     ...     vertices=vertices,
     ... )
+    >>> voltage_f = voltage.compute_voltage(sim_data["field"])  # doctest: +SKIP
+    >>> voltage_t = voltage.compute_voltage(sim_data["field_time"])  # doctest: +SKIP
     """
 
     def compute_voltage(self, em_field: IntegrableMonitorDataType) -> VoltageIntegralResultType:

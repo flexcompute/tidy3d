@@ -407,10 +407,10 @@ Power loss
 
 These monitors record what ``SimulationData.per_structure_loss()`` needs to compute the total electromagnetic power lost in each structure. Dielectrics and conductive media lose power in their volume, and lossy metals lose it at their surface, so each kind of loss has its own monitor:
 
-* The ``FieldStructureMonitor`` records the electric field, the diagonal permittivity and the owning structure at the native Yee-grid points in a 3D region. Its data also provides the displacement field, the absorbed power density and optical carrier generation.
+* The ``FieldStructureMonitor`` records the electric field, the diagonal permittivity and the owning structure at the native Yee-grid points in a 3D region. Its data also provides the displacement field, the loss current density ``Jx_loss``/``Jy_loss``/``Jz_loss`` (the current in phase with E, ``sigma * E`` in a conductive medium), the absorbed power density and optical carrier generation.
 * The ``SurfaceFieldStructureMonitor`` records the H field, which the surface loss is computed from, and by default the E field, the surface normal and the owning structure at each vertex of the PEC and lossy-metal surfaces in a 3D region.
 
-``per_structure_loss()`` returns a ``StructureLossDataArray`` over frequency ``f`` and ``structure_index``, in watts. Each structure's value comes from the monitor that records how the solver modeled it: the ``SurfaceFieldStructureMonitor`` for PEC and for ``LossyMetalMedium`` under the default surface impedance subpixel method, the ``FieldStructureMonitor`` for all other media, including lossy metals solved as conductors (for example with ``subpixel=False``). Only structures sampled by a supplied monitor appear in the result. A structure that its own monitor does not sample, because that monitor was not supplied or does not reach it, is NaN when the other monitor samples it and absent otherwise: for example, a dielectric does not appear in a surface-only result, because surface vertices belong only to PEC and lossy metals. A ``structure_index`` of ``-1`` is the background medium. Under simulation ``symmetry``, the half the solver does not record is attributed to the structures the geometry places there, so mirror-image structures each get their own loss. A ``FullyAnisotropicMedium`` with off-diagonal conductivity is rejected, since its loss has cross terms the recorded diagonal permittivity does not capture. When both monitors are supplied, place them over the same region and give them the same frequencies.
+``per_structure_loss()`` returns a ``StructureLossDataArray`` over frequency ``f`` and ``structure_index``, in watts. Each structure's value comes from the monitor that records how the solver modeled it: the ``SurfaceFieldStructureMonitor`` for PEC and for ``LossyMetalMedium`` under the default surface impedance subpixel method, the ``FieldStructureMonitor`` for all other media, including lossy metals solved as conductors (for example with ``subpixel=False``). Only structures sampled by a supplied monitor appear in the result. A structure that its own monitor does not sample, because that monitor was not supplied or does not reach it, is NaN when the other monitor samples it and absent otherwise: for example, a dielectric does not appear in a surface-only result, because surface vertices belong only to PEC and lossy metals. A ``structure_index`` of ``-1`` is the background medium, and ``-2`` collects the lumped elements and automatic PEC frames, which have no entry in ``Simulation.structures``; ``-2`` takes its total from the ``FieldStructureMonitor``, so it is NaN without one. Under simulation ``symmetry``, each sample of the half the solver does not record is attributed to the structure that owns the recorded sample it was expanded from: a structure lying wholly in the mirrored half has no entry, and the loss of its mirror image includes the mirrored samples. A ``FullyAnisotropicMedium`` with off-diagonal conductivity is rejected, since its loss has cross terms the recorded diagonal permittivity does not capture. When both monitors are supplied, place them over the same region and give them the same frequencies.
 
 .. code-block:: python
 
@@ -440,6 +440,22 @@ These monitors record what ``SimulationData.per_structure_loss()`` needs to comp
 .. note::
 
    ``per_structure_loss()`` requires a 3D simulation and monitors with nonzero size along every axis. Each recorded sample is attributed to a single structure, so near an interface between structures the split of the loss is accurate to about one grid cell. Like other surface monitors, the ``SurfaceFieldStructureMonitor`` is in beta stage.
+
+``SimulationData.specific_absorption_rate()`` divides the ``FieldStructureMonitor``'s absorbed power density by the mass density of the medium owning each sample and returns the point (unaveraged) specific absorption rate in W/kg over ``x``, ``y``, ``z`` and ``f``. It takes each medium's density from its heat medium (the ``density`` of a ``SolidMedium`` or ``FluidMedium``, given as ``MultiPhysicsMedium(heat=...)``). ``SimulationData.specific_absorption_rate_from_densities()`` takes them instead as a mapping from medium to density in kg/um^3, keyed by the medium as the simulation holds it (water at 1000 kg/m^3 is ``1e-15``). Every medium that absorbs power in the monitor region needs a density; media that do not, such as a lossless background, contribute zero, as do 2D materials, lumped elements and automatic PEC frames. Media with equal properties are one key, so give them different ``name`` values to assign different densities. The SAR follows the simulation's `source normalization <../faq/docs/faq/How-are-results-normalized.html>`_. It is linear in the source power, so scale the result for another power, e.g. multiply it by the input power in W for a source normalized to 1 W.
+
+.. code-block:: python
+
+   tissue = MultiPhysicsMedium(
+       optical=Medium(permittivity=41.5, conductivity=0.97e-6),  # S/um
+       heat=SolidMedium(conductivity=0.5e-6, capacity=3.6e3, density=1.05e-15),  # 1050 kg/m^3
+       name="tissue",
+   )
+
+   # after the simulation, SAR in the run's source normalization
+   sar = sim_data.specific_absorption_rate('volume_loss')
+
+   # or with the density given directly
+   sar = sim_data.specific_absorption_rate_from_densities('volume_loss', {tissue: 1.05e-15})
 
 
 ~~~~

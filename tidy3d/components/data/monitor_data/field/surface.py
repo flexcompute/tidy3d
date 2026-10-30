@@ -24,6 +24,7 @@ from tidy3d.components.monitor import (
     SurfaceFieldTimeMonitor,
 )
 from tidy3d.components.validators import enforce_monitor_fields_present
+from tidy3d.constants import DERIVED_STRUCTURE_INDEX
 from tidy3d.exceptions import AdjointError, DataError
 
 if TYPE_CHECKING:
@@ -211,13 +212,14 @@ class SurfaceFieldStructureData(SurfaceFieldData):
         ...,
         title="Structure Index",
         description="Per-vertex owning-structure index on the triangulated surface (-1 for the "
-        "background medium, i for simulation.structures[i]).",
+        "background medium, -2 for an automatic PEC frame, i for simulation.structures[i]).",
     )
 
     @property
     def _symmetry_update_dict(self) -> dict:
         """Extend the base E/H/normal symmetry expansion with ``structure_index``, always even
-        under symmetry (which structure owns a point doesn't change under reflection).
+        under symmetry: a mirrored vertex keeps the owner of the recorded vertex it was expanded
+        from.
 
         Unlike ``normal`` (a vector field with an ``axis`` dimension, whose per-component
         symmetry factor is genuinely axis-tagged), ``structure_index`` is a scalar per-vertex
@@ -265,7 +267,8 @@ class SurfaceFieldStructureData(SurfaceFieldData):
         like surface with no explicit ``Structure``, such as one facet of an infinite lossy-metal
         half-space) looks up ``sim.medium`` instead, the same as any other owner; vertices owned
         by a lossless medium (no ``surface_impedance``, e.g. :class:`.PECMedium`) get
-        ``Re(Z_s) = 0`` either way. Vertices owned by a medium the solver did not model as a
+        ``Re(Z_s) = 0`` either way, as do those of an automatic PEC frame
+        (``structure_index == -2``). Vertices owned by a medium the solver did not model as a
         surface, such as a :class:`.LossyMetalMedium` solved as a conductor (``subpixel=False``,
         ``Staircasing`` or ``VolumetricAveraging``), are NaN: that medium loses power in its
         volume, which a :class:`.FieldStructureMonitor` records.
@@ -283,7 +286,10 @@ class SurfaceFieldStructureData(SurfaceFieldData):
 
         re_z_s_per_vertex = np.zeros((owners.size, freqs.size))
         for owner in np.unique(owners):
-            medium = sim.medium if owner < 0 else sim.structures[int(owner)].medium
+            if owner == DERIVED_STRUCTURE_INDEX:
+                # a vertex on an automatic PEC frame, which is lossless
+                continue
+            medium = sim.medium if owner == -1 else sim.structures[int(owner)].medium
             surface_impedance = getattr(medium, "surface_impedance", None)
             if not _loses_power_at_surface(medium, sim):
                 re_z_s = np.full(freqs.size, np.nan)

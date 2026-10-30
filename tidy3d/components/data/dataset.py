@@ -1183,7 +1183,8 @@ class FieldStructureDataset(AbstractFieldDataset):
     electric field components, ``eps_xx``/``eps_yy``/``eps_zz`` are the matching diagonal complex
     relative permittivity components, and ``structure_index_x``/``structure_index_y``/
     ``structure_index_z`` record which structure owns each Yee point (``-1`` for the background
-    medium, ``i`` for ``simulation.structures[i]``).
+    medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for
+    ``simulation.structures[i]``).
     """
 
     # All nine primitives are required: the displacement field, absorbed power, and optical
@@ -1219,17 +1220,20 @@ class FieldStructureDataset(AbstractFieldDataset):
     structure_index_x: SpatialDataArray = Field(
         title="Structure Index (x)",
         description="Owning structure index at each ``Ex`` Yee point; ``-1`` for the background "
-        "medium, ``i`` for ``simulation.structures[i]``.",
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
     )
     structure_index_y: SpatialDataArray = Field(
         title="Structure Index (y)",
         description="Owning structure index at each ``Ey`` Yee point; ``-1`` for the background "
-        "medium, ``i`` for ``simulation.structures[i]``.",
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
     )
     structure_index_z: SpatialDataArray = Field(
         title="Structure Index (z)",
         description="Owning structure index at each ``Ez`` Yee point; ``-1`` for the background "
-        "medium, ``i`` for ``simulation.structures[i]``.",
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
     )
 
     @property
@@ -1288,7 +1292,8 @@ class ModeStructureDataset(AbstractMediumPropertyDataset):
     What a :class:`.ModeStructureMonitor` records: the diagonal complex relative permittivity
     ``eps_xx``/``eps_yy``/``eps_zz`` and the per-Yee-component ownership maps
     ``structure_index_x``/``structure_index_y``/``structure_index_z`` (``-1`` for the background
-    medium, ``i`` for ``simulation.structures[i]``), each on its native Yee grid. The electric
+    medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for
+    ``simulation.structures[i]``), each on its native Yee grid. The electric
     field is not recorded here: it is paired in from the ordinary mode result at read time (see
     :meth:`.ModeSimulationData.field_structure`), which is why this dataset is the permittivity
     half of :class:`.FieldStructureDataset` rather than the whole matched set.
@@ -1297,17 +1302,20 @@ class ModeStructureDataset(AbstractMediumPropertyDataset):
     structure_index_x: SpatialDataArray = Field(
         title="Structure Index (x)",
         description="Owning structure index at each ``Ex`` Yee point; ``-1`` for the background "
-        "medium, ``i`` for ``simulation.structures[i]``.",
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
     )
     structure_index_y: SpatialDataArray = Field(
         title="Structure Index (y)",
         description="Owning structure index at each ``Ey`` Yee point; ``-1`` for the background "
-        "medium, ``i`` for ``simulation.structures[i]``.",
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
     )
     structure_index_z: SpatialDataArray = Field(
         title="Structure Index (z)",
         description="Owning structure index at each ``Ez`` Yee point; ``-1`` for the background "
-        "medium, ``i`` for ``simulation.structures[i]``.",
+        "medium, ``-2`` for a lumped element or an automatic PEC frame, ``i`` for "
+        "``simulation.structures[i]``.",
     )
 
     @property

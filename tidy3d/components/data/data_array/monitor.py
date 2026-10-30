@@ -32,7 +32,8 @@ class FluxDataArray(DataArray):
 class StructureLossDataArray(DataArray):
     """Total electromagnetic power loss per structure in the frequency domain.
 
-    ``structure_index`` indexes ``Simulation.structures``; ``-1`` is the background medium.
+    ``structure_index`` indexes ``Simulation.structures``; ``-1`` is the background medium, and
+    ``-2`` collects the lumped elements and automatic PEC frames.
 
     Example
     -------

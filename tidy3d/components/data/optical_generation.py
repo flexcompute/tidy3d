@@ -12,7 +12,7 @@ from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium
 from tidy3d.components.tcad.generation_recombination import DistributedGeneration
-from tidy3d.constants import HBAR, HERTZ, VOLUMETRIC_HEAT_RATE, Q_e
+from tidy3d.constants import DERIVED_STRUCTURE_INDEX, HBAR, HERTZ, VOLUMETRIC_HEAT_RATE, Q_e
 from tidy3d.exceptions import DataError, SetupError
 from tidy3d.log import log
 
@@ -164,15 +164,16 @@ def _energy_gap_map(
 ) -> tuple[np.ndarray, bool]:
     """Resolve a per-Yee-point band-gap energy ``E_g`` [eV] from structure-ownership indices.
 
-    ``-1`` (background) and any owning structure without a ``SemiconductorMedium`` ``charge`` medium
-    map to ``+inf`` (gate closed). Note ``-1`` is handled explicitly, never as ``structures[-1]``.
+    ``-1`` (background), ``-2`` (a lumped element or an automatic PEC frame) and any owning
+    structure without a ``SemiconductorMedium`` ``charge`` medium map to ``+inf`` (gate closed).
+    Negative owners are handled explicitly, never as ``structures[-1]``.
 
     Returns the ``E_g`` map and a flag indicating whether any owning structure carried a
     semiconductor ``charge`` medium (used to tell "below gap" apart from "no charge media at all").
     """
     indices = np.round(np.asarray(structure_index.values)).astype(int)
     if indices.size:
-        out_of_range = indices[(indices < -1) | (indices >= len(structures))]
+        out_of_range = indices[(indices < DERIVED_STRUCTURE_INDEX) | (indices >= len(structures))]
         if out_of_range.size:
             raise DataError(
                 f"Structure-ownership index {int(out_of_range.flat[0])} is out of range for a "
@@ -180,19 +181,19 @@ def _energy_gap_map(
                 "'structure_index_*' maps do not match 'simulation.structures'."
             )
 
-    # ``[background, *structures]`` band-gap lookup built once: row 0 is the background and row
-    # ``i + 1`` is ``structures[i]``. ``+inf`` (gate closed) for the background and any owning
-    # structure without a ``SemiconductorMedium`` ``charge`` medium. Indexing this with the
-    # ownership map (shifted by 1 so ``-1`` -> background) is O(structures + points).
-    eg_lookup = np.full(len(structures) + 1, np.inf)
+    # ``[lumped elements and PEC frames, background, *structures]`` band-gap lookup built once:
+    # row ``i + 2`` is ``structures[i]``. ``+inf`` (gate closed) for the first two rows and any
+    # owning structure without a ``SemiconductorMedium`` ``charge`` medium. Indexing this with the
+    # ownership map shifted by 2 is O(structures + points).
+    eg_lookup = np.full(len(structures) + 2, np.inf)
     for i, structure in enumerate(structures):
         medium = structure.medium
         if isinstance(medium, MultiPhysicsMedium) and isinstance(
             medium.charge, SemiconductorMedium
         ):
-            eg_lookup[i + 1] = medium.charge.E_g.band_gap_energy(temperature=temperature)
+            eg_lookup[i + 2] = medium.charge.E_g.band_gap_energy(temperature=temperature)
 
-    e_g = eg_lookup[indices + 1]
+    e_g = eg_lookup[indices + 2]
     # A finite band gap appears only where a cell is owned by a semiconductor structure, so this
     # reflects whether any *owning* structure in this region carries a 'charge' medium (used to
     # distinguish "below gap" from "no charge media at all"), not merely its presence in the sim.

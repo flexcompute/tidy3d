@@ -98,6 +98,14 @@ class Custom2DCurrentIntegral(Custom2DPathIntegral, Custom2DCurrentIntegralSpec)
     To compute the current flowing in the positive ``axis`` direction, the vertices should be
     ordered in a counterclockwise direction.
 
+    Notes
+    -----
+
+    :meth:`compute_current` evaluates the path on recorded field data, such as that of a
+    :class:`.FieldMonitor` (giving the current over frequency) or a :class:`.FieldTimeMonitor` (over
+    time). The data must hold the two magnetic-field components in the path's plane; for a 3D
+    monitor the recorded plane nearest to ``position`` is used.
+
     Example
     -------
     >>> import numpy as np
@@ -107,6 +115,8 @@ class Custom2DCurrentIntegral(Custom2DPathIntegral, Custom2DCurrentIntegralSpec)
     ...     position=0.0,
     ...     vertices=vertices,
     ... )
+    >>> current_f = current.compute_current(sim_data["field"])  # doctest: +SKIP
+    >>> current_t = current.compute_current(sim_data["field_time"])  # doctest: +SKIP
     """
 
     def compute_current(self, em_field: IntegrableMonitorDataType) -> CurrentIntegralResultType:

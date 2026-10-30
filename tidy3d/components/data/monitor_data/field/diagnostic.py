@@ -121,9 +121,10 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
     """Derived quantities shared by every producer of matched field/permittivity/ownership data.
 
     Hosts the electromagnetic quantities that follow from the nine stored primitives — the
-    displacement field, the per-component absorbed power, and the shared ``interval_space``-aware
-    colocation — so that each producer's data class (FDTD and mode solver) only has to supply the
-    primitives themselves. Nothing here is specific to how the data was produced.
+    displacement field, the loss current density, the per-component absorbed power, and the shared
+    ``interval_space``-aware colocation — so that each producer's data class (FDTD and mode
+    solver) only has to supply the primitives themselves. Nothing here is specific to how the data
+    was produced.
 
     Mixed into a concrete monitor-data class, which must additionally provide ``monitor`` (for
     ``center`` and ``downsample``) and ``colocation_boundaries``.
@@ -162,6 +163,83 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
         """z-component of ``D / epsilon_0 = eps_zz * Ez`` on the ``Ez`` Yee grid."""
         return self._displacement_component("Ez", "eps_zz")
 
+    @staticmethod
+    def _loss_current_density_component(
+        e_field: ScalarFieldDataArray, eps: ScalarFieldDataArray
+    ) -> ScalarFieldDataArray:
+        """Single loss current density component ``J_i = w eps0 Im(eps_ii) E_i`` [A/um^2].
+
+        ``eps_ii`` and ``E_i`` share the native Yee grid and frequencies, so they align directly.
+        Computed from the raw ``self`` arrays; use ``self.symmetry_expanded`` for the full domain.
+        """
+        current = loss_numerics.loss_current_density(
+            eps_imag=eps.imag,
+            e_field=e_field,
+            freq=e_field.coords["f"],
+            epsilon_0=EPSILON_0,
+        )
+        ordered = current.transpose(*e_field.dims)
+        return ScalarFieldDataArray(ordered.data, coords=ordered.coords)
+
+    def _loss_current_density_components(self) -> dict[str, ScalarFieldDataArray]:
+        """The loss current density components (see :meth:`_loss_current_density_component`)."""
+        return {"Jx_loss": self.Jx_loss, "Jy_loss": self.Jy_loss, "Jz_loss": self.Jz_loss}
+
+    @property
+    def Jx_loss(self) -> ScalarFieldDataArray:
+        """x-component of the loss current density ``Jx_loss = w eps0 Im(eps_xx) Ex`` [A/um^2] on
+        the ``Ex`` Yee grid.
+
+        The current in phase with ``E``: ``sigma * E`` in a conductive medium, so that
+        ``1/2 Re(J . E*)`` is the absorbed power density. This is the loss current, not the full
+        current:
+
+        - It is zero inside a PEC and inside a lossy metal under the surface impedance method,
+          the usual RF conductors: their current flows on the surface, which
+          :attr:`.SurfaceFieldData.current_density` gives.
+        - ``Im(eps)`` combines conduction and dielectric loss, so a lossy dielectric carries the
+          equivalent ``sigma_eff * E``.
+        - In a dispersive metal, the part of the current out of phase with ``E`` is not included;
+          it is negligible well below the metal's collision frequency (e.g. at RF frequencies).
+        - Only the diagonal permittivity is recorded, so the current driven through the
+          off-diagonal conductivity of a :class:`.FullyAnisotropicMedium` is not included.
+        """
+        return self._loss_current_density_component(self.Ex, self.eps_xx)
+
+    @property
+    def Jy_loss(self) -> ScalarFieldDataArray:
+        """y-component of the loss current density on the ``Ey`` Yee grid (see :attr:`Jx_loss`)."""
+        return self._loss_current_density_component(self.Ey, self.eps_yy)
+
+    @property
+    def Jz_loss(self) -> ScalarFieldDataArray:
+        """z-component of the loss current density on the ``Ez`` Yee grid (see :attr:`Jx_loss`)."""
+        return self._loss_current_density_component(self.Ez, self.eps_zz)
+
+    def _colocate_components(
+        self,
+        components: dict[str, ScalarFieldDataArray],
+        method_name: str,
+        coords: tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D],
+    ) -> xr.Dataset:
+        """Interpolate native-grid derived components to the supplied ``(x, y, z)`` coordinates;
+        ``None`` skips that dimension. ``method_name`` names the public caller in errors."""
+        supplied_coord_map = {k: np.array(v) for k, v in zip("xyz", coords) if v is not None}
+        centered: dict[str, ScalarFieldDataArray] = {}
+        for name, data in components.items():
+            for coord_name, coords_supplied in supplied_coord_map.items():
+                if np.array(data.coords[coord_name]).size == 1:
+                    raise DataError(
+                        f"{method_name} given {coord_name}={coords_supplied}, but "
+                        f"'{name}' has a single coordinate at "
+                        f"{coord_name}={np.array(data.coords[coord_name])[0]}. "
+                        f"Supply {coord_name}=None to skip this dimension."
+                    )
+            centered[name] = data.interp(**supplied_coord_map, kwargs={"bounds_error": True})
+        # preserve traced arrays on item access so an (unsupported) objective built from the
+        # result still registers a VJP path and reaches the explicit AdjointError below
+        return self.package_colocate_results(centered)
+
     def colocate_displacement(
         self, x: ArrayFloat1D = None, y: ArrayFloat1D = None, z: ArrayFloat1D = None
     ) -> xr.Dataset:
@@ -182,21 +260,34 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
         xarray.Dataset
             Dataset containing the colocated ``Dx``/``Dy``/``Dz`` components.
         """
-        supplied_coord_map = {k: np.array(v) for k, v in zip("xyz", (x, y, z)) if v is not None}
-        centered: dict[str, ScalarFieldDataArray] = {}
-        for name, data in self._displacement_components().items():
-            for coord_name, coords_supplied in supplied_coord_map.items():
-                if np.array(data.coords[coord_name]).size == 1:
-                    raise DataError(
-                        f"colocate_displacement given {coord_name}={coords_supplied}, but "
-                        f"'{name}' has a single coordinate at "
-                        f"{coord_name}={np.array(data.coords[coord_name])[0]}. "
-                        f"Supply {coord_name}=None to skip this dimension."
-                    )
-            centered[name] = data.interp(**supplied_coord_map, kwargs={"bounds_error": True})
-        # preserve traced arrays on item access so an (unsupported) objective built from the
-        # result still registers a VJP path and reaches the explicit AdjointError below
-        return self.package_colocate_results(centered)
+        return self._colocate_components(
+            self._displacement_components(), "colocate_displacement", (x, y, z)
+        )
+
+    def colocate_loss_current_density(
+        self, x: ArrayFloat1D = None, y: ArrayFloat1D = None, z: ArrayFloat1D = None
+    ) -> xr.Dataset:
+        """Colocate the loss current density components ``Jx_loss``/``Jy_loss``/``Jz_loss`` to
+        supplied coordinates.
+
+        Analogous to :meth:`.FieldData.colocate`, but for the derived loss current density (see
+        :attr:`Jx_loss`). Returns an :class:`xarray.Dataset` of the colocated
+        ``Jx_loss``/``Jy_loss``/``Jz_loss`` components [A/um^2]. Symmetry is not expanded here;
+        call on ``self.symmetry_expanded`` for the full domain.
+
+        Parameters
+        ----------
+        x, y, z : Optional[array-like] = None
+            Coordinates to colocate to along each dimension; ``None`` skips that dimension.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing the colocated ``Jx_loss``/``Jy_loss``/``Jz_loss`` components.
+        """
+        return self._colocate_components(
+            self._loss_current_density_components(), "colocate_loss_current_density", (x, y, z)
+        )
 
     @property
     def per_component_absorbed_power(self) -> dict[str, xr.DataArray]:
@@ -339,14 +430,15 @@ class _FieldStructureDerivedMixin(FieldStructureDataset):
 class FieldStructureData(_FieldStructureDerivedMixin, AbstractFieldData):
     """Data for a :class:`.FieldStructureMonitor`: matched electric field, permittivity, and
     per-Yee structure-ownership components on their native Yee grids, plus the derived
-    displacement field and absorbed power density.
+    displacement field, loss current density and absorbed power density.
 
     Notes
     -----
 
         The stored primitives (``Ex``/``Ey``/``Ez``, ``eps_xx``/``eps_yy``/``eps_zz``,
         ``structure_index_x``/``structure_index_y``/``structure_index_z``) are recorded on their
-        native Yee grids. The derived displacement field components ``Dx``/``Dy``/``Dz`` and the
+        native Yee grids. The derived displacement field components ``Dx``/``Dy``/``Dz``, loss
+        current density components ``Jx_loss``/``Jy_loss``/``Jz_loss`` and the
         ``absorbed_power_density`` are computed on demand from the raw ``self`` arrays; access the
         symmetry-expanded quantities via ``self.symmetry_expanded``.
 
@@ -416,8 +508,9 @@ class ModeStructureData(ModeStructureDataset, AbstractFieldData):
 
         Half of the matched set its FDTD sibling :class:`.FieldStructureData` carries: the
         electric field is not recorded here but paired in from the ordinary mode result at read
-        time. The derived quantities (``Dx``/``Dy``/``Dz``, ``absorbed_power_density``) therefore
-        live on what :meth:`.ModeSimulationData.field_structure` assembles, not on this class; use
+        time. The derived quantities (``Dx``/``Dy``/``Dz``, ``Jx_loss``/``Jy_loss``/``Jz_loss``,
+        ``absorbed_power_density``) therefore live on what
+        :meth:`.ModeSimulationData.field_structure` assembles, not on this class; use
         :meth:`.ModeSimulationData.optical_generation` for carrier generation.
 
     Example
@@ -465,9 +558,9 @@ class ModeFieldStructureData(_FieldStructureDerivedMixin, AbstractFieldData):
         ``Ex``/``Ey``/``Ez`` out of the mode data at the coordinates the monitor recorded, so the
         nine primitives are matched on their native Yee grids exactly as
         :class:`.FieldStructureData` carries them in FDTD -- and serves the same derived
-        quantities (``Dx``/``Dy``/``Dz``, ``absorbed_power_density``). Never produced by a solver
-        and never serialized: it is a read-time view over :class:`.ModeStructureData` and the mode
-        fields.
+        quantities (``Dx``/``Dy``/``Dz``, ``Jx_loss``/``Jy_loss``/``Jz_loss``,
+        ``absorbed_power_density``). Never produced by a solver and never serialized: it is a
+        read-time view over :class:`.ModeStructureData` and the mode fields.
 
         Mode fields are power-normalized to 1 W, so the ``power_scale`` of
         :meth:`.ModeSimulationData.optical_generation` is the guided power in watts.

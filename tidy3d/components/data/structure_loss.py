@@ -1,54 +1,57 @@
-"""Per-structure electromagnetic power loss, aggregated from loss-density monitor data."""
+"""Per-structure electromagnetic power loss, aggregated from loss-density monitor data, and the
+mass-normalized loss density (specific absorption rate)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 import numpy as np
+import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import power_loss as loss_numerics
 
-from tidy3d.components.data.data_array import StructureLossDataArray
+from tidy3d.components.data.data_array import ScalarFieldDataArray, StructureLossDataArray
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
+from tidy3d.components.material.tcad.heat import FluidMedium, SolidMedium
+from tidy3d.components.medium.abstract_custom import AbstractCustomMedium
 from tidy3d.components.medium.anisotropic import FullyAnisotropicMedium
+from tidy3d.components.medium.base import AbstractMedium
 from tidy3d.components.medium.lossy_metal import LossyMetalMedium
+from tidy3d.components.medium.two_d import Medium2D
 from tidy3d.components.subpixel_spec import SurfaceImpedance
+from tidy3d.constants import DERIVED_STRUCTURE_INDEX
 from tidy3d.exceptions import DataError, SetupError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from tidy3d.components.data.data_array import SpatialDataArray
     from tidy3d.components.data.monitor_data import FieldStructureData, SurfaceFieldStructureData
-    from tidy3d.components.medium.base import AbstractMedium
+    from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.simulation import Simulation
     from tidy3d.components.structure import Structure
 
 
 # off-diagonal conductivity below this fraction of the largest entry is rounding, not coupling
 _OFF_DIAGONAL_RTOL = 1e-9
-# a sample lies in the mirrored half when it is this far below a symmetry plane [um]
-_MIRROR_PLANE_ATOL = 1e-9
-# step into the metal, as a fraction of the smallest grid step, at which a vertex's owner is found
-_SURFACE_OWNER_STEP = 1e-3
-# volumetric samples relabeled per block, bounding the temporary arrays the relabeling needs
-_RELABEL_BLOCK_SIZE = 250_000
 
 
 def _check_owner_range(owners: np.ndarray, num_structures: int, data_name: str) -> np.ndarray:
     """Round ``owners`` to the nearest int (the same canonicalization ``_integrate_by_structure``
     and ``surface_loss_density`` use for aggregation/lookup) and raise a controlled 'DataError'
-    for any value outside ``{-1} | [0, num_structures)``.
+    for any value outside ``{-2, -1} | [0, num_structures)``.
 
-    Mirrors ``optical_generation._energy_gap_map``'s guard: ``-1`` (background) is the only valid
-    negative value, never indexed into ``structures`` -- anything else negative is out of range
-    too, not merely "not background". Validating the rounded owners (rather than the raw stored
-    values) matters because a value that looks in-range before rounding (e.g. ``1.9`` in a
-    two-structure simulation) can round up to an out-of-range index during aggregation and slip
-    past a raw-value check undetected. Returns the rounded owners so callers use the exact same
-    values this guard validated, rather than re-deriving them (and risking a second, possibly
-    inconsistent, cast).
+    Mirrors ``optical_generation._energy_gap_map``'s guard: ``-1`` (background) and
+    ``DERIVED_STRUCTURE_INDEX`` (``-2``, a lumped element or an automatic PEC frame) are the only
+    valid negative values, never indexed into ``structures``. Validating the rounded owners
+    (rather than the raw stored values) matters because a value that looks in-range before
+    rounding (e.g. ``1.9`` in a two-structure simulation) can round up to an out-of-range index
+    during aggregation and slip past a raw-value check undetected. Returns the rounded owners so
+    callers use the exact same values this guard validated, rather than re-deriving them (and
+    risking a second, possibly inconsistent, cast).
     """
     owners = np.round(np.asarray(owners)).astype(int)
-    out_of_range = owners[(owners < -1) | (owners >= num_structures)]
+    out_of_range = owners[(owners < DERIVED_STRUCTURE_INDEX) | (owners >= num_structures)]
     if out_of_range.size:
         raise DataError(
             f"Structure-ownership index {int(out_of_range.flat[0])} in '{data_name}' is out of "
@@ -56,6 +59,28 @@ def _check_owner_range(owners: np.ndarray, num_structures: int, data_name: str) 
             "'structure_index' does not match 'simulation.structures'."
         )
     return owners
+
+
+def _structure_index_by_axis(field_structure: FieldStructureData) -> dict[str, SpatialDataArray]:
+    """The recorded owner map of each E component, keyed by axis."""
+    return {
+        "x": field_structure.structure_index_x,
+        "y": field_structure.structure_index_y,
+        "z": field_structure.structure_index_z,
+    }
+
+
+def _expanded_owners(expanded: FieldStructureData, num_structures: int) -> dict[str, np.ndarray]:
+    """Owner of every sample of symmetry-expanded data, per E component, as an index into
+    ``sim.structures`` (-1 for the background, -2 for a lumped element or an automatic PEC frame).
+    A sample of the mirrored half keeps the owner of the recorded sample it was expanded from."""
+    structure_index = _structure_index_by_axis(expanded)
+    return {
+        axis: _check_owner_range(
+            structure_index[axis].values, num_structures, f"structure_index_{axis}"
+        )
+        for axis in "xyz"
+    }
 
 
 def _volumetric_loss_per_structure(
@@ -92,22 +117,7 @@ def _volumetric_loss_per_structure(
     freqs = np.atleast_1d(np.asarray(expanded.monitor.freqs, dtype=float))
     per_axis_power = expanded.per_component_absorbed_power
     cell_volumes = expanded._cell_volumes()
-    structure_index = {
-        "x": expanded.structure_index_x,
-        "y": expanded.structure_index_y,
-        "z": expanded.structure_index_z,
-    }
-    owners = {
-        axis: _check_owner_range(
-            structure_index[axis].values, num_structures, f"structure_index_{axis}"
-        )
-        for axis in "xyz"
-    }
-    if any(sim.symmetry):
-        owners = {
-            axis: _relabel_mirrored_volumetric(structure_index[axis], owners[axis], sim)
-            for axis in "xyz"
-        }
+    owners = _expanded_owners(expanded, num_structures)
 
     weighted = {axis: cell_volumes[axis].values > 0 for axis in "xyz"}
 
@@ -134,13 +144,6 @@ def _surface_loss_per_structure(
     owners = _check_owner_range(
         expanded.structure_index.values.values, num_structures, "structure_index"
     )
-    if any(sim.symmetry):
-        owners = _relabel_mirrored_surface(expanded, owners, sim)
-        # look up each vertex's Re(Z_s) from its relabeled owner too
-        relabeled = expanded.structure_index.values.copy(data=owners.astype(float))
-        expanded = expanded.updated_copy(
-            structure_index=expanded.structure_index.updated_copy(values=relabeled)
-        )
 
     freqs = np.atleast_1d(np.asarray(expanded.monitor.freqs, dtype=float))
     sld = expanded.surface_loss_density(sim)
@@ -178,14 +181,31 @@ def _loses_power_at_surface(medium: AbstractMedium | MultiPhysicsMedium, sim: Si
 def _absorbs_volumetrically(
     medium: AbstractMedium | MultiPhysicsMedium, sim: Simulation, freqs: np.ndarray
 ) -> bool:
-    """Whether a medium modeled as a volume has a positive Im(eps) at any of ``freqs``."""
+    """Whether a medium modeled as a volume has a positive Im(eps) at any of ``freqs``, anywhere
+    in it for a custom medium. A medium whose permittivity cannot be evaluated counts as absorbing,
+    so that its loss is asked about rather than dropped."""
     em_medium = _em_medium(medium)
     if em_medium is None or _loses_power_at_surface(medium, sim):
         return False
     try:
-        return any(np.any(np.imag(np.asarray(em_medium.eps_diagonal(f))) > 0) for f in freqs)
+        return any(
+            np.any(np.imag(eps) > 0) for f in freqs for eps in _diagonal_permittivity(em_medium, f)
+        )
     except (AttributeError, NotImplementedError, TypeError, ValueError):
-        return False
+        return True
+
+
+def _diagonal_permittivity(medium: AbstractMedium, freq: float) -> list[np.ndarray]:
+    """The diagonal permittivity of ``medium`` at ``freq``: at every sample of a custom medium,
+    whose 'eps_diagonal' keeps only the sample of largest ``|eps|``."""
+    if isinstance(medium, AbstractCustomMedium):
+        return [np.asarray(component.values) for component in medium.eps_dataarray_freq(freq)]
+    return [np.asarray(medium.eps_diagonal(freq))]
+
+
+def _medium_label(medium: AbstractMedium | MultiPhysicsMedium) -> str:
+    """How an error message names a medium: by its ``name``, or by its type when unnamed."""
+    return f"medium '{medium.name}'" if medium.name else f"an unnamed '{type(medium).__name__}'"
 
 
 def _has_off_diagonal_loss(medium: AbstractMedium | MultiPhysicsMedium) -> bool:
@@ -203,140 +223,21 @@ def _has_off_diagonal_loss(medium: AbstractMedium | MultiPhysicsMedium) -> bool:
     return bool(np.any(off_diagonal > _OFF_DIAGONAL_RTOL * np.max(np.abs(conductivity))))
 
 
-def _owner_at(
-    points: np.ndarray, sim: Simulation, candidates: set[int] | None = None
-) -> np.ndarray:
-    """Owner of each point (N, 3) by the solver's painter rule: of the structures whose geometry
-    contains the point, the one painted last, or -1 if none. Structures are painted in the order
-    'Structure._sort_structures' gives, by priority under ``sim.structure_priority_mode`` with
-    list order breaking ties; owners are returned as indices into ``sim.structures``.
-    ``candidates`` restricts the structures considered. Only the points within a structure's
-    bounds are tested against its geometry."""
-    structures = sim.structures
-    painted = sorted(
-        range(len(structures)),
-        key=lambda index: structures[index]._priority(sim.structure_priority_mode),
-    )
-    owners = np.full(len(points), -1, dtype=int)
-    for index in painted:
-        if candidates is not None and index not in candidates:
-            continue
-        rmin, rmax = structures[index].geometry.bounds
-        in_bounds = np.flatnonzero(np.all((points >= rmin) & (points <= rmax), axis=1))
-        if in_bounds.size == 0:
-            continue
-        candidates_in = points[in_bounds]
-        inside = structures[index].geometry.inside(
-            candidates_in[:, 0], candidates_in[:, 1], candidates_in[:, 2]
-        )
-        owners[in_bounds[np.asarray(inside, dtype=bool)]] = index
-    return owners
-
-
-def _mirrored_samples(points: np.ndarray, sim: Simulation) -> tuple[np.ndarray, np.ndarray]:
-    """Which points (N, 3) lie in the part of the domain the solver did not record, below an
-    active symmetry plane of ``sim``, and the image of each point across every plane it lies below:
-    the recorded sample its values were expanded from.
-
-    The symmetry is read from the simulation rather than the data, since data read from
-    'SimulationData' arrives already expanded, with its own 'symmetry' reset."""
-    mirrored = np.zeros(len(points), dtype=bool)
-    images = np.array(points, dtype=float)
-    for axis, plane_symmetry in enumerate(sim.symmetry):
-        if plane_symmetry == 0:
-            continue
-        center = sim.center[axis]
-        below = points[:, axis] < center - _MIRROR_PLANE_ATOL
-        images[below, axis] = 2 * center - points[below, axis]
-        mirrored |= below
-    return mirrored, images
-
-
-def _relabel_mirrored(
-    owners: np.ndarray,
-    mirrored_points: np.ndarray,
-    recorded_points: np.ndarray,
-    sim: Simulation,
-    candidates: set[int] | None = None,
-) -> np.ndarray:
-    """Owners of mirrored samples. Symmetry expansion copies each recorded sample's owner to its
-    mirror image, which is wrong when the image lies in another structure, e.g. the second of two
-    mirror-image structures. Where the priority rule reproduces the solver's owner at the recorded
-    point, it is trusted at the mirrored point too; elsewhere the copied owner is kept."""
-    consistent = _owner_at(recorded_points, sim, candidates) == owners
-    relabeled = owners.copy()
-    relabeled[consistent] = _owner_at(mirrored_points[consistent], sim, candidates)
-    return relabeled
-
-
-def _relabel_mirrored_volumetric(
-    structure_index: SpatialDataArray, owners: np.ndarray, sim: Simulation
-) -> np.ndarray:
-    """``owners`` of one E component's expanded samples, with the mirrored ones relabeled. The
-    samples are processed in blocks of '_RELABEL_BLOCK_SIZE', so the temporary coordinate arrays
-    stay bounded however large the monitor is."""
-    dims = list(structure_index.dims)
-    axis_coords = [np.asarray(structure_index.coords[dim].values, dtype=float) for dim in dims]
-    xyz_order = [dims.index(dim) for dim in "xyz"]
-    # a C-ordered copy, so that 'flat' is a view of it whatever the layout of 'owners'
-    relabeled = np.array(owners, dtype=int, order="C", copy=True)
-    flat = relabeled.reshape(-1)
-    for start in range(0, flat.size, _RELABEL_BLOCK_SIZE):
-        block = np.arange(start, min(start + _RELABEL_BLOCK_SIZE, flat.size))
-        grid_index = np.unravel_index(block, relabeled.shape)
-        points = np.stack([axis_coords[d][grid_index[d]] for d in xyz_order], axis=-1)
-        mirrored, images = _mirrored_samples(points, sim)
-        if mirrored.any():
-            samples = block[mirrored]
-            flat[samples] = _relabel_mirrored(
-                flat[samples], points[mirrored], images[mirrored], sim
-            )
-    return relabeled
-
-
-def _relabel_mirrored_surface(
-    expanded: SurfaceFieldStructureData, owners: np.ndarray, sim: Simulation
-) -> np.ndarray:
-    """``owners`` of the expanded surface vertices, with the mirrored ones relabeled. A vertex
-    lies on the metal surface, so its owner is found a small step into the metal along the
-    outward normal, among the structures the solver models as a surface."""
-    points = np.asarray(expanded.structure_index.points.values, dtype=float)
-    normals = np.asarray(expanded.normal.values.values, dtype=float)
-    mirrored, images = _mirrored_samples(points, sim)
-    relabeled = np.array(owners, copy=True)
-    if not mirrored.any():
-        return relabeled
-    image_normals = np.where(images != points, -normals, normals)
-    step = _SURFACE_OWNER_STEP * min(np.min(sizes) for sizes in sim.grid.sizes.to_list)
-    metals = {
-        index
-        for index, structure in enumerate(sim.structures)
-        if _loses_power_at_surface(structure.medium, sim)
-    }
-    relabeled[mirrored] = _relabel_mirrored(
-        relabeled[mirrored],
-        points[mirrored] - step * normals[mirrored],
-        images[mirrored] - step * image_normals[mirrored],
-        sim,
-        metals,
-    )
-    return relabeled
-
-
 def _check_owners_supported(
-    owners: list[int], structures: list[Structure], sim: Simulation
+    owners: list[int], structures: list[Structure], sim: Simulation, method_name: str
 ) -> None:
-    """Reject owners whose loss this method cannot attribute or compute correctly."""
+    """Reject owners whose loss ``method_name`` cannot attribute or compute correctly."""
     cross_coupled = [
         i
         for i in owners
-        if not _loses_power_at_surface(sim.medium if i == -1 else structures[i].medium, sim)
+        if i != DERIVED_STRUCTURE_INDEX
+        and not _loses_power_at_surface(sim.medium if i == -1 else structures[i].medium, sim)
         and _has_off_diagonal_loss(sim.medium if i == -1 else structures[i].medium)
     ]
     if cross_coupled:
         names = ["the background medium" if i == -1 else f"structure {i}" for i in cross_coupled]
         raise SetupError(
-            f"'per_structure_loss' does not support {', '.join(names)}: a "
+            f"'{method_name}' does not support {', '.join(names)}: a "
             "'FullyAnisotropicMedium' with off-diagonal conductivity loses power through cross "
             "terms between field components, which the diagonal permittivity recorded by a "
             "'FieldStructureMonitor' does not capture."
@@ -364,14 +265,17 @@ def compute_per_structure_loss(
     that is not detectable here, so it is a caller requirement.
 
     The result covers every owner sampled by a supplied monitor. ``structure_index`` ``-1`` is the
-    background medium (``sim.medium``), treated like any structure. Surface vertices are owned only
-    by PEC-like structures, so a structure that loses power in its volume may be absent from a
-    surface-only result; a warning is logged when the simulation contains a lossy one and no
-    volumetric monitor was supplied.
+    background medium (``sim.medium``), treated like any structure, and ``-2`` collects the lumped
+    elements and automatic PEC frames, which have no entry in ``sim.structures``; a lumped element
+    loses power in its volume and a PEC frame loses none, so ``-2`` takes its total from the
+    volumetric monitor and is NaN without one. Surface vertices are owned only by PEC-like
+    structures, so a structure that loses power in its volume may be absent from a surface-only
+    result; a warning is logged when the simulation contains a lossy one and no volumetric monitor
+    was supplied.
 
-    Under simulation symmetry, the samples of the mirrored half are attributed to the structure
-    the geometry places there, not to the one their values were expanded from, so mirror-image
-    structures each get their own loss; this assumes the setup is symmetric. Raises a
+    Under simulation symmetry, a sample of the mirrored half keeps the owner of the recorded
+    sample it was expanded from, so a structure lying wholly in the mirrored half has no entry
+    and the total of its mirror image includes the mirrored samples. Raises a
     ``SetupError`` for a ``FullyAnisotropicMedium`` owner with off-diagonal conductivity, whose loss
     has cross terms the recorded diagonal permittivity cannot capture.
     """
@@ -417,13 +321,134 @@ def compute_per_structure_loss(
             )
 
     owners = sorted(set(volumetric_totals or {}) | set(surface_totals or {}))
-    _check_owners_supported(owners, structures, sim)
+    _check_owners_supported(owners, structures, sim, "per_structure_loss")
     values = np.full((freqs.size, len(owners)), np.nan)
     for column, owner in enumerate(owners):
-        medium = sim.medium if owner == -1 else structures[owner].medium
-        totals = surface_totals if _loses_power_at_surface(medium, sim) else volumetric_totals
+        if owner == DERIVED_STRUCTURE_INDEX:
+            totals = volumetric_totals
+        else:
+            medium = sim.medium if owner == -1 else structures[owner].medium
+            totals = surface_totals if _loses_power_at_surface(medium, sim) else volumetric_totals
         # NaN unless the monitor for this owner's kind was supplied and sampled it: a lossy metal
         # outside the surface monitor's reach has no recorded loss, which zero would misreport
         if totals is not None and owner in totals:
             values[:, column] = totals[owner]
     return StructureLossDataArray(values, coords={"f": freqs, "structure_index": owners})
+
+
+def heat_medium_densities(sim: Simulation) -> dict[StructureMediumType, float]:
+    """Mass density [kg/um^3] of each medium of ``sim`` whose heat medium sets a positive one
+    (``heat`` of a :class:`.MultiPhysicsMedium`, or the medium's ``heat_spec``), keyed by the
+    medium as the simulation holds it."""
+    densities = {}
+    for medium in [sim.medium, *(structure.medium for structure in sim.structures)]:
+        heat = medium.heat_spec
+        if isinstance(heat, (SolidMedium, FluidMedium)) and heat.density:
+            densities[medium] = heat.density
+    return densities
+
+
+def compute_specific_absorption_rate(
+    field_structure: FieldStructureData,
+    sim: Simulation,
+    density: Mapping[StructureMediumType, float],
+    *,
+    method_name: str,
+    missing_remedy: str,
+) -> ScalarFieldDataArray:
+    """Point specific absorption rate ``SAR = P_abs / rho`` [W/kg] on the colocated grid.
+
+    Each component's absorbed power is divided by the mass density of the medium owning its
+    native Yee sample, and only then colocated and summed, so no sample is divided by a
+    neighbour's density. ``density`` maps a medium, as the simulation holds it, to ``rho``
+    [kg/um^3].
+
+    Samples owned by the following do not absorb in their volume and contribute zero:
+
+    - a structure modeled as a surface: a PEC, including an anisotropic medium with a PEC
+      component, or a lossy metal under the surface impedance method;
+    - a 2D material;
+    - a lumped element or an automatic PEC frame;
+    - a lossless medium, which needs no ``density`` entry.
+
+    Every medium that absorbs in its volume needs an entry.
+
+    Raises a ``SetupError`` for a non-positive density, for a ``density`` key that is not a medium
+    of the simulation, for a volumetrically absorbing owner without a density, and for a
+    ``FullyAnisotropicMedium`` owner with off-diagonal conductivity. The errors name
+    ``method_name``, and the one for a missing density ends with ``missing_remedy``. Owners are
+    checked over every recorded sample, including the one-cell recording margin around the
+    monitor. Under simulation symmetry, a mirrored sample is divided by the density of the owner of
+    the recorded sample it was expanded from, as ``per_structure_loss`` attributes its loss.
+    """
+    structures = list(sim.structures)
+    # [background, *structures], indexed by owner + 1 so -1 is the background
+    media = [sim.medium, *(structure.medium for structure in structures)]
+    simulation_media = set(media)
+    for medium, rho in density.items():
+        if not isinstance(medium, (AbstractMedium, MultiPhysicsMedium)):
+            raise SetupError(
+                f"'density' is keyed by media, but has a '{type(medium).__name__}' key. Key each "
+                "density by the medium as the simulation holds it ('structure.medium', or "
+                "'simulation.medium' for the background)."
+            )
+        label = _medium_label(medium)
+        if medium not in simulation_media:
+            raise SetupError(
+                f"'density' has an entry for {label}, which is not a medium of the simulation. "
+                "Key each density by the medium as the simulation holds it ('structure.medium', "
+                "or 'simulation.medium' for the background)."
+            )
+        if not rho > 0:
+            raise SetupError(f"'density' of {label} must be positive [kg/um^3], got {rho}.")
+
+    expanded = field_structure.symmetry_expanded
+    freqs = np.atleast_1d(np.asarray(expanded.monitor.freqs, dtype=float))
+    owners = _expanded_owners(expanded, len(structures))
+    sampled = sorted(set().union(*(np.unique(owners[axis]).tolist() for axis in "xyz")))
+    _check_owners_supported(sampled, structures, sim, method_name)
+
+    # [lumped elements and PEC frames, background, *structures], indexed by owner + 2
+    inverse_density = np.zeros(len(media) + 1)
+    missing = []
+    for owner in sampled:
+        if owner == DERIVED_STRUCTURE_INDEX:
+            continue
+        medium = media[owner + 1]
+        # contributes zero, whatever ``density`` holds:
+        # - a surface or a 2D sheet, which has no mass;
+        # - a lossless medium, whose interface samples can still record a neighbour's loss.
+        if (
+            _loses_power_at_surface(medium, sim)
+            or isinstance(_em_medium(medium), Medium2D)
+            or not _absorbs_volumetrically(medium, sim, freqs)
+        ):
+            continue
+        if medium in density:
+            inverse_density[owner + 2] = 1.0 / density[medium]
+        else:
+            missing.append(owner)
+    if missing:
+        names = [
+            ("the background" if owner == -1 else f"structure {owner}")
+            + f" ({_medium_label(media[owner + 1])})"
+            for owner in missing
+        ]
+        raise SetupError(
+            f"'{method_name}' needs a mass density for every medium that absorbs power in the "
+            f"monitor region; it is missing for {', '.join(names)}. {missing_remedy}"
+        )
+
+    structure_index = _structure_index_by_axis(expanded)
+    per_axis = {
+        axis: power.real
+        * xr.DataArray(
+            inverse_density[owners[axis] + 2],
+            coords=structure_index[axis].coords,
+            dims=structure_index[axis].dims,
+        )
+        for axis, power in expanded.per_component_absorbed_power.items()
+    }
+    total = expanded._colocate_and_sum_axes(per_axis)
+    ordered = total.transpose(*[dim for dim in ("x", "y", "z", "f") if dim in total.dims])
+    return ScalarFieldDataArray(ordered.data, coords=ordered.coords)

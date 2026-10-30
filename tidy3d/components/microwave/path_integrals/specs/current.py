@@ -238,7 +238,8 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
 class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
     """Class for specifying the computation of conduction current via Ampère's circuital law on a custom path.
     To compute the current flowing in the positive ``axis`` direction, the vertices should be
-    ordered in a counterclockwise direction.
+    ordered in a counterclockwise direction. To evaluate the path on recorded field data, use
+    :class:`.Custom2DCurrentIntegral`.
 
     Example
     -------

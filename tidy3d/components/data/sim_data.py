@@ -64,7 +64,11 @@ from .optical_generation import (
     compute_optical_generation,
     compute_per_component_optical_generation,
 )
-from .structure_loss import compute_per_structure_loss
+from .structure_loss import (
+    compute_per_structure_loss,
+    compute_specific_absorption_rate,
+    heat_medium_densities,
+)
 from .utils import static_dataarray_for_plot
 
 if TYPE_CHECKING:
@@ -76,11 +80,12 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
+    from tidy3d.components.material.types import StructureMediumType
     from tidy3d.components.medium import AbstractMedium
     from tidy3d.components.monitor import Monitor
     from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
 
-    from .data_array import DataArray, StructureLossDataArray
+    from .data_array import DataArray, ScalarFieldDataArray, StructureLossDataArray
     from .optical_generation import OpticalGenerationData
 
 
@@ -2602,7 +2607,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             Absorbed power, band-gap-gated generation rate, thermalization heat, and pair power.
         """
         return compute_optical_generation(
-            self._field_structure_data(monitor_name),
+            self._field_structure_data(monitor_name, "optical_generation"),
             list(self.simulation.structures),
             freq=freq,
             temperature=temperature,
@@ -2628,14 +2633,121 @@ class SimulationData(AbstractYeeGridSimulationData):
         :meth:`optical_generation`.
         """
         return compute_per_component_optical_generation(
-            self._field_structure_data(monitor_name),
+            self._field_structure_data(monitor_name, "per_component_optical_generation"),
             list(self.simulation.structures),
             freq=freq,
             temperature=temperature,
             power_scale=power_scale,
         )
 
-    def _field_structure_data(self, monitor_name: str) -> FieldStructureData:
+    def specific_absorption_rate(self, monitor_name: str) -> ScalarFieldDataArray:
+        """Point specific absorption rate ``SAR = P_abs / rho`` [W/kg] from a
+        :class:`.FieldStructureMonitor`, with the mass density of each medium taken from its heat
+        medium.
+
+        As :meth:`specific_absorption_rate_from_densities`, with the ``density`` of each medium's
+        :class:`.SolidMedium` or :class:`.FluidMedium`, given as ``MultiPhysicsMedium(heat=...)``
+        or as the medium's ``heat_spec``.
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name of the :class:`.FieldStructureMonitor` whose data to use.
+
+        Returns
+        -------
+        :class:`.ScalarFieldDataArray`
+            SAR [W/kg] over ``x``, ``y``, ``z`` and ``f``.
+
+        Notes
+        -----
+
+            A medium that absorbs power in its volume, sampled anywhere in the monitor including
+            its one-cell recording margin, must set a density in its heat medium, otherwise a
+            :class:`.SetupError` is raised. For media without heat properties, pass the densities
+            to :meth:`specific_absorption_rate_from_densities` instead.
+        """
+        return compute_specific_absorption_rate(
+            self._field_structure_data(monitor_name, "specific_absorption_rate"),
+            self.simulation,
+            heat_medium_densities(self.simulation),
+            method_name="specific_absorption_rate",
+            missing_remedy=(
+                "Set a 'density' in each one's heat medium ('MultiPhysicsMedium(heat=...)'), "
+                "pass the densities to 'specific_absorption_rate_from_densities', or shrink the "
+                "monitor so it does not reach them."
+            ),
+        )
+
+    def specific_absorption_rate_from_densities(
+        self,
+        monitor_name: str,
+        density: Mapping[StructureMediumType, float],
+    ) -> ScalarFieldDataArray:
+        """Point specific absorption rate ``SAR = P_abs / rho`` [W/kg] from a
+        :class:`.FieldStructureMonitor`, with the mass density of each medium given.
+
+        Divides the absorbed power density of a :class:`.FieldStructureMonitor` by the mass
+        density of the medium that owns each sample. The result is a point (unaveraged) SAR,
+        colocated like :attr:`.FieldStructureData.absorbed_power_density`. To take the densities
+        from the media's heat properties instead, use :meth:`specific_absorption_rate`.
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name of the :class:`.FieldStructureMonitor` whose data to use.
+        density : Mapping[medium, float]
+            Mass density [kg/um^3] of each medium, keyed by the medium as the simulation holds it
+            (``structure.medium``, or ``simulation.medium`` for the background); water at
+            1000 kg/m^3 is ``1e-15``. Media with equal properties are one key: give them different
+            ``name`` values to assign them different densities.
+
+        Returns
+        -------
+        :class:`.ScalarFieldDataArray`
+            SAR [W/kg] over ``x``, ``y``, ``z`` and ``f``.
+
+        Notes
+        -----
+
+            The SAR follows the source normalization of the simulation (see the `source
+            normalization <../../faq/docs/faq/How-are-results-normalized.html>`_ FAQ page). It is
+            linear in the source power, so scale the result for another power, e.g. multiply it by
+            the input power in W for a source normalized to 1 W.
+
+            Each field component is divided by its own owner's density on its native Yee grid
+            before the components are colocated and summed. Samples owned by the following do not
+            absorb in their volume and contribute zero:
+
+            - a structure modeled as a surface: a PEC, including an anisotropic medium with a PEC
+              component, or a lossy metal under the surface impedance method;
+            - a 2D material;
+            - a lumped element or an automatic PEC frame;
+            - a lossless medium, which needs no entry in ``density``.
+
+            Every medium that absorbs in its volume, sampled anywhere in the monitor including its
+            one-cell recording margin, needs an entry, otherwise a :class:`.SetupError` is raised,
+            as it is for a key that is not a medium of the simulation.
+
+            Near an interface the colocated value blends neighbouring samples, as
+            :attr:`.FieldStructureData.absorbed_power_density` does, so the SAR is accurate to
+            about one sample layer there.
+
+            ``density`` gives one density per medium, so a voxel phantom built as a single
+            :class:`.CustomMedium` has one density for all its tissues.
+        """
+        return compute_specific_absorption_rate(
+            self._field_structure_data(monitor_name, "specific_absorption_rate_from_densities"),
+            self.simulation,
+            density,
+            method_name="specific_absorption_rate_from_densities",
+            missing_remedy=(
+                "Add each one's medium to 'density' with its density in kg/um^3, or shrink the "
+                "monitor so it does not reach them."
+            ),
+        )
+
+    def _field_structure_data(self, monitor_name: str, method_name: str) -> FieldStructureData:
         """Fetch and type-check a :class:`.FieldStructureData` by monitor name."""
         try:
             field_structure = self[monitor_name]
@@ -2645,12 +2757,14 @@ class SimulationData(AbstractYeeGridSimulationData):
             ) from exc
         if not isinstance(field_structure, FieldStructureData):
             raise DataError(
-                f"optical generation requires a 'FieldStructureMonitor'; monitor '{monitor_name}' "
+                f"'{method_name}' requires a 'FieldStructureMonitor'; monitor '{monitor_name}' "
                 f"produced '{field_structure.type}'."
             )
         return field_structure
 
-    def _surface_field_structure_data(self, monitor_name: str) -> SurfaceFieldStructureData:
+    def _surface_field_structure_data(
+        self, monitor_name: str, method_name: str
+    ) -> SurfaceFieldStructureData:
         """Fetch and type-check a :class:`.SurfaceFieldStructureData` by monitor name."""
         try:
             surface_field_structure = self[monitor_name]
@@ -2660,7 +2774,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             ) from exc
         if not isinstance(surface_field_structure, SurfaceFieldStructureData):
             raise DataError(
-                f"'per_structure_loss' requires a 'SurfaceFieldStructureMonitor'; monitor "
+                f"'{method_name}' requires a 'SurfaceFieldStructureMonitor'; monitor "
                 f"'{monitor_name}' produced '{surface_field_structure.type}'."
             )
         return surface_field_structure
@@ -2701,12 +2815,14 @@ class SimulationData(AbstractYeeGridSimulationData):
         -------
         :class:`.StructureLossDataArray`
             Loss over ``f`` and ``structure_index``, where ``structure_index`` indexes
-            ``self.simulation.structures`` and ``-1`` (if present) is the background medium
-            (``simulation.medium``). Only owners sampled inside a supplied monitor appear; a
+            ``self.simulation.structures``, ``-1`` (if present) is the background medium
+            (``simulation.medium``), and ``-2`` (if present) collects the lumped elements and
+            automatic PEC frames. Only owners sampled inside a supplied monitor appear; a
             lossless one has a zero total, and one not sampled by its own kind's monitor is NaN.
-            Surface vertices are owned only by PEC-like structures, so a structure that loses
-            power in its volume may be absent from a surface-only result; a warning is logged when
-            the simulation contains a lossy one.
+            ``-2`` takes its total from the volumetric monitor, which records the lumped elements'
+            loss, so it is NaN without one. Surface vertices are owned only by PEC-like structures,
+            so a structure that loses power in its volume may be absent from a surface-only result;
+            a warning is logged when the simulation contains a lossy one.
 
         Notes
         -----
@@ -2719,10 +2835,10 @@ class SimulationData(AbstractYeeGridSimulationData):
             axis) and a volumetric monitor (nonzero size along every axis); otherwise a total
             power in [W] cannot be formed and a :class:`.SetupError` is raised.
 
-            Under simulation ``symmetry``, the samples of the mirrored half, which the solver does
-            not record, are attributed to the structure the geometry places there rather than to
-            the one their values were expanded from, so mirror-image structures each get their own
-            loss. This assumes the setup itself is symmetric.
+            Under simulation ``symmetry``, each sample of the mirrored half, which the solver does
+            not record, is attributed to the structure that owns the recorded sample it was
+            expanded from. A structure lying wholly in the mirrored half therefore has no entry,
+            and the loss of its mirror image includes the mirrored samples.
 
             A :class:`.SetupError` is also raised for a :class:`.FullyAnisotropicMedium` with
             off-diagonal conductivity: its loss has cross terms between field components that the
@@ -2740,12 +2856,12 @@ class SimulationData(AbstractYeeGridSimulationData):
             along that surface.
         """
         field_structure = (
-            self._field_structure_data(volumetric_monitor_name)
+            self._field_structure_data(volumetric_monitor_name, "per_structure_loss")
             if volumetric_monitor_name is not None
             else None
         )
         surface_field_structure = (
-            self._surface_field_structure_data(surface_monitor_name)
+            self._surface_field_structure_data(surface_monitor_name, "per_structure_loss")
             if surface_monitor_name is not None
             else None
         )
