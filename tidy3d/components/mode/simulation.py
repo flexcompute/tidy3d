@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 from pydantic import Field, field_validator, model_validator
@@ -137,6 +137,10 @@ class ModeSimulation(AbstractYeeGridSimulation):
     **Lectures:**
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
+
+    # Classes ``_as_fdtd_sim`` and ``_mode_solver`` build, so a subclass gets its own types back.
+    _fdtd_simulation_type: ClassVar[type[Simulation]] = Simulation
+    _mode_solver_type: ClassVar[type[ModeSolver]] = ModeSolver
 
     mode_spec: ModeSpecType = Field(
         title="Mode specification",
@@ -314,7 +318,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def _mode_solver(self) -> ModeSolver:
         """Convert the :class:`.ModeSimulation` to a :class:`.ModeSolver`."""
         kwargs = {key: getattr(self, key) for key in MODE_SIM_MODE_SOLVER_SHARED_ATTRS}
-        return ModeSolver(simulation=self._as_fdtd_sim, **kwargs)
+        return self._mode_solver_type(simulation=self._as_fdtd_sim, **kwargs)
 
     @supports_local_subpixel
     def run_local(self) -> ModeSimulationData:
@@ -414,7 +418,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         # handles it silently.
 
         # Create the simulation - it will run its own validators
-        return Simulation(
+        return self._fdtd_simulation_type(
             **kwargs,
             run_time=RUN_TIME,
             grid_spec=grid_spec,
