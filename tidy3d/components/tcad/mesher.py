@@ -34,4 +34,4 @@ class VolumeMesher(Tidy3dBaseModel):
         """Validate the VolumeMesher before uploading to the cloud.
         Currently no validation but method is required when calling ``web.upload``.
         """
-        assert_no_protected_media(self, "charge, heat, or heat-charge meshing")
+        assert_no_protected_media(self, "standalone volume meshing")

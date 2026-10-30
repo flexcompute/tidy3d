@@ -465,7 +465,7 @@ class Structure(AbstractStructure):
     def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
 
-        Protected optical media use their public surrogate values.
+        Protected media use their public surrogate values.
 
         Parameters
         ----------
@@ -869,7 +869,7 @@ class Structure(AbstractStructure):
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.
 
-        Protected optical media use their public surrogate values.
+        Protected media use their public surrogate values.
 
         Parameters
         ----------

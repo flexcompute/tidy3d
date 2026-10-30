@@ -1138,6 +1138,8 @@ class Scene(Tidy3dBaseModel):
         """
         import matplotlib as mpl
 
+        warn_protected_surrogate(self, "Local material/grid-dependent plots")
+
         structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
@@ -1732,6 +1734,8 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
+        warn_protected_surrogate(self, "Local heat and charge property plots")
+
         structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
@@ -1989,6 +1993,7 @@ class Scene(Tidy3dBaseModel):
     def doping_bounds(self) -> tuple[list[float], list[float]]:
         """Get the maximum and minimum of the doping"""
 
+        warn_protected_surrogate(self, "Local material/grid-dependent plots")
         acceptors_lims = [np.inf, -np.inf]
         donors_lims = [np.inf, -np.inf]
 
@@ -2049,6 +2054,8 @@ class Scene(Tidy3dBaseModel):
         Tuple[float, float]
             Absolute minimum values for acceptors and donors respectively.
         """
+
+        warn_protected_surrogate(self, "Local material/grid-dependent plots")
         # Use more reasonable initial values
         acceptors_abs_min = np.inf
         donors_abs_min = np.inf

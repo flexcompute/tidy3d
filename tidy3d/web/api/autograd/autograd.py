@@ -78,8 +78,8 @@ def _get_gradient_strategy(local_gradient: bool) -> GradientStrategy:
 def _raise_protected_autograd_error(feature: str) -> None:
     """Reject protected media in autograd/adjoint client paths."""
     raise AdjointError(
-        f"Protected optical media are not supported for {feature}. "
-        "Run protected simulations as ordinary hosted FDTD or hosted ModeSimulation tasks."
+        f"Protected media are not supported for {feature}. "
+        "Run protected simulations as ordinary hosted tasks without gradients."
     )
 
 

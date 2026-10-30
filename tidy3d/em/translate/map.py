@@ -712,6 +712,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.tcad.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.tcad.doping:ProtectedDopingRef": ComponentScope(
+        "flexcompute.core._migration.tcad.schema.doping:ProtectedDopingRef",
+        "flexcompute.core._migration.tcad.validation:validate",
+        on_construction=True,
+    ),
     "tidy3d.components.tcad.doping:GaussianDoping": ComponentScope(
         "flexcompute.core._migration.tcad.schema.doping:GaussianDoping",
         "flexcompute.core._migration.tcad.validation:validate",

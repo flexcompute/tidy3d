@@ -100,7 +100,12 @@ from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
     TemperatureData,
 )
-from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, GaussianDoping
+from tidy3d.components.tcad.doping import (
+    ConstantDoping,
+    CustomDoping,
+    GaussianDoping,
+    ProtectedDopingRef,
+)
 from tidy3d.components.tcad.generation_recombination import (
     FossumCarrierLifetime,
     HeterojunctionCaptureSide,
@@ -975,6 +980,7 @@ __all__ = [
     "PolynomialHeatCapacity",
     "PowerLawConductivity",
     "PowerLawHeatCapacity",
+    "ProtectedDopingRef",
     "ProtectedMediumEncryptedPayload",
     "ProtectedOpticalMediumRef",
     "Q_e",

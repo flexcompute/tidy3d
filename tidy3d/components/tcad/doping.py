@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 import numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import doping as doping_numerics
-from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
 
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.medium.protected import (
+    ProtectedMediumEncryptedPayload,
+    validate_protected_payload_binding,
+)
 from tidy3d.constants import MICROMETER, PERCMCUBE, inf
+from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -346,4 +351,90 @@ class CustomDoping(AbstractDopingBox):
         return contrib.squeeze()
 
 
-DopingBoxType = ConstantDoping | GaussianDoping | CustomDoping
+class ProtectedDopingRef(ConstantDoping):
+    """Reference to a protected doping box with a public constant-doping surrogate.
+
+    The inherited ``center``, ``size`` and ``concentration`` are the foundry-approved public
+    surrogate and drive local construction, validation, plotting and estimates. The encrypted
+    payload carries the real doping profile (constant, Gaussian or custom) inside that same box,
+    and only the hosted solver resolves it.
+
+    Notes
+    -----
+    Add the reference to the ``N_a`` or ``N_d`` list of a semiconductor medium like any other
+    doping box. A foundry provides the reference together with its encrypted payload. The payload
+    binds the surrogate, so changing a surrogate value invalidates it.
+
+    Protected doping is hosted-only: local plots use the surrogate (with a warning), standalone
+    volume meshing is not supported, a reference without its encrypted payload cannot be uploaded,
+    and it is not supported in FDTD or :class:`.ModeSimulation`. A hosted heat and charge
+    simulation with protected doping runs on the accelerated charge solver
+    (``use_accelerated_solver=True``), needs a voltage sweep with at least two points and allows
+    only a :class:`.SteadyCapacitanceMonitor` that covers the whole simulation
+    (``size=(td.inf, td.inf, td.inf)``).
+
+    Example
+    -------
+    The surrogate alone, as used for local previews; a foundry package supplies the payload
+    (``td.ProtectedDopingRef.from_file(...)``).
+
+    >>> import tidy3d as td
+    >>> reference = td.ProtectedDopingRef(
+    ...     asset_id="foundry/n-implant", revision="1", concentration=1e17
+    ... )
+    """
+
+    PROTECTED_REFERENCE: ClassVar[bool] = True
+
+    asset_id: str = Field(
+        title="Protected Asset ID",
+        description="Stable public identifier bound into the protected doping payload.",
+    )
+
+    revision: str = Field(
+        title="Protected Asset Revision",
+        description="Immutable public revision token bound into the protected doping payload.",
+    )
+
+    asset_kind: Literal["doping"] = Field(
+        default="doping",
+        title="Protected Asset Kind",
+        description="Public schema discriminator for the protected asset class.",
+    )
+
+    schema_version: Literal["1.0"] = Field(
+        default="1.0",
+        title="Protected Reference Schema Version",
+        description="Public schema version of the protected doping reference envelope.",
+    )
+
+    encrypted_payload: ProtectedMediumEncryptedPayload | None = Field(
+        default=None,
+        title="Encrypted Payload",
+        description=(
+            "Optional package-carried encrypted solver-ready doping box. Hosted execution may "
+            "decrypt this payload with a trusted foundry runtime key."
+        ),
+    )
+
+    @field_validator("asset_id", "revision")
+    @classmethod
+    def _validate_non_empty_identifier(cls, value: str) -> str:
+        """Validate public identifier strings without contacting external services."""
+        if not value or value.strip() != value:
+            raise ValidationError("Protected doping identifiers must be non-empty strings.")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_encrypted_payload_binding(self) -> ProtectedDopingRef:
+        """Ensure the encrypted payload is bound to this reference's asset kind and surrogate."""
+        validate_protected_payload_binding(self)
+        return self
+
+    @property
+    def public_surrogate(self) -> ConstantDoping:
+        """Public constant doping that the encrypted payload is bound to."""
+        return ConstantDoping(center=self.center, size=self.size, concentration=self.concentration)
+
+
+DopingBoxType = ConstantDoping | GaussianDoping | CustomDoping | ProtectedDopingRef

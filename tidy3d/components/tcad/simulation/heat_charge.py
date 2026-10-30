@@ -27,7 +27,7 @@ from tidy3d.components.material.tcad.charge import (
 )
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
-from tidy3d.components.medium.protected import assert_no_protected_media
+from tidy3d.components.medium.protected import validate_protected_heat_charge_assets
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.analysis.dc import ITERATIVE_ONLY_TOLERANCE_FIELDS
 from tidy3d.components.spice.sources.ac import SSACVoltageSource
@@ -476,7 +476,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized heat/charge simulation before web upload."""
-        assert_no_protected_media(self, "charge, heat, or heat-charge simulations")
+        validate_protected_heat_charge_assets(self)
         self._validate_charge_cartesian_monitors()
 
     @field_validator("size")

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.medium.protected import has_protected_media
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
@@ -358,8 +359,11 @@ def resolve_workflow(
     if workflow is not None:
         return workflow
 
-    for simulation_type, workflow_type in SIMULATION_TO_WORKFLOW.items():
-        if isinstance(simulation, simulation_type):
-            return workflow_type.from_simulation(simulation)
+    # A protected simulation is meshed by its own task. A separate mesh step would build the mesh
+    # from the public surrogate, and a mesh built from the protected values would expose them.
+    if not has_protected_media(simulation):
+        for simulation_type, workflow_type in SIMULATION_TO_WORKFLOW.items():
+            if isinstance(simulation, simulation_type):
+                return workflow_type.from_simulation(simulation)
 
     return Workflow(steps=(Step(name="execute", operation=simulation, cacheable=True),))

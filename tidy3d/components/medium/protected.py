@@ -1,4 +1,4 @@
-"""Protected optical medium references."""
+"""Protected optical medium references and the policy shared with protected doping."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, get_args
 from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.bound_ops import bounds_contains
 from tidy3d.components.data.binary import OPAQUE_BINARY_DATA_TYPE, OpaqueBinaryData
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import DataError, SetupError, ValidationError
@@ -34,9 +35,9 @@ if TYPE_CHECKING:
 PublicOpticalMediumType = Medium | PoleResidue | Sellmeier | Lorentz | Debye | Drude
 
 PROTECTED_SURROGATE_DISCLOSURE = (
-    "Protected optical media are present. Local validation, grid generation, "
+    "Protected assets are present. Local validation, grid generation, "
     "resource estimates, and diagnostics use foundry-approved public surrogate "
-    "values. Cloud validation using the protected material is authoritative."
+    "values. Cloud validation using the protected assets is authoritative."
 )
 
 PROTECTED_FDTD_ALLOWED_MONITOR_TYPES: frozenset[str] = frozenset(
@@ -71,6 +72,12 @@ PROTECTED_FDTD_MATERIAL_MONITOR_TYPES: frozenset[str] = frozenset(
     }
 )
 
+# Hosted charge simulations expose no spatial output for protected doping: carrier, potential,
+# band, field and current-density maps stay denied. The terminal device characteristics are not
+# monitors and are always returned, and the only monitor allowed is the capacitance over the whole
+# simulation, which is a single curve over the bias.
+PROTECTED_CHARGE_ALLOWED_MONITOR_TYPES: frozenset[str] = frozenset({"SteadyCapacitanceMonitor"})
+
 ProtectedMediumSurfacePolicy = Literal[
     "owned-public-ref",
     "serialized-public-surrogate",
@@ -83,6 +90,15 @@ ProtectedMediumSurfacePolicy = Literal[
 PROTECTED_MEDIUM_SURFACE_POLICY_CATEGORIES: frozenset[str] = frozenset(
     get_args(ProtectedMediumSurfacePolicy)
 )
+
+ProtectedAssetKind = Literal["optical_medium", "doping"]
+
+# One solver-compatibility label per asset kind: the label is bound into the authenticated
+# envelope, so a ciphertext published for one kind cannot be reinterpreted as another.
+PROTECTED_SOLVER_COMPATIBILITY_BY_KIND: dict[ProtectedAssetKind, str] = {
+    "optical_medium": "tidy3d-public-medium-3d-v1",
+    "doping": "tidy3d-doping-box-v1",
+}
 
 PROTECTED_MEDIUM_PUBLIC_ID_MAX_LENGTH = 128
 PROTECTED_MEDIUM_ENCRYPTED_DATA_KEY_MAX_BYTES = 8192
@@ -100,6 +116,7 @@ PROTECTED_MEDIUM_SURFACE_POLICY: dict[str, ProtectedMediumSurfacePolicy] = {
     "name": "owned-public-ref",
     "optical": "owned-public-ref",
     "public_name": "owned-public-ref",
+    "public_surrogate": "owned-public-ref",
     "revision": "owned-public-ref",
     "schema_version": "owned-public-ref",
     "type": "owned-public-ref",
@@ -165,35 +182,74 @@ def protected_fdtd_monitor_policy_error(monitor: Any, monitor_index: int) -> str
     monitor_type = getattr(monitor, "type", type(monitor).__name__)
     if monitor_type in PROTECTED_FDTD_MATERIAL_MONITOR_TYPES:
         return (
-            "Protected optical media do not support material-property monitors "
+            "Protected media do not support material-property monitors "
             f"for hosted execution. Monitor 'monitors[{monitor_index}]' has type "
-            f"'{monitor_type}', which could reveal protected optical constitutive values."
+            f"'{monitor_type}', which could reveal protected constitutive values."
         )
     if monitor_type not in PROTECTED_FDTD_ALLOWED_MONITOR_TYPES:
         return (
-            "Protected optical media use a fail-closed monitor policy. "
+            "Protected media use a fail-closed monitor policy. "
             f"Monitor 'monitors[{monitor_index}]' has type '{monitor_type}', which is "
             "not in the protected-output allowlist. Allowed FDTD outputs are E/H field "
             "data, flux data, and overlap or mode amplitudes/profiles."
         )
     if monitor_type == "FluxMonitor" and getattr(monitor, "enable_adjoint", False):
         return (
-            "Protected optical media do not support FluxMonitor(enable_adjoint=True) "
+            "Protected media do not support FluxMonitor(enable_adjoint=True) "
             "because adjoint workflows are unsupported."
         )
     if monitor_type == "PointCloudFieldMonitor" and any(
         field.startswith("D") for field in getattr(monitor, "fields", ())
     ):
         return (
-            "Protected optical media do not support point-cloud 'D' field outputs "
+            "Protected media do not support point-cloud 'D' field outputs "
             f"for hosted execution. Monitor 'monitors[{monitor_index}]' reconstructs "
             "'D' from electric fields and local permittivity."
         )
     return None
 
 
+def _covers_simulation(monitor_bounds: Any, simulation_bounds: Any) -> bool:
+    """Whether a monitor covers the whole simulation.
+
+    The tolerance follows the size of the domain and not its coordinates: a relative tolerance on
+    coordinates far from the origin would let a small monitor pass for the whole domain. An
+    unbounded axis has no size to scale by, so only the finite sizes count: the monitor has to be
+    unbounded along that axis as well.
+    """
+    from math import isfinite
+
+    spans = (float(upper) - float(lower) for lower, upper in zip(*simulation_bounds))
+    extent = max((span for span in spans if isfinite(span)), default=0.0)
+    return bounds_contains(monitor_bounds, simulation_bounds, rtol=0.0, atol=1e-9 * extent)
+
+
+def protected_heat_charge_monitor_policy_error(
+    monitor: Any, monitor_index: int, *, simulation_bounds: Any
+) -> str | None:
+    """Return a protected-output policy error for a heat or charge monitor, if any."""
+    monitor_type = getattr(monitor, "type", type(monitor).__name__)
+    if monitor_type not in PROTECTED_CHARGE_ALLOWED_MONITOR_TYPES:
+        return (
+            "Protected assets use a fail-closed monitor policy for heat and charge simulations. "
+            f"Monitor 'monitors[{monitor_index}]' has type '{monitor_type}', which is not in the "
+            "protected-output allowlist. Protected doping allows only a "
+            "'SteadyCapacitanceMonitor' that covers the whole simulation "
+            "(size=(td.inf, td.inf, td.inf)). The terminal device characteristics are returned "
+            "without monitors."
+        )
+    if not _covers_simulation(monitor.bounds, simulation_bounds):
+        return (
+            "Protected doping only supports a 'SteadyCapacitanceMonitor' that covers the "
+            f"whole simulation. Monitor 'monitors[{monitor_index}]' covers a smaller region, "
+            "where its capacitance could map the protected carrier distribution. "
+            "Use size=(td.inf, td.inf, td.inf)."
+        )
+    return None
+
+
 class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
-    """Authenticated encrypted solver-ready medium carried by a protected reference."""
+    """Authenticated encrypted solver-ready asset (optical medium or doping box) carried by a protected reference."""
 
     envelope_version: Literal["1"] = Field(
         default="1",
@@ -204,7 +260,7 @@ class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
     algorithm: Literal["RSA-OAEP-SHA256+A256GCM"] = Field(
         default="RSA-OAEP-SHA256+A256GCM",
         title="Protected Medium Encryption Algorithm",
-        description="Hybrid public-key envelope used for the protected medium payload.",
+        description="Hybrid public-key envelope used for the protected payload.",
     )
 
     foundry_id: str = Field(
@@ -230,22 +286,25 @@ class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
 
     payload_format: Literal["tidy3d-hdf5"] = Field(
         title="Protected Payload Format",
-        description="Serialization format of the decrypted solver-ready medium.",
+        description="Serialization format of the decrypted solver-ready asset.",
     )
 
     payload_format_version: Literal["1"] = Field(
         title="Protected Payload Format Version",
-        description="Version of the decrypted solver-ready medium serialization contract.",
+        description="Version of the decrypted solver-ready asset serialization contract.",
     )
 
-    solver_compatibility: Literal["tidy3d-public-medium-3d-v1"] = Field(
+    solver_compatibility: Literal[
+        "tidy3d-public-medium-3d-v1",
+        "tidy3d-doping-box-v1",
+    ] = Field(
         title="Protected Payload Solver Compatibility",
-        description="Solver compatibility contract expected for the decrypted medium payload.",
+        description="Solver compatibility contract expected for the decrypted payload.",
     )
 
     ciphertext_sha256: str = Field(
         title="Ciphertext Digest",
-        description="SHA-256 digest of the encrypted solver-ready medium payload bytes.",
+        description="SHA-256 digest of the encrypted solver-ready asset payload bytes.",
         min_length=64,
         max_length=64,
     )
@@ -262,7 +321,7 @@ class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
         title="Payload Nonce",
         description=(
             "Binary HDF5 payload data containing the AES-GCM nonce for the encrypted "
-            "medium payload. JSON and YAML serialization store only a placeholder."
+            "payload. JSON and YAML serialization store only a placeholder."
         ),
     )
 
@@ -270,7 +329,7 @@ class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
         title="Payload Ciphertext",
         description=(
             "Binary HDF5 payload data containing the authenticated ciphertext for the "
-            "solver-ready medium. JSON and YAML serialization store only a placeholder."
+            "solver-ready asset. JSON and YAML serialization store only a placeholder."
         ),
     )
 
@@ -366,7 +425,7 @@ class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
     @field_validator("ciphertext")
     @classmethod
     def _validate_ciphertext(cls, value: OpaqueBinaryData) -> OpaqueBinaryData:
-        """Validate encrypted medium payload shape without exposing it."""
+        """Validate encrypted payload shape without exposing it."""
         cls._validate_binary_size(
             value,
             field_name="ciphertext",
@@ -374,8 +433,26 @@ class ProtectedMediumEncryptedPayload(Tidy3dBaseModel):
         return value
 
 
+def validate_protected_payload_binding(reference: Any) -> None:
+    """Ensure an encrypted payload matches the asset kind and public surrogate of its reference."""
+    payload = reference.encrypted_payload
+    if payload is None:
+        return
+    if payload.solver_compatibility != PROTECTED_SOLVER_COMPATIBILITY_BY_KIND[reference.asset_kind]:
+        raise ValidationError(  # post-init-tidy3d-error: ignore
+            "Protected asset encrypted payload does not match its asset kind."
+        )
+    if payload.surrogate_digest != protected_surrogate_digest(reference.public_surrogate):
+        raise ValidationError(  # post-init-tidy3d-error: ignore
+            "Protected asset encrypted payload does not match its surrogate. The public fields "
+            "of a protected reference must not be changed."
+        )
+
+
 class ProtectedOpticalMediumRef(Tidy3dBaseModel):
     """Reference to a hosted protected optical medium with a public local model."""
+
+    PROTECTED_REFERENCE: ClassVar[bool] = True
 
     SURROGATE_DELEGATED_ATTRIBUTES: ClassVar[frozenset[str]] = frozenset(
         name
@@ -461,15 +538,13 @@ class ProtectedOpticalMediumRef(Tidy3dBaseModel):
     @model_validator(mode="after")
     def _validate_encrypted_payload_surrogate_digest(self) -> ProtectedOpticalMediumRef:
         """Ensure local surrogate behavior matches the encrypted payload binding."""
-        if (
-            self.encrypted_payload is not None
-            and self.encrypted_payload.surrogate_digest
-            != protected_surrogate_digest(self.surrogate)
-        ):
-            raise ValidationError(  # post-init-tidy3d-error: ignore
-                "Protected medium encrypted payload does not match its surrogate."
-            )
+        validate_protected_payload_binding(self)
         return self
+
+    @property
+    def public_surrogate(self) -> AbstractMedium:
+        """Public object that the encrypted payload is bound to."""
+        return self.surrogate
 
     @property
     def is_protected(self) -> bool:
@@ -669,8 +744,16 @@ class ProtectedOpticalMediumRef(Tidy3dBaseModel):
 
 
 def is_protected_medium(obj: object) -> bool:
-    """Whether ``obj`` is a protected optical medium reference."""
+    """Whether ``obj`` is a protected optical medium reference.
+
+    Protected doping is not an optical medium, use ``is_protected_reference`` to test for any kind.
+    """
     return isinstance(obj, ProtectedOpticalMediumRef)
+
+
+def is_protected_reference(obj: object) -> bool:
+    """Whether ``obj`` is a protected reference of any asset kind."""
+    return getattr(type(obj), "PROTECTED_REFERENCE", False) is True
 
 
 def public_medium(medium: Any) -> AbstractMedium | None:
@@ -711,9 +794,9 @@ def _iter_children(obj: object) -> Any:
         yield from obj
 
 
-def protected_asset_refs(obj: object) -> tuple[ProtectedOpticalMediumRef, ...]:
-    """Collect protected optical medium references reachable from ``obj``."""
-    refs: list[ProtectedOpticalMediumRef] = []
+def protected_asset_refs(obj: object) -> tuple[Any, ...]:
+    """Collect protected references of every asset kind reachable from ``obj``."""
+    refs: list[Any] = []
     seen: set[int] = set()
     stack = [obj]
 
@@ -724,7 +807,7 @@ def protected_asset_refs(obj: object) -> tuple[ProtectedOpticalMediumRef, ...]:
             continue
         seen.add(current_id)
 
-        if isinstance(current, ProtectedOpticalMediumRef):
+        if is_protected_reference(current):
             refs.append(current)
             continue
 
@@ -734,7 +817,7 @@ def protected_asset_refs(obj: object) -> tuple[ProtectedOpticalMediumRef, ...]:
 
 
 def has_protected_media(obj: object) -> bool:
-    """Whether ``obj`` contains any protected optical medium reference."""
+    """Whether ``obj`` contains any protected reference."""
     return bool(protected_asset_refs(obj))
 
 
@@ -745,19 +828,85 @@ def warn_protected_surrogate(obj: object, surface: str | None = None) -> None:
 
 
 def assert_no_protected_media(obj: object, feature: str) -> None:
-    """Reject use of protected optical media in an unsupported client feature."""
+    """Reject use of protected media in an unsupported client feature."""
     if not has_protected_media(obj):
         return
     raise SetupError(
-        f"Protected optical media are not supported for {feature}. "
-        "Use hosted FDTD or hosted ModeSimulation through tidy3d.web."
+        f"Protected media are not supported for {feature}. Protected optical media are only "
+        "supported in hosted FDTD and mode simulations, and protected doping only in hosted heat "
+        "and charge simulations, run through tidy3d.web."
     )
 
 
+PROTECTED_DOPING_OPTICAL_ERROR = (
+    "Protected doping is only supported in heat and charge simulations."
+)
+
+PROTECTED_DOPING_SOLVER_ERROR = (
+    "Protected doping requires the accelerated charge solver. Remove "
+    "'use_accelerated_solver=False' to use it."
+)
+
+
+def protected_optical_simulation_error(obj: object) -> str | None:
+    """Return why the protected assets of ``obj`` cannot run in a hosted FDTD or mode simulation.
+
+    Doping only enters heat and charge simulations, so a doping reference there is a mistake.
+    """
+    if any(reference.asset_kind == "doping" for reference in protected_asset_refs(obj)):
+        return PROTECTED_DOPING_OPTICAL_ERROR
+    return None
+
+
+def protected_asset_loc(simulation: Any, asset_kind: str) -> tuple[Any, ...]:
+    """Validation location of the first ``asset_kind`` reference in a simulation.
+
+    Points at the background medium or the structure that holds the reference, so a client can
+    highlight the offending object. Falls back to the structure list.
+    """
+    if any(
+        reference.asset_kind == asset_kind
+        for reference in protected_asset_refs(getattr(simulation, "medium", None))
+    ):
+        return ("medium",)
+    for index, structure in enumerate(getattr(simulation, "structures", ())):
+        if any(reference.asset_kind == asset_kind for reference in protected_asset_refs(structure)):
+            return ("structures", index)
+    return ("structures",)
+
+
+def validate_protected_heat_charge_assets(simulation: Any) -> None:
+    """Enforce the protected-asset capability and output policy of heat and charge simulations."""
+    references = protected_asset_refs(simulation)
+    if not references:
+        return
+    if any(reference.asset_kind == "optical_medium" for reference in references):
+        simulation._raise_validation_error_at_loc(
+            "Protected optical media are not supported for charge, heat, or heat-charge "
+            "simulations. Protected doping is supported.",
+            *protected_asset_loc(simulation, "optical_medium"),
+        )
+    if getattr(simulation, "use_accelerated_solver", None) is False:
+        simulation._raise_validation_error_at_loc(
+            PROTECTED_DOPING_SOLVER_ERROR, "use_accelerated_solver"
+        )
+    for monitor_index, monitor in enumerate(simulation.monitors):
+        error_message = protected_heat_charge_monitor_policy_error(
+            monitor, monitor_index, simulation_bounds=simulation.bounds
+        )
+        if error_message:
+            simulation._raise_validation_error_at_loc(error_message, "monitors", monitor_index)
+
+
 __all__ = [
+    "PROTECTED_CHARGE_ALLOWED_MONITOR_TYPES",
+    "PROTECTED_DOPING_OPTICAL_ERROR",
+    "PROTECTED_DOPING_SOLVER_ERROR",
     "PROTECTED_MEDIUM_SURFACE_POLICY",
     "PROTECTED_MEDIUM_SURFACE_POLICY_CATEGORIES",
+    "PROTECTED_SOLVER_COMPATIBILITY_BY_KIND",
     "PROTECTED_SURROGATE_DISCLOSURE",
+    "ProtectedAssetKind",
     "ProtectedMediumEncryptedPayload",
     "ProtectedMediumSurfacePolicy",
     "ProtectedOpticalMediumRef",
@@ -765,9 +914,15 @@ __all__ = [
     "assert_no_protected_media",
     "has_protected_media",
     "is_protected_medium",
+    "is_protected_reference",
+    "protected_asset_loc",
     "protected_asset_refs",
+    "protected_heat_charge_monitor_policy_error",
+    "protected_optical_simulation_error",
     "protected_surrogate_digest",
     "protected_surrogate_disclosure",
     "public_medium",
+    "validate_protected_heat_charge_assets",
+    "validate_protected_payload_binding",
     "warn_protected_surrogate",
 ]

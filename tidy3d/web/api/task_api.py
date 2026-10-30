@@ -682,13 +682,15 @@ def _upload(
     protected_input = has_protected_media(simulation)
     if isinstance(simulation, ModeSolver) and protected_input:
         raise WebError(
-            "Protected optical media are not supported for direct ModeSolver upload. "
+            "Protected media are not supported for direct ModeSolver upload. "
             "Use hosted ModeSimulation through tidy3d.web instead."
         )
-    if protected_input and not isinstance(simulation, Simulation | ModeSimulation):
+    if protected_input and not isinstance(
+        simulation, Simulation | ModeSimulation | HeatChargeSimulation
+    ):
         raise WebError(
-            "Protected optical media are only supported for hosted FDTD Simulation and hosted "
-            "ModeSimulation uploads."
+            "Protected media are only supported for hosted FDTD Simulation, hosted "
+            "ModeSimulation and hosted heat and charge simulation uploads."
         )
 
     if _active_product_protocol() is None and is_foreign_model(simulation):
@@ -734,14 +736,11 @@ def _upload(
     if has_protected_media(simulation):
         if getattr(config, "profile", "default") == "nexus":
             raise WebError(
-                "Protected optical media are not supported for Nexus execution. "
+                "Protected media are not supported for Nexus execution. "
                 "Use the hosted Tidy3D cloud execution path."
             )
         if any(ref.encrypted_payload is None for ref in protected_asset_refs(simulation)):
-            raise WebError(
-                "Protected optical media require encrypted protected-medium payloads for "
-                "hosted upload."
-            )
+            raise WebError("Protected assets require their encrypted payload for hosted upload.")
         warn_protected_surrogate(simulation, "Hosted upload")
 
     stub = Tidy3dStub(simulation=simulation)
