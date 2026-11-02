@@ -58,6 +58,11 @@ class SSACAnalysis(SteadyChargeDCAnalysis, AbstractSSACAnalysis):
     """
     Configures Small-Signal AC (SSAC) analysis parameters for charge simulation.
 
+    Notes
+    -----
+    With a :class:`.DistributedGeneration`, it also returns
+    ``DeviceCharacteristics.ac_photocurrent_voltage``.
+
     Examples
     --------
     >>> import tidy3d as td
@@ -77,6 +82,9 @@ class IsothermalSSACAnalysis(IsothermalSteadyChargeDCAnalysis, AbstractSSACAnaly
     Notes
     -----
     This analysis class provides an interface for SSAC analysis.
+
+    With a :class:`.DistributedGeneration`, it also returns
+    ``DeviceCharacteristics.ac_photocurrent_voltage``.
 
     Examples
     --------

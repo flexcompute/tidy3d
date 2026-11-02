@@ -245,6 +245,30 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         json_schema_extra={"units": "A", "units_2d": "A/um"},
     )
 
+    ac_photocurrent_voltage: FreqVoltageDataArray | None = Field(
+        default=None,
+        title="Small-signal AC photocurrent-voltage",
+        description="Small-signal AC photocurrent as a function of DC bias voltage and frequency, "
+        "returned by a small-signal analysis of a simulation with "
+        ":class:`.DistributedGeneration`. Every :class:`.DistributedGeneration` is modulated "
+        "together, :math:`G \\rightarrow G \\, (1 + m e^{j\\omega t})`, and this complex-valued "
+        "data :math:`H(v, f)` is the current into the contact of the :class:`.SSACVoltageSource` "
+        "per unit modulation depth :math:`m`, with every voltage-driven contact held at its DC "
+        "voltage and every current-driven contact open to the small signal. It uses the "
+        "passive terminal convention of ``ac_current_voltage`` but does not scale with the "
+        "``amplitude`` of the :class:`.SSACVoltageSource`: the Norton equivalent of the device "
+        "at that contact is :math:`H` together with the admittance :math:`Y = I / V`, where "
+        ":math:`I` is ``ac_current_voltage`` and :math:`V` that ``amplitude``. At low "
+        "frequency :math:`H` tends to the derivative of the DC current with respect to "
+        ":math:`m`, so :math:`|H|` normalized to its low-frequency value gives the bandwidth, "
+        "and :math:`H / P_0` is the responsivity for the mean optical power :math:`P_0` that "
+        "produces the generation. The lattice temperature is held at its DC value. Requires "
+        "the accelerated charge solver. "
+        "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
+        "(extrusion length) to obtain the total current.",
+        json_schema_extra={"units": "A", "units_2d": "A/um"},
+    )
+
     dc_convergence: SteadyConvergenceData | None = Field(
         default=None,
         title="Steady DC convergence state",
