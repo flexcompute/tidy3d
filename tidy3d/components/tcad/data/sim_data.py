@@ -235,14 +235,42 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         default=None,
         title="Small-signal AC current-voltage",
         description="Small-signal AC current as a function of DC bias voltage and frequency. "
-        "This complex-valued data :math:`I(v, f)` is computed from small-signal analysis and "
-        "uses the passive terminal convention, with positive current flowing into the driven "
+        "This complex-valued data :math:`\\tilde{I}(v, f)` is computed from small-signal analysis "
+        "and uses the passive terminal convention, with positive current flowing into the driven "
         "contact. For the usual :math:`e^{j\\omega t}` convention, use "
-        ":math:`Y = I / V` and :math:`C = \\operatorname{Im}(Y) / (2\\pi f)` to extract "
-        "admittance and capacitance. "
+        ":math:`Y = \\tilde{I} / \\tilde{V}`, with :math:`\\tilde{V}` the ``amplitude`` of the "
+        ":class:`.SSACVoltageSource`, and :math:`C = \\operatorname{Im}(Y) / (2\\pi f)` to extract "
+        "admittance and capacitance, which the accelerated charge solver also returns as "
+        "``ac_admittance_voltage`` and ``ac_capacitance_voltage``. "
         "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
         "(extrusion length) to obtain the total current.",
         json_schema_extra={"units": "A", "units_2d": "A/um"},
+    )
+
+    ac_admittance_voltage: FreqVoltageDataArray | None = Field(
+        default=None,
+        title="Small-signal AC admittance-voltage",
+        description="Small-signal admittance :math:`Y = \\tilde{I} / \\tilde{V}` at the contact "
+        "of the :class:`.SSACVoltageSource` as a function of DC bias voltage :math:`v` and "
+        "frequency :math:`f`, where :math:`\\tilde{I}` is ``ac_current_voltage`` and "
+        ":math:`\\tilde{V}` the ``amplitude`` of the source. "
+        "Every other voltage-driven contact is held at its DC voltage and every current-driven "
+        "contact is open to the small signal. Requires the accelerated charge solver. "
+        "Units: S (3D) or S/μm (2D). For 2D simulations, multiply by the device depth "
+        "(extrusion length) to obtain the total admittance.",
+        json_schema_extra={"units": "S", "units_2d": "S/um"},
+    )
+
+    ac_capacitance_voltage: FreqVoltageDataArray | None = Field(
+        default=None,
+        title="Small-signal AC capacitance-voltage",
+        description="Small-signal capacitance :math:`C = \\operatorname{Im}(Y) / (2\\pi f)` as a "
+        "function of DC bias voltage and frequency, where :math:`Y` is "
+        "``ac_admittance_voltage``. It is NaN at :math:`f = 0`. Requires the accelerated charge "
+        "solver. "
+        "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
+        "to obtain the total capacitance.",
+        json_schema_extra={"units": "fF", "units_2d": "fF/um"},
     )
 
     ac_photocurrent_voltage: FreqVoltageDataArray | None = Field(
@@ -257,8 +285,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "voltage and every current-driven contact open to the small signal. It uses the "
         "passive terminal convention of ``ac_current_voltage`` but does not scale with the "
         "``amplitude`` of the :class:`.SSACVoltageSource`: the Norton equivalent of the device "
-        "at that contact is :math:`H` together with the admittance :math:`Y = I / V`, where "
-        ":math:`I` is ``ac_current_voltage`` and :math:`V` that ``amplitude``. At low "
+        "at that contact is :math:`H` together with ``ac_admittance_voltage``. At low "
         "frequency :math:`H` tends to the derivative of the DC current with respect to "
         ":math:`m`, so :math:`|H|` normalized to its low-frequency value gives the bandwidth, "
         "and :math:`H / P_0` is the responsivity for the mean optical power :math:`P_0` that "
