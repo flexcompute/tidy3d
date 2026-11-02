@@ -5,23 +5,26 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+import xarray as xr
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
 from tidy3d.components.data.monitor_data import ModeData, ModeSolverData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
+from tidy3d.components.eme.monitor import _stored_direction
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log
 
 from .dataset import EMECoefficientDataset, EMEDiagnosticsData, EMESMatrixDataset
 from .monitor_data import EMECoefficientData, EMEModeSolverData, EMEMonitorDataType
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Literal
 
     from tidy3d.components.data.data_array import DataArray
@@ -29,6 +32,51 @@ if TYPE_CHECKING:
     from tidy3d.components.mode_spec import ModeInterpSpec
 
     from .monitor_data import EMEFieldData
+
+    TargetBasis = FieldData | ModeData | EMEModeSolverData
+
+
+def _resampled_copy(basis: ModeSolverData) -> ModeSolverData:
+    """``interpolated_copy`` without renormalizing, so the basis keeps its stored scale."""
+    interp_spec = basis.monitor.mode_spec.interp_spec
+    if interp_spec is None or not basis._reduced_data:
+        return basis
+    return basis.interp_in_freq(
+        freqs=basis.monitor.freqs,
+        method=interp_spec.method,
+        renormalize=False,
+        recalculate_grid_correction=True,
+        assume_sorted=True,
+    )
+
+
+def _common_frequency_grid(
+    *bases: FieldData | ModeData | ModeSolverData,
+    stored_ports: tuple[bool, ...] = (),
+) -> tuple[FieldData | ModeData | ModeSolverData, ...]:
+    """Keep one shared reduced mode grid, otherwise expand every mode basis.
+
+    Pairwise reconciliation is not transitive over three bases, and ``outer_dot``
+    silently intersects frequencies. Equal interpolation specs can still sample
+    different frequency spans, so the stored frequencies must match too.
+
+    ``stored_ports`` flags the stored port bases. They carry the normalization of the
+    scattering matrix, which ``interpolated_copy`` would replace by unit self-overlap, so
+    they are expanded without renormalizing; target bases follow ``interpolated_copy``.
+    """
+    if all(isinstance(basis, ModeSolverData) for basis in bases) and all(
+        bases[0].monitor.mode_spec._same_nontrivial_interp_spec(other=basis.monitor.mode_spec)
+        and np.array_equal(bases[0].n_complex.f.values, basis.n_complex.f.values)
+        for basis in bases[1:]
+    ):
+        return bases
+    stored_ports = tuple(stored_ports) + (False,) * (len(bases) - len(stored_ports))
+    return tuple(
+        (_resampled_copy(basis) if stored else basis.interpolated_copy)
+        if isinstance(basis, ModeSolverData)
+        else basis
+        for basis, stored in zip(bases, stored_ports)
+    )
 
 
 def _require_finite(values: np.ndarray) -> None:
@@ -253,6 +301,194 @@ def _port_expansion_coeffs(overlaps: DataArray, port_gram: DataArray) -> DataArr
     return overlaps.copy(data=coeffs)
 
 
+# Basis ids of a port's directional overlap table: 0, 1 = stored port forward and backward
+# modes; 2, 3 = target forward and backward modes.
+
+
+def _directional_overlaps(
+    bases: dict[int, FieldData | ModeData], freqs: np.ndarray, colocated: bool
+) -> dict[tuple[int, int], np.ndarray]:
+    """Unconjugated one-sided overlaps of every ordered pair of ``bases``, keyed by basis id,
+    on ``freqs``: rows follow the first basis's modes."""
+    reconciled = _common_frequency_grid(
+        *(_force_integration_convention(basis, colocated) for basis in bases.values()),
+        stored_ports=tuple(key in (0, 1) for key in bases),
+    )
+    present = dict(zip(bases, reconciled))
+    overlaps = {}
+    for a, first in present.items():
+        spec = getattr(getattr(first.monitor, "mode_spec", None), "interp_spec", None)
+        for b, second in present.items():
+            if a == b:
+                continue
+            values = first.outer_dot(second, conjugate=False, bidirectional=False)
+            for dim in ("mode_index_0", "mode_index_1"):
+                if dim not in values.dims:
+                    values = values.expand_dims({dim: [0]})
+            # Select explicitly: the S-matrix blocks are taken on ascending ``freqs``.
+            values = _interp_to_f(first, values, spec, freqs).sel(f=freqs)
+            values = values.transpose("f", "mode_index_0", "mode_index_1").values
+            _require_finite(values)
+            overlaps[(a, b)] = np.ascontiguousarray(values, dtype=complex)
+    return overlaps
+
+
+def _label_positions(basis: ModeSolverData, labels: np.ndarray) -> np.ndarray:
+    """Positions of mode ``labels`` in ``basis``."""
+    position = {int(label): i for i, label in enumerate(basis.n_complex.mode_index.values)}
+    return np.array([position[int(label)] for label in labels], dtype=int)
+
+
+def _directional_port_transforms(
+    port: int, overlaps: dict[tuple[int, int], np.ndarray], port_rows: list[np.ndarray]
+) -> tuple[np.ndarray | None, np.ndarray | None]:
+    """Incident and outgoing transforms of one port, computed by tidy3d-extras from its
+    overlap table, over the port modes at positions ``port_rows`` of its forward and backward
+    bases."""
+    from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+    try:
+        check_tidy3d_extras_licensed_feature("local_eme")
+    except Tidy3dImportError as exc:
+        raise SetupError(
+            "Changing the basis of an EME result that stores backward port modes requires "
+            f"'tidy3d-extras' with an EME license: {exc}"
+        ) from exc
+    from tidy3d_extras.eme import directional_port_transforms
+
+    selected = {}
+    for (a, b), values in overlaps.items():
+        if a < 2:
+            values = values[:, port_rows[a], :]
+        if b < 2:
+            values = values[:, :, port_rows[b]]
+        selected[(a, b)] = np.ascontiguousarray(values)
+    try:
+        return directional_port_transforms(port, selected)
+    except ValueError as exc:
+        raise SetupError(str(exc)) from exc
+
+
+def _directional_smatrix_in_basis(
+    smatrix: EMESMatrixDataset,
+    ports: list[tuple[ModeSolverData, ModeSolverData] | None],
+    requested: list[tuple[FieldData | ModeData, FieldData | ModeData] | None],
+    skip_gram_normalization: bool,
+) -> EMESMatrixDataset:
+    """Change the basis of an S-matrix onto (forward, backward) target pairs."""
+    if skip_gram_normalization:
+        raise SetupError(
+            "'skip_gram_normalization' is not supported with backward port modes or target pairs."
+        )
+    targets = []
+    freqs = set(smatrix.S11.f.values)
+    labels = []
+    for port, target in enumerate(requested):
+        if target is None:
+            targets.append(None)
+            labels.append(np.asarray((smatrix.S11 if port == 0 else smatrix.S22).mode_index_in))
+            continue
+        for basis, direction in zip(ports[port], ("+", "-")):
+            if _stored_direction(basis) != direction:
+                raise SetupError(
+                    f"The stored '{direction}' port basis has the wrong field direction."
+                )
+        target_labels = []
+        for basis in target:
+            freqs &= set(_basis_freqs(basis))
+            field = next(iter(basis.field_components.values()))
+            target_labels.append(
+                np.asarray(field.mode_index) if "mode_index" in field.dims else np.array([0])
+            )
+        if not np.array_equal(*target_labels):
+            raise SetupError("Forward and backward target mode labels must match.")
+        targets.append(target)
+        labels.append(target_labels[0])
+    freqs = np.asarray(sorted(freqs))
+    if not len(freqs):
+        raise SetupError("The target bases share no frequencies with the scattering matrix.")
+
+    # One integration convention for the whole change of basis, as in the forward-only path.
+    colocated = any(
+        _rebasing_colocated(*ports[port], *targets[port])
+        for port in range(2)
+        if targets[port] is not None
+    )
+    # The overlaps do not depend on the sweep; each sweep selects its active port modes.
+    tables = [
+        None
+        if targets[port] is None
+        else _directional_overlaps(
+            dict(enumerate((*ports[port], *targets[port]))), freqs, colocated
+        )
+        for port in range(2)
+    ]
+
+    sweeps = smatrix.S11.sweep_index.values if "sweep_index" in smatrix.S11.dims else [0]
+    pairs = ((0, 0), (0, 1), (1, 0), (1, 1))
+    result = {
+        key: np.full((len(freqs), len(sweeps), len(labels[i]), len(labels[j])), np.nan, complex)
+        for key, (i, j) in zip(("S11", "S12", "S21", "S22"), pairs)
+    }
+    for sw_pos, sw in enumerate(sweeps):
+        blocks = {}
+        for key in result:
+            block = getattr(smatrix, key).sel(f=freqs)
+            if "sweep_index" in block.dims:
+                block = block.sel(sweep_index=sw)
+            blocks[key] = block.transpose("f", "mode_index_out", "mode_index_in")
+        active = []
+        for key in ("S11", "S22"):
+            valid = np.isfinite(np.diagonal(blocks[key].values, axis1=-2, axis2=-1)).all(axis=0)
+            active.append(np.asarray(blocks[key].mode_index_in)[valid])
+        incoming, outgoing, destinations = [], [], []
+        for port, port_bases in enumerate(ports):
+            if targets[port] is None:
+                identity = np.broadcast_to(
+                    np.eye(len(active[port])),
+                    (len(freqs), len(active[port]), len(active[port])),
+                )
+                incoming.append(identity)
+                outgoing.append(identity)
+                destinations.append(np.flatnonzero(np.isin(labels[port], active[port])))
+                continue
+            for basis in port_bases:
+                missing = np.setdiff1d(active[port], basis.n_complex.mode_index)
+                if missing.size:
+                    raise SetupError(
+                        f"The stored port {port + 1} modes lack mode indices {missing.tolist()} "
+                        "used by the scattering matrix."
+                    )
+            into, out_of = _directional_port_transforms(
+                port,
+                tables[port],
+                [_label_positions(basis, active[port]) for basis in port_bases],
+            )
+            incoming.append(into)
+            outgoing.append(out_of)
+            destinations.append(np.arange(len(labels[port])))
+        for key, (i, j) in zip(result, pairs):
+            s = blocks[key].sel(mode_index_out=active[i], mode_index_in=active[j]).values
+            value = outgoing[i] @ s @ incoming[j]
+            for row, dest in enumerate(destinations[i]):
+                result[key][:, sw_pos, dest, destinations[j]] = value[:, row, :]
+    arrays = {}
+    for key, (i, j) in zip(result, pairs):
+        da = EMESMatrixDataArray(
+            result[key],
+            coords={
+                "f": freqs,
+                "sweep_index": sweeps,
+                "mode_index_out": labels[i],
+                "mode_index_in": labels[j],
+            },
+        )
+        if "sweep_index" not in smatrix.S11.dims:
+            da = da.isel(sweep_index=0, drop=True)
+        arrays[key] = da
+    return EMESMatrixDataset(**arrays)
+
+
 class EMESimulationData(AbstractYeeGridSimulationData):
     """Data associated with an EME simulation.
 
@@ -346,16 +582,33 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     port_modes_raw: EMEModeSolverData | None = Field(
         default=None,
         title="Port Modes",
-        description="Modes associated with the two ports of the EME device. "
-        "The scattering matrix is expressed in this basis. "
+        description="Forward modes associated with the two ports of the EME device. "
+        "When 'port_modes_backward_raw' is stored, port-1 outgoing and port-2 incoming "
+        "amplitudes use it instead. "
         "Note: these modes are not symmetry expanded; use 'port_modes' instead.",
     )
 
+    port_modes_backward_raw: EMEModeSolverData | None = Field(
+        default=None,
+        title="Backward Port Modes",
+        description="Backward modes associated with the two ports, stored when a port cell's "
+        "backward modes are not reflections of its forward modes. Port-1 outgoing and "
+        "port-2 incoming amplitudes use this basis. "
+        "Note: these modes are not symmetry expanded; use 'port_modes_backward' instead.",
+    )
+
+    @cached_property
+    def port_modes_backward(self) -> EMEModeSolverData | None:
+        """Symmetry-expanded backward port modes, when stored."""
+        if self.port_modes_backward_raw is None:
+            return None
+        return self.port_modes_backward_raw.symmetry_expanded_copy
+
     @cached_property
     def port_modes(self) -> EMEModeSolverData | None:
-        """Modes associated with the two ports of the EME device.
-        The scattering matrix is expressed in this basis.
-        Note: these modes are symmetry expanded."""
+        """Forward modes associated with the two ports of the EME device, symmetry expanded.
+        The scattering matrix is expressed in these modes, except for the port-1 outgoing and
+        port-2 incoming amplitudes of a result that stores ``port_modes_backward``."""
         if self.port_modes_raw is None:
             return None
         return self.port_modes_raw.symmetry_expanded_copy
@@ -394,6 +647,9 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         }
 
         monitor = self.simulation.mode_solver_monitors[eme_cell_index]
+        monitor = monitor.updated_copy(
+            direction=data.monitor.direction, store_fields_direction=data.monitor.direction
+        )
         if data.monitor.freqs is not None:
             monitor = monitor.updated_copy(
                 freqs=list(data.monitor.freqs), deep=False, validate=False
@@ -551,7 +807,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
 
     @cached_property
     def port_modes_tuple(self) -> tuple[ModeSolverData, ModeSolverData]:
-        """Port modes as a tuple ``(port_modes_1, port_modes_2)``.
+        """Forward port modes as a tuple ``(port_modes_1, port_modes_2)``.
 
         Returns
         -------
@@ -561,10 +817,49 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         """
         return self._port_modes(0), self._port_modes(1)
 
+    def _port_modes_backward(self, port_index: int) -> ModeSolverData:
+        """Backward basis of one port: stored, or the reflection of its forward basis."""
+        if self.port_modes_backward_raw is None:
+            return self._port_modes(port_index)._reflected_backward_copy()
+        return self._extract_mode_solver_data(
+            self.port_modes_backward, self._port_cell_index(port_index)
+        )
+
+    def _direction_pair(
+        self, modes: TargetBasis | tuple[TargetBasis, TargetBasis] | None, port_index: int
+    ) -> tuple[FieldData | ModeData, FieldData | ModeData] | None:
+        """Split a pair of target bases into (forward, backward) by their recorded directions.
+
+        Returns ``None`` for a single basis.
+        """
+        if not isinstance(modes, (tuple, list)):
+            return None
+        bases = [self._extract_basis_if_needed(basis, port_index) for basis in modes]
+        by_direction = {_stored_direction(basis): basis for basis in bases}
+        if len(bases) != 2 or set(by_direction) != {"+", "-"}:
+            raise SetupError(
+                f"A pair of bases for port {port_index + 1} must hold one basis recorded with "
+                "direction='+' and one recorded with direction='-', for example the data of "
+                "two 'EMEModeSolverMonitor's or two mode solves."
+            )
+        return by_direction["+"], by_direction["-"]
+
+    def _smatrix_in_direction_pairs(
+        self,
+        pairs: list[tuple[FieldData | ModeData, FieldData | ModeData] | None],
+        skip_gram_normalization: bool,
+    ) -> EMESMatrixDataset:
+        """Rebase each changed port onto its (forward, backward) target pair."""
+        ports = [
+            (self._port_modes(port), self._port_modes_backward(port)) if pair else None
+            for port, pair in enumerate(pairs)
+        ]
+        return _directional_smatrix_in_basis(self.smatrix, ports, pairs, skip_gram_normalization)
+
     def smatrix_in_basis(
         self,
-        modes1: FieldData | ModeData | EMEModeSolverData = None,
-        modes2: FieldData | ModeData | EMEModeSolverData = None,
+        modes1: TargetBasis | tuple[TargetBasis, TargetBasis] = None,
+        modes2: TargetBasis | tuple[TargetBasis, TargetBasis] = None,
         skip_gram_normalization: bool = False,
     ) -> EMESMatrixDataset:
         """Express the scattering matrix in the provided basis.
@@ -572,10 +867,16 @@ class EMESimulationData(AbstractYeeGridSimulationData):
 
         Parameters
         ----------
-        modes1: Union[FieldData, ModeData, EMEModeSolverData]
-            New modal basis for port 1. If ``None``, use ``port_modes``.
-        modes2: Union[FieldData, ModeData, EMEModeSolverData]
-            New modal basis for port 2. If ``None``, use ``port_modes``.
+        modes1: Union[FieldData, ModeData, EMEModeSolverData, tuple]
+            New modal basis for port 1. If ``None``, use ``port_modes``. Either a single
+            basis, or a pair of the same modes recorded with ``direction="+"`` and
+            ``direction="-"`` (for example two :class:`.EMEModeSolverMonitor` s, or
+            ``(port_modes, port_modes_backward)``), in either order. A pair is required
+            when the result stores ``port_modes_backward``, and accepted for any result.
+            Changing the basis of such a result requires ``tidy3d-extras`` with an EME
+            license.
+        modes2: Union[FieldData, ModeData, EMEModeSolverData, tuple]
+            New modal basis for port 2, as for ``modes1``.
         skip_gram_normalization: bool = False
             If ``False`` (default), normalize the change of basis so it is correct
             even for bases that are not orthonormal (linear combinations of port
@@ -624,6 +925,10 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             # 2. After running, re-express the S-matrix
             smatrix_custom = sim_data.smatrix_in_basis(modes2=sim_data["output"])
             T_custom = smatrix_custom.S21.isel(mode_index_in=0, mode_index_out=0).abs ** 2
+
+            # If the result stores backward port modes, also record the backward modes
+            # (an EMEModeSolverMonitor with direction="-", here named "output_back")
+            # and pass both: modes2=(sim_data["output"], sim_data["output_back"])
         """
 
         # Pure-Python mirror of tidy3d_extras.eme.smatrix_in_basis: the public client
@@ -641,6 +946,20 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         modes2_provided = modes2 is not None
         if not modes1_provided and not modes2_provided:
             return self.smatrix
+        pairs = [self._direction_pair(modes, port) for port, modes in enumerate((modes1, modes2))]
+        if self.port_modes_backward_raw is not None or any(pairs):
+            for port, (modes, pair) in enumerate(zip((modes1, modes2), pairs)):
+                if modes is not None and pair is None:
+                    raise SetupError(
+                        f"'modes{port + 1}' must be a pair of bases recorded with "
+                        "direction='+' and direction='-'"
+                        + (
+                            ", because this result stores backward port modes."
+                            if self.port_modes_backward_raw is not None
+                            else ", as the other port's basis is."
+                        )
+                    )
+            return self._smatrix_in_direction_pairs(pairs, skip_gram_normalization)
 
         port_modes1 = self._port_modes(0) if modes1_provided else None
         port_modes2 = self._port_modes(1) if modes2_provided else None
@@ -649,6 +968,13 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             modes1 = self._extract_basis_if_needed(modes1, port_index=0)
         if modes2_provided:
             modes2 = self._extract_basis_if_needed(modes2, port_index=1)
+        for port, modes in enumerate((modes1, modes2)):
+            # This result expresses both ports in forward modes.
+            if modes is not None and _stored_direction(modes) == "-":
+                raise SetupError(
+                    f"'modes{port + 1}' holds backward ('-') mode fields, but this result "
+                    "expresses its ports in forward modes. Use data recorded with direction='+'."
+                )
 
         # Express the change of basis in a single integration convention -- the port
         # modes' (i.e. the S-matrix's) convention, which is native Yee for EME -- so
@@ -978,10 +1304,137 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         smatrix = EMESMatrixDataset(S11=xrS11, S12=xrS12, S21=xrS21, S22=xrS22)
         return smatrix
 
+    @staticmethod
+    def _directional_field_coefficients(
+        port_index: int,
+        overlaps: dict[tuple[int, int], np.ndarray],
+        port_bases: tuple[ModeSolverData, ModeSolverData],
+        keep_inds: list[int] | None,
+        mode_index: list[int],
+        freqs: np.ndarray,
+    ) -> DataArray:
+        """Expansion coefficients of the target in the active port modes of a directional
+        result, from the overlap table of the port's (forward, backward) bases and the target."""
+        labels = (
+            np.asarray(keep_inds)
+            if keep_inds is not None
+            else np.asarray(port_bases[0].n_complex.mode_index)
+        )
+        incoming, _ = _directional_port_transforms(
+            port_index, overlaps, [_label_positions(basis, labels) for basis in port_bases]
+        )
+        return xr.DataArray(
+            incoming.transpose(0, 2, 1),
+            coords={"f": freqs, "mode_index_0": list(mode_index), "mode_index_1": labels},
+            dims=("f", "mode_index_0", "mode_index_1"),
+        )
+
+    def _field_in_basis_transform(
+        self,
+        modes: TargetBasis | tuple[TargetBasis, TargetBasis],
+        port_index: Literal[0, 1],
+        field_freqs: np.ndarray,
+        skip_gram_normalization: bool,
+    ) -> tuple[FieldData | ModeData, np.ndarray, Callable[[list[int] | None], DataArray]]:
+        """Prepare the target and an expansion map that reuses overlaps across sweeps.
+
+        Select either the opposite-direction Lorentz pairing or the forward-only Gram
+        convention once. Field assembly consumes the same coefficients in either case.
+        """
+        pair = self._direction_pair(modes, port_index)
+        modes = (
+            self._extract_basis_if_needed(modes, port_index=port_index)
+            if pair is None
+            else pair[port_index]
+        )
+
+        def frequencies(basis: FieldData | ModeData) -> np.ndarray:
+            freqs = np.array(
+                sorted(set(_basis_freqs(basis)).intersection(field_freqs, self.simulation.freqs))
+            )
+            if freqs.size == 0:
+                raise SetupError(
+                    "The provided mode data shares no frequencies with the stored field "
+                    "data and the simulation; cannot change basis on an empty frequency set."
+                )
+            return freqs
+
+        if self.port_modes_backward_raw is not None or pair is not None:
+            expected = "+" if port_index == 0 else "-"
+            if _stored_direction(modes) != expected:
+                raise SetupError(
+                    f"Field excitation at port {port_index + 1} requires mode data recorded "
+                    f"with direction='{expected}'."
+                )
+            if skip_gram_normalization:
+                raise SetupError(
+                    "'skip_gram_normalization' is not supported with backward port "
+                    "modes or target pairs."
+                )
+            forward, backward = self._port_modes(port_index), self._port_modes_backward(port_index)
+            incident = forward if port_index == 0 else backward
+            colocated = _rebasing_colocated(incident, None, modes, None)
+            modes, forward, backward = _common_frequency_grid(
+                *(
+                    _force_integration_convention(basis, colocated)
+                    for basis in (modes, forward, backward)
+                ),
+                stored_ports=(False, True, True),
+            )
+            freqs = frequencies(modes)
+            overlaps = _directional_overlaps(
+                {0: forward, 1: backward, 2 + port_index: modes}, freqs, colocated
+            )
+            mode_index = list(next(iter(modes.field_components.values())).mode_index.values)
+
+            def directional_coefficients(keep_inds: list[int] | None) -> DataArray:
+                return self._directional_field_coefficients(
+                    port_index, overlaps, (forward, backward), keep_inds, mode_index, freqs
+                )
+
+            return modes, freqs, directional_coefficients
+
+        if _stored_direction(modes) == "-":
+            raise SetupError(
+                "'modes' holds backward ('-') mode fields, but this result expresses its "
+                "ports in forward modes. Use data recorded with direction='+'."
+            )
+        port_modes = self._port_modes(port_index)
+        colocated = _rebasing_colocated(port_modes, None, modes, None)
+        modes = _force_integration_convention(modes, colocated)
+        port_modes = _force_integration_convention(port_modes, colocated)
+        modes, port_modes = modes._interpolated_copies_if_needed(port_modes)
+        freqs = frequencies(modes)
+        interp_spec = modes.monitor.mode_spec.interp_spec if isinstance(modes, ModeData) else None
+        overlaps = modes.outer_dot(port_modes, conjugate=False)
+        if "mode_index" not in next(iter(modes.field_components.values())).coords:
+            overlaps = overlaps.expand_dims(dim={"mode_index_0": [0]}, axis=1)
+        overlaps = _interp_to_f(modes, overlaps, interp_spec, freqs).sel(f=freqs)
+        if not skip_gram_normalization:
+            gram = _interp_to_f(
+                port_modes,
+                port_modes.outer_dot(port_modes, conjugate=False),
+                getattr(getattr(port_modes.monitor, "mode_spec", None), "interp_spec", None),
+                freqs,
+            ).sel(f=freqs)
+
+        def gram_coefficients(keep_inds: list[int] | None) -> DataArray:
+            selected = overlaps if keep_inds is None else overlaps.sel(mode_index_1=keep_inds)
+            if not skip_gram_normalization:
+                port_gram = (
+                    gram
+                    if keep_inds is None
+                    else gram.sel(mode_index_0=keep_inds, mode_index_1=keep_inds)
+                )
+                selected = _port_expansion_coeffs(selected, port_gram)
+            return selected
+
+        return modes, freqs, gram_coefficients
+
     def field_in_basis(
         self,
         field: EMEFieldData,
-        modes: FieldData | ModeData | EMEModeSolverData = None,
+        modes: TargetBasis | tuple[TargetBasis, TargetBasis] = None,
         port_index: Literal[0, 1] = 0,
         skip_gram_normalization: bool = False,
     ) -> EMEFieldData:
@@ -999,8 +1452,12 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         ----------
         field: EMEFieldData
             EME field to express in new basis.
-        modes: Union[FieldData, ModeData, EMEModeSolverData]
-            New modal basis. If None, use port_modes.
+        modes: Union[FieldData, ModeData, EMEModeSolverData, tuple]
+            New modal basis. If None, use port_modes. Either a single basis or a pair
+            recorded with ``direction="+"`` and ``direction="-"``, as in
+            :meth:`smatrix_in_basis`. When the result stores ``port_modes_backward``, a
+            single basis must be recorded in the direction of the excitation: ``"+"`` for
+            port 1 and ``"-"`` for port 2.
         port_index: Literal[0, 1]
             Port to excite.
         skip_gram_normalization: bool = False
@@ -1035,36 +1492,21 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             sweep_indices = [0]
 
         modes_provided = modes is not None
-        port_modes = None
         if modes_provided:
-            port_modes = self._port_modes(port_index)
-            modes = self._extract_basis_if_needed(modes, port_index=port_index)
-
-            # Compute the change of basis in the port modes' integration convention -- Yee
-            # for EME -- matching how the field was computed and smatrix_in_basis. A target
-            # basis's use_colocated_integration is not honored; only colocate=True forces
-            # colocated (boundary storage makes Yee integration impossible).
-            rebase_colocated = (
-                _integration_colocated(port_modes)
-                or bool(getattr(getattr(modes, "monitor", None), "colocate", True))
-                or not _shares_tangential_grid(port_modes, modes)
+            modes, f, coefficients = self._field_in_basis_transform(
+                modes,
+                port_index,
+                next(iter(field.field_components.values())).f.values,
+                skip_gram_normalization,
             )
-            port_modes = _force_integration_convention(port_modes, rebase_colocated)
-            modes = _force_integration_convention(modes, rebase_colocated)
-            modes, port_modes = modes._interpolated_copies_if_needed(port_modes)
-
-        # Interpolate the overlaps/Grams onto the frequency grid when a basis uses
-        # frequency interpolation, exactly as smatrix_in_basis does -- so the two
-        # paths cannot disagree.
-        mode_spec = (
-            modes.monitor.mode_spec if modes_provided and isinstance(modes, ModeData) else None
-        )
-        interp_spec = mode_spec.interp_spec if mode_spec is not None else None
-        port_interp_spec = (
-            getattr(getattr(port_modes.monitor, "mode_spec", None), "interp_spec", None)
-            if modes_provided
-            else None
-        )
+        else:
+            field_freqs = next(iter(field.field_components.values())).f.values
+            f = np.array(sorted(set(field_freqs).intersection(self.simulation.freqs)))
+            if f.size == 0:
+                raise SetupError(
+                    "The provided mode data shares no frequencies with the stored field "
+                    "data and the simulation; cannot change basis on an empty frequency set."
+                )
 
         # With no new basis this method only selects an excitation port. Preserve the
         # field monitor's padded mode axis; extracted port modes intentionally omit
@@ -1079,16 +1521,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             mode_index = mode_index_source.mode_index.to_numpy()
         else:
             mode_index = [0]
-
-        f1 = _basis_freqs(modes) if modes_provided else self.simulation.freqs
-        f2 = list(field.field_components.values())[0].f.values
-
-        f = np.array(sorted(set(f1).intersection(f2).intersection(self.simulation.freqs)))
-        if f.size == 0:
-            raise SetupError(
-                "The provided mode data shares no frequencies with the stored field "
-                "data and the simulation; cannot change basis on an empty frequency set."
-            )
 
         # set up field arrays
         field_data = {}
@@ -1110,28 +1542,10 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 "mode_index": mode_index,
             }
 
-        overlaps_full = port_gram_full = None
-        if modes_provided:
-            overlaps_full = modes.outer_dot(port_modes, conjugate=False)
-            if not modes_present:
-                overlaps_full = overlaps_full.expand_dims(dim={"mode_index_0": [0]}, axis=1)
-            overlaps_full = _interp_to_f(modes, overlaps_full, interp_spec, f).sel(f=f)
-            if not skip_gram_normalization:
-                port_gram_full = _interp_to_f(
-                    port_modes,
-                    port_modes.outer_dot(port_modes, conjugate=False),
-                    port_interp_spec,
-                    f,
-                ).sel(f=f)
-
         # populate the arrays
         for sweep_index in sweep_indices:
             if modes_provided:
-                # Rebase through the same trial basis smatrix_in_basis uses: drop the
-                # port modes the S-matrix dropped (sweep-truncated or increasing-/
-                # ModeSortSpec-filtered), so filtered modes don't leak into the result
-                # and dropped modes aren't mistaken for incomplete data and rejected.
-                # Fall back to every port mode when no S-matrix defines the trial basis.
+                # Use the same active trial basis as smatrix_in_basis at this sweep.
                 keep_inds = (
                     _trial_basis_mode_inds(
                         self.smatrix.S11 if port_index == 0 else self.smatrix.S22, sweep_index, f
@@ -1139,16 +1553,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                     if self.smatrix is not None
                     else None
                 )
-                overlaps = overlaps_full
-                if keep_inds is not None:
-                    overlaps = overlaps.sel(mode_index_1=keep_inds)
-                if not skip_gram_normalization:
-                    # Expansion coefficients d = O @ G_port^{-1} (raw O assumes
-                    # orthonormal port modes); G_port in the same Yee convention.
-                    port_gram = port_gram_full
-                    if keep_inds is not None:
-                        port_gram = port_gram.sel(mode_index_0=keep_inds, mode_index_1=keep_inds)
-                    overlaps = _port_expansion_coeffs(overlaps, port_gram)
+                overlaps = coefficients(keep_inds)
 
             for field_key, field_comp in field.field_components.items():
                 field_comp_data = field_comp.sel(f=f).to_numpy()

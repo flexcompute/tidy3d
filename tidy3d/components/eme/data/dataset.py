@@ -193,10 +193,24 @@ class EMECoefficientDataset(Dataset):
         description="Coefficient for backward mode in this cell.",
     )
 
+    n_complex_backward: EMEModeIndexDataArray | None = Field(
+        default=None,
+        description="Complex-valued effective propagation indices of the backward EME modes, "
+        "when they are not reflections of the forward modes. Like ``n_complex``, they describe "
+        "propagation in the modes' own direction.",
+    )
+
+    flux_backward: EMEFluxDataArray | None = Field(
+        default=None,
+        description="Power flux of the backward EME modes, when they are not reflections of "
+        "the forward modes. Integrated along the positive propagation axis like ``flux``, so it "
+        "is negative for backward-propagating modes.",
+    )
+
     n_complex: EMEModeIndexDataArray | None = Field(
         default=None,
         title="Propagation Index",
-        description="Complex-valued effective propagation indices associated with the EME modes.",
+        description="Complex-valued effective propagation indices of the forward EME modes.",
     )
 
     flux: EMEFluxDataArray | None = Field(
@@ -223,15 +237,16 @@ class EMECoefficientDataset(Dataset):
         ``interface_smatrices`` blocks are normalized using the square root of
         the absolute real mode flux, so that the forward and backward power of
         each mode are given directly by ``|A|^2`` and ``|B|^2``, respectively,
-        without additional normalization by flux. Zero-flux modes are left
+        without additional normalization by flux. When ``flux_backward`` is
+        present, ``B`` and the backward channels use it. Zero-flux modes are left
         unscaled. Interface S-matrix normalization requires flux for both
         adjacent EME cells.
 
         Returns
         -------
         :class:`.EMECoefficientDataset`
-            A new dataset with flux-normalized coefficients. The ``flux`` field
-            is set to ``None`` to prevent double normalization.
+            A new dataset with flux-normalized coefficients. The ``flux`` and
+            ``flux_backward`` fields are set to ``None`` to prevent double normalization.
         """
         if self.flux is None:
             raise ValidationError(
@@ -239,9 +254,15 @@ class EMECoefficientDataset(Dataset):
                 "so normalization cannot be performed."
             )
         fields = {"A": self.A, "B": self.B}
-        power_flux = np.abs(np.real(self.flux))
-        scale = np.sqrt(power_flux)
-        scale = scale.where(scale != 0, 1)
+
+        def flux_scale(flux: EMEFluxDataArray) -> EMEFluxDataArray:
+            scale = np.sqrt(np.abs(np.real(flux)))
+            return scale.where(scale != 0, 1)
+
+        scale = flux_scale(self.flux)
+        # Without a backward flux, B uses the forward normalization.
+        backward_scale = scale if self.flux_backward is None else flux_scale(self.flux_backward)
+        scales = {"A": scale, "B": backward_scale}
         flux_cell_indices = np.asarray(scale.eme_cell_index.values)
         for key, field in fields.items():
             if field is not None:
@@ -257,7 +278,7 @@ class EMECoefficientDataset(Dataset):
                         "simulation's virtual-cell mapping; manually expand/remap flux to "
                         "the same 'eme_cell_index' coordinates before normalizing."
                     )
-                scale_field = scale.sel(eme_cell_index=field_cell_indices)
+                scale_field = scales[key].sel(eme_cell_index=field_cell_indices)
                 fields[key] = field * scale_field.rename(mode_index="mode_index_out")
         if self.interface_smatrices is not None:
             interface_smatrices = self.interface_smatrices
@@ -285,22 +306,32 @@ class EMECoefficientDataset(Dataset):
                     "'eme_cell_interval_space=1' when requesting normalized interface "
                     "S matrices, or provide flux for both cells adjacent to each interface."
                 )
-            scale1 = scale.sel(eme_cell_index=interface_cell_indices)
-            scale2 = scale.sel(eme_cell_index=right_cell_indices)
-            scale2 = scale2.assign_coords(eme_cell_index=interface_cell_indices)
-            scale1_out = scale1.rename(mode_index="mode_index_out")
-            scale1_in = scale1.rename(mode_index="mode_index_in")
-            scale2_out = scale2.rename(mode_index="mode_index_out")
-            scale2_in = scale2.rename(mode_index="mode_index_in")
+
+            def side(values: EMEFluxDataArray, cell_indices: np.ndarray) -> EMEFluxDataArray:
+                return values.sel(eme_cell_index=cell_indices).assign_coords(
+                    eme_cell_index=interface_cell_indices
+                )
+
+            # Left incidence is forward in the left cell and right incidence backward
+            # in the right cell; outgoing channels are the opposite directions.
+            f1, b1 = (side(values, interface_cell_indices) for values in (scale, backward_scale))
+            f2, b2 = (side(values, right_cell_indices) for values in (scale, backward_scale))
+
+            def out(values: EMEFluxDataArray) -> EMEFluxDataArray:
+                return values.rename(mode_index="mode_index_out")
+
+            def inc(values: EMEFluxDataArray) -> EMEFluxDataArray:
+                return values.rename(mode_index="mode_index_in")
 
             fields["interface_smatrices"] = interface_smatrices.updated_copy(
-                S11=interface_smatrices.S11 * scale1_out / scale1_in,
-                S12=interface_smatrices.S12 * scale1_out / scale2_in,
-                S21=interface_smatrices.S21 * scale2_out / scale1_in,
-                S22=interface_smatrices.S22 * scale2_out / scale2_in,
+                S11=interface_smatrices.S11 * out(b1) / inc(f1),
+                S12=interface_smatrices.S12 * out(b1) / inc(b2),
+                S21=interface_smatrices.S21 * out(f2) / inc(f1),
+                S22=interface_smatrices.S22 * out(f2) / inc(b2),
             )
         # for safety to prevent normalizing twice
         fields["flux"] = None
+        fields["flux_backward"] = None
         return self.updated_copy(**fields)
 
 

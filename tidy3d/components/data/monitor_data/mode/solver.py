@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import autograd.numpy as np
 import xarray as xr
 from flexcompute.core._migration.em.numerical.raw import grid as grid_numerics
+from flexcompute.core._migration.em.numerical.raw.symmetry import em_field_symmetry_eigenvalue
 from pydantic import Field
 
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray, ModeAmpsDataArray
@@ -99,6 +100,23 @@ class ModeSolverData(ModeData):
         title="Solver Log",
         description="A string containing the log information from the mode solver run.",
     )
+
+    def _reflected_backward_copy(self) -> ModeSolverData:
+        """Reflect forward modes through the monitor plane, keeping their grid corrections.
+
+        This supplies backward modes only for a reflection-symmetric operator. Apply it
+        after frequency interpolation, which otherwise recalculates grid corrections for
+        the recorded direction.
+        """
+        fields = {
+            name: em_field_symmetry_eigenvalue(name, self.monitor.normal_axis) * values
+            for name, values in self.field_components.items()
+        }
+        return self.updated_copy(
+            **fields,
+            monitor=self.monitor.updated_copy(direction="-", store_fields_direction="-"),
+            deep=False,
+        )
 
     def _normalize_modes(self) -> None:
         """Scale every mode to a unit self-overlap in the monitor's own dot product.

@@ -14,7 +14,7 @@ from tidy3d.components.monitor import (
     ModeSolverMonitor,
     PermittivityMonitor,
 )
-from tidy3d.components.types import FreqArray
+from tidy3d.components.types import Direction, FreqArray
 
 if TYPE_CHECKING:
     from .sweep import EMESweepSpecType
@@ -155,6 +155,14 @@ class EMEModeSolverMonitor(EMEMonitor):
     ...     name="eme_modes"
     ... )
     """
+
+    direction: Direction = Field(
+        default="+",
+        title="Propagation Direction",
+        description="Direction of propagation of the recorded modes along the EME axis. "
+        "Record the same modes with ``'+'`` and ``'-'`` to pass both directions to "
+        "``EMESimulationData.smatrix_in_basis``.",
+    )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
         default=(1, 1, 1),
@@ -413,6 +421,15 @@ class EMECoefficientMonitor(EMEMonitor):
             )  # O12, O21
 
         return bytes_total
+
+
+def _stored_direction(modes: object) -> str | None:
+    """Direction recorded for mode fields, including EME mode-monitor data."""
+    data = getattr(modes, "modes_raw", modes)
+    monitor = getattr(data, "monitor", None)
+    if isinstance(monitor, EMEModeSolverMonitor):
+        return monitor.direction
+    return getattr(monitor, "store_fields_direction", None)
 
 
 EMEMonitorType = (

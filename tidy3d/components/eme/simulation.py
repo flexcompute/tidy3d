@@ -16,8 +16,9 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.material.tensor_rotation import (
     cell_center_rotations_from_lengths,
+    medium_rotated_tensors,
 )
-from tidy3d.components.medium import AnisotropicMedium, FullyAnisotropicMedium
+from tidy3d.components.medium import AbstractCustomMedium, AnisotropicMedium, FullyAnisotropicMedium
 from tidy3d.components.medium.protected import assert_no_protected_media
 from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -41,11 +42,13 @@ from tidy3d.log import NoOpProgress, Progress, get_logging_console, log
 
 from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGridSpecType
 from .monitor import (
+    BYTES_COMPLEX,
     EMECoefficientMonitor,
     EMEFieldMonitor,
     EMEModeSolverMonitor,
     EMEMonitor,
     EMEMonitorType,
+    _stored_direction,
 )
 from .sweep import (
     EMELengthSweep,
@@ -945,6 +948,75 @@ class EMESimulation(AbstractYeeGridSimulation):
                 f"which exceeds the maximum allowed '{MAX_NUM_SWEEP}'."
             )
 
+    @cached_property
+    def _anisotropic_validation_freqs_by_cell(self) -> tuple[FreqArray, ...]:
+        """Per-cell frequencies at which anisotropic mode tensors may be evaluated."""
+        freqs_by_cell = []
+        for mode_spec in self.eme_grid.mode_specs:
+            freqs = {
+                float(freq)
+                for freq in mode_spec._sampling_freqs_mode_solver(freqs=list(self.freqs))
+            }
+            freqs_by_cell.append(np.asarray(sorted(freqs), dtype=float))
+        return tuple(freqs_by_cell)
+
+    @cached_property
+    def _cell_mode_planes(self) -> tuple[Box, ...]:
+        """Mode plane of each cell, built once for per-cell predictions."""
+        return tuple(self.eme_grid.mode_planes)
+
+    @cached_property
+    def _cell_rotations(self) -> tuple[TensorReal, ...]:
+        """Rotation of each cell's media into its local frame, as the mode solve applies it."""
+        return cell_center_rotations_from_lengths(
+            np.asarray(self.eme_grid.lengths, dtype=float),
+            self.eme_grid.mode_specs,
+            normal_axis=self.axis,
+        )
+
+    def _medium_has_nondiagonal_permittivity(
+        self, medium: EMEAnisotropicMedium, cell_index: int, freqs: FreqArray | None = None
+    ) -> bool:
+        """Whether ``medium``'s permittivity tensor, rotated into the cell's frame, is not
+        diagonal at ``freqs`` (by default, every frequency the cell's mode solve evaluates), by
+        the solver's own test.
+
+        Permittivity decides it: EME media carry no anisotropic permeability, and EME modes are
+        not angled, so the solver's permeability tensor stays diagonal.
+        ``CustomAnisotropicMedium`` is diagonal component by component.
+        """
+        from tidy3d.components.mode.solver import TOL_TENSORIAL
+
+        if not isinstance(medium, (AnisotropicMedium, FullyAnisotropicMedium)):
+            return False
+        rotation = self._cell_rotations[cell_index]
+        if isinstance(medium, AbstractCustomMedium):
+            # Only spatially averaged tensors are available, so a rotation cannot be certified;
+            # validation already rejects custom media in rotated cells, so this stays a
+            # conservative fallback.
+            return not self._rotation_is_identity(rotation)
+        if freqs is None:
+            freqs = self._anisotropic_validation_freqs_by_cell[cell_index]
+        off_diagonal = ~np.eye(3, dtype=bool)
+        return any(
+            np.any(np.abs(tensor[off_diagonal]) > TOL_TENSORIAL)
+            for tensor in medium_rotated_tensors(
+                medium=medium, freqs=freqs, rotation_matrix=rotation
+            )
+        )
+
+    def _cell_stores_backward_modes(self, cell_index: int) -> bool:
+        """Predict whether a cell stores separately solved backward modes:
+        some medium's permittivity tensor is not diagonal in the cell's frame.
+
+        Such a cell solves its backward modes in one more mode solver invocation; storage,
+        memory, time and billing estimates use this prediction.
+        """
+        return any(
+            self._medium_has_nondiagonal_permittivity(medium, cell_index)
+            for medium in self._plane_anisotropic_media(self._cell_mode_planes[cell_index])
+        )
+
     @keyed_cache()
     def _plane_anisotropic_media(self, plane: Box) -> tuple[EMEAnisotropicMedium, ...]:
         """Anisotropic media intersecting ``plane``."""
@@ -1137,11 +1209,25 @@ class EMESimulation(AbstractYeeGridSimulation):
                         sweep_spec=self.sweep_spec,
                     )
                 )
+                if isinstance(monitor, EMECoefficientMonitor) and any(
+                    self._cell_stores_backward_modes(i)
+                    for i in self._monitor_eme_cell_indices(monitor=monitor)
+                ):
+                    # Backward n_complex and flux, written alongside the forward arrays.
+                    num_stored = sum(key in monitor.fields for key in ("n_complex", "flux"))
+                    storage_size += (
+                        num_stored * BYTES_COMPLEX * num_freqs * num_eme_cells * num_modes
+                    )
                 # EME serializes recorded modes, fields, and coefficients as complex128 regardless
                 # of the cell mode-spec precision (single, double, or auto), while ``storage_size``
                 # uses a complex64 baseline -- so double it. (``ModeSolverMonitor.storage_size``
                 # downcasts single to complex64, but the EME monitor writers do not.)
                 storage_size *= 2
+                if monitor.name == self.port_modes_monitor.name and any(
+                    self._cell_stores_backward_modes(i) for i in (0, self.eme_grid.num_cells - 1)
+                ):
+                    # Allowance for the stored backward port basis.
+                    storage_size *= 2
             else:
                 storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=0))
             data_size[monitor.name] = storage_size
@@ -1602,11 +1688,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         full (untruncated) count; sweep-dependent truncation is applied
         at the S-matrix computation stage.
 
-        All simulations use ``direction="+"`` and ``colocate=False``.
-        Direction is irrelevant for EME (modes are bidirectional);
-        colocation is handled internally by the overlap integrals.
+        All simulations use ``direction="+"`` and ``colocate=False``: the local path
+        supports only cells whose backward modes are reflections of their forward modes,
+        and colocation is handled internally by the overlap integrals.
 
-        Bent anisotropic media in ``bend_medium_frame="global"`` are not
+        Cells whose permittivity tensor is not diagonal in the
+        cell frame are not supported by the local path; run such simulations on
+        the server. Bent anisotropic media in ``bend_medium_frame="global"`` are not
         supported by the local path because subpixel averaging is applied
         before the bend rotation and does not yet handle fully
         anisotropic tensors.  Use ``bend_medium_frame="co_rotating"`` or
@@ -1641,6 +1729,18 @@ class EMESimulation(AbstractYeeGridSimulation):
                     "anisotropic tensors. Use 'bend_medium_frame=\"co_rotating\"', "
                     "avoid bends on cells intersecting anisotropic media, or run "
                     "the EME simulation normally instead."
+                )
+        for cell_index, plane in enumerate(mode_planes):
+            if any(
+                isinstance(medium, FullyAnisotropicMedium)
+                and self._medium_has_nondiagonal_permittivity(medium, cell_index)
+                for medium in self._plane_anisotropic_media(plane)
+            ):
+                raise SetupError(
+                    f"EME cell {cell_index} intersects a 'FullyAnisotropicMedium' with a "
+                    "non-diagonal permittivity tensor, which the local EME path "
+                    "('mode_simulations' / 'propagate') does not support. Run the EME "
+                    "simulation on the server instead."
                 )
 
         shared_kwargs = {
@@ -1678,8 +1778,8 @@ class EMESimulation(AbstractYeeGridSimulation):
     ) -> EMEStageCellModes:
         """Validate, filter, and stamp mode data for one cell.
 
-        Checks that frequencies match, drops NaN modes, and returns a
-        stamped :class:`.EMEStageCellModes`.
+        Requires forward (``'+'``) mode fields, checks that frequencies match,
+        drops NaN modes, and returns a stamped :class:`.EMEStageCellModes`.
         See :meth:`propagate` for the one-shot alternative.
 
         Parameters
@@ -1710,6 +1810,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         else:
             raise ValidationError(
                 f"Expected ModeSimulationData or ModeSolverData, got {type(mode_data).__name__}."
+            )
+
+        if _stored_direction(modes) == "-":
+            raise ValidationError(
+                f"Mode data for EME cell {cell_index} holds backward ('-') mode fields, but "
+                "local EME requires forward fields. Use data recorded with direction='+'."
             )
 
         # Accept a reduced interpolation basis (interp_spec with reduce_data=True) stored on the
@@ -2466,6 +2572,14 @@ class EMESimulation(AbstractYeeGridSimulation):
         # Keep local to avoid ModeSimulationData -> ModeSimulation -> ModeSolver -> EMESimulation cycle.
         from tidy3d.components.mode.data.sim_data import ModeSimulationData
         from tidy3d.packaging import check_tidy3d_extras_licensed_feature
+
+        for name, modes in (("modes1", modes1), ("modes2", modes2)):
+            if _stored_direction(modes) == "-":
+                raise SetupError(
+                    f"'{name}' holds backward ('-') mode fields, but the locally propagated "
+                    "S-matrix expresses its ports in forward modes. Use data recorded with "
+                    "direction='+'."
+                )
 
         self._raise_if_stage_freqs_mismatch(smatrix.S11.f.values, "S-matrix")
 
