@@ -16,7 +16,6 @@ from tidy3d.config import config
 from tidy3d.constants import HERTZ, MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dError, WebError, format_chained_exception_message
 from tidy3d.log import log
-from tidy3d.web.core.http_util import get_headers
 
 from .fit import DispersionFitter
 
@@ -242,6 +241,9 @@ class FitterData(AdvancedFitterParam):
         url_server : str
             URL for the server
         """
+
+        # imported here so that the local fitters do not load the web client
+        from tidy3d.web.core.http_util import get_headers
 
         ssl_verify = config.web.ssl_verify
         try:
