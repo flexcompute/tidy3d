@@ -78,6 +78,13 @@ PROTECTED_FDTD_MATERIAL_MONITOR_TYPES: frozenset[str] = frozenset(
 # simulation, which is a single curve over the bias.
 PROTECTED_CHARGE_ALLOWED_MONITOR_TYPES: frozenset[str] = frozenset({"SteadyCapacitanceMonitor"})
 
+# The solvers of these simulations do not read doping, so protected doping inside one of them is
+# inert: it is never decrypted, and it does not make the simulation, or a modeler or batch that
+# wraps it, protected. Doping elsewhere, for example in an EME simulation, still counts.
+PROTECTED_DOPING_INERT_SIMULATION_TYPES: frozenset[str] = frozenset(
+    {"Simulation", "ModeSimulation", "ModeSolver"}
+)
+
 ProtectedMediumSurfacePolicy = Literal[
     "owned-public-ref",
     "serialized-public-surrogate",
@@ -794,36 +801,53 @@ def _iter_children(obj: object) -> Any:
         yield from obj
 
 
+def _ignores_protected_doping(obj: object) -> bool:
+    """Whether the class of ``obj``, or a base class, is named in the inert-doping types."""
+    return any(cls.__name__ in PROTECTED_DOPING_INERT_SIMULATION_TYPES for cls in type(obj).__mro__)
+
+
 def protected_asset_refs(obj: object) -> tuple[Any, ...]:
-    """Collect protected references of every asset kind reachable from ``obj``."""
-    refs: list[Any] = []
-    seen: set[int] = set()
-    stack = [obj]
+    """Collect the protected references reachable from ``obj``.
+
+    Protected doping inside a simulation of ``PROTECTED_DOPING_INERT_SIMULATION_TYPES`` is left
+    out, because that solver never reads it. A structure or medium passed on its own yields every
+    reference.
+    """
+    refs: dict[int, Any] = {}
+    seen: set[tuple[int, bool]] = set()
+    stack = [(obj, False)]
 
     while stack:
-        current = stack.pop()
-        current_id = id(current)
-        if current_id in seen:
+        current, inert = stack.pop()
+        # The same object can sit inside an optical simulation and elsewhere, e.g. in a batch.
+        if (id(current), inert) in seen:
             continue
-        seen.add(current_id)
+        seen.add((id(current), inert))
 
         if is_protected_reference(current):
-            refs.append(current)
+            if not (inert and current.asset_kind == "doping"):
+                refs[id(current)] = current
             continue
 
-        stack.extend(_iter_children(current))
+        inert = inert or _ignores_protected_doping(current)
+        stack.extend((child, inert) for child in _iter_children(current))
 
-    return tuple(refs)
+    return tuple(refs.values())
 
 
 def has_protected_media(obj: object) -> bool:
-    """Whether ``obj`` contains any protected reference."""
+    """Whether ``protected_asset_refs(obj)`` is non-empty."""
     return bool(protected_asset_refs(obj))
 
 
-def warn_protected_surrogate(obj: object, surface: str | None = None) -> None:
-    """Warn once when a user-facing surface depends on protected surrogates."""
-    if has_protected_media(obj):
+def warn_protected_surrogate(
+    obj: object, surface: str | None = None, asset_kind: ProtectedAssetKind | None = None
+) -> None:
+    """Warn once when a user-facing surface depends on protected surrogates.
+
+    ``asset_kind`` limits the check to the kind that the surface shows.
+    """
+    if any(asset_kind in (None, ref.asset_kind) for ref in protected_asset_refs(obj)):
         log.warning(protected_surrogate_disclosure(surface), log_once=True)
 
 
@@ -838,24 +862,10 @@ def assert_no_protected_media(obj: object, feature: str) -> None:
     )
 
 
-PROTECTED_DOPING_OPTICAL_ERROR = (
-    "Protected doping is only supported in heat and charge simulations."
-)
-
 PROTECTED_DOPING_SOLVER_ERROR = (
     "Protected doping requires the accelerated charge solver. Remove "
     "'use_accelerated_solver=False' to use it."
 )
-
-
-def protected_optical_simulation_error(obj: object) -> str | None:
-    """Return why the protected assets of ``obj`` cannot run in a hosted FDTD or mode simulation.
-
-    Doping only enters heat and charge simulations, so a doping reference there is a mistake.
-    """
-    if any(reference.asset_kind == "doping" for reference in protected_asset_refs(obj)):
-        return PROTECTED_DOPING_OPTICAL_ERROR
-    return None
 
 
 def protected_asset_loc(simulation: Any, asset_kind: str) -> tuple[Any, ...]:
@@ -900,7 +910,7 @@ def validate_protected_heat_charge_assets(simulation: Any) -> None:
 
 __all__ = [
     "PROTECTED_CHARGE_ALLOWED_MONITOR_TYPES",
-    "PROTECTED_DOPING_OPTICAL_ERROR",
+    "PROTECTED_DOPING_INERT_SIMULATION_TYPES",
     "PROTECTED_DOPING_SOLVER_ERROR",
     "PROTECTED_MEDIUM_SURFACE_POLICY",
     "PROTECTED_MEDIUM_SURFACE_POLICY_CATEGORIES",
@@ -918,7 +928,6 @@ __all__ = [
     "protected_asset_loc",
     "protected_asset_refs",
     "protected_heat_charge_monitor_policy_error",
-    "protected_optical_simulation_error",
     "protected_surrogate_digest",
     "protected_surrogate_disclosure",
     "public_medium",

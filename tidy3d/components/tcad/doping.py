@@ -365,9 +365,11 @@ class ProtectedDopingRef(ConstantDoping):
     doping box. A foundry provides the reference together with its encrypted payload. The payload
     binds the surrogate, so changing a surrogate value invalidates it.
 
-    Protected doping is hosted-only: local plots use the surrogate (with a warning), standalone
-    volume meshing is not supported, a reference without its encrypted payload cannot be uploaded,
-    and it is not supported in FDTD or :class:`.ModeSimulation`. A hosted heat and charge
+    In :class:`.Simulation`, :class:`.ModeSimulation` and :class:`.ModeSolver`, whose solvers do
+    not read doping, the reference is ignored, so a medium with a public optical part can be used
+    in the optical and the charge simulation. Elsewhere protected doping is hosted-only: local
+    plots use the surrogate (with a warning), standalone volume meshing is not supported, and a
+    reference without its encrypted payload cannot be uploaded. A hosted heat and charge
     simulation with protected doping runs on the accelerated charge solver
     (``use_accelerated_solver=True``), needs a voltage sweep with at least two points and allows
     only a :class:`.SteadyCapacitanceMonitor` that covers the whole simulation

@@ -477,7 +477,7 @@ class Structure(AbstractStructure):
         complex
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
-        warn_protected_surrogate(self.medium, "Structure material query")
+        warn_protected_surrogate(self.medium, "Structure material query", "optical_medium")
         # resolve the optical portion of a 'MultiPhysicsMedium', as the solvers already do
         medium = _require_public_optical_medium(self._required_optical_medium)
         if isinstance(medium, AbstractCustomMedium):
@@ -885,7 +885,7 @@ class Structure(AbstractStructure):
         complex
            Element of the relative permittivity tensor evaluated at ``frequency``.
         """
-        warn_protected_surrogate(self.medium, "Structure material query")
+        warn_protected_surrogate(self.medium, "Structure material query", "optical_medium")
         # see 'eps_diagonal': 'MultiPhysicsMedium' resolves to its optical portion
         medium = _require_public_optical_medium(self._required_optical_medium)
         if isinstance(medium, AbstractCustomMedium):

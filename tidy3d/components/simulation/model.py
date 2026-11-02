@@ -26,9 +26,7 @@ from tidy3d.components.medium import (
 )
 from tidy3d.components.medium.protected import (
     has_protected_media,
-    protected_asset_loc,
     protected_fdtd_monitor_policy_error,
-    protected_optical_simulation_error,
 )
 from tidy3d.components.microwave.source import LumpedVoltageSource
 from tidy3d.components.monitor import (
@@ -1273,12 +1271,10 @@ class Simulation(AbstractYeeGridSimulation):
         raise SetupError(joint_error)
 
     def _validate_protected_asset_policy(self) -> None:
-        """Reject protected doping and monitor outputs that expose protected material properties."""
+        """Reject monitor outputs that expose protected material properties."""
         if not has_protected_media(self):
             return
 
-        if (error_message := protected_optical_simulation_error(self)) is not None:
-            self._raise_validation_error_at_loc(error_message, *protected_asset_loc(self, "doping"))
         for monitor_index, monitor in enumerate(self.monitors):
             error_message = protected_fdtd_monitor_policy_error(monitor, monitor_index)
             if error_message:

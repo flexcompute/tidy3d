@@ -1052,7 +1052,7 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        warn_protected_surrogate(self, "Local material/grid-dependent plots")
+        warn_protected_surrogate(self, "Local material/grid-dependent plots", "optical_medium")
 
         return self.plot_structures_property(
             x=x,
@@ -1140,7 +1140,11 @@ class Scene(Tidy3dBaseModel):
         """
         import matplotlib as mpl
 
-        warn_protected_surrogate(self, "Local material/grid-dependent plots")
+        warn_protected_surrogate(
+            self,
+            "Local material/grid-dependent plots",
+            "optical_medium" if property == "eps" else "doping",
+        )
 
         structures = self.sorted_structures
 

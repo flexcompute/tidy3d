@@ -12,11 +12,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.medium.protected import (
-    has_protected_media,
-    protected_asset_loc,
-    protected_optical_simulation_error,
-)
+from tidy3d.components.medium.protected import has_protected_media
 from tidy3d.components.monitor import (
     MediumMonitor,
     ModeMonitor,
@@ -733,8 +729,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
         return self._mode_solver.plot_pml(ax=ax)
 
     def validate_pre_upload(self) -> None:
-        if (error_message := protected_optical_simulation_error(self)) is not None:
-            self._raise_validation_error_at_loc(error_message, *protected_asset_loc(self, "doping"))
         if has_protected_media(self) and self.monitors:
             self._raise_validation_error_at_loc(
                 "Protected media do not support ModeSimulation.monitors. "
