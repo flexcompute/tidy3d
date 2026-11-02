@@ -12,13 +12,13 @@ from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
-from .data_array import SpatialDataArray
+from .data_array import IndexedDataArray, SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset
 from .unstructured.tetrahedral import TetrahedralGridDataset
 from .unstructured.triangular import TriangularGridDataset
 
 if TYPE_CHECKING:
-    from tidy3d.components.types import ArrayLike, InterpMethod
+    from tidy3d.components.types import ArrayLike, Bound, InterpMethod
 
     from .data_array import DataArray
 
@@ -26,6 +26,11 @@ UnstructuredGridDatasetType = TriangularGridDataset | TetrahedralGridDataset
 
 CustomSpatialDataType = SpatialDataArray | UnstructuredGridDatasetType
 CustomSpatialDataTypeAnnotated = discriminated_union(UnstructuredGridDatasetType) | SpatialDataArray
+
+ElectricFieldComponentsType = tuple[
+    CustomSpatialDataType | None, CustomSpatialDataType | None, CustomSpatialDataType | None
+]
+ElectricFieldType = ElectricFieldComponentsType | UnstructuredGridDatasetType
 
 OUTER_DOT_BLOCK_TARGET_BYTES = 64 * 1024**2
 OUTER_DOT_BLOCK_MIN_SIZE = 8
@@ -516,4 +521,105 @@ def _as_custom_spatial_data(name: str, field: Any) -> CustomSpatialDataType:
     raise DataError(
         f"'{name}' must be a 'SpatialDataArray', 'TriangularGridDataset', or "
         f"'TetrahedralGridDataset', got '{type(field).__name__}'.{hint}"
+    )
+
+
+def _flat_values(values: xr.DataArray) -> IndexedDataArray:
+    """Unstructured values without their length-1 non-spatial dimensions."""
+    return IndexedDataArray(
+        np.asarray(values.data).reshape(-1), coords={"index": values.index.data}
+    )
+
+
+def _as_electric_field_component(name: str, component: Any) -> CustomSpatialDataType:
+    """Return one component of an electric field with a single value per point.
+
+    A component selected from a vector dataset, e.g. ``E.sel(voltage=1, axis=0)``, keeps
+    ``axis`` and ``voltage`` at length 1. They are dropped, since components keeping different
+    ``axis`` labels do not align when combined. A structured component is put in ``x, y, z``
+    order, since the components are combined by array position.
+    """
+    component = _as_custom_spatial_data(name, component)
+    if isinstance(component, SpatialDataArray):
+        return component.transpose("x", "y", "z")
+    if not component._non_spatial_dims:
+        return component
+    values = component.values
+    extra = [dim for dim in component._non_spatial_dims if values.sizes[dim] > 1]
+    if extra:
+        raise DataError(
+            f"'{name}' carries {extra} beyond the spatial dimensions. Select a single value "
+            "before applying it, e.g. 'E.sel(voltage=1, axis=0)'."
+        )
+    return component.updated_copy(values=_flat_values(values), deep=False)
+
+
+def _as_electric_field_components(field: ElectricFieldType) -> ElectricFieldComponentsType:
+    """Return an electric field as its components along x, y, and z.
+
+    ``field`` is either a tuple ``(Ex, Ey, Ez)`` of scalar spatial fields, with ``None`` for a
+    zero component, or an unstructured dataset whose values carry an ``axis`` dimension labelled
+    0, 1, 2, as ``SteadyElectricFieldData.E`` does after selecting one voltage.
+    """
+    if isinstance(field, UnstructuredGridDataset) and "axis" in field._non_spatial_dims:
+        values = field.values
+        extra = [dim for dim in field._non_spatial_dims if dim != "axis" and values.sizes[dim] > 1]
+        if extra:
+            raise DataError(
+                f"'electric_field' carries {extra} beyond 'axis'. Select a single value "
+                "before applying it, e.g. 'E.sel(voltage=1)'."
+            )
+        labels = values.axis.values.tolist()
+        if sorted(labels) != [0, 1, 2]:
+            raise DataError(
+                f"'electric_field' must have the components 0, 1, 2 along 'axis', got {labels}."
+            )
+        return tuple(
+            field.updated_copy(values=_flat_values(values.sel(axis=axis)), deep=False)
+            for axis in range(3)
+        )
+
+    if isinstance(field, tuple) and len(field) == 3:
+        if all(component is None for component in field):
+            raise DataError("At least one component of 'electric_field' must be provided.")
+        return tuple(
+            None
+            if component is None
+            else _as_electric_field_component(f"electric_field[{axis}]", component)
+            for axis, component in enumerate(field)
+        )
+
+    raise DataError(
+        "'electric_field' must be a tuple '(Ex, Ey, Ez)' of spatial fields or an unstructured "
+        f"dataset with an 'axis' dimension of length 3, got '{type(field).__name__}'."
+    )
+
+
+def _prepare_electric_field(
+    field: ElectricFieldType | None, downsample_dl: float | ArrayLike | None, method: InterpMethod
+) -> ElectricFieldComponentsType | None:
+    """Return an electric field as its components, downsampled when ``downsample_dl`` is given."""
+    if field is None:
+        return None
+    components = _as_electric_field_components(field)
+    if downsample_dl is None:
+        return components
+    return tuple(
+        None
+        if component is None
+        else _downsample_custom_spatial_data(
+            name=f"electric_field[{axis}]", field=component, dl=downsample_dl, method=method
+        )
+        for axis, component in enumerate(components)
+    )
+
+
+def _restrict_electric_field(
+    components: ElectricFieldComponentsType, bounds: Bound, where: str
+) -> ElectricFieldComponentsType:
+    """Components restricted to ``bounds``, warning when they do not cover ``where``."""
+    if not all(component is None or component.does_cover(bounds) for component in components):
+        log.warning(f"Provided 'electric_field' does not fully cover {where}.")
+    return tuple(
+        None if component is None else component.sel_inside(bounds) for component in components
     )

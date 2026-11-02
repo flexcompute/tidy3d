@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.material.types import StructureMediumType
 
-    from .data.utils import CustomSpatialDataType
+    from .data.utils import CustomSpatialDataType, ElectricFieldType
     from .grid.grid import Grid
     from .types import (
         ArrayLike,
@@ -69,6 +69,8 @@ from .data.utils import (
     UnstructuredGridDataset,
     _as_custom_spatial_data,
     _downsample_custom_spatial_data,
+    _prepare_electric_field,
+    _restrict_electric_field,
 )
 from .geometry.base import Box, GeometryGroup
 from .geometry.primitives import Cylinder
@@ -1882,12 +1884,13 @@ class Scene(Tidy3dBaseModel):
         hole_density: CustomSpatialDataType | None = None,
         interp_method: InterpMethod = "linear",
         downsample_dl: float | ArrayLike | None = None,
+        electric_field: ElectricFieldType | None = None,
     ) -> Self:
-        """Return a copy of the scene with heat and/or charge data applied to all mediums
-        that have perturbation models specified. That is, such mediums will be replaced with
-        spatially dependent custom mediums that reflect perturbation effects. Any of temperature,
-        electron_density, and hole_density can be ``None``. All provided fields must have identical
-        coords.
+        """Return a copy of the scene with heat, charge, and/or electric field data applied to all
+        mediums that have perturbation models specified. That is, such mediums will be replaced
+        with spatially dependent custom mediums that reflect perturbation effects. Any of
+        temperature, electron_density, hole_density, and electric_field can be ``None``. All
+        provided fields must have identical coords.
 
         Note
         ----
@@ -1915,6 +1918,12 @@ class Scene(Tidy3dBaseModel):
             ``downsample_dl`` rounded down to a whole number of steps, never up. Features smaller
             than ``downsample_dl`` are erased or, if a grid node lands on one, widened to
             ``downsample_dl``, so verify the perturbed mediums before relying on them.
+        electric_field : Union[tuple, :class:`.TriangularGridDataset`, :class:`.TetrahedralGridDataset`] = None
+            Static electric field (V/um), applied to mediums with an ``electro_optic_spec`` model.
+            Either a tuple ``(Ex, Ey, Ez)`` of spatial fields, ``None`` for a zero component, or
+            an unstructured dataset with an ``axis`` dimension, such as
+            ``SteadyElectricFieldData.E`` at one voltage. ``downsample_dl`` applies to each
+            component.
 
         Returns
         -------
@@ -1940,6 +1949,8 @@ class Scene(Tidy3dBaseModel):
                 )
                 for name, array in array_dict.items()
             }
+
+        electric_field = _prepare_electric_field(electric_field, downsample_dl, interp_method)
 
         scene_dict = self.model_dump()
         structures = self.sorted_structures
@@ -1967,6 +1978,11 @@ class Scene(Tidy3dBaseModel):
                                 f"Provided '{name}' does not fully cover structures[{s_ind}]."
                             )
 
+                if electric_field is not None:
+                    restricted_arrays["electric_field"] = _restrict_electric_field(
+                        electric_field, bounds, f"structures[{s_ind}]"
+                    )
+
                 new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
 
                 # Generate unique medium name based on structure to avoid duplicate name warnings.
@@ -1986,7 +2002,9 @@ class Scene(Tidy3dBaseModel):
         # do the same for background medium if it a medium with perturbation models.
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
-            scene_dict["medium"] = med.perturbed_copy(**array_dict, interp_method=interp_method)
+            scene_dict["medium"] = med.perturbed_copy(
+                **array_dict, interp_method=interp_method, electric_field=electric_field
+            )
 
         return Scene.model_validate(scene_dict)
 

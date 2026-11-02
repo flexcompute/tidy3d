@@ -7,10 +7,15 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal, TypeVar
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, model_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d._runtime import always_validate
-from tidy3d.components.types.base import ArrayComplex, ArrayFloat, discriminated_union
+from tidy3d.components.types.base import (
+    ArrayComplex,
+    ArrayFloat,
+    array_alias,
+    discriminated_union,
+)
 from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
@@ -31,6 +36,7 @@ from .data.utils import (
     _zeros_like,
 )
 from .data.validators import validate_no_nans
+from .transformation import RotationType
 from .types import Complex, InterpMethod
 from .viz import add_ax_if_none
 
@@ -954,22 +960,23 @@ class ParameterPerturbation(Tidy3dBaseModel):
         T: CustomSpatialDataType | None = None,
         n: CustomSpatialDataType | None = None,
         p: CustomSpatialDataType | None = None,
+        electric_field: tuple[CustomSpatialDataType | None, ...] | None = None,
     ) -> CustomSpatialDataType:
         """Check that fields have the same coordinates and return an array field with zeros."""
         template = None
-        for field in [T, n, p]:
+        for field in [T, n, p, *(electric_field or ())]:
             if field is not None:
                 if template is not None and not _check_same_coordinates(field, template):
                     raise DataError(
-                        "'temperature', 'electron_density', and 'hole_density' must have the same "
-                        "coordinates if provided."
+                        "'temperature', 'electron_density', 'hole_density', and the components "
+                        "of 'electric_field' must have the same coordinates if provided."
                     )
                 template = field
 
         if template is None:
             raise DataError(
-                "At least one of 'temperature', 'electron_density', or 'hole_density' must be "
-                "provided."
+                "At least one of 'temperature', 'electron_density', 'hole_density', or "
+                "'electric_field' must be provided."
             )
 
         return _zeros_like(template)
@@ -1676,3 +1683,239 @@ class IndexPerturbation(Tidy3dBaseModel):
     def from_perturbation_delta_model(cls, deltas_model: AbstractDeltaModel) -> Self:
         """Create an IndexPerturbation from a DeltaPerturbationModel."""
         return IndexPerturbation(delta_n=deltas_model.delta_n, delta_k=deltas_model.delta_k)
+
+
+PockelsTensor = array_alias(dtype=float, ndim=2, shape=(6, 3))
+KerrTensor = array_alias(dtype=float, ndim=2, shape=(6, 6))
+
+
+def _with_values(template: CustomSpatialDataType, values: np.ndarray) -> CustomSpatialDataType:
+    """Field with the coordinates of ``template`` and the given values."""
+    if isinstance(template, UnstructuredGridDataset):
+        return template.updated_copy(values=template.values.copy(data=values), deep=False)
+    return template.copy(data=values)
+
+
+class ElectroOpticPerturbation(Tidy3dBaseModel):
+    """Change of the refractive index by a static electric field through the linear (Pockels) and
+    quadratic (DC Kerr) electro-optic effects.
+
+    Notes
+    -----
+    In the crystal frame, the optical impermeability :math:`\\eta = \\varepsilon^{-1}` changes by
+
+    .. math::
+
+        \\Delta\\eta_I = \\sum_k r_{Ik} E_k + \\sum_J s_{IJ} P_J,
+
+    with :math:`r` given by ``pockels``, :math:`s` by ``kerr``, Voigt indices :math:`I, J` ordered
+    ``xx, yy, zz, yz, xz, xy``, and
+    :math:`P = (E_x^2, E_y^2, E_z^2, 2 E_y E_z, 2 E_x E_z, 2 E_x E_y)`, so that :math:`s_{IJ}`
+    equals the tensor component :math:`s_{ijkl}`.
+
+    ``rotation`` orients the crystal axes with the convention of
+    :class:`.AnisotropicPermittivity`: crystal axis :math:`i` points along :math:`R e_i` in
+    simulation axes. The field is rotated into the crystal frame and :math:`\\Delta\\eta` back into
+    simulation axes.
+
+    Only the diagonal of :math:`\\Delta\\eta` in simulation axes is applied, which is first-order
+    exact for modes polarized and propagating along simulation axes. Diagonal component :math:`i`
+    of the medium changes its refractive index by
+    :math:`\\Delta n_i = -\\frac{1}{2} n_i^3 \\Delta\\eta_{ii}`, with :math:`n_i` its index at
+    ``freq``. The index change is converted into permittivity and conductivity changes as in
+    :class:`.IndexPerturbation` and applied at all frequencies.
+
+    The electric field is in V/um, so ``pockels`` is in um/V (1 pm/V = 1e-6 um/V) and ``kerr`` in
+    um^2/V^2 (1 m^2/V^2 = 1e12 um^2/V^2).
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from tidy3d import C_0, ElectroOpticPerturbation, RotationAroundAxis
+    >>> eo = ElectroOpticPerturbation.from_trigonal_3m(
+    ...     r13=10e-6,
+    ...     r22=5e-6,
+    ...     r33=30e-6,
+    ...     r51=30e-6,
+    ...     freq=C_0 / 1.55,
+    ...     rotation=RotationAroundAxis(axis=0, angle=-np.pi / 2),
+    ... )
+    """
+
+    pockels: PockelsTensor | None = Field(
+        default=None,
+        title="Pockels Coefficients",
+        description="Linear electro-optic coefficients :math:`r_{Ik}` in the crystal frame, shape "
+        "(6, 3). Rows are the Voigt indices ``xx, yy, zz, yz, xz, xy``, columns the field "
+        "components ``x, y, z``.",
+        json_schema_extra={"units": "um/V"},
+    )
+
+    kerr: KerrTensor | None = Field(
+        default=None,
+        title="Kerr Coefficients",
+        description="Quadratic electro-optic coefficients :math:`s_{IJ}` in the crystal frame, "
+        "shape (6, 6), with rows and columns the Voigt indices ``xx, yy, zz, yz, xz, xy``.",
+        json_schema_extra={"units": "um^2/V^2"},
+    )
+
+    rotation: RotationType | None = Field(
+        default=None,
+        title="Crystal Rotation",
+        description="Rotation orienting the crystal axes in simulation axes. ``None`` aligns "
+        "them with the simulation axes.",
+    )
+
+    freq: PositiveFloat = Field(
+        title="Frequency",
+        description="Frequency at which the refractive index of the unperturbed medium is "
+        "evaluated (Hz). The resulting permittivity and conductivity changes are applied at all "
+        "frequencies.",
+        json_schema_extra={"units": HERTZ},
+    )
+
+    @classmethod
+    def from_trigonal_3m(
+        cls,
+        r13: float,
+        r22: float,
+        r33: float,
+        r51: float,
+        freq: float,
+        rotation: RotationType | None = None,
+    ) -> Self:
+        """Pockels coefficients of a crystal of point group 3m, with the 3-fold axis along the
+        crystal z axis and a mirror plane normal to the crystal x axis.
+
+        Parameters
+        ----------
+        r13 : float
+            Coefficient :math:`r_{13} = r_{23}` (um/V).
+        r22 : float
+            Coefficient :math:`r_{22} = -r_{12} = -r_{61}` (um/V).
+        r33 : float
+            Coefficient :math:`r_{33}` (um/V).
+        r51 : float
+            Coefficient :math:`r_{51} = r_{42}` (um/V).
+        freq : float
+            Frequency at which the unperturbed refractive index is evaluated (Hz).
+        rotation : :class:`.RotationAroundAxis` = None
+            Rotation orienting the crystal axes in simulation axes.
+
+        Returns
+        -------
+        :class:`.ElectroOpticPerturbation`
+            The electro-optic model.
+        """
+        pockels = [
+            [0, -r22, r13],
+            [0, r22, r13],
+            [0, 0, r33],
+            [0, r51, 0],
+            [r51, 0, 0],
+            [-r22, 0, 0],
+        ]
+        return cls(pockels=pockels, freq=freq, rotation=rotation)
+
+    @classmethod
+    def from_tetragonal_4mm(
+        cls,
+        r13: float,
+        r33: float,
+        r42: float,
+        freq: float,
+        rotation: RotationType | None = None,
+    ) -> Self:
+        """Pockels coefficients of a crystal of point group 4mm, with the 4-fold axis along the
+        crystal z axis. The same pattern holds for a poled polymer with the poling direction along
+        the crystal z axis.
+
+        Parameters
+        ----------
+        r13 : float
+            Coefficient :math:`r_{13} = r_{23}` (um/V).
+        r33 : float
+            Coefficient :math:`r_{33}` (um/V).
+        r42 : float
+            Coefficient :math:`r_{42} = r_{51}` (um/V).
+        freq : float
+            Frequency at which the unperturbed refractive index is evaluated (Hz).
+        rotation : :class:`.RotationAroundAxis` = None
+            Rotation orienting the crystal axes in simulation axes.
+
+        Returns
+        -------
+        :class:`.ElectroOpticPerturbation`
+            The electro-optic model.
+        """
+        pockels = [
+            [0, 0, r13],
+            [0, 0, r13],
+            [0, 0, r33],
+            [0, r42, 0],
+            [r42, 0, 0],
+            [0, 0, 0],
+        ]
+        return cls(pockels=pockels, freq=freq, rotation=rotation)
+
+    @classmethod
+    def from_isotropic_kerr(cls, s11: float, s12: float, freq: float) -> Self:
+        """Kerr coefficients of an isotropic medium, with :math:`s_{44} = (s_{11} - s_{12}) / 2`.
+
+        Parameters
+        ----------
+        s11 : float
+            Coefficient :math:`s_{11}`, change of :math:`\\eta` along the field (um^2/V^2).
+        s12 : float
+            Coefficient :math:`s_{12}`, change of :math:`\\eta` normal to the field (um^2/V^2).
+        freq : float
+            Frequency at which the unperturbed refractive index is evaluated (Hz).
+
+        Returns
+        -------
+        :class:`.ElectroOpticPerturbation`
+            The electro-optic model.
+        """
+        s44 = (s11 - s12) / 2
+        kerr = np.zeros((6, 6))
+        kerr[:3, :3] = s12
+        np.fill_diagonal(kerr[:3, :3], s11)
+        np.fill_diagonal(kerr[3:, 3:], s44)
+        return cls(kerr=kerr, freq=freq)
+
+    @cached_property
+    def _rotation_matrix(self) -> np.ndarray:
+        """Rotation from crystal to simulation axes."""
+        return np.eye(3) if self.rotation is None else np.asarray(self.rotation.matrix)
+
+    def _sample_delta_eps_delta_sigma(
+        self,
+        nk: tuple[tuple[float, float], ...],
+        electric_field: tuple[CustomSpatialDataType | None, ...],
+    ) -> tuple[list[CustomSpatialDataType], list[CustomSpatialDataType | None]]:
+        """Permittivity and conductivity changes of the three diagonal components.
+
+        ``nk`` holds the unperturbed ``(n, k)`` of each diagonal component at ``freq``.
+        ``electric_field`` holds the field components along the simulation axes, ``None`` for a
+        zero component, all sharing coordinates. A conductivity change is ``None`` where ``k``
+        is zero.
+        """
+        from flexcompute.core._migration.em.numerical.raw import medium as medium_numerics
+
+        template = next(e for e in electric_field if e is not None)
+        delta_eta = medium_numerics.electro_optic_delta_impermeability(
+            tuple(None if e is None else _get_numpy_array(e) for e in electric_field),
+            self.pockels,
+            self.kerr,
+            self._rotation_matrix,
+        )
+
+        delta_eps = []
+        delta_sigma = []
+        for (n, k), delta_eta_ii in zip(nk, delta_eta):
+            d_eps, d_sigma = medium_numerics.electro_optic_delta_eps_sigma(
+                n, k, delta_eta_ii, self.freq
+            )
+            delta_eps.append(_with_values(template, d_eps))
+            delta_sigma.append(None if d_sigma is None else _with_values(template, d_sigma))
+        return delta_eps, delta_sigma

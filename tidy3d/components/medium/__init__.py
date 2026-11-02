@@ -80,9 +80,11 @@ from .custom import (
 
 # isort: split
 
-# Temperature and carrier-density perturbation models.
+# Temperature, carrier-density, and electric-field perturbation models.
 from .perturbation import (
+    AbstractIsotropicPerturbationMedium,
     AbstractPerturbationMedium,
+    PerturbationAnisotropicMedium,
     PerturbationMedium,
     PerturbationMediumType,
     PerturbationPoleResidue,
@@ -144,6 +146,7 @@ __all__ = [
     "PROTECTED_MEDIUM_SURFACE_POLICY_CATEGORIES",
     "PROTECTED_SURROGATE_DISCLOSURE",
     "AbstractCustomMedium",
+    "AbstractIsotropicPerturbationMedium",
     "AbstractMedium",
     "AbstractPerturbationMedium",
     "AbstractSurfaceRoughness",
@@ -188,6 +191,7 @@ __all__ = [
     "NonlinearSusceptibility",
     "PECMedium",
     "PMCMedium",
+    "PerturbationAnisotropicMedium",
     "PerturbationMedium",
     "PerturbationMediumType",
     "PerturbationPoleResidue",

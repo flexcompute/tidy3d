@@ -274,10 +274,12 @@ Perturbation (Multiphysics)
 
    PerturbationMedium
    PerturbationPoleResidue
+   PerturbationAnisotropicMedium
    NedeljkovicSorefMashanovich
    ParameterPerturbation
    PermittivityPerturbation
    IndexPerturbation
+   ElectroOpticPerturbation
 
 When performing a multiphysics simulation, the temperature or carrier density field will result in a perturbation to the optical medium.
 
@@ -291,6 +293,23 @@ When performing a multiphysics simulation, the temperature or carrier density fi
        permittivity = 2.0,
        permittivity_perturbation = ParameterPerturbation(heat=my_linear_heat_perturbation)
    )
+
+A static electric field in V/um, such as the field of a charge simulation, changes the index of electro-optic media through the Pockels and DC Kerr effects, with coefficients in um/V and um^2/V^2. Only the diagonal of the impermeability change in simulation axes is applied. It differs along each axis, so the perturbed medium is a :class:`.CustomAnisotropicMedium`. The index change uses the unperturbed index at the model's ``freq`` and is applied at all frequencies.
+
+.. code-block:: python
+
+   # x-cut crystal of point group 3m: crystal z along the y axis, coefficients in um/V
+   my_electro_optic = ElectroOpticPerturbation.from_trigonal_3m(
+       r13=10e-6, r22=5e-6, r33=30e-6, r51=30e-6,
+       freq=C_0 / 1.55,
+       rotation=RotationAroundAxis(axis=0, angle=-np.pi / 2),
+   )
+   my_crystal = PerturbationAnisotropicMedium.from_unperturbed(
+       my_anisotropic_medium, electro_optic_spec=my_electro_optic
+   )
+
+   # charge field at one bias
+   perturbed_sim = sim.perturbed_mediums_copy(electric_field=charge_data["E"].E.sel(voltage=2))
 
 Multiphysics simulations require additional set up in addition to defining a perturbation medium. To get started, we recommend that you check out the example models listed below. 
 
@@ -409,6 +428,7 @@ Abstract Base Classes
    :toctree: _autosummary/
 
    components.medium.AbstractPerturbationMedium
+   components.medium.AbstractIsotropicPerturbationMedium
    components.medium.NonlinearModel
 
 These are abstract base classes that are inherited by some of the medium classes above. The user should not need to interact with these classes during regular usage.

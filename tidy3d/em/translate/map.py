@@ -299,6 +299,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
         on_construction=True,
     ),
+    "tidy3d.components.parameter_perturbation:ElectroOpticPerturbation": ComponentScope(
+        "flexcompute.core._migration.em.material.parameter_perturbation.schema.parameter_perturbation:ElectroOpticPerturbation",
+        "flexcompute.core._migration.em.material.parameter_perturbation.validation:validate",
+        on_construction=True,
+    ),
     # The abstract roots have no schema. The concrete classes below carry no rules, so their
     # facade reports nothing.
     "tidy3d.components.parameter_perturbation:AbstractPerturbation": None,
@@ -385,6 +390,7 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
     "tidy3d.components.medium.abstract_custom:AbstractCustomMedium": None,
     "tidy3d.components.medium.custom.dispersive:CustomDispersiveMedium": None,
     "tidy3d.components.medium.perturbation:AbstractPerturbationMedium": None,
+    "tidy3d.components.medium.perturbation:AbstractIsotropicPerturbationMedium": None,
     "tidy3d.components.medium.drude:Drude": ComponentScope(
         "flexcompute.core._migration.em.material.medium.schema.drude:Drude",
         "flexcompute.core._migration.em.material.medium.validation:validate",
@@ -467,6 +473,11 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
     ),
     "tidy3d.components.medium.perturbation:PerturbationPoleResidue": ComponentScope(
         "flexcompute.core._migration.em.material.medium.schema.perturbation:PerturbationPoleResidue",
+        "flexcompute.core._migration.em.material.medium.validation:validate",
+        on_construction=True,
+    ),
+    "tidy3d.components.medium.perturbation:PerturbationAnisotropicMedium": ComponentScope(
+        "flexcompute.core._migration.em.material.medium.schema.perturbation:PerturbationAnisotropicMedium",
         "flexcompute.core._migration.em.material.medium.validation:validate",
         on_construction=True,
     ),

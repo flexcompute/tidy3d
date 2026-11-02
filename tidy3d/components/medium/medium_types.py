@@ -22,7 +22,11 @@ from .drude import Drude
 from .isotropic import Medium, PECMedium, PMCMedium
 from .lorentz import Lorentz
 from .lossy_metal import LossyMetalMedium
-from .perturbation import PerturbationMedium, PerturbationPoleResidue
+from .perturbation import (
+    PerturbationAnisotropicMedium,
+    PerturbationMedium,
+    PerturbationPoleResidue,
+)
 from .pole_residue import PoleResidue
 from .protected import ProtectedOpticalMediumRef
 from .sellmeier import Sellmeier
@@ -59,6 +63,7 @@ PublicMediumType3D = (
     | CustomAnisotropicMedium
     | PerturbationMedium
     | PerturbationPoleResidue
+    | PerturbationAnisotropicMedium
     | LossyMetalMedium
 )
 MediumType3D = PublicMediumType3D
