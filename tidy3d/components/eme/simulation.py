@@ -458,13 +458,6 @@ class EMESimulation(AbstractYeeGridSimulation):
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
 
-    @field_validator("grid_spec")
-    @classmethod
-    def _validate_auto_grid_wavelength(cls, val: GridSpec) -> GridSpec:
-        """Handle the case where grid_spec is auto and wavelength is not provided."""
-        # this is handled instead post-init to ensure freqs is defined
-        return val
-
     @equal_aspect
     @add_ax_if_none
     def plot_eme_ports(

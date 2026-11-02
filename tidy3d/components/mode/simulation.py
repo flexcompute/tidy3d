@@ -240,12 +240,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "simulation geometry.",
     )
 
-    @field_validator("grid_spec")
-    @classmethod
-    def _validate_auto_grid_wavelength(cls, val: GridSpec) -> GridSpec:
-        # abstract override, logic is handled in post-init to ensure freqs is defined
-        return val
-
     @field_validator("plane")
     @classmethod
     def _validate_planar(cls, val: MODE_PLANE_TYPE | None) -> MODE_PLANE_TYPE | None:

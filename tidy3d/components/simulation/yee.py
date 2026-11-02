@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import (
@@ -267,10 +267,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         super()._run_after_validators()
         self._validate_auto_grid_size()
         return self
-
-    @abstractmethod
-    def _validate_auto_grid_wavelength(val) -> None:
-        """Check that wavelength can be defined if there is auto grid spec."""
 
     @cached_property
     def _subpixel(self) -> SubpixelSpec:

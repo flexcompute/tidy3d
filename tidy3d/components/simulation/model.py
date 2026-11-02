@@ -927,7 +927,6 @@ class Simulation(AbstractYeeGridSimulation):
     _num_non_pml_cells = _boundaries_methods._num_non_pml_cells
 
     # SimulationGrid
-    _validate_auto_grid_wavelength = _grid_methods._validate_auto_grid_wavelength
     _validate_lumped_element_grid_size = _grid_methods._validate_lumped_element_grid_size
     num_cells = _grid_methods._simulation_num_cells
     _num_computational_grid_points_dim = _grid_methods._num_computational_grid_points_dim
@@ -961,8 +960,6 @@ class Simulation(AbstractYeeGridSimulation):
             # fast mode keeps only the fold; every other call in this chain checks and would be
             # skipped by the class-level guard
             return self
-        # Check what the grid build needs.
-        self._validate_auto_grid_wavelength()
         # The parent hooks add only the grid size check and the monitor and structure containment
         # checks. This simulation runs the containment checks later, while it validates, and calls
         # the grid size check itself. The EME, mode and heat-charge simulations call those hooks.

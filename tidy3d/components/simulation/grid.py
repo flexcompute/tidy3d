@@ -864,14 +864,6 @@ def suggest_mesh_overrides(self: Any, **kwargs: Any) -> list[MeshOverrideStructu
     return mesh_overrides
 
 
-def _validate_auto_grid_wavelength(self: Any) -> Self:
-    """Check that wavelength can be defined if there is auto grid spec."""
-    val = self.grid_spec
-    if val.wavelength is None and val.auto_grid_used:
-        _ = val.wavelength_from_sources(sources=self.sources)
-    return self
-
-
 def _validate_lumped_element_grid_size(self: Any) -> None:
     """Ensure each lumped element resolves to a non-degenerate sheet on the simulation grid.
 
