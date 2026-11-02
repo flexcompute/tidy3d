@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import InitErrorDetails
 
+from tidy3d.em.translate.base import apply_translators
 from tidy3d.em.translate.map import (
     COMPONENT_ERROR_TYPES,
     COMPONENT_SCOPES,
@@ -150,12 +151,16 @@ def from_component(model: BaseModel) -> object | None:
         data = {
             name: data[name] for name in owner.model_fields.keys() - {TYPE_TAG_STR} if name in data
         }
+    # Every model in the data, nested ones included, goes through its class's translator.
+    # Field selection drops an outside subclass's type tag, so the walk skips the top level
+    # and its registration's translator applies here.
+    data = apply_translators(data)
+    scope = COMPONENT_SCOPES[_key(owner)]
+    if owner is not type(model) and scope.translator is not None:
+        data = resolve(scope.translator)(data)
     # The public model already logged its warnings; copies would repeat them past td.log.
     # The copy's error lines are kept and logged only if the translation fails, because then
     # the public model's own check never ran.
-    scope = COMPONENT_SCOPES[_key(owner)]
-    if scope.translator is not None:
-        data = resolve(scope.translator)(data)
     _capture_copied_errors(copied_log)
     errors: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     token = _copied_errors.set(errors)

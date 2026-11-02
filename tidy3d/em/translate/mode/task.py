@@ -22,6 +22,4 @@ def to_task(sim: Any) -> Any:
 
     from tidy3d.components.mode.simulation import ModeSimulation
 
-    data = dump_for_public(sim, type_name="ModeSimulation")
-    data.pop("subpixel_scheme", None)
-    return ModeSimulation.model_validate(data)
+    return ModeSimulation.model_validate(dump_for_public(sim, type_name="ModeSimulation"))

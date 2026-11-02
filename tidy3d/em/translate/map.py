@@ -196,9 +196,9 @@ class ComponentScope(NamedTuple):
     """Where a public class translates to, which facade checks it, and when.
 
     ``on_construction`` runs the full facade after every construction of the public
-    class. Client policy validators stay on the public class. ``translator`` names a fold
-    the translation applies to the dumped data before the schema validates it, so the
-    rules check the folded form.
+    class. Client policy validators stay on the public class. ``translator`` names a step
+    the translation applies to the class's dumped data, wherever it is nested, before the
+    schema validates it, such as a fold, so the rules check the translated form.
     """
 
     schema: str
@@ -1018,6 +1018,14 @@ COMPONENT_SCOPES: dict[str, ComponentScope | None] = {
         "flexcompute.core._migration.em.source.validation:validate",
         on_construction=True,
     ),
+    # The schema evaluates the pulse from the Gaussian pulses the translation reads from
+    # ``tidy3d-extras``.
+    "tidy3d.components.source.time:BroadbandPulse": ComponentScope(
+        "flexcompute.core._migration.em.source.schema.time:BroadbandPulse",
+        "flexcompute.core._migration.em.source.validation:validate",
+        on_construction=True,
+        translator="tidy3d.em.translate.source:fill_broadband_pulse",
+    ),
     # mode: ``import tidy3d`` builds ModeSortSpec, ModeInterpSpec and ChebSampling objects (the
     # EMEModeSpec default), so they stay off the construction path.
     "tidy3d.components.mode_spec:ModeSortSpec": ComponentScope(
@@ -1311,6 +1319,8 @@ COMPONENT_ERROR_TYPES = {
     "em.source.non_increasing_time_coords": "tidy3d.exceptions:ValidationError",
     "em.source.nan_dataset": "tidy3d.exceptions:ValidationError",
     "em.source.duplicate_dataset_coords": "tidy3d.exceptions:DataError",
+    "em.source.non_positive_freq_range": "tidy3d.exceptions:ValidationError",
+    "em.source.unordered_freq_range": "tidy3d.exceptions:ValidationError",
     # mode
     "em.mode.spec.custom_sampling_min_points": "tidy3d.exceptions:ValidationError",
     "em.mode.spec.custom_sampling_sorted": "tidy3d.exceptions:ValidationError",

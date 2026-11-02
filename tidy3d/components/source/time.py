@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator
+from pydantic import Field, PositiveFloat
 from pyroots import Brentq
 
 from tidy3d.components.base import cached_property
@@ -607,18 +607,6 @@ class BroadbandPulse(SourceTime):
         "to ensure smooth ramping up of the pulse at time = 0. This offfset is added on top of the automatic time delay "
         "in units of 1 / [``2pi * (freq_range[1] - freq_range[0])``].",
     )
-
-    @field_validator("freq_range")
-    @classmethod
-    def _validate_freq_range(cls, val: FreqBound) -> FreqBound:
-        """Validate that freq_range is positive and properly ordered."""
-        if val[0] <= 0 or val[1] <= 0:
-            raise ValidationError("Both elements of 'freq_range' must be positive.")
-        if val[1] <= val[0]:
-            raise ValidationError(
-                f"'freq_range[1]' ({val[1]}) must be greater than 'freq_range[0]' ({val[0]})."
-            )
-        return val
 
     @cached_property
     def _source(self) -> Any:

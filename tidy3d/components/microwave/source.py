@@ -80,6 +80,18 @@ class MicrowaveTerminalSource(AbstractModeSource):
 
         return self
 
+    # This class has no construction scope, so it calls the source rule that replaced the
+    # ``BroadbandSource`` validator directly until the rf unit migrates it.
+    @model_validator(mode="after")
+    def _validate_num_freqs_limit(self) -> Self:
+        """Enforce method-specific bounds on num_freqs."""
+        from flexcompute.core._migration.em.source.validation import validate_num_freqs_limit
+
+        from tidy3d.em.translate.components import _present
+
+        _present(self, validate_num_freqs_limit(self))
+        return self
+
 
 class LumpedVoltageSource(Source):
     """Ideal voltage source across a lumped gap.

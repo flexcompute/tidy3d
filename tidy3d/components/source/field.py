@@ -11,7 +11,6 @@ from pydantic import (
     Field,
     NonNegativeInt,
     field_validator,
-    model_validator,
 )
 
 from tidy3d.components.autograd import TracedFloat, TracedPositiveFloat
@@ -28,7 +27,6 @@ from tidy3d.components.types import TYPE_TAG_STR, Axis, Direction
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.validators import (
     assert_plane,
-    assert_single_freq_in_range,
     assert_volumetric,
     is_close_to_glancing_angle,
     warn_backward_waist_distance,
@@ -166,22 +164,6 @@ class BroadbandSource(Source, ABC):
         "than frequency samples.",
     )
 
-    @model_validator(mode="after")
-    def _validate_num_freqs_limit(self) -> Self:
-        """Enforce method-specific bounds on num_freqs."""
-        if self.broadband_method == "chebyshev" and self.num_freqs > 20:
-            self._raise_validation_error_at_loc(
-                f"For broadband_method='chebyshev', 'num_freqs' must be <= 20, got {self.num_freqs}.",
-                "num_freqs",
-            )
-        if self.broadband_method == "pole_residue" and self.num_freqs < 3:
-            self._raise_validation_error_at_loc(
-                f"For broadband_method='pole_residue', 'num_freqs' must be >= 3, got {self.num_freqs}. "
-                "The vector fitting algorithm requires more frequency samples than fit coefficients.",
-                "num_freqs",
-            )
-        return self
-
     @cached_property
     def frequency_grid(self) -> NDArray:
         """Frequency grid used to approximate frequency dependence.
@@ -316,7 +298,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
     )
 
     _field_dataset_none_warning = warn_if_dataset_none("field_dataset")
-    _field_dataset_single_freq = assert_single_freq_in_range("field_dataset")
 
     def _derivative_terms(self, paths: list[PathType], target: SourceTarget) -> Compiled:
         """One pullback term per traced field component, on that component's own grid."""
@@ -689,23 +670,6 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
             f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
             freq_min = max(freq_min, f_crit * CRITICAL_FREQUENCY_FACTOR)
         return self._chebyshev_freq_grid(freq_min, freq_max)
-
-    @model_validator(mode="after")
-    def _validate_source_frequency_range(self) -> Self:
-        """Error if a broadband plane wave with constant in-plane k is defined such that
-        the source frequency range is entirely below ``f_crit * CRITICAL_FREQUENCY_FACTOR."""
-        if self._is_periodic_fixed_angle or self.num_freqs == 1:
-            return self
-        _freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
-        f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
-        if f_crit * CRITICAL_FREQUENCY_FACTOR > freq_max:
-            self._raise_validation_error_at_loc(
-                "Broadband plane wave source defined with a bandwidth too close to the critical "
-                "frequency of oblique incidence. Increase the source bandwidth, or disable the "
-                "broadband handling by setting 'num_freqs' to 1.",
-                "num_freqs",
-            )
-        return self
 
 
 def _beam_parameter_vjp(
