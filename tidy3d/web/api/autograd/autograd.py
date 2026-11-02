@@ -23,6 +23,8 @@ from tidy3d.web.api import asynchronous, webapi
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.run_options import log_deprecated_run_args
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+from tidy3d.web.api.workflow_model import most_specific_entry
+from tidy3d.web.core.client_identity import get_client_identity
 
 from . import backward, engine, forward, hooks, strategy
 from .constants import FLUX_MONITOR_ADJOINT_DOCS
@@ -401,6 +403,27 @@ def _prepare_simulation_mapping_for_autograd(
     return needs_autograd, expanded_custom_vjp, setup_results
 
 
+def _component_modeler_runner(simulation: Any) -> Callable[..., Any] | None:
+    """Return the runner that runs ``simulation`` as its port simulations, if it is a modeler.
+
+    The active client identity lists its product's modelers; Tidy3D runs its own
+    ``ModalComponentModeler``.
+    """
+    identity = get_client_identity()
+    if identity is not None:
+        runner = most_specific_entry(identity.modeler_runners, type(simulation))
+        if runner is not None:
+            return runner
+
+    from tidy3d.plugins.smatrix import ModalComponentModeler
+
+    if isinstance(simulation, ModalComponentModeler):
+        from tidy3d.plugins.smatrix import run as smatrix_run
+
+        return smatrix_run._run_local
+    return None
+
+
 def is_valid_for_autograd_async(
     simulations: dict[str, td.Simulation],
     custom_vjp: dict[str, Sequence[CustomVJPConfig]] | None = None,
@@ -702,9 +725,11 @@ def run_custom(
 
     traced_numerical_structures = has_traced_numerical_structures(numerical_structures or [])
 
-    from tidy3d.plugins.smatrix import ModalComponentModeler
+    modeler_runner = _component_modeler_runner(simulation)
 
-    if numerical_structures and not isinstance(simulation, (td.Simulation, ModalComponentModeler)):
+    if numerical_structures and not (
+        isinstance(simulation, td.Simulation) or modeler_runner is not None
+    ):
         raise AdjointError(
             "numerical_structures is only supported for 'Simulation' and "
             "'ModalComponentModeler' workflows."
@@ -718,7 +743,7 @@ def run_custom(
         Path(path) if path is not None else Path(webapi.default_data_filename(stub.get_type()))
     )
 
-    if isinstance(simulation, ModalComponentModeler):
+    if modeler_runner is not None:
         sim_dict = simulation.sim_dict
         modeler_numerical_structures = (
             dict.fromkeys(sim_dict, numerical_structures) if numerical_structures else None
@@ -743,9 +768,7 @@ def run_custom(
             _raise_protected_autograd_error("component-modeler autograd workflows")
 
         if protected_input or should_run_local:
-            from tidy3d.plugins.smatrix import run as smatrix_run
-
-            return smatrix_run._run_local(
+            return modeler_runner(
                 simulation,
                 path_dir=resolved_path.parent,
                 folder_name=folder_name,
@@ -1786,10 +1809,34 @@ def postprocess_adj(
     )
 
 
+def _in_client_context(
+    make_vjp: Callable[..., Callable[[Any], Any]],
+) -> Callable[..., Callable[[Any], Any]]:
+    """Wrap a VJP maker so its VJP runs in the client context active when the VJP is made.
+
+    Autograd makes the VJP inside the forward call and calls it after that call has returned,
+    outside the product client context the forward ran in.
+    """
+
+    def make_vjp_in_client_context(*args: Any, **kwargs: Any) -> Callable[[Any], Any]:
+        vjp = make_vjp(*args, **kwargs)
+        identity = get_client_identity()
+        if identity is None or identity.client_context is None:
+            return vjp
+
+        def vjp_in_client_context(grad: Any) -> Any:
+            with identity.client_context(identity):
+                return vjp(grad)
+
+        return vjp_in_client_context
+
+    return make_vjp_in_client_context
+
+
 """ Register primitives and VJP makers used by the user-facing functions."""
 
-defvjp(_run_primitive, _run_bwd, argnums=[0])
-defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
+defvjp(_run_primitive, _in_client_context(_run_bwd), argnums=[0])
+defvjp(_run_async_primitive, _in_client_context(_run_async_bwd), argnums=[0])
 
 
 """ The fundamental Tidy3D run and run_async functions used above. """

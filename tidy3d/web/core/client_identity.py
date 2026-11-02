@@ -8,7 +8,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Callable, Generator, Mapping
+    from contextlib import AbstractContextManager
+    from typing import Any
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,18 @@ class ClientIdentity:
 
     A class listed here, or a subclass of one, is a product model the client submits.
     Classes not listed resolve through Tidy3D's own table.
+    """
+    client_context: Callable[[ClientIdentity], AbstractContextManager[object]] | None = None
+    """The product's client context, entered as ``client_context(self)``.
+
+    Tidy3D re-enters it for work it does later on the client's behalf, such as the adjoint
+    runs of an autograd backward pass.
+    """
+    modeler_runners: Mapping[type, Callable[..., Any]] = field(default_factory=dict)
+    """Runner of each product component modeler, by class.
+
+    Autograd runs a traced modeler as its port simulations through its runner, called with the
+    arguments of Tidy3D's own ``ModalComponentModeler`` runner, instead of as one modeler task.
     """
 
 

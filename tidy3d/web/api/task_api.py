@@ -104,9 +104,6 @@ _PRODUCT_MODEL_OUTSIDE_PRODUCT_WEB_MESSAGE = (
     "Product workflow models are submitted through their product's web module, for example "
     "'flexcompute.rf.web' for FlexRF models, not through 'tidy3d.web' directly."
 )
-_UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE = (
-    "FlexRF protocol tasks do not support autograd-enabled FDTD submissions."
-)
 
 
 def _preprocess_cache_mode(
@@ -713,14 +710,6 @@ def _upload(
         solver_version=solver_version,
         simulation_type=simulation_type,
     )
-    if _active_product_protocol() and upload_options.simulation_type in {
-        "autograd_fwd",
-        "autograd_bwd",
-        "tidy3d_autograd",
-        "tidy3d_autograd_async",
-    }:
-        raise DataError(_UNSUPPORTED_PRODUCT_AUTOGRAD_MESSAGE)
-
     preprocess_cache_mode = _preprocess_cache_mode(
         simulation,
         simulation_type=upload_options.simulation_type,

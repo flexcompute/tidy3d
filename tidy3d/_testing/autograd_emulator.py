@@ -39,7 +39,9 @@ def run_emulated_minimal(
     - Supports PermittivityMonitor (eps_xx, eps_yy, eps_zz)
     """
 
-    rng = np.random.default_rng(42)
+    # Seeded by the simulation: the port simulations of a component modeler need distinct data,
+    # or the modeler's port matrix is singular.
+    rng = np.random.default_rng(int(simulation._hash_self(), 16))
 
     def _coords_for_monitor(sim: td.Simulation, mnt: td.Monitor) -> tuple[dict[str, Any], Grid]:
         grid = sim.discretize_monitor(mnt)
