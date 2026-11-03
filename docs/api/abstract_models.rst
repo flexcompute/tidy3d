@@ -63,9 +63,11 @@ These are some of the classes that are used to organize Tidy3D components, but a
    components.material.tcad.heat.AbstractHeatMedium
    components.mode_spec.AbstractModeSpec
    components.base_sim.monitor.AbstractMonitor
+   components.base_sim.monitor.BoxMonitor
    components.monitor.AbstractGaussianOverlapMonitor
    components.monitor.AbstractMediumPropertyMonitor
    components.monitor.AbstractModeMonitor
+   components.monitor.AbstractPointCloudMonitor
    components.source.field.AbstractAngularSpec
    components.tcad.data.sim_data.AbstractHeatChargeSimulationData
    components.tcad.doping.AbstractDopingBox

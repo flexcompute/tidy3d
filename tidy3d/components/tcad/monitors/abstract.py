@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_validator, model_validator
 
-from tidy3d.components.base_sim.monitor import AbstractMonitor
+from tidy3d.components.base_sim.monitor import BoxMonitor
 from tidy3d.log import log
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 BYTES_REAL = 4
 
 
-class HeatChargeMonitor(AbstractMonitor, ABC):
+class HeatChargeMonitor(BoxMonitor, ABC):
     """Abstract base class for heat-charge monitors."""
 
     unstructured: bool = Field(

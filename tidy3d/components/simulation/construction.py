@@ -203,7 +203,7 @@ def subsection(
         ]
 
     if monitors is None:
-        monitors = [mnt for mnt in self.monitors if new_box.intersects(mnt)]
+        monitors = [mnt for mnt in self.monitors if new_box.intersects(mnt.geometry)]
 
     if boundary_spec is None:
         boundary_spec = self.boundary_spec

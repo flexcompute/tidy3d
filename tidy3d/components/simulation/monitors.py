@@ -70,7 +70,7 @@ def _monitor_num_cells(self: Any, monitor: Monitor) -> int:
     def num_cells_in_monitor(monitor: Monitor) -> int:
         """Get the number of measurement cells in a monitor given the simulation grid and
         downsampling."""
-        if not self.intersects(monitor):
+        if not self.intersects(monitor.geometry):
             # Monitor is outside of simulation domain; can happen e.g. for integration surfaces
             return 0
         num_cells = self.discretize_monitor(monitor).num_cells
@@ -367,9 +367,11 @@ def monitor_medium(self: Any, monitor: MonitorType) -> AbstractMedium:
     :class:`.AbstractMedium`
         Medium associated with the given :class:`.Monitor`.
     """
+    # a box monitor is tested itself so that its ``exclude_surfaces`` still apply
+    test_object = monitor if isinstance(monitor, Box) else monitor.geometry
     medium_set = {
         _require_public_optical_medium(medium)
-        for medium in Scene.intersecting_media(monitor, self.structures)
+        for medium in Scene.intersecting_media(test_object, self.structures)
     }
     if len({optical_medium_key(medium) for medium in medium_set}) > 1:
         raise SetupError(  # post-init-tidy3d-error: ignore

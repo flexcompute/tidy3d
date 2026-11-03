@@ -385,7 +385,7 @@ def _discretize_inds_monitor(
 def discretize_monitor(self: Any, monitor: Monitor) -> Grid:
     """Grid on which monitor data corresponding to a given monitor will be computed."""
     span_inds = self._discretize_inds_monitor(monitor)
-    grid_snapped = self._subgrid(span_inds=span_inds).snap_to_box_zero_dim(monitor)
+    grid_snapped = self._subgrid(span_inds=span_inds).snap_to_box_zero_dim(monitor.geometry)
     grid_snapped = self._snap_zero_dim(grid=grid_snapped)
     return grid_snapped
 

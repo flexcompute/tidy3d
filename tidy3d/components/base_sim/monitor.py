@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import Field
 
-from tidy3d.components.base import cached_property
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.validators import _warn_unsupported_traced_argument
 from tidy3d.components.viz import plot_params_monitor
@@ -18,8 +18,13 @@ if TYPE_CHECKING:
     from tidy3d.components.viz import PlotParams
 
 
-class AbstractMonitor(Box, ABC):
-    """Abstract base class for steady-state monitors."""
+class AbstractMonitor(Tidy3dBaseModel, ABC):
+    """Abstract base class for monitors.
+
+    Every monitor exposes the region it records as ``geometry``, a :class:`~tidy3d.Box`: a
+    :class:`.BoxMonitor` is that box, and a point-cloud monitor uses the bounding box of its
+    ``points``.
+    """
 
     name: str = Field(
         title="Name",
@@ -27,24 +32,15 @@ class AbstractMonitor(Box, ABC):
         min_length=1,
     )
 
-    _warn_traced_center = _warn_unsupported_traced_argument("center")
-    _warn_traced_size = _warn_unsupported_traced_argument("size")
+    @property
+    @abstractmethod
+    def geometry(self) -> Box:
+        """:class:`~tidy3d.Box` that bounds the region the monitor records."""
 
     @cached_property
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Monitor object."""
         return plot_params_monitor
-
-    @cached_property
-    def geometry(self) -> Box:
-        """:class:`~tidy3d.Box` representation of monitor.
-
-        Returns
-        -------
-        :class:`~tidy3d.Box`
-            Representation of the monitor geometry as a :class:`~tidy3d.Box`.
-        """
-        return Box(center=self.center, size=self.size)
 
     @abstractmethod
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -98,3 +94,21 @@ class AbstractMonitor(Box, ABC):
         """
         arrs = [np.arange(ncells) for ncells in num_cells]
         return tuple((self.downsample(arr, axis=dim).size for dim, arr in enumerate(arrs)))
+
+
+class BoxMonitor(AbstractMonitor, Box, ABC):
+    """Abstract base class for monitors whose region is a box given by ``center`` and ``size``."""
+
+    _warn_traced_center = _warn_unsupported_traced_argument("center")
+    _warn_traced_size = _warn_unsupported_traced_argument("size")
+
+    @cached_property
+    def geometry(self) -> Box:
+        """:class:`~tidy3d.Box` representation of monitor.
+
+        Returns
+        -------
+        :class:`~tidy3d.Box`
+            Representation of the monitor geometry as a :class:`~tidy3d.Box`.
+        """
+        return Box(center=self.center, size=self.size)

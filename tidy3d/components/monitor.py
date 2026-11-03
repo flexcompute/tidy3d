@@ -31,7 +31,7 @@ from .autograd.parallel_adjoint_bases import (
     _build_point_field_bases,
 )
 from .base import Tidy3dBaseModel, cached_property
-from .base_sim.monitor import AbstractMonitor
+from .base_sim.monitor import AbstractMonitor, BoxMonitor
 from .data.data_array import PointDataArray
 from .data.point_cloud import (
     POINT_CLOUD_PERMITTIVITY_COMPONENTS,
@@ -49,6 +49,7 @@ from .diffraction import (
     reciprocal_coords,
     sim_bloch_vecs,
 )
+from .geometry.base import Box
 from .medium import MediumType
 from .microwave.base import MicrowaveBaseModel
 from .mode_spec import ModeSpec
@@ -238,7 +239,7 @@ class Monitor(AbstractMonitor):
         return []
 
 
-class AbstractRecordInPMLMonitor(Monitor, ABC):
+class AbstractRecordInPMLMonitor(Monitor, BoxMonitor, ABC):
     """:class:`~tidy3d.Monitor` whose recorded region can be truncated to exclude the absorbing
     boundary layers."""
 
@@ -609,7 +610,7 @@ class AbstractFieldMonitor(AbstractRecordInPMLMonitor, ABC):
         return solver_data_size
 
 
-class AbstractAuxFieldMonitor(Monitor, ABC):
+class AbstractAuxFieldMonitor(Monitor, BoxMonitor, ABC):
     """:class:`.Monitor` that records auxiliary fields as a function of x,y,z.
 
     Notes
@@ -655,7 +656,7 @@ class AbstractAuxFieldMonitor(Monitor, ABC):
         return solver_data_size
 
 
-class PlanarMonitor(Monitor, ABC):
+class PlanarMonitor(Monitor, BoxMonitor, ABC):
     """:class:`~tidy3d.Monitor` that has a planar geometry."""
 
     _plane_validator = assert_plane()
@@ -1206,7 +1207,58 @@ class ModeStructureMonitor(PlanarMonitor):
         return mode_structure_size
 
 
-class PointCloudFieldMonitor(FreqMonitor):
+class AbstractPointCloudMonitor(AbstractMonitor, ABC):
+    """Abstract base class for monitors that record at the coordinates of their ``points``.
+
+    ``geometry`` is the bounding box of ``points``; ``center``, ``size`` and ``bounds`` read it,
+    and other :class:`~tidy3d.Box` members are reached through ``geometry``. Each subclass
+    declares ``points`` with its own limits.
+    """
+
+    _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
+
+    @cached_property
+    def geometry(self) -> Box:
+        """Bounding box of ``points``."""
+        values = np.asarray(self.points.values, dtype=float)
+        return Box.from_bounds(values.min(axis=0), values.max(axis=0))
+
+    @property
+    def center(self) -> Coordinate:
+        """Center of the bounding box of ``points``."""
+        return self.geometry.center
+
+    @property
+    def size(self) -> Size:
+        """Size of the bounding box of ``points``."""
+        return self.geometry.size
+
+    @property
+    def bounds(self) -> Bound:
+        """Bounds of the bounding box of ``points``."""
+        return self.geometry.bounds
+
+    @property
+    def num_points(self) -> int:
+        """Number of points sampled by this monitor."""
+        return self.points.sizes["index"]
+
+    def plot(
+        self,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        ax: Ax = None,
+        **patch_kwargs: Any,
+    ) -> Ax:
+        """Plot the bounding box of ``points`` at a cross section, with this monitor's plot
+        parameters; see :meth:`.Geometry.plot`."""
+        overrides = {key: value for key, value in patch_kwargs.items() if value is not None}
+        patch_kwargs = {**self.plot_params.model_dump(exclude={"type", "attrs"}), **overrides}
+        return self.geometry.plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
+
+
+class PointCloudFieldMonitor(AbstractPointCloudMonitor, FreqMonitor):
     """:class:`~tidy3d.Monitor` that records electromagnetic fields at arbitrary points.
 
     The monitor stores field components indexed by point and frequency. Point coordinates are
@@ -1233,22 +1285,6 @@ class PointCloudFieldMonitor(FreqMonitor):
     ...     name="point_cloud",
     ... )
     """
-
-    _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
-
-    center: Coordinate = Field(
-        default=(0.0, 0.0, 0.0),
-        title="Derived Center",
-        description="Bounding-box center derived from the point cloud coordinates.",
-        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
-    )
-
-    size: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
-        default=(0.0, 0.0, 0.0),
-        title="Derived Size",
-        description="Bounding-box size derived from the point cloud coordinates.",
-        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
-    )
 
     points: PointDataArray = Field(
         ...,
@@ -1313,47 +1349,6 @@ class PointCloudFieldMonitor(FreqMonitor):
         monitor = PointCloudFieldMonitorSchema.model_construct(fields=val)
         raise_first_error(validate_point_cloud_fields_unique(monitor), ValueError)
         return val
-
-    @staticmethod
-    def _geometry_from_points(
-        points: PointDataArray,
-    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        """Compute inherited box geometry from point-cloud bounds."""
-        point_values = np.asarray(points.values, dtype=float)
-        rmin = point_values.min(axis=0)
-        rmax = point_values.max(axis=0)
-        center = tuple(float(val) for val in (rmin + rmax) / 2)
-        size = tuple(float(val) for val in rmax - rmin)
-        return center, size
-
-    @model_validator(mode="after")
-    @always_validate
-    def _derive_geometry_from_points(self) -> Self:
-        """Keep inherited box geometry consistent with the point-cloud bounds."""
-
-        center, size = self._geometry_from_points(self.points)
-        for field_name, derived_value in (("center", center), ("size", size)):
-            if field_name in self.model_fields_set and not np.allclose(
-                getattr(self, field_name), derived_value
-            ):
-                log.warning(
-                    f"PointCloudFieldMonitor '{self.name}' derives '{field_name}' from "
-                    f"'points'; the supplied '{field_name}' value will be ignored.",
-                    custom_loc=[field_name],
-                )
-
-        # ``center`` and ``size`` are inherited box-monitor fields, but for point-cloud monitors
-        # they are derived metadata used by existing monitor bounds paths, not user-controlled
-        # inputs. Normal validation keeps them synchronized; ``validate=False`` callers accept
-        # the usual risk that derived fields may become stale.
-        object.__setattr__(self, "center", center)
-        object.__setattr__(self, "size", size)
-        return self
-
-    @property
-    def num_points(self) -> int:
-        """Number of points sampled by this monitor."""
-        return self.points.sizes["index"]
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of point-cloud samples."""
@@ -1720,7 +1715,7 @@ class PermittivityMonitor(AbstractMediumPropertyMonitor, AbstractRecordInPMLMoni
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 3
 
 
-class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
+class PointCloudPermittivityMonitor(AbstractPointCloudMonitor, AbstractMediumPropertyMonitor):
     """:class:`~tidy3d.Monitor` that records permittivity for arbitrary requested points.
 
     The monitor samples diagonal permittivity components using nearest-neighbor selection on each
@@ -1729,22 +1724,6 @@ class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
     of the permittivity tensor, matching :class:`.PermittivityMonitor`. Point order and duplicate
     points are preserved.
     """
-
-    _skip_sim_bounds_intersection_validation: ClassVar[bool] = True
-
-    center: Coordinate = Field(
-        default=(0.0, 0.0, 0.0),
-        title="Derived Center",
-        description="Bounding-box center derived from the point cloud coordinates.",
-        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
-    )
-
-    size: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
-        default=(0.0, 0.0, 0.0),
-        title="Derived Size",
-        description="Bounding-box size derived from the point cloud coordinates.",
-        json_schema_extra={"units": MICROMETER, "doc_hidden": True},
-    )
 
     points: PointDataArray = Field(
         ...,
@@ -1776,31 +1755,6 @@ class PointCloudPermittivityMonitor(AbstractMediumPropertyMonitor):
             cast_to_float=True,
             preserve_index=True,
         )
-
-    @model_validator(mode="after")
-    @always_validate
-    def _derive_geometry_from_points(self) -> Self:
-        """Keep inherited box geometry consistent with the point-cloud bounds."""
-
-        center, size = PointCloudFieldMonitor._geometry_from_points(self.points)
-        for field_name, derived_value in (("center", center), ("size", size)):
-            if field_name in self.model_fields_set and not np.allclose(
-                getattr(self, field_name), derived_value
-            ):
-                log.warning(
-                    f"PointCloudPermittivityMonitor '{self.name}' derives '{field_name}' from "
-                    f"'points'; the supplied '{field_name}' value will be ignored.",
-                    custom_loc=[field_name],
-                )
-
-        object.__setattr__(self, "center", center)
-        object.__setattr__(self, "size", size)
-        return self
-
-    @property
-    def num_points(self) -> int:
-        """Number of points sampled by this monitor."""
-        return self.points.sizes["index"]
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of point-cloud samples."""
@@ -3048,7 +3002,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
 
 
-class AbstractSurfaceMonitor(Monitor, ABC):
+class AbstractSurfaceMonitor(Monitor, BoxMonitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z on PEC and lossy metal surfaces."""
 
     fields: tuple[EMSurfaceField, ...] = Field(

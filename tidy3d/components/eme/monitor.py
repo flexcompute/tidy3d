@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, NonNegativeInt, PositiveInt
 
-from tidy3d.components.base_sim.monitor import AbstractMonitor
+from tidy3d.components.base_sim.monitor import BoxMonitor
 from tidy3d.components.monitor import (
     AbstractFieldMonitor,
     MediumMonitor,
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 BYTES_COMPLEX = 8
 
 
-class EMEMonitor(AbstractMonitor, ABC):
+class EMEMonitor(BoxMonitor, ABC):
     """Abstract base class for EME monitors.
 
     Notes
