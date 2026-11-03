@@ -388,6 +388,10 @@ def _batch_detail_error(resource_id: str) -> WebError | None:
     if status not in ERROR_STATES:
         return None
 
+    block_info = batch_detail.taskBlockInfo
+    if status == "blocked" and block_info and block_info.taskBlockMsg:
+        raise WebError(f"Batch '{resource_id}' is blocked: {block_info.taskBlockMsg}")
+
     if hasattr(batch_detail, "validateErrors") and batch_detail.validateErrors:
         try:
             error_details = []
