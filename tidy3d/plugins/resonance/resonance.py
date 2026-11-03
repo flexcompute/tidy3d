@@ -257,7 +257,7 @@ class ResonanceFinder(Tidy3dBaseModel):
                     if dt == -1:
                         dt = curr_dt
                         coords["t"] = field_comp.t
-                    elif abs(curr_dt - dt) > TIME_STEP_RTOL:
+                    elif not np.isclose(curr_dt, dt, rtol=TIME_STEP_RTOL, atol=0):
                         raise SetupError(
                             "The time steps in the supplied 'FieldTimeData' must all be equal."
                         )

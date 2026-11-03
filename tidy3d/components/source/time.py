@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from flexcompute.core._migration.em.numerical.raw import source_time as raw_source_time
 from pydantic import Field, PositiveFloat
 from pyroots import Brentq
 
@@ -378,10 +379,7 @@ class GaussianPulse(Pulse):
 
         # If remove_dc_component=True, the Gaussian pulse is distorted
         kwargs.update({"remove_dc_component": True})
-        log_ratio = np.log(fmax / fmin)
-        coeff = ((1 + log_ratio**2) ** 0.5 - 1) / 2.0
-        freq0 = freq_center - coeff / log_ratio * freq_range
-        fwidth = freq_range / log_ratio * coeff**0.5
+        freq0, fwidth = raw_source_time.gaussian_pulse_frequency_parameters(fmin, fmax)
         pulse = cls(freq0=freq0, fwidth=fwidth, **kwargs)
         if np.abs(pulse._rel_amp_freq(fmin)) < WARN_SOURCE_AMPLITUDE:
             log.warning(
@@ -575,14 +573,9 @@ class CustomSourceTime(Pulse):
 
         data_array = self.source_time_dataset.values
 
-        t_coords = data_array.coords["t"]
-        source_is_non_zero = ~np.isclose(abs(data_array), 0)
-        t_non_zero = t_coords[source_is_non_zero]
-
-        if len(t_non_zero) == 0:
-            return None
-
-        return float(np.max(t_non_zero))
+        return raw_source_time.custom_source_end_time(
+            data_array.coords["t"], data_array.values, offset_time=self.offset_time
+        )
 
 
 class BroadbandPulse(SourceTime):
